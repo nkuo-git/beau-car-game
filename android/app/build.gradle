@@ -1,0 +1,53 @@
+plugins {
+  id 'com.android.application'
+}
+
+android {
+  namespace 'com.nkuo.beaucargame'
+  compileSdk 34
+
+  // 版號跟著 GitHub Actions 的編號走，跟 Release 的 apk-N 對得起來，
+  // 網頁才有辦法比對「GitHub 上是不是有比我新的 APK」（User-Agent 的 BeauCarApp/N）
+  def build = (System.getenv("GITHUB_RUN_NUMBER") ?: "1") as int
+
+  // 固定的簽章金鑰（改車遊戲自己的一把，不是萬能軟體那把）。檔案在 repo 裡，密碼從環境變數（GitHub Secret BEAU_KEY_PASS）來，
+  // 沒有這兩樣就退回 debug 簽章，至少還編得出可以側載的 APK（但裝新版前要先移除舊版）。
+  def ksFile = rootProject.file("keystore/beaucargame.jks")
+  def ksPass = System.getenv("BEAU_KEY_PASS")
+  def signable = ksFile.exists() && ksPass
+
+  defaultConfig {
+    applicationId "com.nkuo.beaucargame"
+    minSdk 24
+    targetSdk 34
+    versionCode build
+    versionName "1.0." + build
+  }
+
+  signingConfigs {
+    release {
+      if (signable) {
+        storeFile ksFile
+        storePassword ksPass
+        keyAlias "beaucargame"
+        keyPassword ksPass
+      }
+    }
+  }
+
+  buildTypes {
+    release {
+      minifyEnabled false
+      signingConfig signable ? signingConfigs.release : signingConfigs.debug
+    }
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+}
+
+dependencies {
+  implementation 'androidx.core:core:1.13.1'
+}

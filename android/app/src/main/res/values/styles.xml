@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- 遊戲預設是暗色：狀態列、導覽列跟網頁的底色一樣 -->
+  <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+    <item name="android:windowBackground">#0E0F12</item>
+    <item name="android:statusBarColor">#0E0F12</item>
+    <item name="android:windowLightStatusBar">false</item>
+    <item name="android:navigationBarColor">#0E0F12</item>
+  </style>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">大便龍的改車遊戲</string>
+  <!-- 手機桌面圖示下面的字（太長會被切掉） -->
+  <string name="short_name">改車遊戲</string>
+</resources>

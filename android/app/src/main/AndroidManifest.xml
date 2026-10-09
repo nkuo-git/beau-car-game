@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <uses-permission android:name="android.permission.INTERNET" />
+
+  <application
+      android:allowBackup="true"
+      android:icon="@mipmap/ic_launcher"
+      android:label="@string/app_name"
+      android:supportsRtl="true"
+      android:usesCleartextTraffic="false"
+      android:theme="@style/AppTheme">
+
+    <!-- 直的、橫的都可以（沒有鎖方向）；轉向、換大小不要重開網頁（遊戲會整個重來） -->
+    <activity
+        android:name=".MainActivity"
+        android:label="@string/short_name"
+        android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode"
+        android:exported="true"
+        android:launchMode="singleTask"
+        android:windowSoftInputMode="adjustResize">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+      <!-- 從萬能軟體搬進度過來：beaucargame://import?save=<base64url>（交給網頁的 window.beauImport，網頁會先問） -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="beaucargame" android:host="import" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

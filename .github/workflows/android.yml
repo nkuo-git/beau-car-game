@@ -1,0 +1,81 @@
+name: 編 APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # 第一次跑的時候用 Secret（BEAU_KEY_PASS）裡的密碼產一把固定的簽章金鑰，並存回 repo（改車遊戲自己的一把，不是萬能軟體那把）。
+      # 之後每次都用同一把簽，新版 APK 才能直接蓋過舊版安裝，不用先移除（存檔才不會不見）。
+      - name: 準備簽章金鑰
+        env:
+          BEAU_KEY_PASS: ${{ secrets.BEAU_KEY_PASS }}
+        run: |
+          if [ -z "$BEAU_KEY_PASS" ]; then
+            echo "::warning::還沒設定 BEAU_KEY_PASS，這次會用臨時的 debug 簽章，裝之前要先移除舊版（存檔會不見）"
+            exit 0
+          fi
+          if [ -f android/keystore/beaucargame.jks ]; then
+            echo "已經有固定的簽章金鑰了"
+            exit 0
+          fi
+          mkdir -p android/keystore
+          keytool -genkeypair -v \
+            -keystore android/keystore/beaucargame.jks \
+            -storepass "$BEAU_KEY_PASS" -keypass "$BEAU_KEY_PASS" \
+            -alias beaucargame -keyalg RSA -keysize 2048 -validity 10950 \
+            -dname "CN=beaucargame, OU=personal, O=beaucargame, L=Taipei, S=Taipei, C=TW"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add android/keystore/beaucargame.jks
+          git commit -m "建立固定的簽章金鑰，之後的 APK 都用這一把簽"
+          git push origin HEAD:main
+
+      - name: 編譯
+        working-directory: android
+        env:
+          BEAU_KEY_PASS: ${{ secrets.BEAU_KEY_PASS }}
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: 改個看得懂的檔名
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/*.apk "out/beau-car-game-${{ github.run_number }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beau-car-game-apk
+          path: out/*.apk
+
+      # 沒有 BEAU_KEY_PASS（臨時的 debug 簽章）：發成「預先發行」，遊戲裡查新版（releases/latest）不會叫人裝這個
+      - name: 發成 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEAU_KEY_PASS: ${{ secrets.BEAU_KEY_PASS }}
+        run: |
+          NOTES="用手機開這一頁，點下面的 .apk 就能安裝。第一次安裝要允許「安裝不明來源的應用程式」。遊戲網頁版：https://nkuo-git.github.io/beau-car-game/"
+          PRE=""
+          if [ -z "$BEAU_KEY_PASS" ]; then
+            PRE="--prerelease"
+            NOTES="測試用（臨時簽章）：之後的正式版裝不上去，要先移除這個（存檔會不見）。$NOTES"
+          fi
+          gh release create "apk-${{ github.run_number }}" out/*.apk $PRE \
+            --title "大便龍的改車遊戲 APK #${{ github.run_number }}" \
+            --notes "$NOTES"
