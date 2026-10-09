@@ -1294,7 +1294,7 @@ function buildVillage(opts = {}) {
     const T = frame(LOT.x, 0, LOT.z, LOT.heading), T0 = frame(0, 0, 0); B.at(-300, -84);
     addPave(-300, -83.85, 14, 8.35, 0, C('#d2d2cd'));            // 前庭 x −314…−286、z −92.2…−75.5
     addPave(-300, -83.85, 7, 8.35, 0, C('#bcbdb9'), 0.024);       // 門前的車道（apron）深一點
-    addPave(-300, -101.35, 13, 9.15, 0, null, 0, false);          // 車庫裡面（模組的地板）：算水泥地，不畫
+    addPave(-300, -101.35, 16, 9.15, 0, null, 0, false);          // 車庫裡面（模組的地板）：算水泥地，不畫（第 11 批：車庫變寬，本來 13）
     for (const x of [-306.8, -293.2]) { B.at(x, -84); box('main', T0, [x - 0.12, 0.024, -91.8, x + 0.12, 0.03, -76], C('#8e8f8c')); } // 車道兩邊的排水溝蓋
     const rnd = rng(919);
     for (const s of [1, -1]) { // 兩邊花台（低低的，不擋視線）
@@ -1315,7 +1315,7 @@ function buildVillage(opts = {}) {
       box('main', T, [-13.1, 5.5, -13.1, 5.35, 5.8, 13.1], C('#dcdcd6'), { _: U.conc, ny: U.conc });
       for (const [x, z] of [[-8, -8], [-8, 8], [0, -8], [0, 8]]) ceil('glow', T, x - 1, z - 0.2, x + 1, z + 0.2, 5.48, dotUV(GU.cool), [1.2, 1.2, 1.2]);
     }
-    buildings.push({ kind: 'garage', name: '你的車庫', x: -300, z: -101.35, hx: 9.15, hz: 13, rot: LOT.heading, h: 6, door: { x: -300, z: -91.6, ry: 0 } }); // 車庫模組的地（本地 x −13…5.3、z ±13）：以後走進去、小地圖用
+    buildings.push({ kind: 'garage', name: '你的車庫', x: -300, z: -101.35, hx: 9.15, hz: 16, rot: LOT.heading, h: 6, door: { x: -300, z: -91.6, ry: 0 } }); // 車庫模組的地（本地 x −13…5.3、z ±16；第 11 批：本來 ±13）：以後走進去、小地圖用
   }
 
   // ---- 阿輝改車廠：鐵皮工廠。前門開進去（中間的改車區），後門出去，從後院、東邊的小路回大路；裡面舉升機、工具牆、輪胎架、零件架、辦公室、日光燈 ----
@@ -1870,8 +1870,8 @@ function buildVillage(opts = {}) {
       name: '你的車庫', pos: [LOT.x, LOT.z], lot: { ...LOT }, spawn: { ...LOT },
       door: { x: -300, z: -92.5, heading: -R2 },                                // 鐵捲門中間（本地 x = +5），朝外（南）
       apron: { x: -300, z: -83.85, hx: 8.35, hz: 7, rot: -R2 },                 // 門前（本地 x 5.3…22、z ±7）：停在這裡 HUD 給「開鐵捲門」
-      inside: { x: -300, z: -101.35, hx: 8.85, hz: 12.7, rot: -R2 },            // 車庫裡面（本地 x −12.7…5、z ±12.7）
-      zone: { x: -300, z: -92.85, hx: 17.35, hz: 12.7, rot: -R2 },              // apron＋inside
+      inside: { x: -300, z: -101.35, hx: 8.85, hz: 15.7, rot: -R2 },            // 車庫裡面（本地 x −12.7…5、z ±15.7；第 11 批：本來 ±12.7）
+      zone: { x: -300, z: -92.85, hx: 17.35, hz: 15.7, rot: -R2 },              // apron＋inside
     },
     shop: { // 阿輝改車廠：前門（南）開進改車區、後門（北）出去
       name: '阿輝改車廠', pos: [-160, -35],
