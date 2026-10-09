@@ -1,0 +1,20 @@
+# guns.js + gunshop.js (b3-guns: gun shop, guns, ammo, range, shooting) — DONE ~18:15 UTC; not merged → integration (batch 3)
+
+> 這是遊戲還在「大便龍的萬能軟體」裡的時候，做這一塊的工作記錄（2026-09／10，英文）。檔名現在都在 repo 的 `src/`；
+> 裡面提到的 `old-scratch/…` 記錄檔、截圖、port-*.mjs 都在舊的暫存資料夾，沒有搬進 repo（要重看就重跑測試）。
+
+Folder old-scratch/b3-guns (node_modules → b1-int symlink). guns.js (1738 lines; header = full API + 【接到遊戲裡】 per-file wiring), gunshop.js (878 lines; walk-in shop + back range, own THREE.Scene + second walker, counter panel, range round; header API/wiring), guns-test.html (debug buttons 槍店門口/店裡/櫃台/靶場/＋100 萬/四把槍都給; ?start= ?money= ?guns=all ?peds= ?traffic=1 ?police=0 ?village=b1 ?char=stub|latest ?pol=latest; window.__T), guns-test.mjs (phases bundle street shop counter hold range ped car cop rules hud; --out= --q=), guns-logic-test.mjs, shots/ (29), shots-latest/, logs/, latest/ (copies of newest character.js + police-ai.js), prev/, cityprobe/. b3-guns has an OLD npc.js copy — use b2-npc/npc.js.
+
+Exports: guns.js GUNS, GUN_IDS, gunSave, gunShop, buildGunModel, createGunAudio, createGunner, gunTargets, GUN_ICONS, createGunArms, GUN_RANGE_REWARD; gunshop.js buildGunShopInterior, openGunShop, gunShopFonts, GUNSHOP_TEXT. Wrapped (only exports visible). Bundle order: character.js, npc.js, police-ai.js, then guns.js, then gunshop.js.
+createGunner({scene, camera, renderer, walker, character, GAME, hudParent, onChange, onEquip, onCrime, world, targets, damage, keyboard, aimAssist}) → update(dt), setWorld, setTargets, setWalker, setCharacter, draw(id?), holster, next, reload, setAim, setTrigger, refresh, setEnabled, toast, telemetry, probe, fx, dispose.
+Touch: 開槍 (hold = auto), 瞄準 (hold; drag either button to turn), 換彈匣; tap ammo pill = weapon wheel (incl. 收起來). Keys: F fire, RMB aim (LMB fires while aiming), V aim toggle, R reload, Q next, 1–4, X holster. Aim assist 7° to peds when hip-firing.
+
+Weapons (萬): 手槍 semi 0.2 s mag 12 range 60 m price 3, ammo 1/48 (max 240); 衝鋒槍 auto 0.075 s mag 30 45 m price 12, ammo 1/90 (450); 霰彈槍 pump 0.85 s 6 shells 8 pellets 28 m price 18, ammo 1/24 (120); 步槍 auto 0.105 s mag 30 scope ×1.9 150 m price 30, ammo 2/90 (360). Range: 6 targets, 3 s countdown, 30 s limit; first perfect round per weapon pays 2 萬 (GUN_RANGE_REWARD).
+Save: GAME.guns = { owned, ammo, mag, cur, range:{best,time,paid} }; gunSave.fresh(); gunSave.load(saved.guns) repairs. garage.src.html save() must add guns: GAME.guns.
+Rules: pedestrian hit → falls, gets up (no blood); KIDS cannot be hit or auto-aimed (default kept); hit ped/traffic car → crime 'shoot' (3★); hit cop/police car → 'shootCop' +1★; miss → 'gunfire' (police-ai counts only if police within 60 m). Shooting blocked inside shop except range (never a crime indoors). Guns off while driving. Police never shoot.
+
+Wiring (guns.js header has exact code; names match b2-int 17:13 town.src.js): create gunner after makeWalker(); gunner.update(dt) after walker.update in driveStep; setEnabled(true) in leaveCar(); setEnabled(false) on get in car / race start / panelOpen / back to garage page; atDoor gunshop → gunshop.js enter/leave steps; police onCaught → gunner.holster(); renderWallet() after purchases + range rewards; while in shop police getPlayer hidden=true, at counter mode 'off'.
+police-ai.js (b3-police 17:56) has police.shot(hit), carObject(i), shotCar(i,hit) as guns.js calls them (officer down 2.8 s, holes on police car). Optional (fallbacks exist): npc traffic.shot (else c.stun), damage.js damage.shoot (else guns.js draws holes/glass), walk.js setFacing (strafe), character stock length (else long guns pushed 0.26 m).
+
+Tests: node logic 155/155; SwiftShader browser 35/35, 0 page errors; with newest character.js + police-ai.js: hold/range/police 14/14, police 4/4.
+Open: kids unshootable (design choice, kept); prices vs race winnings may need tuning; no shooting from cars; player's own full-detail car only rough hit shape (damage.shoot would fix); per-car BVH-ish hit index ~1 MB/model, 178 ms build under load (in game built 1.5 ms/frame while crosshair on car).

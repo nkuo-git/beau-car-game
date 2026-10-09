@@ -1,0 +1,10 @@
+# Fullscreen play mode (old-scratch/fs) — DONE ~18:20 UTC; applied to trunk b1-int 18:25 (backups *.bak-fspre.*); screenshots sent to Nick for OK
+
+> 這是遊戲還在「大便龍的萬能軟體」裡的時候，做這一塊的工作記錄（2026-09／10，英文）。檔名現在都在 repo 的 `src/`；
+> 裡面提到的 `old-scratch/…` 記錄檔、截圖、port-*.mjs 都在舊的暫存資料夾，沒有搬進 repo（要重看就重跑測試）。
+
+Patches: old-scratch/fs/port/fullscreen-b1int.patch (garage.src.html fsBtn + pixel cap + fullscreen block after /*__TOWN__*/, garage.css block, race.src.js raceLive + tall camera + sheet shift, town.src.js cabin fov on aspect change, drive.js camTick tall-screen fov, app/tune-vars.css hides .appbar/.segbar/.tabbar, test-app-b1.mjs 19 fullscreen checks), old-scratch/fs/port/fullscreen-android.patch (MainActivity.java +57: CaridApp.setFullscreen(bool) via WindowInsetsControllerCompat, transient bars by swipe, onPageStarted resets, onResume/onWindowFocusChanged reapply, back button leaves fullscreen first via window.caridExitFullscreen). androidx.core 1.13.1 already a dependency. Applied to old-scratch/repo34 (backup old-scratch/MainActivity.bak-fspre.java).
+Behaviour: body.fs when driving (not shopping) or racing; fsBtn toggles, remembered localStorage carid.tune.full (default on); my tweak 18:25: Android back = off for this trip only (backOff, cleared when not driving/racing), setting stays on. Pixel cap ~1.1 MP in fullscreen (+25% GPU vs 0.87 MP). Old APK: in-page fullscreen only (bars stay). Browser: requestFullscreen after a tap.
+Tests (fs agent): test-app-b1 49 checks OK (19 new), test-b1 27 OK, layout sweep 9 sizes 0 overlaps in fullscreen (4 pre-existing overlaps with fullscreen OFF on landscape phones), javac OK vs stubs for androidx.
+Open: Java not run on a device; notch = black band (default cutout mode); shop/dealer panels bring bars back; race start 1–2 s start-light pole partly hides opponent in tall fullscreen; 「再比一次」 wraps at 360 wide; police/gun-shop destination pills not in page yet (CSS-checked for 7 buttons).
+Batch 2 (b2-int) must merge this too (walk-in garage buttons 上車/下車 etc. in fullscreen layout).

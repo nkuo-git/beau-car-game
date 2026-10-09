@@ -7,8 +7,8 @@ The best worked example is the Nissan R34 GT-R: `gtr-body.mjs`, `gtr-look.js`, `
 Read those three plus `parts.js`, `masks.js` (look at the shader in `patchPaint` to see what each mask channel does)
 and `body.mjs` (helpers `curve, sdf2d, look, smin, smax, rbox`) before you start.
 
-Directory: `SUPRA3D = /tmp/claude-0/-home-claude-carid-pwa/336427ec-3b47-5def-b423-b684f9ee79cd/scratchpad/supra3d`
-Reference photos: `/mnt/project-files/tune-game/ref/`.
+Directory: this repo's `src/` folder (called `SUPRA3D` below; it used to be a scratch folder).
+Reference photos: the 萬能軟體 Claude project's files `tune-game/ref/` — modelling reference only, never put into the game.
 
 ## Rules
 - **Do not edit any shared file** (body.mjs, masks.js, parts.js, supra.js, gtr-*, garage.src.html, build-art.mjs,
@@ -43,7 +43,7 @@ a=0 front, a=90 left side, a=180 rear, a=−90 right side.
 - Overlay on the photo: `python3 overlay.py photo.jpg render.png out.png 0.55` (also writes out-side.png).
 - Bundle check: `node check-bundle.mjs <key>-look.js <key>-spec.js` must print `bundle ok`.
 
-## Files you deliver (all in SUPRA3D)
+## Files you deliver (all in SUPRA3D = src/)
 1. `<key>-body.mjs` — SDF body (node only). Side/plan/front profile extrusions intersected and rounded, a separate cabin,
    wheel arches cut out, arch lips, recesses for intakes/grilles (see gtr-body.mjs). Surface features that are only
    color (windows, lights, grille mesh, panel gaps, vents) belong in the masks, not the SDF, unless depth really shows.

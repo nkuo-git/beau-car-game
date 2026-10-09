@@ -1,0 +1,21 @@
+# npc.js (b2-npc: traffic + residents) — DONE (~13:10 UTC); not merged yet → integration agent
+
+> 這是遊戲還在「大便龍的萬能軟體」裡的時候，做這一塊的工作記錄（2026-09／10，英文）。檔名現在都在 repo 的 `src/`；
+> 裡面提到的 `old-scratch/…` 記錄檔、截圖、port-*.mjs 都在舊的暫存資料夾，沒有搬進 repo（要重看就重跑測試）。
+
+Files old-scratch/b2-npc: npc.js (1964 lines, IIFE exposing createTraffic, createPedestrians, npcGraphs; header has API + integration + perf notes), npc-test.html (live; ?test for stepping), npc-test.mjs (`node npc-test.mjs [minutes=6] [seed=1]`, ~2.5 min, npc-shots/result.json, exit 1 on fail; 21 checks ALL OK), npc-shots/ 1-street, 2-street-dealer, 3-mainroad, 4-highway, 5-knocked, 6-top-village, 7-top-core. Tested against PRE-city village (re-verify with merged village: police station, gun shop, new drives). b3-guns has an OLD npc.js copy (12:28) — use b2-npc/npc.js.
+
+API: npcGraphs(V) once per village. createTraffic({ world, scene, lod: { keys, load, build }, makeCharacter, randomLook, camera, max=10, radius=350, seed, sound, onHonk, onCarHit }) → { update(dt, focus, obstacles, people), cars, colliders(x,z,r), dispose(), prewarm(), stats, time }.
+createPedestrians({ world, scene, makeCharacter, randomLook, camera, max=20, radius=150, visible=125, animNear=45, animMid=90, seed, onHit(person, speed, car) }) → { update(dt, focus, cars, walkers), people, colliders(x,z,r), scare(x,z,r), knock(person, dirX, dirZ, speed, car), dispose(), nearest(x,z,r), prewarm(n), props.colliders, props.seats, stats, time }.
+
+Integration:
+1. Bundle npc.js after carlod.js (and character.js) in build-art/build-app lists.
+2. Loading screen: npcGraphs(V); traffic = createTraffic({ …, lod: { keys: Object.keys(LOD_CARS), load: k => LOD_CARS[k].load(), build: (k, sc, look) => buildLodCar(k, sc, look) }, makeCharacter: buildCharacter, randomLook, camera, sound }); await traffic.prewarm(); peds = createPedestrians({ …, onHit }); peds.prewarm(); drv.addColliders(peds.props.colliders, 'npc-props'). (Without prewarm first frame spiked 860 ms.)
+3. Each frame driving: one reused `me` = car centre: CX = (carInfo.nose + carInfo.tail)/2; x = t.x + cos(h)·CX; z = t.z − sin(h)·CX; hx = len/2; hz = halfW; v = t.v. traffic.update(dt, focus, OBS=[me], peds.people); peds.update(dt, focus, PCARS=[me, traffic.cars]); drv.removeColliders('traffic'); drv.addColliders(traffic.colliders(t.x, t.z, 30), 'traffic'). Reuse OBS/PCARS arrays; returned collider arrays are reused per frame (don't keep).
+4. Walking: me.hx = me.hz = 0.3, v = 0 (AI cars stop and honk); peds.update(dt, focus, [traffic.cars], [walker]); walking collisions traffic.colliders(x,z,10) + peds.colliders(x,z,3).
+5. onHit: car.ai !== true → player hit someone (batch 3 arrest). AI cars never knock people down.
+6. Batch 3 hooks: punching peds.nearest + peds.knock; horn/crash/gunshot peds.scare; police/guns read traffic.cars fields x,z,heading,hx,hz,v,stun,obj.
+7. Guns: guns.js calls traffic.shot if exists; npc has none; fallback sets c.stun, c.hitCool (car stops 2.5–3.5 s).
+
+Results: 6 simulated min, 7 locations: AI-AI hits 0, off-road 0, right-hand 100%, peds in buildings 0, AI knockdowns 0; update avg traffic 0.05–0.12 ms, peds 0.08–0.25 ms (stand-in chars); with real character.js peds ~0.49 ms, traffic 0.14 ms. Highway median 110 km/h. Scenarios: blocked AI stops 3.35 m, honks, drives on; rear-ended AI stops 2.4 s; hit ped at 8 m/s → fall → lie → get up → angry → pavement; dodge at 14 m; scare flee ≤8 s.
+Known issues: (1) real character.js cost ~0.5 ms/frame for peds (knobs animNear/animMid/visible/max; not measured on phone); (2) frame spikes 60–870 ms in busy machine (not verified quiet); runtime car build 13 ms when pool short; (3) AI never goes around a stopped player car (waits/honks; removed after 40 s stuck out of sight); (4) traffic slows near highway at-grade junction; (5) load cost npcGraphs 0.5–0.9 s, prewarm 2–4.5 s (SwiftShader) → loading screen; (6) people vanish at doors (no interiors), farmhouse/far houses not on walk graph, none near garage/highway; (7) recycled people keep looks (color-only setLook on respawn would fix); (8) kerb waits up to ~35 s; (9) a village.js tree on farm-road lane (obstacle zone workaround; real fix in village.js); (10) test-only scripted car on pavements.

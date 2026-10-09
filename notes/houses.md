@@ -1,0 +1,21 @@
+# interiors.js (b2-houses: walk-in houses/shops) — DONE ~18:10 UTC; not merged → integration agent
+
+> 這是遊戲還在「大便龍的萬能軟體」裡的時候，做這一塊的工作記錄（2026-09／10，英文）。檔名現在都在 repo 的 `src/`；
+> 裡面提到的 `old-scratch/…` 記錄檔、截圖、port-*.mjs 都在舊的暫存資料夾，沒有搬進 repo（要重看就重跑測試）。
+
+Files old-scratch/b2-houses: interiors.js (2284 lines, IIFE exports buildInterior, interiorFor, interiorFonts, disposeInteriorCache; GENERATED from int-src/p0-head.js…p6-api.js by `bash int-src/cat.sh` — edit parts; p0-head.js has full API doc), patch-village.py (adds name/sign/front/up fields to village buildings; RNG sequence unchanged; applies cleanly to b1-int/village.js 17:12), houses-test.html/.mjs (--quick --only= --timing --cpu2d --serve), int-node-check.mjs, int-map.mjs <i>, village.js (patched b1-int copy), village.b3.orig.js, houses-shots/ (54 PNG), int-dbg/final-*.png contact sheets, logs int-dbg/ht9.log, check15.txt.
+
+API: await interiorFonts() (≤1.5 s). interiorFor(b) cheap → null (not enterable) or { kind, biz, name, floors, size, rooms, enter{x,z,hx,hz,rot}, outside{x,z,heading} }. buildInterior(b, {renderer, quality:'high'|'low'}) → I (deterministic); buildInterior(null,{renderer}) = prewarm shared textures/PMREM/materials. I.group (building world pos, own lights; own THREE.Scene), I.floors, I.floor, I.setFloor(i) (all floors at y 0, one shown), I.spawn (1.15 m inside, facing in), current floor: I.colliders (world, village format), I.exits [{x,z,hx,hz,rot,to:'outside'|floorIdx,spawn,door{x,z,ry,w} = walk.js setDoors format}], I.spots {stand, sit(y; charstub group.y=y−0.45), sleep, pray, counter}, I.rooms, I.camera {maxDist 2.1–3.2, ceiling ≈2.82, near}, I.bounds, I.background, I.info {tris,draws,ms,shared}, I.dispose(); disposeInteriorCache().
+
+Coverage (117 buildings): 59 houses (2/3/4 floors; 客廳 神明桌 sofa TV → 餐廳/走道 → 廚房; upstairs bedrooms/study/laundry; 4F shrine room), 50 shops (breakfast, grocery, noodle, 碳烤滷味, scooter, hardware, 冷氣行, pharmacy, barber, betel nut, pawn, buffet, tea, laundry, clinic, optical, cram school, shaved ice; homes upstairs), #88 福德宮 temple, #89 村口超商 (cashier), #90 三合院. null: #86 garage (room.js), #87 阿輝改車廠 (drive-in bay), #99 阿財車行 (showroom NOT walkable: front glass collider lbox(T,-22,-0.3,22,0.05,5.2) spans auto door x 11.1–14.1 → split to leave 11.25–13.95 open), #115 police (police.js), #116 gunshop (gunshop.js).
+
+Integration:
+1. python3 patch-village.py village.js on trunk village.js (without it 8 shops get wrong interiors, balconies won't match outside).
+2. Bundle interiors.js after village.js (and street/police) in build-art/build-app; no name collisions.
+3. BLOCKER: walk.js adds world.colliders untagged and the village box covers house floors → can't move inside. Fix B (preferred): walk.js `cw.add(world.colliders,'world')` then remove/add tag 'world' on enter/exit. (Option A: world:{...VIL,colliders:[]} + addColliders(VIL.colliders,'village') but minimap outlines then need mapLayer.)
+4. Loading: interiorFonts() + buildInterior(null,{renderer}).
+5. Enter: atDoor(b) (town.src.js, now a toast) when interiorFor(b) non-null: fade → I = buildInterior(b,{renderer,quality}) (compileAsync during fade) → render ONLY interior scene (floors overlap village at y 0) → remove village colliders, add I.colliders 'interior' → setDoors(I.exits.map(e=>e.door)) → teleport(I.spawn) → setCamera({maxY:I.camera.ceiling}).
+6. onDoor(door): e = I.exits.find(x=>x.door===door); 'outside' → dispose I, village colliders back, setDoors('village'), teleport(e.spawn); floor n → I.setFloor(n), swap 'interior' colliders, reset doors, teleport(e.spawn). Ignore doors 0.4 s after a switch.
+
+Results: node check 5089/5089 (reachability 0.3 m body, gaps ≥0.84 m, spots near floor, arrivals free); browser 61/61 incl. leak check (geoms back to 0, textures 7, programs 12), 112 built 5 skipped, 0 page errors. ≤29.4k tris/building (avg 21.4k), ≤9 draws/floor. Build time avg 36 ms / max 86 ms at normal load; 93/604 ms under heavy load.
+Known: (1) collider blocker above; (2) first build PMREM stall 13.5 s under load on SwiftShader (normally 140–250 ms) → prewarm at loading; (3) build under the fade; (4) patch must be applied; (5) dealer glass; (6) sparse furniture in narrow cram schools, 4 deep houses no kitchen table; (7) stairs are fade exits, not walkable steps; (8) test top-down shots low contrast.
