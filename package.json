@@ -1,0 +1,21 @@
+{
+  "name": "beau-car-game",
+  "version": "0.0.0",
+  "private": true,
+  "description": "大便龍的改車遊戲（3D 車庫、開車出門、比賽）",
+  "type": "module",
+  "scripts": {
+    "build": "node src/build-art.mjs --yaris && node src/make-free.mjs",
+    "site": "node src/build-site.mjs"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@gltf-transform/cli": "4.5.0",
+    "@gltf-transform/core": "4.5.0",
+    "@gltf-transform/extensions": "4.5.0",
+    "@gltf-transform/functions": "4.5.0",
+    "meshoptimizer": "1.2.0"
+  }
+}

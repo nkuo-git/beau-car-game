@@ -1,0 +1,18 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+// 怪獸卡車輕量車的烘焙頁（monster-lod.mjs 用 Chromium 開）：四張投影遮罩（側、上、後、正面）的原始像素＋U（遮罩座標）
+// 車殼網格、零件在 node 那邊直接讀（monster3d/body-monster-hi.glb、monster-spec.js 的 lodParts）
+import { makeMaskTextures } from './masks.js';
+import { MONSTER_LOOK } from './monster-look.js';
+const b64 = (a) => { const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+const tex = (t) => ({ w: t.image.width, h: t.image.height, data: b64(t.image.data) });
+window.bake = () => {
+  const T = makeMaskTextures(MONSTER_LOOK);
+  return { U: MONSTER_LOOK.U, masks: { side: tex(T.side), top: tex(T.top), rear: tex(T.rear), front: tex(T.fronts.base) } };
+};
+window.__ready = true;
+</script>
+</body></html>

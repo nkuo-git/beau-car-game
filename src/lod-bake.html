@@ -1,0 +1,148 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+// 輕量車（LOD）的烘焙頁（make-lod.mjs 用 Chromium 開）：照車庫的組法把整台車組起來，拿出
+//   1. 右半邊車身（和 Supra 的兩個車頭）的網格
+//   2. 四張投影遮罩（側、上、後、每個車頭的正面）的原始像素 → node 端照 masks.js patchPaint 的規則分類（車漆／玻璃／黑／燈⋯）
+//   3. 車身上的零件（後照鏡、排氣管、套件、每種尾翼、寬體）：車身座標的三角形＋材質角色＋在哪些套件／尾翼下看得到
+// 車漆用一個不會撞到的顏色（#123457）組車：零件材質顏色跟它一樣的（鴨尾、918 同色零件）就算車漆
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { buildCar, SUPRA_SPEC, GTR_SPEC, carGeos } from './supra.js';
+import { makeMaskTextures } from './masks.js';
+import { extraWings } from './wings.js';
+import { WIDE } from './wide.js';
+import { GC8_SPEC, GC8_GARAGE } from './gc8-spec.js';
+import { YARIS_SPEC, YARIS_GARAGE } from './yaris-spec.js';
+import { P918_SPEC, P918_GARAGE } from './p918-spec.js';
+import { SP3_SPEC, SP3_GARAGE } from './sp3-spec.js';
+import { JESKO_SPEC, JESKO_GARAGE } from './jesko-spec.js';
+const KITS3 = [['stock'], ['bomex'], ['track']];
+const CARS = {
+  supra: { spec: SUPRA_SPEC, glb: 'body-q.glb', kits: KITS3, wings: [['stock'], ['gt'], ['none']] },
+  gtr: { spec: GTR_SPEC, glb: 'body-gtr-q.glb', kits: KITS3, wings: [['stock'], ['gt'], ['none']] },
+  gc8: { spec: GC8_SPEC, glb: 'body-gc8-q.glb', ...GC8_GARAGE.opts },
+  yaris: { spec: YARIS_SPEC, glb: 'body-yaris-q.glb', ...YARIS_GARAGE.opts },
+  p918: { spec: P918_SPEC, glb: 'body-p918-q.glb', ...P918_GARAGE.opts },
+  sp3: { spec: SP3_SPEC, glb: 'body-sp3-q.glb', ...SP3_GARAGE.opts },
+  jesko: { spec: JESKO_SPEC, glb: 'body-jesko-q.glb', ...JESKO_GARAGE.opts },
+};
+for (const C of Object.values(CARS)) C.kits = (C.kit || C.kits).map((o) => o[0]), C.wingKeys = (C.wing || C.wings).map((o) => o[0]);
+const SENT = '#123457';
+const b64 = (a) => { const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+
+async function load(key) {
+  const C = CARS[key];
+  const buf = await (await fetch(C.glb)).arrayBuffer();
+  const gltf = await new GLTFLoader().parseAsync(buf, '');
+  const spec = { ...C.spec, wings: { ...C.spec.wings, ...extraWings(key) } };
+  const S = buildCar(spec, carGeos(gltf.scene), { wide: WIDE[key], paint: SENT });
+  return { C, gltf, spec, S };
+}
+// 材質角色：車漆、mats 裡的那些、Jesko 點綴色；其他的叫 custom（node 端用它自己的顏色）
+function roleOf(m, S) {
+  if (m === S.paint || (m.color && m.color.getHexString() === SENT.slice(1))) return 'paint';
+  for (const [k, v] of Object.entries(S.mats)) if (v === m) return k === 'chrome' ? 'rim' : k;
+  return 'custom';
+}
+// 一個 mesh 在「目前的」可見狀態下看不看得到（一路往上到 body）
+const shown = (o, stop) => { for (let p = o; p && p !== stop; p = p.parent) if (!p.visible) return false; return true; };
+// 車身上的零件：跳過車殼三層、車頭、車內
+function parts(S) {
+  const out = [];
+  S.body.updateMatrixWorld(true);
+  S.body.traverse((o) => {
+    if (!o.isMesh) return;
+    for (let p = o; p && p !== S.body; p = p.parent) if (['paint', 'inside', 'glass', 'interior'].includes(p.name) || p.name.startsWith('nose-')) return;
+    let wing = null, wide = false;
+    for (let p = o; p && p !== S.body; p = p.parent) { if (p.name.startsWith('wing-')) wing = p.name.slice(5); if (p.name === 'wide') wide = true; }
+    out.push({ o, wing, wide });
+  });
+  return out;
+}
+window.inventory = async (key) => {
+  const { C, S } = await load(key);
+  const list = parts(S), rows = [];
+  for (const it of list) {
+    const g = it.o.geometry, n = (g.index ? g.index.count : g.attributes.position.count) / 3 * (it.o.isInstancedMesh ? it.o.count : 1);
+    const mats = [].concat(it.o.material);
+    rows.push({ name: it.o.name, parent: it.o.parent.name, geo: g.type, tris: n, role: mats.map((m) => roleOf(m, S)).join('+'), wing: it.wing, wide: it.wide, inst: !!it.o.isInstancedMesh,
+      col: mats[0].color ? mats[0].color.getHexString() : '', mtype: mats[0].type, cache: mats[0].customProgramCacheKey && mats[0].customProgramCacheKey !== THREE.Material.prototype.customProgramCacheKey ? 'custom' : '' });
+  }
+  // 每個套件下看得到哪些
+  const vis = {};
+  for (const k of C.kits) {
+    S.setKit(k);
+    vis[k] = list.map((it) => { if (it.wing) S.setWing(it.wing); if (it.wide) S.setWide(true); const v = shown(it.o, S.body); S.setWing(C.spec.wing); S.setWide(false); return v ? 1 : 0; });
+  }
+  const noses = Object.keys(S.noses);
+  return { key, kits: C.kits, wings: C.wingKeys, noses, rows, vis };
+};
+
+// ---- 烘焙：回傳 node 端要的全部資料（大陣列用 base64）----
+// 半邊車身：照 glb 節點矩陣還原成公尺（跟 supra.js fullBody 一樣，只是不鏡射）
+function half(scene, name) {
+  scene.updateMatrixWorld(true);
+  let src = null; scene.traverse((o) => { if (o.isMesh && o.name === name) src = o; });
+  const g = src.geometry, m = src.matrixWorld, nm = new THREE.Matrix3().getNormalMatrix(m), p = g.attributes.position, n = g.attributes.normal, c = p.count;
+  const P = new Float32Array(c * 3), N = new Float32Array(c * 3), v = new THREE.Vector3();
+  for (let i = 0; i < c; i++) {
+    v.fromBufferAttribute(p, i).applyMatrix4(m); P.set([v.x, v.y, v.z], i * 3);
+    v.fromBufferAttribute(n, i).applyMatrix3(nm).normalize(); N.set([v.x, v.y, v.z], i * 3);
+  }
+  return { pos: b64(P), nor: b64(N), idx: b64(new Uint32Array(g.index.array)), n: c };
+}
+const tex = (t) => ({ w: t.image.width, h: t.image.height, data: b64(t.image.data) });
+// 零件的三角形（車身座標，不加索引）：position、normal
+function soup(o) {
+  let g = o.geometry; if (g.index) g = g.toNonIndexed();
+  if (!g.attributes.normal) g.computeVertexNormals();
+  const m = o.matrixWorld, nm = new THREE.Matrix3().getNormalMatrix(m), p = g.attributes.position, n = g.attributes.normal, c = p.count;
+  const P = new Float32Array(c * 3), N = new Float32Array(c * 3), v = new THREE.Vector3();
+  const flip = m.determinant() < 0; // 鏡射過的（scale 有負的）：三角形要反過來繞
+  for (let i = 0; i < c; i++) {
+    const j = flip ? i - (i % 3) + [0, 2, 1][i % 3] : i;
+    v.fromBufferAttribute(p, j).applyMatrix4(m); P.set([v.x, v.y, v.z], i * 3);
+    v.fromBufferAttribute(n, j).applyMatrix3(nm).normalize(); N.set([v.x, v.y, v.z], i * 3);
+  }
+  return { pos: b64(P), nor: b64(N), n: c };
+}
+const hex = (c) => '#' + c.getHexString();
+window.bake = async (key) => {
+  const { C, gltf, spec, S } = await load(key);
+  const look = spec.look, T = makeMaskTextures(look);
+  const out = { key, U: look.U, kits: C.kits, wings: [...Object.keys(spec.wings), 'none'], wing: spec.wing, kit: spec.kit,
+    body: half(gltf.scene, 'Body'), noses: {}, masks: { side: tex(T.side), top: tex(T.top), rear: tex(T.rear), fronts: {} }, noseOfKit: {}, parts: [] };
+  for (const k of Object.keys(S.noses)) { out.noses[k] = half(gltf.scene, 'Nose_' + k); out.masks.fronts[k] = tex(T.fronts[k]); }
+  if (!Object.keys(S.noses).length) out.masks.fronts.base = tex(T.fronts[Object.keys(T.fronts)[0]]);
+  // 每個套件用哪個車頭、零件在哪些套件看得到（尾翼零件要先選那個尾翼；寬體零件要先開寬體）
+  const list = parts(S).filter((it) => {
+    const o = it.o, m = [].concat(o.material)[0], type = o.geometry.type;
+    if (o.isInstancedMesh) return false; // 寬體的鉚釘（太小）
+    if (o.name === 'p918-lid') return false; // 918 車蓋條紋＝拉花
+    if (roleOf(m, S) === 'custom' && (type === 'ShapeGeometry' || type === 'PlaneGeometry')) return false; // 小貼片（SP3 葉子板上的盾牌、國旗）
+    return true;
+  });
+  const vis = list.map(() => []);
+  for (const k of C.kits) {
+    S.setKit(k);
+    const nose = Object.entries(S.noses).find(([, m]) => m.visible);
+    if (nose) out.noseOfKit[k] = nose[0];
+    list.forEach((it, i) => { if (it.wing) S.setWing(it.wing); if (it.wide) S.setWide(true); if (shown(it.o, S.body)) vis[i].push(k); S.setWing(spec.wing); S.setWide(false); });
+  }
+  S.setKit(spec.kit);
+  S.body.updateMatrixWorld(true);
+  list.forEach((it, i) => {
+    if (!vis[i].length) return;
+    const m = [].concat(it.o.material)[0], role = roleOf(m, S);
+    const mat = { color: m.color ? hex(m.color) : '#808080', roughness: m.roughness ?? 0.5, metalness: m.metalness ?? 0, clearcoat: m.clearcoat ?? 0,
+      emissive: m.emissive ? hex(m.emissive) : '#000000', ei: m.emissiveIntensity ?? 1, opacity: m.transparent ? m.opacity : 1 };
+    out.parts.push({ role, mat, kits: vis[i], wing: it.wing, wide: it.wide, name: it.o.name, type: it.o.geometry.type, ...soup(it.o) });
+  });
+  return out;
+};
+window.__ready = true;
+</script>
+</body></html>

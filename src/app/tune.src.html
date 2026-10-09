@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>改車</title>
+<meta name="description" content="改車：3D 車庫，換車色、輪框、套件、寬體、引擎，還能上賽道跑 400 公尺直線加速。">
+<meta name="theme-color" content="#0E0F12">
+<link rel="icon" href="./icons/icon-192.png" sizes="192x192">
+<script>
+/* 跟汽車那頁一樣的明暗和主色（在汽車那頁的齒輪裡改）；先套上再畫，才不會閃一下 */
+(function () {
+  var r = document.documentElement, t = null, a = null;
+  try { t = localStorage.getItem("carid.theme"); a = localStorage.getItem("carid.accent"); } catch (e) { /* 不給用就用預設 */ }
+  var mode = t === "light" || t === "dark" || t === "system" ? t : "dark";
+  if (mode === "system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme", mode);
+  var m = /^#?([0-9a-f]{6})$/i.exec(String(a || "").trim());
+  if (!m) return;
+  var n = parseInt(m[1], 16), rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  var dark = mode === "dark" || (mode === "system" && !!(window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches));
+  var lum = function (c) {
+    var l = c.map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
+  };
+  if (dark && lum(rgb) < 0.18) rgb = rgb.map(function (v) { return Math.round(v + (255 - v) * 0.24); });
+  var hex = "#" + rgb.map(function (v) { return v.toString(16).padStart(2, "0"); }).join("");
+  r.style.setProperty("--accent", hex);
+  r.style.setProperty("--accent-ink", lum(rgb) > 0.19 ? "#0E0F12" : "#FFFFFF");
+  r.style.setProperty("--accent-wash", "rgba(" + rgb.join(", ") + ", " + (dark ? 0.16 : 0.09) + ")");
+})();
+</script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="./tune.css?v=__V__">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
+</head>
+<body>
+
+<div class="app">
+  <header class="appbar">
+    <img class="mark" src="./icons/icon-192.png" alt="" width="34" height="34">
+    <div class="brand">
+      <h1 class="brand-name">大便龍的萬能軟體<span class="brand-ver" id="brandVer"></span></h1>
+      <p class="brand-sub">汽車</p>
+    </div>
+    <a class="icon-btn" href="./index.html#settings" aria-label="設定"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M4.6 14.4h-.5a2 2 0 1 1 0-4h.5a7.5 7.5 0 0 1 .9-2.2l-.4-.4a2 2 0 1 1 2.8-2.8l.4.4a7.5 7.5 0 0 1 2.2-.9v-.5a2 2 0 1 1 4 0v.5a7.5 7.5 0 0 1 2.2.9l.4-.4a2 2 0 1 1 2.8 2.8l-.4.4a7.5 7.5 0 0 1 .9 2.2h.5a2 2 0 1 1 0 4h-.5a7.5 7.5 0 0 1-.9 2.2l.4.4a2 2 0 1 1-2.8 2.8l-.4-.4a7.5 7.5 0 0 1-2.2.9v.5a2 2 0 1 1-4 0v-.5a7.5 7.5 0 0 1-2.2-.9l-.4.4a2 2 0 1 1-2.8-2.8l.4-.4a7.5 7.5 0 0 1-.9-2.2z"/></svg></a>
+  </header>
+
+  <!-- 汽車裡的四個功能：前三個在 index.html，改車是這一頁 -->
+  <div class="segbar">
+    <nav class="segs" aria-label="汽車">
+      <a href="./index.html#car" data-seg="car">辨車</a>
+      <a href="./index.html#history" data-seg="history">紀錄</a>
+      <a href="./index.html#news" data-seg="news">車訊</a>
+      <a href="./tune.html" data-seg="tune" aria-current="page">改車</a>
+    </nav>
+  </div>
+
+  <main class="tune" id="tune">
+<!--__GARAGE__-->
+  </main>
+
+  <nav class="tabbar" aria-label="功能">
+    <a href="./tune.html" id="carTab" aria-current="page"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 13l1.7-4.3A3 3 0 0 1 8 6.8h8a3 3 0 0 1 2.8 1.9L20.5 13"/><path d="M3.5 13h17v3.8h-17z"/><path d="M6.8 16.8v1.4"/><path d="M17.2 16.8v1.4"/></svg></span>汽車</a>
+    <a href="./mc.html"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 20.5 7.5v9L12 21 3.5 16.5v-9z"/><path d="M3.5 7.5 12 12l8.5-4.5"/><path d="M12 12v9"/></svg></span>麥塊</a>
+  </nav>
+</div>
+
+<script type="module" src="./tune.js?v=__V__"></script>
+</body>
+</html>

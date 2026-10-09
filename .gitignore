@@ -1,0 +1,29 @@
+node_modules/
+# 試做頁（node src/build-art.mjs --yaris、make-free.mjs 產生的，很大，不放進 git）
+src/art/
+# 測試的截圖、記錄
+out/
+src/**/*.png
+src/*-shots/
+*.log
+# 車身產生器的中間檔（-q.glb、-lod.glb 才是要的，已經在 git 裡）
+src/body.glb
+src/body-gc8.glb
+src/body-gtr.glb
+src/body-jesko.glb
+src/body-monster.glb
+src/body-p918.glb
+src/body-sp3.glb
+src/body-yaris.glb
+src/lod3d/
+src/monster3d/
+# 備份
+*.bak*
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/*.iml
+.idea/
+.DS_Store

@@ -1,0 +1,25 @@
+
+/* ================= 改車頁 ================= */
+/* 3D 車庫的變數對到 App 的顏色，所以跟著 App 的亮暗和主色走（車庫試做頁是固定的暗色） */
+.tune {
+  --bg: var(--ground);
+  --surf: var(--surface);
+  --soft: var(--ink-soft);
+  --sel: var(--accent-wash);
+  --on-accent: var(--accent-ink);
+  --cond: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --sans: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px 24px;
+}
+/* 上面黏著「辨車／紀錄／車訊／改車」，捲過去的時候留位置給它 */
+.tune .stage, .tune .result { scroll-margin-top: 76px; }
+/* 比賽、開車出門時標題列收起來，畫面大一點 */
+body.racing .appbar, body.driving .appbar { display: none; }
+
+/* 全螢幕（開車、比賽；garage.css 的 body.fs）：辨車／紀錄／車訊／改車、底下的汽車／麥塊也收起來，畫面蓋滿整個螢幕 */
+body.fs .appbar, body.fs .segbar, body.fs .tabbar { display: none; }
