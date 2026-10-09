@@ -685,7 +685,7 @@ const AK = ['park', 'school', 'pitch', 'track', 'court', 'water', 'play', 'parki
 const areasOut = AREAS.map((a) => [AK.indexOf(a.t), a.p.flatMap((p) => [q(p[0]), q(p[1])])]);
 const out = {
   v: 2, center: CENTER, edge: EDGE, at: { x: Math.round(AT.x * 10) / 10, z: Math.round(AT.z * 10) / 10 }, link: { entry: [Math.round((AT.x + EP[0]) * 10) / 10, Math.round((AT.z + EP[1]) * 10) / 10], box: BOX_AT },
-  src: path.basename(SRC), made: new Date().toISOString().slice(0, 10), box: [q(BB.x0), q(BB.z0), q(BB.x1), q(BB.z1)],
+  src: path.basename(SRC).replace(/\.gz$/, ''), made: new Date().toISOString().slice(0, 10), box: [q(BB.x0), q(BB.z0), q(BB.x1), q(BB.z1)],
   ent: entOut, entP: [q(EP[0]), q(EP[1])], entDir: [Math.round(entDir[0] * 1e4) / 1e4, Math.round(entDir[1] * 1e4) / 1e4],
   names: NAMES, nodes: NOUT, roads: roadsOut, nbld: BLD.length, bld: bldOut, areaKinds: AK, areas: areasOut,
   elev: ELEV.map((e) => [e.k, q(e.y), q(e.w), e.p.flatMap((p) => [q(p[0]), q(p[1])]), e.piers.flatMap((p) => [q(p[0]), q(p[1])])]),
