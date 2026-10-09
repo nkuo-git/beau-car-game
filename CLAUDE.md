@@ -127,8 +127,9 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 
 ## App（APK）
 - `android/`：WebView 殼，package `com.nkuo.beaucargame`，名字「大便龍的改車遊戲」（桌面上「改車遊戲」），開 START_URL＝網站。直的、橫的都可以。
-- 網頁那邊叫 `window.BeauCarApp`：`setFullscreen(on)`、`ready()`。User-Agent 帶 `BeauCarApp/<版號>`。返回鍵先問網頁 `window.caridExitFullscreen()`（關自訂角色、離開這一趟的全螢幕），網頁回 false 才離開。
+- 網頁那邊叫 `window.BeauCarApp`：`setFullscreen(on)`、`ready()`、`googleSignIn()`（apk-4 起；結果回 `window.beauGoogleSignIn(idToken, 錯誤)`）。User-Agent 帶 `BeauCarApp/<版號>`。返回鍵先問網頁 `window.caridExitFullscreen()`（關自訂角色、離開這一趟的全螢幕），網頁回 false 才離開。
 - 搬家連結 `beaucargame://import?save=…` → `window.beauImport(save)`。
+- workflow 只有在 main 才發 Release；在別的分支手動跑（workflow_dispatch）只是試編（apk-3 就是這樣用掉的號碼）。
 - 簽章：workflow 第一次跑用 repo secret **`BEAU_KEY_PASS`** 產生 `android/keystore/beaucargame.jks` 並 commit（之後都用同一把，新版才能直接蓋過去裝）。沒有那個 secret：用臨時的 debug 簽章，Release 發成「預先發行」（遊戲裡的「App 有新版本」不會指到它），裝正式版前要先移除（存檔會不見）。
 - 這個機器的 GitHub 代理不給碰 Actions secrets 和 Pages 設定（403）：這兩個要 Nick（或家長）在 GitHub 網頁上設。
 - 圖示：萬能軟體的橘色車＋右下角格子旗徽章（蓋掉保桿上的貼紙字），深色底（`src/site/make-icons.py`）。
@@ -137,10 +138,9 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - **main** ＝ 手機上的 0.9.37 遊戲（萬能軟體內容 37／38 的 tune.js 跟 `build-app.mjs` 產生的一模一樣）＋這次的網站（內容 1）＋APK 殼。
   - 0.9.37 有：越野車車庫（4 格，越野車專屬）、怪獸卡車輾扁東西（車、路邊小東西；人跳開）、汽車半價、怪獸卡車 100 萬、拿掉撞爛（`CRASH_DAMAGE = false`）、內湖（七個地標、路牌、離村子近）、警察、槍店、甩尾、賽車場。
 - **內容 2（2026-10-09 上線，試做頁 v25–v27）**：路變寬 1.5 倍（村子、內湖；快速道路、賽車場、直線加速沒變）；房子最多 2 層（村子、內湖；地標不變），越野車撞不倒房子，其他的（樹、電線桿、警車⋯）幾乎都輾得扁（不會輾的：人、小孩、房子、你家車庫、改車廠、車店、槍店、警察局、廟、捷運柱子⋯），輾扁的東西你離開 140 公尺 25 秒後會修好；越野車車庫搬到你的車庫前面左邊（門對著路，變大）；你的車庫變高（6 公尺、門 8×5）、裡面變寬（31.4 公尺）；路人不會再卡在門口。說明在 `notes/wide.md`、`notes/tall.md`。
-- **登入＋雲端存檔（做好了，在試玩頁 https://nkuo-git.github.io/beau-car-game/try/ ，等 Nick 試、說「上線」）**：用 Google 帳號登入（Nick 的 Firebase `beau-car-game`），進度存在雲端 `saves/{uid}`。說明在 `notes/cloud.md`。
-  - 試玩頁 `docs/try/`（`node src/build-site.mjs <版號> --try`）：跟正式網站同網域、用同一份存檔；不裝 Service Worker。正式網站和 App 還沒有登入。
-  - App 要新版外殼才能登入（`BeauCarApp.googleSignIn()`，只在工作分支，merge 進 main 就會出新的 APK），還要在 Firebase 加 Android 應用程式（`com.nkuo.beaucargame`＋SHA-1，見 notes/cloud.md）。
-  - 上線的時候：build-site.mjs 的正式版也要接 cloud.js。
+- **內容 3（2026-10-09 上線）＝ 登入＋雲端存檔**：右上角「☁ 登入」，用 Google 帳號登入（Nick 的 Firebase `beau-car-game`），進度存在雲端 `saves/{uid}`（`src/site/cloud.js`，說明在 `notes/cloud.md`）。
+  - App 要新版外殼（apk-4 起，`BeauCarApp.googleSignIn()`）才能登入，而且 Firebase 要有 Android 應用程式（`com.nkuo.beaucargame`＋SHA-1，見 notes/cloud.md）；舊 App 按登入會叫他先更新。
+  - 試玩頁 `docs/try/`（`node src/build-site.mjs <版號> --try`）：要真的連網路才能試的東西（試做頁 artifact 連不到 Firebase）放這裡；跟正式網站同網域、用同一份存檔；不裝 Service Worker。
 - **已知問題**
   - 越野車車庫裡坐在駕駛座（或追車鏡頭）會看到天空（屋頂被剔除）。
   - 越野車車庫 1 號格要倒車、打方向、再前進（三點迴轉）才出得來。

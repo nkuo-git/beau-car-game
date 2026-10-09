@@ -1,7 +1,7 @@
 // 大便龍的改車遊戲 — Service Worker（build-site.mjs 從 src/site/sw.src.js 產生，不要直接改 docs/sw.js）
 // 跟萬能軟體的 sw.js 同一個做法：殼先存起來（離線也打得開），新版先在旁邊待命，畫面上按了「更新」才接手（不自己更新）
 
-const V = "2"; // 跟 index.html 裡 game.css／game.js 後面的 ?v= 一樣：換版就換網址，任何一層快取都不會給到舊檔
+const V = "3"; // 跟 index.html 裡 game.css／game.js 後面的 ?v= 一樣：換版就換網址，任何一層快取都不會給到舊檔
 const CACHE = "beaucar-v" + V;
 // 車身檔（tune/<車>.glb?h=<雜湊>）：網址帶內容的雜湊，車身沒改網址就不變 → 放在另一個不會隨版號清掉的快取，換版不用重新下載（每台 1–2 MB）
 const GLB_CACHE = "beaucar-glb";
@@ -50,11 +50,13 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  // 查 App 有沒有新版（GitHub API）一律走網路
-  if (url.hostname === "api.github.com") return;
+  // 查 App 有沒有新版（GitHub API）、登入和雲端存檔（Firebase：*.googleapis.com、*.firebaseapp.com）一律走網路
+  if (url.hostname === "api.github.com" || /(^|\.)googleapis\.com$|(^|\.)firebaseapp\.com$/.test(url.hostname)) return;
 
-  // 導覽：先連網，失敗才用快取的殼（離線時至少開得起來）
+  // 導覽：先連網，失敗才用快取的殼（離線時至少開得起來）；只管遊戲首頁（試玩頁 try/ 這種別的頁不要存成首頁）
   if (req.mode === "navigate") {
+    const home = new URL("./", self.registration.scope).pathname;
+    if (url.pathname !== home && url.pathname !== home + "index.html") return;
     event.respondWith(
       fetch(req, { cache: "no-store" })
         .then((res) => {

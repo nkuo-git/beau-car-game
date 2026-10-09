@@ -4,7 +4,7 @@ Nick: 「要做登入功能 讓每個人資料存在雲端」 → his own Fireba
 https://claude.ai/artifact/MGRTHMPeLjNTEvcJzZtmpq
 
 ## Where it lives
-- `src/site/cloud.js`: the whole feature, a block appended to `game.js` after `site.js`. **Only the /try/ build includes it for now** (`node src/build-site.mjs <ver> --try` → `docs/try/`). The main site gets it at the next 上線 (append it in the non-try build too).
+- `src/site/cloud.js`: the whole feature, a block appended to `game.js` after `site.js` (both the main and the /try/ builds). Shipped to the main site as content 3 (2026-10-09); first trialed on /try/.
 - UI: `src/site/index.src.html` (`#cloudChip` in the app bar and the `#cloudDlg` sheet: 登入 / 帳號 / 要用哪一個進度？) plus `.cloudchip`/`.cl-*` in `site.css`. Without cloud.js, the chip stays `hidden`.
 - `garage.src.html` `save()` fires `window` event `beau-save` after writing `carid.tune`. cloud.js debounces it by 2.5 s and uploads.
 
@@ -32,7 +32,7 @@ Google blocks web sign-in inside WebViews, so the shell does it natively:
 - The result goes to `window.beauGoogleSignIn(idToken, err)`, where err is `cancel` / `noacct` / `fail`. The web side then calls `signInWithCredential(GoogleAuthProvider.credential(idToken))`.
 - An old shell (no `googleSignIn`) shows 「要先更新 App 才能登入…」.
 - Needs an **Android app in the Firebase project**: package `com.nkuo.beaucargame` plus the release cert SHA-1 `D6:1F:9B:DC:CE:50:E6:F6:27:ED:DB:07:4A:B6:C2:88:CC:74:3D:66`. This is public. It was read from the public apk-2 APK's v2 signing block, not from the keystore. Without it, Credential Manager returns a developer error and the shell sends `fail`.
-- The android code is on the work branch only. Merging it to main builds and releases a new APK. That waits for 上線.
+- Shipped with content 3: the merge to main released apk-4 (apk-3 was a branch-only compile check).
 - `.github/workflows/android.yml`: only main creates a Release. `workflow_dispatch` on another branch just compiles and uploads the artifact.
 
 ## /try/ page

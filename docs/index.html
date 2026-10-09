@@ -33,7 +33,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="./game.css?v=2">
+<link rel="stylesheet" href="./game.css?v=3">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
 </head>
 <body>
@@ -44,6 +44,8 @@
     <div class="brand">
       <h1 class="brand-name">大便龍的改車遊戲<span class="brand-ver" id="brandVer"></span></h1>
     </div>
+    <!-- 登入＋雲端存檔（site/cloud.js 接好了才出現） -->
+    <button type="button" class="cloudchip" id="cloudChip" hidden><span class="cl-dot ok" aria-hidden="true"></span><span id="cloudChipTxt">☁ 登入</span></button>
   </header>
 
   <!-- 有新版本：一次只跳一條（App 的新版優先），不會自己更新 -->
@@ -148,6 +150,35 @@
   </div>
 </div>
 
-<script type="module" src="./game.js?v=2"></script>
+<!-- 登入＋雲端存檔：登入、帳號、要用哪一個進度（site/cloud.js） -->
+<div class="imp" id="cloudDlg" role="dialog" aria-modal="true" aria-labelledby="cloudTitle" hidden>
+  <div class="imp-card cl-card">
+    <div class="cl-head"><h2 id="cloudTitle">登入</h2><button type="button" class="cl-x" id="cloudX" aria-label="關掉">✕</button></div>
+    <div class="cl-sec" id="clIn">
+      <p class="cl-note">不用密碼。選手機上的 Google 帳號就登入了。</p>
+      <button type="button" class="imp-yes cl-btn" id="clGoogle">用 Google 帳號登入</button>
+      <button type="button" class="imp-no cl-btn" id="clLater">先不要</button>
+      <p class="cl-err" id="clErr" hidden></p>
+      <p class="cl-note">登入以後，進度會自己存到雲端。換手機登入同一個帳號，進度就回來了。</p>
+    </div>
+    <div class="cl-sec" id="clAcct" hidden>
+      <div class="cl-acct"><span class="cl-ava" id="clAva">?</span><p><span id="clEmail"></span><small>登入中</small></p></div>
+      <div class="cl-status"><span class="cl-dot" id="clStatusDot"></span><span id="clStatus">雲端存檔：讀取中⋯</span></div>
+      <button type="button" class="imp-no cl-btn" id="clOut">登出</button>
+      <p class="cl-note">登出以後，這支手機上的進度還在，只是不會再存到雲端。</p>
+    </div>
+    <div class="cl-sec" id="clPick" hidden>
+      <p class="cl-note">這個帳號在雲端已經有進度了，跟這支手機的不一樣。</p>
+      <div class="cl-pair">
+        <div class="cl-save pick"><h3>☁ 雲端的</h3><p id="clCloudSum"></p></div>
+        <div class="cl-save"><h3>📱 這支手機的</h3><p id="clLocalSum"></p></div>
+      </div>
+      <button type="button" class="imp-yes cl-btn" id="clUseCloud">用雲端的</button>
+      <button type="button" class="imp-no cl-btn" id="clUseLocal">用這支手機的<small>雲端的會被蓋掉</small></button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./game.js?v=3"></script>
 </body>
 </html>
