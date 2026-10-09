@@ -362,6 +362,7 @@ function save(now) {
       localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 2, cur, scene: studioKind, money: GAME.money, owned: [...GAME.owned], parts: GAME.parts, tyres: GAME.tyres, wins: GAME.wins, park: GAME.park, dmg: GAME.dmg, look: GAME.look || undefined, guns: GAME.guns,
         cars: Object.fromEntries(Object.entries(CARS).map(([k, C]) => [k, C.state])) }));
     } catch { /* 不給存就算了 */ }
+    try { window.dispatchEvent(new Event('beau-save')); } catch { /* 沒有人聽就算了 */ } // 網站的雲端存檔（site/cloud.js）聽這個
   };
   if (now) write(); else save.t = setTimeout(write, 300);
 }

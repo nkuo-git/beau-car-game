@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>大便龍的改車遊戲（試玩）</title>
+<meta name="description" content="改車遊戲：3D 車庫，換車色、輪框、套件、寬體、引擎，開車出門、比賽、越野、去內湖。">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0E0F12">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<script>
+/* 明暗和主色：預設暗色；從萬能軟體搬過來的進度如果帶了 carid.theme／carid.accent 就照它（這裡沒有設定頁）。先套上再畫，才不會閃一下 */
+(function () {
+  var r = document.documentElement, t = null, a = null;
+  try { t = localStorage.getItem("carid.theme"); a = localStorage.getItem("carid.accent"); } catch (e) { /* 不給用就用預設 */ }
+  var mode = t === "light" || t === "dark" || t === "system" ? t : "dark";
+  if (mode === "system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme", mode);
+  var m = /^#?([0-9a-f]{6})$/i.exec(String(a || "").trim());
+  if (!m) return;
+  var n = parseInt(m[1], 16), rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  var dark = mode === "dark" || (mode === "system" && !!(window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches));
+  var lum = function (c) {
+    var l = c.map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
+  };
+  if (dark && lum(rgb) < 0.18) rgb = rgb.map(function (v) { return Math.round(v + (255 - v) * 0.24); });
+  var hex = "#" + rgb.map(function (v) { return v.toString(16).padStart(2, "0"); }).join("");
+  r.style.setProperty("--accent", hex);
+  r.style.setProperty("--accent-ink", lum(rgb) > 0.19 ? "#0E0F12" : "#FFFFFF");
+  r.style.setProperty("--accent-wash", "rgba(" + rgb.join(", ") + ", " + (dark ? 0.16 : 0.09) + ")");
+})();
+</script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="./game.css?v=2">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
+</head>
+<body>
+
+<div class="app">
+  <header class="appbar">
+    <img class="mark" src="./icons/icon-192.png" alt="" width="34" height="34">
+    <div class="brand">
+      <h1 class="brand-name">大便龍的改車遊戲<span class="brand-ver" id="brandVer"></span></h1>
+    </div>
+    <!-- 登入＋雲端存檔（site/cloud.js 接好了才出現） -->
+    <button type="button" class="cloudchip" id="cloudChip" hidden><span class="cl-dot ok" aria-hidden="true"></span><span id="cloudChipTxt">☁ 登入</span></button>
+  </header>
+
+  <!-- 有新版本：一次只跳一條（App 的新版優先），不會自己更新 -->
+  <div class="updatebar" id="updateBar" hidden>
+    <span class="dot" aria-hidden="true"></span>
+    <span class="txt">有新版本，要更新嗎</span>
+    <button type="button" id="updateBtn" class="small">更新</button>
+  </div>
+  <div class="updatebar" id="appUpdateBar" hidden>
+    <span class="dot" aria-hidden="true"></span>
+    <span class="txt">App 有新版本</span>
+    <a class="small btnlike" id="appUpdateLink" href="https://github.com/nkuo-git/beau-car-game/releases/latest" rel="noopener">下載安裝</a>
+  </div>
+
+  <main class="tune" id="tune">
+    <div class="wallet" id="wallet"><span>你的錢</span><b id="cash">NT$ 0 萬</b><small id="cashTip">贏比賽拿獎金，買零件和新車</small></div>
+    <div class="cars" id="cars" role="group" aria-label="選車"></div>
+    <div class="stage" id="stage">
+      <div class="status" id="status"><span id="msg">車子開進車庫中⋯</span><div class="bar"><i id="prog"></i></div></div>
+      <div class="hint" id="hint">用手指拖可以轉，兩指可以放大</div>
+      <button type="button" class="revbtn" id="revBtn" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="off" d="M16.5 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>聽引擎聲</span></button>
+      <div class="views" id="views"><button type="button" data-a="38">前面</button><button type="button" data-a="90">側面</button><button type="button" data-a="150">後面</button><button type="button" id="seatBtn" aria-pressed="false">車內</button><button type="button" id="spin" aria-pressed="true">自動轉</button></div>
+      <div class="hud" id="hud" hidden>
+        <div class="trackbar" aria-hidden="true"><span>0</span><div class="prog2"><i id="pOpp"></i><i id="pMe" class="me"></i></div><span>400 M</span></div>
+        <div class="tree" id="tree" aria-hidden="true"><i data-k=""></i><i data-k=""></i><i data-k=""></i><i data-k="g" class="g"></i><i data-k="r" class="r"></i></div>
+        <div class="clock"><b id="clock">0.000</b><span>秒</span></div>
+        <div class="gauge"><canvas id="tach" aria-hidden="true"></canvas><div class="spd"><b id="spd">0</b><span>KM/H</span></div></div>
+        <div class="pedals"><button type="button" class="nitro" id="nitroBtn" disabled>氮氣</button><button type="button" class="go" id="goBtn" disabled>起步</button></div>
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      </div>
+      <div class="toast gtoast" id="gtoast" role="status" aria-live="polite"></div>
+      <button type="button" class="fsbtn" id="fsBtn" aria-pressed="true" aria-label="離開全螢幕"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="on" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/><path class="off" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    </div>
+    <section class="race" id="race" hidden aria-label="直線加速">
+      <div class="result" id="result" hidden></div>
+      <div class="race-btns"><button type="button" class="primary" id="raceGo">開始比賽</button><button type="button" class="ghost" id="raceBack">開回村子</button><button type="button" class="ghost snd" id="sndBtn" aria-pressed="true" aria-label="引擎聲音"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="off" d="M16.5 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+      <div class="minirow"><button type="button" class="ghost" id="raceHome">直接回車庫</button><span>不用開，一下就回到車庫</span></div>
+      <div class="group"><h2>選對手<small>贏了拿獎金；在賽車場贏過，下一個對手才會出現</small></h2><div class="cars opps" id="opps" role="group" aria-label="選對手"></div></div>
+      <p class="me" id="meStat"></p>
+      <p class="how">綠燈一亮就按「起步」；指針進到綠色區按「換檔」，太早太晚都會慢；「氮氣」一場只能用一次。綠燈前按起步算偷跑，輸了、偷跑都沒有獎金。電腦可以用空白鍵起步和換檔、N 鍵放氮氣。</p>
+    </section>
+    <section class="drivebar" id="drivebar" hidden aria-label="出門">
+      <div class="dests" id="dests" role="group" aria-label="要去哪裡"><button type="button" data-d="shop" aria-pressed="false">去改車廠</button><button type="button" data-d="dealer" aria-pressed="false">去車店</button><button type="button" data-d="circuit" aria-pressed="false">去賽車場</button><button type="button" data-d="highway" aria-pressed="false">去快速道路</button><button type="button" data-d="offroad" aria-pressed="false">去越野車場</button><button type="button" data-d="neihu" aria-pressed="false">去內湖</button><button type="button" data-d="garage" aria-pressed="false">回車庫</button></div>
+      <div class="minirow"><button type="button" class="ghost snd" id="dSndBtn" aria-pressed="true" aria-label="引擎聲音"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="off" d="M16.5 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><button type="button" class="ghost" id="driveHome">直接回車庫</button></div>
+      <p class="how">走路：左下角推著走，推到底用跑的，右邊滑動看四周；走到車子旁邊按「上車」（每一台都可以開）。開車：左下角 ◀ ▶ 轉彎，右下角「油門」「煞車」（停住了按著煞車會倒車）；停住了按右邊的「下車」。開快的時候一邊轉彎一邊按「手煞車」可以甩尾，往反方向按就拉回來。跟著左上角的箭頭、右上角小地圖的橘色路線走；地圖下面的鈕換視角。改車廠、車店要自己開進去停好；回家按「開鐵捲門」開進車庫停好、下車。電腦可以用方向鍵（走路也可以 WASD，Shift 跑），空白鍵手煞車，C 換視角，E 按畫面上的大按鈕。</p>
+    </section>
+    <section class="shop" id="shop" hidden aria-label="改車廠">
+      <div class="shop-head"><div class="who"><b id="shopName">改車廠</b><span>引擎零件、輪胎裝了就變快</span></div><button type="button" class="primary" id="shopGo">開走</button></div>
+      <div class="shop-cash"><span>你的錢</span><b id="shopCash">NT$ 0 萬</b></div>
+      <p class="shop-msg" id="shopMsg" role="status" aria-live="polite"></p>
+      <div class="group" id="shopFixG" hidden><h2>修車<small id="shopFixSub"></small></h2><div class="parts" id="shopFix" role="group" aria-label="修車"></div></div>
+      <div class="group"><h2>引擎零件<small id="shopEng"></small></h2><div class="parts" id="shopParts" role="group" aria-label="引擎零件"></div></div>
+      <div class="group"><h2>輪胎<small>起步比較不會打滑</small></h2><div class="eng tyres" id="shopTyres" role="group" aria-label="輪胎"></div></div>
+      <div class="minirow"><button type="button" class="ghost" id="shopHome">直接回車庫</button><span>不用開，一下就回到車庫</span></div>
+    </section>
+    <section class="shop dealer" id="dealer" hidden aria-label="車店">
+      <div class="shop-head"><div class="who"><b id="dealerName">車店</b><span>還沒買的車都擺在這裡，買了自己開回家</span></div><button type="button" class="primary" id="dealerGo">開走</button></div>
+      <div class="shop-cash"><span>你的錢</span><b id="dealerCash">NT$ 0 萬</b></div>
+      <p class="shop-msg" id="dealerMsg" role="status" aria-live="polite"></p>
+      <div class="group"><h2>展示中的車<small>按一下看那台車</small></h2><div class="parts lot" id="dealerCars" role="group" aria-label="展示中的車"></div></div>
+      <button type="button" class="cta buy" id="dealerBuy" hidden><b id="dealerBuyHead">買這台</b><span id="dealerBuyNote"></span></button>
+      <div class="minirow"><button type="button" class="ghost" id="dealerHome">直接回車庫</button><span>不用開，一下就回到車庫</span></div>
+    </section>
+    <div class="name"><b id="carName">Toyota Supra</b><span id="carSub">玩命關頭那台 · 3D 試做版</span></div>
+    <p class="spec" id="carSpec"></p>
+    <button type="button" class="cta" id="driveOut"><b>出門</b><span>走去坐上車，開鐵捲門開出去：改車廠、車店、賽車場、快速道路、越野車場</span></button>
+    <button type="button" class="cta alt" id="lookBtn"><b>自訂角色</b><span>你自己的樣子：性別、髮型、衣服、帽子⋯ 出門走路就是這個樣子</span></button>
+    <button type="button" class="cta buy" id="buyCar" hidden><b id="buyHead">買這台</b><span id="buyNote"></span></button>
+    <p class="locknote" id="lockNote" hidden>這台還不是你的：買了才能改裝、開出門。</p>
+    <div class="opts" id="opts">
+      <h3 class="optsub">性能<small>引擎零件和輪胎要開車去改車廠買</small></h3>
+      <div class="group wide"><h2>引擎零件<small id="engName"></small></h2><div class="parts" id="parts" role="group" aria-label="引擎零件"></div></div>
+      <div class="group wide"><h2>輪胎<small>起步比較不會打滑</small></h2><div class="eng tyres" id="tyres" role="group" aria-label="輪胎"></div></div>
+      <h3 class="optsub">外觀<small>免費，不影響速度</small></h3>
+      <div class="group wide"><h2>車色</h2><div class="chips" id="paints"></div></div>
+      <div class="group wide"><h2>烤漆</h2><div class="seg" data-opt="finish"></div></div>
+      <div class="group wide"><h2>輪框樣式</h2><div class="seg" data-opt="rimStyle"></div></div>
+      <div class="group"><h2>輪框顏色</h2><div class="chips" id="rims"></div></div>
+      <div class="group"><h2>卡鉗</h2><div class="chips" id="calipers"></div></div>
+      <div class="group"><h2>尾翼</h2><div class="seg" data-opt="wing"></div></div>
+      <div class="group"><h2>套件</h2><div class="seg" data-opt="kit"></div></div>
+      <div class="group"><h2>寬體</h2><div class="seg" data-opt="wide"></div></div>
+      <div class="group"><h2>車身高度</h2><div class="seg" data-opt="height"></div></div>
+      <div class="group"><h2>底盤燈</h2><div class="chips" id="glows"></div></div>
+      <div class="group"><h2>拉花</h2><div class="seg" data-opt="livery"></div></div>
+      <div class="group"><h2>隔熱紙</h2><div class="seg" data-opt="tint"></div></div>
+      <div class="group wide"><h2>場景</h2><div class="seg" data-opt="studio"></div></div>
+    </div>
+    <p class="note" id="garageNote">一開始只有 GC8、身上沒錢：按「出門」走去坐上車，開去賽車場跟對手比賽，贏了才有獎金；引擎零件、輪胎在改車廠買，新車開去車店買（買了自己開回家，停進車庫）。停下來可以下車走來走去，走到別台車旁邊就可以換開那台。車子是照你給的照片用程式捏出來的 3D 模型，哪裡不像直接跟我說。價錢是大概行情的一半（二手車看車況差很多），零件的價錢和馬力也是估的。</p>
+    <div class="restart"><button type="button" class="ghost" id="restart">重新開始</button><span id="restartTip">錢、車、零件、槍都歸零，外觀留著</span></div>
+  </main>
+</div>
+
+<!-- 從萬能軟體搬進度過來（App 的外殼叫 window.beauImport，或網址 #import=…）：先問，按了才蓋掉 -->
+<div class="imp" id="impDlg" role="dialog" aria-modal="true" aria-labelledby="impMsg" hidden>
+  <div class="imp-card">
+    <p class="imp-msg" id="impMsg">要把萬能軟體裡的進度搬過來嗎？（會蓋掉這裡的進度）</p>
+    <div class="imp-btns">
+      <button type="button" class="imp-no" id="impNo">不要</button>
+      <button type="button" class="imp-yes" id="impYes">搬過來</button>
+    </div>
+  </div>
+</div>
+
+<!-- 登入＋雲端存檔：登入、帳號、要用哪一個進度（site/cloud.js） -->
+<div class="imp" id="cloudDlg" role="dialog" aria-modal="true" aria-labelledby="cloudTitle" hidden>
+  <div class="imp-card cl-card">
+    <div class="cl-head"><h2 id="cloudTitle">登入</h2><button type="button" class="cl-x" id="cloudX" aria-label="關掉">✕</button></div>
+    <div class="cl-sec" id="clIn">
+      <p class="cl-note">不用密碼。選手機上的 Google 帳號就登入了。</p>
+      <button type="button" class="imp-yes cl-btn" id="clGoogle">用 Google 帳號登入</button>
+      <button type="button" class="imp-no cl-btn" id="clLater">先不要</button>
+      <p class="cl-err" id="clErr" hidden></p>
+      <p class="cl-note">登入以後，進度會自己存到雲端。換手機登入同一個帳號，進度就回來了。</p>
+    </div>
+    <div class="cl-sec" id="clAcct" hidden>
+      <div class="cl-acct"><span class="cl-ava" id="clAva">?</span><p><span id="clEmail"></span><small>登入中</small></p></div>
+      <div class="cl-status"><span class="cl-dot" id="clStatusDot"></span><span id="clStatus">雲端存檔：讀取中⋯</span></div>
+      <button type="button" class="imp-no cl-btn" id="clOut">登出</button>
+      <p class="cl-note">登出以後，這支手機上的進度還在，只是不會再存到雲端。</p>
+    </div>
+    <div class="cl-sec" id="clPick" hidden>
+      <p class="cl-note">這個帳號在雲端已經有進度了，跟這支手機的不一樣。</p>
+      <div class="cl-pair">
+        <div class="cl-save pick"><h3>☁ 雲端的</h3><p id="clCloudSum"></p></div>
+        <div class="cl-save"><h3>📱 這支手機的</h3><p id="clLocalSum"></p></div>
+      </div>
+      <button type="button" class="imp-yes cl-btn" id="clUseCloud">用雲端的</button>
+      <button type="button" class="imp-no cl-btn" id="clUseLocal">用這支手機的<small>雲端的會被蓋掉</small></button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./game.js?v=2"></script>
+</body>
+</html>

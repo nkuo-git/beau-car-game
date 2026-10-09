@@ -94,6 +94,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `node test-app-b1.mjs ../docs ../out/app1/app` | 網站（docs/）整趟：跟 test-b1 一樣＋版本號、標題列、App 外殼的全螢幕 | 146 ok |
 | `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場 | 74 ok |
 | `node site-test.mjs ../docs ../out/site/site` | 網站：打開、開車、有新版本那一條、App 有新版本、搬進度 | 22 ok |
+| `node cloud-test.mjs ../docs/try ../out/cloud/cloud` | 登入＋雲端存檔（假的雲端、兩支手機、沒網路、App 外殼） | 20 ok |
 
 - test-app-b1／b4 給萬能軟體的 repo（有 tune.html）也可以跑，就是測萬能軟體的改車頁。
 - **不可以為了變綠燈把測試改鬆**；找出原因修好。新加或改的測試要真的有在測東西。
@@ -136,6 +137,10 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - **main** ＝ 手機上的 0.9.37 遊戲（萬能軟體內容 37／38 的 tune.js 跟 `build-app.mjs` 產生的一模一樣）＋這次的網站（內容 1）＋APK 殼。
   - 0.9.37 有：越野車車庫（4 格，越野車專屬）、怪獸卡車輾扁東西（車、路邊小東西；人跳開）、汽車半價、怪獸卡車 100 萬、拿掉撞爛（`CRASH_DAMAGE = false`）、內湖（七個地標、路牌、離村子近）、警察、槍店、甩尾、賽車場。
 - **內容 2（2026-10-09 上線，試做頁 v25–v27）**：路變寬 1.5 倍（村子、內湖；快速道路、賽車場、直線加速沒變）；房子最多 2 層（村子、內湖；地標不變），越野車撞不倒房子，其他的（樹、電線桿、警車⋯）幾乎都輾得扁（不會輾的：人、小孩、房子、你家車庫、改車廠、車店、槍店、警察局、廟、捷運柱子⋯），輾扁的東西你離開 140 公尺 25 秒後會修好；越野車車庫搬到你的車庫前面左邊（門對著路，變大）；你的車庫變高（6 公尺、門 8×5）、裡面變寬（31.4 公尺）；路人不會再卡在門口。說明在 `notes/wide.md`、`notes/tall.md`。
+- **登入＋雲端存檔（做好了，在試玩頁 https://nkuo-git.github.io/beau-car-game/try/ ，等 Nick 試、說「上線」）**：用 Google 帳號登入（Nick 的 Firebase `beau-car-game`），進度存在雲端 `saves/{uid}`。說明在 `notes/cloud.md`。
+  - 試玩頁 `docs/try/`（`node src/build-site.mjs <版號> --try`）：跟正式網站同網域、用同一份存檔；不裝 Service Worker。正式網站和 App 還沒有登入。
+  - App 要新版外殼才能登入（`BeauCarApp.googleSignIn()`，只在工作分支，merge 進 main 就會出新的 APK），還要在 Firebase 加 Android 應用程式（`com.nkuo.beaucargame`＋SHA-1，見 notes/cloud.md）。
+  - 上線的時候：build-site.mjs 的正式版也要接 cloud.js。
 - **已知問題**
   - 越野車車庫裡坐在駕駛座（或追車鏡頭）會看到天空（屋頂被剔除）。
   - 越野車車庫 1 號格要倒車、打方向、再前進（三點迴轉）才出得來。

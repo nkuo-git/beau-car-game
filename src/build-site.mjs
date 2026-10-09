@@ -1,5 +1,6 @@
 // 獨立的改車遊戲網站（GitHub Pages：https://nkuo-git.github.io/beau-car-game/ ，APK 也是開這個網址）：產生 docs/
 // node build-site.mjs <內容版號> [輸出資料夾，預設 ../docs]
+// node build-site.mjs <版號> --try  → 試玩頁 ../docs/try/（還沒上線的東西先放這裡真的試：標題寫「試玩」、不裝 Service Worker；正式的網站、App 都不變）
 //   內容版號：每次要上線就 +1（不能比 docs/version.json 的小）；標題旁的版本號是 0.<APK 版號>.<內容版號>
 // 做法：先用 build-app.mjs（萬能軟體的「改車」頁）在暫存資料夾產生 tune.js／tune.css／tune/*.glb（同一份打包清單，不用改兩個地方），再：
 //   game.js  ＝ tune.js 去掉萬能軟體才有的尾巴（版本號、汽車分頁）＋ site/site.js（版本號、有新版本那一條、搬進度）
@@ -11,9 +12,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 const dir = path.dirname(new URL(import.meta.url).pathname);
-const [V, outArg] = process.argv.slice(2);
+const args = process.argv.slice(2), TRY = args.includes('--try'), [V, outArg] = args.filter((a) => a !== '--try');
 if (!/^\d+$/.test(V || '')) throw new Error('用法：node build-site.mjs <內容版號> [輸出資料夾]');
-const out = path.resolve(outArg || path.join(dir, '../docs'));
+const out = path.resolve(outArg || path.join(dir, TRY ? '../docs/try' : '../docs'));
 const read = (f) => fs.readFileSync(path.join(dir, f), 'utf8');
 const verFile = path.join(out, 'version.json');
 const prev = fs.existsSync(verFile) ? JSON.parse(fs.readFileSync(verFile, 'utf8')).build : 0;
@@ -31,7 +32,8 @@ js = js.slice(0, js.indexOf(TAIL));
 const HEAD = /^\/\/ 大便龍的萬能軟體 — 改車.*\n\/\/ 這個檔是產生出來的.*\n/;
 if (!HEAD.test(js)) throw new Error('tune.js 開頭的說明不一樣了（build-app.mjs 改過了？）');
 js = js.replace(HEAD, '// 大便龍的改車遊戲（3D 車庫＋開車出門的小村莊、賽車場、越野車場、內湖）\n// 這個檔是產生出來的，不要直接改：原始碼在 beau-car-game 的 src/（node src/build-site.mjs <版號>）\n');
-js += '\n' + read('site/site.js').replace('__V__', V);
+js += '\n' + read('site/site.js').replace('__V__', V).replace('__TRY__', String(TRY));
+js += '\n' + read('site/cloud.js'); // 第 12 批：登入＋雲端存檔
 
 // 3. game.css
 let css = fs.readFileSync(path.join(tmp, 'tune.css'), 'utf8');
@@ -42,7 +44,8 @@ const src = read('garage.src.html'), a = '<!--__GARAGE__-->', b = '<!--__/GARAGE
 const i = src.indexOf(a), j = src.indexOf(b, i);
 if (i < 0 || j < 0) throw new Error('garage.src.html 找不到 ' + a);
 const markup = src.slice(i + a.length, j).replace(/^\n+|\s+$/g, '');
-const html = read('site/index.src.html').replace('<!--__GARAGE__-->', () => markup.split('\n').map((l) => '  ' + l).join('\n')).replaceAll('__V__', V);
+let html = read('site/index.src.html').replace('<!--__GARAGE__-->', () => markup.split('\n').map((l) => '  ' + l).join('\n')).replaceAll('__V__', V);
+if (TRY) html = html.replace('<title>大便龍的改車遊戲</title>', '<title>大便龍的改車遊戲（試玩）</title>').replace('<meta name="theme-color"', '<meta name="robots" content="noindex">\n<meta name="theme-color"');
 
 // 5. 寫出去
 fs.mkdirSync(path.join(out, 'tune'), { recursive: true });
@@ -52,10 +55,18 @@ for (const f of fs.readdirSync(path.join(out, 'tune'))) if (!glbs.includes(f)) f
 for (const f of glbs) fs.copyFileSync(path.join(tmp, 'tune', f), path.join(out, 'tune', f));
 const glbUrls = [...js.matchAll(/'(tune\/[a-z0-9-]+\.glb\?h=[0-9a-f]{8})'/g)].map((m) => './' + m[1]);
 if (glbUrls.length !== glbs.length) throw new Error(`game.js 裡的車身檔網址 ${glbUrls.length} 個，檔案 ${glbs.length} 個`);
+if (TRY) { // 試玩頁：正式網站已經有一樣的車身檔就用它的（../tune/），不要在 docs/ 裡多放一份
+  const main = path.join(dir, '../docs/tune');
+  for (const f of glbs) {
+    const m = path.join(main, f), t = path.join(out, 'tune', f);
+    if (fs.existsSync(m) && fs.readFileSync(m).equals(fs.readFileSync(t))) { js = js.replaceAll(`'tune/${f}?h=`, `'../tune/${f}?h=`); fs.rmSync(t); }
+  }
+  if (!fs.readdirSync(path.join(out, 'tune')).length) fs.rmSync(path.join(out, 'tune'), { recursive: true });
+}
 fs.writeFileSync(path.join(out, 'game.js'), js);
 fs.writeFileSync(path.join(out, 'game.css'), css);
 fs.writeFileSync(path.join(out, 'index.html'), html);
-fs.writeFileSync(path.join(out, 'sw.js'), read('site/sw.src.js').replace('"__V__"', JSON.stringify(V)).replace('/*__GLB__*/', glbUrls.map((u) => JSON.stringify(u)).join(', ')));
+if (!TRY) fs.writeFileSync(path.join(out, 'sw.js'), read('site/sw.src.js').replace('"__V__"', JSON.stringify(V)).replace('/*__GLB__*/', glbUrls.map((u) => JSON.stringify(u)).join(', ')));
 fs.copyFileSync(path.join(dir, 'site/manifest.webmanifest'), path.join(out, 'manifest.webmanifest'));
 for (const f of fs.readdirSync(path.join(dir, 'site/icons'))) fs.copyFileSync(path.join(dir, 'site/icons', f), path.join(out, 'icons', f));
 fs.writeFileSync(path.join(out, '.nojekyll'), '');

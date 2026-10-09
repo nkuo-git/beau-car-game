@@ -50,11 +50,13 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  // 查 App 有沒有新版（GitHub API）一律走網路
-  if (url.hostname === "api.github.com") return;
+  // 查 App 有沒有新版（GitHub API）、登入和雲端存檔（Firebase：*.googleapis.com、*.firebaseapp.com）一律走網路
+  if (url.hostname === "api.github.com" || /(^|\.)googleapis\.com$|(^|\.)firebaseapp\.com$/.test(url.hostname)) return;
 
-  // 導覽：先連網，失敗才用快取的殼（離線時至少開得起來）
+  // 導覽：先連網，失敗才用快取的殼（離線時至少開得起來）；只管遊戲首頁（試玩頁 try/ 這種別的頁不要存成首頁）
   if (req.mode === "navigate") {
+    const home = new URL("./", self.registration.scope).pathname;
+    if (url.pathname !== home && url.pathname !== home + "index.html") return;
     event.respondWith(
       fetch(req, { cache: "no-store" })
         .then((res) => {

@@ -3,6 +3,7 @@
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
   const GAME_BUILD = __V__; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const TRY_PAGE = __TRY__; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
   const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* 不給存就算了 */ } };
@@ -11,7 +12,7 @@
 
   // ---- 標題旁的版本號：0.App.內容（不在 App 裡＝一般瀏覽器，App 算 0）----
   const ver = $id('brandVer');
-  if (ver) ver.textContent = '0.' + (apkBuild() ?? 0) + '.' + GAME_BUILD;
+  if (ver) ver.textContent = '0.' + (apkBuild() ?? 0) + '.' + GAME_BUILD + (TRY_PAGE ? ' 試玩' : '');
 
   // ---- 有新版本的那一條（跟萬能軟體一樣：一次只跳一條、不自己更新，按了才換）----
   // App 有新版 → 「App 有新版本／下載安裝」（開 GitHub 上的 .apk）；只有內容有新版 → 「有新版本，要更新嗎／更新」
@@ -54,7 +55,7 @@
     lsSet(APK_NEW, apkNew ? JSON.stringify(apkNew) : null);
     paintUpdate();
   }
-  if ('serviceWorker' in navigator) {
+  if ('serviceWorker' in navigator && !TRY_PAGE) {
     const start = async () => {
       const appChecked = checkAppUpdate().catch(() => {});
       let reg;

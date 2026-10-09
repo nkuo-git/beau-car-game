@@ -72,3 +72,49 @@ body.racing .updatebar, body.driving .updatebar, body.fs .updatebar { display: n
 .imp-no { border: 1px solid var(--line-strong); background: transparent; color: var(--ink); }
 .imp-yes { border: 0; background: var(--accent); color: var(--accent-ink); }
 .imp-yes[hidden] { display: none; }
+
+/* 登入＋雲端存檔（site/cloud.js）：標題列右邊的小按鈕、登入／帳號／選進度（跟搬進度一樣蓋在整個畫面上） */
+.cloudchip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: 700 13px "Noto Sans TC", system-ui, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cloudchip[hidden] { display: none; }
+.cloudchip .cl-dot { display: none; }
+.cloudchip.on .cl-dot { display: block; }
+.cl-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--ink-soft); }
+.cl-dot.ok { background: #46C46F; }
+.cl-dot.warn { background: var(--accent); }
+.cl-card { display: flex; flex-direction: column; gap: 12px; }
+.cl-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cl-head h2 { margin: 0; font-size: 18px; }
+.cl-x { width: 30px; height: 30px; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--ink-soft); font-size: 14px; cursor: pointer; }
+.cl-x[hidden] { display: none; }
+.cl-sec { display: flex; flex-direction: column; gap: 10px; }
+.cl-sec[hidden] { display: none; }
+.cl-note { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink-soft); }
+.cl-err { margin: 0; padding: 9px 11px; border-radius: 10px; background: var(--warm); border: 1px solid var(--warm-line); font-size: 13px; line-height: 1.5; color: var(--ink); }
+.cl-err[hidden] { display: none; }
+.cl-btn { min-height: 46px; padding: 8px 12px; border-radius: 12px; font: 700 15px "Noto Sans TC", system-ui, sans-serif; cursor: pointer; }
+.cl-btn small { display: block; font-size: 11px; font-weight: 500; opacity: .75; }
+.cl-btn:disabled { opacity: .6; }
+.cl-acct { display: flex; align-items: center; gap: 12px; }
+.cl-acct p { margin: 0; min-width: 0; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.cl-acct small { display: block; font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+.cl-ava { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 19px; font-weight: 700; }
+.cl-status { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-radius: 11px; background: var(--surface-2); font-size: 14px; }
+.cl-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.cl-save { min-width: 0; padding: 10px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-2); }
+.cl-save.pick { border-color: var(--accent); }
+.cl-save h3 { margin: 0 0 6px; font-size: 12px; color: var(--ink-soft); }
+.cl-save p { margin: 0; font-size: 13px; line-height: 1.55; white-space: pre-line; font-variant-numeric: tabular-nums; }
