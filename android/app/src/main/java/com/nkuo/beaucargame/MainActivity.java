@@ -12,9 +12,23 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+
+import androidx.credentials.Credential;
+import androidx.credentials.CredentialManager;
+import androidx.credentials.CredentialManagerCallback;
+import androidx.credentials.CustomCredential;
+import androidx.credentials.GetCredentialRequest;
+import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.exceptions.GetCredentialCancellationException;
+import androidx.credentials.exceptions.GetCredentialException;
+import androidx.credentials.exceptions.NoCredentialException;
+
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import org.json.JSONObject;
 
@@ -25,11 +39,16 @@ import org.json.JSONObject;
  *   2. 返回鍵（先問網頁的 window.caridExitFullscreen：關掉自訂角色、離開這一趟的全螢幕；網頁說沒事才離開）
  *   3. 從萬能軟體搬進度：beaucargame://import?save=… → 網頁的 window.beauImport(save)（網頁會先問「要搬過來嗎？」）
  *   4. User-Agent 帶 BeauCarApp/<版號>：網頁拿它跟 GitHub Release 的 apk-<版號> 比，有新的就跳「App 有新版本」
+ *   5. 用 Google 帳號登入（雲端存檔）：網頁叫 BeauCarApp.googleSignIn() → 手機跳出「選 Google 帳號」→
+ *      把 Google 給的 ID token 交給網頁的 window.beauGoogleSignIn(idToken, 錯誤)，網頁再拿去登入 Firebase
  */
 public class MainActivity extends Activity {
 
   /** 遊戲的網址（GitHub Pages）。 */
   private static final String START_URL = "https://nkuo-git.github.io/beau-car-game/";
+
+  /** Firebase 專案 beau-car-game 的「網頁用戶端 ID」（公開的，不是密碼）：Google 發的 ID token 是給它的，Firebase 才收。 */
+  private static final String WEB_CLIENT_ID = "793707590323-fv2r1c0gu48qr3qulsrmr5f0dms22njk.apps.googleusercontent.com";
 
   private WebView web;
 
@@ -133,6 +152,12 @@ public class MainActivity extends Activity {
       runOnUiThread(MainActivity.this::deliverSave);
     }
 
+    /** 網頁按「用 Google 帳號登入」：跳出選帳號，結果送回 window.beauGoogleSignIn。 */
+    @JavascriptInterface
+    public void googleSignIn() {
+      runOnUiThread(MainActivity.this::startGoogleSignIn);
+    }
+
     /** 開車、比賽的時候 true（全螢幕）、回到車庫頁 false。 */
     @JavascriptInterface
     public void setFullscreen(boolean on) {
@@ -141,6 +166,48 @@ public class MainActivity extends Activity {
         applyFullscreen();
       });
     }
+  }
+
+  /** 手機的「用 Google 帳號登入」（Credential Manager）：每次都讓人選帳號（也可以加一個新的）。 */
+  private void startGoogleSignIn() {
+    GetSignInWithGoogleOption google = new GetSignInWithGoogleOption.Builder(WEB_CLIENT_ID).build();
+    GetCredentialRequest req = new GetCredentialRequest.Builder().addCredentialOption(google).build();
+    try {
+      CredentialManager.create(this).getCredentialAsync(this, req, null, ContextCompat.getMainExecutor(this),
+          new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+            @Override
+            public void onResult(GetCredentialResponse res) {
+              Credential c = res.getCredential();
+              if (c instanceof CustomCredential && GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(c.getType())) {
+                try {
+                  sendSignIn(GoogleIdTokenCredential.createFrom(c.getData()).getIdToken(), null);
+                  return;
+                } catch (Exception e) {
+                  // 看不懂的回覆：當作失敗
+                }
+              }
+              sendSignIn(null, "fail");
+            }
+
+            @Override
+            public void onError(GetCredentialException e) {
+              // 按了取消：不用說什麼；手機上沒有 Google 帳號：叫他先加一個；其他：再試一次
+              String code = e instanceof GetCredentialCancellationException ? "cancel"
+                  : e instanceof NoCredentialException ? "noacct" : "fail";
+              sendSignIn(null, code);
+            }
+          });
+    } catch (Exception e) {
+      sendSignIn(null, "fail");
+    }
+  }
+
+  /** 把登入的結果交給網頁：window.beauGoogleSignIn(idToken, 錯誤)。 */
+  private void sendSignIn(String idToken, String error) {
+    if (web == null) return;
+    web.evaluateJavascript("window.beauGoogleSignIn&&window.beauGoogleSignIn("
+        + (idToken == null ? "null" : JSONObject.quote(idToken)) + ","
+        + (error == null ? "null" : JSONObject.quote(error)) + ")", null);
   }
 
   /** 照 fullscreen 藏起／放回狀態列和導覽列。藏起來的時候從螢幕邊邊滑一下會暫時跑出來，過一下又自己收回去。 */

@@ -25,6 +25,7 @@ jobs:
       # 第一次跑的時候用 Secret（BEAU_KEY_PASS）裡的密碼產一把固定的簽章金鑰，並存回 repo（改車遊戲自己的一把，不是萬能軟體那把）。
       # 之後每次都用同一把簽，新版 APK 才能直接蓋過舊版安裝，不用先移除（存檔才不會不見）。
       - name: 準備簽章金鑰
+        if: github.ref == 'refs/heads/main'
         env:
           BEAU_KEY_PASS: ${{ secrets.BEAU_KEY_PASS }}
         run: |
@@ -65,7 +66,9 @@ jobs:
           path: out/*.apk
 
       # 沒有 BEAU_KEY_PASS（臨時的 debug 簽章）：發成「預先發行」，遊戲裡查新版（releases/latest）不會叫人裝這個
+      # 只有 main 才發 Release；在別的分支手動跑（workflow_dispatch）只是試試看編不編得過，APK 放在 Actions 的 artifact
       - name: 發成 Release
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           BEAU_KEY_PASS: ${{ secrets.BEAU_KEY_PASS }}
