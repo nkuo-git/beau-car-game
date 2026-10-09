@@ -323,12 +323,14 @@ function buildNeihu(V, opt = {}) {
   const resSt = new Set([0, 1, 2, 3, 7, 8]);
   let nb = 0, nArc = 0, nShed = 0, vSigns = [];
   const LISHAN = N.lm && N.lm.lishan ? N.lm.lishan.p : null; // 麗山國中校地裡的房子：白磁磚＋紅磚飾帶的牆（格子 24，照參考照片）
+  const NH_MAX_FL = 2; // 第 10 批：內湖一般的房子最多幾層（地標不變）
   const GB = 1e6; // 第 9 批：房子的編號（碰撞物的 g；村子的房子沒有 g）
   N.bld.forEach((b, bi) => {
     if (b.lm) return; // 地標的房子（西湖圖書館、湖光教會）：下面自己做
     const P = b.P, n = P.length; let cx = 0, cz = 0; for (const p of P) { cx += p[0]; cz += p[1]; } cx /= n; cz /= n;
     const g = bank('wall', cx, cz, TB);
-    const gh = b.e.includes(2) ? 4.2 : 3.6, top = b.h > 2 ? b.h : b.f <= 1 ? 3.8 + hh(bi, 1) * 0.8 : gh + (b.f - 1) * 3.2;
+    const gh = b.e.includes(2) ? 4.2 : 3.6, top0 = b.h > 2 ? b.h : b.f <= 1 ? 3.8 + hh(bi, 1) * 0.8 : gh + (b.f - 1) * 3.2;
+    const bf = Math.min(b.f, NH_MAX_FL), top = Math.min(top0, gh + (NH_MAX_FL - 1) * 3.2); // 第 10 批（Nick「所有房子變矮」）：最多 2 層樓高
     const st = b.st, base = STY_COL[st] || WHITE, tint = 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, 0.78), gcell = GROUND_OF[st] ?? 15;
     const C = b.core || P;
     for (let i = 0; i < n; i++) {
@@ -351,7 +353,7 @@ function buildNeihu(V, opt = {}) {
         }
       }
       // 一樓臨路的店：樓上掛直立招牌（往外伸）
-      if (e && b.f >= 3 && L >= 6 && !b.back && vSigns.length < 2200 && hh(bi, 30 + i) < (e === 2 ? 0.95 : 0.45)) {
+      if (e && bf >= 3 && L >= 6 && !b.back && vSigns.length < 2200 && hh(bi, 30 + i) < (e === 2 ? 0.95 : 0.45)) {
         const m = Math.min(3, Math.floor(L / 7)); for (let j = 0; j < m; j++) { const t = (j + 0.5) / m, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L; vSigns.push({ x: a[0] + (c[0] - a[0]) * t, z: a[1] + (c[1] - a[1]) * t, ox, oz, y0: gh + 0.4, h: Math.min(top - gh - 0.6, 3 + hh(bi, 50 + j) * 2.6), s: Math.floor(hh(bi, 60 + i * 3 + j) * 16) }); }
       }
     }
@@ -359,15 +361,15 @@ function buildNeihu(V, opt = {}) {
     flatPoly(g, P, top, 6, shade([235, 233, 228], 0.9 + hh(bi, 3) * 0.15), 18);
     // 一樓的頂點顏色暗一點已經有了；頂樓加蓋、水塔、樓梯間
     const rc = b.rect;
-    if (rc && !b.back && b.f >= 3) {
+    if (rc && !b.back && bf >= 3) {
       const [rx, rz, hx, hz, rot] = rc, ux = Math.cos(rot), uz = -Math.sin(rot), vx = -uz, vz = ux;
-      if (resSt.has(st) && b.f <= 8 && hh(bi, 4) < 0.45 && hx > 3 && hz > 3) { // 頂樓加蓋（鐵皮屋）
+      if (resSt.has(st) && bf <= 8 && hh(bi, 4) < 0.45 && hx > 3 && hz > 3) { // 頂樓加蓋（鐵皮屋）
         nShed++; const sx = hx * (0.55 + hh(bi, 5) * 0.3), sz = hz * (0.55 + hh(bi, 6) * 0.3), ox = (hh(bi, 7) - 0.5) * (hx - sx), oz = (hh(bi, 8) - 0.5) * (hz - sz), x = rx + ux * ox + vx * oz, z = rz + uz * ox + vz * oz;
         const Q = boxG(g, x, z, sx, sz, rot, top, top + 2.6, [255, 255, 255], 11, false);
         quad3(g, [[Q[0][0], top + 2.6, Q[0][1]], [Q[3][0], top + 2.9, Q[3][1]], [Q[2][0], top + 2.9, Q[2][1]], [Q[1][0], top + 2.6, Q[1][1]]], [[0, 0], [0, sz / 3], [sx / 3, sz / 3], [sx / 3, 0]], 19, [255, 255, 255]);
       }
       if (hh(bi, 9) < 0.6) { const x = rx + ux * hx * 0.6 - vx * hz * 0.5, z = rz + uz * hx * 0.6 - vz * hz * 0.5; boxG(g, x, z, 0.7, 0.7, rot, top, top + 1.5, [222, 226, 230]); } // 水塔
-      if (b.f >= 7) boxG(g, rx - ux * hx * 0.3, rz - uz * hx * 0.3, Math.min(2.5, hx * 0.3), Math.min(2, hz * 0.3), rot, top, top + 3, shade(col, 0.95), 20); // 樓梯間
+      if (bf >= 7) boxG(g, rx - ux * hx * 0.3, rz - uz * hx * 0.3, Math.min(2.5, hx * 0.3), Math.min(2, hz * 0.3), rot, top, top + 3, shade(col, 0.95), 20); // 樓梯間
     }
     if (b.col) for (const [x, z, hx, hz, rot] of b.col) colliders.push({ t: 'box', x, z, hx, hz, rot, h: top, g: GB + bi }); // g：同一棟（第 9 批：越野車輾到一個盒子，整棟一起扁）
     nb++;

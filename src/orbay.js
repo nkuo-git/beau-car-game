@@ -2,14 +2,12 @@
 // Nick 2026-10-07：「越野車專屬位」＝家裡要有越野車（怪獸卡車⋯）專門停的地方
 // 越野車（PERF.big：怪獸卡車 3.81 公尺寬、2.98 公尺高）停不上車庫的升降機，本來停在鐵捲門前面的水泥地（大車位，只有兩格）；
 //   以後還有吉普車、小型越野車、皮卡、沙灘車 → 蓋一棟自己的車庫：白色大理石的車庫旁邊（西邊）一棟同樣款式、有自己鐵捲門的附屬車庫，裡面四個停車格
-// 位置（世界座標，跟車庫一樣是正的長方形）：外牆 x −342…−320、z −109…−91.5（22 × 17.5 公尺），裡面淨高 5 公尺
-//   旁邊（東邊）x −320…−313 是新的水泥車道，往南接到車庫前面的前庭（村子的花台縮短了一點，見 village.js「第 6 批」那一行）
-//   鐵捲門在東邊那面牆（面向車道）：z −101…−94（寬 7 公尺）、高 4.4 公尺；門上面掛「越野車專用」
-//   四個停車格靠北牆（車頭朝北開進去）：4.6 公尺寬 × 7.5 公尺深，黃線框起來、地上寫「越野車」；南邊 9.4 公尺的通道（怪獸卡車 7.3 公尺長，倒車出格轉得過來）
-//   東邊牆邊（門旁邊）輪胎架，南牆邊工具牆＋工作台；地上幾塊泥巴（越野車帶回來的）
-// 檢查過沒有壓到別的東西：村子的房子（西邊那排 z −89.5…−77）、圍籬（z −113 的邊界）、稻田（x ≤ −344）、
-//   北邊那排樹（z −110.3 以北）、車庫（x −313…−287）、往內湖的聯外道路（村子南邊 x −112）、越野車場的水泥路（都在村子南邊）、
-//   路上的車和居民的路線（npc.js 的 lane／walk graph 在大路、村子的街上，這一帶一條都沒有）
+// 位置（第 10 批搬家了）：你的車庫前面左邊（本來車庫西邊那排透天厝的地方），外牆 x −339.55…−320.45、z −104.2…−79（19.1 × 25.2 公尺），裡面淨高 6.5 公尺
+//   鐵捲門在南邊那面牆、對著北邊那條路：x −338.5…−329.5（寬 9 公尺）、高 5.6 公尺；門上面掛「越野車專用」；門外 1.6 公尺水泥地就接到路邊
+//   四個停車格靠東牆（車頭朝東開進去）：5.4 公尺寬 × 8 公尺深，黃線框起來、地上寫「越野車」；西邊 10.5 公尺的通道（怪獸卡車 7.3 公尺長，倒車出格轉得過來）
+//   門旁邊（南牆邊）輪胎架，西牆邊工具牆＋工作台；地上幾塊泥巴（越野車帶回來的）
+//   程式裡用「設計座標」蓋（門在 +x、停車格靠 −z，跟以前一樣），PLACE 轉 −90 度放到村子裡；OB.toWorld／OB.toDesign 換座標
+// 檢查過沒有壓到別的東西：稻田（x ≤ −344）、北邊那排樹（z −110.3 以北）、車庫（x −313…−287）、西邊那條路的轉角；門前的電線桿拿掉、反光鏡往西挪（village.js「第 10 批」）
 // 【API】
 //   await orbayFonts();                      招牌的中文字（跟 villageFonts 一起等）
 //   const OB = buildOrbay(V, { renderer });   V＝buildVillage() 回傳的（offroad／circuit／neihu 之後叫）
@@ -59,15 +57,25 @@ class PB {
 }
 
 // ---- 尺寸（世界座標；x 往東、z 往南）----
+// 第 10 批（Nick 2026-10-09「越野車車庫位置改到前面」「所有車庫變高變寬」）：搬到你的車庫前面左邊（本來那排透天厝的地方），鐵捲門對著路；
+//   變大：一格 4.6 → 5.4 公尺寬、7.5 → 8 公尺深，通道 9.4 → 10.5 公尺，裡面 5 → 6.5 公尺高，門 7 × 4.4 → 9 × 5.6 公尺
+// 下面的尺寸是「設計座標」（整棟的中心在原點，門在 +x 那面牆、停車格靠 −z 那面牆）；PLACE 把整棟轉過去、放到村子裡
 const G = {
-  X0: -342, X1: -320, Z0: -109, Z1: -91.5, WT: 0.3,   // 外牆面、牆厚（南牆 z −91.5：西邊那排透天厝在 z −89.5 以南，留 2 公尺）
-  CEIL: 5, ROOF: 5.3, TOP: 5.8,                        // 天花板、屋頂板上面、女兒牆頂
-  DZ0: -101, DZ1: -94, DH: 4.4, XD: -320.1,            // 鐵捲門（東牆）：開口 z、門高、門片平面
-  N: 4, BW: 4.6, BD: 7.5,                              // 四格、一格寬、一格深
-  LX0: -320, LX1: -313, LZ0: -109, LZ1: -86.5,         // 門外的水泥車道（往南接前庭）
+  X0: -12.6, X1: 12.6, Z0: -9.55, Z1: 9.55, WT: 0.3, // 外牆面、牆厚
+  CEIL: 6.5, ROOF: 6.8, TOP: 7.3,                    // 天花板、屋頂板上面、女兒牆頂
+  DW: 9, DH: 5.6,                                    // 鐵捲門（+x 那面牆，對著通道的中間）：寬、高
+  N: 4, BW: 5.4, BD: 8,                              // 四格、一格寬、一格深
+  AP: 1.6,                                           // 門外的水泥地（接到路邊）
 };
+const PLACE = { x: -330, z: -91.6, rot: -Math.PI / 2 }; // 世界座標：中心、轉角（設計的 +x＝門 → 世界的 +z＝南邊，對著北邊那條路）：外牆 x −339.55…−320.45、z −104.2…−79
 const IX0 = G.X0 + G.WT, IX1 = G.X1 - G.WT, IZ0 = G.Z0 + G.WT, IZ1 = G.Z1 - G.WT; // 裡面
 const BZ1 = IZ0 + G.BD;                                                            // 停車格的格口（通道那一邊）
+G.XD = G.X1 - 0.1; G.DZ0 = (BZ1 + IZ1) / 2 - G.DW / 2; G.DZ1 = G.DZ0 + G.DW;       // 門片平面、門的開口
+G.LX0 = G.X1; G.LX1 = G.X1 + G.AP; G.LZ0 = G.DZ0 - 1.5; G.LZ1 = G.DZ1 + 1.5;        // 門外的水泥地
+const PC = Math.cos(PLACE.rot), PS = Math.sin(PLACE.rot);
+const wx = (x, z) => PC * x + PS * z + PLACE.x, wz = (x, z) => -PS * x + PC * z + PLACE.z; // 設計座標 → 世界座標
+const toW = (r) => ({ ...r, x: wx(r.x, r.z), z: wz(r.x, r.z), rot: (r.rot || 0) + PLACE.rot });            // 長方形、碰撞物、停車的位置（heading 也轉）
+const aabbW = (x0, z0, x1, z1) => { const xs = [wx(x0, z0), wx(x1, z1)], zs = [wz(x0, z0), wz(x1, z1)]; return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) }; };
 const bayX = (i) => IX0 + G.BW / 2 + i * G.BW;                                     // 第 i 格的中心
 const SIGNS = { wall: '越野車專用', bay: '越野車', tool: '工具', tyre: '輪胎', name: '越野車車庫' };
 const ORBAY_TEXT = [...new Set(Object.values(SIGNS).join('').split('').filter((ch) => ch.charCodeAt(0) > 0x2e80))].join('');
@@ -162,7 +170,8 @@ function buildOrbay(V, o = {}) {
     flat('main', cx - 1.5, z1 - 2.4, cx + 1.5, z1 - 1.5, 0.036, null, U.bay); // 「越野車」（從門口看是正的）
   }
   // 泥巴（越野車帶回來的）：門口、格口幾塊
-  for (const [mx, mz, hx, hz] of [[-322.5, -97.5, 1.4, 1.1], [-327, -100.4, 1.8, 0.8], [-332.5, -101.6, 1.2, 0.9], [-338.6, -102.2, 1.5, 0.7], [-318.5, -97.5, 1.6, 1.3]])
+  const ZC0 = (G.DZ0 + G.DZ1) / 2;
+  for (const [mx, mz, hx, hz] of [[IX1 - 2.3, ZC0, 1.4, 1.1], [IX1 - 6.8, BZ1 + 0.6, 1.8, 0.8], [bayX(1), BZ1 - 0.4, 1.2, 0.9], [bayX(0), BZ1 - 1.0, 1.5, 0.7], [G.X1 + 0.8, ZC0, 0.7, 1.3]])
     flat('main', mx - hx, mz - hz, mx + hx, mz + hz, 0.032, MUD);
 
   // ---- 牆（外面白色大理石、裡面淺灰；h 5.2 的碰撞：小地圖畫得出來）----
@@ -173,11 +182,11 @@ function buildOrbay(V, o = {}) {
   box('ext', [G.X1 - G.WT, 0, G.Z0 + G.WT, G.X1, G.TOP, G.DZ0], { _: WALL, nx: WALL_IN, py: TRIM });               // 東牆（門北邊）
   box('ext', [G.X1 - G.WT, 0, G.DZ1, G.X1, G.TOP, G.Z1 - G.WT], { _: WALL, nx: WALL_IN, py: TRIM });               // 東牆（門南邊）
   box('ext', [G.X1 - G.WT, G.DH, G.DZ0, G.X1, G.TOP, G.DZ1], { _: WALL, nx: WALL_IN, py: TRIM, px: WALL });        // 門上面那塊牆
-  addBox(G.X0 + G.WT / 2, (G.Z0 + G.Z1) / 2, G.WT / 2, (G.Z1 - G.Z0) / 2, 5.2);
-  addBox((G.X0 + G.X1) / 2, G.Z0 + G.WT / 2, (G.X1 - G.X0) / 2, G.WT / 2, 5.2);
-  addBox((G.X0 + G.X1) / 2, G.Z1 - G.WT / 2, (G.X1 - G.X0) / 2, G.WT / 2, 5.2);
-  addBox(G.X1 - G.WT / 2, (G.Z0 + G.DZ0) / 2, G.WT / 2, (G.DZ0 - G.Z0) / 2, 5.2);
-  addBox(G.X1 - G.WT / 2, (G.DZ1 + G.Z1) / 2, G.WT / 2, (G.Z1 - G.DZ1) / 2, 5.2);
+  addBox(G.X0 + G.WT / 2, (G.Z0 + G.Z1) / 2, G.WT / 2, (G.Z1 - G.Z0) / 2, G.CEIL);
+  addBox((G.X0 + G.X1) / 2, G.Z0 + G.WT / 2, (G.X1 - G.X0) / 2, G.WT / 2, G.CEIL);
+  addBox((G.X0 + G.X1) / 2, G.Z1 - G.WT / 2, (G.X1 - G.X0) / 2, G.WT / 2, G.CEIL);
+  addBox(G.X1 - G.WT / 2, (G.Z0 + G.DZ0) / 2, G.WT / 2, (G.DZ0 - G.Z0) / 2, G.CEIL);
+  addBox(G.X1 - G.WT / 2, (G.DZ1 + G.Z1) / 2, G.WT / 2, (G.Z1 - G.DZ1) / 2, G.CEIL);
   // 屋頂板＋天花板（埋進牆裡 0.15 公尺，不會跟牆有重疊的面）：鏡頭跑到屋頂上面就不畫
   box('roof', [IX0 - 0.15, G.CEIL, IZ0 - 0.15, IX1 + 0.15, G.ROOF, IZ1 + 0.15], { _: mul(WALL, 0.96), py: C('#dcdcd6'), ny: C('#eeeeea') });
   // 門口的門檻、導軌、捲筒盒、警示燈
@@ -195,11 +204,12 @@ function buildOrbay(V, o = {}) {
 
   // ---- 輪胎架（門旁邊、東牆邊）、工具牆＋工作台（南牆邊）----
   const RX = IX1 - 0.55; // 輪胎架中心
-  for (const z of [-107.4, -103.2]) box('main', [RX - 0.5, 0, z - 0.06, RX + 0.5, 2.2, z + 0.06], STEEL);           // 兩根立柱
-  for (const y of [0.6, 1.5]) box('main', [RX - 0.5, y, -107.5, RX + 0.5, y + 0.08, -103.1], STEEL);                // 兩層架板
-  for (const [y, z] of [[0.98, -106.8], [0.98, -105.5], [0.98, -104.2], [1.88, -106.8], [1.88, -105.5], [1.88, -104.2]]) tyre(RX, y, z, 0.38, 0.3, C('#1b1c1e'));
-  box('main', [RX - 0.52, 2.2, -105.6, RX + 0.52, 2.72, -104.6], { _: C('#2f343b') }, { nx: U.tyre });
-  addBox(RX, -105.3, 0.62, 2.3, 2.3);
+  const RZ = IZ0 + 3.7; // 輪胎架中間（z）
+  for (const z of [RZ - 2.1, RZ + 2.1]) box('main', [RX - 0.5, 0, z - 0.06, RX + 0.5, 2.2, z + 0.06], STEEL);       // 兩根立柱
+  for (const y of [0.6, 1.5]) box('main', [RX - 0.5, y, RZ - 2.2, RX + 0.5, y + 0.08, RZ + 2.2], STEEL);            // 兩層架板
+  for (const [y, z] of [[0.98, -1.5], [0.98, -0.2], [0.98, 1.1], [1.88, -1.5], [1.88, -0.2], [1.88, 1.1]]) tyre(RX, y, RZ + z, 0.38, 0.3, C('#1b1c1e'));
+  box('main', [RX - 0.52, 2.2, RZ - 0.3, RX + 0.52, 2.72, RZ + 0.7], { _: C('#2f343b') }, { nx: U.tyre });
+  addBox(RX, RZ, 0.62, 2.3, 2.3);
   const TW0 = IX0 + 0.4, TW1 = IX0 + 5.4; // 工具牆（南牆）
   box('main', [TW0, 1.05, IZ1 - 0.12, TW1, 2.65, IZ1 - 0.02], { _: C('#2a5a8f'), nz: C('#36699e') });
   for (let i = 0; i < 9; i++) { const x = TW0 + 0.45 + i * 0.55; box('main', [x - 0.05, 1.35 + (i % 3) * 0.42, IZ1 - 0.2, x + 0.05, 1.72 + (i % 3) * 0.42, IZ1 - 0.12], STEEL); } // 掛著的工具
@@ -261,52 +271,53 @@ function buildOrbay(V, o = {}) {
   const group = new THREE.Group(); group.name = 'orbay';
   for (const k of ['main', 'ext', 'roof', 'sign', 'glow']) if (built.meshes[k]) group.add(built.meshes[k]);
   group.add(slats);
+  group.position.set(PLACE.x, 0, PLACE.z); group.rotation.y = PLACE.rot; // 第 10 批：設計座標 → 世界
   group.matrixAutoUpdate = false; group.updateMatrix();
   V.group.add(group);
 
-  // 碰撞、地方、路面、小地圖、房子
-  for (const c of colliders) V.colliders.push(c);
+  // 碰撞、地方、路面、小地圖、房子（都換成世界座標）
+  for (const c of colliders) V.colliders.push(toW(c));
   const zones = {
-    inside: { x: (IX0 + IX1) / 2, z: (IZ0 + IZ1) / 2, hx: (IX1 - IX0) / 2, hz: (IZ1 - IZ0) / 2, rot: 0 },
-    aisle: { x: (IX0 + IX1) / 2, z: (BZ1 + IZ1) / 2, hx: (IX1 - IX0) / 2, hz: (IZ1 - BZ1) / 2, rot: 0 },
-    apron: { x: (G.LX0 + G.LX1) / 2, z: (G.DZ0 + G.DZ1) / 2 - 1, hx: (G.LX1 - G.LX0) / 2, hz: 6, rot: 0 },
-    door: { x: G.X1, z: ZC, hx: 4.6, hz: (G.DZ1 - G.DZ0) / 2 + 0.6, rot: 0 }, // 門口（裡外各 4.6 公尺：怪獸卡車車頂到門的時候車身中間在 3.8 公尺外）：站在這裡給「開鐵捲門」
+    inside: toW({ x: (IX0 + IX1) / 2, z: (IZ0 + IZ1) / 2, hx: (IX1 - IX0) / 2, hz: (IZ1 - IZ0) / 2, rot: 0 }),
+    aisle: toW({ x: (IX0 + IX1) / 2, z: (BZ1 + IZ1) / 2, hx: (IX1 - IX0) / 2, hz: (IZ1 - BZ1) / 2, rot: 0 }),
+    apron: toW({ x: G.X1 + 4, z: ZC, hx: 4, hz: (G.DZ1 - G.DZ0) / 2 + 1.5, rot: 0 }),
+    door: toW({ x: G.X1, z: ZC, hx: 4.6, hz: (G.DZ1 - G.DZ0) / 2 + 0.6, rot: 0 }), // 門口（裡外各 4.6 公尺：怪獸卡車車頂到門的時候車身中間在 3.8 公尺外）：站在這裡給「開鐵捲門」
     bays: [],
   };
   const bays = [];
   for (let i = 0; i < G.N; i++) {
-    const cx = bayX(i);
-    bays.push({ x: cx, z: (IZ0 + BZ1) / 2, heading: Math.PI / 2 }); // 車頭朝北（開進去）
-    zones.bays.push({ x: cx, z: (IZ0 + BZ1) / 2, hx: G.BW / 2, hz: G.BD / 2, rot: 0 });
+    const cx = bayX(i), b = toW({ x: cx, z: (IZ0 + BZ1) / 2, rot: Math.PI / 2 }); // 車頭朝裡面（開進去）
+    bays.push({ x: b.x, z: b.z, heading: b.rot });
+    zones.bays.push(toW({ x: cx, z: (IZ0 + BZ1) / 2, hx: G.BW / 2, hz: G.BD / 2, rot: 0 }));
   }
+  const sp = toW({ x: G.X1 + 3.5, z: ZC, rot: 0 }), dp = toW({ x: G.X1 + 1.2, z: ZC, rot: 0 }), BX = aabbW(G.X0, G.Z0, G.X1, G.Z1);
   const place = {
-    name: SIGNS.name, pos: [(G.X0 + G.X1) / 2, (G.Z0 + G.Z1) / 2],
-    spawn: { x: G.X1 + 3.5, z: ZC, heading: 0 },               // 門外面、車頭朝東（開出去）
-    door: { x: G.X1 + 1.2, z: ZC, heading: 0 },
+    name: SIGNS.name, pos: [PLACE.x, PLACE.z],
+    spawn: { x: sp.x, z: sp.z, heading: sp.rot },               // 門外面、車頭朝外（開出去）
+    door: { x: dp.x, z: dp.z, heading: dp.rot },
     inside: zones.inside, apron: zones.apron, bays,
-    zone: { x: (G.X0 + G.LX1) / 2, z: (G.Z0 + G.Z1) / 2, hx: (G.LX1 - G.X0) / 2, hz: (G.Z1 - G.Z0) / 2, rot: 0 }, // 車庫＋門外的車道
+    zone: toW({ x: (G.X0 + G.LX1) / 2, z: (G.Z0 + G.Z1) / 2, hx: (G.LX1 - G.X0) / 2, hz: (G.Z1 - G.Z0) / 2, rot: 0 }), // 車庫＋門外的水泥地
   };
   V.places.orbay = place;
-  if (V.areas?.pave) {
-    V.areas.pave.push({ x: (IX0 + IX1) / 2, z: (IZ0 + IZ1) / 2, hx: (IX1 - IX0) / 2, hz: (IZ1 - IZ0) / 2, rot: 0 });
-    V.areas.pave.push({ x: (G.LX0 + G.LX1) / 2, z: (G.LZ0 + G.LZ1) / 2, hx: (G.LX1 - G.LX0) / 2, hz: (G.LZ1 - G.LZ0) / 2, rot: 0 });
-  }
-  if (V.roads) V.roads.push({ pts: [[(G.LX0 + G.LX1) / 2, G.LZ1], [(G.LX0 + G.LX1) / 2, ZC]], w: 6.5, kind: 'drive' }); // 小地圖畫得出來的車道（kind 'drive'：路上的車、居民不走）
-  if (V.buildings) V.buildings.push({ kind: 'garage', name: SIGNS.name, x: (G.X0 + G.X1) / 2, z: (G.Z0 + G.Z1) / 2, hx: (G.X1 - G.X0) / 2, hz: (G.Z1 - G.Z0) / 2, rot: 0, h: G.TOP }); // 沒有 door：走進房子、居民、車流都不理它
+  const rectW = (x0, z0, x1, z1) => { const a = aabbW(x0, z0, x1, z1); return { x: (a.x0 + a.x1) / 2, z: (a.z0 + a.z1) / 2, hx: (a.x1 - a.x0) / 2, hz: (a.z1 - a.z0) / 2, rot: 0 }; };
+  const paveR = [rectW(G.X0, G.Z0, G.X1, G.Z1), rectW(G.LX0, G.LZ0, G.LX1, G.LZ1)];
+  if (V.areas?.pave) { V.areas.pave.push(rectW(IX0, IZ0, IX1, IZ1)); V.areas.pave.push(paveR[1]); }
+  if (V.buildings) V.buildings.push({ kind: 'garage', name: SIGNS.name, ...paveR[0], h: G.TOP }); // 沒有 door：走進房子、居民、車流都不理它
   const inR = (r, x, z) => Math.abs(x - r.x) <= r.hx && Math.abs(z - r.z) <= r.hz;
-  const paveR = [{ x: (G.X0 + G.X1) / 2, z: (G.Z0 + G.Z1) / 2, hx: (G.X1 - G.X0) / 2, hz: (G.Z1 - G.Z0) / 2 }, { x: (G.LX0 + G.LX1) / 2, z: (G.LZ0 + G.LZ1) / 2, hx: (G.LX1 - G.LX0) / 2, hz: (G.LZ1 - G.LZ0) / 2 }];
   const surf0 = V.surfaceAt;
   V.surfaceAt = (x, z) => { for (const r of paveR) if (inR(r, x, z)) return 3; return surf0(x, z); }; // 地板、車道＝水泥地
 
   const info = { meshes: built.n + 1, tris: B.tris + NS * 6, ms: +((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0).toFixed(0) };
   if (V.info) V.info.orbay = info;
 
+  const DOORC = toW({ t: 'box', x: G.X1 - 0.17, z: ZC, hx: 0.2, hz: (G.DZ1 - G.DZ0) / 2, rot: 0, h: G.DH });
   const OB = {
-    group, door, bays, zones, place, size: { ceil: G.CEIL, doorH: G.DH, doorW: G.DZ1 - G.DZ0, bayW: G.BW, bayD: G.BD }, box: { x0: G.X0, x1: G.X1, z0: G.Z0, z1: G.Z1 },
+    group, door, bays, zones, place, size: { ceil: G.CEIL, doorH: G.DH, doorW: G.DZ1 - G.DZ0, bayW: G.BW, bayD: G.BD }, box: { x0: BX.x0, x1: BX.x1, z0: BX.z0, z1: BX.z1 },
+    toWorld: (x, z) => [wx(x, z), wz(x, z)], toDesign: (x, z) => { const X = x - PLACE.x, Z = z - PLACE.z; return [PC * X - PS * Z, PS * X + PC * Z]; }, rot: PLACE.rot, design: { ...G, IX0, IX1, IZ0, IZ1, BZ1 }, // 第 10 批：設計座標（測試用）
     signs: { ...SIGNS }, // 牆上、地上寫的字（測試看得到）
     // 門的碰撞（關著才擋）：開車、走路都加這一個（tag 自己取）
-    doorCols: (open = DS.t >= 0.9) => (open ? [] : [{ t: 'box', x: G.X1 - 0.17, z: ZC, hx: 0.2, hz: (G.DZ1 - G.DZ0) / 2, rot: 0, h: G.DH }]),
-    inside: (x, z, m = 0) => x > G.X0 - m && x < G.X1 + m && z > G.Z0 - m && z < G.Z1 + m,
+    doorCols: (open = DS.t >= 0.9) => (open ? [] : [DOORC]),
+    inside: (x, z, m = 0) => x > BX.x0 - m && x < BX.x1 + m && z > BX.z0 - m && z < BX.z1 + m,
     // 鏡頭在裡面而且比屋頂高：屋頂、天花板不畫（不然看不到裡面的車；跟 room.js 的 cull 一樣的意思）
     cull: (cam) => { const r = built.meshes.roof; if (!r || !cam) return; const v = !(cam.position.y > G.CEIL - 0.6 && OB.inside(cam.position.x, cam.position.z, 0.6)); if (r.visible !== v) r.visible = v; },
     update: (dt) => door.update(dt),

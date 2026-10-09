@@ -86,6 +86,7 @@ const C = (hex) => { let v = CC.get(hex); if (!v) { const c = new THREE.Color(he
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
 const pick = (r, list) => list[(r() * list.length) | 0];
+const HOUSE_MAX_FL = 2; // 第 10 批（Nick 2026-10-09「所有房子變矮」）：透天厝最多 2 層
 // 本地座標框：原點 (x, y, z)、繞 y 轉 ry（跟 three.js rotation.y 一樣：本地 +x → (cos, 0, −sin)）
 function frame(x, y, z, ry = 0, s = 1) {
   const c = Math.cos(ry) * s, n = Math.sin(ry) * s;
@@ -1156,6 +1157,7 @@ function buildVillage(opts = {}) {
     const c = T.p(-0.05, 0, 0); addBox(c[0], c[2], 0.72, 0.24, ry, 1);
   };
   const house = (x, z, ry, w, D, fl, rnd, o = {}) => {
+    const fl0 = o.fl0 ?? fl; // 第 10 批（房子變矮）：本來要蓋幾層（亂數照本來的層數用，別的房子才長得跟以前一樣）
     B.at(x, z); const T = frame(x, 0, z, ry), H = fl * FH;
     const cw = pick(rnd, HOUSE), cs = mix(cw, C('#c9c5bd'), 0.55), band = mul(cw, 0.8), roof = C('#a39f97');
     const hl = FAC ? { x, z, ry, w, D, H, fl, pw: 0.18, ph: 0.95, cw, cs, kind: 'house', door: 0, flo: [], awn: null, shop: o.shop ?? null, vsign: o.vsign ?? null } : null; // ==== 第 3 批：外牆給 street.js 畫（磁磚、水漬）；這裡記下每一棟（不動到亂數）====
@@ -1168,7 +1170,8 @@ function buildVillage(opts = {}) {
     box('main', T, stair, cs, { _: U.conc, pz: U.conc }); face('main', T, sx - 0.45, sx + 0.45, H, H + 2.1, -D + 3.92, U.ac2);
     if (rnd() < 0.55) { cyl('main', T, sx, -D + 2.2, H + 2.6, H + 2.8, 0.5, 0.5, 6, C('#7d8288'), null, true); cyl('main', T, sx, -D + 2.2, H + 2.8, H + 4.1, 0.58, 0.58, 10, WHITE, U.tank, false); cyl('main', T, sx, -D + 2.2, H + 4.1, H + 4.4, 0.58, 0, 10, C('#d9dde1'), null, false); }
     else { const bl = C('#2f78c8'); cyl('main', T, sx, -D + 2.2, H + 2.6, H + 3.8, 0.62, 0.62, 10, bl, null, false); cyl('main', T, sx, -D + 2.2, H + 3.8, H + 4.05, 0.62, 0.2, 10, mul(bl, 0.9), null, true); }
-    if (fl >= 3 && rnd() < 0.35) { // 頂樓加蓋（浪板）
+    if (fl < 3 && fl0 >= 3) { if (rnd() < 0.35) pick(rnd, ROOFADD); } // 第 10 批：變矮的房子不加蓋（亂數一樣用掉）
+    else if (fl >= 3 && rnd() < 0.35) { // 頂樓加蓋（浪板）
       const rc = pick(rnd, ROOFADD), z1 = -D * 0.42;
       box('main', T, [-w / 2 + 0.25, H, -D + 4.3, w / 2 - 0.25, H + 2.7, z1], rc, { _: U.corr, py: false });
       B.quad('main', T.p(-w / 2 + 0.05, H + 2.62, z1 + 0.4), T.p(w / 2 - 0.05, H + 2.62, z1 + 0.4), T.p(w / 2 - 0.05, H + 3.2, -D + 4.0), T.p(-w / 2 + 0.05, H + 3.2, -D + 4.0), U.corr, mul(rc, 0.85));
@@ -1200,7 +1203,11 @@ function buildVillage(opts = {}) {
       B.quad('main', T.p(-w / 2, 3.25, 0), T.p(w / 2, 3.25, 0), T.p(w / 2, 2.95, 1.1), T.p(-w / 2, 2.95, 1.1), WD, mul(ac, 0.55));
     }
     const pc = rnd() < 0.3 ? WHITE : cw, parU = pick(rnd, [U.par1, U.par2, U.par3]), ups = []; // ups：樓上每層的正面（b 陽台＋落地門、w 鐵窗）
-    for (let f = 1; f < fl; f++) { // 樓上：陽台或鐵窗
+    for (let f = 1; f < fl0; f++) { // 樓上：陽台或鐵窗
+      if (f >= fl) { // 第 10 批：拿掉的樓層不蓋，亂數照下面一樣用掉
+        if (rnd() < 0.5) { if (rnd() < 0.35) for (let k = 0; k < 4; k++) { rnd(); rnd(); } rnd(); } else { rnd(); rnd(); }
+        continue;
+      }
       const y = f * FH;
       if (rnd() < 0.5) {
         ups.push('b');
@@ -1237,7 +1244,7 @@ function buildVillage(opts = {}) {
       let w = 4.3 + rnd() * 1.7; if (L - t - w < 4) w = L - t;
       if (w > 7) w = 5 + rnd();
       const cx = ax + ux * (t + w / 2), cz = az + uz * (t + w / 2), fl = rnd() < 0.2 ? 2 : rnd() < 0.62 ? 3 : 4;
-      house(cx, cz, ry, w, o.D ?? 12.5, fl, rnd, { shop: o.shops && o.shops[i] != null ? o.shops[i] : null, vsign: o.vsigns && o.vsigns[i] != null ? o.vsigns[i] : null });
+      house(cx, cz, ry, w, o.D ?? 12.5, Math.min(fl, HOUSE_MAX_FL), rnd, { fl0: fl, shop: o.shops && o.shops[i] != null ? o.shops[i] : null, vsign: o.vsigns && o.vsigns[i] != null ? o.vsigns[i] : null });
       t += w; i++;
       if (o.gaps && rnd() < 0.13 && L - t > 12) { const gw = 3 + rnd() * 2.5, gx = ax + ux * (t + gw / 2), gz = az + uz * (t + gw / 2); tree(gx - nx * 3, gz - nz * 3, 0.9 + rnd() * 0.3, rnd); t += gw; }
     }
@@ -1268,7 +1275,7 @@ function buildVillage(opts = {}) {
   tree(-264.5, -11, 1.05, rng(31)); tree(-242.5, 14.5, 1.1, rng(32)); // 廟口路口的兩個角
   // 外圍
   row(-243.25, -22, -243.25, -66, -1, 0, 105, { shops: [null, null, 1], vsigns: [4, null, null, 7], gaps: true }); // 廟口街東側（面向西）
-  row(-340, -78.75, -316, -78.75, 0, 1, 106, { D: 11, gaps: false });            // 車庫西邊（面向南）
+  // 第 10 批：車庫西邊（面向南）那排透天厝拿掉了：越野車車庫搬到這裡（orbay.js PLACE）
   row(-284, -78.75, -256, -78.75, 0, 1, 107, { gaps: false });            // 車庫東邊
   row(-302, 7.5, -340, 7.5, 0, -1, 108, { vsigns: [6, null, null, 1], gaps: true }); // 大路西段南側（面向北）
   row(-220, -8.25, -184, -8.25, 0, 1, 109, { shops: [null, null, 0, null, null, 1], vsigns: [3], gaps: true }); // 大路北側（超商到改車廠）
@@ -1556,11 +1563,12 @@ function buildVillage(opts = {}) {
   poleLine([[-235, 7.45, 0, -1], [-212, 7.45, 0, -1], [-184, 7.45, 0, -1], [-156, 7.65, 0, -1], [-128, 7.85, 0, -1], [-100, 8.2, 0, -1], [-78, 8.2, 0, -1]]);
   poleLine([[-262, -6.8, 0, 1], [-290, -6.8, 0, 1], [-318, -6.8, 0, 1], [-336.5, -6.8, 0, 1]]);
   poleLine([[-244.05, -62, -1, 0], [-244.05, -44, -1, 0], [-244.05, -24, -1, 0]]);
-  poleLine([[-336.5, -78.15, 0, 1], [-318, -78.15, 0, 1], [-280, -78.15, 0, 1], [-260, -78.15, 0, 1]]);
+  // 第 10 批：越野車車庫的門前（x −338.5…−329.5）不要有電線桿：拿掉 x −336.5 那根，反光鏡往西挪到 −340.6
+  poleLine([[-318, -78.15, 0, 1], [-280, -78.15, 0, 1], [-260, -78.15, 0, 1]]);
   poleLine([[-351.25, -52, 1, 0], [-351.25, -26, 1, 0], [-351.25, -8.2, 1, 0]]);
   poleLine([[-255.5, 22, 1, 0], [-255.5, 46, 1, 0], [-236, 63.5, 0, -1], [-208, 63.5, 0, -1], [-180, 63.5, 0, -1], [-152, 63.5, 0, -1], [-124, 63.5, 0, -1], [-106.5, 44, -1, 0], [-106.5, 20, -1, 0]]);
   poleLine([[-358, 7.55, 0, -1], [-386, 7.55, 0, -1], [-414, 7.55, 0, -1], [-442, 7.55, 0, -1], [-470, 7.55, 0, -1], [-500, 7.55, 0, -1]]); // 往快速道路那段（南側）
-  mirrorPole(-241.85, -7.75, -250, 0); mirrorPole(-256.25, -77.95, -252, -70); mirrorPole(-339.25, -77.75, -343, -70); mirrorPole(-288.6, -78.05, -300, -72); mirrorPole(-293.85, -7.1, -300, 0);
+  mirrorPole(-241.85, -7.75, -250, 0); mirrorPole(-256.25, -77.95, -252, -70); mirrorPole(-340.6, -77.75, -343, -70); mirrorPole(-288.6, -78.05, -300, -72); mirrorPole(-293.85, -7.1, -300, 0);
 
   // ---- 地上的字：路口前的「慢」、廟口的斑馬線 ----
   const approach = (node, r) => { // 從路 r 開向 node：最後一段的方向、在 node 前 d 公尺的點

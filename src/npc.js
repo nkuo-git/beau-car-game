@@ -1766,7 +1766,7 @@ function createPedestrians(o = {}) {
   function arrive(p) {
     const i = p.rn - 1, e = EDGES[p.route[i]]; p.te = e.id; p.ts = p.rdir[i] > 0 ? e.len : 0;
     p.v = 0; p.rn = 0;
-    if (p.gk === 'door' && p.door) { p.mode = 'enter'; return; }
+    if (p.gk === 'door' && p.door) { p.mode = 'enter'; p.timer = 0; return; }
     if (p.gk === 'seat' && p.seat && p.seat.by === p.id) { p.mode = 'sitdown'; p.timer = 0; return; }
     p.mode = 'idle'; p.timer = 1.5 + R() * 5;
   }
@@ -1793,7 +1793,8 @@ function createPedestrians(o = {}) {
         p.v = 0; break;
       }
       case 'enter': { // 進門：走到門裡面一點就不見了
-        const d = p.door; if (moveToward(p, d.hx, d.hz, p.baseV * 0.8, h) < 0.05) { st.entered++; release(p); } else pushOut(p, false); break;
+        // 門口有東西（花台、機車）擋住、走不到門裡面：4 秒以後就算進去了（不然會一直卡在門口，那個人永遠不會換）
+        const d = p.door; if (moveToward(p, d.hx, d.hz, p.baseV * 0.8, h) < 0.05 || (p.timer += h) > 4) { st.entered++; release(p); } else pushOut(p, false); break;
       }
       case 'sitdown': { // 轉身、往後坐下
         const s = p.seat; p.timer += h; p.hd = headOf(s.fx, s.fz);

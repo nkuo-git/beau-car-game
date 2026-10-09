@@ -23,7 +23,7 @@
 //     wake＝起床站的地方（床邊、面向門）；houseIn／houseOut＝進門（面向房間裡）、出門（門外面、面向車庫）站的地方
 //   colliders(doorOpen = door.t >= 0.9, world = false)：[{ t: 'box', x, z, hx, hz, rot, h } | { t: 'circle', x, z, r, h }]（盆栽是圓的，跟 village.js 一樣）
 //     牆、壁柱、家具、小房子（牆留 1 公尺的門洞、開著的門、床、衣櫃、書桌⋯）、升降機（照現在的狀態：升起來＝四根柱子、在動＝整個坑、降下去＝沒有）、操作柱
-//     門沒全開就多一塊門（x 4.85 … 5.3、z −3 … 3、h 3.8），一定是最後一個（walk.js 靠這個）；停著的車自己加；world＝true 直接給世界座標（rot 加上整棟轉的角度）
+//     門沒全開就多一塊門（x 4.85 … 5.3、z −DZ … DZ、h DH），一定是最後一個（walk.js 靠這個）；停著的車自己加；world＝true 直接給世界座標（rot 加上整棟轉的角度）
 //     升降機一動（onLift）碰撞就變了：要重給（drive.js 的 'garage'、walk.js 再叫一次 setGarage）
 //   zones：{ inside, door: { x, z0, z1, x1, h }, apron, house, bedSide, houseDoor, lifts: [6] }（apron＝門外面等開門的那一塊）
 //     house＝小房子裡面的地板 { x, z, hx, hz, ceil（牆邊天花板高）, ridge（屋脊）}；bedSide＝站在這裡 →「睡覺」；houseDoor＝門洞；lifts[i]＝站在這裡 → 操作第 i 台升降機
@@ -51,8 +51,8 @@
 //   走路走得到（walk.js setCars 要給的）：每台只有 floorDeck 那層的車（level 1＝上層那台、level 0＝下層那台）；升起來那層在頭上、降下去那層在坑裡、在動的時候都走不到
 //   開車：車子從門開到跟地板平的那層（車頭朝門倒車進去，停好 put 到 platforms[floorDeck]）；有車、有人在上面別動升降機（頁面管）
 // 本地座標：x 往門（+x 出去）、y 上、z＝車頭朝門的時候車子的右邊；地板 y = 0
-//   裡面 x −12.7 … 5、z −12.7 … 12.7、天花板 4.5（四周燈槽到 4.64）；牆厚 0.3：外面 x −13 … 5.3、z −13 … 13、女兒牆頂 5.7
-//   鐵捲門：x = 5 那面牆的中間，門洞 z −3 … 3、高 3.8；門片在牆裡面 7 公分（x = 4.93），捲筒盒在門洞上面（x 4.52 … 5、y 3.86 … 4.5）
+//   裡面 x −12.7 … 5、z −12.7 … 12.7、天花板 6（第 10 批：本來 4.5；四周燈槽到 H＋0.14）；牆厚 0.3：外面 x −13 … 5.3、z −13 … 13、女兒牆頂 7.2
+//   鐵捲門：x = 5 那面牆的中間，門洞 z −4 … 4、高 5（第 10 批：本來 ±3、3.8）；門片在牆裡面 7 公分（x = 4.93），捲筒盒在門洞上面（x 4.52 … 5、y DH＋0.06 … H）
 //   小房子：左前角 x 0 … 5、z −12.7 … −8.5（貼著門那面牆、z −12.7 那面牆），屋簷 2.75、屋脊 3.97；門洞 x 0.35 … 1.35（朝 +z，門往裡面開著）；床頭靠 z −12.7
 //   升降機：車位中心 x −9.8、z ±1.85、±5.55、±9.25；坑口 5.44 × 3.04、深 2.35；操作柱在兩台中間的分隔線上（x −7.3）
 // 燈光：房間自己的東西不吃場景的燈（村子的太陽照不進來）：牆、家具的亮度＝照「上／水平／下」算的環境光＋角落暗一點＋燈槽洗牆，
@@ -66,7 +66,7 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 
-export const ROOM_SIZE = { X: 5, XB: -12.7, Z: 12.7, H: 4.5, T: 0.3, TOP: 5.7, DZ: 3, DH: 3.8 };
+export const ROOM_SIZE = { X: 5, XB: -12.7, Z: 12.7, H: 6, T: 0.3, TOP: 7.2, DZ: 4, DH: 5 }; // 第 10 批（Nick「所有車庫變高變寬」）：天花板 4.5 → 6、門 6 × 3.8 → 8 × 5 公尺
 
 export function buildRoom(renderer, { quality = 'high', exterior = false } = {}) {
   const { X: XD, XB, Z: ZS, H, T: WT, TOP, DZ, DH } = ROOM_SIZE, hi = quality !== 'low';
@@ -407,7 +407,7 @@ export function buildRoom(renderer, { quality = 'high', exterior = false } = {})
   // 升降機（後牆六個車位都是地坑式兩層）：平台上緣間距 PD、坑深、平台半長（x）半寬（z）厚、坑口半長半寬、柱子（相對平台中心）、操作柱
   const PD = 2.1, PIT = 2.35, DKX = 2.7, DKZ = 1.5, DKT = 0.16, PXH = 2.72, PZH = 1.52, POSTX = DKX - 0.07, POSTZ = DKZ - 0.07, POSTW = 0.07, PANX = BX + 2.5;
   const PANZ = BAYZ.map((c) => c + Math.sign(c) * 1.85); // 操作柱在車位外側那條分隔線上（中間 z = 0 那條空著：車庫頁的鏡頭從後面看車不會被擋）
-  const LAMP = [XD - 0.49, 4.2, 3.1]; // 裡面的警示燈（捲筒盒正面右邊）
+  const LAMP = [XD - 0.49, DH + 0.4, DZ + 0.1]; // 裡面的警示燈（捲筒盒正面右邊）
   const FB0 = 2.4, FB1 = 3.2; // 後牆黑大理石橫帶（招牌）上下：車庫頁一開始的鏡頭（手機）招牌要在上面那排按鈕下面
   const v3 = (a) => `vec3(${a.map(f3).join(', ')})`;
   const G_DEF = `#define R_XD ${f3(XD)}
@@ -712,7 +712,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
   }
 
   // ---- 牆 B（x = XD，門那面）：鐵捲門（兩邊黑色導軌、上面白色捲筒盒＋警示燈、門邊開關盒）；右邊輪胎架、左邊模型車展示櫃 ----
-  const RL = 0.13, BOXN = 0.48, BOXY = 3.86; // 導軌深、捲筒盒深、盒底
+  const RL = 0.13, BOXN = 0.48, BOXY = DH + 0.06; // 導軌深、捲筒盒深、盒底
   slabs('B', -ZS, -DZ - 0.36); slabs('B', DZ + 0.36, ZS); skirt('B', -ZS, -DZ - 0.36); skirt('B', DZ + 0.36, ZS);
   wq(S, 'B', -DZ - 0.36, DZ + 0.36, DH, HC, 0, RW, CEIL, MM.paint); // 門洞上面（被盒子擋住）
   S.quad(V(XD, 0, -DZ), V(XO, 0, -DZ), V(XO, DH, -DZ), V(XD, DH, -DZ), RW, [0.02, 0.02, 0.022], MM.satin); // 門洞的內側（牆的厚度）：兩邊、上面，黑色
@@ -1161,7 +1161,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
   }
 
   // ---- 鐵捲門：41 片鋁門片（最下面那片是底條），InstancedMesh；裡面那面拉絲鋁、外面那面白色烤漆 ----
-  const SLAT = 0.1, NS = 41, XC = XD - 0.07, YT = 4.12, R0 = 0.14; // 片高、片數、門片平面、捲筒切點高、捲筒外半徑
+  const SLAT = 0.1, YT = DH + 0.32, NS = Math.round(YT / SLAT), XC = XD - 0.07, R0 = 0.14; // 片高、片數、門片平面、捲筒切點高、捲筒外半徑
   const slatGeo = (side) => { // 本地：x＝往外（門外）、y＝沿著門往上、z＝沿著門片；side −1＝裡面那面、+1＝外面那面
     const b = batch(), prof = [[0.004, -0.05, 0.3], [0.004, -0.044, 0.3], [0.008, -0.042, 0.8], [0.011, -0.02, 1], [0.012, 0, 1], [0.011, 0.024, 1], [0.008, 0.043, 0.85], [0.004, 0.045, 0.35], [0.004, 0.05, 0.35]];
     const z0 = -DZ - 0.06, z1 = DZ + 0.06;
@@ -1204,7 +1204,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
   layoutDoor();
 
   // ---- 外殼（村子才有）：外牆白大理石板＋黑大理石牆腳、女兒牆、屋頂；門面：黑色門框、招牌、兩邊直的壁燈、牆腳的車道燈、警示燈、密碼盤 ----
-  const EROWS = [0.4, 2.0, 3.6, 5.25], PAR = 5.25; // 外牆石板的排（牆腳黑的到 0.4）
+  const PAR = TOP - 0.45, EROWS = [0.4, 2.0, 3.6, 5.2, PAR]; // 第 10 批：車庫變高，多一排 // 外牆石板的排（牆腳黑的到 0.4）
   const EFY0 = DH + 0.5, EFY1 = PAR - 0.1, EFU = DZ + 1.45; // 門上面的黑大理石橫帶（招牌）
   const eslabs = (w, u0, u1, rows = EROWS) => slabs(w, u0, u1, rows, { cw: 1.5, mat: MM.honed, bt: E });
   const eplinth = (w, u0, u1) => { wq(E, w, u0, u1, 0, EROWS[0], 0.02, 'M', W1, MM.nero, true); wqUp(E, w, u0, u1, EROWS[0], 0, 0.02, RW, BLK, MM.gloss); };

@@ -852,7 +852,8 @@ function orbaySpot(t) {
   if (!OB || liftOK(cur)) return null;
   for (let i = 0; i < OB.bays.length; i++) {
     const b = OB.bays[i];
-    if (Math.abs(t.z - b.z) > 2.4 || Math.abs(t.x - b.x) > 1.1) continue; // 往裡面 ±2.4、左右 ±1.1 公尺
+    const dx = t.x - b.x, dz = t.z - b.z, ch = Math.cos(b.heading), sh = Math.sin(b.heading); // 第 10 批：越野車車庫轉過去了：照那一格的方向算
+    if (Math.abs(dx * ch - dz * sh) > 2.4 || Math.abs(dx * sh + dz * ch) > 1.3) continue; // 往裡面 ±2.4、左右 ±1.3 公尺
     const h = wrapPi(t.heading - b.heading), rev = Math.abs(h) > Math.PI / 2; // 車頭朝裡面、朝門口都可以
     if (Math.abs(wrapPi(h - (rev ? Math.PI : 0))) > 0.5) continue; // 歪太多（橫著停）不算
     if (bayTaken(i, cur)) continue; // 那一格已經有別台了

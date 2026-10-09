@@ -29,6 +29,7 @@
 //   crush.stats               { cars, junk, props, bails, pads, flats, ms, maxMs, frames, types }
 // 第 9 批（路變大）Nick 2026-10-09「越車可碾任何東西」：越野車（PERF.offroad；現在只有怪獸卡車）什麼都輾得過去：
 //   路上的車、警車（警察先下車跑掉，+2★）、路燈、樹、紅綠燈、牆、圍籬、站牌、招牌、房子、大樓、地標 → 壓成一堆低低的瓦礫（開得上去），碰撞拿掉
+//   第 10 批：房子、大樓、內湖的地標撞不倒（HOUSE_SOLID）：撞到就停住，不扁、不算犯罪。下面「房子怎麼壓」留著，HOUSE_SOLID 關掉才會用到
 //   不輾：人（永遠不會）、你的車庫、越野車車庫、改車廠、車店、槍店、警察局、越野車行、福德宮（o.protect）、捷運的橋墩跟高架（noCrush）、
 //         賽車場（circuit）、長的圍牆／護欄（地圖的邊、快速道路：14 公尺以上）
 //   房子怎麼壓：輾到的那一下把那棟（同一個 g 的碰撞物＋貼在上面的小東西）記下來 → 分幾幀（每幀最多 SEL_MS 毫秒）從合併網格裡挑出它的三角形
@@ -73,8 +74,12 @@ function canAny(c, any, protect) {
   if (!any || c.circuit || (c.src && c.src.circuit)) return false;
   if (c.t === 'box' && (c.hx > LONG || c.hz > LONG)) return false;
   if (protect && protect(c.x, c.z)) return false;
+  if (HOUSE_SOLID && isBld(c.src || c)) return false;
   return true;
 }
+// 第 10 批（Nick 2026-10-09「所有房子⋯越野車撞不倒」）：房子、大樓、地標（內湖的 g ≥ GB−2；村子的：高 2.6 以上、兩邊都 1 公尺以上的盒子）越野車也撞不倒
+const HOUSE_SOLID = true, NH_GB = 1e6 - 2;
+function isBld(c) { return (c.g != null && c.g >= NH_GB) || (c.t === 'box' && (c.h ?? 9) >= 2.6 && c.hx >= 1 && c.hz >= 1); }
 function can(c) { return canAny(c, false, null); }
 
 function createCrush(o = {}) {

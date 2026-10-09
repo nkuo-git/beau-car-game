@@ -293,7 +293,8 @@ check(Math.max(crush2.r.maxY, crush2.r2.maxY) > 0.25, `the truck climbed up onto
 await drawAndShot('2-crushed-car');
 const on2 = await p.evaluate(() => { const H = window.__H; const r = H.drive({ throttle: 0.6, brake: 0, steer: 0 }, 5, null); return { r, cst: H.cst(), tele: window.__D().drv.telemetry() }; });
 console.log('  drives on:', JSON.stringify(on2.r));
-check(on2.r.maxKmh > 18 && on2.r.moved > 40 && Math.abs(on2.tele.y) < 0.3, `the truck drives on afterwards (${on2.r.moved} m further at up to ${on2.r.maxKmh} km/h, back down on the road)`);
+// 第 10 批：往南直直開 30 多公尺就是大路對面的透天厝：現在撞不倒、會停在那裡（以前輾過去再開 40 公尺）
+check(on2.r.maxKmh > 18 && on2.r.moved > 25 && Math.abs(on2.tele.y) < 0.3, `the truck drives on afterwards (${on2.r.moved} m further at up to ${on2.r.maxKmh} km/h, back down on the road; a house across the main road stops it now)`);
 summary.push(`monster vs traffic car: squashed to ${crush2.car.scaleY}, ${crush2.cst.bails} people out, ${crush2.pol.wanted}★`);
 await drawAndShot('3-drives-on');
 
@@ -367,7 +368,7 @@ await drawAndShot('7-park-after');
 
 console.log('6', el(), 'off-road truck crushes anything');
 // 6a 房子（村子裡的透天厝）
-const hs = await p.evaluate(() => { const D = window.__D(), H = window.__H; window.__pol()?.clear(); D.drv.teleport({ x: -262, z: 0, heading: 0 }); H.step(20); const r = H.pickBig(-262, -40, (c) => c.t === 'box' && (c.h ?? 9) >= 5 && c.hx >= 2.5 && c.hz >= 2.5 && c.hx < 10 && c.hz < 10 && c.g == null); delete r.c; return r; });
+const hs = await p.evaluate(() => { const D = window.__D(), H = window.__H; window.__pol()?.clear(); D.drv.teleport({ x: -262, z: 0, heading: 0 }); H.step(20); const r = H.pickBig(-262, -40, (c) => c.t === 'box' && (c.h ?? 9) >= 5 && c.hx >= 2.5 && c.hz >= 2.5 && c.hx < 10 && c.hz < 10 && c.g == null, 260, false); delete r.c; return r; }); // 第 10 批：房子撞不倒了（不看 can）
 console.log('  house target:', JSON.stringify(hs));
 const house = !hs.none ? await p.evaluate((q) => {
   const D = window.__D(), H = window.__H, C = window.__C();
@@ -378,14 +379,14 @@ const house = !hs.none ? await p.evaluate((q) => {
   H.step(60);
   const j = C.big.find((k) => k.grp.includes(c));
   return { r, crushed: !!c.crushed, big: C.stats.big - big0, info: j ? H.bigInfo()[C.big.indexOf(j)] : null, maxY: j ? H.segMaxY(j) : null, door: b ? !!b.crushed : null, bname: b ? b.kind : null,
-    pol: H.pol(), tele: D.drv.telemetry(), past: j ? +(((D.drv.telemetry().x - c.x) * Math.cos(q.a) - (D.drv.telemetry().z - c.z) * Math.sin(q.a))).toFixed(1) : null, knocks: window.__N().peds.stats.knocks - n0, ms: +C.stats.bigMs.toFixed(2) };
+    can: C.can(c), pol: H.pol(), tele: D.drv.telemetry(), past: j ? +(((D.drv.telemetry().x - c.x) * Math.cos(q.a) - (D.drv.telemetry().z - c.z) * Math.sin(q.a))).toFixed(1) : null, knocks: window.__N().peds.stats.knocks - n0, ms: +C.stats.bigMs.toFixed(2) };
 }, hs) : null;
 console.log('  monster truck into a house:', JSON.stringify(house));
-check(!!house && house.crushed && house.big >= 1 && house.info && house.info.phase === 2 && house.info.verts > 30, `the off-road truck flattened a village house (${house?.info?.verts} vertices of ${house?.info?.segs} meshes pressed down, ${house?.info?.n} colliders gone)`);
-check(!!house && house.maxY !== null && house.maxY <= house.info.rub + 0.6, `the house is a low pile of rubble now (highest point ${house?.maxY} m, was ${house?.info?.top} m)`);
-check(!!house && house.past > 0 && house.r.maxKmh > 15, `the truck drove straight through it and kept going (${house?.past} m past the middle, up to ${house?.r?.maxKmh} km/h)`);
-check(!!house && house.pol.types.includes('crush') && house.pol.wanted >= 1 && house.pol.wanted <= 3, `crushing a house is a crime (${house?.pol?.wanted}★)`);
-await drawAndShot('8-flat-house');
+// 第 10 批（Nick 2026-10-09「所有房子變矮越野車撞不倒」）：房子越野車也撞不倒：只是撞到，不會扁、不算犯罪
+check(!!house && !house.crushed && !house.can && house.big === 0 && !house.info && hs.h <= 7, `the off-road truck cannot knock down a village house any more (a ${hs.h} m house: not flattened, still solid)`);
+check(!!house && (house.r.bumps > 0 || house.r.kmh < 12), `the truck just bumps into it and stops (bumps ${house?.r?.bumps}, ${house?.r?.kmh} km/h at the end)`);
+check(!!house && house.pol.wanted === 0, `bumping a house is not a crime (${house?.pol?.wanted}★ after the stars were cleared)`);
+await drawAndShot('8-house-solid');
 // 6b 樹、路燈（圓的、高的）
 const tr = await p.evaluate(() => { const D = window.__D(), H = window.__H; const r = H.pickBig(-262, -40, (c) => c.t === 'circle' && (c.h ?? 9) >= 3.5); delete r.c; return r; });
 const tree = !tr.none ? await p.evaluate((q) => {
@@ -485,16 +486,17 @@ const nh = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, C = window.__C(), V = D.VIL;
   window.__pol().clear();
   D.drv.teleport(V.places.neihu.spawn); H.step(60);
-  const t = D.drv.telemetry(), q = H.pickBig(t.x, t.z, (c) => c.g != null && c.t === 'box' && (c.h ?? 0) >= 9 && V.colliders.filter((k) => k.g === c.g).length >= 2, 400);
+  const t = D.drv.telemetry(), q = H.pickBig(t.x, t.z, (c) => c.g != null && c.t === 'box' && (c.h ?? 0) >= 5 && V.colliders.filter((k) => k.g === c.g).length >= 2, 400, false); // 第 10 批：內湖的房子也最多 2 層（7.4 公尺）
   if (q.none) return { none: true, n: q.n };
   const g = q.c.g, grp = V.colliders.filter((k) => k.g === g); delete q.c;
   const r = H.ram(q, 0.6, 5); H.step(60);
   const j = C.big.find((k) => k.grp.some((c) => c.g === g));
-  return { q, r, n: grp.length, crushed: grp.filter((k) => k.crushed).length, verts: j ? j.segs.reduce((a, s) => a + s.idx.length, 0) : 0, maxY: j ? H.segMaxY(j) : null, top: j ? j.top : null, ms: +C.stats.bigMs.toFixed(2), hit: +C.stats.hitMs.toFixed(2) };
+  return { q, r, can: grp.filter((k) => C.can(k)).length, tops: Math.max(...V.colliders.filter((k) => k.g != null && k.g >= 1e6 && k.t === 'box').map((k) => k.h ?? 0)), n: grp.length, crushed: grp.filter((k) => k.crushed).length, verts: j ? j.segs.reduce((a, s) => a + s.idx.length, 0) : 0, maxY: j ? H.segMaxY(j) : null, top: j ? j.top : null, ms: +C.stats.bigMs.toFixed(2), hit: +C.stats.hitMs.toFixed(2) };
 });
 console.log('  neihu building:', JSON.stringify(nh));
-check(!nh.none && nh.crushed === nh.n && nh.verts > 50 && nh.maxY <= 1.5, `a ${nh.top} m building in 內湖 (${nh.n} collider boxes) went flat all at once (${nh.verts} vertices, now ${nh.maxY} m)`);
-await drawAndShot('10-flat-neihu');
+check(!nh.none && nh.crushed === 0 && nh.can === 0 && nh.verts === 0 && (nh.r.bumps > 0 || nh.r.kmh < 12), `a building in 內湖 (${nh.n} collider boxes) stops the truck and is not flattened (bumps ${nh.r?.bumps})`);
+check(!nh.none && nh.tops <= 7.5, `內湖 buildings are at most 2 floors now (tallest ordinary building ${nh.tops} m)`);
+await drawAndShot('10-neihu-solid');
 // 6g 長回來：離開 140 公尺以上 25 秒
 const back9 = await p.evaluate((hq) => {
   const D = window.__D(), H = window.__H, C = window.__C(), V = D.VIL;
@@ -504,8 +506,8 @@ const back9 = await p.evaluate((hq) => {
   return { n0, n1: C.big.length, crushed: c ? !!c.crushed : null, doors: V.buildings.filter((b) => b.crushed).length, restored: C.stats.restored, nhCrushed: V.colliders.filter((k) => k.g != null && k.crushed).length };
 }, hs.none ? null : hs);
 console.log('  after being away:', JSON.stringify(back9));
-check(back9.n0 >= 2 && back9.n1 === 0 && back9.crushed === false && back9.doors === 0 && back9.nhCrushed === 0, `everything flattened came back after being away for a while (${back9.restored} things restored; the house blocks again, its door works again)`);
-summary.push(`off-road truck: house ${house?.info?.verts} verts, ${tr.t} ${tree?.verts} verts, police car +${cop ? cop.w1 - cop.w0 : '?'}★, neihu ${nh.n} boxes; picking triangles max ${nh.ms} ms/frame, the hit itself max ${nh.hit} ms`);
+check(back9.n0 >= 1 && back9.n1 === 0 && back9.crushed === false && back9.doors === 0 && back9.nhCrushed === 0, `everything flattened came back after being away for a while (${back9.restored} things restored; houses were never flattened)`);
+summary.push(`off-road truck: house solid, ${tr.t} ${tree?.verts} verts, police car +${cop ? cop.w1 - cop.w0 : '?'}★, neihu building solid (${nh.n} boxes); picking triangles max ${nh.ms} ms/frame, the hit itself max ${nh.hit} ms`);
 
 // ================= 7 第 9 批（路變大）：路變寬（村子、內湖）、車流照跑、內湖左上角的路名 =================
 const wide = await p.evaluate(() => {
