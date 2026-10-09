@@ -479,7 +479,7 @@ const b1 = await p.evaluate(() => { const D = window.__D(), V = D.VIL, I = V.inf
   return { info: I, pills, place: !!V.places.circuit, track: !!V.places.track, roads: V.roads.filter((r) => r.kind === 'circuit').length, bounds: V.bounds }; });
 console.log('1', el(), 'circuit built:', JSON.stringify(b1));
 check(b1.info && b1.info.lap > 3500 && b1.info.lap < 5000 && b1.place && b1.track && b1.roads >= 2, `circuit built into the village (lap ${b1.info?.lap} m, ${b1.info?.meshes} meshes, ${b1.info?.tris} tris, ${b1.info?.colliders} colliders, ${b1.info?.ms} ms); drag strip place still there`);
-check(b1.pills.length === 7 && b1.pills.includes('neihu:去內湖') && b1.pills.includes('circuit:去賽車場*') && !b1.pills.some((q) => q.startsWith('track:')), `seven destination pills (內湖 added), 去賽車場 replaces 去賽道 and is the default with no money (${b1.pills.join(' ')})`);
+check(b1.pills.length === 8 && b1.pills.includes('neihu:去內湖') && b1.pills.includes('mountain:去山頂') && b1.pills.includes('circuit:去賽車場*') && !b1.pills.some((q) => q.startsWith('track:')), `eight destination pills (內湖, 山頂 added), 去賽車場 replaces 去賽道 and is the default with no money (${b1.pills.join(' ')})`);
 const w2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker; W.teleport(H.gw(-4.6, -7.7, -1.05)); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); return { ok: r.ok, act: H.actText() }; });
 const bd2 = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(); H.step(40); const D = window.__D(); return { pressed, modes: r.modes, drv: !!D.drv, cur: D.cur, dest: D.drv?.telemetry().dest }; });
 console.log('  上車:', JSON.stringify(w2), JSON.stringify(bd2));

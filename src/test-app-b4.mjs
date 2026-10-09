@@ -456,10 +456,10 @@ const pillsAbove = (sel) => p.evaluate((s) => { const d = [...document.querySele
   const e = document.querySelector(s); return { d, top: e ? Math.round(e.getBoundingClientRect().top) : null, fs: document.body.classList.contains('fs') }; }, sel);
 const pw1 = await pillsAbove('#stage .wk-stick');
 console.log('2', el(), 'on foot, dests:', JSON.stringify(pw1));
-check(pw1.fs && pw1.d.length === 7 && new Set(pw1.d.map((q) => q.x)).size === 1 && new Set(pw1.d.map((q) => q.y)).size === 7 && pw1.top != null && Math.max(...pw1.d.map((q) => q.b)) <= pw1.top,
-  `on foot (fullscreen): seven destination pills (內湖 added) in one column above the joystick (last pill ends ${Math.max(...pw1.d.map((q) => q.b))}, joystick at ${pw1.top})`);
+check(pw1.fs && pw1.d.length === 8 && new Set(pw1.d.map((q) => q.x)).size === 1 && new Set(pw1.d.map((q) => q.y)).size === 8 && pw1.top != null && Math.max(...pw1.d.map((q) => q.b)) <= pw1.top,
+  `on foot (fullscreen): eight destination pills (內湖, 山頂 added) in one column above the joystick (last pill ends ${Math.max(...pw1.d.map((q) => q.b))}, joystick at ${pw1.top})`);
 let clash = await hudClash() || await sizeSweep();
-check(!clash, `on foot with seven destinations: nothing overlapping or off-screen on any screen size (${clash || 'ok'})`);
+check(!clash, `on foot with eight destinations: nothing overlapping or off-screen on any screen size (${clash || 'ok'})`);
 const w2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker; W.teleport(H.gw(-4.6, -7.7, -1.05)); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); return { ok: r.ok, act: H.actText() }; });
 const bd2 = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(); H.step(40); const D = window.__D(); return { pressed, modes: r.modes, drv: !!D.drv, cur: D.cur, act: H.actText(), act2: H.act2() }; });
 console.log('  上車 GC8:', JSON.stringify(w2), JSON.stringify(bd2));
@@ -467,15 +467,15 @@ check(w2.ok && w2.act === '上車 · GC8' && bd2.pressed === '上車 · GC8' && 
 await p.evaluate(() => document.querySelector('#dests button[data-d="offroad"]').click());
 const pd2 = await pillsAbove('#stage .dv-steer');
 console.log('  in the car, dests:', JSON.stringify(pd2));
-check(pd2.fs && pd2.d.length === 7 && new Set(pd2.d.map((q) => q.x)).size === 1 && new Set(pd2.d.map((q) => q.y)).size === 7 && pd2.top != null && Math.max(...pd2.d.map((q) => q.b)) <= pd2.top,
-  `driving (fullscreen): seven destination pills (內湖 added) in one column above the steering buttons (last pill ends ${Math.max(...pd2.d.map((q) => q.b))}, steering at ${pd2.top})`);
+check(pd2.fs && pd2.d.length === 8 && new Set(pd2.d.map((q) => q.x)).size === 1 && new Set(pd2.d.map((q) => q.y)).size === 8 && pd2.top != null && Math.max(...pd2.d.map((q) => q.b)) <= pd2.top,
+  `driving (fullscreen): eight destination pills (內湖, 山頂 added) in one column above the steering buttons (last pill ends ${Math.max(...pd2.d.map((q) => q.b))}, steering at ${pd2.top})`);
 clash = await hudClash() || await sizeSweep();
-check(!clash, `driving with seven destinations: nothing overlapping or off-screen on any screen size (${clash || 'ok'})`);
+check(!clash, `driving with eight destinations: nothing overlapping or off-screen on any screen size (${clash || 'ok'})`);
 await p.evaluate(() => document.getElementById('fsBtn').click()); await p.waitForTimeout(400); // 離開全螢幕：畫面下面的「去哪裡」
 const dests2 = await p.evaluate(() => [...document.querySelectorAll('#dests button')].map((x) => { const r = x.getBoundingClientRect(); return { t: x.textContent, y: Math.round(r.y), w: Math.round(r.width) }; }));
 const rows = [...new Set(dests2.map((d) => d.y))];
 console.log('  not fullscreen:', JSON.stringify(dests2));
-check(!(await p.evaluate(() => document.body.classList.contains('fs'))) && rows.length === 2 && dests2.filter((d) => d.y === rows[0]).length === 4 && dests2.length === 7 && Math.max(...dests2.map((d) => d.w)) - Math.min(...dests2.map((d) => d.w)) <= 2, 'not fullscreen: destination bar is two rows (four + three, 內湖 added), same width');
+check(!(await p.evaluate(() => document.body.classList.contains('fs'))) && rows.length === 2 && dests2.filter((d) => d.y === rows[0]).length === 4 && dests2.length === 8 && Math.max(...dests2.map((d) => d.w)) - Math.min(...dests2.map((d) => d.w)) <= 2, 'not fullscreen: destination bar is two rows (four + four, 內湖, 山頂 added), same width');
 await p.evaluate(() => { window.scrollTo(0, 0); document.getElementById('fsBtn').click(); }); await p.waitForTimeout(400);
 check(await p.evaluate(() => document.body.classList.contains('fs')), 'back to fullscreen');
 check(pd2.d.find((d) => d.t === '去越野車場')?.p === 'true' && (await driveInfo()).dest === 'offroad', '去越野車場 pressed: drive destination is the off-road park');

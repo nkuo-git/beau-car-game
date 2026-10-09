@@ -484,7 +484,7 @@ const bd2 = await p.evaluate(() => { const H = window.__H, pressed = H.press(), 
 console.log('2', el(), JSON.stringify(w2), JSON.stringify(bd2));
 check(w2.ok && bd2.drv && bd2.act === '開鐵捲門', 'walked to GC8 and got in');
 const pills = await p.evaluate(() => [...document.querySelectorAll('#dests button')].map((b) => b.dataset.d + ':' + b.textContent));
-check(pills.length === 7 && pills.includes('neihu:去內湖') && pills[pills.length - 1] === 'garage:回車庫', `seven destination pills with 去內湖 (${pills.join(' ')})`);
+check(pills.length === 8 && pills.includes('neihu:去內湖') && pills.includes('mountain:去山頂') && pills[pills.length - 1] === 'garage:回車庫', `eight destination pills with 去內湖 and 去山頂 (${pills.join(' ')})`);
 await p.evaluate(() => document.querySelector('#dests button[data-d="neihu"]').click());
 await p.evaluate(() => window.__dstep(5));
 const d2 = await p.evaluate(() => { const t = window.__D().drv.telemetry(); return { dest: t.dest, dist: t.destDist, chip: document.querySelector('#stage .dv-chip')?.textContent, pressed: document.querySelector('#dests button[data-d="neihu"]').getAttribute('aria-pressed') }; });
