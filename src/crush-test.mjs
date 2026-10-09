@@ -1,4 +1,6 @@
 // 第 7 批（輾扁）：怪獸卡車開上去把東西壓扁（art/garage.html 整頁跑一次）
+// 第 9 批（路變大）：越野車什麼都輾（6）：房子、樹／路燈、警車（+2★，警察先跑掉）、內湖的大樓；人、車庫、店、警察局、捷運的橋墩不輾；路上的人撲開；離開一陣子長回來
+//   7 路變寬（村子、內湖）、車流照跑、內湖左上角的路名；1 也多一個：GC8 撞房子只是撞到
 //   1 開 GC8 出門 → 撞路上的車（只是撞到、彈開，不會扁）、撞垃圾桶（也不會扁）
 //   2 直接回車庫 → 換怪獸卡車 → 出門 → 輾路上的車：車頂壓扁、玻璃破、車上的人跳車跑掉（沒人受傷）、警察 +1★、接著還開得動
 //   3 輾路邊的東西（垃圾桶、燈箱、機車、板凳⋯）：扁掉、再 +1★
@@ -111,7 +113,7 @@ await p.addInitScript(() => {
   };
   H.hurt = () => { // 有沒有人受傷（倒地、躺著、爬起來）
     const N = window.__N(); if (!N) return { peds: 0, down: 0, knocks: 0 };
-    const down = N.peds.people.filter((q) => !q.gone && (q.mode === 'fall' || q.mode === 'lie' || q.mode === 'getup')).length;
+    const down = N.peds.people.filter((q) => !q.gone && !q.dive && (q.mode === 'fall' || q.mode === 'lie' || q.mode === 'getup')).length; // 第 9 批：自己撲開的（dive）不算受傷
     return { peds: N.peds.people.filter((q) => !q.gone).length, down, knocks: N.peds.stats.knocks, flee: N.peds.people.filter((q) => !q.gone && q.mode === 'flee').length };
   };
   H.pol = () => { const P = window.__pol(); return P ? { wanted: P.wanted, types: P.telemetry().crimes.map((c) => c.type) } : null; };
@@ -151,7 +153,7 @@ await p.addInitScript(() => {
       }
       return true;
     };
-    const cands = cols.filter((c) => C.can(c) && Math.hypot(c.x - x, c.z - z) < r).sort((a2, b2) => Math.hypot(a2.x - x, a2.z - z) - Math.hypot(b2.x - x, b2.z - z));
+    const cands = cols.filter((c) => C.can(c) && (c.h ?? 9) <= 1.6 && Math.hypot(c.x - x, c.z - z) < r) // 第 9 批：小東西（越野車現在什麼都輾：房子另外測）.sort((a2, b2) => Math.hypot(a2.x - x, a2.z - z) - Math.hypot(b2.x - x, b2.z - z));
     for (const c of cands) {
       for (let k = 0; k < 16; k++) {
         const a = (k / 16) * Math.PI * 2, ux = Math.cos(a), uz = -Math.sin(a);
@@ -205,6 +207,50 @@ const gcProp = prop1 && !prop1.none ? await p.evaluate((c) => {
 }, prop1) : { r: { bumps: 0, kmh: 0 }, cst: { props: -1 } };
 console.log('  GC8 into a roadside thing:', JSON.stringify(gcProp));
 check(!!prop1 && !prop1.none && gcProp.cst.props === 0 && (gcProp.r.bumps > 0 || gcProp.r.kmh < 12), `GC8 into a crushable roadside thing (${JSON.stringify(prop1)}): nothing crushed, it still blocks (bumps ${gcProp.r.bumps}, ${gcProp.r.kmh} km/h)`);
+// 第 9 批：一般的車（GC8）撞房子：只是撞到（不會扁）
+await p.evaluate(() => { const H = window.__H; H.step(1); });
+await p.evaluate(() => {
+  const H = window.__H;
+  H.pickBig = (x, z, pred, r = 260, useCan = true) => { // useCan＝false：一般的車（不管輾不輾得到）
+    const D = window.__D(), C = window.__C(), cols = D.VIL.colliders, tall = cols.filter((q) => (q.h ?? 9) >= 1.0 && Math.abs(q.x - x) < r + 60 && Math.abs(q.z - z) < r + 60);
+    const clearAt = (px, pz, m, self) => {
+      for (const q of tall) {
+        if (q === self || q.crushed) continue;
+        const cs = Math.cos(q.rot || 0), sn = Math.sin(q.rot || 0), dx = px - q.x, dz = pz - q.z;
+        const d = q.t === 'box' ? Math.hypot(Math.max(0, Math.abs(dx * cs - dz * sn) - q.hx), Math.max(0, Math.abs(dx * sn + dz * cs) - q.hz)) : Math.hypot(dx, dz) - q.r;
+        if (d < m) return false;
+      }
+      return true;
+    };
+    const cands = cols.filter((c) => !c.crushed && !c.noCrush && pred(c) && (!useCan || C.can(c)) && Math.hypot(c.x - x, c.z - z) < r).sort((a2, b2) => Math.hypot(a2.x - x, a2.z - z) - Math.hypot(b2.x - x, b2.z - z));
+    for (const c of cands.slice(0, 80)) {
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2, ux = Math.cos(a), uz = -Math.sin(a), e = c.t === 'box' ? Math.abs(ux * Math.cos(c.rot || 0) - uz * Math.sin(c.rot || 0)) * c.hx + Math.abs(ux * Math.sin(c.rot || 0) + uz * Math.cos(c.rot || 0)) * c.hz : c.r;
+        let ok = true;
+        for (const d of [2.5, 5, 8, 11, 14]) if (!clearAt(c.x - ux * (e + d), c.z - uz * (e + d), 2.3, c)) { ok = false; break; }
+        if (!ok) continue;
+        return { c, x: c.x, z: c.z, e: +e.toFixed(2), a: +a.toFixed(3), h: c.h, t: c.t, hx: c.hx, hz: c.hz, r: c.r, g: c.g ?? null, n: cands.length };
+      }
+    }
+    return { none: true, n: cands.length };
+  };
+  H.ram = (c, km = 0.5, s = 4) => { // 從 e＋14 公尺外對著它直直開過去
+    const D = window.__D(), a = c.a, d = c.e + 14;
+    D.drv.teleport({ x: c.x - Math.cos(a) * d, z: c.z + Math.sin(a) * d, heading: a }); H.step(10);
+    return H.drive({ throttle: km, brake: 0, steer: 0 }, s, null);
+  };
+  H.bigInfo = () => { const C = window.__C(); return C.big.map((j) => ({ phase: j.phase, n: j.grp.length, segs: j.segs.length, verts: j.segs.reduce((a, s) => a + s.idx.length, 0), k: +j.k.toFixed(3), rub: j.rub, top: j.top, bld: j.bld.length, inst: !!j.inst, chunks: j.chunks.length })); };
+  H.segMaxY = (j) => { let m = 0; for (const s of j.segs) { const P = s.A.array; for (let i = 0; i < s.idx.length; i++) m = Math.max(m, P[s.idx[i] * 3 + 1] + s.ty); } return +m.toFixed(2); };
+});
+const gcHouse = await p.evaluate(() => {
+  const D = window.__D(), H = window.__H, C = window.__C();
+  const q = H.pickBig(-262, -40, (c) => c.t === 'box' && (c.h ?? 9) >= 5 && c.hx >= 2.5 && c.hz >= 2.5 && c.hx < 10 && c.hz < 10 && c.g == null, 260, false); if (q.none) return null;
+  const c = q.c; delete q.c; const big0 = C.stats.big;
+  const r = H.ram(q, 0.5, 4);
+  return { q, r, big: C.stats.big - big0, crushed: !!c.crushed, can: C.can(c) };
+});
+console.log('  GC8 into a house:', JSON.stringify(gcHouse));
+check(!!gcHouse && gcHouse.big === 0 && !gcHouse.crushed && !gcHouse.can && (gcHouse.r.bumps > 0 || gcHouse.r.kmh < 12), `GC8 into a house: it just hits it (bumps ${gcHouse?.r?.bumps}), nothing flattened — normal cars cannot crush anything`);
 summary.push(`GC8: 0 crushes (${gcProp.r.bumps + ram1.r.bumps} bumps)`);
 
 // ================= 2 換怪獸卡車：輾路上的車 =================
@@ -247,7 +293,8 @@ check(Math.max(crush2.r.maxY, crush2.r2.maxY) > 0.25, `the truck climbed up onto
 await drawAndShot('2-crushed-car');
 const on2 = await p.evaluate(() => { const H = window.__H; const r = H.drive({ throttle: 0.6, brake: 0, steer: 0 }, 5, null); return { r, cst: H.cst(), tele: window.__D().drv.telemetry() }; });
 console.log('  drives on:', JSON.stringify(on2.r));
-check(on2.r.maxKmh > 18 && on2.r.moved > 40 && Math.abs(on2.tele.y) < 0.3, `the truck drives on afterwards (${on2.r.moved} m further at up to ${on2.r.maxKmh} km/h, back down on the road)`);
+// 第 10 批：往南直直開 30 多公尺就是大路對面的透天厝：現在撞不倒、會停在那裡（以前輾過去再開 40 公尺）
+check(on2.r.maxKmh > 18 && on2.r.moved > 25 && Math.abs(on2.tele.y) < 0.3, `the truck drives on afterwards (${on2.r.moved} m further at up to ${on2.r.maxKmh} km/h, back down on the road; a house across the main road stops it now)`);
 summary.push(`monster vs traffic car: squashed to ${crush2.car.scaleY}, ${crush2.cst.bails} people out, ${crush2.pol.wanted}★`);
 await drawAndShot('3-drives-on');
 
@@ -318,6 +365,176 @@ console.log('  perf:', JSON.stringify(perf));
 check(perf.crush.avg < 0.12, `crush.js update costs ${perf.crush.avg} ms per frame on average (max ${perf.crush.max} ms, the one-off vertex flatten is in there)`);
 summary.push(`crush.js ${perf.crush.avg} ms/frame avg, max ${perf.crush.max} ms`);
 await drawAndShot('7-park-after');
+
+console.log('6', el(), 'off-road truck crushes anything');
+// 6a 房子（村子裡的透天厝）
+const hs = await p.evaluate(() => { const D = window.__D(), H = window.__H; window.__pol()?.clear(); D.drv.teleport({ x: -262, z: 0, heading: 0 }); H.step(20); const r = H.pickBig(-262, -40, (c) => c.t === 'box' && (c.h ?? 9) >= 5 && c.hx >= 2.5 && c.hz >= 2.5 && c.hx < 10 && c.hz < 10 && c.g == null, 260, false); delete r.c; return r; }); // 第 10 批：房子撞不倒了（不看 can）
+console.log('  house target:', JSON.stringify(hs));
+const house = !hs.none ? await p.evaluate((q) => {
+  const D = window.__D(), H = window.__H, C = window.__C();
+  const c = D.VIL.colliders.find((k) => k.t === 'box' && k.x === q.x && k.z === q.z && !k.crushed);
+  const b = D.VIL.buildings.find((k) => Math.abs(k.x - c.x) < Math.max(c.hx, c.hz) && Math.abs(k.z - c.z) < Math.max(c.hx, c.hz)) || null;
+  const big0 = C.stats.big, n0 = window.__N().peds.stats.knocks;
+  const r = H.ram({ ...q }, 0.55, 5);
+  H.step(60);
+  const j = C.big.find((k) => k.grp.includes(c));
+  return { r, crushed: !!c.crushed, big: C.stats.big - big0, info: j ? H.bigInfo()[C.big.indexOf(j)] : null, maxY: j ? H.segMaxY(j) : null, door: b ? !!b.crushed : null, bname: b ? b.kind : null,
+    can: C.can(c), pol: H.pol(), tele: D.drv.telemetry(), past: j ? +(((D.drv.telemetry().x - c.x) * Math.cos(q.a) - (D.drv.telemetry().z - c.z) * Math.sin(q.a))).toFixed(1) : null, knocks: window.__N().peds.stats.knocks - n0, ms: +C.stats.bigMs.toFixed(2) };
+}, hs) : null;
+console.log('  monster truck into a house:', JSON.stringify(house));
+// 第 10 批（Nick 2026-10-09「所有房子變矮越野車撞不倒」）：房子越野車也撞不倒：只是撞到，不會扁、不算犯罪
+check(!!house && !house.crushed && !house.can && house.big === 0 && !house.info && hs.h <= 7, `the off-road truck cannot knock down a village house any more (a ${hs.h} m house: not flattened, still solid)`);
+check(!!house && (house.r.bumps > 0 || house.r.kmh < 12), `the truck just bumps into it and stops (bumps ${house?.r?.bumps}, ${house?.r?.kmh} km/h at the end)`);
+check(!!house && house.pol.wanted === 0, `bumping a house is not a crime (${house?.pol?.wanted}★ after the stars were cleared)`);
+await drawAndShot('8-house-solid');
+// 6b 樹、路燈（圓的、高的）
+const tr = await p.evaluate(() => { const D = window.__D(), H = window.__H; const r = H.pickBig(-262, -40, (c) => c.t === 'circle' && (c.h ?? 9) >= 3.5); delete r.c; return r; });
+const tree = !tr.none ? await p.evaluate((q) => {
+  const D = window.__D(), H = window.__H, C = window.__C();
+  const c = D.VIL.colliders.find((k) => k.t === 'circle' && k.x === q.x && k.z === q.z && !k.crushed);
+  const r = H.ram({ ...q }, 0.5, 4); H.step(60);
+  const j = C.big.find((k) => k.grp.includes(c));
+  return { r, crushed: !!c.crushed, verts: j ? j.segs.reduce((a, s) => a + s.idx.length, 0) : 0, maxY: j ? H.segMaxY(j) : null, types: C.stats.types.slice(-4) };
+}, tr) : null;
+console.log('  tree / lamp:', JSON.stringify(tr), JSON.stringify(tree));
+check(!!tree && tree.crushed && tree.verts > 6 && tree.maxY <= 1.2, `the truck flattened a ${tr.h} m tall ${tree?.types?.slice(-1)[0]} (${tree?.verts} vertices, now ${tree?.maxY} m high)`);
+// 6c 警車：警察先下車（從另一邊）跑掉，車子扁掉，+2★
+const cop = await p.evaluate(() => {
+  const D = window.__D(), H = window.__H, P = window.__pol(), C = window.__C(), N = window.__N();
+  P.clear(); D.drv.teleport(D.VIL.places.garage.spawn); H.step(20);
+  const t = D.drv.telemetry(); P.crime('punch', { x: t.x, z: t.z });
+  let c = null; for (let i = 0; i < 60 * 40 && !c; i++) { H.step(1); c = P._dbg.cars.find((k) => k.on && k.mode !== 'home' && k.d < 120) || null; }
+  if (!c) return { err: 'no police car came' };
+  const w0 = P.wanted, k0 = N.peds.stats.knocks;
+  const fx = Math.cos(c.th), fz = -Math.sin(c.th), x = c.x + fx * 13, z = c.z + fz * 13;
+  D.drv.teleport({ x, z, heading: c.th + Math.PI }); H.step(2);
+  const r = H.drive({ throttle: 0.7, brake: 0, steer: 0 }, 4, 'window.__C().stats.cops > 0');
+  H.drive({ throttle: 0, brake: 1, steer: 0 }, 1.5, null);
+  const f = c.officer, tel = P.telemetry();
+  return { r, wreck: c.wreckT > 0, scaleY: +c.group.scale.y.toFixed(2), officer: f.on ? f.st : 'in', down: f.st === 'down' || f.st === 'getup', od: +Math.hypot(f.x - c.x, f.z - c.z).toFixed(1),
+    w0, w1: P.wanted, crimes: tel.crimes.map((q) => q.type), cops: C.stats.cops, cols: P.colliders(c.x, c.z, 5).length, knocks: N.peds.stats.knocks - k0 };
+});
+console.log('  monster truck vs police car:', JSON.stringify(cop));
+check(!!cop && cop.wreck && cop.cops === 1 && cop.scaleY <= 0.6 && cop.cols === 0, `the truck crushed a police car (squashed to ${cop?.scaleY}, no longer solid)`);
+check(!!cop && cop.crimes.includes('crushCop') && cop.w1 === Math.min(3, cop.w0 + 2), `crushing a police car is a bigger crime: +2★ (${cop?.w0}★ → ${cop?.w1}★, max 3)`);
+check(!!cop && cop.officer === 'flee' && !cop.down && cop.od > 2, `the officer jumped out the far side and ran off unharmed (${cop?.officer}, ${cop?.od} m from the wreck)`);
+await drawAndShot('9-flat-police-car');
+// 6d 不輾的地方：人、你的車庫、改車廠、車店、槍店、警察局、捷運的橋墩、賽道；一般的車也不會
+const prot = await p.evaluate(() => {
+  const D = window.__D(), C = window.__C(), V = D.VIL, P = V.places, N = window.__N();
+  const inB = (b, c, m = 0) => { const cs = Math.cos(b.rot || 0), sn = Math.sin(b.rot || 0), dx = c.x - b.x, dz = c.z - b.z; return Math.abs(dx * cs - dz * sn) <= b.hx + m && Math.abs(dx * sn + dz * cs) <= b.hz + m; };
+  const bOf = (k) => V.buildings.find((b) => b.kind === k && (k !== 'shop' || b.name === P.shop.name));
+  const at = (b) => V.colliders.filter((c) => (c.h ?? 9) >= 2.5 && inB(b, c));
+  const out = {};
+  for (const [k, b] of [['garageZone', P.garage.inside], ['orbayZone', P.orbay.inside], ['odealer', P.odealer.zone]]) out[k] = { n: 1, can: C.can({ t: 'box', x: b.x, z: b.z, hx: 2, hz: 2, rot: 0, h: 6 }) ? 1 : 0 }; // 車庫裡面的東西是車庫模組的（不在 V.colliders）
+  for (const [k, b] of [['garage', bOf('garage')], ['shop', bOf('shop')], ['dealer', bOf('dealer')], ['gunshop', bOf('gunshop')], ['police', bOf('police')], ['temple', bOf('temple')], ['orbay', { ...P.orbay.inside }]]) { const L = b ? at(b) : []; out[k] = { n: L.length, can: L.filter((c) => C.can(c)).length }; }
+  const piers = V.colliders.filter((c) => c.noCrush && c.t === 'box' && (c.h ?? 0) > 6); out.mrt = { n: piers.length, can: piers.filter((c) => C.can(c)).length };
+  const strip = V.colliders.filter((c) => c.circuit && (c.h ?? 9) > 1.6).slice(0, 50); // 賽車場（小的三角錐以前就輾得到：照舊） out.circuit = { n: strip.length, can: strip.filter((c) => C.can(c)).length };
+  const peds = N.peds.colliders(); out.people = { n: peds.length, can: peds.filter((c) => C.can(c)).length };
+  const offs = window.__pol().movers.filter((m) => m.t === 'circle'); out.officers = { n: offs.length, can: offs.filter((c) => C.can({ ...c, r: 0.3 })).length };
+  return out;
+});
+console.log('  protected:', JSON.stringify(prot));
+check(Object.entries(prot).every(([k, v]) => v.can === 0) && prot.shop.n > 0 && prot.police.n > 0 && prot.gunshop.n > 0 && prot.mrt.n > 0 && prot.people.n > 0,
+  `never crushed: people, your garage, the off-road garage, the tuning shop, the dealer, the gun shop, the police station, the temple, the MRT piers, the race track (${Object.entries(prot).map(([k, v]) => k + ' ' + v.n).join(', ')})`);
+const gsb = await p.evaluate(() => { // 槍店的正面：撞到（不會扁）
+  const D = window.__D(), H = window.__H, C = window.__C(), b = D.VIL.places.gunshop.building, big0 = C.stats.big;
+  window.__pol().clear();
+  D.drv.teleport({ x: b.x, z: b.z - b.hz - 12, heading: -Math.PI / 2 }); H.step(10);
+  const r = H.drive({ throttle: 0.5, brake: 0, steer: 0 }, 4, null);
+  const t = D.drv.telemetry();
+  return { r, big: C.stats.big - big0, z: +t.z.toFixed(1), front: +(b.z - b.hz).toFixed(1) };
+});
+console.log('  into the gun shop:', JSON.stringify(gsb));
+check(gsb.big === 0 && gsb.z < gsb.front + 0.5, `driving into the gun shop: it just blocks the truck (stopped at z ${gsb.z}, front ${gsb.front}), nothing flattened`);
+// 6e 路上的人：越野車衝過去 → 大叫、往旁邊撲倒、爬起來跑掉（大人、小孩都一樣；不會被輾、不會被撞）
+const dive = await p.evaluate(() => {
+  const D = window.__D(), H = window.__H, N = window.__N(), C = window.__C(), P = window.__pol(), out = [];
+  for (const kid of [false, true]) {
+    P.clear();
+    const x0 = -228, z0 = -3.3; D.drv.teleport({ x: x0, z: z0, heading: 0 }); H.step(30); // 村子的大路（超商前面往東，右邊的車道）
+    const q = N.peds.people.find((k) => k.active && !k.gone && (kid ? k.age === 'kid' : k.age !== 'kid') && (k.mode === 'walk' || k.mode === 'idle' || k.mode === 'wait' || k.mode === 'return'));
+    if (!q) { out.push({ kid, none: true }); continue; }
+    if (q.seat && q.seat.by === q.id) q.seat.by = -1; q.seat = null; q.partner = null;
+    q.x = x0 + 22; q.z = z0 + (kid ? -0.3 : 0.4); q.y = 0; q.mode = 'idle'; q.timer = 30; q.v = 0; q.rn = 0;
+    const d0 = N.peds.stats.dives, k0 = N.peds.stats.knocks, ci = D.drv.carInfo, hz = ci.halfW;
+    let under = 0, minLat = 9, saw = new Set(); const t0 = D.drv.telemetry(); D.drv.setInput({ throttle: 0.6, brake: 0, steer: 0 });
+    for (let i = 0; i < 60 * 4; i++) {
+      H.step(1); const t = D.drv.telemetry(), CX = (ci.nose + ci.tail) / 2, cx = t.x + Math.cos(t.heading) * CX, cz = t.z - Math.sin(t.heading) * CX;
+      const dx = q.x - cx, dz = q.z - cz, lon = dx * Math.cos(t.heading) - dz * Math.sin(t.heading), lat = dx * Math.sin(t.heading) + dz * Math.cos(t.heading);
+      if (Math.abs(lon) < ci.len / 2 - 0.3 && Math.abs(lat) < hz - 0.3) under++;
+      if (Math.abs(lon) < ci.len / 2) minLat = Math.min(minLat, Math.abs(lat));
+      saw.add(q.mode);
+    }
+    D.drv.setInput({ throttle: 0, brake: 1, steer: 0 });
+    const tA = D.drv.telemetry();
+    let stood = -1; for (let i = 0; i < 60 * 6; i++) { H.step(1); saw.add(q.mode); if (stood < 0 && q.mode !== 'fall' && q.mode !== 'lie' && q.mode !== 'getup' && saw.has('getup')) stood = +(i / 60).toFixed(1); }
+    D.drv.setInput(null);
+    out.push({ kid, age: q.age, dives: N.peds.stats.dives - d0, knocks: N.peds.stats.knocks - k0, under, minLat: +minLat.toFixed(2), hz, modes: [...saw], mode: q.mode, stood, passed: +(tA.x - (x0 + 22)).toFixed(1), crimes: P.telemetry().crimes.map((c) => c.type), gone: q.gone });
+  }
+  return out;
+});
+console.log('  pedestrian in the path:', JSON.stringify(dive));
+for (const d of dive) {
+  if (d.none) { console.log(`  (no ${d.kid ? 'child' : 'adult'} around to test)`); continue; }
+  check(d.dives >= 1 && d.under === 0 && d.minLat >= d.hz && d.passed > 3 && d.knocks === 0 && !d.crimes.includes('hit'),
+    `${d.kid ? 'a child' : 'a person'} in the truck's path shouted and dived aside (never under it: closest ${d.minLat} m from the middle, truck half width ${d.hz}; not knocked, no crime)`);
+  check(d.stood >= 0 && !['fall', 'lie', 'getup'].includes(d.mode), `${d.kid ? 'the child' : 'the person'} got up again after ${d.stood} s and ran off (${d.modes.join('→')})`);
+}
+// 6f 內湖的大樓（好幾個盒子的那種）：整棟一起扁
+const nh = await p.evaluate(() => {
+  const D = window.__D(), H = window.__H, C = window.__C(), V = D.VIL;
+  window.__pol().clear();
+  D.drv.teleport(V.places.neihu.spawn); H.step(60);
+  const t = D.drv.telemetry(), q = H.pickBig(t.x, t.z, (c) => c.g != null && c.t === 'box' && (c.h ?? 0) >= 5 && V.colliders.filter((k) => k.g === c.g).length >= 2, 400, false); // 第 10 批：內湖的房子也最多 2 層（7.4 公尺）
+  if (q.none) return { none: true, n: q.n };
+  const g = q.c.g, grp = V.colliders.filter((k) => k.g === g); delete q.c;
+  const r = H.ram(q, 0.6, 5); H.step(60);
+  const j = C.big.find((k) => k.grp.some((c) => c.g === g));
+  return { q, r, can: grp.filter((k) => C.can(k)).length, tops: Math.max(...V.colliders.filter((k) => k.g != null && k.g >= 1e6 && k.t === 'box').map((k) => k.h ?? 0)), n: grp.length, crushed: grp.filter((k) => k.crushed).length, verts: j ? j.segs.reduce((a, s) => a + s.idx.length, 0) : 0, maxY: j ? H.segMaxY(j) : null, top: j ? j.top : null, ms: +C.stats.bigMs.toFixed(2), hit: +C.stats.hitMs.toFixed(2) };
+});
+console.log('  neihu building:', JSON.stringify(nh));
+check(!nh.none && nh.crushed === 0 && nh.can === 0 && nh.verts === 0 && (nh.r.bumps > 0 || nh.r.kmh < 12), `a building in 內湖 (${nh.n} collider boxes) stops the truck and is not flattened (bumps ${nh.r?.bumps})`);
+check(!nh.none && nh.tops <= 7.5, `內湖 buildings are at most 2 floors now (tallest ordinary building ${nh.tops} m)`);
+await drawAndShot('10-neihu-solid');
+// 6g 長回來：離開 140 公尺以上 25 秒
+const back9 = await p.evaluate((hq) => {
+  const D = window.__D(), H = window.__H, C = window.__C(), V = D.VIL;
+  const c = hq ? V.colliders.find((k) => k.t === 'box' && k.x === hq.x && k.z === hq.z) : null, n0 = C.big.length;
+  D.drv.teleport(V.places.circuit.spawn); H.step(30); // 賽車場（離村子、越野車場、內湖都很遠）
+  H.step(900, 1 / 30); // 30 秒
+  return { n0, n1: C.big.length, crushed: c ? !!c.crushed : null, doors: V.buildings.filter((b) => b.crushed).length, restored: C.stats.restored, nhCrushed: V.colliders.filter((k) => k.g != null && k.crushed).length };
+}, hs.none ? null : hs);
+console.log('  after being away:', JSON.stringify(back9));
+check(back9.n0 >= 1 && back9.n1 === 0 && back9.crushed === false && back9.doors === 0 && back9.nhCrushed === 0, `everything flattened came back after being away for a while (${back9.restored} things restored; houses were never flattened)`);
+summary.push(`off-road truck: house solid, ${tr.t} ${tree?.verts} verts, police car +${cop ? cop.w1 - cop.w0 : '?'}★, neihu building solid (${nh.n} boxes); picking triangles max ${nh.ms} ms/frame, the hit itself max ${nh.hit} ms`);
+
+// ================= 7 第 9 批（路變大）：路變寬（村子、內湖）、車流照跑、內湖左上角的路名 =================
+const wide = await p.evaluate(() => {
+  const D = window.__D(), V = D.VIL, N = V.neihu, H = window.__H, ws = {};
+  for (const r of V.roads) if (r.kind === 'main' || r.kind === 'street' || r.kind === 'farm') (ws[r.kind] = ws[r.kind] || new Set()).add(Array.isArray(r.w) ? Math.max(...r.w) : r.w);
+  const surf = [V.surfaceAt(-250, 6.2), V.surfaceAt(-250, -6.2), V.surfaceAt(-250, 7.4)];
+  const nr = N.data.roads.find((r) => r.nm >= 0 && N.names[r.nm][0] === '內湖路一段'), ND = N.data.nodes;
+  let k = 1, best = 0; for (let i = 1; i < nr.n.length; i++) { const l = Math.hypot(ND[nr.n[i] * 2] - ND[nr.n[i - 1] * 2], ND[nr.n[i] * 2 + 1] - ND[nr.n[i - 1] * 2 + 1]); if (l > best) { best = l; k = i; } }
+  const a = nr.n[k - 1], b = nr.n[k], ax = ND[a * 2], az = ND[a * 2 + 1], bx = ND[b * 2], bz = ND[b * 2 + 1], l = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / l, uz = (bz - az) / l, mx = (ax + bx) / 2, mz = (az + bz) / 2;
+  const off = nr.w * 0.42, px = mx - uz * off, pz = mz + ux * off;
+  window.__pol().clear();
+  D.drv.teleport({ x: mx - uz * nr.w * 0.25, z: mz + ux * nr.w * 0.25, heading: Math.atan2(-uz, ux) }); H.step(40);
+  const e = document.querySelector('.nh-road');
+  return { ws: Object.fromEntries(Object.entries(ws).map(([q, v]) => [q, [...v].sort((x, y) => x - y)])), surf, wide: N.data.wide, nw: nr.w, name: N.roadName(px, pz), off: +off.toFixed(1), hud: e && !e.hidden ? e.textContent : null };
+});
+console.log('7', el(), 'wider roads:', JSON.stringify(wide));
+check(wide.ws.main.every((w) => w >= 13.5) && wide.ws.street.every((w) => w >= 10.5) && wide.ws.farm.every((w) => w >= 9) && wide.surf[0] === 0 && wide.surf[1] === 0,
+  `village roads are 1.5× wider (main ${wide.ws.main.join('/')} m, streets ${wide.ws.street.join('/')} m, farm road ${wide.ws.farm.join('/')} m; 6.2 m from the middle of the main road is still road)`);
+check(wide.wide === 1.5 && wide.nw >= 15 && wide.name === '內湖路一段', `內湖 roads are 1.5× wider too (內湖路一段 ${wide.nw} m; ${wide.off} m from its middle is still 「${wide.name}」)`);
+check(wide.hud === '內湖路一段', `the road name still shows top left in 內湖 (「${wide.hud}」)`);
+const traf = await p.evaluate(() => {
+  const D = window.__D(), H = window.__H, N = window.__N(), s0 = { ...N.traffic.stats };
+  D.drv.teleport(D.VIL.places.garage.spawn); H.step(30); H.step(900, 1 / 30); // 村子裡 30 秒（停在車庫前面，不擋路）
+  const cars = N.traffic.cars; return { n: cars.length, moving: cars.filter((c) => Math.abs(c.v) > 2).length, spawned: N.traffic.stats.spawned - s0.spawned, stuck: N.traffic.stats.stuckGone - s0.stuckGone };
+});
+console.log('  village traffic:', JSON.stringify(traf));
+check(traf.n >= 4 && traf.moving >= 2, `traffic still runs on the wider village roads (${traf.n} cars around, ${traf.moving} moving, ${traf.stuck} stuck ones removed in 30 s)`);
 
 console.log('==== summary ====');
 for (const s of summary) console.log(' -', s);

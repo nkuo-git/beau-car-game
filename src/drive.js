@@ -184,7 +184,7 @@ function colGrid() {
     let n = 0;
     for (const c of list || []) {
       if (!c || !isFinite(c.x) || !isFinite(c.z) || !(c.t === 'box' ? c.hx > 0 && c.hz > 0 : c.r > 0)) continue;
-      const q = c.t === 'box' ? { ...c, u: [Math.cos(c.rot || 0), -Math.sin(c.rot || 0)], w: [Math.sin(c.rot || 0), Math.cos(c.rot || 0)] } : { ...c, t: 'circle' };
+      const q = c.t === 'box' ? { ...c, src: c, u: [Math.cos(c.rot || 0), -Math.sin(c.rot || 0)], w: [Math.sin(c.rot || 0), Math.cos(c.rot || 0)] } : { ...c, src: c, t: 'circle' }; // src：原來那個（第 9 批：壓扁的房子長回來，原來那個 crushed 改回 false 就又擋了）
       const ex = q.t === 'box' ? Math.abs(q.u[0]) * q.hx + Math.abs(q.w[0]) * q.hz : q.r, ez = q.t === 'box' ? Math.abs(q.u[1]) * q.hx + Math.abs(q.w[1]) * q.hz : q.r;
       q.tag = tag; q.cells = []; q._s = 0;
       for (let gx = Math.floor((q.x - ex) / CELL); gx <= Math.floor((q.x + ex) / CELL); gx++) for (let gz = Math.floor((q.z - ez) / CELL); gz <= Math.floor((q.z + ez) / CELL); gz++) {
@@ -405,10 +405,10 @@ function createDrive(o) {
       let cx = st.x + f[0] * CX, cz = st.z + f[1] * CX, moved = false;
       const list = cw.near(cx - 3, cz - 3, cx + 3, cz + 3).slice();
       for (const c of list) {
-        if (c.crushed === true) continue; // 第 7 批（輾扁）：已經扁掉的東西誰都開得過去（不擋了）
+        if (c.crushed === true || c.src.crushed === true) continue; // 第 7 批（輾扁）：已經扁掉的東西誰都開得過去（不擋了）；第 9 批：看原來那個（會長回來）
         const p = c.t === 'box' ? hitBox(cx, cz, f, r, c) : hitCircle(cx, cz, f, r, c);
         if (!p) continue;
-        if (CRU && c.crushed !== true && CRU.can(c)) { c.crushed = true; CRU.hit(c, Math.abs(st.v)); continue; } // 第 7 批：怪獸卡車輾過去（不擋、不彈開、不算撞到；車子照 crush.js 的墊子爬上去）
+        if (CRU && CRU.can(c)) { if (CRU.hit(c, Math.abs(st.v)) === false) c.crushed = true; continue; } // 第 7 批：怪獸卡車輾過去（不擋、不彈開、不算撞到；車子照 crush.js 的墊子爬上去）
         st.x += p[0]; st.z += p[1]; cx += p[0]; cz += p[1]; moved = true; hit++; st.touch = 0.2;
         const fn = st.slip !== 0 ? Math.cos(st.th + st.slip) * p[2] - Math.sin(st.th + st.slip) * p[3] : f[0] * p[2] + f[1] * p[3], w = -st.v * fn; // 第 3 批：甩尾的時候照「走的方向」算撞進去多快
         if (w > 0.05) { impact(w, fn, p[2], p[3], p[4], p[5], f, c); if (st.slip !== 0) hitSlide(w); }
@@ -420,7 +420,7 @@ function createDrive(o) {
   }
   // 鏡頭到車子中間有沒有被房子擋住：回傳 0–1（1＝沒擋到）
   const tall = (c) => (c.h ?? 9) >= 2.4 && (c.t === 'box' || c.r >= 0.6);
-  const camBlock = (c) => c.police === true || tall(c); // 第 3 批（b3-int）：緊跟在後面的警車也擋鏡頭（拉近到它前面，不要從它的警示燈上面看）
+  const camBlock = (c) => c.crushed !== true && c.src.crushed !== true && (c.police === true || tall(c)); // 第 9 批：壓扁的房子不擋鏡頭 // 第 3 批（b3-int）：緊跟在後面的警車也擋鏡頭（拉近到它前面，不要從它的警示燈上面看）
   function rayHit(x0, z0, x1, z1) {
     let best = 1; const dx = x1 - x0, dz = z1 - z0;
     for (const c of cw.near(Math.min(x0, x1) - 1, Math.min(z0, z1) - 1, Math.max(x0, x1) + 1, Math.max(z0, z1) + 1, camBlock)) {

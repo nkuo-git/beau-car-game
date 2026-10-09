@@ -23,7 +23,7 @@
 //     wake＝起床站的地方（床邊、面向門）；houseIn／houseOut＝進門（面向房間裡）、出門（門外面、面向車庫）站的地方
 //   colliders(doorOpen = door.t >= 0.9, world = false)：[{ t: 'box', x, z, hx, hz, rot, h } | { t: 'circle', x, z, r, h }]（盆栽是圓的，跟 village.js 一樣）
 //     牆、壁柱、家具、小房子（牆留 1 公尺的門洞、開著的門、床、衣櫃、書桌⋯）、升降機（照現在的狀態：升起來＝四根柱子、在動＝整個坑、降下去＝沒有）、操作柱
-//     門沒全開就多一塊門（x 4.85 … 5.3、z −3 … 3、h 3.8），一定是最後一個（walk.js 靠這個）；停著的車自己加；world＝true 直接給世界座標（rot 加上整棟轉的角度）
+//     門沒全開就多一塊門（x 4.85 … 5.3、z −DZ … DZ、h DH），一定是最後一個（walk.js 靠這個）；停著的車自己加；world＝true 直接給世界座標（rot 加上整棟轉的角度）
 //     升降機一動（onLift）碰撞就變了：要重給（drive.js 的 'garage'、walk.js 再叫一次 setGarage）
 //   zones：{ inside, door: { x, z0, z1, x1, h }, apron, house, bedSide, houseDoor, lifts: [6] }（apron＝門外面等開門的那一塊）
 //     house＝小房子裡面的地板 { x, z, hx, hz, ceil（牆邊天花板高）, ridge（屋脊）}；bedSide＝站在這裡 →「睡覺」；houseDoor＝門洞；lifts[i]＝站在這裡 → 操作第 i 台升降機
@@ -51,9 +51,10 @@
 //   走路走得到（walk.js setCars 要給的）：每台只有 floorDeck 那層的車（level 1＝上層那台、level 0＝下層那台）；升起來那層在頭上、降下去那層在坑裡、在動的時候都走不到
 //   開車：車子從門開到跟地板平的那層（車頭朝門倒車進去，停好 put 到 platforms[floorDeck]）；有車、有人在上面別動升降機（頁面管）
 // 本地座標：x 往門（+x 出去）、y 上、z＝車頭朝門的時候車子的右邊；地板 y = 0
-//   裡面 x −12.7 … 5、z −12.7 … 12.7、天花板 4.5（四周燈槽到 4.64）；牆厚 0.3：外面 x −13 … 5.3、z −13 … 13、女兒牆頂 5.7
-//   鐵捲門：x = 5 那面牆的中間，門洞 z −3 … 3、高 3.8；門片在牆裡面 7 公分（x = 4.93），捲筒盒在門洞上面（x 4.52 … 5、y 3.86 … 4.5）
-//   小房子：左前角 x 0 … 5、z −12.7 … −8.5（貼著門那面牆、z −12.7 那面牆），屋簷 2.75、屋脊 3.97；門洞 x 0.35 … 1.35（朝 +z，門往裡面開著）；床頭靠 z −12.7
+//   裡面 x −12.7 … 5、z −15.7 … 15.7（第 11 批：本來 ±12.7）、天花板 6（第 10 批：本來 4.5；四周燈槽到 H＋0.14）；牆厚 0.3：外面 x −13 … 5.3、z −16 … 16、女兒牆頂 7.2
+//   第 11 批：靠兩邊牆的東西（小房子、休息區、盆栽、角落的燈）跟著牆往外搬 ZW＝3 公尺；後牆的六個車位、門那面牆的櫃子、天花板中間的燈不動
+//   鐵捲門：x = 5 那面牆的中間，門洞 z −4 … 4、高 5（第 10 批：本來 ±3、3.8）；門片在牆裡面 7 公分（x = 4.93），捲筒盒在門洞上面（x 4.52 … 5、y DH＋0.06 … H）
+//   小房子：左前角 x 0 … 5、z −15.7 … −11.5（貼著門那面牆、z −15.7 那面牆；第 11 批：本來 −12.7 … −8.5），屋簷 2.75、屋脊 3.97；門洞 x 0.35 … 1.35（朝 +z，門往裡面開著）；床頭靠 z −15.7
 //   升降機：車位中心 x −9.8、z ±1.85、±5.55、±9.25；坑口 5.44 × 3.04、深 2.35；操作柱在兩台中間的分隔線上（x −7.3）
 // 燈光：房間自己的東西不吃場景的燈（村子的太陽照不進來）：牆、家具的亮度＝照「上／水平／下」算的環境光＋角落暗一點＋燈槽洗牆，
 //   反射吃自己的環境貼圖；燈都是自己發光的面（沒有即時光源、沒有即時陰影）；外殼吃場景的燈（跟村子其他房子一樣）
@@ -66,7 +67,7 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 
-export const ROOM_SIZE = { X: 5, XB: -12.7, Z: 12.7, H: 4.5, T: 0.3, TOP: 5.7, DZ: 3, DH: 3.8 };
+export const ROOM_SIZE = { X: 5, XB: -12.7, Z: 15.7, H: 6, T: 0.3, TOP: 7.2, DZ: 4, DH: 5 }; // 第 10 批（Nick「所有車庫變高變寬」）：天花板 4.5 → 6、門 6 × 3.8 → 8 × 5 公尺；第 11 批（Nick「要變寬」）：寬 25.4 → 31.4（z ±12.7 → ±15.7）
 
 export function buildRoom(renderer, { quality = 'high', exterior = false } = {}) {
   const { X: XD, XB, Z: ZS, H, T: WT, TOP, DZ, DH } = ROOM_SIZE, hi = quality !== 'low';
@@ -396,18 +397,19 @@ export function buildRoom(renderer, { quality = 'high', exterior = false } = {})
     uCut: { value: exterior ? 0 : 1 }, uApron: { value: exterior ? XO : 14 }, uBlink: { value: 0 }, uMarble: { value: marbleTex },
     uDeckOcc: { value: Array(12).fill(0) }, uLiftBlink: { value: Array(6).fill(0) }, // 升降機：每一層平台有沒有車（車底的影子）、每一台的警示燈（動的時候閃）
   };
+  const ZW = ZS - 12.7; // 第 11 批：車庫變寬，靠兩邊牆的東西往外搬多少（本來照 ZS 12.7 擺的）
   const BX = XB + 2.9, BAYZ = [1.85, 5.55, -1.85, 9.25, -5.55, -9.25], RT = 2.85; // 車位中心 x、車位 z（照車庫頁一開始的鏡頭看得到的順序）、轉盤半徑
   // 小房子（臥室）：車庫左前角 x 0 … 5、z −12.7 … −8.5；人字屋頂屋脊沿 z（在 x 2.5），簷 2.75、脊 3.97；東、南兩面貼著車庫的牆（只有一層內牆板）
-  const HX0 = 0, HX1 = XD, HZ0 = -ZS, HZ1 = -8.5, HWT = 0.14, HE = 2.75, HP = 0.488, HRT = 0.16, HRX = (HX0 + HX1) / 2, HOV = 0.3, HOVN = 0.15; // 外框、牆厚、簷高、坡度（26°）、屋頂厚、屋脊、西邊／北邊出簷
+  const HX0 = 0, HX1 = XD, HZ0 = -ZS, HZ1 = -8.5 - ZW, HWT = 0.14, HE = 2.75, HP = 0.488, HRT = 0.16, HRX = (HX0 + HX1) / 2, HOV = 0.3, HOVN = 0.15; // 外框、牆厚、簷高、坡度（26°）、屋頂厚、屋脊、西邊／北邊出簷
   const IX0 = HX0 + HWT, IX1 = HX1 - 0.03, IZ0 = HZ0 + 0.03, IZ1 = HZ1 - HWT, HFY = 0.012; // 裡面的牆面、地板高
   const hTop = (x) => HE + (HRX - HX0 - Math.abs(x - HRX)) * HP, hIn = (x) => hTop(x) - HRT; // 屋頂上面、屋頂底（裡面的天花板、屋簷底）
   const BEAMY = hIn(HRX) - 0.2, HD0 = 0.35, HD1 = 1.35, HDH = 2.15; // 屋脊樑底、門洞（正面 x 0.35 … 1.35、高 2.15）
-  const HLAMP = [[1.28, 0.885, -12.43], [3.72, 0.885, -12.43]], SCONCE = [0.16, 1.95, HZ1 + 0.07]; // 兩盞床頭檯燈（燈罩中心）、門邊壁燈
-  const HAO = [[2.5, -11.54, 0.92, 1.1], [4.67, -11.87, 0.32, 0.77], [0.41, -12.38, 0.27, 0.28], [4.7, -10.25, 0.3, 0.67]]; // 房子地板上家具底下暗：床、衣櫃、冰箱、書桌
+  const HLAMP = [[1.28, 0.885, -12.43 - ZW], [3.72, 0.885, -12.43 - ZW]], SCONCE = [0.16, 1.95, HZ1 + 0.07]; // 兩盞床頭檯燈（燈罩中心）、門邊壁燈
+  const HAO = [[2.5, -11.54, 0.92, 1.1], [4.67, -11.87, 0.32, 0.77], [0.41, -12.38, 0.27, 0.28], [4.7, -10.25, 0.3, 0.67]].map(([x, z, hx, hz]) => [x, z - ZW, hx, hz]); // 房子地板上家具底下暗：床、衣櫃、冰箱、書桌
   // 升降機（後牆六個車位都是地坑式兩層）：平台上緣間距 PD、坑深、平台半長（x）半寬（z）厚、坑口半長半寬、柱子（相對平台中心）、操作柱
   const PD = 2.1, PIT = 2.35, DKX = 2.7, DKZ = 1.5, DKT = 0.16, PXH = 2.72, PZH = 1.52, POSTX = DKX - 0.07, POSTZ = DKZ - 0.07, POSTW = 0.07, PANX = BX + 2.5;
   const PANZ = BAYZ.map((c) => c + Math.sign(c) * 1.85); // 操作柱在車位外側那條分隔線上（中間 z = 0 那條空著：車庫頁的鏡頭從後面看車不會被擋）
-  const LAMP = [XD - 0.49, 4.2, 3.1]; // 裡面的警示燈（捲筒盒正面右邊）
+  const LAMP = [XD - 0.49, DH + 0.4, DZ + 0.1]; // 裡面的警示燈（捲筒盒正面右邊）
   const FB0 = 2.4, FB1 = 3.2; // 後牆黑大理石橫帶（招牌）上下：車庫頁一開始的鏡頭（手機）招牌要在上面那排按鈕下面
   const v3 = (a) => `vec3(${a.map(f3).join(', ')})`;
   const G_DEF = `#define R_XD ${f3(XD)}
@@ -442,8 +444,8 @@ vec3 houseWash(vec3 n, vec3 p, float k) {
   vec3 w = vec3(0.0);
 ${HLAMP.map(([x, y, z]) => `  { vec3 d = ${v3([x, y, z])} - p; float r = max(length(d), 0.05); w += ${v3([1.7, 1.12, 0.55])} * ((0.3 + 0.7 * max(dot(n, d / r), 0.0)) * exp(-r / 0.8) / (1.0 + 1.6 * r * r)); }`).join('\n')}
   float dr = length(vec2(p.x - ${f3(HRX)}, (p.y - ${f3(BEAMY + 0.03)}) * 1.3)); w += ${v3([0.75, 0.52, 0.3])} * (exp(-dr / 0.6) * max(-n.y, 0.3));
-  float db = sdb(p.xz, vec2(2.5, -11.54), vec2(0.78, 0.94)); w += ${v3([1.1, 0.62, 0.28])} * (exp(-max(db, 0.0) / 0.1) * exp(-max(p.y - ${f3(HFY)}, 0.0) / 0.05) * step(-0.04, db));
-  { vec3 d = vec3(4.9, 1.46, -10.25) - p; float r = max(length(d), 0.05); w += ${v3([0.1, 0.12, 0.18])} * (max(dot(n, d / r), 0.0) * exp(-r / 1.4)); }
+  float db = sdb(p.xz, vec2(2.5, ${f3(-11.54 - ZW)}), vec2(0.78, 0.94)); w += ${v3([1.1, 0.62, 0.28])} * (exp(-max(db, 0.0) / 0.1) * exp(-max(p.y - ${f3(HFY)}, 0.0) / 0.05) * step(-0.04, db));
+  { vec3 d = vec3(4.9, 1.46, ${f3(-10.25 - ZW)}) - p; float r = max(length(d), 0.05); w += ${v3([0.1, 0.12, 0.18])} * (max(dot(n, d / r), 0.0) * exp(-r / 1.4)); }
   return w * (0.7 + 0.3 * k);
 }
 // 反射（環境貼圖是車庫大廳，很亮）：小房子裡面、坑裡面暗很多
@@ -474,7 +476,7 @@ vec3 roomWash(vec3 n, vec3 p, float k) {
   const G_CUT = `uniform float uCut;
 void roomCut(vec3 c, vec3 q) { // 鏡頭跑到牆外（或天花板上面）：靠那面牆的東西丟掉、天花板抖動淡掉
   if (uCut < 0.5) return;
-  if (!(q.x > -0.4 && q.z < -8.2 && q.y < 4.1) && ((c.x > R_XD - 0.9 && q.x > R_XD - 1.3) || (c.x < R_XB + 0.9 && q.x < R_XB + 1.3) || (c.z > R_ZS - 0.9 && q.z > R_ZS - 1.3) || (c.z < 0.9 - R_ZS && q.z < 1.3 - R_ZS))) discard; // 小房子不切（鏡頭不會進去；靠牆那兩面只有內牆板）
+  if (!(q.x > -0.4 && q.z < ${f3(-8.2 - ZW)} && q.y < 4.1) && ((c.x > R_XD - 0.9 && q.x > R_XD - 1.3) || (c.x < R_XB + 0.9 && q.x < R_XB + 1.3) || (c.z > R_ZS - 0.9 && q.z > R_ZS - 1.3) || (c.z < 0.9 - R_ZS && q.z < 1.3 - R_ZS))) discard; // 小房子不切（鏡頭不會進去；靠牆那兩面只有內牆板）
   float k = smoothstep(R_H - 0.3, R_H + 0.4, c.y) * step(R_H - 0.16, q.y);
   if (k > 0.0 && k >= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
 }
@@ -583,6 +585,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
   function batch() {
     const P = [], N = [], Uv = [], C = [], Ma = [], Se = [], I = [], t = new THREE.Vector3(), nm = new THREE.Matrix3();
     const b = {
+      oz: 0, // 第 11 批：整塊往 z 挪多少（小房子照本來的座標蓋，再跟著牆搬）
       get count() { return I.length; },
       // 四邊形 a b c d：從正面看逆時針（左下、右下、右上、左上）；r＝貼圖範圍（'M'＝隨便挑一塊大理石）；col＝一個顏色或四個角各一個；mat＝MM 的一個；seam＝畫石板縫
       quad(a, bb, c, d, r = RW, col = W1, mat = MM.paint, seam = false) {
@@ -590,7 +593,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
         if (r === 'M') r = mwin(w, h, rnd() < 0.5);
         const cs = Array.isArray(col[0]) ? col : [col, col, col, col], sm = [[0, 0], [w, 0], [w, h], [0, h]];
         [[a, r[0], r[1]], [bb, r[2], r[1]], [c, r[2], r[3]], [d, r[0], r[3]]].forEach(([p, u, v], i) => {
-          P.push(p.x, p.y, p.z); N.push(n.x, n.y, n.z); Uv.push(u, v); C.push(...cs[i]); Ma.push(...mat); Se.push(...(seam ? [sm[i][0], sm[i][1], w, h] : NOSEAM));
+          P.push(p.x, p.y, p.z + b.oz); N.push(n.x, n.y, n.z); Uv.push(u, v); C.push(...cs[i]); Ma.push(...mat); Se.push(...(seam ? [sm[i][0], sm[i][1], w, h] : NOSEAM));
         });
         I.push(k, k + 1, k + 2, k, k + 2, k + 3);
       },
@@ -607,7 +610,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
         const k = P.length / 3, p = g.attributes.position, n = g.attributes.normal, uv = g.attributes.uv, c = g.attributes.color;
         nm.getNormalMatrix(m);
         for (let i = 0; i < p.count; i++) {
-          t.fromBufferAttribute(p, i).applyMatrix4(m); P.push(t.x, t.y, t.z);
+          t.fromBufferAttribute(p, i).applyMatrix4(m); P.push(t.x, t.y, t.z + b.oz);
           t.fromBufferAttribute(n, i).applyMatrix3(nm).normalize(); N.push(t.x, t.y, t.z);
           const u = uv ? uv.getX(i) : 0.5, v = uv ? uv.getY(i) : 0.5; Uv.push(r[0] + u * (r[2] - r[0]), r[1] + v * (r[3] - r[1]));
           if (col) C.push(...col); else C.push(c.getX(i), c.getY(i), c.getZ(i));
@@ -692,7 +695,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
     L.geo(new THREE.CircleGeometry(r, 20).rotateX(Math.PI / 2).translate(x, H - 0.004, z), M4(), RW, c, MM.lamp);
   };
   for (const z of BAYZ) { downlight(BX - 0.9, z); downlight(BX + 0.9, z); }
-  for (const [x, z] of [[-5.1, -11.0], [-2.9, -11.0], [-6.0, 11.4], [-4.0, 11.4], [4.1, 6.2], [4.1, 9.0], [4.1, -6.25], [0.85, -7.75], [-11.4, 11.6], [-11.4, -11.6]]) downlight(x, z, 0.06); // (0.85, −7.75)：小房子門口
+  for (const [x, z] of [[-5.1, -11.0 - ZW], [-2.9, -11.0 - ZW], [-6.0, 11.4 + ZW], [-4.0, 11.4 + ZW], [4.1, 6.2], [4.1, 9.0], [4.1, -6.25], [0.85, -7.75 - ZW], [-11.4, 11.6 + ZW], [-11.4, -11.6 - ZW]]) downlight(x, z, 0.06); // (0.85, −7.75)：小房子門口
 
   // ---- 牆 A（x = XB，後牆）：六個展示車位；白大理石＋壁柱（兩邊黃銅條）、上面黑大理石橫帶（招牌、徽章），每個車位一塊黑玻璃名牌 ----
   const PIL = [-11.1, -7.4, -3.7, 0, 3.7, 7.4, 11.1]; // 壁柱（u）
@@ -712,7 +715,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
   }
 
   // ---- 牆 B（x = XD，門那面）：鐵捲門（兩邊黑色導軌、上面白色捲筒盒＋警示燈、門邊開關盒）；右邊輪胎架、左邊模型車展示櫃 ----
-  const RL = 0.13, BOXN = 0.48, BOXY = 3.86; // 導軌深、捲筒盒深、盒底
+  const RL = 0.13, BOXN = 0.48, BOXY = DH + 0.06; // 導軌深、捲筒盒深、盒底
   slabs('B', -ZS, -DZ - 0.36); slabs('B', DZ + 0.36, ZS); skirt('B', -ZS, -DZ - 0.36); skirt('B', DZ + 0.36, ZS);
   wq(S, 'B', -DZ - 0.36, DZ + 0.36, DH, HC, 0, RW, CEIL, MM.paint); // 門洞上面（被盒子擋住）
   S.quad(V(XD, 0, -DZ), V(XO, 0, -DZ), V(XO, DH, -DZ), V(XD, DH, -DZ), RW, [0.02, 0.02, 0.022], MM.satin); // 門洞的內側（牆的厚度）：兩邊、上面，黑色
@@ -811,7 +814,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
     wqDown(L, 'D', -4.35, -3.65, 2.919, 0.1, 0.14, RW, [3, 2.3, 1.5], MM.lamp);
   }
   { // 地毯（地板上一片）
-    const x0 = -6.3, x1 = -1.7, z0 = -12.45, z1 = -10.8, y = 0.008;
+    const x0 = -6.3, x1 = -1.7, z0 = -12.45 - ZW, z1 = -10.8 - ZW, y = 0.008;
     S.quad(V(x0, y, z1), V(x1, y, z1), V(x1, y, z0), V(x0, y, z0), R.RUG, W1, MM.fabric);
     for (const [a, b] of [[V(x0, 0, z1), V(x1, 0, z1)], [V(x1, 0, z0), V(x0, 0, z0)]]) S.quad(a, b, b.clone().setY(y), a.clone().setY(y), RW, [0.05, 0.05, 0.055], MM.fabric);
   }
@@ -824,13 +827,13 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
     bx(x0 + 0.05, x1 - 0.05, 0.0, 0.1, zb + 0.05, zf - 0.05, { all: [RW, BRASS, MM.brass], skip: 'ny' });
   }
   { // 茶几：白大理石檯面＋黃銅框（細長，靠沙發）
-    const cx = -4.0, cz = -11.15;
+    const cx = -4.0, cz = -11.15 - ZW;
     S.box(M4().makeTranslation(cx, 0.4, cz), [1.2, 0.04, 0.4], { py: ['M', W1, MM.marble, true], all: [RW, [0.8, 0.8, 0.79], MM.marble], skip: 'py' });
     for (const [x, z] of [[-0.55, -0.16], [0.55, -0.16], [-0.55, 0.16], [0.55, 0.16]]) S.box(M4().makeTranslation(cx + x, 0.19, cz + z), [0.03, 0.38, 0.03], { all: [RW, BRASS, MM.brass], skip: 'ny' });
     for (const z of [-0.16, 0.16]) S.box(M4().makeTranslation(cx, 0.05, cz + z), [1.13, 0.02, 0.02], { all: [RW, BRASS, MM.brass] });
   }
   { // 落地燈：黃銅桿、白色燈罩（裡面亮）
-    const x = -6.75, z = -12.15;
+    const x = -6.75, z = -12.15 - ZW;
     S.geo(new THREE.CylinderGeometry(0.16, 0.18, 0.03, 24).translate(x, 0.015, z), M4(), RW, BRASS, MM.brass);
     S.geo(new THREE.CylinderGeometry(0.014, 0.014, 1.5, 8).translate(x, 0.78, z), M4(), RW, BRASS, MM.brass);
     S.geo(new THREE.CylinderGeometry(0.2, 0.26, 0.32, 24, 1, true).translate(x, 1.62, z), M4(), RW, [1.7, 1.45, 1.15], MM.fabric);
@@ -838,7 +841,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
     COLS.push({ t: 'circle', x, z, r: 0.24, h: 1.8 });
   }
   { // 盆栽（黑色高盆＋一叢長葉子）
-    for (const [x, z] of [[-0.55, -12.1], [-11.9, 11.9], [-11.9, -11.9]]) {
+    for (const [x, z] of [[-0.55, -12.1 - ZW], [-11.9, 11.9 + ZW], [-11.9, -11.9 - ZW]]) {
       S.geo(new THREE.CylinderGeometry(0.26, 0.2, 0.62, 20).translate(x, 0.31, z), M4(), RW, [0.015, 0.015, 0.016], MM.gloss);
       for (let i = 0; i < 26; i++) {
         const a = rnd() * Math.PI * 2, tilt = 0.12 + rnd() * 0.42, len = 0.7 + rnd() * 0.75, g = new THREE.PlaneGeometry(0.075, len, 1, 3);
@@ -853,8 +856,8 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
       COLS.push({ t: 'circle', x, z, r: 0.35, h: 1.4 });
     }
   }
-  COLS.push({ t: 'box', x: -4.0, z: -11.8, hx: 1.6, hz: 0.9, rot: 0, h: 0.9 }); // 休息區（沙發＋茶几）
-  AO_BOX.push([-4.0, -12.2, 1.55, 0.5], [-4.0, -11.15, 0.6, 0.2]);
+  COLS.push({ t: 'box', x: -4.0, z: -11.8 - ZW, hx: 1.6, hz: 0.9, rot: 0, h: 0.9 }); // 休息區（沙發＋茶几）
+  AO_BOX.push([-4.0, -12.2 - ZW, 1.55, 0.5], [-4.0, -11.15 - ZW, 0.6, 0.2]);
 
   // ---- 幾何小幫手：qN＝四個點（照順序繞一圈），法線朝 hint 那邊（不對就左右翻）；qX／qY／qZ＝x／y／z 定值的四邊形；qZs＝上緣順著屋頂斜的（山牆）；hbx＝盒子（兩個角）----
   const DPX = V(1, 0, 0), DNX = V(-1, 0, 0), DPY = V(0, 1, 0), DNY = V(0, -1, 0), DPZ = V(0, 0, 1), DNZ = V(0, 0, -1);
@@ -897,6 +900,9 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
   //     兩邊懸空床頭櫃＋黃銅檯燈；白色衣櫃、書桌＋電視（在玩賽車）＋椅子；小冰箱＋咖啡機；盆栽、地毯、窗簾、小掛畫
   //   門洞 1.0 公尺寬（x 0.35 … 1.35，門一直開著，往裡面開、靠西邊）；正面大窗 x 1.75 … 4.7：躺在床上往腳那邊（+z）看是主車位、鐵捲門；西牆一扇低窗台的窗：躺著轉頭（−x）看得到後牆升降機上的車
   {
+    // 第 11 批：車庫變寬，小房子整間跟著 z −ZS 那面牆往外搬 ZW。這一塊照本來的座標（z −12.7 … −8.5）蓋：z 的常數在這裡蓋掉，batch 的 oz、碰撞、AO 最後一起挪
+    const HZ0 = -12.7, HZ1 = -8.5, IZ0 = HZ0 + 0.03, IZ1 = HZ1 - HWT, HLAMP = [[1.28, 0.885, -12.43], [3.72, 0.885, -12.43]], SCONCE = [0.16, 1.95, HZ1 + 0.07];
+    const BATS = [S, L, T, E, EL, GL], c0 = COLS.length, a0 = AO_BOX.length; for (const bt of BATS) bt.oz = -ZW;
     const HW0 = 1.75, HW1 = 4.7, HWY0 = 0.45, HWY1 = 2.5, BAND = 2.5; // 正面大窗、腰帶
     const WW0 = -11.5, WW1 = -9.3, WWY0 = 0.62, WWY1 = 2.35; // 西牆的窗（z）：窗台 0.62（床墊 0.56）：躺著看得到整台車
     const PLAS = [0.86, 0.85, 0.82], TRIM = [0.018, 0.018, 0.02], ROOF = [0.05, 0.052, 0.056], OAKC = W1, CURT = [0.8, 0.74, 0.64], SHEET = [0.95, 0.94, 0.92];
@@ -1061,6 +1067,9 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
     COLS.push({ t: 'circle', x: 4.62, z: -9.2, r: 0.24, h: 1.1 });
     hcol(1.6, 1.98, IZ1 - 0.16, IZ1, 2.46); hcol(4.47, 4.85, IZ1 - 0.16, IZ1, 2.46);
     AO_BOX.push([(HX0 + HX1) / 2, (HZ0 + HZ1) / 2, (HX1 - HX0) / 2, (HZ1 - HZ0) / 2]); // 車庫地板：小房子牆腳暗一點
+    for (const bt of BATS) bt.oz = 0;
+    for (let i = c0; i < COLS.length; i++) COLS[i].z -= ZW;
+    for (let i = a0; i < AO_BOX.length; i++) AO_BOX[i][1] -= ZW;
   }
 
   // ---- 升降停車格（Nick：「車庫是有升降停車格」）：後牆六個車位都是地坑式兩層升降機（上下兩層各停一台 → 12 台＋主車位）----
@@ -1161,7 +1170,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
   }
 
   // ---- 鐵捲門：41 片鋁門片（最下面那片是底條），InstancedMesh；裡面那面拉絲鋁、外面那面白色烤漆 ----
-  const SLAT = 0.1, NS = 41, XC = XD - 0.07, YT = 4.12, R0 = 0.14; // 片高、片數、門片平面、捲筒切點高、捲筒外半徑
+  const SLAT = 0.1, YT = DH + 0.32, NS = Math.round(YT / SLAT), XC = XD - 0.07, R0 = 0.14; // 片高、片數、門片平面、捲筒切點高、捲筒外半徑
   const slatGeo = (side) => { // 本地：x＝往外（門外）、y＝沿著門往上、z＝沿著門片；side −1＝裡面那面、+1＝外面那面
     const b = batch(), prof = [[0.004, -0.05, 0.3], [0.004, -0.044, 0.3], [0.008, -0.042, 0.8], [0.011, -0.02, 1], [0.012, 0, 1], [0.011, 0.024, 1], [0.008, 0.043, 0.85], [0.004, 0.045, 0.35], [0.004, 0.05, 0.35]];
     const z0 = -DZ - 0.06, z1 = DZ + 0.06;
@@ -1204,7 +1213,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
   layoutDoor();
 
   // ---- 外殼（村子才有）：外牆白大理石板＋黑大理石牆腳、女兒牆、屋頂；門面：黑色門框、招牌、兩邊直的壁燈、牆腳的車道燈、警示燈、密碼盤 ----
-  const EROWS = [0.4, 2.0, 3.6, 5.25], PAR = 5.25; // 外牆石板的排（牆腳黑的到 0.4）
+  const PAR = TOP - 0.45, EROWS = [0.4, 2.0, 3.6, 5.2, PAR]; // 第 10 批：車庫變高，多一排 // 外牆石板的排（牆腳黑的到 0.4）
   const EFY0 = DH + 0.5, EFY1 = PAR - 0.1, EFU = DZ + 1.45; // 門上面的黑大理石橫帶（招牌）
   const eslabs = (w, u0, u1, rows = EROWS) => slabs(w, u0, u1, rows, { cw: 1.5, mat: MM.honed, bt: E });
   const eplinth = (w, u0, u1) => { wq(E, w, u0, u1, 0, EROWS[0], 0.02, 'M', W1, MM.nero, true); wqUp(E, w, u0, u1, EROWS[0], 0, 0.02, RW, BLK, MM.gloss); };
@@ -1467,9 +1476,9 @@ void main() { if (roomPitXZ(vLoc.xz)) discard; vec3 a, e; float r, m, ao; roomFl
   // ---- 停車位、碰撞、區域 ----
   const spots = {
     main: { x: 0, z: 0, heading: 0 }, bays: BAYZ.map((z) => ({ x: BX, z, heading: 0 })), outside: { x: XO + 4.2, z: 0, heading: 0 },
-    bed: { x: 2.08, y: 0.56, z: -11.41, heading: -Math.PI / 2, head: { x: 2.08, z: -12.27 }, feet: { x: 2.08, z: -10.55 } }, // 躺在床上（左半邊）：角色的 group 放 feet（高 y）、rotation.y＝heading、state 'fall' → 頭朝 head
-    wake: { x: 0.93, z: -11.0, heading: -Math.PI / 2 }, // 起床：站在床邊、面向門（+z）
-    houseIn: { x: HD0 / 2 + HD1 / 2, z: -9.35, heading: Math.PI / 2 }, houseOut: { x: HD0 / 2 + HD1 / 2, z: -7.75, heading: -Math.PI / 2 }, // 進門（面向房間裡 −z）、出門（面向車庫 +z）
+    bed: { x: 2.08, y: 0.56, z: -11.41 - ZW, heading: -Math.PI / 2, head: { x: 2.08, z: -12.27 - ZW }, feet: { x: 2.08, z: -10.55 - ZW } }, // 躺在床上（左半邊）：角色的 group 放 feet（高 y）、rotation.y＝heading、state 'fall' → 頭朝 head
+    wake: { x: 0.93, z: -11.0 - ZW, heading: -Math.PI / 2 }, // 起床：站在床邊、面向門（+z）
+    houseIn: { x: HD0 / 2 + HD1 / 2, z: -9.35 - ZW, heading: Math.PI / 2 }, houseOut: { x: HD0 / 2 + HD1 / 2, z: -7.75 - ZW, heading: -Math.PI / 2 }, // 進門（面向房間裡 −z）、出門（面向車庫 +z）
   };
   const WALLS = [
     { t: 'box', x: XD + WT / 2, z: -(ZO + DZ) / 2, hx: WT / 2, hz: (ZO - DZ) / 2, rot: 0, h: TOP },
@@ -1501,7 +1510,7 @@ void main() { if (roomPitXZ(vLoc.xz)) discard; vec3 a, e; float r, m, ao; roomFl
   const zones = {
     inside: { x: (XB + XD) / 2, z: 0, hx: (XD - XB) / 2, hz: ZS }, door: { x: XD, z0: -DZ, z1: DZ, x1: XO, h: DH }, apron: { x: XO + 3, z: 0, hx: 3, hz: DZ + 1 },
     house: { x: (IX0 + IX1) / 2, z: (IZ0 + IZ1) / 2, hx: (IX1 - IX0) / 2, hz: (IZ1 - IZ0) / 2, ceil: +hIn(IX0).toFixed(3), ridge: +hIn(HRX).toFixed(3) }, // 小房子的地板（裡面）；天花板最低（牆邊）、最高（屋脊）
-    bedSide: { x: 0.925, z: -11.2, hx: 0.375, hz: 0.55 }, // 站在這裡 →「睡覺」
+    bedSide: { x: 0.925, z: -11.2 - ZW, hx: 0.375, hz: 0.55 }, // 站在這裡 →「睡覺」
     houseDoor: { x: (HD0 + HD1) / 2, z: (IZ1 + HZ1) / 2, hx: (HD1 - HD0) / 2, hz: (HZ1 - IZ1) / 2, h: HDH }, // 門洞（牆的厚度那一段）
     lifts: lifts.map((lf) => lf.zone), // 站在這裡 → 操作那一台升降機（lifts[i].stand＝站的位置、面向操作柱）
   };

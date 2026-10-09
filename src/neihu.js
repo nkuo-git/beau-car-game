@@ -84,6 +84,7 @@ function readData() {
   const lm = {}; // 七個地標：形狀（世界座標）、牌子
   for (const [k, v] of Object.entries(D.lm || {})) { const o = { nm: v.nm }; for (const [kk, vv] of Object.entries(v)) { if (kk === 'nm') continue; if (kk === 'sign') { o.sign = { p: W(vv[0], vv[1]), ang: vv[2] / 1000, nm: vv[3] }; continue; } const P = []; for (let i = 0; i < vv.length; i += 2) P.push(W(vv[i], vv[i + 1])); o[kk] = P; } lm[k] = o; }
   return {
+    wide: D.wide || 1, // 第 9 批（路變大）：車道是 OSM 估的幾倍
     AX, AZ, W, nodes, roads, bld, areas, elev, trees, lm,
     stations: D.stations.map(([nm, en, x, z, a, len, w]) => ({ nm, en, p: W(x, z), ang: a / 1000, len: len / 10, w: w / 10 })),
     entr: D.entr.map(([x, z, a]) => ({ p: W(x, z), ang: a / 1000 })),
@@ -322,11 +323,14 @@ function buildNeihu(V, opt = {}) {
   const resSt = new Set([0, 1, 2, 3, 7, 8]);
   let nb = 0, nArc = 0, nShed = 0, vSigns = [];
   const LISHAN = N.lm && N.lm.lishan ? N.lm.lishan.p : null; // 麗山國中校地裡的房子：白磁磚＋紅磚飾帶的牆（格子 24，照參考照片）
+  const NH_MAX_FL = 2; // 第 10 批：內湖一般的房子最多幾層（地標不變）
+  const GB = 1e6; // 第 9 批：房子的編號（碰撞物的 g；村子的房子沒有 g）
   N.bld.forEach((b, bi) => {
     if (b.lm) return; // 地標的房子（西湖圖書館、湖光教會）：下面自己做
     const P = b.P, n = P.length; let cx = 0, cz = 0; for (const p of P) { cx += p[0]; cz += p[1]; } cx /= n; cz /= n;
     const g = bank('wall', cx, cz, TB);
-    const gh = b.e.includes(2) ? 4.2 : 3.6, top = b.h > 2 ? b.h : b.f <= 1 ? 3.8 + hh(bi, 1) * 0.8 : gh + (b.f - 1) * 3.2;
+    const gh = b.e.includes(2) ? 4.2 : 3.6, top0 = b.h > 2 ? b.h : b.f <= 1 ? 3.8 + hh(bi, 1) * 0.8 : gh + (b.f - 1) * 3.2;
+    const bf = Math.min(b.f, NH_MAX_FL), top = Math.min(top0, gh + (NH_MAX_FL - 1) * 3.2); // 第 10 批（Nick「所有房子變矮」）：最多 2 層樓高
     const st = b.st, base = STY_COL[st] || WHITE, tint = 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, 0.78), gcell = GROUND_OF[st] ?? 15;
     const C = b.core || P;
     for (let i = 0; i < n; i++) {
@@ -345,11 +349,11 @@ function buildNeihu(V, opt = {}) {
         for (let j = 0; j <= k; j++) {
           const t = clamp(j / k, 0.04, 0.96), px = a[0] + (c[0] - a[0]) * t - ox * 0.4, pz = a[1] + (c[1] - a[1]) * t - oz * 0.4;
           boxG(g, px, pz, 0.32, 0.32, rotOf(c[0] - a[0], c[1] - a[1]), 0, gh, shade(col, 0.95), 20, false);
-          if (!b.back) colliders.push({ t: 'circle', x: px, z: pz, r: 0.42, h: gh });
+          if (!b.back) colliders.push({ t: 'circle', x: px, z: pz, r: 0.42, h: gh, g: GB + bi });
         }
       }
       // 一樓臨路的店：樓上掛直立招牌（往外伸）
-      if (e && b.f >= 3 && L >= 6 && !b.back && vSigns.length < 2200 && hh(bi, 30 + i) < (e === 2 ? 0.95 : 0.45)) {
+      if (e && bf >= 3 && L >= 6 && !b.back && vSigns.length < 2200 && hh(bi, 30 + i) < (e === 2 ? 0.95 : 0.45)) {
         const m = Math.min(3, Math.floor(L / 7)); for (let j = 0; j < m; j++) { const t = (j + 0.5) / m, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L; vSigns.push({ x: a[0] + (c[0] - a[0]) * t, z: a[1] + (c[1] - a[1]) * t, ox, oz, y0: gh + 0.4, h: Math.min(top - gh - 0.6, 3 + hh(bi, 50 + j) * 2.6), s: Math.floor(hh(bi, 60 + i * 3 + j) * 16) }); }
       }
     }
@@ -357,23 +361,23 @@ function buildNeihu(V, opt = {}) {
     flatPoly(g, P, top, 6, shade([235, 233, 228], 0.9 + hh(bi, 3) * 0.15), 18);
     // 一樓的頂點顏色暗一點已經有了；頂樓加蓋、水塔、樓梯間
     const rc = b.rect;
-    if (rc && !b.back && b.f >= 3) {
+    if (rc && !b.back && bf >= 3) {
       const [rx, rz, hx, hz, rot] = rc, ux = Math.cos(rot), uz = -Math.sin(rot), vx = -uz, vz = ux;
-      if (resSt.has(st) && b.f <= 8 && hh(bi, 4) < 0.45 && hx > 3 && hz > 3) { // 頂樓加蓋（鐵皮屋）
+      if (resSt.has(st) && bf <= 8 && hh(bi, 4) < 0.45 && hx > 3 && hz > 3) { // 頂樓加蓋（鐵皮屋）
         nShed++; const sx = hx * (0.55 + hh(bi, 5) * 0.3), sz = hz * (0.55 + hh(bi, 6) * 0.3), ox = (hh(bi, 7) - 0.5) * (hx - sx), oz = (hh(bi, 8) - 0.5) * (hz - sz), x = rx + ux * ox + vx * oz, z = rz + uz * ox + vz * oz;
         const Q = boxG(g, x, z, sx, sz, rot, top, top + 2.6, [255, 255, 255], 11, false);
         quad3(g, [[Q[0][0], top + 2.6, Q[0][1]], [Q[3][0], top + 2.9, Q[3][1]], [Q[2][0], top + 2.9, Q[2][1]], [Q[1][0], top + 2.6, Q[1][1]]], [[0, 0], [0, sz / 3], [sx / 3, sz / 3], [sx / 3, 0]], 19, [255, 255, 255]);
       }
       if (hh(bi, 9) < 0.6) { const x = rx + ux * hx * 0.6 - vx * hz * 0.5, z = rz + uz * hx * 0.6 - vz * hz * 0.5; boxG(g, x, z, 0.7, 0.7, rot, top, top + 1.5, [222, 226, 230]); } // 水塔
-      if (b.f >= 7) boxG(g, rx - ux * hx * 0.3, rz - uz * hx * 0.3, Math.min(2.5, hx * 0.3), Math.min(2, hz * 0.3), rot, top, top + 3, shade(col, 0.95), 20); // 樓梯間
+      if (bf >= 7) boxG(g, rx - ux * hx * 0.3, rz - uz * hx * 0.3, Math.min(2.5, hx * 0.3), Math.min(2, hz * 0.3), rot, top, top + 3, shade(col, 0.95), 20); // 樓梯間
     }
-    if (b.col) for (const [x, z, hx, hz, rot] of b.col) colliders.push({ t: 'box', x, z, hx, hz, rot, h: top });
+    if (b.col) for (const [x, z, hx, hz, rot] of b.col) colliders.push({ t: 'box', x, z, hx, hz, rot, h: top, g: GB + bi }); // g：同一棟（第 9 批：越野車輾到一個盒子，整棟一起扁）
     nb++;
   });
 
   // ==== 聯外道路：越野車場的水泥路在村子南邊的口 LINK_J (−112, 94) → 往南直走 → 轉往東 → 內湖西北角的環山路二段（入口） ====
   const LK = (() => {
-    const [jx, jz] = LINK_J, E = N.entP, d = N.entDir, W0 = 9, pts = [];
+    const [jx, jz] = LINK_J, E = N.entP, d = N.entDir, W0 = 13.5, pts = []; // 第 9 批（路變大）：9 → 13.5
     const P2 = [E[0] - d[0] * 30, E[1] - d[1] * 30], A = [jx, P2[1] - 45]; // 進範圍前 30 公尺照入口那條路的方向；轉彎前 45 公尺還是往南
     for (let z = jz; z < A[1] - 1; z += 20) pts.push([jx, z]); pts.push(A.slice());
     const nS = pts.length - 1, C1 = [A[0], A[1] + 30], C2 = [P2[0] - d[0] * 30, P2[1] - d[1] * 30];
@@ -383,7 +387,7 @@ function buildNeihu(V, opt = {}) {
     let spread = 0; for (const [ri, e] of N.ent) { const r = N.roads[ri], ni = r.n[e ? r.n.length - 1 : 0]; spread = Math.max(spread, Math.abs((nx(ni) - E[0]) * -d[1] + (nz(ni) - E[1]) * d[0]) + r.w / 2); }
     const wEnd = Math.max(13, spread * 2 + 1), nT = pts.length - 1 - nS;
     const w = pts.map((_, i) => (i <= nS ? W0 : W0 + (wEnd - W0) * ss(0.3, 0.95, (i - nS) / nT)));
-    w[0] = w[1] = 6; // 村子南邊的口（x −118…−106）那一段跟越野車場的水泥路一樣寬 6 公尺：口兩邊留草地（切太快會慢下來），不要整個路口都鋪成柏油
+    w[0] = w[1] = 9; // 村子南邊的口（x −118…−106）那一段跟越野車場的水泥路一樣寬 9 公尺（第 9 批：本來 6）：口兩邊留草地（切太快會慢下來），不要整個路口都鋪成柏油
     let bx0 = Infinity, bx1 = -Infinity, bz0 = Infinity, bz1 = -Infinity, len = 0; for (const [x, z] of pts) { bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); bz0 = Math.min(bz0, z); bz1 = Math.max(bz1, z); }
     for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
     return { pts, w, wEnd, nS, len, box: [bx0 - 12, bz0 - 12, bx1 + 12, bz1 + 12] };
@@ -448,7 +452,7 @@ function buildNeihu(V, opt = {}) {
       const g = bank('wall', p[0], p[1], TB), cw = mrt ? 0.9 : 1.1;
       boxG(g, p[0], p[1], cw, cw, rot, 0, y - 1, CON, 20, false);
       boxG(g, p[0], p[1], 1.1, w / 2 - 0.6, rot, y - 1.2, y, shade(CON, 0.95), 20, false);
-      colliders.push({ t: 'box', x: p[0], z: p[1], hx: cw, hz: cw, rot, h: y });
+      colliders.push({ t: 'box', x: p[0], z: p[1], hx: cw, hz: cw, rot, h: y, noCrush: true }); // noCrush：第 9 批（捷運的橋墩，越野車也輾不到）
     }
   }
   for (const t of portals) { // 隧道口：橋面切口一道水泥牆（上面再高一點，下面埋進山裡）、中間黑黑的洞
@@ -500,7 +504,7 @@ function buildNeihu(V, opt = {}) {
     for (const sd of [-1, 1]) for (let t = -hl + 6; t <= hl - 6; t += 14) {
       const px = x + ux * t + vx * sd * (hw - 2), pz = z + uz * t + vz * sd * (hw - 2), rr = roadAt(px, pz); if (rr && rr.d < rr.r.w / 2 + rr.r.sw + 0.4) continue; // 車道、人行道上不放
       if (nearJunction(px, pz)) continue; // 路口轉彎的地方也不放
-      boxG(g, px, pz, 0.7, 0.7, rot, 0, y0, CON, 20, false); colliders.push({ t: 'box', x: px, z: pz, hx: 0.7, hz: 0.7, rot, h: y0 });
+      boxG(g, px, pz, 0.7, 0.7, rot, 0, y0, CON, 20, false); colliders.push({ t: 'box', x: px, z: pz, hx: 0.7, hz: 0.7, rot, h: y0, noCrush: true });
     }
     // 軌道兩邊：淺綠色的隔音牆（站前後各 130 公尺）
     const mrt = N.elev.find((e) => e.k === 'mrt');
@@ -524,11 +528,11 @@ function buildNeihu(V, opt = {}) {
       const Q = boxG(g, x, z, 3.7, 2.0, rot, 0.5, 3.6, [196, 200, 204], 20, false); // 鋁板的罩子
       quad3(g, [[Q[0][0], 3.9, Q[0][1]], [Q[3][0], 3.9, Q[3][1]], [Q[2][0], 3.9, Q[2][1]], [Q[1][0], 3.9, Q[1][1]]], [[0.3, 0.3], [0.3, 0.7], [0.7, 0.7], [0.7, 0.3]], 20, [150, 156, 160]);
       for (let i = 0; i < 4; i++) { const a = Q[i], c = Q[(i + 1) % 4]; wallQ(g, a[0], a[1], c[0], c[1], 3.6, 3.9, 0.3, 0.7, 0.3, 0.7, 20, [168, 172, 176]); }
-      colliders.push({ t: 'box', x, z, hx: 4.0, hz: 2.2, rot, h: 3.9 });
+      colliders.push({ t: 'box', x, z, hx: 4.0, hz: 2.2, rot, h: 3.9, noCrush: true }); // 捷運站的出入口（第 9 批：不輾）
     } else {
       const Q = boxG(g, x, z, 3.8, 1.9, rot, 0, 3.4, [255, 255, 255], 21, false);
       quad3(g, [[Q[0][0], 3.6, Q[0][1]], [Q[3][0], 3.6, Q[3][1]], [Q[2][0], 3.6, Q[2][1]], [Q[1][0], 3.6, Q[1][1]]], [[0.3, 0.3], [0.3, 0.7], [0.7, 0.7], [0.7, 0.3]], 20, [120, 128, 136]);
-      colliders.push({ t: 'box', x, z, hx: 3.8, hz: 1.9, rot, h: 3.5 });
+      colliders.push({ t: 'box', x, z, hx: 3.8, hz: 1.9, rot, h: 3.5, noCrush: true });
     }
   }
 
@@ -589,14 +593,14 @@ function buildNeihu(V, opt = {}) {
   N.roads.forEach((r, ri) => {
     const P = rpts(r), L = plen(P), ia = r.n[0], ib = r.n[r.n.length - 1];
     const t0 = deg[ia] >= 3 ? jR[ia] + 1.5 : 0, t1 = L - (deg[ib] >= 3 ? jR[ib] + 1.5 : 0); if (t1 - t0 < 3) return;
-    const y = 0.05, hw = r.w / 2;
+    const y = 0.05, hw = r.w / 2, w0 = r.w / (D.wide || 1); // 第 9 批：標線照原本的路寬（車道數一樣、每條變寬）
     if (!r.ow) {
-      if (r.w >= 8.5) { line(P, -0.13, 0.13, y, YEL, 0, 0, t0, t1); line(P, 0.13, 0.13, y, YEL, 0, 0, t0, t1); }
-      else if (r.w >= 6.4) line(P, 0, 0.12, y, YEL, 4, 6, t0, t1);
-      const lanes = Math.floor((hw - 0.5) / 3.1); for (let k = 1; k < lanes; k++) for (const s of [-1, 1]) line(P, s * k * (hw / lanes), 0.12, y, WHT, 4, 6, t0, t1);
-    } else { const lanes = Math.max(1, Math.floor((r.w - 0.6) / 3.1)); for (let k = 1; k < lanes; k++) line(P, -hw + (k * r.w) / lanes, 0.12, y, WHT, 4, 6, t0, t1); }
+      if (w0 >= 8.5) { line(P, -0.13, 0.13, y, YEL, 0, 0, t0, t1); line(P, 0.13, 0.13, y, YEL, 0, 0, t0, t1); }
+      else if (w0 >= 6.4) line(P, 0, 0.12, y, YEL, 4, 6, t0, t1);
+      const lanes = Math.floor((w0 / 2 - 0.5) / 3.1); for (let k = 1; k < lanes; k++) for (const s of [-1, 1]) line(P, s * k * (hw / lanes), 0.12, y, WHT, 4, 6, t0, t1);
+    } else { const lanes = Math.max(1, Math.floor((w0 - 0.6) / 3.1)); for (let k = 1; k < lanes; k++) line(P, -hw + (k * r.w) / lanes, 0.12, y, WHT, 4, 6, t0, t1); }
     if (r.cls <= 3) { line(P, -hw + 0.3, 0.15, y, WHT, 0, 0, t0, t1); line(P, hw - 0.3, 0.15, y, WHT, 0, 0, t0, t1); }
-    else if (r.w >= 4.5 && hh(ri, 1) < 0.55) { const c = hh(ri, 2) < 0.7 ? RED : YEL; line(P, -hw + 0.25, 0.12, y, c, 0, 0, t0, t1); line(P, hw - 0.25, 0.12, y, c, 0, 0, t0, t1); } // 紅線（不能停車）
+    else if (w0 >= 4.5 && hh(ri, 1) < 0.55) { const c = hh(ri, 2) < 0.7 ? RED : YEL; line(P, -hw + 0.25, 0.12, y, c, 0, 0, t0, t1); line(P, hw - 0.25, 0.12, y, c, 0, 0, t0, t1); } // 紅線（不能停車）
     // 停止線（大路口前面，自己這個方向那半邊）
     if (r.cls <= 3) for (const [end, ni] of [[1, ib], [0, ia]]) {
       if (deg[ni] < 3) continue; if (r.ow === 1 && !end) continue; if (r.ow === -1 && end) continue;
@@ -605,7 +609,7 @@ function buildNeihu(V, opt = {}) {
     }
   });
   // 聯外道路的標線
-  { const P = LKP, L = plen(P), Ls = plen(LKP.slice(0, LK.nS + 1)); line(P, -0.13, 0.13, 0.05, YEL, 0, 0, 6, L - 20); line(P, 0.13, 0.13, 0.05, YEL, 0, 0, 6, L - 20); line(P, -4.2, 0.15, 0.05, WHT, 0, 0, 6, Ls); line(P, 4.2, 0.15, 0.05, WHT, 0, 0, 6, Ls); }
+  { const P = LKP, L = plen(P), Ls = plen(LKP.slice(0, LK.nS + 1)); line(P, -0.13, 0.13, 0.05, YEL, 0, 0, 6, L - 20); line(P, 0.13, 0.13, 0.05, YEL, 0, 0, 6, L - 20); line(P, -6.45, 0.15, 0.05, WHT, 0, 0, 6, Ls); line(P, 6.45, 0.15, 0.05, WHT, 0, 0, 6, Ls); }
   // 斑馬線
   for (const c of N.cross) {
     const ux = Math.cos(c.ang), uz = Math.sin(c.ang), vx = -uz, vz = ux, n = Math.max(3, Math.floor((c.w - 0.6) / 1.0)), g = bank('paint', c.p[0], c.p[1], TG);
@@ -679,7 +683,7 @@ function buildNeihu(V, opt = {}) {
       const m = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2], rot = rotOf(B[0] - A[0], B[1] - A[1]), l = Math.hypot(B[0] - A[0], B[1] - A[1]);
       boxG(bank('wall', m[0], m[1], TB), m[0], m[1], l / 2 + 0.02, 0.12, rot, 0.35, 0.85, [214, 218, 222], 20);
       if (i % 2) boxG(bank('wall', A[0], A[1], TB), A[0], A[1], 0.08, 0.08, rot, 0, 0.85, [170, 172, 176], 20, false);
-      colliders.push({ t: 'box', x: m[0], z: m[1], hx: l / 2 + 0.05, hz: 0.25, rot, h: 0.9 });
+      colliders.push({ t: 'box', x: m[0], z: m[1], hx: l / 2 + 0.05, hz: 0.25, rot, h: 0.9, noCrush: true }); // 第 9 批：聯外道路的護欄不輾（山谷）
     }
   }
 
@@ -712,12 +716,12 @@ function buildNeihu(V, opt = {}) {
       const rx = -uz, rz = ux, g = bank('wall', px, pz, TB), arm = Math.min(5.5, w * 0.3 + 1.4), cx = px - rx * arm, cz = pz - rz * arm;
       boxG(g, px, pz, 0.14, 0.14, 0, 0, 6.3, [148, 152, 156], 20); // 柱子
       boxG(g, (px + cx) / 2, (pz + cz) / 2, arm / 2, 0.09, rotOf(rx, rz), 6.0, 6.25, [148, 152, 156], 20, false); // 橫桿
-      colliders.push({ t: 'circle', x: px, z: pz, r: 0.22, h: 6.3 }); bigSigns.push([cx, cz, ux, uz, nm]);
+      colliders.push({ t: 'circle', x: px, z: pz, r: 0.22, h: 6.3, reach: arm + 1 }); bigSigns.push([cx, cz, ux, uz, nm]);
       plate(cx, 5.3, cz, rx, rz, 4.6, 0.95, uv, false);
       if (uv2) plate(cx, 4.5, cz, rx, rz, 3.3, 0.68, uv2, false);
     };
     for (const r of N.roads) {
-      if (r.nm < 0 || r.w + 2 * r.sw < BIG_W) continue;
+      if (r.nm < 0 || r.w / (D.wide || 1) + 2 * r.sw < BIG_W) continue; // 第 9 批：照原本的路寬挑（同一批路）
       const P = rpts(r), n = P.length; if (n < 2) continue;
       const cum = [0]; for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
       const L = cum[n - 1]; if (L < 25) continue;
@@ -752,7 +756,7 @@ function buildNeihu(V, opt = {}) {
   { // 聯外道路：往內湖的指示牌（門架）＋回程的
     const P = LK.pts, gtry = (i, back) => {
       const a = P[i], b = P[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L, vx = -uz, vz = ux, hw = LK.w[i] / 2 + 1.2, gw = bank('wall', a[0], a[1], TB);
-      for (const sd of [-1, 1]) { boxG(gw, a[0] + vx * sd * hw, a[1] + vz * sd * hw, 0.18, 0.18, 0, 0, 7.2, [160, 166, 170], 20); colliders.push({ t: 'circle', x: a[0] + vx * sd * hw, z: a[1] + vz * sd * hw, r: 0.3, h: 7.2 }); }
+      for (const sd of [-1, 1]) { boxG(gw, a[0] + vx * sd * hw, a[1] + vz * sd * hw, 0.18, 0.18, 0, 0, 7.2, [160, 166, 170], 20); colliders.push({ t: 'circle', x: a[0] + vx * sd * hw, z: a[1] + vz * sd * hw, r: 0.3, h: 7.2, noCrush: true }); }
       boxG(gw, a[0], a[1], 0.15, hw, rotOf(ux, uz), 6.9, 7.2, [160, 166, 170], 20);
       const uv = SA.uv['b' + bIdx((bb) => bb.t === 'guide' && !bb.arrow && (back ? bb.nm !== '內湖' : bb.nm === '內湖'))];
       if (uv) { const s = back ? 1 : -1; plate(a[0] + ux * 0.2 * s + vx * 2.2, 5.6, a[1] + uz * 0.2 * s + vz * 2.2, vx * -s, vz * -s, 5.2, 1.4, uv, false); } // 牌子朝開過來的人
@@ -768,7 +772,7 @@ function buildNeihu(V, opt = {}) {
     const ux = Math.cos(bar.ang), uz = Math.sin(bar.ang), vx = -uz, vz = ux, w = bar.w, uv = SA.uv['b' + bIdx((b) => b.t === 'work')], gw = bank('wall', bar.p[0], bar.p[1], TB);
     const n = Math.max(1, Math.round(w / 3.2));
     for (let i = 0; i < n; i++) { const off = -w / 2 + (i + 0.5) * (w / n), x = bar.p[0] + vx * off, z = bar.p[1] + vz * off; if (uv) plate(x, 0.85, z, vx, vz, w / n - 0.15, 0.62, uv, true); for (const s of [-1, 1]) boxG(gw, x + vx * s * (w / n / 2 - 0.2), z + vz * s * (w / n / 2 - 0.2), 0.05, 0.05, 0, 0, 1.2, [235, 235, 235], 20); }
-    colliders.push({ t: 'box', x: bar.p[0], z: bar.p[1], hx: w / 2 + 0.5, hz: 0.35, rot: rotOf(vx, vz), h: 1.2 });
+    colliders.push({ t: 'box', x: bar.p[0], z: bar.p[1], hx: w / 2 + 0.5, hz: 0.35, rot: rotOf(vx, vz), h: 1.2, noCrush: true }); // 第 9 批：路封起來的欄杆（範圍的邊）不輾
   }
   for (const s of vSigns) { // 直立招牌：從牆往外伸 0.9 公尺、兩面都有字
     const uv = SA.uv['v' + s.s]; if (!uv) continue; const x = s.x + s.ox * 0.55, z = s.z + s.oz * 0.55, ymid = s.y0 + s.h / 2;
@@ -931,7 +935,15 @@ function buildNeihu(V, opt = {}) {
       }
       boxG(g2, c[0], c[1], 1.6, 1.6, 0, top, top + 3.2, [226, 228, 230], 25); // 樓梯間
       const bx = P[P.length - 1]; boxG(g2, bx[0], bx[1], 1.5, 1.5, 0, 0, top + 4.5, [226, 230, 232], 25); // 館名的那道高牆（直立的字）
+      const k0 = colliders.length;
       for (const [x, z, hx, hz] of [[c[0], c[1], 14, 14]]) colliders.push({ t: 'box', x, z, hx, hz, rot: 0, h: top });
+      // 第 9 批（路變大）：江南街讓開以後車子開得到圖書館的每一面牆，原本只有中間一個 14×14 的箱子（邊上撞得進去 12 公尺）；
+      //   每一面牆往裡面加一道 3 公尺厚的牆、圓角＝圓柱；全部同一個 g（越野車一次壓扁整棟）
+      for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) continue;
+        let nx = (b[1] - a[1]) / L, nz = -(b[0] - a[0]) / L; const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2; if (!inPoly(P, mx + nx * 0.6, mz + nz * 0.6)) { nx = -nx; nz = -nz; }
+        colliders.push({ t: 'box', x: mx + nx * 1.5, z: mz + nz * 1.5, hx: L / 2, hz: 1.5, rot: rotOf(b[0] - a[0], b[1] - a[1]), h: top }); }
+      { const a = P[0], b = P[1]; colliders.push({ t: 'circle', x: (a[0] + b[0]) / 2, z: (a[1] + b[1]) / 2, r: 5.2, h: top }); }
+      for (let i = k0; i < colliders.length; i++) colliders[i].g = GB - 1;
       lmSign('lib', 6.5, 1.1, 4.4);
     }
 
@@ -939,6 +951,7 @@ function buildNeihu(V, opt = {}) {
     const CH = LMP.church;
     if (CH) {
       const P = CH.p, c = cenOf(P), g2 = bank('wall', c[0], c[1], TB), top = 15.0, SW = [238, 236, 230];
+      const k0 = colliders.length; // 第 9 批（路變大）：教會的碰撞物同一個 g（越野車一次壓扁整棟）
       for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.3) continue;
         wallQ(g2, a[0], a[1], b[0], b[1], 0, top, 0, Math.max(1, Math.round(L / 6)), 0, 1, 20, shade(SW, 0.94), SW); }
       flatPoly(g2, P, top, 6, [214, 212, 206], 18);
@@ -966,6 +979,7 @@ function buildNeihu(V, opt = {}) {
         colliders.push({ t: 'box', x: tx, z: tz, hx: 3.2, hz: 3.2, rot: 0, h: 21 });
       }
       for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; colliders.push({ t: 'box', x: (a[0] + b[0]) / 2, z: (a[1] + b[1]) / 2, hx: Math.hypot(b[0] - a[0], b[1] - a[1]) / 2, hz: 0.4, rot: rotOf(b[0] - a[0], b[1] - a[1]), h: top }); }
+      for (let i = k0; i < colliders.length; i++) colliders[i].g = GB - 2;
     }
 
     // ---- 港墘站的出入口：金色的站名牌（照片 港墘站-2）----
@@ -991,7 +1005,8 @@ function buildNeihu(V, opt = {}) {
   })();
   const treeTiles = new Map(), TT = 250, M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), SC = new THREE.Vector3(), PV = new THREE.Vector3(), UPV = new THREE.Vector3(0, 1, 0);
   const addTree = (x, y, z, s, hill = false) => { const key = hill ? 'hill' : Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT); let L = treeTiles.get(key); if (!L) treeTiles.set(key, (L = [])); L.push(x, y, z, s); };
-  for (const [x, z, s] of N.trees) { addTree(x, 0, z, s); if (inBox(x, z)) colliders.push({ t: 'circle', x, z, r: 0.25, h: 3 }); }
+  const treeCols = []; // 第 9 批：碰撞物記著是哪一格的第幾棵（越野車輾到 → 那一棵壓扁：crush.js 改 InstancedMesh 的矩陣）
+  for (const [x, z, s] of N.trees) { addTree(x, 0, z, s); if (inBox(x, z)) { const c = { t: 'circle', x, z, r: 0.25, h: 3, tk: Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT), ti: treeTiles.get(Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT)).length / 4 - 1 }; colliders.push(c); treeCols.push(c); } }
   { // 山上的樹（遠遠看的）：範圍外面一圈，山腳 4 公尺以上；近的密一點
     const R3 = rng(8); let n = 0;
     for (let tries = 0; n < 2600 && tries < 40000; tries++) {
@@ -1006,6 +1021,7 @@ function buildNeihu(V, opt = {}) {
     for (let i = 0; i < n; i++) { const x = L[i * 4], y = L[i * 4 + 1], z = L[i * 4 + 2], s = L[i * 4 + 3]; Q.setFromAxisAngle(UPV, hh(i, 70) * TAU); M4.compose(PV.set(x, y, z), Q, SC.set(s, s * (0.85 + hh(i, 71) * 0.3), s)); m.setMatrixAt(i, M4); col.setRGB(0.85 + hh(i, 72) * 0.25, 0.9 + hh(i, 73) * 0.15, 0.85 + hh(i, 74) * 0.2); m.setColorAt(i, col); cx += x; cz += z; }
     m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); m.userData.c = [cx / n, cz / n]; m.userData.hill = key === 'hill'; treeMeshes.push(m);
   }
+  { const byKey = new Map(treeMeshes.map((m) => [m.name.slice(9), m])); for (const c of treeCols) { c.im = byKey.get(c.tk) || null; delete c.tk; } }
 
   // ==== 全部放進 group ====
   const group = new THREE.Group(); group.name = 'neihu';
@@ -1119,7 +1135,7 @@ function buildNeihu(V, opt = {}) {
     return join(a, [LINK_J], b && b.pts);
   };
   // 聯外道路給小地圖、警車（路網）
-  V.roads.push({ pts: LP.map((p) => p.slice()), w: 9, kind: 'main', noNpc: true });
+  V.roads.push({ pts: LP.map((p) => p.slice()), w: 13.5, kind: 'main', noNpc: true }); // 第 9 批：聯外道路 13.5 公尺
   V.colliders.push(...colliders);
   // 範圍：走路（walk.js 照 V.bounds 限制）、警察的格子；小地圖的底圖照原本的範圍（V.mapBounds），內湖另外畫（V.mapLive）
   if (V.bounds) { if (!V.mapBounds) V.mapBounds = { ...V.bounds }; V.bounds.x1 = Math.max(V.bounds.x1, BX1 + 30); V.bounds.z1 = Math.max(V.bounds.z1, BZ1 + 30); V.bounds.z0 = Math.min(V.bounds.z0, BZ0 - 30); }

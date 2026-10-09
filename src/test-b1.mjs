@@ -600,7 +600,7 @@ const hdoor = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, W = D.walker, X = window.__IN(), t0 = W.telemetry(), cols = H.cols(), R = W.character.radius;
   const out = (d) => { const nx = -Math.sin(d.ry), nz = -Math.cos(d.ry); return { x: d.ax - nx * 2, z: d.az - nz * 2 }; };
   const all = W.doors.map((d) => d.ref).filter(Boolean), open = all.filter((b) => X.interiorFor(b)).length, shut = all.filter((b) => !X.interiorFor(b)).map((b) => b.kind).sort().join(',');
-  const ds = W.doors.filter((d) => d.ref?.kind === 'house' && d.ref.floors >= 3 && X.interiorFor(d.ref) && !H.inside(cols, out(d).x, 1, out(d).z, R + 0.1)).sort((a, b) => Math.hypot(a.ax - t0.x, a.az - t0.z) - Math.hypot(b.ax - t0.x, b.az - t0.z));
+  const ds = W.doors.filter((d) => d.ref?.kind === 'house' && d.ref.floors >= 2 && /* 第 10 批：房子最多 2 層 */  X.interiorFor(d.ref) && !H.inside(cols, out(d).x, 1, out(d).z, R + 0.1)).sort((a, b) => Math.hypot(a.ax - t0.x, a.az - t0.z) - Math.hypot(b.ax - t0.x, b.az - t0.z));
   const d = ds[0]; if (!d) return { n: 0 };
   window.__hb = d.ref; window.__hback = { x: t0.x, z: t0.z, heading: t0.heading };
   const dist0 = W.cameraDist, r = H.toDoor(d), info = X.interiorFor(d.ref);

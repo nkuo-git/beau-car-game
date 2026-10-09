@@ -385,7 +385,7 @@ function buildOffroad(V, opts = {}) {
   }
   for (let j = 0; j < SNZ; j++) for (let i = 0; i < SNX; i++) SURF[j * SNX + i] = surfCode(G.x0 + (i + 0.5) * SC, G.z0 + (j + 0.5) * SC);
   const accBox = [-116, 38, -47, 110];
-  const onAccess = (x, z) => { if (x < accBox[0] || x > accBox[2] || z < accBox[1] || z > accBox[3]) return false; for (let i = 1; i < ACCESS.length; i++) if (segD(x, z, ACCESS[i - 1][0], ACCESS[i - 1][1], ACCESS[i][0], ACCESS[i][1]) <= 3.4) return true; return false; };
+  const onAccess = (x, z) => { if (x < accBox[0] || x > accBox[2] || z < accBox[1] || z > accBox[3]) return false; for (let i = 1; i < ACCESS.length; i++) if (segD(x, z, ACCESS[i - 1][0], ACCESS[i - 1][1], ACCESS[i][0], ACCESS[i][1]) <= 4.9) return true; return false; };
   const surf0 = V.surfaceAt;
   const surfaceAt = (x, z) => {
     if (x >= G.x0 && x < G.x1 && z >= G.z0 && z < G.z1) return SURF[(((z - G.z0) / SC) | 0) * SNX + (((x - G.x0) / SC) | 0)];
@@ -701,8 +701,8 @@ function buildOffroad(V, opts = {}) {
   board(250, 102.5, -1, 0, U.jump, 2.4, 1.1, 1.2); board(398, 163.5, 0, -1, U.mud, 2.4, 1.1, 1.2); board(316, 157.5, 0, -1, U.rock, 2.4, 1.1, 1.2);
   board(22, 133.5, 0, -1, U.sand, 2.4, 1.1, 1.2);
   // 村子裡往越野車場的指示牌（大路 E1 路口兩邊、農路分岔的地方）
-  board(-103.5, 6.9, 1, 0, U.v2, 2.8, 0.95, 1.6);
-  board(-121, 6.9, -1, 0, U.v1, 2.8, 0.95, 1.6);
+  board(-103.5, 9.15, 1, 0, U.v2, 2.8, 0.95, 1.6); // 第 9 批（路變大）：大路寬 13.5，牌子往外 2.25
+  board(-121, 9.15, -1, 0, U.v1, 2.8, 0.95, 1.6);
   board(-106.3, 53, 0, -1, U.v3, 2.4, 0.95, 1.4);
   // 樹、石頭（固定種子；避開賽道、小路、房子、跳台、泥巴池、攀岩區、圍籬）
   const GREENS = ['#4f8a3c', '#5e9a44', '#3f7a35', '#6aa84f', '#77ad4c'].map(C), TRUNK = C('#6b5140');
@@ -767,7 +767,7 @@ function buildOffroad(V, opts = {}) {
     for (let i = 0; i < n; i++) {
       const p = ACCESS[i], a = ACCESS[Math.max(0, i - 1)], b = ACCESS[Math.min(n - 1, i + 1)];
       let tx = b[0] - a[0], tz = b[1] - a[1]; const tl = Math.hypot(tx, tz); tx /= tl; tz /= tl;
-      const lx = tz, lz = -tx, hw = 3, y = terrainAt(p[0], p[1]) ? Math.max(0.03, heightAt(p[0], p[1]) + 0.04) : 0.03;
+      const lx = tz, lz = -tx, hw = 4.5, y = terrainAt(p[0], p[1]) ? Math.max(0.03, heightAt(p[0], p[1]) + 0.04) : 0.03;
       if (i > 0) v += Math.hypot(p[0] - ACCESS[i - 1][0], p[1] - ACCESS[i - 1][1]);
       L.push([p[0] + lx * hw, y, p[1] + lz * hw]); Rr.push([p[0] - lx * hw, y, p[1] - lz * hw]); M.push([p[0], y, p[1]]); Vv.push(v / 10);
     }
@@ -805,7 +805,7 @@ function buildOffroad(V, opts = {}) {
   };
   Object.assign(V.places, places);
   for (const c of colliders) V.colliders.push(c);
-  V.roads.push({ pts: ACCESS.map((p) => p.slice()), w: 6, kind: 'farm', noNpc: true }); // noNpc：路上的車、居民（npc.js）不走這條（盡頭是越野車場大門：車開到底會停在門口擋路）
+  V.roads.push({ pts: ACCESS.map((p) => p.slice()), w: 9, kind: 'farm', noNpc: true }); // 第 9 批（路變大）：6 → 9 // noNpc：路上的車、居民（npc.js）不走這條（盡頭是越野車場大門：車開到底會停在門口擋路）
   const prevDraw = V.mapDraw;
   V.mapDraw = (gg) => {
     if (prevDraw) prevDraw(gg);

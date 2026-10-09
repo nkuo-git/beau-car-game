@@ -86,6 +86,7 @@ const C = (hex) => { let v = CC.get(hex); if (!v) { const c = new THREE.Color(he
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
 const pick = (r, list) => list[(r() * list.length) | 0];
+const HOUSE_MAX_FL = 2; // 第 10 批（Nick 2026-10-09「所有房子變矮」）：透天厝最多 2 層
 // 本地座標框：原點 (x, y, z)、繞 y 轉 ry（跟 three.js rotation.y 一樣：本地 +x → (cos, 0, −sin)）
 function frame(x, y, z, ry = 0, s = 1) {
   const c = Math.cos(ry) * s, n = Math.sin(ry) * s;
@@ -765,29 +766,31 @@ const NODES = {
   HO: [HW.x + HW.mid, 0], HI: [HW.x - HW.mid, 0], // 快速道路：往北（外圈）、往南（內圈）那一邊的路口
   G: [-300, -72], GD: [-300, -92.5], GAR: [-300, -97.5], SHB: [-160, -35], DEB: [-484, -17],
 };
+// 第 9 批（b9-wide）：Nick 2026-10-09「路變大」→ 村子的路都寬 1.5 倍（中線不動）：大路 9 → 13.5、村子的路 8 → 12、7 → 10.5、水泥農路 6 → 9；
+//   車道（drive：改車廠、車店、車庫、警察局、槍店的進出口）、快速道路（一線 3.75 公尺本來就夠寬）、賽道不變
 const ROADS = [
   { a: 'T', b: 'E0', kind: 'strip', w: 12, pts: [[-7, 0], [-60, 0]] }, // 賽道（buildTrack 畫的，這裡只算路線）
-  { a: 'E0', b: 'E1', kind: 'main', w: [12, 12, 9, 9], pts: [[-60, 0], [-88, 0], [-100, 0], [-112, 0]] }, // 賽道入口：12 公尺寬，慢慢縮成 9
-  { a: 'E1', b: 'SHX', kind: 'main', w: 9, pts: [[-112, 0], [-136, 0]] },
-  { a: 'SHX', b: 'SH', kind: 'main', w: 9, pts: [[-136, 0], [-160, 0]] },
-  { a: 'SH', b: 'C', kind: 'main', w: 9, pts: [[-160, 0], [-250, 0]] },
-  { a: 'C', b: 'X', kind: 'street', w: 8, pts: [[-250, 0], [-300, 0]] },
-  { a: 'X', b: 'W', kind: 'street', w: 8, pts: [[-300, 0], [-345, 0]] },
-  { a: 'W', b: 'DEN', kind: 'main', w: 9, pts: [[-345, 0], [-410, 0]] }, // 出村子往西：車店、快速道路
-  { a: 'DEN', b: 'DEX', kind: 'main', w: 9, pts: [[-410, 0], [-497, 0]] },
-  { a: 'DEX', b: 'HJ', kind: 'main', w: 9, pts: [[-497, 0], [-518, 0]] },
+  { a: 'E0', b: 'E1', kind: 'main', w: [12, 12.4, 13.5, 13.5], pts: [[-60, 0], [-88, 0], [-100, 0], [-112, 0]] }, // 賽道入口：12 公尺寬（賽道），慢慢變成 13.5（Nick 2026-10-09「路變大」：大路 9 → 13.5）
+  { a: 'E1', b: 'SHX', kind: 'main', w: 13.5, pts: [[-112, 0], [-136, 0]] },
+  { a: 'SHX', b: 'SH', kind: 'main', w: 13.5, pts: [[-136, 0], [-160, 0]] },
+  { a: 'SH', b: 'C', kind: 'main', w: 13.5, pts: [[-160, 0], [-250, 0]] },
+  { a: 'C', b: 'X', kind: 'street', w: 12, pts: [[-250, 0], [-300, 0]] },
+  { a: 'X', b: 'W', kind: 'street', w: 12, pts: [[-300, 0], [-345, 0]] },
+  { a: 'W', b: 'DEN', kind: 'main', w: 13.5, pts: [[-345, 0], [-410, 0]] }, // 出村子往西：車店、快速道路
+  { a: 'DEN', b: 'DEX', kind: 'main', w: 13.5, pts: [[-410, 0], [-497, 0]] },
+  { a: 'DEX', b: 'HJ', kind: 'main', w: 13.5, pts: [[-497, 0], [-518, 0]] },
   { a: 'HJ', b: 'HO', kind: 'link', w: 8, pts: [[-518, 0], [HW.x + HW.mid, 0]] }, // 路口右轉上外圈（往北）、左轉過中間護欄開口上內圈（往南）
   { a: 'HJ', b: 'HI', kind: 'link', w: 8, pts: [[-518, 0], [HW.x - HW.mid, 0]] },
-  { a: 'W', b: 'G', kind: 'street', w: 7, pts: [[-345, 0], [-345, -72], [-300, -72]], round: 10 },
-  { a: 'G', b: 'C', kind: 'street', w: 7, pts: [[-300, -72], [-250, -72], [-250, 0]], round: 10 },
-  { a: 'G', b: 'X', kind: 'street', w: 7, pts: [[-300, -72], [-300, 0]] }, // 車庫門口直直往南到大路
+  { a: 'W', b: 'G', kind: 'street', w: 10.5, pts: [[-345, 0], [-345, -72], [-300, -72]], round: 10 },
+  { a: 'G', b: 'C', kind: 'street', w: 10.5, pts: [[-300, -72], [-250, -72], [-250, 0]], round: 10 },
+  { a: 'G', b: 'X', kind: 'street', w: 10.5, pts: [[-300, -72], [-300, 0]] }, // 車庫門口直直往南到大路
   { a: 'G', b: 'GD', kind: 'drive', w: 6, pts: [[-300, -72], [-300, -92.5]] }, // 車庫前的水泥地 → 鐵捲門
   { a: 'GD', b: 'GAR', kind: 'drive', w: 6, pts: [[-300, -92.5], [-300, -97.5]] }, // 鐵捲門 → 車庫裡的停車位
   { a: 'SH', b: 'SHB', kind: 'drive', w: 7, oneway: true, pts: [[-160, 0], [-160, -35]] }, // 改車廠：前門開進改車區
   { a: 'SHB', b: 'SHX', kind: 'drive', w: 7, oneway: true, pts: [[-160, -35], [-160, -57], [-136, -57], [-136, 0]], round: 9 }, // 後門出去、後院、東邊的小路回大路
   { a: 'DEN', b: 'DEB', kind: 'drive', w: 7, oneway: true, pts: [[-410, 0], [-410, -17], [-484, -17]], round: 8 }, // 車店：東邊進來、經過展示間前面、開進車棚（買車區）
   { a: 'DEB', b: 'DEX', kind: 'drive', w: 7, oneway: true, pts: [[-484, -17], [-497, -17], [-497, 0]], round: 7 }, // 西邊出去
-  { a: 'C', b: 'E1', kind: 'farm', w: 6, pts: [[-250, 0], [-250, 58], [-112, 58], [-112, 0]], round: 13 },
+  { a: 'C', b: 'E1', kind: 'farm', w: 9, pts: [[-250, 0], [-250, 58], [-112, 58], [-112, 0]], round: 13 },
 ];
 const DEST_NODE = { garage: 'GAR', shop: 'SHB', track: 'T', dealer: 'DEB', highway: 'HO' };
 // ==== 第 3 批：警察局（大路西段南邊：W 路口往南開進前院，變成十字路口）、槍店（改車廠對面：SH 路口往南斜斜開進店門口）====
@@ -820,6 +823,7 @@ function stripColliders() {
   out.push({ t: 'circle', x: 3.2, z: 0, r: 0.35, h: 2.6 });
   for (const s of [1, -1]) out.push({ t: 'box', x: 400, z: s * 6.9, hx: 0.23, hz: 0.23, rot: 0, h: 6.4 });
   out.push({ t: 'box', x: 761, z: 0, hx: 1, hz: 7, rot: 0, h: 1 }); // 柏油東邊的盡頭（看不到的牆，不要開出去）
+  for (const c of out) c.noCrush = true; // 第 9 批（路變大）：賽道的東西越野車也輾不到（照舊）
   return out;
 }
 
@@ -1153,6 +1157,7 @@ function buildVillage(opts = {}) {
     const c = T.p(-0.05, 0, 0); addBox(c[0], c[2], 0.72, 0.24, ry, 1);
   };
   const house = (x, z, ry, w, D, fl, rnd, o = {}) => {
+    const fl0 = o.fl0 ?? fl; // 第 10 批（房子變矮）：本來要蓋幾層（亂數照本來的層數用，別的房子才長得跟以前一樣）
     B.at(x, z); const T = frame(x, 0, z, ry), H = fl * FH;
     const cw = pick(rnd, HOUSE), cs = mix(cw, C('#c9c5bd'), 0.55), band = mul(cw, 0.8), roof = C('#a39f97');
     const hl = FAC ? { x, z, ry, w, D, H, fl, pw: 0.18, ph: 0.95, cw, cs, kind: 'house', door: 0, flo: [], awn: null, shop: o.shop ?? null, vsign: o.vsign ?? null } : null; // ==== 第 3 批：外牆給 street.js 畫（磁磚、水漬）；這裡記下每一棟（不動到亂數）====
@@ -1165,7 +1170,8 @@ function buildVillage(opts = {}) {
     box('main', T, stair, cs, { _: U.conc, pz: U.conc }); face('main', T, sx - 0.45, sx + 0.45, H, H + 2.1, -D + 3.92, U.ac2);
     if (rnd() < 0.55) { cyl('main', T, sx, -D + 2.2, H + 2.6, H + 2.8, 0.5, 0.5, 6, C('#7d8288'), null, true); cyl('main', T, sx, -D + 2.2, H + 2.8, H + 4.1, 0.58, 0.58, 10, WHITE, U.tank, false); cyl('main', T, sx, -D + 2.2, H + 4.1, H + 4.4, 0.58, 0, 10, C('#d9dde1'), null, false); }
     else { const bl = C('#2f78c8'); cyl('main', T, sx, -D + 2.2, H + 2.6, H + 3.8, 0.62, 0.62, 10, bl, null, false); cyl('main', T, sx, -D + 2.2, H + 3.8, H + 4.05, 0.62, 0.2, 10, mul(bl, 0.9), null, true); }
-    if (fl >= 3 && rnd() < 0.35) { // 頂樓加蓋（浪板）
+    if (fl < 3 && fl0 >= 3) { if (rnd() < 0.35) pick(rnd, ROOFADD); } // 第 10 批：變矮的房子不加蓋（亂數一樣用掉）
+    else if (fl >= 3 && rnd() < 0.35) { // 頂樓加蓋（浪板）
       const rc = pick(rnd, ROOFADD), z1 = -D * 0.42;
       box('main', T, [-w / 2 + 0.25, H, -D + 4.3, w / 2 - 0.25, H + 2.7, z1], rc, { _: U.corr, py: false });
       B.quad('main', T.p(-w / 2 + 0.05, H + 2.62, z1 + 0.4), T.p(w / 2 - 0.05, H + 2.62, z1 + 0.4), T.p(w / 2 - 0.05, H + 3.2, -D + 4.0), T.p(-w / 2 + 0.05, H + 3.2, -D + 4.0), U.corr, mul(rc, 0.85));
@@ -1197,7 +1203,11 @@ function buildVillage(opts = {}) {
       B.quad('main', T.p(-w / 2, 3.25, 0), T.p(w / 2, 3.25, 0), T.p(w / 2, 2.95, 1.1), T.p(-w / 2, 2.95, 1.1), WD, mul(ac, 0.55));
     }
     const pc = rnd() < 0.3 ? WHITE : cw, parU = pick(rnd, [U.par1, U.par2, U.par3]), ups = []; // ups：樓上每層的正面（b 陽台＋落地門、w 鐵窗）
-    for (let f = 1; f < fl; f++) { // 樓上：陽台或鐵窗
+    for (let f = 1; f < fl0; f++) { // 樓上：陽台或鐵窗
+      if (f >= fl) { // 第 10 批：拿掉的樓層不蓋，亂數照下面一樣用掉
+        if (rnd() < 0.5) { if (rnd() < 0.35) for (let k = 0; k < 4; k++) { rnd(); rnd(); } rnd(); } else { rnd(); rnd(); }
+        continue;
+      }
       const y = f * FH;
       if (rnd() < 0.5) {
         ups.push('b');
@@ -1234,7 +1244,7 @@ function buildVillage(opts = {}) {
       let w = 4.3 + rnd() * 1.7; if (L - t - w < 4) w = L - t;
       if (w > 7) w = 5 + rnd();
       const cx = ax + ux * (t + w / 2), cz = az + uz * (t + w / 2), fl = rnd() < 0.2 ? 2 : rnd() < 0.62 ? 3 : 4;
-      house(cx, cz, ry, w, o.D ?? 12.5, fl, rnd, { shop: o.shops && o.shops[i] != null ? o.shops[i] : null, vsign: o.vsigns && o.vsigns[i] != null ? o.vsigns[i] : null });
+      house(cx, cz, ry, w, o.D ?? 12.5, Math.min(fl, HOUSE_MAX_FL), rnd, { fl0: fl, shop: o.shops && o.shops[i] != null ? o.shops[i] : null, vsign: o.vsigns && o.vsigns[i] != null ? o.vsigns[i] : null });
       t += w; i++;
       if (o.gaps && rnd() < 0.13 && L - t > 12) { const gw = 3 + rnd() * 2.5, gx = ax + ux * (t + gw / 2), gz = az + uz * (t + gw / 2); tree(gx - nx * 3, gz - nz * 3, 0.9 + rnd() * 0.3, rnd); t += gw; }
     }
@@ -1253,22 +1263,23 @@ function buildVillage(opts = {}) {
   };
 
   // ---- 村子中間那塊：四邊都是透天厝；中間一條往北的路（車庫門口直直出來到大路）----
-  row(-268, -5.5, -295.5, -5.5, 0, 1, 101, { shops: [null, 0, null, null, 1], gaps: false }); // 大路西段北側（面向南）：新路東邊
-  row(-304.5, -5.5, -327, -5.5, 0, 1, 112, { shops: [null, 2], gaps: false });              // 新路西邊
-  row(-268, -67, -295.5, -67, 0, -1, 102, { gaps: false });                                 // 北邊的路南側（面向北）
-  row(-304.5, -67, -327, -67, 0, -1, 113, { gaps: false });
-  row(-295, -52, -295, -21, -1, 0, 114, { D: 11, apron: 1.0, vsigns: [null, 2], gaps: false }); // 車庫那條路（x −300）東側（面向西）
-  row(-305, -37, -305, -52, 1, 0, 115, { D: 11, apron: 1.0, gaps: false });                 // 西側（面向東）
-  row(-255, -15, -255, -66, 1, 0, 103, { shops: [2, null, null, null, 0], vsigns: [null, 3, null, 5], gaps: false }); // 廟口街西側（面向東）；路口那塊空著（樹）
-  row(-340, -66, -340, -6, -1, 0, 104, { gaps: false });                                    // 西邊的路東側（面向西）
-  tree(-263, -9.5, 1.05, rng(31)); tree(-244, 12.5, 1.1, rng(32)); // 廟口路口的兩個角
+  // 第 9 批（路變大）：每一排往後退（路寬多出來的一半：大路 2.25、12 公尺的路 2、10.5 公尺的路 1.75 公尺），騎樓前的水泥地一樣寬
+  row(-269.75, -7.5, -293.75, -7.5, 0, 1, 101, { shops: [null, 0, null, null, 1], gaps: false }); // 大路西段北側（面向南）：新路東邊
+  row(-306.25, -7.5, -325.25, -7.5, 0, 1, 112, { shops: [null, 2], gaps: false });              // 新路西邊
+  row(-269.75, -65.25, -293.75, -65.25, 0, -1, 102, { gaps: false });                                 // 北邊的路南側（面向北）
+  row(-306.25, -65.25, -325.25, -65.25, 0, -1, 113, { gaps: false });
+  row(-293.25, -52, -293.25, -21, -1, 0, 114, { D: 11, apron: 1.0, vsigns: [null, 2], gaps: false }); // 車庫那條路（x −300）東側（面向西）
+  row(-306.75, -37, -306.75, -52, 1, 0, 115, { D: 11, apron: 1.0, gaps: false });                 // 西側（面向東）
+  row(-256.75, -15, -256.75, -65, 1, 0, 103, { shops: [2, null, null, null, 0], vsigns: [null, 3, null, 5], gaps: false }); // 廟口街西側（面向東）；路口那塊空著（樹）
+  row(-338.25, -65, -338.25, -8, -1, 0, 104, { gaps: false });                                    // 西邊的路東側（面向西）
+  tree(-264.5, -11, 1.05, rng(31)); tree(-242.5, 14.5, 1.1, rng(32)); // 廟口路口的兩個角
   // 外圍
-  row(-245, -22, -245, -66, -1, 0, 105, { shops: [null, null, 1], vsigns: [4, null, null, 7], gaps: true }); // 廟口街東側（面向西）
-  row(-340, -77, -316, -77, 0, 1, 106, { gaps: false });            // 車庫西邊（面向南）
-  row(-284, -77, -256, -77, 0, 1, 107, { gaps: false });            // 車庫東邊
-  row(-302, 5.5, -340, 5.5, 0, -1, 108, { vsigns: [6, null, null, 1], gaps: true }); // 大路西段南側（面向北）
-  row(-220, -6, -184, -6, 0, 1, 109, { shops: [null, null, 0, null, null, 1], vsigns: [3], gaps: true }); // 大路北側（超商到改車廠）
-  row(-237, 6, -196, 6, 0, -1, 110, { shops: [null, 2, null, null], vsigns: [null, null, null, 5, null, 7], gaps: true }); // 大路南側
+  row(-243.25, -22, -243.25, -66, -1, 0, 105, { shops: [null, null, 1], vsigns: [4, null, null, 7], gaps: true }); // 廟口街東側（面向西）
+  // 第 10 批：車庫西邊（面向南）那排透天厝拿掉了：越野車車庫搬到這裡（orbay.js PLACE）
+  row(-284, -78.75, -256, -78.75, 0, 1, 107, { gaps: false });            // 車庫東邊
+  row(-302, 7.5, -340, 7.5, 0, -1, 108, { vsigns: [6, null, null, 1], gaps: true }); // 大路西段南側（面向北）
+  row(-220, -8.25, -184, -8.25, 0, 1, 109, { shops: [null, null, 0, null, null, 1], vsigns: [3], gaps: true }); // 大路北側（超商到改車廠）
+  row(-237, 8.25, -196, 8.25, 0, -1, 110, { shops: [null, 2, null, null], vsigns: [null, null, null, 5, null, 7], gaps: true }); // 大路南側
   { // 中間的院子：菜園、幾棵樹、一小塊田
     const rnd = rng(111);
     for (const [x, z] of [[-282, -44], [-276, -28], [-272, -48]]) tree(x, z, 1.1 + rnd() * 0.3, rnd, false);
@@ -1283,7 +1294,7 @@ function buildVillage(opts = {}) {
     const T = frame(LOT.x, 0, LOT.z, LOT.heading), T0 = frame(0, 0, 0); B.at(-300, -84);
     addPave(-300, -83.85, 14, 8.35, 0, C('#d2d2cd'));            // 前庭 x −314…−286、z −92.2…−75.5
     addPave(-300, -83.85, 7, 8.35, 0, C('#bcbdb9'), 0.024);       // 門前的車道（apron）深一點
-    addPave(-300, -101.35, 13, 9.15, 0, null, 0, false);          // 車庫裡面（模組的地板）：算水泥地，不畫
+    addPave(-300, -101.35, 16, 9.15, 0, null, 0, false);          // 車庫裡面（模組的地板）：算水泥地，不畫（第 11 批：車庫變寬，本來 13）
     for (const x of [-306.8, -293.2]) { B.at(x, -84); box('main', T0, [x - 0.12, 0.024, -91.8, x + 0.12, 0.03, -76], C('#8e8f8c')); } // 車道兩邊的排水溝蓋
     const rnd = rng(919);
     for (const s of [1, -1]) { // 兩邊花台（低低的，不擋視線）
@@ -1293,7 +1304,7 @@ function buildVillage(opts = {}) {
       for (let k = 0; k < 5; k++) shrub((x0 + x1) / 2 + (rnd() - 0.5) * 1.6, -85.4 + k * 1.15, 1.1, rnd);
       const t = (x0 + x1) / 2; tree(t, -83.2, 0.8, rnd, false); addBox(t, -83, (x1 - x0) / 2, 3, 0, 0.62);
     }
-    for (const x of [-308.2, -291.8]) { B.at(x, -77.2); const t = frame(x, 0, -77.2); cyl('main', t, 0, 0, 0, 0.8, 0.1, 0.1, 6, C('#2a2c30'), null, false); cyl('glow', t, 0, 0, 0.8, 0.95, 0.1, 0.1, 6, [1.5, 1.5, 1.5], dotUV(GU.warm), true); addCircle(x, -77.2, 0.12, 1); } // 車道口的矮燈柱
+    for (const x of [-308.2, -291.8]) { B.at(x, -78.6); const t = frame(x, 0, -78.6); cyl('main', t, 0, 0, 0, 0.8, 0.1, 0.1, 6, C('#2a2c30'), null, false); cyl('glow', t, 0, 0, 0.8, 0.95, 0.1, 0.1, 6, [1.5, 1.5, 1.5], dotUV(GU.warm), true); addCircle(x, -78.6, 0.12, 1); } // 車道口的矮燈柱
     if (opts.garagePlaceholder) { // 測試用的假車庫殼：牆、6 公尺寬 3.8 公尺高的門洞、屋頂；碰撞跟真的模組差不多
       const wc = C('#f4f3ef'), trim = C('#9a9b9d'); B.at(-300, -101);
       floor('main', T, -12.7, -12.7, 5, 12.7, 0.03, dotUV(U.conc), C('#f7f6f2'));
@@ -1304,7 +1315,7 @@ function buildVillage(opts = {}) {
       box('main', T, [-13.1, 5.5, -13.1, 5.35, 5.8, 13.1], C('#dcdcd6'), { _: U.conc, ny: U.conc });
       for (const [x, z] of [[-8, -8], [-8, 8], [0, -8], [0, 8]]) ceil('glow', T, x - 1, z - 0.2, x + 1, z + 0.2, 5.48, dotUV(GU.cool), [1.2, 1.2, 1.2]);
     }
-    buildings.push({ kind: 'garage', name: '你的車庫', x: -300, z: -101.35, hx: 9.15, hz: 13, rot: LOT.heading, h: 6, door: { x: -300, z: -91.6, ry: 0 } }); // 車庫模組的地（本地 x −13…5.3、z ±13）：以後走進去、小地圖用
+    buildings.push({ kind: 'garage', name: '你的車庫', x: -300, z: -101.35, hx: 9.15, hz: 16, rot: LOT.heading, h: 6, door: { x: -300, z: -91.6, ry: 0 } }); // 車庫模組的地（本地 x −13…5.3、z ±16；第 11 批：本來 ±13）：以後走進去、小地圖用
   }
 
   // ---- 阿輝改車廠：鐵皮工廠。前門開進去（中間的改車區），後門出去，從後院、東邊的小路回大路；裡面舉升機、工具牆、輪胎架、零件架、辦公室、日光燈 ----
@@ -1384,7 +1395,7 @@ function buildVillage(opts = {}) {
     const tyres = (x, z, n) => { const t = frame(x, 0, z); for (let k = 0; k < n; k++) cyl('main', t, 0, 0, k * 0.25, k * 0.25 + 0.23, 0.33, 0.33, 9, C('#1b1c1f'), null, true); addCircle(x, z, 0.36, n * 0.25); };
     for (const [x, z, n] of [[-176, -22.5, 5], [-176.8, -21.6, 4], [-175.2, -21.4, 6], [-144, -22.6, 5], [-143.2, -21.7, 3], [-179.5, -24.5, 4]]) { B.at(x, z); tyres(x, z, n); }
     for (const [x, z, col] of [[-177.2, -12, '#d0342c'], [-176.4, -11.4, '#2f6fd6'], [-177.4, -10.6, '#f2c230']]) { B.at(x, z); const t = frame(x, 0, z); cyl('main', t, 0, 0, 0, 0.9, 0.3, 0.3, 10, C(col), null, true); cyl('main', t, 0, 0, 0.3, 0.36, 0.305, 0.305, 10, WHITE, null, false); addCircle(x, z, 0.32, 0.9); }
-    ['flag0', 'flag1', 'flag2'].forEach((f, i) => { const x = -153 + i * 5.5, z = -5.5, t = frame(x, 0, z); B.at(x, z); cyl('main', t, 0, 0, 0, 3.8, 0.04, 0.04, 5, C('#c9ccd0'), null, true); vquad('sign', t, [0.05, 0], [0.75, 0], 0.9, 3.7, SU[f], WHITE, true); addCircle(x, z, 0.1, 3.8); });
+    ['flag0', 'flag1', 'flag2'].forEach((f, i) => { const x = -153 + i * 5.5, z = -7.75, t = frame(x, 0, z); B.at(x, z); cyl('main', t, 0, 0, 0, 3.8, 0.04, 0.04, 5, C('#c9ccd0'), null, true); vquad('sign', t, [0.05, 0], [0.75, 0], 0.9, 3.7, SU[f], WHITE, true); addCircle(x, z, 0.1, 3.8); });
     flat('decal', -166, -9, 0.6, -0.8, 5, 5, 0.052, DU.skid); flat('decal', -150, -21, 0, -1, 4, 4, 0.052, DU.oil);
     for (let i = 0; i < 3; i++) flat('decal', -150 + i * 3.5, -12 + rnd(), 0, 1, 3, 3, 0.051, DU.oil);
     flat('decal', -160, -19, 0, -1, 4.6, 1.3, 0.05, DU.arrU); flat('decal', -136, -16, 0, 1, 4.6, 1.3, 0.05, DU.arrU); // 前門進去、東邊小路出來（地上的箭頭）
@@ -1453,7 +1464,7 @@ function buildVillage(opts = {}) {
 
   // ---- 村口超商 ----
   {
-    const T = frame(-231.5, 0, -6, 0); B.at(-231.5, -6);
+    const T = frame(-231.5, 0, -8.25, 0); B.at(-231.5, -8.25); // 第 9 批：大路變寬，超商往後退 2.25 公尺
     box('main', T, [-9, 0, -13, 9, 4.2, 0], C('#f4f4f2'), { _: U.conc });
     face('glow', T, -8.4, 8.4, 0, 3.0, 0.03, GU.store, [1.05, 1.05, 1.05]);
     face('main', T, -9, 9, 3.05, 3.6, 0.03, U.band);
@@ -1463,7 +1474,7 @@ function buildVillage(opts = {}) {
     box('main', T, [5.2, 0, 0.6, 7.6, 0.45, 1.1], C('#8a6a4a')); const bc = T.p(6.4, 0, 0.85); addBox(bc[0], bc[2], 1.2, 0.25, 0, 0.5); // 長椅
     const rnd = rng(414); scooter(...T.p(3.6, 0, 1.1).filter((_, i) => i !== 1), 0, rnd); scooter(...T.p(2.5, 0, 1.2).filter((_, i) => i !== 1), 0.1, rnd);
     for (const [x, cl] of [[-3.4, '#1e7b45'], [-2.7, '#c8281e']]) { const p = T.p(x, 0, 1.1); B.at(p[0], p[2]); const t = frame(p[0], 0, p[2]); box('main', t, [-0.28, 0, -0.25, 0.28, 1.05, 0.25], C(cl)); cyl('main', t, 0, 0, 1.05, 1.2, 0.3, 0.2, 8, C(cl), null, true); addCircle(p[0], p[2], 0.32, 1.2); } // 郵筒（綠、紅）
-    const c = T.p(0, 0, -6.5); addBox(c[0], c[2], 9, 6.5, 0, 5); buildings.push({ kind: 'store', name: '村口超商', x: c[0], z: c[2], hx: 9, hz: 6.5, rot: 0, h: 5.2, door: { x: -231.5, z: -5.4, ry: 0 } });
+    const c = T.p(0, 0, -6.5); addBox(c[0], c[2], 9, 6.5, 0, 5); buildings.push({ kind: 'store', name: '村口超商', x: c[0], z: c[2], hx: 9, hz: 6.5, rot: 0, h: 5.2, door: { x: -231.5, z: -7.65, ry: 0 } });
   }
 
   // ---- 三合院（農家，紅磚紅瓦）----
@@ -1548,14 +1559,16 @@ function buildVillage(opts = {}) {
   }
 
   // ---- 電線桿（每條路一排）、路口反光鏡 ----
-  poleLine([[-235, 5.2, 0, -1], [-212, 5.2, 0, -1], [-184, 5.2, 0, -1], [-156, 5.4, 0, -1], [-128, 5.6, 0, -1], [-100, 7.5, 0, -1], [-78, 7.5, 0, -1]]);
-  poleLine([[-262, -4.8, 0, 1], [-290, -4.8, 0, 1], [-318, -4.8, 0, 1], [-338, -4.8, 0, 1]]);
-  poleLine([[-245.8, -64, -1, 0], [-245.8, -44, -1, 0], [-245.8, -24, -1, 0]]);
-  poleLine([[-338, -76.4, 0, 1], [-318, -76.4, 0, 1], [-280, -76.4, 0, 1], [-258, -76.4, 0, 1]]);
-  poleLine([[-349.5, -52, 1, 0], [-349.5, -26, 1, 0], [-349.5, -4.5, 1, 0]]);
-  poleLine([[-254, 22, 1, 0], [-254, 46, 1, 0], [-236, 62, 0, -1], [-208, 62, 0, -1], [-180, 62, 0, -1], [-152, 62, 0, -1], [-124, 62, 0, -1], [-108, 44, -1, 0], [-108, 20, -1, 0]]);
-  poleLine([[-358, 5.3, 0, -1], [-386, 5.3, 0, -1], [-414, 5.3, 0, -1], [-442, 5.3, 0, -1], [-470, 5.3, 0, -1], [-500, 5.3, 0, -1]]); // 往快速道路那段（南側）
-  mirrorPole(-243.6, -5.5, -250, 0); mirrorPole(-254.5, -76.2, -252, -70); mirrorPole(-341, -76, -343, -70); mirrorPole(-288.6, -76.3, -300, -72); mirrorPole(-295.6, -5.1, -300, 0);
+  // 第 9 批（路變大）：電線桿跟著路邊往外移（大路 2.25、12 公尺的路 2、10.5 公尺的路 1.75、農路 1.5 公尺）
+  poleLine([[-235, 7.45, 0, -1], [-212, 7.45, 0, -1], [-184, 7.45, 0, -1], [-156, 7.65, 0, -1], [-128, 7.85, 0, -1], [-100, 8.2, 0, -1], [-78, 8.2, 0, -1]]);
+  poleLine([[-262, -6.8, 0, 1], [-290, -6.8, 0, 1], [-318, -6.8, 0, 1], [-336.5, -6.8, 0, 1]]);
+  poleLine([[-244.05, -62, -1, 0], [-244.05, -44, -1, 0], [-244.05, -24, -1, 0]]);
+  // 第 10 批：越野車車庫的門前（x −338.5…−329.5）不要有電線桿：拿掉 x −336.5 那根，反光鏡往西挪到 −340.6
+  poleLine([[-318, -78.15, 0, 1], [-280, -78.15, 0, 1], [-260, -78.15, 0, 1]]);
+  poleLine([[-351.25, -52, 1, 0], [-351.25, -26, 1, 0], [-351.25, -8.2, 1, 0]]);
+  poleLine([[-255.5, 22, 1, 0], [-255.5, 46, 1, 0], [-236, 63.5, 0, -1], [-208, 63.5, 0, -1], [-180, 63.5, 0, -1], [-152, 63.5, 0, -1], [-124, 63.5, 0, -1], [-106.5, 44, -1, 0], [-106.5, 20, -1, 0]]);
+  poleLine([[-358, 7.55, 0, -1], [-386, 7.55, 0, -1], [-414, 7.55, 0, -1], [-442, 7.55, 0, -1], [-470, 7.55, 0, -1], [-500, 7.55, 0, -1]]); // 往快速道路那段（南側）
+  mirrorPole(-241.85, -7.75, -250, 0); mirrorPole(-256.25, -77.95, -252, -70); mirrorPole(-340.6, -77.75, -343, -70); mirrorPole(-288.6, -78.05, -300, -72); mirrorPole(-293.85, -7.1, -300, 0);
 
   // ---- 地上的字：路口前的「慢」、廟口的斑馬線 ----
   const approach = (node, r) => { // 從路 r 開向 node：最後一段的方向、在 node 前 d 公尺的點
@@ -1568,7 +1581,7 @@ function buildVillage(opts = {}) {
     if ((deg[k] || 0) < 3 || NOSLOW.has(k)) continue;
     for (const e of adjIn[k] || []) {
       const r = e.r; if (r.kind === 'strip' || r.kind === 'drive' || r.kind === 'link' || r.len < 30) continue;
-      const at = approach(k, r), p = at(17), hw = (Array.isArray(r.w) ? 9 : r.w) / 2;
+      const at = approach(k, r), p = at(17), hw = (Array.isArray(r.w) ? 13.5 : r.w) / 2;
       flat('decal', p.x - p.dz * hw * 0.5, p.z + p.dx * hw * 0.5, p.dx, p.dz, 3.4, 1.6, 0.05, DU.slow);
       if (k === 'C') { const q = at(8.4); flat('decal', q.x, q.z, p.dx, p.dz, 3, hw * 2 - 0.6, 0.05, DU.zebra); }
     }
@@ -1606,26 +1619,26 @@ function buildVillage(opts = {}) {
         rows.push(dest + '_' + dirOf(fin.dx, fin.dz, hx / hl, hz / hl));
       }
       if (!rows.length) continue;
-      const off = (Array.isArray(rIn.w) ? 9 : rIn.w) / 2 + 0.6;
+      const off = (Array.isArray(rIn.w) ? 13.5 : rIn.w) / 2 + 0.6;
       if (rIn.kind === 'drive') guide(own[0], own[1], p.dx, p.dz, rows); else guide(p.x - p.dz * off, p.z + p.dx * off, p.dx, p.dz, rows);
     }
   }
   { // 慢、限速牌（村子入口）
-    for (const [x, z, ry, u] of [[-190, 5.6, -Math.PI / 2, 'limit'], [-254.2, -26, Math.PI, 'slow']]) { const T = frame(x, 0, z, ry); B.at(x, z); cyl('main', T, 0, -0.06, 0, 2.6, 0.045, 0.045, 5, C('#9aa0a6'), null, true); signPoly(T, SU[u], 96, 96, u === 'limit' ? circ(48, 48, 44, 16) : [[4, 6], [92, 6], [48, 92]], 0.9 / 96, 0, 2.62, 0.02); addCircle(x, z, 0.08, 3); }
+    for (const [x, z, ry, u] of [[-190, 7.85, -Math.PI / 2, 'limit'], [-255.95, -26, Math.PI, 'slow']]) { const T = frame(x, 0, z, ry); B.at(x, z); cyl('main', T, 0, -0.06, 0, 2.6, 0.045, 0.045, 5, C('#9aa0a6'), null, true); signPoly(T, SU[u], 96, 96, u === 'limit' ? circ(48, 48, 44, 16) : [[4, 6], [92, 6], [48, 92]], 0.9 / 96, 0, 2.62, 0.02); addCircle(x, z, 0.08, 3); }
   }
 
   // ---- 往快速道路那段：南邊一排透天厝（小聚落）、路口前的「停」、左右轉的箭頭、快速道路的入口牌 ----
-  row(-418, 7.5, -466, 7.5, 0, -1, 120, { shops: [null, 1, null, null, null, 0], vsigns: [7, null, 4, null, 6], gaps: true });
+  row(-418, 9.75, -466, 9.75, 0, -1, 120, { shops: [null, 1, null, null, null, 0], vsigns: [7, null, 4, null, 6], gaps: true });
   {
     const oct = Array.from({ length: 8 }, (_, i) => { const a = ((i + 0.5) / 8) * TAU; return [48 + Math.cos(a) * 46, 48 + Math.sin(a) * 46]; });
-    const T = frame(-513.6, 0, -6.2, Math.PI / 2); B.at(-513.6, -6.2); cyl('main', T, 0, -0.06, 0, 2.5, 0.05, 0.05, 5, C('#9aa0a6'), null, true); signPoly(T, S2.stop, 96, 96, oct, 0.8 / 96, 0, 2.55, 0.02, C('#9aa0a6'), 'sign2'); addCircle(-513.6, -6.2, 0.08, 3);
-    flat('decal', -516.1, -2.25, -1, 0, 0.45, 4.2, 0.05, DU.start); // 停止線
-    flat('decal', -508, -2.25, -1, 0, 5, 1.7, 0.05, DU.arrLR); flat('decal', -480, -2.25, -1, 0, 5, 1.7, 0.05, DU.arrU);
-    const G = frame(-485, 0, 6.6, Math.PI / 2); B.at(-485, 0); // 懸臂的大牌子：路南邊一根柱子（本地 +x 朝北），牌子在往西那一線上面、對著開過來的車
+    const T = frame(-513.6, 0, -8.45, Math.PI / 2); B.at(-513.6, -8.45); cyl('main', T, 0, -0.06, 0, 2.5, 0.05, 0.05, 5, C('#9aa0a6'), null, true); signPoly(T, S2.stop, 96, 96, oct, 0.8 / 96, 0, 2.55, 0.02, C('#9aa0a6'), 'sign2'); addCircle(-513.6, -8.45, 0.08, 3);
+    flat('decal', -516.1, -3.375, -1, 0, 0.45, 6.3, 0.05, DU.start); // 停止線（第 9 批：車道 6.75 公尺寬，中間 z −3.375）
+    flat('decal', -508, -3.375, -1, 0, 5, 1.7, 0.05, DU.arrLR); flat('decal', -480, -3.375, -1, 0, 5, 1.7, 0.05, DU.arrU);
+    const G = frame(-485, 0, 8.85, Math.PI / 2); B.at(-485, 0); // 第 9 批：柱子往外 2.25、懸臂長 3.4（牌子還是在往西那一線的正上面） // 懸臂的大牌子：路南邊一根柱子（本地 +x 朝北），牌子在往西那一線上面、對著開過來的車
     cyl('main', G, 0, -0.3, 0, 7.9, 0.22, 0.2, 8, C('#8d9197'), null, true);
-    for (const y of [7.35, 6.0]) box('main', G, [-0.2, y, -0.42, 11.2, y + 0.18, -0.2], C('#8d9197'));
-    box('sign2', G, [6.2, 5.2, -0.18, 10.6, 7.3, -0.06], C('#7d8288'), { pz: S2.entry, _: S2W });
-    addCircle(-485, 6.3, 0.25, 8);
+    for (const y of [7.35, 6.0]) box('main', G, [-0.2, y, -0.42, 14.6, y + 0.18, -0.2], C('#8d9197'));
+    box('sign2', G, [10.0, 5.2, -0.18, 14.4, 7.3, -0.06], C('#7d8288'), { pz: S2.entry, _: S2W });
+    addCircle(-485, 8.55, 0.25, 8);
   }
 
   // ---- 阿財車行：玻璃展示間（6 台車在轉盤上，大路看得到）、旁邊的車棚（買車區：開進去停好就打開車店）、後面的庫存車、路邊的立牌、旗子 ----
@@ -1673,12 +1686,12 @@ function buildVillage(opts = {}) {
     addPave(-484, -17, 8, 8, 0, C('#5d5f63'), 0.03); flat('decal', -484, -17, -1, 0, 10, 7, 0.05, DU.buyzone);
     // 前庭（x −502…−400、z −26…−4.5）、東邊入口 x −414…−406、西邊出口 x −501…−493；中間一排矮花台＋旗子
     addPave(-451, -15.25, 51, 10.75, 0, C('#dedfdb'));
-    for (const [x0, x1] of [[-493, -414], [-406, -401]]) { B.at((x0 + x1) / 2, -5.3); box('main', frame(0, 0, 0), [x0, 0, -6, x1, 0.45, -4.7], C('#e8e7e2'), { _: dotUV(U.conc) }); box('main', frame(0, 0, 0), [x0 + 0.15, 0.45, -5.85, x1 - 0.15, 0.5, -4.85], C('#5d4a38')); for (let x = x0 + 1.2; x < x1 - 0.5; x += 2.2) shrub(x, -5.35, 0.75, rnd); addBox((x0 + x1) / 2, -5.35, (x1 - x0) / 2, 0.65, 0, 0.5); }
-    for (let i = 0; i < 8; i++) { const x = -487 + i * 9.5, t = frame(x, 0, -5.35, 0); B.at(x, -5.35); cyl('main', t, 0, 0, 0.45, 4.6, 0.035, 0.035, 5, C('#dfe2e6'), null, true); vquad('sign2', t, [0.05, 0], [0.62, 0], 1.9, 4.5, S2['fl' + (i % 3)], WHITE, true); }
+    for (const [x0, x1] of [[-493, -414], [-406, -401]]) { B.at((x0 + x1) / 2, -7.55); box('main', frame(0, 0, 0), [x0, 0, -8.25, x1, 0.45, -6.95], C('#e8e7e2'), { _: dotUV(U.conc) }); box('main', frame(0, 0, 0), [x0 + 0.15, 0.45, -8.1, x1 - 0.15, 0.5, -7.1], C('#5d4a38')); for (let x = x0 + 1.2; x < x1 - 0.5; x += 2.2) shrub(x, -7.6, 0.75, rnd); addBox((x0 + x1) / 2, -7.6, (x1 - x0) / 2, 0.65, 0, 0.5); }
+    for (let i = 0; i < 8; i++) { const x = -487 + i * 9.5, t = frame(x, 0, -7.6, 0); B.at(x, -7.6); cyl('main', t, 0, 0, 0.45, 4.6, 0.035, 0.035, 5, C('#dfe2e6'), null, true); vquad('sign2', t, [0.05, 0], [0.62, 0], 1.9, 4.5, S2['fl' + (i % 3)], WHITE, true); }
     for (const [x, z, a] of [[-410, -9, [0, -1]], [-440, -17, [-1, 0]], [-470, -17, [-1, 0]], [-497, -8, [0, 1]]]) flat('decal', x, z, a[0], a[1], 4.6, 1.3, 0.05, DU.arrU); // 地上的箭頭：進來、往西、出去
-    { const t = frame(-415.2, 0, -6.4, 0); B.at(-415.2, -6.4); cyl('main', t, 0, 0, 0, 1.9, 0.04, 0.04, 5, C('#9aa0a6'), null, true); box('sign2', t, [-0.5, 1.4, -0.03, 0.5, 1.9, 0.02], C('#7d8288'), { pz: S2.in, _: S2W }); addCircle(-415.2, -6.4, 0.06, 2); } // 入口
-    { const t = frame(-491.8, 0, -6.4, Math.PI); B.at(-491.8, -6.4); cyl('main', t, 0, 0, 0, 1.9, 0.04, 0.04, 5, C('#9aa0a6'), null, true); box('sign2', t, [-0.5, 1.4, -0.03, 0.5, 1.9, 0.02], C('#7d8288'), { pz: S2.out, _: S2W }); addCircle(-491.8, -6.4, 0.06, 2); } // 出口（對著開出來的車）
-    { const t = frame(-403.5, 0, -7.2, 0); B.at(-403.5, -7.2); box('main', t, [-0.9, 0, -0.35, 0.9, 0.5, 0.35], C('#c9ccd0')); box('glow', t, [-0.8, 0.5, -0.25, 0.8, 7.3, 0.25], [1.05, 1.05, 1.05], { px: GU.pylon, nx: GU.pylon, _: dotUV(GU.white) }); box('main', t, [-0.85, 7.3, -0.3, 0.85, 7.45, 0.3], C('#c8281e')); addBox(-403.5, -7.2, 0.9, 0.35, 0, 7.5); } // 路邊的立牌（東西兩面）
+    { const t = frame(-415.2, 0, -8.65, 0); B.at(-415.2, -8.65); cyl('main', t, 0, 0, 0, 1.9, 0.04, 0.04, 5, C('#9aa0a6'), null, true); box('sign2', t, [-0.5, 1.4, -0.03, 0.5, 1.9, 0.02], C('#7d8288'), { pz: S2.in, _: S2W }); addCircle(-415.2, -8.65, 0.06, 2); } // 入口
+    { const t = frame(-491.8, 0, -8.65, Math.PI); B.at(-491.8, -8.65); cyl('main', t, 0, 0, 0, 1.9, 0.04, 0.04, 5, C('#9aa0a6'), null, true); box('sign2', t, [-0.5, 1.4, -0.03, 0.5, 1.9, 0.02], C('#7d8288'), { pz: S2.out, _: S2W }); addCircle(-491.8, -8.65, 0.06, 2); } // 出口（對著開出來的車）
+    { const t = frame(-403.5, 0, -9.45, 0); B.at(-403.5, -9.45); box('main', t, [-0.9, 0, -0.35, 0.9, 0.5, 0.35], C('#c9ccd0')); box('glow', t, [-0.8, 0.5, -0.25, 0.8, 7.3, 0.25], [1.05, 1.05, 1.05], { px: GU.pylon, nx: GU.pylon, _: dotUV(GU.white) }); box('main', t, [-0.85, 7.3, -0.3, 0.85, 7.45, 0.3], C('#c8281e')); addBox(-403.5, -9.45, 0.9, 0.35, 0, 7.5); } // 路邊的立牌（東西兩面）
     // 後面：庫存車（x −500…−474、z −48…−28）、客人停車
     addPave(-487, -38, 13, 10, 0, C('#b9bab6'));
     for (let i = 0; i < 5; i++) { const x = -497.5 + i * 5, t = carProp(x, 0, -34, -Math.PI / 2, pick(rnd, [C('#f2f3f5'), C('#1d1f23'), C('#9aa0a6'), C('#c8281e'), C('#2f6fd6'), C('#e8e4da')])); void t; addBox(x, -34, 1, 2.3, 0, 1.5); }
@@ -1857,8 +1870,8 @@ function buildVillage(opts = {}) {
       name: '你的車庫', pos: [LOT.x, LOT.z], lot: { ...LOT }, spawn: { ...LOT },
       door: { x: -300, z: -92.5, heading: -R2 },                                // 鐵捲門中間（本地 x = +5），朝外（南）
       apron: { x: -300, z: -83.85, hx: 8.35, hz: 7, rot: -R2 },                 // 門前（本地 x 5.3…22、z ±7）：停在這裡 HUD 給「開鐵捲門」
-      inside: { x: -300, z: -101.35, hx: 8.85, hz: 12.7, rot: -R2 },            // 車庫裡面（本地 x −12.7…5、z ±12.7）
-      zone: { x: -300, z: -92.85, hx: 17.35, hz: 12.7, rot: -R2 },              // apron＋inside
+      inside: { x: -300, z: -101.35, hx: 8.85, hz: 15.7, rot: -R2 },            // 車庫裡面（本地 x −12.7…5、z ±15.7；第 11 批：本來 ±12.7）
+      zone: { x: -300, z: -92.85, hx: 17.35, hz: 15.7, rot: -R2 },              // apron＋inside
     },
     shop: { // 阿輝改車廠：前門（南）開進改車區、後門（北）出去
       name: '阿輝改車廠', pos: [-160, -35],
