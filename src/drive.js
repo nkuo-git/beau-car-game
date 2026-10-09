@@ -96,6 +96,7 @@ const DEST = {
   police: { label: '去警察局', icon: '警', bg: '#1F4FA8', fg: '#FFFFFF' }, gunshop: { label: '去槍店', icon: '槍', bg: '#26282C', fg: '#FF9A2E' }, // ==== 第 3 批：警察局、槍店 ====
   offroad: { label: '去越野車場', icon: '越', bg: '#8A5A2B', fg: '#FFF3E0' }, // ==== 第 4 批：越野車場 ====
   neihu: { label: '去內湖', icon: '內', bg: '#6E4BA8', fg: '#FFFFFF' }, // 內湖（neihu.js）：小地圖上一直看得到（貼在邊上＝往那邊開）
+  mountain: { label: '去山頂', icon: '山', bg: '#2E7D4F', fg: '#FFFFFF' }, // 山（mountain.js）
 };
 const COND = '"Barlow Condensed", "Arial Narrow", sans-serif', SANS = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
 const CSS = `

@@ -268,11 +268,11 @@ async function enterDrive() {
   if (!VIL) {
     enterDrive.busy = true;
     status.hidden = false; msg.textContent = '出門中⋯'; prog.parentElement.hidden = true;
-    await Promise.race([Promise.all([document.fonts.load('700 58px "Noto Sans TC"', '終點').catch(() => {}), villageFonts(), offroadFonts(), circuitFonts(), neihuFonts(), orbayFonts()]), new Promise((r) => setTimeout(r, 1600))]);
+    await Promise.race([Promise.all([document.fonts.load('700 58px "Noto Sans TC"', '終點').catch(() => {}), villageFonts(), offroadFonts(), circuitFonts(), neihuFonts(), mountainFonts(), orbayFonts()]), new Promise((r) => setTimeout(r, 1600))]);
     await new Promise((r) => setTimeout(r, 30)); // 讓「出門中」先畫出來（蓋村子要一下子，這時候畫面不會動）
     try {
       if (!TR) TR = buildTrack();
-      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
+      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMountain(VIL, { renderer }); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
       const L = VIL.places.garage.lot;
       GAR = buildRoom(renderer, { quality: 'low', exterior: true }); // 村子裡看得到外牆、屋頂、招牌；地板不反射（省）
       GAR.group.position.set(L.x, 0, L.z); GAR.group.rotation.y = L.heading; TR.scene.add(GAR.group);
@@ -453,7 +453,54 @@ function arrive(name, inside) {
   if (name === 'orbay' && !home.ob && !liftOK(cur)) { home.ob = true; drv.toast('越野車車庫：開進去停在黃線的格子裡', 2800); } // 第 6 批
   if (name === 'offroad' && !home.or) { home.or = true; drv.toast('到越野車場了！越野車行買越野車，起跑區比越野賽', 2800); } // 第 4 批
   if (name === 'neihu' && !home.nhs) { home.nhs = true; drv.toast('到港墘站了！上面是捷運文湖線，可以下車走走', 2800); } // 內湖（neihu.js）
+  if (name === 'mountain' && !home.mt) { home.mt = true; drv.toast(`到山頂了！海拔 ${Math.round(VIL.mountain?.top || 100)} 公尺，下車去涼亭看風景`, 2800); } // 山（mountain.js）
   if (name === 'highway' && !home.hw) { home.hw = true; drv.toast(`上快速道路了：油門踩到底，看 ${CARS[cur].btn[0]} 開得到幾 km/h！`, 2800); }
+}
+
+// ---- 爬山計時賽（mountain.js）：往上開過山腳的起點門開始計時，開過山頂的終點門（或開進山頂）停；每台車記最快的（GAME.best.hill）----
+const HILL = { on: false, t: 0, doneT: 0, prev: -1, drv: null, el: null, tm: null, bs: null, shown: '', pr: { s: 0, d: 0, h: 0, i: 0, t: 0, side: 0 } };
+const hillFmt = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+function hillHud(on) {
+  if (on && !HILL.el) {
+    const st = document.createElement('style'); st.textContent = '.hill-t{position:absolute;top:58px;left:10px;z-index:4;min-width:120px;padding:7px 13px 8px;border-radius:16px;background:rgba(14,15,18,0.66);color:#F2F3F5;font-family:"Noto Sans TC","PingFang TC",sans-serif;line-height:1.2;pointer-events:none;-webkit-user-select:none;user-select:none}.hill-t small{display:block;font-size:13px;font-weight:600;color:#9FE0B5}.hill-t b{display:block;font:700 30px/1.1 "Barlow Condensed","Arial Narrow",sans-serif;letter-spacing:.02em;font-variant-numeric:tabular-nums}.hill-t span{display:block;font-size:13px;font-weight:600;color:#C6CAD1}body:not(.driving) .hill-t{display:none}';
+    document.head.appendChild(st);
+    const el = document.createElement('div'); el.className = 'hill-t'; el.hidden = true;
+    const lb = document.createElement('small'); lb.textContent = '爬山計時賽'; HILL.tm = document.createElement('b'); HILL.bs = document.createElement('span');
+    el.append(lb, HILL.tm, HILL.bs); stage.appendChild(el); HILL.el = el;
+  }
+  if (HILL.el) HILL.el.hidden = !on;
+}
+function hillStop(why) {
+  if (!HILL.on) return;
+  HILL.on = false; hillHud(false);
+  if (why && drv) drv.toast(why, 2200);
+}
+function hillStep(t, dt) {
+  const M = VIL?.mountain; if (!M || !drv) return;
+  if (HILL.drv !== drv) { HILL.drv = drv; HILL.prev = -1; hillStop(); } // 換了一台、重新出門、比賽回來
+  if (t.paused || t.auto || jailed() || (walker && walker.mode === 'walk') || ciRace || orRace) { HILL.prev = -1; hillStop(HILL.on ? '爬山計時賽取消了' : null); if (HILL.doneT > 0) { HILL.doneT = 0; hillHud(false); } return; } // 下車：結果也收起來
+  const tr = M.trial, onM = M.inMountain(t.x, t.z) || M.onRoad(t.x, t.z);
+  const p = onM ? M.road.project(t.x, t.z, 12, HILL.pr) : null, s = p && p.i >= 0 ? p.s : -1;
+  if (!HILL.on) {
+    if (s >= 0 && HILL.prev >= 0 && HILL.prev < tr.s0 && s >= tr.s0 && p.d < 6 && t.v > 0.5) { // 往上開過起點
+      HILL.on = true; HILL.t = 0; HILL.shown = ''; hillHud(true);
+      const b = GAME.best.hill[cur]; HILL.bs.textContent = b ? `最快 ${hillFmt(b)}` : '開到山頂！';
+      drv.toast('爬山計時賽開始！開到山頂', 1800);
+    }
+  } else {
+    HILL.t += dt;
+    const fin = (s >= tr.s1 && p.d < 8) || (t.x > M.summit.x0 && t.x < M.summit.x1 && t.z > M.summit.z0 && t.z < M.summit.z1); // 越野車走捷徑上來也算
+    if (fin) {
+      const tt = Math.round(HILL.t * 100) / 100, old = GAME.best.hill[cur], rec = !old || tt < old;
+      if (rec) { GAME.best.hill[cur] = tt; save(); }
+      HILL.on = false; HILL.tm.textContent = hillFmt(tt); HILL.bs.textContent = rec ? '新紀錄！' : `最快 ${hillFmt(old)}`;
+      drv.toast(rec ? `到山頂了！${hillFmt(tt)}　新紀錄！` : `到山頂了！${hillFmt(tt)}（最快 ${hillFmt(old)}）`, 3200);
+      HILL.doneT = 4; // 結果留 4 秒
+    } else if (HILL.t > 600 || !onM || (s >= 0 && s < tr.s0 - 40)) { HILL.prev = s; hillStop('爬山計時賽取消了'); return; }
+    else { const txt = hillFmt(HILL.t); if (txt !== HILL.shown) { HILL.shown = txt; HILL.tm.textContent = txt; } }
+  }
+  if (!HILL.on && HILL.doneT > 0) { HILL.doneT -= dt; if (HILL.doneT <= 0) hillHud(false); }
+  HILL.prev = s;
 }
 
 // ---- 下車、上車（walk.js）：停住了按「下車」，車子停在原地；走到哪一台旁邊按「上車」就開那台 ----
@@ -1619,6 +1666,7 @@ function driveStep(dt) {
         if (drv && !drv.telemetry().paused) orStep(t); // 第 4 批：越野車場（展示台的車、起跑區）
         if (drv && !drv.telemetry().paused) ciStep(t); // 賽車場：報名處、比賽中沒有「下車」
       }
+      if (drv && DRIVE.on) hillStep(drv.telemetry(), dt); // 爬山計時賽（mountain.js）
       if (snooze.track && Math.hypot(t.x - VIL.places.track.zone.x, t.z - VIL.places.track.zone.z) > 30) snooze.track = false;
     }
   }

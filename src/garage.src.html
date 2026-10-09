@@ -51,7 +51,7 @@ body.fs .wrap > header { display: none; } /* 全螢幕（開車、比賽）：�
     <p class="how">綠燈一亮就按「起步」；指針進到綠色區按「換檔」，太早太晚都會慢；「氮氣」一場只能用一次。綠燈前按起步算偷跑，輸了、偷跑都沒有獎金。電腦可以用空白鍵起步和換檔、N 鍵放氮氣。</p>
   </section>
   <section class="drivebar" id="drivebar" hidden aria-label="出門">
-    <div class="dests" id="dests" role="group" aria-label="要去哪裡"><button type="button" data-d="shop" aria-pressed="false">去改車廠</button><button type="button" data-d="dealer" aria-pressed="false">去車店</button><button type="button" data-d="circuit" aria-pressed="false">去賽車場</button><button type="button" data-d="highway" aria-pressed="false">去快速道路</button><button type="button" data-d="offroad" aria-pressed="false">去越野車場</button><button type="button" data-d="neihu" aria-pressed="false">去內湖</button><button type="button" data-d="garage" aria-pressed="false">回車庫</button></div>
+    <div class="dests" id="dests" role="group" aria-label="要去哪裡"><button type="button" data-d="shop" aria-pressed="false">去改車廠</button><button type="button" data-d="dealer" aria-pressed="false">去車店</button><button type="button" data-d="circuit" aria-pressed="false">去賽車場</button><button type="button" data-d="highway" aria-pressed="false">去快速道路</button><button type="button" data-d="offroad" aria-pressed="false">去越野車場</button><button type="button" data-d="neihu" aria-pressed="false">去內湖</button><button type="button" data-d="mountain" aria-pressed="false">去山頂</button><button type="button" data-d="garage" aria-pressed="false">回車庫</button></div>
     <div class="minirow"><button type="button" class="ghost snd" id="dSndBtn" aria-pressed="true" aria-label="引擎聲音"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="off" d="M16.5 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><button type="button" class="ghost" id="driveHome">直接回車庫</button></div>
     <p class="how">走路：左下角推著走，推到底用跑的，右邊滑動看四周；走到車子旁邊按「上車」（每一台都可以開）。開車：左下角 ◀ ▶ 轉彎，右下角「油門」「煞車」（停住了按著煞車會倒車）；停住了按右邊的「下車」。開快的時候一邊轉彎一邊按「手煞車」可以甩尾，往反方向按就拉回來。跟著左上角的箭頭、右上角小地圖的橘色路線走；地圖下面的鈕換視角。改車廠、車店要自己開進去停好；回家按「開鐵捲門」開進車庫停好、下車。電腦可以用方向鍵（走路也可以 WASD，Shift 跑），空白鍵手煞車，C 換視角，E 按畫面上的大按鈕。</p>
   </section>
@@ -314,7 +314,7 @@ const PERF = {
 const TYRES = [[0, '原廠胎', '原本的輪胎'], [1, '半熱熔胎', '起步抓地 +8%'], [2, '直線加速胎', '起步抓地 +16%']];
 // 遊戲進度：錢（萬）、有哪些車、每台裝了哪些零件、輪胎（買過哪些、現在用哪個）、每個對手贏過幾次、車子停在車庫哪裡（park：town.src.js 的 normPark）、
 //   每台撞壞的樣子（dmg：damage.js 的 dmg.state；沒壞就沒有）、你自己的樣子（look：自訂角色，lookpanel.js；沒改過＝null＝PLAYER_LOOK；重新開始也留著）
-const GAME = { money: 0, owned: new Set(['gc8']), parts: {}, tyres: {}, wins: {}, park: null, dmg: {}, look: null, guns: gunSave.fresh() }; // guns：第 3 批（b3-int）槍店買的槍、子彈、靶場紀錄（guns.js 的 gunSave）
+const GAME = { money: 0, owned: new Set(['gc8']), parts: {}, tyres: {}, wins: {}, park: null, dmg: {}, look: null, guns: gunSave.fresh(), best: { hill: {} } }; // best：最快的紀錄（hill＝爬山計時賽，每台車幾秒） // guns：第 3 批（b3-int）槍店買的槍、子彈、靶場紀錄（guns.js 的 gunSave）
 // 試做頁（Nick 2026-10-07「那個試做頁所有都不用錢」）：發布前 make-free.mjs 把 false 換成 true → 錢用不完、什麼都買得起（花了也不會少）；App 一直是 false
 const TRIAL_FREE = false;
 if (TRIAL_FREE) Object.defineProperty(GAME, 'money', { get: () => 9999999, set: () => {}, enumerable: true });
@@ -359,7 +359,7 @@ function save(now) {
   clearTimeout(save.t);
   const write = () => {
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 2, cur, scene: studioKind, money: GAME.money, owned: [...GAME.owned], parts: GAME.parts, tyres: GAME.tyres, wins: GAME.wins, park: GAME.park, dmg: GAME.dmg, look: GAME.look || undefined, guns: GAME.guns,
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 2, cur, scene: studioKind, money: GAME.money, owned: [...GAME.owned], parts: GAME.parts, tyres: GAME.tyres, wins: GAME.wins, park: GAME.park, dmg: GAME.dmg, look: GAME.look || undefined, guns: GAME.guns, best: GAME.best,
         cars: Object.fromEntries(Object.entries(CARS).map(([k, C]) => [k, C.state])) }));
     } catch { /* 不給存就算了 */ }
     try { window.dispatchEvent(new Event('beau-save')); } catch { /* 沒有人聽就算了 */ } // 網站的雲端存檔（site/cloud.js）聽這個
@@ -394,6 +394,7 @@ function okValue(k, o, v) { // 存的值還是現在有的選項才用（改版�
     GAME.tyres[k] = { own, use: own.includes(t.use) ? t.use : 0 };
   }
   for (const [id, n] of Object.entries(d.wins || {})) GAME.wins[id] = Math.max(0, Math.floor(+n || 0));
+  for (const [k, n] of Object.entries((d.best && d.best.hill) || {})) if (CARS[k] && +n > 1 && +n < 3600) GAME.best.hill[k] = Math.round(+n * 100) / 100; // 爬山計時賽（以前的存檔沒有：空的）
   if (d.park && typeof d.park === 'object' && Array.isArray(d.park.decks)) GAME.park = { mid: typeof d.park.mid === 'string' ? d.park.mid : null, decks: d.park.decks.slice(0, 12), rev: Array.isArray(d.park.rev) ? d.park.rev.slice(0, 12) : [] }; // 升降機上停哪台（第 2 批；舊存檔沒有：照價錢排，town.src.js 的 normPark）
   if (CRASH_DAMAGE) for (const [k, st] of Object.entries(d.dmg || {})) if (PERF[k] && st && typeof st === 'object' && Array.isArray(st.h) && st.h.length) GAME.dmg[k] = st; // 撞壞的（apply 會再檢查每一下）
   if (CARS[d.cur] && GAME.owned.has(d.cur)) cur = d.cur; // 車庫裡只停你的車（還沒買的在車店）
@@ -796,7 +797,7 @@ restartBtn.addEventListener('click', () => {
     clearTimeout(restartBtn.t); restartBtn.t = setTimeout(() => { restartBtn.classList.remove('armed'); restartBtn.textContent = '重新開始'; }, 3500); return;
   }
   clearTimeout(restartBtn.t); restartBtn.classList.remove('armed'); restartBtn.textContent = '重新開始';
-  Object.assign(GAME, { money: 0, owned: new Set(['gc8']), parts: {}, tyres: {}, wins: {}, park: null, dmg: {}, guns: gunSave.fresh() }); room?.setTrophies(0); // 槍也歸零（第 3 批）
+  Object.assign(GAME, { money: 0, owned: new Set(['gc8']), parts: {}, tyres: {}, wins: {}, park: null, dmg: {}, guns: gunSave.fresh(), best: { hill: {} } }); room?.setTrophies(0); // 槍也歸零（第 3 批）
   if (typeof townReset === 'function') townReset(); // 第 3 批（b3-int）：星星清掉、槍收起來（town.src.js）
   for (const c of Object.values(built)) c.dmg?.repair(); // 撞壞的也歸零
   save(true); renderWallet(); refreshCarBtns();

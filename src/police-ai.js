@@ -731,6 +731,7 @@ function createPolice(o = {}) {
   const solid = makeGrid(allCols, 1.6); // 車、人撞的（線段測試胖 1.6 公尺以內都找得到）
   const tall = makeGrid(allCols, 0, (c) => (c.h ?? 9) >= 2.4 && (c.t === 'box' || c.r >= 0.6)); // 擋住視線的（房子、牆、大樹）
   const surf = makeSurf(V);
+  const gy = typeof V.heightAt === 'function' && typeof V.terrainAt === 'function' ? (x, z) => (V.terrainAt(x, z) ? V.heightAt(x, z) : 0) : () => 0; // 山（mountain.js）、越野車場：地面多高
   const places = V.places || {};
   let rs = (o.seed >>> 0) || 0x9e3779b9; const rnd = () => { rs ^= rs << 13; rs ^= rs >>> 17; rs ^= rs << 5; return ((rs >>> 0) % 100000) / 100000; };
 
@@ -1430,7 +1431,7 @@ function createPolice(o = {}) {
       f.downT -= dt; const vT = f.downT > 0 ? 4.6 : 0;
       f.v += clamp(vT - f.v, -10 * dt, 9 * dt); f.x += Math.cos(f.th) * f.v * dt; f.z -= Math.sin(f.th) * f.v * dt; collidePerson(f, 0.3);
       ps.speed = f.v; ps.state = f.v > 2.6 ? 'run' : f.v > 0.2 ? 'walk' : 'idle';
-      f.ch.group.position.set(f.x, 0, f.z); f.ch.group.rotation.set(0, f.th, 0); f.ch.update(dt, ps);
+      f.ch.group.position.set(f.x, gy(f.x, f.z), f.z); f.ch.group.rotation.set(0, f.th, 0); f.ch.update(dt, ps);
       return;
     }
     if (f.st === 'down' || f.st === 'getup') { // 被撞倒、被揍倒：躺一下再爬起來
@@ -1456,7 +1457,7 @@ function createPolice(o = {}) {
         if (Math.hypot(f.car.x - f.x, f.car.z - f.z) < f.car.hl + 1.2 || (f.backT > 25 && !f.seen)) { hideOfficer(f); f.car.rt = 0; return; } // 上車了
       }
     }
-    f.ch.group.position.set(f.x, 0, f.z); f.ch.group.rotation.set(0, f.th, 0);
+    f.ch.group.position.set(f.x, gy(f.x, f.z), f.z); f.ch.group.rotation.set(0, f.th, 0);
     f.ch.update(dt, ps);
   }
   function knockOfficer(f, dx, dz) { f.st = 'down'; f.downT = 2.4; f.v = 0; const l = Math.hypot(dx, dz); if (l > 1e-6) f.th = Math.atan2(dz / l, -dx / l); } // 臉朝撞過來的方向、往後倒
@@ -1716,7 +1717,11 @@ function createPolice(o = {}) {
     for (const c of cars) if (c.on) goHome(c);
     if (msg) toast(msg, 2400);
   }
-  function poseCar(c) { c.group.position.set(c.x, 0, c.z); c.group.rotation.set(c.roll, c.th, c.pitch); }
+  function poseCar(c) { // 上坡下坡（山）：車子跟著地面的高度、前後的斜度
+    const y = gy(c.x, c.z); let sl = 0;
+    if (y !== 0 || V.terrainAt?.(c.x, c.z)) { const cx = Math.cos(c.th) * 1.4, sz = Math.sin(c.th) * 1.4; sl = Math.atan((gy(c.x + cx, c.z - sz) - gy(c.x - cx, c.z + sz)) / 2.8); }
+    c.group.position.set(c.x, y, c.z); c.group.rotation.set(c.roll, c.th, c.pitch + sl);
+  }
   function syncOut() {
     markerList.length = 0;
     for (let i = 0; i < MAXC; i++) {

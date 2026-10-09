@@ -53,7 +53,7 @@ const V3 = new THREE.Vector3();
 // 第 9 批：大東西（房子、樹、路燈⋯）
 const LONG = 14; // 長的圍牆、護欄（地圖的邊、快速道路）不輾
 const FALL_T = 0.6, SEL_MS = 1.6, FAR = 140, AWAY = 25, REC_MAX = 64; // 壓下去幾秒；挑三角形每幀最多幾毫秒；離多遠多久全部長回來；最多記幾個
-const SKIP_MESH = /(^|[-_|])(ground|area|walk|road|paint|hill|grass|paddy|water|asph|line|lane)\b/i; // 地上的（壓不到）不用找
+const SKIP_MESH = /(^|[-_|])(ground|area|walk|road|paint|hill|grass|paddy|water|asph|line|lane|trail)\b/i; // 地上的（壓不到）不用找
 
 // 哪些東西輾得過去（照碰撞物的大小分：跟 street.js 畫影子一樣的辦法）
 //   圓：垃圾桶（r 0.32 h 0.95）、燈箱（0.28 × 1.3）、油桶、矮柱；細細的桿子（旗桿、小招牌）h 3 公尺以內
@@ -171,6 +171,7 @@ function createCrush(o = {}) {
     const h = Math.max(0.25, c.h ?? 1), cs = Math.cos(c.rot || 0), sn = Math.sin(c.rot || 0);
     const rx = (c.t === 'box' ? c.hx : c.r) + 0.22, rz = (c.t === 'box' ? c.hz : c.r) + 0.22, reach = Math.sqrt(rx * rx + rz * rz);
     const k = PROP_FLAT / h, rr = c.t === 'circle' ? rx * rx : 0;
+    const b0 = heightOf(c.x, c.z), tb = b0 !== 0; // 山上（mountain.js）：地面不是 0，每個頂點量自己腳下多高
     let n = 0;
     const L = meshes();
     for (let j = 0; j < L.length; j++) {
@@ -179,13 +180,16 @@ function createCrush(o = {}) {
       const A = q.m.geometry.attributes.position, arr = A.array;
       let lo = -1, hi = -1;
       for (let i = 0; i < arr.length; i += 3) {
-        const y = arr[i + 1]; if (y <= 0.04 || y > h + 0.5) continue;
+        const y = arr[i + 1], wy = q.id ? y : y + q.ty;
+        if (tb ? wy - b0 < -1.5 || wy - b0 > h + 2 : y <= 0.04 || y > h + 0.5) continue;
         let x = arr[i], z = arr[i + 2];
         if (!q.id) { V3.set(x, y, z).applyMatrix4(q.m.matrixWorld); x = V3.x; z = V3.z; }
         const dx = x - c.x, dz = z - c.z;
         if (rr) { if (dx * dx + dz * dz > rr) continue; }
         else if (Math.abs(dx * cs - dz * sn) > rx || Math.abs(dx * sn + dz * cs) > rz) continue;
-        arr[i + 1] = y * k; n++;
+        if (tb) { const g = heightOf(x, z), yr = wy - g; if (yr <= 0.04 || yr > h + 0.5) continue; arr[i + 1] = g + yr * k - (wy - y); }
+        else arr[i + 1] = y * k;
+        n++;
         if (lo < 0) lo = i; hi = i + 3;
       }
       if (lo >= 0) { const R = RGP[rgi++ % RGP.length]; R.start = lo; R.count = hi - lo; if (A.updateRanges.length) { A.clearUpdateRanges(); A.needsUpdate = true; } else { A.updateRanges.push(R); A.needsUpdate = true; } } // 只上傳改到的那一段（第 9 批：還有別的沒上傳的：整個上傳，範圍才不會亂）
@@ -252,7 +256,7 @@ function createCrush(o = {}) {
   // 共用的：瓦礫（一塊一塊）、灰塵（一團一團變大再縮掉）；沒在用的時候不畫
   let RUBM = null, DUSTM = null, rubN = 0;
   const RUB_N = 192, DUST_N = 36, M4 = new THREE.Matrix4(), QT = new THREE.Quaternion(), SV = new THREE.Vector3(), PV = new THREE.Vector3(), EU = new THREE.Euler();
-  const PUFF = []; for (let i = 0; i < DUST_N / 6; i++) PUFF.push({ on: false, x: 0, z: 0, s: 1, t: 0 });
+  const PUFF = []; for (let i = 0; i < DUST_N / 6; i++) PUFF.push({ on: false, x: 0, z: 0, y: 0, s: 1, t: 0 });
   let rr = 12345; const rnd = () => ((rr = (rr * 16807) % 2147483647) / 2147483647);
   function fxInit() {
     if (RUBM || !V.group) return;
@@ -266,7 +270,7 @@ function createCrush(o = {}) {
   function puff(x, z, s) { // 灰塵（一團 6 顆）
     fxInit(); if (!DUSTM) return;
     let q = PUFF[0]; for (const p of PUFF) { if (!p.on) { q = p; break; } if (p.t > q.t) q = p; }
-    q.on = true; q.x = x; q.z = z; q.s = s; q.t = 0; DUSTM.visible = true;
+    q.on = true; q.x = x; q.z = z; q.y = heightOf(x, z); q.s = s; q.t = 0; DUSTM.visible = true;
   }
   function dustTick(dt) {
     if (!DUSTM || !DUSTM.visible) return;
@@ -279,7 +283,7 @@ function createCrush(o = {}) {
         if (!q.on) { M4.makeScale(0, 0, 0); DUSTM.setMatrixAt(j, M4); continue; }
         any = true;
         const a = (k / 6) * Math.PI * 2 + i, e = Math.min(1, q.t / 0.5), r = q.s * (0.35 + 0.65 * e), sc = q.s * (0.35 + 0.55 * e) * (q.t > 0.8 ? Math.max(0, 1 - (q.t - 0.8) / 0.5) : 1);
-        PV.set(q.x + Math.cos(a) * r, 0.4 + q.s * 0.25 * e + (k % 2) * q.s * 0.3, q.z + Math.sin(a) * r); SV.set(sc, sc * 0.75, sc);
+        PV.set(q.x + Math.cos(a) * r, q.y + 0.4 + q.s * 0.25 * e + (k % 2) * q.s * 0.3, q.z + Math.sin(a) * r); SV.set(sc, sc * 0.75, sc);
         M4.compose(PV, QT.identity(), SV); DUSTM.setMatrixAt(j, M4);
       }
     }
@@ -296,7 +300,7 @@ function createCrush(o = {}) {
       else { const u = (rnd() * 2 - 1) * L[i + 4] * 0.85, w = (rnd() * 2 - 1) * L[i + 5] * 0.85; x += u * L[i + 2] + w * L[i + 3]; z += -u * L[i + 3] + w * L[i + 2]; }
       const sc = (j.tree ? 0.35 : 0.5 + rnd() * 0.7) * Math.min(1.6, 0.6 + j.rub);
       const id = rubN++ % RUB_N; j.chunks.push(id);
-      PV.set(x, j.rub * 0.55, z); EU.set(rnd() * 3, rnd() * 3, rnd() * 3); QT.setFromEuler(EU); SV.set(sc, sc * 0.6, sc);
+      PV.set(x, heightOf(x, z) + j.rub * 0.55, z); EU.set(rnd() * 3, rnd() * 3, rnd() * 3); QT.setFromEuler(EU); SV.set(sc, sc * 0.6, sc);
       M4.compose(PV, QT, SV); RUBM.setMatrixAt(id, M4);
     }
     RUBM.count = Math.min(RUB_N, Math.max(RUBM.count, rubN)); RUBM.instanceMatrix.needsUpdate = true; RUBM.visible = true;
@@ -312,7 +316,8 @@ function createCrush(o = {}) {
     const tree = src.t === 'circle', thin = tree && src.r < 0.45;
     const M = thin ? clamp(top * 0.6, 0.6, 4.5) : tree ? clamp(top * 0.45, 0.6, 4.2) : top >= 2.4 ? 1.6 : 0.5; // 往外多抓幾公尺（樹冠、路燈的燈頭、招牌、屋簷）
     const rub = thin ? 0.12 : tree ? 0.18 : clamp(top * 0.1, 0.15, 0.8);
-    const j = { grp, items: pack(grp), nb: null, x: (b0 + b2) / 2, z: (b1 + b3) / 2, b0, b1, b2, b3, top, rub, M, tree, phase: 0, cand: [], mi: 0, ti: 0, sel: [], segs: [], t: 0, inst: null, chunks: [], bld: [], k: 1, away: 0 };
+    const j = { grp, items: pack(grp), nb: null, x: (b0 + b2) / 2, z: (b1 + b3) / 2, b0, b1, b2, b3, top, rub, M, tree, phase: 0, cand: [], mi: 0, ti: 0, sel: [], segs: [], t: 0, inst: null, chunks: [], bld: [], k: 1, away: 0, tb: false };
+    j.tb = heightOf(j.x, j.z) !== 0 || terrainAt(j.x, j.z); // 山上：地面多高要一個一個量
     // 別的東西（三角形比較靠它們的不要壓）
     const nb = []; for (const q of cgNear(b0 - M - 2, b1 - M - 2, b2 + M + 2, b3 + M + 2, NB)) if (!grp.includes(q) && (q.h ?? 9) > 0.3) nb.push(q);
     j.nb = pack(nb);
@@ -349,7 +354,8 @@ function createCrush(o = {}) {
         const mx = (ax + bx + cx) / 3, mz = (az + bz + cz) / 3;
         if (mx < x0 || mx > x1 || mz < z0 || mz > z1) continue;
         const ay = P[a * 3 + 1] + ty, by = P[b * 3 + 1] + ty, cy = P[c * 3 + 1] + ty, hi = ay > by ? (ay > cy ? ay : cy) : by > cy ? by : cy;
-        if (hi < 0.25 || Math.min(ay, by, cy) > ymax) continue; // 地上的（路、人行道）、比它高很多的（別棟）
+        const gb = j.tb ? heightOf(mx, mz) : 0; // 山上：從腳下的地面量
+        if (hi - gb < 0.25 || Math.min(ay, by, cy) - gb > ymax) continue; // 地上的（路、人行道）、比它高很多的（別棟）
         // 法線（往裡面縮 0.1 公尺）：隔壁貼著的牆、屋簷才不會被算進來
         const ux = bx - ax, uy = by - ay, uz = bz - az, vx = cx - ax, vy = cy - ay, vz = cz - az;
         let nx = uy * vz - uz * vy, nz = ux * vy - uy * vx; const ny = uz * vx - ux * vz, nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; nz /= nl;
@@ -361,7 +367,8 @@ function createCrush(o = {}) {
       if (j.sel.length) { // 這個網格挑好了：記下來（頂點、原本的 y）
         const idx = Int32Array.from(j.sel); let lo = 1e9, hi = -1; const y0 = new Float32Array(idx.length);
         for (let i = 0; i < idx.length; i++) { const v = idx[i]; y0[i] = P[v * 3 + 1]; if (v < lo) lo = v; if (v > hi) hi = v; }
-        j.segs.push({ A, idx, y0, lo, hi, ty, R: { start: lo * 3, count: (hi - lo + 1) * 3 } }); // R：這一段自己的上傳範圍（還沒上傳就不要再放一次）
+        let gb = null; if (j.tb) { gb = new Float32Array(idx.length); for (let i = 0; i < idx.length; i++) { const v = idx[i]; gb[i] = heightOf(P[v * 3] + tx, P[v * 3 + 2] + tz); } } // 山上：每個頂點腳下的地面
+        j.segs.push({ A, idx, y0, gb, lo, hi, ty, R: { start: lo * 3, count: (hi - lo + 1) * 3 } }); // R：這一段自己的上傳範圍（還沒上傳就不要再放一次）
         j.sel.length = 0;
       }
       j.mi++; j.ti = 0;
@@ -374,8 +381,9 @@ function createCrush(o = {}) {
   };
   function setK(j, k) { // 頂點的 y＝原本 × k（只上傳改到的那一段）
     for (const sg of j.segs) {
-      const P = sg.A.array, I = sg.idx, Y = sg.y0, ty = sg.ty;
-      for (let i = 0; i < I.length; i++) P[I[i] * 3 + 1] = (Y[i] + ty) * k - ty;
+      const P = sg.A.array, I = sg.idx, Y = sg.y0, ty = sg.ty, GB = sg.gb;
+      if (GB) for (let i = 0; i < I.length; i++) P[I[i] * 3 + 1] = (Y[i] + ty - GB[i]) * k + GB[i] - ty;
+      else for (let i = 0; i < I.length; i++) P[I[i] * 3 + 1] = (Y[i] + ty) * k - ty;
       upd(sg.A, sg.R, sg.lo * 3, (sg.hi - sg.lo + 1) * 3);
     }
     if (j.inst) { // 內湖的樹：矩陣的 y 軸縮下去、x z 放大一點（扁扁的一片）

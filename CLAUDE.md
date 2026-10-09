@@ -3,7 +3,7 @@
 ## 這是什麼
 - 一個 3D 改車開放世界遊戲（three.js 0.186.1，沒有框架），玩家是 Nick，在 Android 手機上玩。
 - 白色大理石車庫：換車色、輪框、套件、寬體、尾翼、引擎零件、輪胎；下車走路、自訂角色；開車出門到小村莊（台灣小鎮）。
-- 地點：阿輝改車廠（零件、修車）、阿財車行（買車）、大便龍賽車場（繞圈賽、AI 對手）、400 公尺直線加速、快速道路、越野車場（粉紅怪獸卡車、越野車行、泥巴賽）、越野車車庫、內湖（OpenStreetMap 1:1，七個真的地標）、警察局（通緝星星、追捕、拘留室）、槍店＋靶場、可以進去的透天厝、路上的車和行人、甩尾、怪獸卡車輾扁東西。
+- 地點：阿輝改車廠（零件、修車）、阿財車行（買車）、大便龍賽車場（繞圈賽、AI 對手）、400 公尺直線加速、快速道路、越野車場（粉紅怪獸卡車、越野車行、泥巴賽）、越野車車庫、內湖（OpenStreetMap 1:1，七個真的地標）、山（之字形山路、山頂涼亭、爬山計時賽）、警察局（通緝星星、追捕、拘留室）、槍店＋靶場、可以進去的透天厝、路上的車和行人、甩尾、怪獸卡車輾扁東西。
 - 以前是「大便龍的萬能軟體」（repo nkuo-git/carid-pwa）裡「汽車 → 改車」那一頁（tune.html）。2026-10-09 搬出來變成自己的網站＋自己的 APK：
   - 網站（GitHub Pages，main 的 `docs/`）：https://nkuo-git.github.io/beau-car-game/
   - APK：GitHub Releases（tag `apk-N`，檔名 `beau-car-game-N.apk`）
@@ -65,7 +65,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 ## 版本號
 - 標題旁：`0.<APK 版號>.<內容版號>`。APK 版號＝「編 APK」workflow 的 run number（Release `apk-N`），網頁版（不在 App 裡）是 0。內容版號＝`docs/version.json`。
 - 內容 1 ＝ 跟萬能軟體 0.9.37／內容 38 一樣的遊戲（main 第一次）。
-- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4）；下一個試做頁是 v29。
+- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4；v29 ＝ 山）；下一個試做頁是 v30。
 
 ## 試做頁（artifact）
 - https://claude.ai/artifact/29pHoiqGVBs34ERLnJ9T8s（Nick 的；新的專案第一次發佈前要先用 Artifact 的 `read` 讀它，才能更新同一個網址）。
@@ -90,6 +90,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `node circuit-test.mjs ../out/ci/ci` | 賽車場、AI、名次 | 24 ok，PASSED |
 | `node drift-test.mjs ../out/drift/drift` | 甩尾（Node＋瀏覽器；沒甩的時候跟舊 drive.js 一模一樣） | 42 ok |
 | `node crush-test.mjs ../out/crush/crush` | 怪獸卡車輾扁車、騎的機車和路邊的東西、人跳開 | 53 ok |
+| `node mountain-test.mjs ../out/mt/mt` | 山：去山頂、爬山計時賽、上山下山貼著路、山頂走路、越野車捷徑、輾扁山上的東西、警察追上山 | 34 ok |
 | `node free-test.mjs` | 試做頁錢用不完、正常頁存檔的錢 | 2 ok（先跑 make-free.mjs） |
 | `node test-app-b1.mjs ../docs ../out/app1/app` | 網站（docs/）整趟：跟 test-b1 一樣＋版本號、標題列、App 外殼的全螢幕 | 146 ok |
 | `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場 | 74 ok |
@@ -111,7 +112,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 
 | key | 內容 |
 |---|---|
-| `carid.tune` | 存檔 JSON（garage.src.html `save()`）：`{v:2, cur, scene, money, owned[], parts{}, tyres{}, wins{}, park{}, dmg{}, look{}, guns{}, cars{<車>:{外觀}}}` |
+| `carid.tune` | 存檔 JSON（garage.src.html `save()`）：`{v:2, cur, scene, money, owned[], parts{}, tyres{}, wins{}, park{}, dmg{}, look{}, guns{}, best{hill{<車>:秒}}, cars{<車>:{外觀}}}` |
 | `carid.tune.full` | 全螢幕 `'on'`／`'off'` |
 | `carid.sound` | 引擎聲 `'on'`／`'off'` |
 | `carid.roomq` | 車庫畫質 `'high'`／`'low'` |
@@ -142,7 +143,8 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - App 要新版外殼（apk-4 起，`BeauCarApp.googleSignIn()`）才能登入，而且 Firebase 要有 Android 應用程式（`com.nkuo.beaucargame`＋SHA-1，見 notes/cloud.md）；舊 App 按登入會叫他先更新。
   - 試玩頁 `docs/try/`（`node src/build-site.mjs <版號> --try`）：要真的連網路才能試的東西（試做頁 artifact 連不到 Firebase）放這裡；跟正式網站同網域、用同一份存檔；不裝 Service Worker。
 - **內容 4（2026-10-09 上線，試做頁 v28）**：越野車也輾得扁路上騎的機車（騎士先跳車跑掉，只有機車扁；`notes/crush.md` 第 13 批）。
-- **等 Nick 看草稿**：開車上山 https://claude.ai/artifact/NhH4i6Gw2C8Yk2ZhEx6Poj 、連線（鬼影排行榜、一起開車、一起比賽、參觀車庫）https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo 。連線要家長同意。
+- **山（試做頁 v29，等 Nick 試、說「上線」；在分支 `claude/project-thread-q5ydzq`）**：村子北邊一座約 102 公尺高的山，約 1 公里的之字形山路（護欄、急彎牌、反光鏡）、山頂停車場＋紅色涼亭＋觀景台、越野車泥土捷徑、「去山頂」、爬山計時賽（每台車記最快的，存在 `best.hill`）。草稿 https://claude.ai/artifact/NhH4i6Gw2C8Yk2ZhEx6Poj （說 120 公尺、1.5 公里，做出來比較小）。說明在 `notes/mountain.md`。
+- **接下來（Nick 選「做1236」，草稿和家長都同意了）**：連線 https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo ——照順序：鬼影排行榜（爬山計時賽也接上去）→ 一起開車 → 一起比賽 → 參觀車庫。每做好一個先放試做頁。
 - **已知問題**
   - 越野車車庫裡坐在駕駛座（或追車鏡頭）會看到天空（屋頂被剔除）。
   - 越野車車庫 1 號格要倒車、打方向、再前進（三點迴轉）才出得來。
@@ -156,4 +158,4 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - **價錢（萬，新台幣）**：GC8 75（一開始就有）、YARIS 130、SUPRA 200、GT-R 400、918 3000、SP3 6000、JESKO 7500（阿財車行）；怪獸卡車 100（越野車行）。槍：手槍 3、衝鋒槍 12、霰彈槍 18、步槍 30；靶場第一次全中每把槍 2 萬。泥巴賽獎金 20／80／300。被抓罰款每顆星 2 萬。零件、輪胎的價錢在 garage.src.html 的 `PERF`。
 
 ## 筆記（notes/）
-以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。
+以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）、mountain（山）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。

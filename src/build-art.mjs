@@ -19,7 +19,7 @@ if (yaris) CARS.splice(4, 0, ['yaris', 'body-yaris-q.glb', 'car-yaris.txt', ['ya
 const strip = (f) => fs.readFileSync(path.join(dir, f), 'utf8')
   .split('\n').filter((l) => !/^import /.test(l)).join('\n')
   .replace(/^export (const|function) /gm, '$1 ');
-const files = ['masks.js', 'gtr-look.js', 'parts.js', 'supra.js', 'cabin.js', 'wings.js', 'wide.js', 'room.js', 'sound.js', 'street.js', 'police.js', 'village.js', 'interiors.js', 'terrain.js', 'drive.js', 'offroad.js', 'circuit.js', 'neihu-data.js', 'neihu.js', 'orbay.js', 'damage.js', 'walk.js', 'character.js', 'lookpanel.js', ...CARS.flatMap((c) => c[3]), 'carlod.js', 'npc.js', 'crush.js', 'police-ai.js', 'guns.js', 'gunshop.js'];
+const files = ['masks.js', 'gtr-look.js', 'parts.js', 'supra.js', 'cabin.js', 'wings.js', 'wide.js', 'room.js', 'sound.js', 'street.js', 'police.js', 'village.js', 'interiors.js', 'terrain.js', 'drive.js', 'offroad.js', 'circuit.js', 'neihu-data.js', 'neihu.js', 'mountain.js', 'orbay.js', 'damage.js', 'walk.js', 'character.js', 'lookpanel.js', ...CARS.flatMap((c) => c[3]), 'carlod.js', 'npc.js', 'crush.js', 'police-ai.js', 'guns.js', 'gunshop.js'];
 const code = files.map((f) => `// ---- ${f} ----\n${strip(f)}`).join('\n');
 fs.mkdirSync(path.join(dir, 'art'), { recursive: true });
 const sizes = {}, lodSizes = {};
