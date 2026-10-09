@@ -65,7 +65,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 ## 版本號
 - 標題旁：`0.<APK 版號>.<內容版號>`。APK 版號＝「編 APK」workflow 的 run number（Release `apk-N`），網頁版（不在 App 裡）是 0。內容版號＝`docs/version.json`。
 - 內容 1 ＝ 跟萬能軟體 0.9.37／內容 38 一樣的遊戲（main 第一次）。
-- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ `claude/project-thread-q5ydzq`）；下一個試做頁是 v29。
+- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4）；下一個試做頁是 v29。
 
 ## 試做頁（artifact）
 - https://claude.ai/artifact/29pHoiqGVBs34ERLnJ9T8s（Nick 的；新的專案第一次發佈前要先用 Artifact 的 `read` 讀它，才能更新同一個網址）。
@@ -141,7 +141,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - **內容 3（2026-10-09 上線）＝ 登入＋雲端存檔**：右上角「☁ 登入」，用 Google 帳號登入（Nick 的 Firebase `beau-car-game`），進度存在雲端 `saves/{uid}`（`src/site/cloud.js`，說明在 `notes/cloud.md`）。
   - App 要新版外殼（apk-4 起，`BeauCarApp.googleSignIn()`）才能登入，而且 Firebase 要有 Android 應用程式（`com.nkuo.beaucargame`＋SHA-1，見 notes/cloud.md）；舊 App 按登入會叫他先更新。
   - 試玩頁 `docs/try/`（`node src/build-site.mjs <版號> --try`）：要真的連網路才能試的東西（試做頁 artifact 連不到 Firebase）放這裡；跟正式網站同網域、用同一份存檔；不裝 Service Worker。
-- **試做頁 v28（`claude/project-thread-q5ydzq`，等 Nick 說「上線」）**：越野車也輾得扁路上騎的機車（騎士先跳車跑掉，只有機車扁；`notes/crush.md` 第 13 批）。
+- **內容 4（2026-10-09 上線，試做頁 v28）**：越野車也輾得扁路上騎的機車（騎士先跳車跑掉，只有機車扁；`notes/crush.md` 第 13 批）。
 - **等 Nick 看草稿**：開車上山 https://claude.ai/artifact/NhH4i6Gw2C8Yk2ZhEx6Poj 、連線（鬼影排行榜、一起開車、一起比賽、參觀車庫）https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo 。連線要家長同意。
 - **已知問題**
   - 越野車車庫裡坐在駕駛座（或追車鏡頭）會看到天空（屋頂被剔除）。
