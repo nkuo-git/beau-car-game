@@ -7,7 +7,7 @@
 - 以前是「大便龍的萬能軟體」（repo nkuo-git/carid-pwa）裡「汽車 → 改車」那一頁（tune.html）。2026-10-09 搬出來變成自己的網站＋自己的 APK：
   - 網站（GitHub Pages，main 的 `docs/`）：https://nkuo-git.github.io/beau-car-game/
   - APK：GitHub Releases（tag `apk-N`，檔名 `beau-car-game-N.apk`）
-- 萬能軟體裡**現在還有一份**遊戲（內容 37，tune.html）。Nick 沒說可以拿掉之前不要動它；那個 repo 不是這個專案的，這裡不要改它。
+- 萬能軟體（內容 39，2026-10-09）已經**不能玩**遊戲了：它的「改車」變成搬家頁（下載這個 App、把進度搬過來）。那個 repo 不是這個專案的，這裡不要改它。
 
 ## Nick 和工作規則（一定要照做）
 - Nick 是小孩，用繁體中文寫；**回答也用繁體中文**，字要簡單、白話、短。帳號是家長的。
@@ -121,7 +121,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - 只認上面 6 個 key（其他的不管）；`carid.tune` 一定要有，而且要是有 `v`（數字）的 JSON 物件；每個值是字串、最多 512 KB。
 - 送法：Android 的連結 `beaucargame://import?save=<base64url>`（新 App 的殼收到 → 網頁 `window.beauImport(save)`）；測試／瀏覽器：`https://nkuo-git.github.io/beau-car-game/#import=<base64url>`。
 - 網頁先問「要把萬能軟體裡的進度搬過來嗎？（會蓋掉這裡的進度）」搬過來／不要。搬過來：這 6 個 key 先清掉，再寫進搬來的，重新載入。資料壞掉：「搬家的資料看不懂，沒有搬。」什麼都不改。
-- 萬能軟體那邊的「搬家」按鈕**還沒做**：要先做 mock、Nick 說好才做（而且是在萬能軟體的專案做）。沒裝新 App 的時候要提示先去 Releases 裝。
+- 萬能軟體那邊的「搬家」頁 2026-10-09 已經上線（內容 39）：照上面的格式送 `beaucargame://import?save=…`（App 裡）或 `#import=`（瀏覽器）。沒裝新 App 時在萬能 App 裡按會出現 WebView 的錯誤頁（按返回就好）。
 - 注意：一般瀏覽器裡，`nkuo-git.github.io/carid-pwa` 和 `/beau-car-game` 是同一個網域，localStorage 是共用的（兩邊看到同一份存檔）；兩個 APK 各自分開。萬能軟體的 sw.js 換版時會刪掉同網域上不是它自己的快取（改車遊戲的離線快取會被清掉，重新下載而已，不會壞）。
 
 ## App（APK）
