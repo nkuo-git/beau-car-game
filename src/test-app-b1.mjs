@@ -11,6 +11,8 @@ const dir = path.dirname(new URL(import.meta.url).pathname);
 const three = path.join(dir, '../node_modules/three');
 const [repo, prefix = 'b2-shots/app'] = process.argv.slice(2);
 if (!repo) throw new Error('用法：node test-app-b1.mjs <repo> [prefix]');
+// <repo>：改車遊戲自己的網站（docs/：index.html＋game.js，外殼 BeauCarApp）或萬能軟體的 repo（tune.html＋tune.js，外殼 CaridApp）
+const SITE = !fs.existsSync(path.join(repo, 'tune.html')), JS = SITE ? '/game.js' : '/tune.js', SHELL = SITE ? 'BeauCarApp' : 'CaridApp';
 if (path.dirname(prefix) !== '.') fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.css': 'text/css', '.glb': 'model/gltf-binary', '.json': 'application/json', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () => S; window.__snd = () => snd; window.__room = () => room; window.__scene = () => scene; window.__controls = () => controls;'
@@ -31,7 +33,7 @@ const srv = http.createServer((req, res) => {
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; }
   let body = fs.readFileSync(f);
   if (f.endsWith('.html')) body = body.toString('utf8').replaceAll('https://cdn.jsdelivr.net/npm/three@0.186.1/', '/three/');
-  if (u === '/tune.js') {
+  if (u === JS) {
     let js = body.toString('utf8');
     const a = 'const RACE = { on: false, frame: raceFrame };', r = '  renderer.render(TR.scene, rcam);\n}', d1 = '  driveStep(dt);\n  if (!DRIVE.on) return;', d2 = '  renderer.render(TR.scene, dcam);\n}', d3 = '  if (indoor) { renderer.render(indoor.scene, dcam); return; }';
     for (const x of [a, r, d1, d2, d3]) if (js.split(x).length !== 2) throw new Error('hook anchor missing or not unique in tune.js: ' + x);
@@ -44,13 +46,13 @@ const srv = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': types[path.extname(f)] || 'application/octet-stream' });
   res.end(body);
 }).listen(0);
-const root = `http://127.0.0.1:${srv.address().port}`, base = `${root}/tune.html`;
+const root = `http://127.0.0.1:${srv.address().port}`, base = `${root}/${SITE ? '' : 'tune.html'}`;
 const b = await pw.chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
-const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36 CaridApp/8' });
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36 ' + SHELL + '/8' });
 await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort()); // 不連外面
 await ctx.addInitScript(() => { window.__roomWatch = false; });
 // 新版 APK 的外殼：CaridApp.setFullscreen(true/false)（只放在改車頁：汽車、麥塊那兩頁照舊）
-await ctx.addInitScript(() => { if (!/\/tune\.html$/.test(location.pathname)) return; window.__fsCalls = []; window.CaridApp = { ready() {}, openMail() { return false; }, setFullscreen(on) { window.__fsCalls.push(on); } }; });
+await ctx.addInitScript(({ site, shell }) => { if (!(site ? /\/(index\.html)?$/ : /\/tune\.html$/).test(location.pathname)) return; window.__fsCalls = []; window[shell] = { ready() {}, openMail() { return false; }, setFullscreen(on) { window.__fsCalls.push(on); } }; }, { site: SITE, shell: SHELL });
 const p = await ctx.newPage();
 p.setDefaultTimeout(300000);
 const errs = [], fails = [];
@@ -69,7 +71,7 @@ async function drawAndShot(name, fullPage = false) { // 畫兩格再截圖（開
 }
 // ---- 全螢幕（主幹的，Nick：「可以全螢幕」）：出門（走路、開車）、比賽蓋滿整個螢幕；改車廠、車店照舊可以捲；回車庫頁恢復 ----
 //   APP：test-app-b1.mjs（App 裡）才有 App 的標題、切換、分頁、外殼（假的 CaridApp.setFullscreen 記下收到的 true／false）
-const APP = typeof repo !== 'undefined';
+const APP = typeof repo !== 'undefined', CHROME = SITE ? '.appbar' : '.appbar .segbar .tabbar'; // 改車遊戲的網站只有標題列（沒有萬能軟體的切換、分頁）
 const fsInfo = () => p.evaluate(() => {
   const q = (s) => document.querySelector(s), vis = (e) => !!e && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden' && e.getClientRects().length > 0;
   const st = q('#stage').getBoundingClientRect(), rc = q('#race').getBoundingClientRect();
@@ -379,11 +381,11 @@ check(outBtn === '出門', `the garage page button is 出門 (was 開車出門):
 await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(1500);
 await p.screenshot({ path: `${prefix}-1-page.png` }); console.log('  shot', `${prefix}-1-page.png`, el());
 const ver = await p.evaluate(() => document.getElementById('brandVer').textContent);
-const wantVer = '0.8.' + (/const WEB_BUILD = (\d+);/.exec(fs.readFileSync(path.join(repo, 'app.js'), 'utf8')) || [])[1];
+const wantVer = '0.8.' + (SITE ? JSON.parse(fs.readFileSync(path.join(repo, 'version.json'), 'utf8')).build : (/const WEB_BUILD = (\d+);/.exec(fs.readFileSync(path.join(repo, 'app.js'), 'utf8')) || [])[1]);
 check(ver === wantVer, `version next to the title is ${wantVer} (${ver})`);
 let fi = await fsInfo(), clash = '';
 console.log('  fullscreen (garage page):', JSON.stringify(fi));
-check(!fi.fs && !fi.html && !fi.btn && fi.scrolls && (!APP || (fi.chrome === '.appbar .segbar .tabbar' && fi.calls === '')), 'garage page: normal scrolling layout, no fullscreen button' + (APP ? ', the App header/switcher/tabs visible' : ''));
+check(!fi.fs && !fi.html && !fi.btn && fi.scrolls && (!APP || (fi.chrome === CHROME && fi.calls === '')), 'garage page: normal scrolling layout, no fullscreen button' + (APP ? ', the App header/switcher/tabs visible' : ''));
 // ---- 自訂角色（車庫頁「出門」下面）：蓋滿畫面，上面 3D 預覽（真的人在轉盤上）、下面選項（身體／頭髮／衣服／配件）；隨機、取消、返回鍵都不存；完成才存 ----
 const LOOK_KEYS = 'body,age,height,build,skin,face,hair,hairColor,top,topColor,bottom,bottomColor,shoes,shoesColor,hat,glasses,mask';
 const lk1 = await p.evaluate(() => {
@@ -531,7 +533,7 @@ const off1 = await fsInfo(), offBar = await p.evaluate(() => { const r = documen
 clash = await hudClash(false);
 console.log('  fullscreen off:', JSON.stringify(off1), JSON.stringify(offBar), '| clash:', clash || '-');
 await drawAndShot('4b-fullscreen-off');
-check(!off1.fs && !off1.html && off1.pos !== 'fixed' && off1.btn && off1.pressed === 'false' && off1.pref === 'off' && offBar.below && off1.scrolls && !clash && (!APP || (/\.segbar/.test(off1.chrome) && /\.tabbar/.test(off1.chrome) && off1.calls === 'true,false')),
+check(!off1.fs && !off1.html && off1.pos !== 'fixed' && off1.btn && off1.pressed === 'false' && off1.pref === 'off' && offBar.below && off1.scrolls && !clash && (!APP || ((SITE || (/\.segbar/.test(off1.chrome) && /\.tabbar/.test(off1.chrome))) && off1.calls === 'true,false')),
   'fullscreen button: back to the normal layout (drive bar under the stage), remembered as off' + (APP ? ', CaridApp.setFullscreen(false)' : ''));
 clash = await sizeSweep(false, ['#fsBtn']);
 check(!clash, `fullscreen off on other screens: the fullscreen button does not cover any other button (${clash || 'ok'})`);
@@ -751,7 +753,7 @@ check(di.paused && !di.voice && !di.drivebar && di.cls.includes('shopping') && a
 check(await p.evaluate(() => window.__D().GAR.door.t === 0), 'garage door closed itself after driving away');
 fi = await fsInfo();
 console.log('  fullscreen (shop):', JSON.stringify(fi));
-check(!fi.fs && fi.pos !== 'fixed' && fi.scrolls && (!APP || (/\.segbar/.test(fi.chrome) && fi.calls.endsWith(',false'))), 'shop panel open: normal scrolling layout (not fullscreen)' + (APP ? ', CaridApp.setFullscreen(false)' : ''));
+check(!fi.fs && fi.pos !== 'fixed' && fi.scrolls && (!APP || ((SITE || /\.segbar/.test(fi.chrome)) && fi.calls.endsWith(',false'))), 'shop panel open: normal scrolling layout (not fullscreen)' + (APP ? ', CaridApp.setFullscreen(false)' : ''));
 await p.evaluate(() => window.scrollTo(0, 0)); await drawAndShot('10-shop');
 // 撞爛拿掉了：改車廠沒有「修車」，上面的說明也不提修車
 const fix = await p.evaluate(() => ({ hidden: document.getElementById('shopFixG').hidden, n: document.querySelectorAll('#shopFix button').length, head: document.querySelector('#shop .shop-head .who span')?.textContent || '' }));
@@ -914,7 +916,7 @@ await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(1500);
 await p.screenshot({ path: `${prefix}-19-home.png` }); console.log('  shot', `${prefix}-19-home.png`, el());
 fi = await fsInfo();
 console.log('  fullscreen (home):', JSON.stringify(fi));
-check(!fi.fs && !fi.html && !fi.btn && fi.scrolls && fi.pref === 'on' && (!APP || (fi.chrome === '.appbar .segbar .tabbar' && fi.calls.endsWith(',false'))), 'back on the garage page: normal layout restored, no fullscreen button' + (APP ? ', CaridApp.setFullscreen(false)' : ''));
+check(!fi.fs && !fi.html && !fi.btn && fi.scrolls && fi.pref === 'on' && (!APP || (fi.chrome === CHROME && fi.calls.endsWith(',false'))), 'back on the garage page: normal layout restored, no fullscreen button' + (APP ? ', CaridApp.setFullscreen(false)' : ''));
 
 // ---- 8 重新整理：新車、錢、零件都在 ----
 const keep = await p.evaluate(() => ({ look: JSON.stringify(window.__G().look), money: window.__G().money, owned: [...window.__G().owned].sort().join(), cur: window.__D().cur, park: JSON.stringify(window.__G().park) }));
@@ -945,11 +947,11 @@ await p.evaluate(() => document.getElementById('driveHome').click()); await p.wa
 const h9 = await p.evaluate(() => { const D = window.__D(), X = window.__IN(), W = D.walker; return { page: document.body.className === '' && !D.trip && D.GAR.door.t === 0 && W.mode === 'off', indoor: !!X.indoor, fade: !!X.doorFade, mine: W.character.group.parent === D.TR.scene, doors: W.doors.length > 50 }; });
 check(h9.page && !h9.indoor && !h9.fade && h9.mine && h9.doors, `直接回車庫 from inside the store works too: back on the garage page, the store is put away (you are back in the village scene, village doors back) (${JSON.stringify(h9)})`);
 // 舊版 APK（外殼沒有 setFullscreen）：頁面裡照樣全螢幕，不會出錯；之後換回新版的外殼
-await p.evaluate(() => { window.__ca0 = window.CaridApp; window.CaridApp = { ready() {}, openMail() { return false; } }; document.getElementById('driveOut').click(); });
+await p.evaluate((nm) => { window.__ca0 = window[nm]; window[nm] = { ready() {}, openMail() { return false; } }; document.getElementById('driveOut').click(); }, SHELL);
 await p.waitForFunction(() => window.__D().on && window.__D().walker?.mode === 'walk', null, { timeout: 300000 });
 fi = await fsInfo();
 check(fullView(fi), 'older APK without CaridApp.setFullscreen: in-page fullscreen still works');
-await p.evaluate(() => { document.getElementById('driveHome').click(); window.CaridApp = window.__ca0; }); await p.waitForTimeout(1200);
+await p.evaluate((nm) => { document.getElementById('driveHome').click(); window[nm] = window.__ca0; }, SHELL); await p.waitForTimeout(1200);
 check(await p.evaluate(() => document.body.className === '' && !window.__D().trip && window.__D().walker.mode === 'off'), 'older APK: 直接回車庫 back to the normal page');
 
 // ---- 10 升降停車格：操作柱按升降機（7 秒、馬達聲）→ 把車開上下層停好下車 → 降下去（車子到坑裡）→ 再升上來上車；有人、有車壓著不動；停中間自己開正；
@@ -1285,10 +1287,15 @@ await p.screenshot({ path: `${prefix}-32-page-lifts.png` }); console.log('  shot
 await p.evaluate(() => { window.__controls().autoRotate = true; });
 
 // ---- 12 麥塊 → 汽車：回到改車 ----
+if (SITE) { // 改車遊戲的網站沒有麥塊、汽車分頁：重新整理還是遊戲
+  await p.reload({ waitUntil: 'domcontentloaded' }); await ready();
+  check(new URL(p.url()).pathname === '/' && await p.evaluate(() => typeof window.__D === 'function' && !!document.getElementById('cars').children.length), `reload: the game page comes back by itself (${p.url().replace(root, '')})`);
+} else {
 await p.click('.tabbar a[href="./mc.html"]'); await p.waitForURL(/mc\.html/, { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(800);
 await p.click('.tabbar a[href="./index.html"]'); await p.waitForURL(/tune\.html/, { waitUntil: 'domcontentloaded' });
 await ready();
 check(/tune\.html/.test(p.url()), `麥塊 → 汽車 returns to 改車 (${p.url().replace(root, '')})`);
+}
 
 // ---- 13 亮色＋藍色主色：車庫頁、出門（走路，在你家車庫裡）、上車，再直接回車庫 ----
 await p.evaluate(() => { localStorage.setItem('carid.theme', 'light'); localStorage.setItem('carid.accent', '#4C9AFF'); });

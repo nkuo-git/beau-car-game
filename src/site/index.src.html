@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>大便龍的改車遊戲</title>
+<meta name="description" content="改車遊戲：3D 車庫，換車色、輪框、套件、寬體、引擎，開車出門、比賽、越野、去內湖。">
+<meta name="theme-color" content="#0E0F12">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<script>
+/* 明暗和主色：預設暗色；從萬能軟體搬過來的進度如果帶了 carid.theme／carid.accent 就照它（這裡沒有設定頁）。先套上再畫，才不會閃一下 */
+(function () {
+  var r = document.documentElement, t = null, a = null;
+  try { t = localStorage.getItem("carid.theme"); a = localStorage.getItem("carid.accent"); } catch (e) { /* 不給用就用預設 */ }
+  var mode = t === "light" || t === "dark" || t === "system" ? t : "dark";
+  if (mode === "system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme", mode);
+  var m = /^#?([0-9a-f]{6})$/i.exec(String(a || "").trim());
+  if (!m) return;
+  var n = parseInt(m[1], 16), rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  var dark = mode === "dark" || (mode === "system" && !!(window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches));
+  var lum = function (c) {
+    var l = c.map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
+  };
+  if (dark && lum(rgb) < 0.18) rgb = rgb.map(function (v) { return Math.round(v + (255 - v) * 0.24); });
+  var hex = "#" + rgb.map(function (v) { return v.toString(16).padStart(2, "0"); }).join("");
+  r.style.setProperty("--accent", hex);
+  r.style.setProperty("--accent-ink", lum(rgb) > 0.19 ? "#0E0F12" : "#FFFFFF");
+  r.style.setProperty("--accent-wash", "rgba(" + rgb.join(", ") + ", " + (dark ? 0.16 : 0.09) + ")");
+})();
+</script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="./game.css?v=__V__">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
+</head>
+<body>
+
+<div class="app">
+  <header class="appbar">
+    <img class="mark" src="./icons/icon-192.png" alt="" width="34" height="34">
+    <div class="brand">
+      <h1 class="brand-name">大便龍的改車遊戲<span class="brand-ver" id="brandVer"></span></h1>
+    </div>
+  </header>
+
+  <!-- 有新版本：一次只跳一條（App 的新版優先），不會自己更新 -->
+  <div class="updatebar" id="updateBar" hidden>
+    <span class="dot" aria-hidden="true"></span>
+    <span class="txt">有新版本，要更新嗎</span>
+    <button type="button" id="updateBtn" class="small">更新</button>
+  </div>
+  <div class="updatebar" id="appUpdateBar" hidden>
+    <span class="dot" aria-hidden="true"></span>
+    <span class="txt">App 有新版本</span>
+    <a class="small btnlike" id="appUpdateLink" href="https://github.com/nkuo-git/beau-car-game/releases/latest" rel="noopener">下載安裝</a>
+  </div>
+
+  <main class="tune" id="tune">
+<!--__GARAGE__-->
+  </main>
+</div>
+
+<!-- 從萬能軟體搬進度過來（App 的外殼叫 window.beauImport，或網址 #import=…）：先問，按了才蓋掉 -->
+<div class="imp" id="impDlg" role="dialog" aria-modal="true" aria-labelledby="impMsg" hidden>
+  <div class="imp-card">
+    <p class="imp-msg" id="impMsg">要把萬能軟體裡的進度搬過來嗎？（會蓋掉這裡的進度）</p>
+    <div class="imp-btns">
+      <button type="button" class="imp-no" id="impNo">不要</button>
+      <button type="button" class="imp-yes" id="impYes">搬過來</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./game.js?v=__V__"></script>
+</body>
+</html>

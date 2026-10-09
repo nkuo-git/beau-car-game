@@ -17,6 +17,8 @@ const dir = path.dirname(new URL(import.meta.url).pathname);
 const three = path.join(dir, '../node_modules/three');
 const [repo, prefix = 'b4-shots/app'] = process.argv.slice(2);
 if (!repo) throw new Error('用法：node test-app-b4.mjs <repo> [prefix]');
+// <repo>：改車遊戲自己的網站（docs/：index.html＋game.js，外殼 BeauCarApp）或萬能軟體的 repo（tune.html＋tune.js，外殼 CaridApp）
+const SITE = !fs.existsSync(path.join(repo, 'tune.html')), JS = SITE ? '/game.js' : '/tune.js', SHELL = SITE ? 'BeauCarApp' : 'CaridApp';
 if (path.dirname(prefix) !== '.') fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.css': 'text/css', '.glb': 'model/gltf-binary', '.json': 'application/json', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () => S; window.__snd = () => snd; window.__room = () => room; window.__scene = () => scene; window.__controls = () => controls;'
@@ -38,7 +40,7 @@ const srv = http.createServer((req, res) => {
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; }
   let body = fs.readFileSync(f);
   if (f.endsWith('.html')) body = body.toString('utf8').replaceAll('https://cdn.jsdelivr.net/npm/three@0.186.1/', '/three/');
-  if (u === '/tune.js') {
+  if (u === JS) {
     let js = body.toString('utf8');
     const a = 'const RACE = { on: false, frame: raceFrame };', r = '  renderer.render(TR.scene, rcam);\n}', d1 = '  driveStep(dt);\n  if (!DRIVE.on) return;', d2 = '  renderer.render(TR.scene, dcam);\n}', d3 = '  if (indoor) { renderer.render(indoor.scene, dcam); return; }';
     for (const x of [a, r, d1, d2, d3]) if (js.split(x).length !== 2) throw new Error('hook anchor missing or not unique in tune.js: ' + x);
@@ -51,13 +53,13 @@ const srv = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': types[path.extname(f)] || 'application/octet-stream' });
   res.end(body);
 }).listen(0);
-const root = `http://127.0.0.1:${srv.address().port}`, base = `${root}/tune.html`;
+const root = `http://127.0.0.1:${srv.address().port}`, base = `${root}/${SITE ? '' : 'tune.html'}`;
 const b = await pw.chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
-const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36 CaridApp/8' });
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36 ' + SHELL + '/8' });
 await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort()); // 不連外面
 await ctx.addInitScript(() => { window.__roomWatch = false; });
 // 新版 APK 的外殼：CaridApp.setFullscreen(true/false)（只放在改車頁：汽車、麥塊那兩頁照舊）
-await ctx.addInitScript(() => { if (!/\/tune\.html$/.test(location.pathname)) return; window.__fsCalls = []; window.CaridApp = { ready() {}, openMail() { return false; }, setFullscreen(on) { window.__fsCalls.push(on); } }; });
+await ctx.addInitScript(({ site, shell }) => { if (!(site ? /\/(index\.html)?$/ : /\/tune\.html$/).test(location.pathname)) return; window.__fsCalls = []; window[shell] = { ready() {}, openMail() { return false; }, setFullscreen(on) { window.__fsCalls.push(on); } }; }, { site: SITE, shell: SHELL });
 const p = await ctx.newPage();
 p.setDefaultTimeout(300000);
 const errs = [], fails = [];

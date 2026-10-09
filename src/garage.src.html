@@ -817,7 +817,7 @@ carsEl.querySelector(`[data-car="${cur}"]`).scrollIntoView({ inline: 'center', b
 // App：外殼有 CaridApp.setFullscreen（新版 APK）就連手機的狀態列、導覽列都藏起來（從邊邊滑一下會暫時出來）；舊版 APK 只有頁面裡的全螢幕
 //   返回鍵：外殼先叫 window.caridExitFullscreen()：只離開這一趟的全螢幕（不記起來，回車庫再開出去又是全螢幕），不會一下就離開改車頁
 // 一般瀏覽器（車庫試做頁、網頁版）：順便叫瀏覽器的全螢幕（requestFullscreen），不給就算了
-const FULL_KEY = 'carid.tune.full', fsBtn = $('fsBtn'), inShell = /CaridApp\//.test(navigator.userAgent || '');
+const FULL_KEY = 'carid.tune.full', fsBtn = $('fsBtn'), inShell = /(CaridApp|BeauCarApp)\//.test(navigator.userAgent || ''); // 外殼：萬能軟體的 APK（CaridApp）或改車遊戲自己的 APK（BeauCarApp）
 let fullPref = (() => { try { return localStorage.getItem(FULL_KEY) !== 'off'; } catch { return true; } })(), fsOn = false;
 let backOff = false; // 返回鍵關掉的：只算這一趟（回到車庫頁就清掉）
 function fsSync() {
@@ -827,7 +827,8 @@ function fsSync() {
   fsBtn.setAttribute('aria-pressed', String(want)); fsBtn.setAttribute('aria-label', want ? '離開全螢幕' : '全螢幕');
   if (on === fsOn) return;
   fsOn = on; c.toggle('fs', on); document.documentElement.classList.toggle('fs', on);
-  try { if (typeof window.CaridApp?.setFullscreen === 'function') window.CaridApp.setFullscreen(on); } catch { /* 外殼沒有就算了 */ }
+  const shell = window.BeauCarApp || window.CaridApp; // 兩種 APK 的外殼都有 setFullscreen
+  try { if (typeof shell?.setFullscreen === 'function') shell.setFullscreen(on); } catch { /* 外殼沒有就算了 */ }
   if (!inShell) pageFull(on);
 }
 function pageFull(on) { // 瀏覽器的全螢幕：要在點擊裡叫（開車出門、開回村子都是點出來的）；不給（iframe、iPhone）就算了，頁面裡的全螢幕照樣有

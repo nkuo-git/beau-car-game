@@ -1,0 +1,74 @@
+
+/* ================= 改車遊戲（獨立的網站／App）才有的：src/site/site.css ================= */
+/* 標題列：只有圖示、遊戲名字、版本號（沒有萬能軟體的設定、切換、分頁） */
+.appbar { padding-bottom: 6px; }
+
+/* 有新版本的那一條（抄萬能軟體的 styles.css） */
+.updatebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 16px 0;
+  padding: 11px 12px;
+  border: 1px solid var(--warm-line);
+  border-radius: 13px;
+  background: var(--warm);
+  color: var(--ink);
+  font-size: 13px;
+}
+.updatebar[hidden] { display: none; }
+.updatebar .dot { width: 7px; height: 7px; flex: none; border-radius: 999px; background: var(--accent); }
+.updatebar span.txt { flex: 1; color: var(--ink-soft); }
+.updatebar button.small,
+.updatebar .btnlike {
+  flex: none;
+  height: 30px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 700 13px "Noto Sans TC", system-ui, sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+.updatebar button.small:disabled { opacity: .6; }
+/* 開車、比賽、全螢幕的時候不跳出來擋畫面（回到車庫頁才看得到） */
+body.racing .updatebar, body.driving .updatebar, body.fs .updatebar { display: none; }
+
+/* 搬進度的問題：蓋在整個畫面上 */
+.imp {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, .55);
+}
+.imp[hidden] { display: none; }
+.imp-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 20px 18px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.imp-msg { margin: 0 0 16px; font-size: 16px; font-weight: 700; line-height: 1.5; }
+.imp-btns { display: flex; gap: 10px; }
+.imp-btns button {
+  flex: 1 1 0;
+  height: 46px;
+  border-radius: 12px;
+  font: 700 15px "Noto Sans TC", system-ui, sans-serif;
+  cursor: pointer;
+}
+.imp-no { border: 1px solid var(--line-strong); background: transparent; color: var(--ink); }
+.imp-yes { border: 0; background: var(--accent); color: var(--accent-ink); }
+.imp-yes[hidden] { display: none; }
