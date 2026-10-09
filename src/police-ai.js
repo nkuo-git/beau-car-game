@@ -78,7 +78,7 @@ const SANS = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif', 
 
 // ---- 預設值 ----
 const TUNE = {
-  add: { punch: 1, hit: 2, cop: 1, shoot: 3, shootCop: 1, gunfire: 1, crush: 1 }, // 幾顆星（shoot：直接變 3★）；crush＝第 7 批：怪獸卡車輾扁別人的車、路邊的東西（＋1★，跟撞車一樣）
+  add: { punch: 1, hit: 2, cop: 1, shoot: 3, shootCop: 1, gunfire: 1, crush: 1, crushCop: 2 }, // crushCop＝第 9 批：越野車輾扁警車 +2★（警察先下車跑掉，不會受傷） // 幾顆星（shoot：直接變 3★）；crush＝第 7 批：怪獸卡車輾扁別人的車、路邊的東西（＋1★，跟撞車一樣）
   gunfireR: 60, cool: 1.5, // 開槍沒打到人：警察在幾公尺內才算；同一種犯罪幾秒內只算一次
   seeR: 180, nearR: 30, lose: 25, loseNext: 10, hunt: 45, // 看得到的距離、轉角也算看到的距離、幾秒沒被看到掉一顆星、之後每幾秒再掉一顆
   catchR: 7, catchV: 5 / 3.6, catchT: 2.5, boxT: 1.5, boxR: 6.2, // 開車被抓：幾公尺內、比多慢、幾秒；兩台以上夾著：幾秒、幾公尺
@@ -789,7 +789,7 @@ function createPolice(o = {}) {
     x: 0, z: 0, th: 0, v: 0, steer: 0, pitch: 0, roll: 0,
     mode: 'go', path: mkPath(900), rt: 0, losT: 0, seen: false, clear: false, d: 999, role: -1, slot: -1, slotDone: false,
     stuck: 0, exitCool: 0, offT: 0, offOk: true, manOn: false, manT: 0, manN: 0, manD: 0, manS: 0, manB: 0, manCool: 0, ancX: 0, ancZ: 0, ancT: 0, wantV: 0, waitT: 0, touch: 0, pathOff: 0,
-    officer: null, siren: null, lights: false, hitCool: 0, homeT: 0, age: 0, dist: 0,
+    officer: null, siren: null, lights: false, hitCool: 0, homeT: 0, age: 0, dist: 0, wreckT: 0, wreckA: 0, // wreckT：第 9 批（被越野車輾扁）還留幾秒
     stats: { stuckMax: 0, relocs: 0, bumps: 0, recov: 0, stuckSec: 0, manSec: 0, shots: 0 },
   });
   const offs = []; // 警察（一台一個）
@@ -805,7 +805,7 @@ function createPolice(o = {}) {
 
   // ---- 犯罪 ----
   const CRIME_MSG = { punch: '你揍人了！警察來了', hit: '你撞到人了！警察來了', cop: '你惹到警察了！', shoot: '你開槍打人了！警察全部出動', shootCop: '你開槍打警察了！', gunfire: '你開槍了！警察來了',
-    crush: '你把別人的東西輾扁了！警察來了' }; // 第 7 批：怪獸卡車輾東西（越野車場裡面不算：呼叫的人不報）
+    crush: '你把別人的東西輾扁了！警察來了', crushCop: '你把警車輾扁了！' }; // crushCop：第 9 批 // 第 7 批：怪獸卡車輾東西（越野車場裡面不算：呼叫的人不報）
   function nearestPolice(x, z) {
     let best = Infinity;
     for (const c of cars) if (c.on) { const d = Math.hypot(c.x - x, c.z - z); if (d < best) best = d; }
@@ -858,7 +858,7 @@ function createPolice(o = {}) {
     hideOfficer(c.officer);
   }
   function removeCar(c) {
-    c.on = false; if (c.group) c.group.visible = false;
+    c.on = false; if (c.group) { c.group.visible = false; c.group.scale.set(1, 1, 1); } c.wreckT = 0; c.wreckA = 0; // 第 9 批：輾扁的變回原狀（下次出來是好的）
     if (c.model && c.model.setLights) c.model.setLights(false); c.lights = false;
     if (c.siren) { c.siren.stop(); c.siren = null; }
     hideOfficer(c.officer);
@@ -1426,6 +1426,13 @@ function createPolice(o = {}) {
   }
   function stepOfficer(f, dt) {
     const ps = f.pose;
+    if (f.st === 'flee') { // 第 9 批：警車被輾扁：跑開一下再站著（不追、不抓）
+      f.downT -= dt; const vT = f.downT > 0 ? 4.6 : 0;
+      f.v += clamp(vT - f.v, -10 * dt, 9 * dt); f.x += Math.cos(f.th) * f.v * dt; f.z -= Math.sin(f.th) * f.v * dt; collidePerson(f, 0.3);
+      ps.speed = f.v; ps.state = f.v > 2.6 ? 'run' : f.v > 0.2 ? 'walk' : 'idle';
+      f.ch.group.position.set(f.x, 0, f.z); f.ch.group.rotation.set(0, f.th, 0); f.ch.update(dt, ps);
+      return;
+    }
     if (f.st === 'down' || f.st === 'getup') { // 被撞倒、被揍倒：躺一下再爬起來
       f.downT -= dt; ps.speed = 0; ps.state = f.st === 'down' ? 'fall' : 'getup';
       if (f.st === 'down' && f.downT <= 0) { f.st = 'getup'; f.downT = 1.2; }
@@ -1569,24 +1576,25 @@ function createPolice(o = {}) {
     if (state === 'wanted' && P.safe) { safeT += dt; if (safeT > 0.6) clearStars('躲回車庫了，警察找不到你！'); } else safeT = 0;
     // 幾顆星幾台（隔 2.5 秒一台；回家路上的先叫回來）
     let active = 0, vtop = 20;
-    for (const c of cars) { if (!c.on) continue; if (c.mode !== 'home') active++; const a = Math.abs(c.v); if (a > vtop) vtop = a; }
+    for (const c of cars) { if (!c.on || c.wreckT > 0) continue; if (c.mode !== 'home') active++; const a = Math.abs(c.v); if (a > vtop) vtop = a; } // 第 9 批：輾扁的不算
     if (state === 'wanted' && P.ok) {
       const want = Math.min(MAXC, wanted);
       spawnT -= dt;
       if (active < want && spawnT <= 0 && P.mode !== 'off') {
-        let home = null; for (const c of cars) if (c.on && c.mode === 'home' && (!home || c.d < home.d)) home = c;
+        let home = null; for (const c of cars) if (c.on && !(c.wreckT > 0) && c.mode === 'home' && (!home || c.d < home.d)) home = c;
         if (home) goChase(home); else spawnCar();
         spawnT = T.stagger;
-      } else if (active > want) { let far = null; for (const c of cars) if (c.on && c.mode !== 'home' && (!far || c.d > far.d)) far = c; if (far) goHome(far); }
+      } else if (active > want) { let far = null; for (const c of cars) if (c.on && !(c.wreckT > 0) && c.mode !== 'home' && (!far || c.d > far.d)) far = c; if (far) goHome(far); }
     }
     const n = Math.max(1, Math.ceil((dt * vtop) / 0.6)), h = dt / n; // 物理每步最多走 0.6 公尺
     seenNow = false;
     if (state === 'wanted' || state === 'free') {
       // 角色：最近的那台咬著（0），第二近繞到前面（1），第三近從旁邊夾（2）
-      for (const c of cars) { c.role = -1; if (!c.on || c.mode === 'home') continue; let r = 0; for (const k of cars) if (k !== c && k.on && k.mode !== 'home' && (k.d < c.d || (k.d === c.d && k.id < c.id))) r++; c.role = r; }
+      for (const c of cars) { c.role = -1; if (!c.on || c.mode === 'home' || c.wreckT > 0) continue; let r = 0; for (const k of cars) if (k !== c && k.on && k.mode !== 'home' && !(k.wreckT > 0) && (k.d < c.d || (k.d === c.d && k.id < c.id))) r++; c.role = r; }
       if (P.mode === 'drive' && P.ok) { slotsFor(); slotT -= dt; if (slotT <= 0) { slotT = 0.5; if (P.spd < 4) assignSlots(); else for (const c of cars) c.slot = -1; } }
       for (const c of cars) {
         if (!c.on) continue;
+        if (c.wreckT > 0) { wreckTick(c, dt); continue; } // 第 9 批：輾扁的停著
         c.age += dt; c.hitCool -= dt;
         thinkCar(c, dt);
         if (c.seen && c.mode !== 'home') seenNow = true;
@@ -1617,12 +1625,13 @@ function createPolice(o = {}) {
           if ((arrived || (!c.seen && c.d > 140) || c.homeT > 60) && !(c.seen && c.d < 60 && !arrived)) { removeCar(c); continue; }
         }
       }
-      for (let k = 0; k < n; k++) for (const c of cars) if (c.on) stepCar(c, h);
+      for (let k = 0; k < n; k++) for (const c of cars) if (c.on && !(c.wreckT > 0)) stepCar(c, h);
     }
     // 警察：走路的你 → 車停了、看得到你、近了（或車開不過去）→ 下車追；你上車了 → 跑回車上
     for (const f of offs) {
       const c = f.car;
       if (!c.on) { if (f.on) hideOfficer(f); continue; }
+      if (c.wreckT > 0) { if (f.on) stepOfficer(f, dt); continue; } // 第 9 批：車子扁了：警察跑開、站著
       if (state === 'wanted' && !f.on && P.mode === 'walk' && !P.hidden && c.mode !== 'home' && c.seen && Math.abs(c.v) < 0.8) {
         c.waitT += dt; c.exitCool -= dt; if (c.d < 20 || (c.exitCool <= 0 && (c.d < 34 || (c.d < 90 && c.waitT > 1.2)))) officerOut(f);
       } else if (!f.on) c.waitT = 0;
@@ -1674,7 +1683,7 @@ function createPolice(o = {}) {
   function catchTick(dt) {
     let rate = 0, near = 0;
     if (P.mode === 'drive' && !P.hidden) {
-      for (const c of cars) { if (!c.on || c.mode === 'home') continue; const g = Math.hypot(c.x - P.cx, c.z - P.cz); if (g < T.boxR) near++; if (g < T.catchR) rate = 1 / T.catchT; }
+      for (const c of cars) { if (!c.on || c.mode === 'home' || c.wreckT > 0) continue; const g = Math.hypot(c.x - P.cx, c.z - P.cz); if (g < T.boxR) near++; if (g < T.catchR) rate = 1 / T.catchT; }
       if (near >= 2) rate = 1 / T.boxT;
       if (P.spd > T.catchV) rate = 0;
       catchP = rate > 0 ? catchP + rate * dt : Math.max(0, catchP - dt * 0.8);
@@ -1689,7 +1698,7 @@ function createPolice(o = {}) {
     if (!P.ok || P.mode !== 'drive') return;
     setBox(TMPB, P.cx, P.cz, P.th, P.hl + 0.35, P.hw + 0.35);
     for (const c of cars) {
-      if (!c.on || c.hitCool > 0 || Math.abs(c.x - P.cx) > 8 || Math.abs(c.z - P.cz) > 8) continue;
+      if (!c.on || c.wreckT > 0 || c.hitCool > 0 || Math.abs(c.x - P.cx) > 8 || Math.abs(c.z - P.cz) > 8) continue;
       if (!boxPush(c.x, c.z, Math.cos(c.th), -Math.sin(c.th), c.hl, c.hw, TMPB)) continue;
       const dx = c.x - P.cx, dz = c.z - P.cz, d = Math.hypot(dx, dz) || 1, cvx = Math.cos(c.th) * c.v, cvz = -Math.sin(c.th) * c.v;
       const into = ((P.vx - cvx) * dx + (P.vz - cvz) * dz) / d, mine = (P.vx * dx + P.vz * dz) / d;
@@ -1713,21 +1722,45 @@ function createPolice(o = {}) {
     for (let i = 0; i < MAXC; i++) {
       const c = cars[i], m = movers[i], mk = markers[i];
       const nc = npcCars[i]; if (c.on) { nc.x = c.x; nc.z = c.z; nc.heading = c.th; nc.v = c.v; nc.hx = c.hl; nc.hz = c.hw; } else { nc.x = 1e6; nc.z = 1e6; nc.v = 0; }
-      if (c.on) { m.x = c.x; m.z = c.z; m.hx = c.hl; m.hz = c.hw; m.rot = c.th; mk.x = c.x; mk.z = c.z; mk.fill = c.mode === 'home' ? '#8A9099' : Math.floor(T0 * 4 + i) % 2 ? '#2F7BFF' : '#FF3B30'; mk.on = true; markerList.push(mk); }
+      if (c.on) { m.x = c.x; m.z = c.z; m.hx = c.hl; m.hz = c.hw; m.rot = c.th; mk.x = c.x; mk.z = c.z; mk.fill = c.mode === 'home' || c.wreckT > 0 ? '#8A9099' : Math.floor(T0 * 4 + i) % 2 ? '#2F7BFF' : '#FF3B30'; mk.on = true; markerList.push(mk); }
       else { m.hx = 0; m.hz = 0; mk.on = false; }
       const f = offs[i], mo = movers[MAXC + i];
-      if (f.on && (f.st === 'out' || f.st === 'back')) { mo.x = f.x; mo.z = f.z; mo.r = 0.3; } else mo.r = 0;
+      if (f.on && (f.st === 'out' || f.st === 'back' || f.st === 'flee')) { mo.x = f.x; mo.z = f.z; mo.r = 0.3; } else mo.r = 0;
     }
   }
 
   const DBG = { cars, offs, G, R, station, P, solid, tall, T, surf, spawnCar, relocate, onRecover: null, CNT }; // 測試用
   // ---- 給別的模組 ----
+  // 第 9 批（路變大）：越野車輾扁警車 → 車子扁下去、燈關掉、警察從另一邊下車跑掉（不會受傷）；+2★；20 秒後收掉
+  function wreck(i, fx, fz) {
+    const c = cars[i]; if (!alive || !enabled || !c || !c.on || c.wreckT > 0) return null;
+    c.wreckT = 20; c.wreckA = 0; c.v = 0; c.steer = 0; c.slot = -1; c.role = -1; c.lights = false; if (c.model && c.model.setLights) c.model.setLights(false);
+    if (c.siren) { c.siren.stop(); c.siren = null; }
+    const f = c.officer;
+    if (!f.on || f.st === 'in') { // 從離越野車遠的那一邊下車
+      ensureOfficer(f);
+      const ffx = Math.cos(c.th), ffz = -Math.sin(c.th), rx = -ffz, rz = ffx, sd = (fx - c.x) * rx + (fz - c.z) * rz > 0 ? -1 : 1;
+      let x = c.x + rx * sd * (c.hw + 0.7), z = c.z + rz * sd * (c.hw + 0.7);
+      if (!personFree(x, z, 0.3)) { x = c.x - ffx * (c.hl + 0.8); z = c.z - ffz * (c.hl + 0.8); }
+      f.on = true; f.x = x; f.z = z; f.ch.group.visible = enabled;
+    }
+    const dx = f.x - fx, dz = f.z - fz, l = Math.hypot(dx, dz) || 1;
+    f.st = 'flee'; f.downT = 2.6; f.v = 1.5; f.th = Math.atan2(-dz / l, dx / l); f.seen = false;
+    CNT.wreck = (CNT.wreck || 0) + 1;
+    crime('crushCop', { x: c.x, z: c.z });
+    return { x: c.x, z: c.z, th: c.th, hl: c.hl, hw: c.hw };
+  }
+  function wreckTick(c, dt) { // 扁下去（0.45 秒）、留著，時間到收掉
+    c.wreckA = Math.min(1, c.wreckA + dt / 0.45); const e = c.wreckA * c.wreckA * (3 - 2 * c.wreckA);
+    if (c.group) c.group.scale.set(1 + 0.07 * e, 1 - 0.6 * e, 1 + 0.07 * e);
+    c.v = 0; c.wreckT -= dt; if (c.wreckT <= 0) removeCar(c);
+  }
   function colliders(x, z, r) { // 現在的警車（長方形；陣列、物件都是重複用的）
     colOut.length = 0;
     for (const c of cars) {
-      if (!c.on || (x != null && Math.hypot(c.x - x, c.z - z) > r + c.hl)) continue;
-      const b = colPool[colOut.length] || (colPool[colOut.length] = { t: 'box', x: 0, z: 0, hx: 1, hz: 1, rot: 0, h: 1.6, police: true });
-      b.x = c.x; b.z = c.z; b.hx = c.hl; b.hz = c.hw; b.rot = c.th; colOut.push(b);
+      if (!c.on || c.wreckT > 0 || (x != null && Math.hypot(c.x - x, c.z - z) > r + c.hl)) continue; // 第 9 批：輾扁的不擋（crush.js 的墊子：開得上去）
+      const b = colPool[colOut.length] || (colPool[colOut.length] = { t: 'box', x: 0, z: 0, hx: 1, hz: 1, rot: 0, h: 1.6, police: true, pi: 0 });
+      b.x = c.x; b.z = c.z; b.hx = c.hl; b.hz = c.hw; b.rot = c.th; b.pi = c.id; colOut.push(b); // pi：第幾台（第 9 批：越野車輾到 → wreck(pi)）
     }
     return colOut;
   }
@@ -1804,14 +1837,14 @@ function createPolice(o = {}) {
       wanted, state, seen: seenNow, everSeen, hunt: +huntT.toFixed(1), heat: +heat.toFixed(2), catch: +catchP.toFixed(3), last: { x: +lastX.toFixed(1), z: +lastZ.toFixed(1) }, enabled,
       player: { mode: P.mode, x: +P.cx.toFixed(1), z: +P.cz.toFixed(1), kmh: Math.round(P.spd * 3.6), hidden: P.hidden, safe: P.safe },
       cars: cars.filter((c) => c.on).map((c) => ({ id: c.id, mode: c.mode, x: +c.x.toFixed(1), z: +c.z.toFixed(1), th: +c.th.toFixed(2), kmh: Math.round(c.v * 3.6), d: +c.d.toFixed(1), seen: c.seen, clear: c.clear, role: c.role, slot: c.slot,
-        stuck: +c.ancT.toFixed(2), stuckMax: +c.stats.stuckMax.toFixed(2), recov: c.stats.recov, relocs: c.stats.relocs, bumps: c.stats.bumps, path: c.path.ok ? c.path.n : 0, officer: c.officer.on ? c.officer.st : 'in', ox: +c.officer.x.toFixed(1), oz: +c.officer.z.toFixed(1), siren: !!c.siren })),
+        stuck: +c.ancT.toFixed(2), stuckMax: +c.stats.stuckMax.toFixed(2), recov: c.stats.recov, relocs: c.stats.relocs, bumps: c.stats.bumps, path: c.path.ok ? c.path.n : 0, wreck: c.wreckT > 0, officer: c.officer.on ? c.officer.st : 'in', ox: +c.officer.x.toFixed(1), oz: +c.officer.z.toFixed(1), siren: !!c.siren })),
       jail: state === 'jail' || state === 'release' ? { left: +jailLeft.toFixed(1), fine: jailFine, paid } : null,
       arrests, escapes, crimes: crimes.slice(-8), ms: { avg: perf.n ? +(perf.sum / perf.n).toFixed(4) : 0, max: +perf.max.toFixed(3), last: +perf.last.toFixed(4), frames: perf.n },
       graph: { nodes: G.N, segs: G.M },
     };
   }
   return {
-    update, crime, punch, carHit, shot, carObject, shotCar, colliders, movers, npcCars, markers: markerList, clear, setEnabled, dispose, telemetry, payFine, preload,
+    update, crime, punch, carHit, shot, carObject, shotCar, colliders, wreck, movers, npcCars, markers: markerList, clear, setEnabled, dispose, telemetry, payFine, preload,
     surrender: () => { if (state !== 'wanted') return false; caught('surrender'); return true; }, // 第 3 批（b3-int）：通緝中自己走進警察局＝自首（一樣關、一樣罰）
     get wanted() { return wanted; }, get state() { return state; }, get enabled() { return enabled; },
     resetPerf() { perf.n = 0; perf.sum = 0; perf.max = 0; },

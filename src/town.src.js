@@ -408,7 +408,7 @@ function makeDrv(pose) {
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur) }, world: VIL, colliders: stripColliders(), hudParent: stage,
     onZone: arrive, onShift: () => dvoice?.shift(), onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
-    crush: crushFx && PERF[cur].big ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊） // 小地圖的底圖跟走路共用一張
+    crush: crushFx && offK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
@@ -575,6 +575,7 @@ function atDoor(d) {
     goDoor(() => enterStation(false, d)); return;
   }
   if (d.kind === 'gunshop') { goDoor(() => enterGunShop(d)); return; } // 第 3 批（b3-int）：槍店
+  if (d.crushed) { walker.toast('房子被壓扁了，等一下才會修好', 1800); return; } // 第 9 批：越野車輾扁的房子（離開一陣子就長回來）
   const info = CLOSED[d.kind] ? null : interiorFor(d);
   if (!info) { walker.toast(CLOSED[d.kind] || `${d.name ? d.name + '：' : ''}門鎖著`, 1800); return; }
   goDoor(() => enterHouse(d));
@@ -1276,7 +1277,7 @@ function npcStep(dt) {
   if (drv && walker.mode === 'off' && !sleep) {
     const t = drv.telemetry(), ci = drv.carInfo, CX = (ci.nose + ci.tail) / 2;
     me.x = t.x + Math.cos(t.heading) * CX; me.z = t.z - Math.sin(t.heading) * CX; me.heading = t.heading; me.v = t.v; me.hx = ci.len / 2; me.hz = ci.halfW;
-    me.crush = !!(crushFx && PERF[cur].big && !t.paused); // 第 7 批：怪獸卡車：碰到路上的車就輾過去（npc.js 把那台拿出車流）
+    me.crush = !!(crushFx && offK(cur) && !t.paused); // 第 7 批：怪獸卡車：碰到路上的車就輾過去（npc.js 把那台拿出車流）；第 9 批：越野車（路上的人看到會撲開）
     f.x = t.x; f.z = t.z; f.heading = t.heading;
     N.traffic.update(dt, f, N.OBS, N.peds.people);
     N.peds.update(dt, f, N.PCARS, N.NONE);
@@ -1320,6 +1321,23 @@ function inGarage(x, z) {
   const L = VIL.places.garage.lot, c = Math.cos(L.heading), s = Math.sin(L.heading), dx = x - L.x, dz = z - L.z;
   return inBox(GAR.zones.inside, dx * c - dz * s, dx * s + dz * c);
 }
+// 第 9 批（路變大）Nick 2026-10-09「越車可碾任何東西」：越野車（PERF.offroad；以後的越野車自己就有）什麼都輾（房子、樹、路燈、牆、警車⋯）；一般的車照舊
+const offK = (k) => !!(PERF[k] && PERF[k].offroad);
+// 輾不到的地方（世界座標的長方形 [x0, z0, x1, z1]，第一次用到才算）：你的車庫（小房子）、越野車車庫、改車廠、車店、槍店、警察局、越野車行、福德宮
+let CRUSH_SAFE = null;
+function crushSafe(x, z) {
+  if (!CRUSH_SAFE) {
+    const S = (CRUSH_SAFE = []), P = VIL.places;
+    const add = (o, m = 1.5) => { if (!o || !isFinite(o.x)) return; const c = Math.abs(Math.cos(o.rot || 0)), s = Math.abs(Math.sin(o.rot || 0)), ex = c * o.hx + s * o.hz + m, ez = s * o.hx + c * o.hz + m; S.push([o.x - ex, o.z - ez, o.x + ex, o.z + ez]); };
+    for (const k of ['garage', 'orbay', 'shop', 'dealer', 'odealer']) { add(P[k]?.zone); add(P[k]?.inside); }
+    add(P.gunshop?.building); add(P.police?.building);
+    if (P.police?.lot) { const L = P.police.lot; S.push([L.x0 - 1, L.z0 - 1, L.x1 + 1, L.z1 + 1]); }
+    if (P.odealer?.pos) { const [x0, z0] = P.odealer.pos; S.push([x0 - 21, z0 - 10, x0 + 21, z0 + 10]); } // 越野車行的鐵皮車棚（offroad.js：x ±18、z 78…94）
+    for (const b of VIL.buildings || []) if (/^(garage|dealer|police|gunshop|temple)$/.test(b.kind) || (b.kind === 'shop' && b.name === P.shop?.name)) add(b);
+  }
+  for (const r of CRUSH_SAFE) if (x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3]) return true;
+  return false;
+}
 const CRUSH_DRV = { heightAt: (x, z) => (crushFx ? crushFx.heightAt(x, z) : 0), can: (c) => !!crushFx && crushFx.can(c) && !inGarage(c.x, c.z), hit: (c, v) => crushFx && crushFx.hit(c, v) };
 const CRUSH_POS = { x: 0, z: 0 }; // 報警用（每格不配置記憶體）
 const JUNK_LOOK = [{ paint: '#8d8f86', finish: 'matte', rim: 'gunmetal', tint: 'dark' }, { paint: '#7b6a52', finish: 'matte', rim: 'black', tint: 'dark' },
@@ -1333,7 +1351,7 @@ function makeCrush() {
       const t = drv.telemetry(); if (t.paused) return false;
       const ci = drv.carInfo, CX = (ci.nose + ci.tail) / 2;
       q.x = t.x + Math.cos(t.heading) * CX; q.z = t.z - Math.sin(t.heading) * CX;
-      q.heading = t.heading; q.v = t.v; q.hx = ci.len / 2; q.hz = ci.halfW; q.big = !!PERF[cur].big;
+      q.heading = t.heading; q.v = t.v; q.hx = ci.len / 2; q.hz = ci.halfW; q.big = offK(cur); // 第 9 批：越野車
       return true;
     },
     makeJunk: async (i) => { // 表演場的舊車：輕量車（一次做一台）
@@ -1348,6 +1366,8 @@ function makeCrush() {
     sound: (kind, x, z, k) => engineAudio.crash(kind === 'glass' ? { strength: 0.12, glass: 1 } : { strength: k, glass: 0 }),
     toast: (text) => { if (drv && DRIVE.on) drv.toast(text, 2000); },
     crime: (x, z) => { CRUSH_POS.x = x; CRUSH_POS.z = z; police?.crime('crush', CRUSH_POS); }, // 村子裡輾東西＝1★（越野車場裡面 crush.js 不叫）
+    any: () => offK(cur), protect: crushSafe, // 第 9 批：越野車什麼都輾；輾不到的地方
+    copWreck: (i, x, z) => (police && police.wreck ? police.wreck(i, x, z) : null), // 第 9 批：警車扁掉、警察下車跑掉、+2★（police-ai.js）
   });
 }
 // 每一格（npcStep 後面）：墊子、壓扁、輾扁的車留 20 秒再收回去、表演場的垃圾車；垃圾車的碰撞只有「不是怪獸卡車」的時候要（換了才重放）

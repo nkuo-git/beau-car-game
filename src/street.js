@@ -740,7 +740,7 @@ function buildStreet(W, opts = {}) {
     }
     // 人行道（騎樓前）的中線：以後居民走路用
     Z.sidewalks = rows.map((rw) => ({ pts: [[rw.ax + rw.nx * rw.ap / 2, rw.az + rw.nz * rw.ap / 2], [rw.bx + rw.nx * rw.ap / 2, rw.bz + rw.nz * rw.ap / 2]], w: rw.ap, side: [rw.nx, rw.nz] }));
-    Z.sidewalks.push({ pts: [[-369.5, 7.2], [-367, 7.2], [-367, 19]], w: 2.4, side: [0, -1], place: 'police' }, { pts: [[-160.5, 5.4], [-164.5, 12.8]], w: 2, side: [0, -1], place: 'gunshop' });
+    Z.sidewalks.push({ pts: [[-369.5, 8.4], [-367, 8.4], [-367, 19]], w: 2.4, side: [0, -1], place: 'police' }, { pts: [[-160.9, 7.6], [-164.5, 12.8]], w: 2, side: [0, -1], place: 'gunshop' }); // 第 9 批：大路寬了，起點往外
   }
 
   // ==================== 紅綠燈（大路口 C）：四根桿子、懸臂上的燈＋倒數、行人號誌 ====================
@@ -843,23 +843,24 @@ function buildStreet(W, opts = {}) {
     };
     const post = (x, z) => { B.at(x, z); cyl('st', frame(x, 0, z), 0, 0, 0, 3.8, 0.06, 0.05, 6, C('#9aa0a6')); addCircle(x, z, 0.08, 3.8); shade.stick(x, z, 3.8, 0.12); };
     const C0 = nodes.C, X = nodes.X, Wn = nodes.W;
-    if (C0) { B.at(C0[0] + 4.6, C0[1] - 5.8); const s = Z.signals && Z.signals[0]; const hp = s && s.heads[0]; void hp; plate(C0[0] + 4.7, C0[1] - 5.8, 3.3, true, 0); plate(C0[0] + 4.7, C0[1] - 5.8, 2.75, false, 1); }
-    if (X) { const x = X[0] - 3.9, z = X[1] - 4.85; if (!hitsAny(x, z, 0.2)) { post(x, z); plate(x, z, 3.2, true, 0); plate(x, z, 2.65, false, 4); } }
-    if (Wn) { const x = Wn[0] - 4.5, z = Wn[1] - 4.6; B.at(x, z); plate(x + 0.25, z, 3.3, true, 0); plate(x + 0.25, z, 2.75, false, 3); }
-    const E1 = nodes.E1; if (E1) { const x = E1[0] - 3.6, z = E1[1] + 5.2; if (!hitsAny(x, z, 0.25)) { post(x, z); plate(x, z, 3.2, true, 0); plate(x, z, 2.65, false, 2); } }
+    // 第 9 批（路變大）：路名牌跟著路邊往外（村子的路寬 1.5 倍）
+    if (C0) { B.at(C0[0] + 6.45, C0[1] - 8.05); const s = Z.signals && Z.signals[0]; const hp = s && s.heads[0]; void hp; plate(C0[0] + 6.45, C0[1] - 8.05, 3.3, true, 0); plate(C0[0] + 6.45, C0[1] - 8.05, 2.75, false, 1); }
+    if (X) { const x = X[0] - 5.65, z = X[1] - 6.85; if (!hitsAny(x, z, 0.2)) { post(x, z); plate(x, z, 3.2, true, 0); plate(x, z, 2.65, false, 4); } }
+    if (Wn) { const x = Wn[0] - 6.25, z = Wn[1] - 8.3; B.at(x, z); plate(x + 0.25, z, 3.3, true, 0); plate(x + 0.25, z, 2.75, false, 3); }
+    const E1 = nodes.E1; if (E1) { const x = E1[0] - 5.1, z = E1[1] + 7.45; if (!hitsAny(x, z, 0.25)) { post(x, z); plate(x, z, 3.2, true, 0); plate(x, z, 2.65, false, 2); } }
   }
 
   // ==================== 路邊的東西：公車站、燈箱、檳榔攤、垃圾桶、郵筒 ====================
   function furniture() {
     // 公車站（大路南邊、農路口東邊）：站牌＋時刻表＋長椅
-    { const x = -224, z = 5.25; B = SB; B.at(x, z); const T = frame(x, 0, z, 0);
+    { const x = -224, z = 7.5; B = SB; B.at(x, z); const T = frame(x, 0, z, 0);
       cyl('st', T, 0, 0, 0, 2.9, 0.05, 0.05, 6, C('#9aa0a6'));
       const Tb = frame(x, 2.55, z, 0); box('st', Tb, [-0.45, -0.45, -0.03, 0.45, 0.45, 0.03], { pz: WHITE, nz: WHITE, _: C('#1f7a4c') }, { pz: PU.bus, nz: PU.bus, _: PW });
       box('st', frame(x, 1.2, z + 0.06, 0), [-0.2, 0, 0, 0.2, 0.6, 0.04], { nz: WHITE, _: C('#c9ccd0') }, { nz: PU.busTable, _: PW });
       addCircle(x, z, 0.1, 2.9); shade.stick(x, z, 2.9, 0.12);
-      B = PB; B.at(x, z); const Tc = frame(x - 2.2, 0, 5.72, 0); box('st', Tc, [-0.9, 0.4, -0.2, 0.9, 0.46, 0.2], C('#7a6a55')); box('st', Tc, [-0.9, 0.46, 0.14, 0.9, 0.85, 0.2], C('#7a6a55')); for (const lx of [-0.8, 0.8]) box('st', Tc, [lx - 0.03, 0, -0.18, lx + 0.03, 0.4, 0.18], C('#6b6f74')); addBox(x - 2.2, 5.72, 0.9, 0.22, 0, 0.9); }
+      B = PB; B.at(x, z); const Tc = frame(x - 2.2, 0, 7.97, 0); box('st', Tc, [-0.9, 0.4, -0.2, 0.9, 0.46, 0.2], C('#7a6a55')); box('st', Tc, [-0.9, 0.46, 0.14, 0.9, 0.85, 0.2], C('#7a6a55')); for (const lx of [-0.8, 0.8]) box('st', Tc, [lx - 0.03, 0, -0.18, lx + 0.03, 0.4, 0.18], C('#6b6f74')); addBox(x - 2.2, 7.97, 0.9, 0.22, 0, 0.9); }
     // 檳榔攤（霓虹框、玻璃櫃）：大路北邊、超商西邊的角落（改車廠那段）
-    { const x = -188.5, z = -7.2, T = frame(x, 0, z, 0); if (!hitsAny(x, z, 1.4)) { B = SB; B.at(x, z);
+    { const x = -188.5, z = -9.45, T = frame(x, 0, z, 0); if (!hitsAny(x, z, 1.4)) { B = SB; B.at(x, z);
       box('st', T, [-1.3, 0, -1.2, 1.3, 2.5, 0.9], { pz: WHITE, _: C('#e9e4dc') }, { pz: false, py: PW });
       B.e = 0.55; face('st', T, -1.3, 1.3, 0, 2.5, 0.91, PU.booth); B.e = 0;
       box('st', T, [-1.5, 2.5, -1.35, 1.5, 2.62, 1.6], C('#d9d9d4'), { ny: PW }); // 雨遮
@@ -876,7 +877,7 @@ function buildStreet(W, opts = {}) {
       B.e = 0.55; box('st', Tb, [-0.24, 0.12, -0.14, 0.24, 1.25, 0.14], { pz: WHITE, nz: WHITE, _: C('#e9ecef') }, { pz: u, nz: u, _: PW }); B.e = 0; box('st', Tb, [-0.28, 0, -0.18, 0.28, 0.12, 0.18], C('#2a2c30'));
       addCircle(p[0], p[2], 0.28, 1.3);
     }
-    const bins = [[-233.5, 4.9, '#2f7a4c'], [-229.6, -5.0, '#2f6fb0'], [-296.3, 4.9, '#2f7a4c'], [-257.4, -4.9, '#2f6fb0'], [-187.3, -4.9, '#2f7a4c'], [-343.2, 5.4, '#2f6fb0']];
+    const bins = [[-233.5, 7.15, '#2f7a4c'], [-229.6, -7.25, '#2f6fb0'], [-296.3, 6.9, '#2f7a4c'], [-257.4, -6.9, '#2f6fb0'], [-187.3, -7.15, '#2f7a4c'], [-343.2, 7.65, '#2f6fb0']];
     for (const [x, z, c] of bins) { if (hitsAny(x, z, 0.3) || onRoad(x, z, 0.2)) continue; B.at(x, z); const T = frame(x, 0, z, 0); box('st', T, [-0.28, 0, -0.28, 0.28, 0.85, 0.28], C(c)); box('st', T, [-0.31, 0.85, -0.31, 0.31, 0.95, 0.31], mul(C(c), 0.8)); addCircle(x, z, 0.32, 0.95); }
   }
 
@@ -915,7 +916,7 @@ function buildStreet(W, opts = {}) {
       }
     }
     // 警察局、槍店門口也停幾台
-    for (const [x, z, ry] of [[-158.2, 6.4, 0.5], [-158.1, 7.6, 0.5], [-340.6, 7.2, Math.PI / 2 + 0.3]]) { if (hitsAny(x, z, 0.4)) continue; const Ts = frame(x, 0, z, ry); B.at(x, z); scooter(Ts, pick(R, SCOOT), null); addBox(x, z, 0.82, 0.3, ry, 1.1); n++; }
+    for (const [x, z, ry] of [[-158.2, 8.1, 0.5], [-158.1, 9.3, 0.5], [-340.6, 9.2, Math.PI / 2 + 0.3]]) { if (hitsAny(x, z, 0.4)) continue; const Ts = frame(x, 0, z, ry); B.at(x, z); scooter(Ts, pick(R, SCOOT), null); addBox(x, z, 0.82, 0.3, ry, 1.1); n++; }
     Z.instances = n;
   }
 

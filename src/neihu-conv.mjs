@@ -87,6 +87,7 @@ const RC = { // [雙向寬, 單行寬, 人行道, 等級（越小越大條）]
   trunk: [18, 11, 4, 0], primary: [16, 11, 4, 0], secondary: [14, 10.5, 3.5, 1], secondary_link: [7, 6.5, 2, 2], primary_link: [7, 6.5, 2, 2],
   tertiary: [11, 7.5, 3, 2], tertiary_link: [7, 6, 2, 3], unclassified: [8, 6, 2, 3], residential: [7, 5, 0, 4], living_street: [4.5, 4, 0, 5], service: [4.2, 4, 0, 6],
 };
+const WIDEN = 1.5; // 第 9 批（路變大）
 const roadW = (t) => {
   const c = RC[t.highway]; if (!c) return null;
   const ow = t.oneway === 'yes' || t.oneway === '1' || t.oneway === '-1' || t.junction === 'roundabout';
@@ -94,6 +95,7 @@ const roadW = (t) => {
   const ln = parseInt(t.lanes, 10); if (ln > 0 && ln < 9) w = ow ? ln * 3.3 + 1 : ln * 3.2 + 1.2;
   const wt = parseFloat(t.width); if (wt > 2.5 && wt < 40) w = wt;
   if (t.highway === 'residential' && /弄/.test(t.name || '')) w = Math.min(w, 5.5);
+  w *= WIDEN; // 第 9 批（路變大）：車道 ×1.5（人行道不變；中心線不動）
   return { w, sw: c[2], cls: c[3], ow: t.oneway === '-1' ? -1 : ow ? 1 : 0 };
 };
 
@@ -160,6 +162,26 @@ function nearRoadSlow(x, z, skip) { let best = null; for (const r of ROADS) { if
     ext++;
   }
   console.log(`dead ends outside the data extended: ${ext}`);
+}
+// ---- 第 9 批（路變大）：地標的房子（圖書館、教會）旁邊那一小段路照舊的寬（路邊局部縮回去，地標原封不動）----
+{
+  const LMB = [168407498, 371239214], CLR = 0.5, SUB = 10; let nSplit = 0;
+  const polys = LMB.map((id) => { const w = WAYMAP.get(String(id)); return w ? wayPts(w).slice(0, -1) : null; }).filter(Boolean);
+  const gapOf = (P, a, b) => { let m = 1e9; for (const p of P) m = Math.min(m, Math.sqrt(segD2(p[0], p[1], a[0], a[1], b[0], b[1]))); for (let i = 0; i < P.length; i++) { const c = P[i], d = P[(i + 1) % P.length]; for (const e of [a, b]) m = Math.min(m, Math.sqrt(segD2(e[0], e[1], c[0], c[1], d[0], d[1]))); } return m; }; // 多邊形到路段（中線）的距離
+  for (let ri = ROADS.length - 1; ri >= 0; ri--) { const r = ROADS[ri];
+    const hitK = (k) => { let g = 1e9; for (const P of polys) g = Math.min(g, gapOf(P, NODE[r.n[k - 1]], NODE[r.n[k]])); return g; };
+    let any = false; for (let k = 1; k < r.n.length; k++) if (hitK(k) < r.w / 2 + CLR) any = true;
+    if (!any) continue;
+    const n2 = [r.n[0]]; for (let k = 1; k < r.n.length; k++) { const a = NODE[r.n[k - 1]], b = NODE[r.n[k]], L = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.ceil(L / SUB); for (let i = 1; i < m; i++) n2.push(newNode([a[0] + ((b[0] - a[0]) * i) / m, a[1] + ((b[1] - a[1]) * i) / m])); n2.push(r.n[k]); } // 切成 10 公尺一段
+    r.n = n2; let k0 = 1e9, k1 = -1, g = 1e9; for (let k = 1; k < r.n.length; k++) { const gk = hitK(k); if (gk < r.w / 2 + CLR) { k0 = Math.min(k0, k); k1 = Math.max(k1, k); g = Math.min(g, gk); } }
+    const nw = Math.max(r.w / WIDEN, 2 * (g - CLR)), mk = (n, cut) => ({ ...r, n, cut }), out = [];
+    if (k0 > 1) out.push(mk(r.n.slice(0, k0), [r.cut[0], 0]));
+    out.push({ ...mk(r.n.slice(k0 - 1, k1 + 1), [k0 > 1 ? 0 : r.cut[0], k1 < r.n.length - 1 ? 0 : r.cut[1]]), w: nw });
+    if (k1 < r.n.length - 1) out.push(mk(r.n.slice(k1), [0, r.cut[1]]));
+    ROADS.splice(ri, 1, ...out); nSplit++;
+    console.log(`  ${r.nm || r.hw}: ${(r.w).toFixed(1)} → ${nw.toFixed(1)} m 一小段（${k1 - k0 + 1} 段 × ≤${SUB} m，地標旁邊）`);
+  }
+  console.log(`landmark clearance: ${nSplit} roads narrowed locally`);
 }
 // ---- 西邊的入口：ENTRY_ROAD（沒有就最大條的路）穿過範圍西邊的地方 → 接遊戲世界 ----
 const westEnd = (p) => p[0] < BB.x0 + 2; // 切在西邊的邊上（外面 8 公尺）
@@ -326,7 +348,8 @@ for (const it of polyItems) {
   }
 }
 for (const b of BLD) paintPoly(b.p, 2, (v) => v !== 2);
-{ // OSM 的房子蓋到車道上：邊進到車道裡（路的寬度是照車道數估的；資料畫的位置也會差一點）→ 那幾邊往裡面退；退不了（或路中線在多邊形裡）就拿掉
+{ // 第 9 批：路變寬，可以退比較多（3→4.5 公尺）才拿掉
+  // OSM 的房子蓋到車道上：邊進到車道裡（路的寬度是照車道數估的；資料畫的位置也會差一點）→ 那幾邊往裡面退；退不了（或路中線在多邊形裡）就拿掉
   const laneIn = (x, z) => { const L = sgrid.get(sgKey(Math.floor(x / SG), Math.floor(z / SG))); let m = 0; if (L) for (let i = 0; i < L.length; i += 2) { const r = ROADS[L[i]], k = L[i + 1], a = NODE[r.n[k - 1]], b = NODE[r.n[k]], d = Math.sqrt(segD2(x, z, a[0], a[1], b[0], b[1])); m = Math.max(m, r.w / 2 + 0.3 - d); } return m; }; // 進到車道（＋0.3）多深
   const edgeIn = (P) => P.map((a, j) => { const c = P[(j + 1) % P.length], L = Math.hypot(c[0] - a[0], c[1] - a[1]) || 1; let m = 0; for (let s2 = 0; s2 <= L; s2 += 1) m = Math.max(m, laneIn(a[0] + ((c[0] - a[0]) * Math.min(s2, L)) / L, a[1] + ((c[1] - a[1]) * Math.min(s2, L)) / L)); return m; });
   const insetBy = (P, d) => { const n = P.length, ln = (i) => { const a = P[i], c = P[(i + 1) % n], l = Math.hypot(c[0] - a[0], c[1] - a[1]) || 1, ox = (c[1] - a[1]) / l, oz = -(c[0] - a[0]) / l; return { a: [a[0] - ox * d[i], a[1] - oz * d[i]], dx: (c[0] - a[0]) / l, dz: (c[1] - a[1]) / l }; }; const out = []; for (let i = 0; i < n; i++) { const A = ln((i + n - 1) % n), B = ln(i), den = A.dx * B.dz - A.dz * B.dx; if (Math.abs(den) < 0.05) { out.push(B.a); continue; } const t = ((B.a[0] - A.a[0]) * B.dz - (B.a[1] - A.a[1]) * B.dx) / den; out.push([A.a[0] + A.dx * t, A.a[1] + A.dz * t]); } return out; };
@@ -334,8 +357,8 @@ for (const b of BLD) paintPoly(b.p, 2, (v) => v !== 2);
   for (let i = BLD.length - 1; i >= 0; i--) { const b = BLD[i]; let hit = false; const P = b.p;
     const ei = edgeIn(P), mx = Math.max(...ei);
     if (mx > 0.4) { hit = true;
-      if (mx < 3) { const Q = insetBy(P, ei.map((v) => (v > 0.4 ? v + 0.2 : 0))), a0 = area(P), a1 = area(Q); // 外面＝(dz, −dx)：往裡面退
-        if (a1 / a0 > 0.5 && Q.every((q, j) => Math.hypot(q[0] - P[j][0], q[1] - P[j][1]) < 5) && Math.max(...edgeIn(Q)) <= 0.4) { b.p = Q; hit = false; fixed++; } } }
+      if (mx < 3 * WIDEN) { const Q = insetBy(P, ei.map((v) => (v > 0.4 ? v + 0.2 : 0))), a0 = area(P), a1 = area(Q); // 外面＝(dz, −dx)：往裡面退
+        if (a1 / a0 > 0.45 && Q.every((q, j) => Math.hypot(q[0] - P[j][0], q[1] - P[j][1]) < 5 * WIDEN) && Math.max(...edgeIn(Q)) <= 0.4) { b.p = Q; hit = false; fixed++; } } }
     for (const r of ROADS) { if (hit) break; for (let k = 1; k < r.n.length && !hit; k++) { const a = NODE[r.n[k - 1]], c = NODE[r.n[k]], L = Math.hypot(c[0] - a[0], c[1] - a[1]); for (let s2 = 0; s2 <= L; s2 += 1.5) { const x = a[0] + ((c[0] - a[0]) * s2) / L, z = a[1] + ((c[1] - a[1]) * s2) / L; if (inPoly(b.p, x, z)) { hit = true; break; } } } }
     if (hit) { BLD.splice(i, 1); n++; } }
   if (n) { OG.fill(0); for (let j = 0; j < GNZ; j++) for (let i = 0; i < GNX; i++) if (!inData(GX0 + i + 0.5, GZ0 + j + 0.5, EDGE + 1)) OG[j * GNX + i] = 5; for (const r of ROADS) for (let k = 1; k < r.n.length; k++) paintCapsule(NODE[r.n[k - 1]], NODE[r.n[k]], r.w / 2 + r.sw + 0.6, 1); for (const a of AREAS) if (a.t !== 'parking' && a.t !== 'plaza') paintPoly(a.p, 3); for (const b of BLD) paintPoly(b.p, 2, (v) => v !== 2); }
@@ -366,7 +389,7 @@ function placeAlong(r, side, R0) {
       let F, D, f, st, arc = false, set = r.w / 2 + r.sw + 0.4, row = 0, kind;
       if (office && (main || R0() < 0.6)) { F = 26 + R0() * 30; D = 20 + R0() * 16; f = 7 + Math.floor(R0() * 9); st = R0() < 0.75 ? STY.office : STY.newGrey; set += 5; kind = 'office'; }
       else if (main) { F = 12 + R0() * 16; D = 13 + R0() * 7; f = R0() < 0.3 ? 11 + Math.floor(R0() * 5) : 5 + Math.floor(R0() * 6); st = f >= 11 && R0() < 0.6 ? STY.newGrey : resStyles[Math.floor(R0() * resStyles.length)]; arc = r.cls <= 2 && f >= 4; kind = 'apartments'; }
-      else if (r.w < 6.2 || R0() < 0.45) { F = 4.4 + R0() * 1.8; D = 11 + R0() * 5; f = 3 + Math.floor(R0() * 3); st = resStyles[Math.floor(R0() * resStyles.length)]; row = 1; kind = 'townhouse'; } // 透天厝
+      else if (r.w / WIDEN < 6.2 || R0() < 0.45) { F = 4.4 + R0() * 1.8; D = 11 + R0() * 5; f = 3 + Math.floor(R0() * 3); st = resStyles[Math.floor(R0() * resStyles.length)]; row = 1; kind = 'townhouse'; } // 透天厝
       else { F = 10 + R0() * 8; D = 11 + R0() * 5; f = R0() < 0.7 ? 4 + Math.floor(R0() * 2) : 7 + Math.floor(R0() * 6); st = resStyles[Math.floor(R0() * resStyles.length)]; kind = 'apartments'; }
       if (t + F > L - 3) { F = L - 3 - t; if (F < (row ? 4 : 9)) break; }
       let placed = false;
@@ -562,9 +585,14 @@ const nameIdx = (nm, en) => { let i = NAMES.findIndex((n) => n[0] === nm); if (i
 }
 // 公園、學校的名字牌：最靠路的那一邊中間（路邊）
 const NAMESIGNS = [];
-function signAt(P) { // 多邊形最靠路的那一邊：牌子的位置、朝哪邊（null＝找不到路）
-  let best = null;
-  for (let i = 0; i < P.length; i++) { const p = P[i], c = P[(i + 1) % P.length], m = [(p[0] + c[0]) / 2, (p[1] + c[1]) / 2], nr = nearRoad(m[0], m[1]); if (nr && (!best || nr.gap < best.gap) && Math.hypot(c[0] - p[0], c[1] - p[1]) > 6) best = { gap: nr.gap, m, nr }; }
+function signAt(P) { // 多邊形最靠路的那一邊：牌子的位置、朝哪邊（null＝找不到路）；第 9 批：放不下（路變寬，壓到別條路）就換次近的那一邊
+  const C = [];
+  for (let i = 0; i < P.length; i++) { const p = P[i], c = P[(i + 1) % P.length], m = [(p[0] + c[0]) / 2, (p[1] + c[1]) / 2], nr = nearRoad(m[0], m[1]); if (nr && Math.hypot(c[0] - p[0], c[1] - p[1]) > 6) C.push({ gap: nr.gap, m, nr }); }
+  C.sort((a, b) => a.gap - b.gap);
+  for (const best of C.slice(0, 4)) { const s = signAt1(best); if (s) return s; }
+  return null;
+}
+function signAt1(best) {
   if (!best || best.gap > 25 || !drivable(best.m[0], best.m[1])) return null;
   const r = best.nr.r, ra = NODE[r.n[best.nr.k - 1]], rb = NODE[r.n[best.nr.k]], ang = Math.atan2(rb[1] - ra[1], rb[0] - ra[0]);
   // 牌子放在路邊（人行道外面一點），朝路
@@ -684,7 +712,7 @@ const treeOut = b64(TREES.flatMap((t) => [q(t[0]), q(t[1]), Math.round(t[2] * 10
 const AK = ['park', 'school', 'pitch', 'track', 'court', 'water', 'play', 'parking', 'plaza', 'site'];
 const areasOut = AREAS.map((a) => [AK.indexOf(a.t), a.p.flatMap((p) => [q(p[0]), q(p[1])])]);
 const out = {
-  v: 2, center: CENTER, edge: EDGE, at: { x: Math.round(AT.x * 10) / 10, z: Math.round(AT.z * 10) / 10 }, link: { entry: [Math.round((AT.x + EP[0]) * 10) / 10, Math.round((AT.z + EP[1]) * 10) / 10], box: BOX_AT },
+  v: 2, wide: WIDEN, center: CENTER, edge: EDGE, at: { x: Math.round(AT.x * 10) / 10, z: Math.round(AT.z * 10) / 10 }, link: { entry: [Math.round((AT.x + EP[0]) * 10) / 10, Math.round((AT.z + EP[1]) * 10) / 10], box: BOX_AT },
   src: path.basename(SRC).replace(/\.gz$/, ''), made: new Date().toISOString().slice(0, 10), box: [q(BB.x0), q(BB.z0), q(BB.x1), q(BB.z1)],
   ent: entOut, entP: [q(EP[0]), q(EP[1])], entDir: [Math.round(entDir[0] * 1e4) / 1e4, Math.round(entDir[1] * 1e4) / 1e4],
   names: NAMES, nodes: NOUT, roads: roadsOut, nbld: BLD.length, bld: bldOut, areaKinds: AK, areas: areasOut,

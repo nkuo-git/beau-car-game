@@ -41,7 +41,7 @@ const POLICE_LOOK = { body: 'm', age: 'adult', height: 1.76, build: 'mid', skin:
 
 // ---- 位置（世界座標）----
 const ST = { x: -367, z: 26, rot: Math.PI, hx: 13, hz: 6, FH: 3.6, fl: 3 }; // 大樓中心、朝北（本地 +z → 世界 −z）；本地 +x → 世界 −x（西）
-const LOT = { x0: -385, z0: 6, x1: -341, z1: 33.5 };
+const LOT = { x0: -385, z0: 7.5, x1: -341, z1: 33.5 }; // 第 9 批（路變大）：大路寬 13.5，前面的圍牆從 z 6 往後到 7.5
 
 // ---- 小工具 ----
 function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -392,11 +392,11 @@ function buildPoliceStation(opts = {}) {
     addCircle(fx, fz, 0.65, 11.6); }
   // 前面的矮牆＋欄杆（中間人走的門口、東邊車道口空著）
   const fence = (x0, x1, z) => { const Tf = frame((x0 + x1) / 2, 0, z, 0), L = (x1 - x0) / 2; box(m, Tf, [-L, 0, -0.15, L, 0.6, 0.15], C('#e8e6e0'), { _: dotUV(U.white) }); for (let x = -L; x < L - 1e-6; x += 4) { const xb = Math.min(L, x + 4); S.faceN(m, Tf, x, xb, 0.12, 0.48, -0.16, subUV(U.stripe, 0, 0, (xb - x) / 4, 1)); } for (let x = -L + 0.1; x <= L; x += 0.25) box(m, Tf, [x - 0.02, 0.6, -0.02, x + 0.02, 1.25, 0.02], C('#5a6068'), { py: false }); box(m, Tf, [-L, 1.2, -0.04, L, 1.26, 0.04], C('#5a6068')); addBox((x0 + x1) / 2, z, L, 0.18, 0, 1.25); };
-  fence(LOT.x0, -369, 6.1); fence(-365, -349, 6.1);
-  for (const [x0, x1] of [[-369.4, -369], [-365, -364.6]]) { const Tg = frame((x0 + x1) / 2, 0, 6.1, 0); box(m, Tg, [-0.2, 0, -0.2, 0.2, 1.5, 0.2], C('#dcdad4')); } // 人走的門口的門柱
+  fence(LOT.x0, -369, LOT.z0 + 0.1); fence(-365, -349, LOT.z0 + 0.1);
+  for (const [x0, x1] of [[-369.4, -369], [-365, -364.6]]) { const Tg = frame((x0 + x1) / 2, 0, LOT.z0 + 0.1, 0); box(m, Tg, [-0.2, 0, -0.2, 0.2, 1.5, 0.2], C('#dcdad4')); } // 人走的門口的門柱
   // 兩邊、後面的圍牆（矮一點）
   const wallL = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0) / 2, Tw = frame((x0 + x1) / 2, 0, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0)); box(m, Tw, [-L, 0, -0.12, L, 1.6, 0.12], C('#dedcd5'), { _: dotUV(U.conc) }); addBox((x0 + x1) / 2, (z0 + z1) / 2, L, 0.14, Math.atan2(-(z1 - z0), x1 - x0), 1.6); };
-  wallL(LOT.x0, 6.3, LOT.x0, LOT.z1); wallL(LOT.x0, LOT.z1, -341, LOT.z1); wallL(-341, 20.5, -341, LOT.z1);
+  wallL(LOT.x0, LOT.z0 + 0.3, LOT.x0, LOT.z1); wallL(LOT.x0, LOT.z1, -341, LOT.z1); wallL(-341, 20.5, -341, LOT.z1);
   // 警用機車（大樓東邊，三台）
   for (let i = 0; i < 3; i++) { const x = -352.2, z = 22.2 + i * 1.1, Tm = frame(x, 0, z, 0), wh = C('#f4f5f6'), bl = C('#1f4fa8'), dk = C('#2a2b2e');
     box(m, Tm, [-0.75, 0.28, -0.19, 0.5, 0.62, 0.19], wh); box(m, Tm, [-0.7, 0.44, -0.2, 0.45, 0.52, 0.2], bl); box(m, Tm, [-0.66, 0.62, -0.17, 0.05, 0.73, 0.17], dk); box(m, Tm, [0.46, 0.26, -0.22, 0.62, 0.98, 0.22], wh); box(m, Tm, [0.52, 0.96, -0.33, 0.58, 1.01, 0.33], dk);

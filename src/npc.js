@@ -1389,14 +1389,14 @@ function createPedestrians(o = {}) {
     if (!PROP_MAT) PROP_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 });
     if (W.props.geo) { propMesh = new THREE.Mesh(W.props.geo, PROP_MAT); propMesh.name = 'npc-props'; propMesh.matrixAutoUpdate = false; scene.add(propMesh); }
   }
-  const st = { spawned: 0, despawned: 0, entered: 0, knocks: 0, shoves: 0, aiShoves: 0, dodges: 0, crossings: 0, waitMax: 0, sits: 0, talks: 0, stuckGone: 0, noRoute: 0, ms: 0, maxMs: 0, frames: 0, active: 0, built: 0 };
+  const st = { spawned: 0, despawned: 0, entered: 0, knocks: 0, shoves: 0, aiShoves: 0, dodges: 0, dives: 0, crossings: 0, waitMax: 0, sits: 0, talks: 0, stuckGone: 0, noRoute: 0, ms: 0, maxMs: 0, frames: 0, active: 0, built: 0 };
 
   // ---- 一個人（池子裡重複用）----
   const P = [], people = [], chFree = [];
   for (let i = 0; i < max; i++) P.push({ id: i, active: false, gone: false, ch: null, age: 'adult', x: -0, z: -0, y: -0, r: 0.3, heading: -0, hd: -0, v: -0, baseV: 1.3, run: false,
     mode: 'idle', state: 'idle', sent: '', timer: -0, t2: -0, route: new Int32Array(RMAX), rdir: new Int8Array(RMAX), cum: new Float64Array(RMAX + 1), rn: 0, ri: 0, s: -0, lim: 0, goal: -1, gk: '',
     lat: -0, latT: -0, latHold: -0, vx: -0, vz: -0, vy: -0, mx: -0, mz: -0, seat: null, door: null, partner: null, talkCool: -0, hitCool: -0, react: 0.35, freeze: -0, from: null, tx: -0, tz: -0, te: -1, ts: -0,
-    fx: -0, fz: -0, lookT: -0, waitT: -0, clearT: -0, stuck: -0, lastD: -0, prog: -0, far: -0, animAcc: -0, animT: -0, knockBy: null }); // 小數欄位用 -0 開始（見 createTraffic）
+    fx: -0, fz: -0, lookT: -0, waitT: -0, clearT: -0, stuck: -0, lastD: -0, prog: -0, far: -0, animAcc: -0, animT: -0, knockBy: null, dive: 0 }); // dive：第 9 批（撲開越野車） // 小數欄位用 -0 開始（見 createTraffic）
   const T = pt(), T2 = pt();
   const CARS = [], NONE2 = [], ARG = { speed: 0, state: 'idle' };
 
@@ -1513,7 +1513,7 @@ function createPedestrians(o = {}) {
   function activate(p, ch, x, z, heading) {
     const look = ch.look || {};
     Object.assign(p, { active: true, gone: false, ch, age: look.age || 'adult', x, z, y: 0, heading, hd: heading, v: 0, r: Math.max(0.24, Math.min(0.34, ch.radius || 0.3)), lat: 0, latT: 0, latHold: 0,
-      seat: null, door: null, partner: null, talkCool: 5 + R() * 20, hitCool: 0, react: 0.25 + R() * 0.3, freeze: 0, knockBy: null, sent: '', timer: 0, rn: 0, ri: 0, s: 0, lim: 0, stuck: 0, lookT: 0, waitT: 0, clearT: 0, vy: 0, vx: 0, vz: 0, mx: 0, mz: 0, animAcc: 0 });
+      seat: null, door: null, partner: null, talkCool: 5 + R() * 20, hitCool: 0, react: 0.25 + R() * 0.3, freeze: 0, knockBy: null, dive: 0, sent: '', timer: 0, rn: 0, ri: 0, s: 0, lim: 0, stuck: 0, lookT: 0, waitT: 0, clearT: 0, vy: 0, vx: 0, vz: 0, mx: 0, mz: 0, animAcc: 0 });
     p.baseV = p.age === 'kid' ? 1.45 + R() * 0.25 : p.age === 'elder' ? 0.82 + R() * 0.2 : 1.2 + R() * 0.3;
     if (p.age === 'elder') p.react += 0.25;
     ch.group.visible = true; ch.group.position.set(x, 0, z); ch.group.rotation.set(0, heading, 0);
@@ -1823,11 +1823,11 @@ function createPedestrians(o = {}) {
         if (p.y > 0 || p.vy > 0) { p.vy -= 9.8 * h; p.y += p.vy * h; if (p.y <= 0) { p.y = 0; p.vy = 0; } }
         if (p.y <= 0) { const sp = hyp(p.vx, p.vz), k = sp > 1e-3 ? Math.max(0, sp - 7 * h) / sp : 0; p.vx *= k; p.vz *= k; }
         pushOut(p, true);
-        if (p.y <= 0 && hyp(p.vx, p.vz) < 0.08) { p.mode = 'lie'; p.timer = 1.8 + R() * 1.8; }
+        if (p.y <= 0 && hyp(p.vx, p.vz) < 0.08) { p.mode = 'lie'; p.timer = p.dive ? 0.45 + R() * 0.4 : 1.8 + R() * 1.8; } // 第 9 批：撲開的躺一下下就好
         p.v = 0; break;
       }
       case 'lie': p.v = 0; if ((p.timer -= h) <= 0) { p.mode = 'getup'; p.timer = 1.25; } break;
-      case 'getup': p.v = 0; if ((p.timer -= h) <= 0) angry(p, p.knockBy); break;
+      case 'getup': p.v = 0; if ((p.timer -= h) <= 0) { if (p.dive) fleeFrom(p, p.from); else angry(p, p.knockBy); } break; // 第 9 批：撲開的爬起來跑掉
       case 'angry': { // 對車子揮手（生氣）
         p.v = 0; const c = p.from; if (c) p.hd = Math.atan2(-(c.z - p.z), c.x - p.x);
         if ((p.timer -= h) <= 0) { p.from = null; if (!reattach(p)) p.stuck += 5; }
@@ -1895,6 +1895,14 @@ function createPedestrians(o = {}) {
         }
         continue;
       }
+      // 第 9 批（路變大）：越野車（c.crush，什麼都輾）衝過來：8 公尺內（快的時候看 0.9 秒）、2 秒內會到 → 大叫、往旁邊撲倒、爬起來跑掉
+      //（小孩也一定躲得開，不會嚇呆；還是被碰到的話照舊推開／撞倒（上面那段），永遠不會被輾）
+      if (c.crush === true) {
+        if (av < 1.5 || p.mode === 'fall' || p.mode === 'lie' || p.mode === 'getup' || p.dive) continue;
+        const s = v >= 0 ? 1 : -1, ahead = lon * s - hx - p.r;
+        if (ahead < -0.3 || ahead > Math.max(8.5, av * 0.9) || ahead / av > 2 || Math.abs(lat) > hz + p.r + 1.4) continue;
+        dive(p, lat, sh, ch, hz, c); continue;
+      }
       // 快撞到：車子往這邊開、1.3 秒內會到、在車子前面的路線上 → 往旁邊跳開
       //（路上的 AI 車會自己煞車：煞不住才跳；往旁邊跳不過去（牆）的話不要反過來跳到車子前面）
       if (av < 3 || p.mode === 'fall' || p.mode === 'lie' || p.mode === 'getup' || p.mode === 'dodge' || p.freeze > 0) continue;
@@ -1911,6 +1919,40 @@ function createPedestrians(o = {}) {
     }
   }
 
+  // 第 9 批：撲開（往車子的旁邊飛出去、倒地；沒有受傷：不算被撞、不報警）
+  function dive(p, lat, sh, ch, hz, c) {
+    let side = lat >= 0 ? 1 : -1; if (Math.abs(lat) < 0.2 && R() < 0.5) side = -side;
+    let fx = sh * side, fz = ch * side;
+    if (Math.abs(lat) < hz && !W.clearAt(p.x + fx * 2.4, p.z + fz * 2.4, 0.28) && W.clearAt(p.x - fx * 2.4, p.z - fz * 2.4, 0.28)) { fx = -fx; fz = -fz; } // 那邊是牆：往另一邊
+    if (p.seat && p.seat.by === p.id) p.seat.by = -1; p.seat = null;
+    if (p.partner) { const q = p.partner; p.partner = null; if (q.partner === p) q.partner = null; }
+    const sp = 6.4 - Math.min(1.2, Math.abs(lat) * 0.5);
+    p.vx = fx * sp; p.vz = fz * sp; p.vy = 2.4; p.y = Math.max(p.y, 0.02);
+    p.mode = 'fall'; p.heading = p.hd = headOf(-fx, -fz); p.v = 0; p.hitCool = 1.2; p.knockBy = null; p.from = c; p.rn = 0; p.dive = 1; p.freeze = 0;
+    st.dives++; shout(p);
+    if (o.onDive) try { o.onDive(p, c); } catch (e) { console.warn(e); }
+  }
+  function fleeFrom(p, c) { // 爬起來，往離車子遠的那邊跑
+    let dx = c ? p.x - c.x : R() - 0.5, dz = c ? p.z - c.z : R() - 0.5; const l = hyp(dx, dz) || 1; dx /= l; dz /= l;
+    p.dive = 0; p.from = null; p.fx = dx; p.fz = dz; p.mode = 'flee'; p.timer = 2.2 + R() * 1.4; p.rn = 0;
+  }
+  // 「哇！」：頭上一個小字（4 個重複用；第一次用到才做）
+  const SH = []; let shTex = null;
+  function shout(p) {
+    if (!scene || typeof document === 'undefined') return;
+    if (!shTex) {
+      const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const g = cv.getContext('2d');
+      g.fillStyle = '#fff'; g.strokeStyle = '#222'; g.lineWidth = 4; g.beginPath(); g.roundRect ? g.roundRect(4, 4, 120, 50, 18) : g.rect(4, 4, 120, 50); g.fill(); g.stroke();
+      g.fillStyle = '#e0302a'; g.font = 'bold 34px "Noto Sans TC", "PingFang TC", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('哇！', 64, 31);
+      shTex = new THREE.CanvasTexture(cv); shTex.colorSpace = THREE.SRGBColorSpace;
+      for (let i = 0; i < 4; i++) { const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: shTex, depthTest: false, transparent: true })); m.scale.set(1.1, 0.55, 1); m.visible = false; m.renderOrder = 5; scene.add(m); SH.push({ m, p: null, t: 0 }); }
+    }
+    let q = SH[0]; for (const k of SH) { if (!k.p) { q = k; break; } if (k.t > q.t) q = k; }
+    q.p = p; q.t = 0; q.m.visible = true;
+  }
+  function shoutTick(dt) {
+    for (const q of SH) { if (!q.p) continue; q.t += dt; const p = q.p; if (q.t > 1.1 || p.gone || !p.active) { q.p = null; q.m.visible = false; continue; } q.m.position.set(p.x, 2.15 + p.y + Math.min(0.25, q.t * 0.6), p.z); }
+  }
   // ---- 每一幀 ----
   let WALKERS = NONE2;
   function update(dt, focus = {}, cars = NONE2, walkers = NONE2) {
@@ -1988,6 +2030,7 @@ function createPedestrians(o = {}) {
       }
       send(p, s, p.mode === 'enter' ? p.baseV * 0.8 : p.mode === 'wait' ? hyp(p.mx, p.mz) : p.v, adt);
     }
+    if (SH.length) shoutTick(dt); // 第 9 批：「哇！」
     const ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     st.ms += ms; st.maxMs = Math.max(st.maxMs, ms); st.frames++; st.active = people.length;
   }
@@ -2010,6 +2053,7 @@ function createPedestrians(o = {}) {
     for (const ch of chFree) ch.dispose();
     chFree.length = 0;
     if (propMesh) { propMesh.removeFromParent(); propMesh = null; }
+    for (const q of SH) { q.m.removeFromParent(); q.m.material.dispose(); } SH.length = 0; if (shTex) { shTex.dispose(); shTex = null; }
   }
   return { update, people, colliders, scare, knock, bail, nearest, prewarm, dispose, graph: W, props: { colliders: W.props.colliders, seats: W.props.seats }, stats: st, get time() { return TM[0]; } };
 }
