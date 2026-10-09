@@ -467,8 +467,9 @@ function createCrush(o = {}) {
   function hitTraffic(car) { // npc.js：路上的車被怪獸卡車輾到（npc.js 已經把它從車流裡拿出來、停住）
     if (!alive || !car) return false;
     const q = take(); if (!q) return false;
-    setPad(q, 'car', car.x, car.z, car.heading, car.hx, car.hz, CAR_H, CAR_FLAT, true);
-    q.car = car; q.lod = car.lod || null;
+    const moto = car.kind === 'scooter'; // 第 13 批：機車（矮、扁到跟路邊的東西一樣）
+    setPad(q, 'car', car.x, car.z, car.heading, car.hx, car.hz, moto ? 1.1 : CAR_H, moto ? PROP_FLAT : CAR_FLAT, true);
+    q.car = car; q.lod = car.lod || car.squash || null;
     st.cars++; note('car');
     // 車上的人先跳車跑掉（往怪獸卡車的反方向、車身的旁邊；不會被輾到）
     const dx = car.x - ME.x, dz = car.z - ME.z, d = Math.hypot(dx, dz) || 1;

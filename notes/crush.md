@@ -156,3 +156,10 @@ BIG_SPOTS / bigMarks / room / village code, so it can run after port-orbay.mjs.
   street is instantly 3★.
 - The monster truck's price is still 800 萬 in PERF (left alone on purpose — the coordinator changes it to 100 萬 when
   merging).
+
+## Batch 13 (2026-10-09): riding scooters (trial v28)
+Nick: 「越野車可以碾摩托車」. Off-road trucks now crush **moving** scooters in the traffic flow, not just parked ones.
+- `npc.js` `hitTest`: the `b.crush` branch now covers `kind === 'scooter'` too. `wreck(c)` sets `c.squash = c.rider.sq`.
+- Each pooled scooter (`takeScooter`) carries a `sq` adapter with the same shape crush.js uses for LOD cars: `{ car, driver.group.visible, setSquash(k) }`. Hiding `driver` hides the rider and the helmet. `setSquash` flattens the `lean` group (y × 0.2 at k = 1). `despawn` resets all of it.
+- `crush.js` `hitTraffic`: scooters get a lower pad (1.1 m → `PROP_FLAT`) and `q.lod = car.lod || car.squash`. The rider bails via `peds.bail`, the same way car drivers do. The rider is never hit or run over.
+- crush-test 2b: monster truck vs a stopped riding scooter. It checks that the scooter is crushed and out of traffic, scale y ≤ 0.3, the rider bailed, and nobody is down. The test then waits 10 s (the `CRIME_GAP`) before section 3.

@@ -1138,7 +1138,7 @@ function createTraffic(o = {}) {
     // 安全帽：量騎士坐著的頭頂（最上面 0.28 公尺的點）
     lean.updateMatrixWorld(true);
     const inv = new THREE.Matrix4().copy(lean.matrixWorld).invert(), v = new THREE.Vector3(), mm = new THREE.Matrix4();
-    let top = -Infinity; const pts = [];
+    let top = -Infinity, helm = null; const pts = [];
     rider.group.traverse((ob) => { if (!ob.isMesh || !ob.geometry.attributes.position) return; mm.multiplyMatrices(inv, ob.matrixWorld); const n = ob.geometry.attributes.position.count; for (let i = 0; i < n; i++) { if (ob.getVertexPosition) ob.getVertexPosition(i, v); else v.fromBufferAttribute(ob.geometry.attributes.position, i); v.applyMatrix4(mm); pts.push(v.x, v.y, v.z); if (v.y > top) top = v.y; } });
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (let i = 0; i < pts.length; i += 3) if (pts[i + 1] > top - 0.28) { x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]); z0 = Math.min(z0, pts[i + 2]); z1 = Math.max(z1, pts[i + 2]); }
@@ -1146,11 +1146,17 @@ function createTraffic(o = {}) {
       if (!HELMET_GEO) HELMET_GEO = new THREE.SphereGeometry(1, 10, 6, 0, TAU, 0, Math.PI * 0.55);
       const hc = ['#f2f3f5', '#c8281e', '#1d1f23', '#2f6fd6', '#f2c230', '#ff8fb5'][(R() * 6) | 0];
       let hm = HELMET_MATS.get(hc); if (!hm) HELMET_MATS.set(hc, (hm = new THREE.MeshStandardMaterial({ color: hc, roughness: 0.35, metalness: 0.05 })));
-      const helm = new THREE.Mesh(HELMET_GEO, hm), sx = Math.max(0.2, x1 - x0) * 0.62, sz = Math.max(0.18, z1 - z0) * 0.66;
+      helm = new THREE.Mesh(HELMET_GEO, hm); const sx = Math.max(0.2, x1 - x0) * 0.62, sz = Math.max(0.18, z1 - z0) * 0.66;
       helm.scale.set(sx, 0.2, sz); helm.position.set((x0 + x1) / 2, top - 0.13, (z0 + z1) / 2); lean.add(helm);
     }
     if (scene) scene.add(g);
-    return { g, lean, rider, hex };
+    // 第 13 批（越野車輾機車）：被輾到的時候騎士跳車（藏起來、peds.bail 生一個人跑掉）、機車壓扁（crush.js 當它是一台車：setSquash）
+    const sq = {
+      car: g,
+      driver: { group: { set visible(v) { rider.group.visible = v; if (helm) helm.visible = v; }, get visible() { return rider.group.visible; } } },
+      setSquash(k) { lean.rotation.x = 0; lean.scale.set(1 + 0.25 * k, 1 - 0.8 * k, 1 + 0.35 * k); },
+    };
+    return { g, lean, rider, hex, sq };
   }
   function spawn(fx, fz, fh, obstacles, initial) {
     const c = cars.find((q) => !q.active); if (!c) return false;
@@ -1204,13 +1210,14 @@ function createTraffic(o = {}) {
     if (c.crushed) { const j = wrecks.indexOf(c); if (j >= 0) wrecks.splice(j, 1); c.crushed = false; } // 第 7 批（輾扁）：收回來的時候車頂、駕駛、高度都回原狀
     if (c.lod) { if (c.lod.setSquash) c.lod.setSquash(0); if (c.lod.driver) c.lod.driver.group.visible = true; c.lod.car.position.y = 0;
       c.lod.car.visible = false; if (c.braking) c.lod.setLook({ brake: false }); c.braking = false; (pool[c.lod.npcKey] ||= []).push(c.lod); }
-    if (c.rider) { c.rider.g.visible = false; scootPool.push(c.rider); }
-    c.lod = null; c.rider = null; c.obj = null; c.edge = null; c.prev = null; c.plan.length = 0; c.commit = null;
+    if (c.rider) { c.rider.sq.setSquash(0); c.rider.sq.driver.group.visible = true; c.rider.g.position.y = 0; c.rider.g.visible = false; scootPool.push(c.rider); }
+    c.squash = null; c.lod = null; c.rider = null; c.obj = null; c.edge = null; c.prev = null; c.plan.length = 0; c.commit = null;
     st.despawned++;
   }
 
   // ---- 第 7 批（輾扁）：被怪獸卡車輾到：從車流裡拿出來、停在那裡（crush.js 畫面、地形接手；別的車不會在它後面排隊，警察、居民也不管它）----
   function wreck(c) {
+    if (c.rider) c.squash = c.rider.sq; // 機車：crush.js 用 squash（跟輕量車的 setSquash、driver 一樣用法）
     c.crushed = true; c.v = 0; c.a = 0; c.stun = 1e9; c.braking = false;
     const i = act.indexOf(c); if (i >= 0) act.splice(i, 1);
     wrecks.push(c); st.crushed++;
@@ -1242,8 +1249,9 @@ function createTraffic(o = {}) {
     for (let j = 0; j < obstacles.length; j++) {
       const b = obstacles[j]; if (!(b.hx > 0.5)) continue; // 走路的人不算撞車
       const dx = c.x - b.x, dz = c.z - b.z; if (dx * dx + dz * dz > (c.hx + b.hx + 1) * (c.hx + b.hx + 1)) continue;
-      // 第 7 批（輾扁）：怪獸卡車（b.crush）靠到汽車身上 → 不是撞到，是輾過去（早 0.6 公尺就算，下一格那台車就不擋了）；機車照舊（上面有人）
-      if (b.crush === true && c.kind === 'car') { if (obbOverlap(c.x, c.z, c.heading, c.hx + 0.6, c.hz + 0.6, b.x, b.z, b.heading || 0, b.hx, b.hz)) { wreck(c); return; } continue; }
+      // 第 7 批（輾扁）：怪獸卡車（b.crush）靠到汽車身上 → 不是撞到，是輾過去（早 0.6 公尺就算，下一格那台車就不擋了）
+      // 第 13 批（Nick 2026-10-09「越野車可以碾摩托車」）：機車也是（騎士先跳車跑掉，只有機車被壓扁）
+      if (b.crush === true && (c.kind === 'car' || (c.kind === 'scooter' && c.rider))) { if (obbOverlap(c.x, c.z, c.heading, c.hx + 0.6, c.hz + 0.6, b.x, b.z, b.heading || 0, b.hx, b.hz)) { wreck(c); return; } continue; }
       if (!obbOverlap(c.x, c.z, c.heading, c.hx + 0.12, c.hz + 0.12, b.x, b.z, b.heading || 0, b.hx, b.hz)) continue;
       const vb = Math.abs(b.v || 0); if (vb < 1.2 && c.v < 1.2) continue;
       const d = hyp(dx, dz) || 1, push = Math.min(0.4, 0.04 * vb + 0.05);

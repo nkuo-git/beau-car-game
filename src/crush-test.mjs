@@ -3,6 +3,7 @@
 //   7 路變寬（村子、內湖）、車流照跑、內湖左上角的路名；1 也多一個：GC8 撞房子只是撞到
 //   1 開 GC8 出門 → 撞路上的車（只是撞到、彈開，不會扁）、撞垃圾桶（也不會扁）
 //   2 直接回車庫 → 換怪獸卡車 → 出門 → 輾路上的車：車頂壓扁、玻璃破、車上的人跳車跑掉（沒人受傷）、警察 +1★、接著還開得動
+//   2b 第 13 批：輾路上騎的機車（騎士先跳車跑掉、沒人受傷，機車扁掉）
 //   3 輾路邊的東西（垃圾桶、燈箱、機車、板凳⋯）：扁掉、再 +1★
 //   4 越野車場的表演場：土坡＋一排五台舊車：輾爆不會報警、第一次說「輾扁了！」、過一會兒自己回來
 //   5 輾扁的車在路邊留 20 秒再收回車流的池子
@@ -118,12 +119,12 @@ await p.addInitScript(() => {
   };
   H.pol = () => { const P = window.__pol(); return P ? { wanted: P.wanted, types: P.telemetry().crimes.map((c) => c.type) } : null; };
   H.cst = () => { const C = window.__C(); return C ? { ...C.stats, types: C.stats.types.slice(), junk: C.stats.junk, pads: C.pads.filter((q) => q.on).length, junkCars: C.junk.length } : null; };
-  // 路上的車：最近的一台汽車（不是機車）；停住它（測試用：stun），回它的位置
-  H.pickTraffic = (r = 70) => {
+  // 路上的車：最近的一台汽車（kind＝'scooter'：機車）；停住它（測試用：stun），回它的位置
+  H.pickTraffic = (r = 70, kind = 'car') => {
     const D = window.__D(), N = window.__N(), t = D.drv.telemetry();
     let best = null, bd = r;
     for (const c of N.traffic.cars) {
-      if (c.kind !== 'car') continue;
+      if (c.kind !== kind) continue;
       const d = Math.hypot(c.x - t.x, c.z - t.z); if (d > bd) continue;
       let busy = false; // 後面 10 公尺要空（怪獸卡車要放在那裡）
       const bx = c.x - Math.cos(c.heading) * 10, bz = c.z + Math.sin(c.heading) * 10;
@@ -139,6 +140,7 @@ await p.addInitScript(() => {
   H.carState = (id) => { // 那一台現在怎麼樣（扁了沒、在車流裡還是 wrecks 裡）
     const N = window.__N();
     const inA = N.traffic.cars.find((c) => c.id === id), inW = N.traffic.wrecks.find((c) => c.id === id), c = inA || inW;
+    if (c && c.rider) return { live: !!inA, wreck: !!inW, crushed: !!c.crushed, scaleY: +c.rider.lean.scale.y.toFixed(3), driver: c.rider.sq.driver.group.visible, v: +c.v.toFixed(2) }; // 機車
     return { live: !!inA, wreck: !!inW, crushed: !!(c && c.crushed), scaleY: c && c.lod ? +c.lod.body.scale.y.toFixed(3) : null,
       glass: c && c.lod ? c.lod.meshes.glass.visible : null, driver: c && c.lod && c.lod.driver ? c.lod.driver.group.visible : null, v: c ? +c.v.toFixed(2) : null };
   };
@@ -297,6 +299,30 @@ console.log('  drives on:', JSON.stringify(on2.r));
 check(on2.r.maxKmh > 18 && on2.r.moved > 25 && Math.abs(on2.tele.y) < 0.3, `the truck drives on afterwards (${on2.r.moved} m further at up to ${on2.r.maxKmh} km/h, back down on the road; a house across the main road stops it now)`);
 summary.push(`monster vs traffic car: squashed to ${crush2.car.scaleY}, ${crush2.cst.bails} people out, ${crush2.pol.wanted}★`);
 await drawAndShot('3-drives-on');
+
+// ================= 2b 第 13 批：輾路上騎的機車（騎士先跳車跑掉，只有機車扁）=================
+await p.evaluate(() => { const D = window.__D(); D.drv.teleport(D.VIL.places.garage.spawn); window.__H.step(20); window.__pol()?.clear(); });
+let tgtM = null;
+for (let i = 0; i < 30 && !tgtM; i++) { await p.evaluate(() => window.__H.step(90)); tgtM = await p.evaluate(() => window.__H.pickTraffic(90, 'scooter')); }
+console.log('2b', el(), 'scooter target:', JSON.stringify(tgtM));
+check(!!tgtM, 'found a scooter (with a rider) on the road');
+const crushM = tgtM ? await p.evaluate((q) => {
+  const D = window.__D(), H = window.__H, C = window.__C();
+  window.__pol()?.clear();
+  const n0 = window.__N().peds.stats.knocks, c0 = C.stats.cars, b0 = C.stats.bails;
+  D.drv.teleport({ x: q.bx, z: q.bz, heading: q.heading }); H.step(10);
+  const r = H.drive({ throttle: 0.45, brake: 0, steer: 0 }, 6, `window.__C().stats.cars > ${c0}`);
+  const r2 = H.drive({ throttle: 0.45, brake: 0, steer: 0 }, 2, null);
+  return { r, r2, car: H.carState(q.id), crushed: C.stats.cars - c0, bails: C.stats.bails - b0, hurt: H.hurt(), knocks0: n0, pol: H.pol() };
+}, tgtM) : null;
+console.log('  monster truck crushes a scooter:', JSON.stringify(crushM));
+check(!!crushM && crushM.crushed === 1 && crushM.car.crushed && crushM.car.wreck, 'the monster truck crushed the scooter (taken out of the traffic flow)');
+check(!!crushM && crushM.car.scaleY <= 0.3, `the scooter is squashed flat (scale y ${crushM && crushM.car.scaleY})`);
+check(!!crushM && crushM.bails >= 1 && crushM.car.driver === false, `the rider jumped off and ran before it was crushed (${crushM && crushM.bails} out, nobody left on the scooter)`);
+check(!!crushM && crushM.hurt.down === 0 && crushM.hurt.knocks === crushM.knocks0 && !crushM.pol.types.includes('hit'), `nobody was hurt (nobody down, no "hit" crime)`);
+await drawAndShot('2b-crushed-scooter');
+summary.push(`monster vs scooter: squashed to ${crushM && crushM.car.scaleY}, ${crushM && crushM.bails} rider out`);
+await p.evaluate(() => window.__H.step(600)); // 一路輾過去 8 秒內只報一次警（CRIME_GAP）：等 10 秒再輾下一個
 
 // ================= 3 輾路邊的東西 =================
 const prop3 = await p.evaluate(() => { const t = window.__D().drv.telemetry(); return window.__H.pickProp(t.x, t.z, 160); });
