@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 # 試做頁（node src/build-art.mjs --yaris、make-free.mjs 產生的，很大，不放進 git）
 src/art/
 # 測試的截圖、記錄

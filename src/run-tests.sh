@@ -17,6 +17,6 @@ for t in $LIST; do
   node "$t.mjs" $args > "../out/logs/$t.log" 2>&1
   code=$?
   oks=$(grep -c '^ *ok ' "../out/logs/$t.log")
-  fails=$(grep -c '^ *FAIL' "../out/logs/$t.log")
+  fails=$(grep -c '^ *FAIL ' "../out/logs/$t.log")
   echo "$t: exit $code, $oks ok, $fails FAIL, $(( $(date +%s) - start ))s — $(tail -1 "../out/logs/$t.log")"
 done

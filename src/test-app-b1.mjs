@@ -542,7 +542,7 @@ fi = await fsInfo();
 check(fullView(fi) && fi.pref === 'on' && (!APP || fi.calls === 'true,false,true'), 'fullscreen button again: fullscreen, remembered as on');
 const back1 = await p.evaluate(() => window.caridExitFullscreen()); fi = await fsInfo();
 const back2 = await p.evaluate(() => window.caridExitFullscreen());
-check(back1 === true && back2 === false && !fi.fs && fi.pref === 'on' && fi.pressed === 'false' && (!APP || (fi.calls === 'true,false,true,false' && /tune\.html/.test(p.url()))),
+check(back1 === true && back2 === false && !fi.fs && fi.pref === 'on' && fi.pressed === 'false' && (!APP || (fi.calls === 'true,false,true,false' && (SITE ? new URL(p.url()).pathname === '/' : /tune\.html/.test(p.url())))),
   'Android back (caridExitFullscreen) leaves fullscreen for this trip only (setting stays on); when not fullscreen it returns false');
 await p.evaluate(() => document.getElementById('fsBtn').click()); await p.waitForTimeout(300);
 fi = await fsInfo();
