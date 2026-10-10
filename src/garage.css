@@ -252,15 +252,39 @@ body.fs #drivebar .minirow .snd svg { width: 22px; height: 22px; }
 body.fs #drivebar .minirow .snd[aria-pressed="false"] { color: #9AA1AC; }
 /* 矮的畫面（手機橫拿、小視窗）：去哪裡固定排兩排、往右排過去（以後多了目的地也一樣高），才不會高到碰到上面的按鈕 */
 @media (max-height: 560px) { body.fs #dests { display: grid; grid-template-columns: none; grid-template-rows: repeat(2, auto); grid-auto-flow: column; grid-auto-columns: auto; justify-items: start; } }
-/* 修 11（Nick 2026-10-10 兩張截圖：顯示大小調大的手機，兩排目的地蓋住路和車）：手機橫拿全螢幕「開車」的時候收成一顆「📍 去哪裡 ▾」；
-   按了才打開（三欄，「直接回車庫」在上面）；選了、開走了就收起來（town.src.js 的 destOpen）。走路、直拿手機、不是全螢幕的照舊 */
-.dtog { display: none; }
-@media (max-height: 560px) {
-  body.fs.driving:not(.walking) #drivebar .dtog { display: block; height: 34px; padding: 0 13px; border: 0; border-radius: 999px; background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 13px/1 var(--sans); white-space: nowrap; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-  body.fs.driving:not(.walking).destsopen #drivebar .dtog { background: var(--accent); color: var(--on-accent); }
-  body.fs.driving:not(.walking):not(.destsopen) #dests, body.fs.driving:not(.walking):not(.destsopen) #drivebar .minirow .ghost:not(.snd) { display: none; }
-  body.fs.driving:not(.walking).destsopen #dests { grid-template-rows: none; grid-template-columns: repeat(3, auto); grid-auto-flow: row; }
-}
+/* 修 11（Nick 2026-10-10 兩張截圖：顯示大小調大的手機，目的地蓋住路和車）＋ Nick「按鈕不用總是全部顯示…點了再列出來 再點一次就收起來」：
+   全螢幕「開車」的時候（直拿、橫拿都一樣）目的地收成一顆「📍 去哪裡 ▾」，右上的聲音、全螢幕、換視角收成一顆「⋯」；
+   按了才打開、再按一次收起來；選了地方、開走了也會收（town.src.js 的 destOpen、moreOpen）。走路、比賽、不是全螢幕的照舊 */
+.dtog, .moretog { display: none; }
+body.fs.driving:not(.walking) #drivebar .dtog { display: block; height: 34px; padding: 0 13px; border: 0; border-radius: 999px; background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 13px/1 var(--sans); white-space: nowrap; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+body.fs.driving:not(.walking).destsopen #drivebar .dtog { background: var(--accent); color: var(--on-accent); }
+body.fs.driving:not(.walking):not(.destsopen) #dests, body.fs.driving:not(.walking):not(.destsopen) #drivebar .minirow .ghost:not(.snd) { display: none; }
+@media (min-height: 561px) { body.fs.driving:not(.walking) #drivebar .dtog { order: 1; } } /* 直拿：「去哪裡」在方向鍵正上面，打開的地方往上排 */
+/* 橫拿打開：「去哪裡」＋8 個地方＋「直接回車庫」排成 5 個一排、兩排（不會往上疊到「開鐵捲門」） */
+@media (max-height: 560px) { body.fs.driving:not(.walking).destsopen #drivebar { display: grid; grid-template-columns: repeat(5, auto); justify-items: start; }
+  body.fs.driving:not(.walking).destsopen #drivebar #dests, body.fs.driving:not(.walking).destsopen #drivebar .minirow { display: contents; } }
+body.fs.driving:not(.walking):not(.racing) #drivebar .moretog { display: grid; place-items: center; position: fixed; top: calc(var(--fs-t) + 142px); right: calc(var(--fs-r) + 10px); width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 20px/1 var(--sans); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: margin-top .2s; }
+body.fs.driving:not(.walking):not(.racing).moreopen #drivebar .moretog { background: var(--accent); color: var(--on-accent); font-size: 16px; }
+body.fs.driving:not(.walking):not(.racing):not(.moreopen) #drivebar .minirow .snd, body.fs.driving:not(.walking):not(.racing):not(.moreopen) #stage .fsbtn, body.fs.driving:not(.walking):not(.racing):not(.moreopen) #stage .dv-cam { display: none; }
+body.fs.driving:not(.walking):not(.racing).moreopen #drivebar .minirow .snd { right: calc(var(--fs-r) + 166px); }
+body.fs.driving:not(.walking):not(.racing).moreopen #stage .fsbtn { right: calc(var(--fs-r) + 114px); }
+body.fs.driving:not(.walking):not(.racing).moreopen #stage .dv-cam { right: 62px; }
+/* 按鈕大小（Nick 2026-10-10「加個遊戲設定的選項 可以讓他自訂想看到的大小」）：「⋯」打開那一排多一顆「Aa」，按了那一排換成「按鈕大小 小 中 大」；
+   開車、走路畫面裡的按鈕照 --hudz 縮放（小 0.8、中 1、大 1.15；每支手機記在 carid.btnsize） */
+:root { --hudz: 1; }
+body.fs #stage .dv > *, body.fs #stage .wk > *, body.fs #drivebar, body.fs #stage .fsbtn { zoom: var(--hudz); }
+.sizetog, .sizepop { display: none; }
+body.fs.driving:not(.walking):not(.racing).moreopen:not(.sizeopen) #drivebar .sizetog { display: grid; place-items: center; position: fixed; top: calc(var(--fs-t) + 142px); right: calc(var(--fs-r) + 218px); width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 15px/1 var(--sans); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+body.fs.driving:not(.walking):not(.racing).moreopen.sizeopen #drivebar .sizepop { display: flex; align-items: center; gap: 4px; position: fixed; top: calc(var(--fs-t) + 142px); right: calc(var(--fs-r) + 62px); height: 44px; padding: 0 4px 0 12px; box-sizing: border-box; border-radius: 999px;
+  background: rgba(14,15,18,0.72); color: #F2F3F5; font: 700 13px/1 var(--sans); white-space: nowrap; }
+body.fs #drivebar .sizepop span { margin-right: 4px; }
+body.fs #drivebar .sizepop button { height: 36px; min-width: 40px; padding: 0 10px; border: 0; border-radius: 999px; background: rgba(255,255,255,0.1); color: #F2F3F5; font: 700 14px/1 var(--sans); cursor: pointer; touch-action: manipulation; }
+body.fs #drivebar .sizepop button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+body.fs.driving:not(.walking):not(.racing).sizeopen #drivebar .minirow .snd, body.fs.driving:not(.walking):not(.racing).sizeopen #stage .fsbtn, body.fs.driving:not(.walking):not(.racing).sizeopen #stage .dv-cam { display: none; }
+@media (min-height: 561px) { body.fs.wanted #drivebar .moretog, body.fs.wanted #drivebar .sizetog, body.fs.wanted #drivebar .sizepop { margin-top: 46px; } }
+@media (max-height: 560px) { body.fs.driving:not(.walking):not(.racing).moreopen #stage .dv-act2 { right: 270px; } } /* 橫拿：「下車」在那一排的左邊，打開的時候再往左讓開 */
 body.fs #dests button, body.fs #drivebar .minirow .ghost { white-space: nowrap; }
 /* 比賽：下面拉上來的一片（成績、開始比賽、選對手）；跑的時候（body.race-live，race.src.js）收起來 */
 body.fs #race { position: fixed; z-index: 51; left: 0; right: 0; bottom: 0; max-width: 560px; margin: 0 auto; max-height: min(60vh, 620px); max-height: min(60dvh, 620px); overflow-y: auto; overscroll-behavior: contain;

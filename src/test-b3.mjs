@@ -72,12 +72,12 @@ const fsInfo = () => p.evaluate(() => {
   const st = q('#stage').getBoundingClientRect(), rc = q('#race').getBoundingClientRect();
   return { fs: document.body.classList.contains('fs'), html: document.documentElement.classList.contains('fs'), live: document.body.classList.contains('race-live'), walking: document.body.classList.contains('walking'),
     stage: [st.left, st.top, st.width, st.height].map(Math.round), vw: innerWidth, vh: innerHeight, pos: getComputedStyle(q('#stage')).position,
-    chrome: ['.appbar', '.segbar', '.tabbar'].filter((s) => vis(q(s))).join(' '), btn: vis(q('#fsBtn')), pressed: q('#fsBtn').getAttribute('aria-pressed'),
+    chrome: ['.appbar', '.segbar', '.tabbar'].filter((s) => vis(q(s))).join(' '), btn: vis(q('#fsBtn')), more: vis(q('#moreTog')), pressed: q('#fsBtn').getAttribute('aria-pressed'),
     scrolls: document.documentElement.scrollHeight > innerHeight + 1, pref: localStorage.getItem('carid.tune.full'), calls: (window.__fsCalls || []).join(','),
     race: vis(q('#race')) ? [rc.left, rc.top, rc.width, rc.height].map(Math.round) : null, pedals: vis(q('#hud .pedals')), gauge: vis(q('#hud .gauge')) };
 });
 const shown = (sel) => p.evaluate((s) => { const e = document.querySelector(s); return !!e && !e.hidden && getComputedStyle(e).display !== 'none' && e.getClientRects().length > 0; }, sel);
-const fullView = (f) => f.fs && f.html && f.pos === 'fixed' && f.stage.join() === `0,0,${f.vw},${f.vh}` && !f.chrome && !f.scrolls && f.btn;
+const fullView = (f) => f.fs && f.html && f.pos === 'fixed' && f.stage.join() === `0,0,${f.vw},${f.vh}` && !f.chrome && !f.scrolls && (f.btn || f.more); // 全螢幕開車：全螢幕鈕收在「⋯」裡
 // 畫面上的按鈕：開車的 HUD（多了「下車」）、走路的 HUD（搖桿、上車／升降機／睡覺的大按鈕、小地圖、換視角、右下角的圓按鈕）、疊在畫面上的去哪裡／直接回車庫／聲音、
 //   全螢幕鈕、比賽的 HUD：看得到的兩兩不重疊；全螢幕的時候都在螢幕裡面（離邊邊至少 4 px）
 const HUD_SEL = ['.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '.wk-chip', '.wk-act', '.wk-map', '.wk-cam', '.wk-stick', '.wk-btns',
@@ -353,10 +353,12 @@ await p.addInitScript(() => {
     }
     return false;
   };
+  // 路人走去哪裡每次不一樣：「離警察局遠一點」揍人的時候，挑從警車出來的地方看不到的（房子擋住；不要剛好挑到警察局門口那條直路上的人）
+  X.farFromPolice = (q) => { const D = P3().police._dbg, st = D.station.spawn || window.__D().VIL.places.police?.spawn; return !st || (Math.hypot(q.x - st.x, q.z - st.z) > 60 && D.tall.blocked(st.x, st.z, q.x, q.z, 0)); };
   // 離 (x, z) 最近的人（age：'adult' | 'kid'；站著、走著的）
-  X.person = (x, z, age, maxD = 200) => {
+  X.person = (x, z, age, maxD = 200, ok = null) => { // ok(q)：另外的條件（例如離警察局夠遠）
     let best = null, bd = maxD;
-    for (const q of P3().NPC.peds.people) { if (q.gone || q.active === false || (age === 'adult' ? q.age === 'kid' : q.age !== age) || !['walk', 'idle', 'stand', 'talk', 'wait'].includes(q.mode) || q.y > 0.1) continue; const d = Math.hypot(q.x - x, q.z - z); if (d < bd) { bd = d; best = q; } }
+    for (const q of P3().NPC.peds.people) { if ((ok && !ok(q)) || q.gone || q.active === false || (age === 'adult' ? q.age === 'kid' : q.age !== age) || !['walk', 'idle', 'stand', 'talk', 'wait'].includes(q.mode) || q.y > 0.1) continue; const d = Math.hypot(q.x - x, q.z - z); if (d < bd) { bd = d; best = q; } }
     return best;
   };
   X.pol = () => { const t = P3().police.telemetry(); return { wanted: t.wanted, state: t.state, seen: t.seen, everSeen: t.everSeen, heat: t.heat, cars: t.cars.map((c) => `${c.id}:${c.mode}:${c.d}:${c.officer}`).join(' '), crimes: t.crimes.map((c) => c.type).join(','), arrests: t.arrests, escapes: t.escapes, jail: t.jail, player: t.player }; };
@@ -542,7 +544,7 @@ const s4a = await ev(() => {
   const X = window.__X, D = window.__D(), H = window.__H, w = D.walker, P3 = window.__P3(), pol = P3.police;
   // 離警察局遠一點（你家門口外面）揍一個大人
   w.teleport(H.gw(16, 4, 0)); X.step(60);
-  const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300); if (!ad) return { err: 'no adult' };
+  const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300, X.farFromPolice); if (!ad) return { err: 'no adult' };
   X.faceTo(ad); X.punchBtn(); X.step(2);
   const a = { wanted: pol.wanted };
   X.step(180); const t3 = pol.telemetry(); a.at3 = { heat: t3.heat, everSeen: t3.everSeen, seen: t3.seen, hunt: t3.hunt, cars: X.pol().cars };
@@ -576,7 +578,7 @@ const s4b = await ev(() => {
   w.teleport(H.gw(7.5, 0, Math.PI)); X.step(20);
   if (G.door.t === 0) { a.open = H.press(); for (let i = 0; i < 200 && G.door.t < 1; i++) X.step(1); }
   w.teleport(H.gw(16, 4, 0)); X.step(30);
-  const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300); if (!ad) return { err: 'no adult' };
+  const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300, X.farFromPolice); if (!ad) return { err: 'no adult' };
   X.faceTo(ad); X.punchBtn(); X.step(2);
   a.wanted = pol.wanted;
   // 馬上跑回車庫裡面

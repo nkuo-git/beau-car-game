@@ -76,19 +76,21 @@ const fsInfo = () => p.evaluate(() => {
   const st = q('#stage').getBoundingClientRect(), rc = q('#race').getBoundingClientRect();
   return { fs: document.body.classList.contains('fs'), html: document.documentElement.classList.contains('fs'), live: document.body.classList.contains('race-live'), walking: document.body.classList.contains('walking'),
     stage: [st.left, st.top, st.width, st.height].map(Math.round), vw: innerWidth, vh: innerHeight, pos: getComputedStyle(q('#stage')).position,
-    chrome: ['.appbar', '.segbar', '.tabbar'].filter((s) => vis(q(s))).join(' '), btn: vis(q('#fsBtn')), pressed: q('#fsBtn').getAttribute('aria-pressed'),
+    chrome: ['.appbar', '.segbar', '.tabbar'].filter((s) => vis(q(s))).join(' '), btn: vis(q('#fsBtn')), more: vis(q('#moreTog')), pressed: q('#fsBtn').getAttribute('aria-pressed'),
     scrolls: document.documentElement.scrollHeight > innerHeight + 1, pref: localStorage.getItem('carid.tune.full'), calls: (window.__fsCalls || []).join(','),
     race: vis(q('#race')) ? [rc.left, rc.top, rc.width, rc.height].map(Math.round) : null, pedals: vis(q('#hud .pedals')), gauge: vis(q('#hud .gauge')) };
 });
 const shown = (sel) => p.evaluate((s) => { const e = document.querySelector(s); return !!e && !e.hidden && getComputedStyle(e).display !== 'none' && e.getClientRects().length > 0; }, sel);
-const fullView = (f) => f.fs && f.html && f.pos === 'fixed' && f.stage.join() === `0,0,${f.vw},${f.vh}` && !f.chrome && !f.scrolls && f.btn;
+const fullView = (f) => f.fs && f.html && f.pos === 'fixed' && f.stage.join() === `0,0,${f.vw},${f.vh}` && !f.chrome && !f.scrolls && (f.btn || f.more); // 全螢幕開車：全螢幕鈕收在「⋯」裡
 // 畫面上的按鈕：開車的 HUD（多了「下車」）、走路的 HUD（搖桿、上車／升降機／睡覺的大按鈕、小地圖、換視角、右下角的圓按鈕）、疊在畫面上的去哪裡／直接回車庫／聲音、
 //   全螢幕鈕、比賽的 HUD：看得到的兩兩不重疊；全螢幕的時候都在螢幕裡面（離邊邊至少 4 px）
 const HUD_SEL = ['.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '.wk-chip', '.wk-act', '.wk-map', '.wk-cam', '.wk-stick', '.wk-btns',
-  '#dests', '#destTog', '#driveHome', '#dSndBtn', '#fsBtn', '#hud .trackbar', '#hud .tree', '#hud .clock', '#hud .gauge', '#hud .pedals', '#race'];
+  '#dests', '#destTog', '#moreTog', '#sizeTog', '#sizePop', '#driveHome', '#dSndBtn', '#fsBtn', '#hud .trackbar', '#hud .tree', '#hud .clock', '#hud .gauge', '#hud .pedals', '#race'];
 const hudClash = (inView = true) => p.evaluate(([inView, S]) => {
-  const R = S.map((s) => [s, document.querySelector(s)]).filter(([, e]) => e && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden' && e.getClientRects().length)
-    .map(([s, e]) => [s, e.getBoundingClientRect()]), out = [];
+  // 橫拿打開的「去哪裡」：#dests 是 display: contents（按鈕直接排在 #drivebar 的格子裡）→ 裡面看得到的按鈕一個一個量
+  const R = S.map((s) => [s, document.querySelector(s)]).filter(([, e]) => e && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden')
+    .flatMap(([s, e]) => getComputedStyle(e).display === 'contents' ? [...e.children].filter((c) => !c.hidden && getComputedStyle(c).display !== 'none' && c.getClientRects().length).map((c, i) => [`${s}>${i + 1}`, c.getBoundingClientRect()])
+      : e.getClientRects().length ? [[s, e.getBoundingClientRect()]] : []), out = [];
   if (inView) for (const [s, r] of R) if (s !== '#race' && (r.left < 4 || r.top < 4 || r.right > innerWidth - 4 || r.bottom > innerHeight - 4)) out.push(`${s} off-screen ${[r.left, r.top, r.right, r.bottom].map(Math.round)}`);
   for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++) { const a = R[i][1], b = R[j][1]; if (a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) out.push(`${R[i][0]} × ${R[j][0]}`); }
   return out.join(' | ');
@@ -523,30 +525,49 @@ console.log('  fullscreen (in the car):', JSON.stringify(fi), '| clash:', clash 
 check(fullView(fi) && !fi.walking && !clash, `in the car: still fullscreen; 開鐵捲門, 下車, steering, pedals, map and the page buttons all on screen, none overlapping (${clash || 'ok'})`);
 clash = await sizeSweep();
 check(!clash, `in the car on other screens (landscape: 下車 moves into the row of round buttons): none overlapping (${clash || 'ok'})`);
-// 修 11（Nick 2026-10-10：顯示大小調大的手機，兩排目的地蓋住路和車）：手機橫拿全螢幕開車＝一顆「📍 去哪裡 ▾」，按了打開、選了收起來；「手煞車」一行
+// 修 11＋Nick 2026-10-10「按鈕不用總是全部顯示…點了再列出來 再點一次就收起來」「加個遊戲設定的選項 可以讓他自訂想看到的大小」：
+//   全螢幕開車（直拿、橫拿）＝一顆「📍 去哪裡 ▾」＋一顆「⋯」（聲音、全螢幕、換視角、Aa 按鈕大小），按了打開、再按收起來、選了地方收起來；「手煞車」一行
 //   731×338＝2340×1080 的手機「顯示大小」調大（約 3.2 倍）
 const dtog = [];
-for (const [w, h] of [[915, 412], [800, 360], [731, 338]]) {
+for (const [w, h] of [[390, 844], [360, 740], [915, 412], [800, 360], [731, 338]]) {
   await p.setViewportSize({ width: w, height: h }); await p.waitForTimeout(250); await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const st = () => p.evaluate(() => { const H = window.__H, hb = document.querySelector('#stage .dv-hb'), rg = document.createRange(); rg.selectNodeContents(hb);
-    const lines = new Set([...rg.getClientRects()].map((r) => Math.round(r.top))).size, ds = document.getElementById('dests').getBoundingClientRect();
-    return { tog: H.visible('#destTog'), dests: H.visible('#dests'), home: H.visible('#driveHome'), hbLines: lines, top: Math.round(ds.top), open: document.body.classList.contains('destsopen') }; });
+    const lines = new Set([...rg.getClientRects()].map((r) => Math.round(r.top))).size, B = document.body.classList;
+    return { tog: H.visible('#destTog'), dests: H.visible('#dests button[data-d="shop"]'), home: H.visible('#driveHome'), hbLines: lines, open: B.contains('destsopen'),
+      more: H.visible('#moreTog'), snd: H.visible('#dSndBtn'), fs: H.visible('#fsBtn'), cam: H.visible('#stage .dv-cam'), aa: H.visible('#sizeTog'), pop: H.visible('#sizePop'), mopen: B.contains('moreopen'),
+      gas: Math.round(document.querySelector('#stage .dv-gas').getBoundingClientRect().height), z: getComputedStyle(document.documentElement).getPropertyValue('--hudz').trim(), saved: localStorage.getItem('carid.btnsize') }; });
   const shut = await st(), c0 = await hudClash();
   await p.click('#destTog'); await p.waitForTimeout(80);
   const open = await st(), c1 = await hudClash();
   await p.click('#dests button[data-d="shop"]'); await p.waitForTimeout(80);
   const picked = await st(), dest = await p.evaluate(() => window.__D().drv.telemetry().dest);
   await p.evaluate(() => window.__D().setDest(null));
-  dtog.push({ w, h, shut, open, picked, dest, c0, c1 });
+  await p.click('#moreTog'); await p.waitForTimeout(80);
+  const more = await st(), c2 = await hudClash();
+  await p.click('#sizeTog'); await p.waitForTimeout(80);
+  const pop = await st(), c3 = await hudClash();
+  await p.click('#sizePop button[data-z="s"]'); await p.waitForTimeout(150);
+  const small = await st(), c4 = await hudClash();
+  await p.click('#sizeTog'); await p.waitForTimeout(80); await p.click('#sizePop button[data-z="l"]'); await p.waitForTimeout(150);
+  const large = await st(), c5 = await hudClash();
+  await p.click('#sizeTog'); await p.waitForTimeout(80); await p.click('#sizePop button[data-z="m"]'); await p.waitForTimeout(150);
+  await p.click('#moreTog'); await p.waitForTimeout(80);
+  const back = await st();
+  dtog.push({ w, h, shut, open, picked, dest, more, pop, small, large, back, c0, c1, c2, c3, c4, c5 });
 }
 await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(250); await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-const portrait = await p.evaluate(() => ({ tog: window.__H.visible('#destTog'), dests: window.__H.visible('#dests') }));
-console.log('  去哪裡 (landscape):', JSON.stringify(dtog), JSON.stringify(portrait));
-check(dtog.every((d) => d.shut.tog && !d.shut.dests && !d.shut.home && !d.shut.open && !d.c0) && portrait.dests && !portrait.tog,
-  `landscape full screen in the car: the destinations fold into one 「📍 去哪裡 ▾」 (no rows over the road; 915×412, 800×360 and a big-display 731×338), nothing overlapping; portrait still shows the list`);
+console.log('  去哪裡 / ⋯ / 按鈕大小:', JSON.stringify(dtog));
+// 「大」放大到排得下為止：直拿 390 寬、橫拿 340 高＝1 倍（不會比「中」小）；915×412 這種夠大的畫面就是 1.15
+const bigZ = (w, h) => +Math.max(1, Math.min(1.15, h <= 560 ? h / 340 : w / 390)).toFixed(2);
+check(dtog.every((d) => d.shut.tog && !d.shut.dests && !d.shut.home && !d.shut.open && d.shut.more && !d.shut.snd && !d.shut.fs && !d.shut.cam && !d.shut.aa && !d.c0),
+  `full screen in the car (portrait 390×844, 360×740; landscape 915×412, 800×360, big-display 731×338): only 「📍 去哪裡 ▾」 and 「⋯」 show (no list over the road, no row of round buttons), nothing overlapping`);
 check(dtog.every((d) => d.open.dests && d.open.home && d.open.open && !d.c1 && d.dest === 'shop' && !d.picked.open && !d.picked.dests),
-  `tapping it opens the list (with 直接回車庫), nothing overlapping (${dtog.map((d) => d.c1 || 'ok').join(', ')}); picking 「去改車廠」 sets the route and folds it again`);
-check(dtog.every((d) => d.shut.hbLines === 1), `「手煞車」 stays on one line on every landscape size (${dtog.map((d) => d.shut.hbLines).join(', ')} line)`);
+  `tapping 去哪裡 opens the list (with 直接回車庫), nothing overlapping (${dtog.map((d) => d.c1 || 'ok').join(', ')}); picking 「去改車廠」 sets the route and folds it again`);
+check(dtog.every((d) => d.more.mopen && d.more.snd && d.more.fs && d.more.cam && d.more.aa && !d.c2 && !d.back.mopen && !d.back.snd && !d.back.fs && !d.back.cam),
+  `tapping 「⋯」 shows sound, full screen, camera and 「Aa」 in one row, nothing overlapping (${dtog.map((d) => d.c2 || 'ok').join(', ')}); tapping it again folds them`);
+check(dtog.every((d) => d.pop.pop && !d.pop.snd && !d.c3 && d.small.z === '0.8' && d.small.saved === 's' && !d.small.pop && Math.abs(d.small.gas / d.shut.gas - 0.8) < 0.05 && !d.c4 && +d.large.z === bigZ(d.w, d.h) && d.large.saved === 'l' && Math.abs(d.large.gas / d.shut.gas - bigZ(d.w, d.h)) < 0.05 && !d.c5 && d.back.z === '1' && d.back.saved === 'm') && dtog.find((d) => d.w === 915).large.z === '1.15',
+  `「Aa」 → 「按鈕大小 小 中 大」: 小 makes the buttons 0.8× (gas ${dtog.map((d) => d.shut.gas + '→' + d.small.gas).join(', ')} px), 大 up to 1.15× where it still fits (${dtog.map((d) => d.large.z).join(', ')}), saved on this phone; nothing overlapping at any size (${dtog.map((d) => (d.c4 || 'ok') + '/' + (d.c5 || 'ok')).join(', ')})`);
+check(dtog.every((d) => d.shut.hbLines === 1), `「手煞車」 stays on one line on every size (${dtog.map((d) => d.shut.hbLines).join(', ')} line)`);
 // 右上的鈕：離開全螢幕（畫面回到頁面裡，下面那排大按鈕回來）→ 再按一次回到全螢幕；返回鍵（外殼叫 window.caridExitFullscreen）只離開這一趟
 await p.evaluate(() => document.getElementById('fsBtn').click()); await p.waitForTimeout(300);
 const off1 = await fsInfo(), offBar = await p.evaluate(() => { const r = document.getElementById('drivebar').getBoundingClientRect(), s = document.getElementById('stage').getBoundingClientRect(); return { below: r.top >= s.bottom - 1, h: Math.round(s.height) }; });

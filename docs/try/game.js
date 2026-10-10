@@ -28016,6 +28016,8 @@ function createPedestrians(o = {}) {
     st.noRoute++;
     return false;
   }
+  // 修 10：內湖的人行道很窄：讓別人的時候不要讓到車道上（繞過停在人行道上的車才可以走到路上，那時候會看有沒有車來）
+  const onLane = (p, x, z) => V.npcOnRoad && EDGES[p.route[p.ri]].kind === 'side' && V.npcOnRoad(x, z);
   function setWalk(p) { p.mode = 'walk'; p.run = p.age === 'kid' && R() < 0.45; p.lat = 0; p.latT = 0; }
   // 從現在的位置回到路網上（被撞、閃車、嚇跑之後）：最近、直直走得到的側線點
   function reattach(p) {
@@ -28239,9 +28241,9 @@ function createPedestrians(o = {}) {
         let side = blockLat > 0.05 ? -1 : blockLat < -0.05 ? 1 : 1; // 往沒有人的那邊（對面來的都往自己的右邊）
         const gap = p.r + WS[11] + 0.12, lm = car ? 1.7 : 0.95; // 停著的車比較寬：可以讓遠一點（走到馬路上繞過去，那邊沒有車過來才走）
         const want = clamp(p.lat + side * (gap - Math.abs(blockLat)), -lm, lm);
-        const cx = T.x + rx * want, cz = T.z + rz * want;
-        if (W.clearAt(cx, cz, 0.28) && !(car && carComing(cx, cz, p.r + 0.3))) p.latT = want;
-        else { const w2 = clamp(p.lat - side * (gap + Math.abs(blockLat)), -lm, lm), x2 = T.x + rx * w2, z2 = T.z + rz * w2; if (W.clearAt(x2, z2, 0.28) && !(car && carComing(x2, z2, p.r + 0.3))) p.latT = w2; else vt = Math.min(vt, blockL < 1 ? 0 : 0.4); }
+        const cx = T.x + rx * want, cz = T.z + rz * want; p.latCar = car;
+        if (W.clearAt(cx, cz, 0.28) && (car ? !carComing(cx, cz, p.r + 0.3) : !onLane(p, cx, cz))) p.latT = want;
+        else { const w2 = clamp(p.lat - side * (gap + Math.abs(blockLat)), -lm, lm), x2 = T.x + rx * w2, z2 = T.z + rz * w2; if (W.clearAt(x2, z2, 0.28) && (car ? !carComing(x2, z2, p.r + 0.3) : !onLane(p, x2, z2))) p.latT = w2; else vt = Math.min(vt, blockL < 1 ? 0 : 0.4); }
         if (blockL < 0.75) vt = Math.min(vt, 0.25);
       }
       // 迎面遇到認識的人：停下來聊天
@@ -28259,7 +28261,7 @@ function createPedestrians(o = {}) {
     }
     p.lat += clamp(p.latT - p.lat, -0.9 * h, 0.9 * h);
     if (p.lat !== 0) { // 往旁邊讓：不能讓到牆裡、樹裡（每一幀都看，讓不過去就少讓一點）
-      let la = p.lat; for (let k = 0; k < 6 && !W.clearAt(tx + rx * la, tz + rz * la, p.r); k++) la *= 0.55;
+      let la = p.lat; for (let k = 0; k < 6 && !(W.clearAt(tx + rx * la, tz + rz * la, p.r) && (p.latCar || !onLane(p, tx + rx * la, tz + rz * la))); k++) la *= 0.55;
       if (la !== p.lat) { if (la > -0.03 && la < 0.03) la = 0; p.lat = la; if (p.latT * la >= 0 && Math.abs(p.latT) > Math.abs(la)) p.latT = la; }
     }
     tx += rx * p.lat; tz += rz * p.lat;
@@ -35483,8 +35485,35 @@ function setDest(d) {
 }
 destBtns.forEach((b) => b.addEventListener('click', () => { if (DRIVE.on) setDest(b.dataset.d); }));
 // 修 11：手機橫拿全螢幕開車的時候「去哪裡」收成一顆（garage.css .dtog）：按了打開，選了、開走了就收起來
-function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); }
+// Nick 2026-10-10「按鈕不用總是全部顯示 可以效法目的地選單那樣 點了再列出來 再點一次就收起來」：去哪裡、⋯（聲音、全螢幕、換視角）
+//   平常收起來（garage.css）；停著打開的，開走了（超過 4 m/s）就收；開著的時候打開的，8 秒後收（FOLD：−1 開走就收、> 0 還有幾秒）
+const FOLD = { destsopen: -1, moreopen: -1 };
+const foldStart = () => { const t = drv && DRIVE.on ? drv.telemetry() : null; return t && Math.abs(t.v) > 4 ? 8 : -1; };
+function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.destsopen = foldStart(); }
+function moreOpen(on) { if (!on) sizeOpen(false); if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
+// 按鈕大小（Nick 2026-10-10）：小 0.8、中 1（原本的）、大 1.15；每支手機自己記（carid.btnsize，不用搬家、不上雲端）
+const BTN_Z = { s: 0.8, m: 1, l: 1.15 }, BTN_KEY = 'carid.btnsize';
+// 「大」只放大到排得下：直拿看寬（390 寬剛好排滿＝1 倍）、橫拿看高（340 高＝1 倍）；小螢幕（或手機「顯示大小」調大）上「大」＝「中」
+let btnK = 'm';
+function btnZoom() { const z = BTN_Z[btnK]; if (z <= 1) return z; const W = innerWidth, H = innerHeight, cap = H <= 560 ? H / 340 : W / 390; return +Math.max(1, Math.min(z, cap)).toFixed(2); }
+function btnApply() { const z = String(btnZoom()); if (document.documentElement.style.getPropertyValue('--hudz') !== z) document.documentElement.style.setProperty('--hudz', z); }
+addEventListener('resize', btnApply);
+function btnSize(k, keep) {
+  if (!BTN_Z[k]) k = 'm';
+  btnK = k; btnApply();
+  for (const b of document.querySelectorAll('#sizePop button')) b.setAttribute('aria-pressed', String(b.dataset.z === k));
+  if (keep) try { localStorage.setItem(BTN_KEY, k); } catch {}
+}
+function sizeOpen(on) { if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+try { btnSize(localStorage.getItem(BTN_KEY)); } catch { btnSize('m'); }
+$('sizeTog').addEventListener('click', () => sizeOpen(true));
+for (const b of document.querySelectorAll('#sizePop button')) b.addEventListener('click', () => { btnSize(b.dataset.z, true); sizeOpen(false); });
+function foldStep(dt, v) { // 每一格（開車）
+  if (bodyFlags.destsopen && (FOLD.destsopen < 0 ? Math.abs(v) > 4 : (FOLD.destsopen -= dt) <= 0)) destOpen(false);
+  if (bodyFlags.moreopen && (FOLD.moreopen < 0 ? Math.abs(v) > 4 : (FOLD.moreopen -= dt) <= 0)) moreOpen(false);
+}
 $('destTog').addEventListener('click', () => destOpen(!bodyFlags.destsopen));
+$('moreTog').addEventListener('click', () => moreOpen(!bodyFlags.moreopen));
 
 // 撞到東西：手機震一下（按過畫面才可以震）
 function bump(s) {
@@ -36715,7 +36744,7 @@ function driveStep(dt) {
       const t = drv.telemetry();
       dvoice?.set({ rpm: t.rpm, throttle: t.load, speed: Math.abs(t.v) });
       tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); // 駕駛座視角看得到轉速表、速度表
-      if (bodyFlags.destsopen && Math.abs(t.v) > 4) destOpen(false); // 修 11：開走了「去哪裡」收起來
+      foldStep(dt, t.v); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {
         drv.setAction(homeAct(t) || orbayAct(t) || bayAct(t)); // HUD 的大按鈕：開鐵捲門（車庫、越野車車庫）、停在這裡改車／看車

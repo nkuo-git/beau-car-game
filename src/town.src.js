@@ -435,8 +435,35 @@ function setDest(d) {
 }
 destBtns.forEach((b) => b.addEventListener('click', () => { if (DRIVE.on) setDest(b.dataset.d); }));
 // 修 11：手機橫拿全螢幕開車的時候「去哪裡」收成一顆（garage.css .dtog）：按了打開，選了、開走了就收起來
-function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); }
+// Nick 2026-10-10「按鈕不用總是全部顯示 可以效法目的地選單那樣 點了再列出來 再點一次就收起來」：去哪裡、⋯（聲音、全螢幕、換視角）
+//   平常收起來（garage.css）；停著打開的，開走了（超過 4 m/s）就收；開著的時候打開的，8 秒後收（FOLD：−1 開走就收、> 0 還有幾秒）
+const FOLD = { destsopen: -1, moreopen: -1 };
+const foldStart = () => { const t = drv && DRIVE.on ? drv.telemetry() : null; return t && Math.abs(t.v) > 4 ? 8 : -1; };
+function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.destsopen = foldStart(); }
+function moreOpen(on) { if (!on) sizeOpen(false); if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
+// 按鈕大小（Nick 2026-10-10）：小 0.8、中 1（原本的）、大 1.15；每支手機自己記（carid.btnsize，不用搬家、不上雲端）
+const BTN_Z = { s: 0.8, m: 1, l: 1.15 }, BTN_KEY = 'carid.btnsize';
+// 「大」只放大到排得下：直拿看寬（390 寬剛好排滿＝1 倍）、橫拿看高（340 高＝1 倍）；小螢幕（或手機「顯示大小」調大）上「大」＝「中」
+let btnK = 'm';
+function btnZoom() { const z = BTN_Z[btnK]; if (z <= 1) return z; const W = innerWidth, H = innerHeight, cap = H <= 560 ? H / 340 : W / 390; return +Math.max(1, Math.min(z, cap)).toFixed(2); }
+function btnApply() { const z = String(btnZoom()); if (document.documentElement.style.getPropertyValue('--hudz') !== z) document.documentElement.style.setProperty('--hudz', z); }
+addEventListener('resize', btnApply);
+function btnSize(k, keep) {
+  if (!BTN_Z[k]) k = 'm';
+  btnK = k; btnApply();
+  for (const b of document.querySelectorAll('#sizePop button')) b.setAttribute('aria-pressed', String(b.dataset.z === k));
+  if (keep) try { localStorage.setItem(BTN_KEY, k); } catch {}
+}
+function sizeOpen(on) { if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+try { btnSize(localStorage.getItem(BTN_KEY)); } catch { btnSize('m'); }
+$('sizeTog').addEventListener('click', () => sizeOpen(true));
+for (const b of document.querySelectorAll('#sizePop button')) b.addEventListener('click', () => { btnSize(b.dataset.z, true); sizeOpen(false); });
+function foldStep(dt, v) { // 每一格（開車）
+  if (bodyFlags.destsopen && (FOLD.destsopen < 0 ? Math.abs(v) > 4 : (FOLD.destsopen -= dt) <= 0)) destOpen(false);
+  if (bodyFlags.moreopen && (FOLD.moreopen < 0 ? Math.abs(v) > 4 : (FOLD.moreopen -= dt) <= 0)) moreOpen(false);
+}
 $('destTog').addEventListener('click', () => destOpen(!bodyFlags.destsopen));
+$('moreTog').addEventListener('click', () => moreOpen(!bodyFlags.moreopen));
 
 // 撞到東西：手機震一下（按過畫面才可以震）
 function bump(s) {
@@ -1667,7 +1694,7 @@ function driveStep(dt) {
       const t = drv.telemetry();
       dvoice?.set({ rpm: t.rpm, throttle: t.load, speed: Math.abs(t.v) });
       tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); // 駕駛座視角看得到轉速表、速度表
-      if (bodyFlags.destsopen && Math.abs(t.v) > 4) destOpen(false); // 修 11：開走了「去哪裡」收起來
+      foldStep(dt, t.v); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {
         drv.setAction(homeAct(t) || orbayAct(t) || bayAct(t)); // HUD 的大按鈕：開鐵捲門（車庫、越野車車庫）、停在這裡改車／看車

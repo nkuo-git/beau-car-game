@@ -1542,6 +1542,8 @@ function createPedestrians(o = {}) {
     st.noRoute++;
     return false;
   }
+  // 修 10：內湖的人行道很窄：讓別人的時候不要讓到車道上（繞過停在人行道上的車才可以走到路上，那時候會看有沒有車來）
+  const onLane = (p, x, z) => V.npcOnRoad && EDGES[p.route[p.ri]].kind === 'side' && V.npcOnRoad(x, z);
   function setWalk(p) { p.mode = 'walk'; p.run = p.age === 'kid' && R() < 0.45; p.lat = 0; p.latT = 0; }
   // 從現在的位置回到路網上（被撞、閃車、嚇跑之後）：最近、直直走得到的側線點
   function reattach(p) {
@@ -1765,9 +1767,9 @@ function createPedestrians(o = {}) {
         let side = blockLat > 0.05 ? -1 : blockLat < -0.05 ? 1 : 1; // 往沒有人的那邊（對面來的都往自己的右邊）
         const gap = p.r + WS[11] + 0.12, lm = car ? 1.7 : 0.95; // 停著的車比較寬：可以讓遠一點（走到馬路上繞過去，那邊沒有車過來才走）
         const want = clamp(p.lat + side * (gap - Math.abs(blockLat)), -lm, lm);
-        const cx = T.x + rx * want, cz = T.z + rz * want;
-        if (W.clearAt(cx, cz, 0.28) && !(car && carComing(cx, cz, p.r + 0.3))) p.latT = want;
-        else { const w2 = clamp(p.lat - side * (gap + Math.abs(blockLat)), -lm, lm), x2 = T.x + rx * w2, z2 = T.z + rz * w2; if (W.clearAt(x2, z2, 0.28) && !(car && carComing(x2, z2, p.r + 0.3))) p.latT = w2; else vt = Math.min(vt, blockL < 1 ? 0 : 0.4); }
+        const cx = T.x + rx * want, cz = T.z + rz * want; p.latCar = car;
+        if (W.clearAt(cx, cz, 0.28) && (car ? !carComing(cx, cz, p.r + 0.3) : !onLane(p, cx, cz))) p.latT = want;
+        else { const w2 = clamp(p.lat - side * (gap + Math.abs(blockLat)), -lm, lm), x2 = T.x + rx * w2, z2 = T.z + rz * w2; if (W.clearAt(x2, z2, 0.28) && (car ? !carComing(x2, z2, p.r + 0.3) : !onLane(p, x2, z2))) p.latT = w2; else vt = Math.min(vt, blockL < 1 ? 0 : 0.4); }
         if (blockL < 0.75) vt = Math.min(vt, 0.25);
       }
       // 迎面遇到認識的人：停下來聊天
@@ -1785,7 +1787,7 @@ function createPedestrians(o = {}) {
     }
     p.lat += clamp(p.latT - p.lat, -0.9 * h, 0.9 * h);
     if (p.lat !== 0) { // 往旁邊讓：不能讓到牆裡、樹裡（每一幀都看，讓不過去就少讓一點）
-      let la = p.lat; for (let k = 0; k < 6 && !W.clearAt(tx + rx * la, tz + rz * la, p.r); k++) la *= 0.55;
+      let la = p.lat; for (let k = 0; k < 6 && !(W.clearAt(tx + rx * la, tz + rz * la, p.r) && (p.latCar || !onLane(p, tx + rx * la, tz + rz * la))); k++) la *= 0.55;
       if (la !== p.lat) { if (la > -0.03 && la < 0.03) la = 0; p.lat = la; if (p.latT * la >= 0 && Math.abs(p.latT) > Math.abs(la)) p.latT = la; }
     }
     tx += rx * p.lat; tz += rz * p.lat;
