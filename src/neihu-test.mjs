@@ -1,7 +1,7 @@
 // 內湖（neihu.js）的測試：node neihu-test.mjs [截圖前綴 neihu-shots/nh]（要先 node build-art.mjs --yaris）
 //   0 轉換程式再跑一次＝一模一樣的 neihu-data.js；1 載入（內湖蓋好了：房子、車站、路名）；2 出門上 GC8、七個目的地有「去內湖」；
 //   3 機器人從車庫照「去內湖」的路線開到港墘站（直線加速賽道南邊的口、聯外道路、山谷、內湖路一段）、地圖資料的出處；
-//   4 沿著內湖路一段往東、港墘路往北、再整條往南開（不卡住、大部分在那條路上）；5 房子擋車；6 下車走路（人行道、騎樓、房子擋人）；
+//   4 沿著內湖路一段往東、港墘路往北、再整條往南開（不卡住、大部分在那條路上）；4b 內湖的車流和走路的人（修 10）；5 房子擋車；6 下車走路（人行道、騎樓、房子擋人）；
 //   7 截圖（路上、駕駛座、空拍、車站、學校、山邊、七個地標）＋ draw call／三角形；8 直接回車庫：小村莊放回來、出處、路名收起來）
 //   地標（碧湖公園、內湖國小、麗山國中、港墘站、湖光教會、西湖圖書館、大港墘公園）的位置照 OSM、牌子、擋得住；大路的路名牌、HUD 的路名
 import http from 'node:http';
@@ -533,6 +533,47 @@ for (const [k, road, label] of [['nh:e', '內湖路一段', 'east along 內湖�
 // HUD 的路名在開車、走路、各種螢幕大小都不會壓到別的東西
 const sw4 = await sizeSweep(true);
 check(!sw4, `HUD (incl. the road-name label) does not overlap at any size: ${sw4 || 'none'}`);
+
+// ==== 4b 修 10（2026-10-10）：內湖的車流、走路的人（npc.js 用 neihu.js 的 V.npcRoads：單行道一條車道、人走人行道）====
+const G4 = await p.evaluate(() => {
+  const N = window.__N(), V = window.__D().VIL, E = N.traffic.graph.edges, W = N.peds.graph;
+  const pre = E.filter((e) => e.pre), live = pre.filter((e) => !e.dead), lanes = live.filter((e) => !e.conn);
+  const noNext = live.filter((e) => !e.next.length).length, toDead = E.filter((e) => e.next.some((q) => q.dead)).length;
+  const ow = V.npcRoads.filter((r) => r.ow).length;
+  const nhSide = W.edges.filter((e) => e.kind === 'side' && V.neihu.inside(e.pts[0][0], e.pts[0][1])).length;
+  const onCar = W.edges.filter((e) => e.kind === 'side' && V.neihu.inside(e.pts[0][0], e.pts[0][1]) && e.pts.some((q) => V.npcOnRoad(q[0], q[1]))).length;
+  return { roads: V.npcRoads.length, ow, pre: pre.length, live: live.length, lanes: lanes.length, km: +(lanes.reduce((a, e) => a + e.len, 0) / 1000).toFixed(1), noNext, toDead, nhSide, onCar, load: N.load };
+});
+console.log('4b graph', JSON.stringify(G4));
+check(G4.roads > 150 && G4.ow > 10 && G4.lanes > 300 && G4.km > 25 && G4.noNext === 0 && G4.toDead === 0 && G4.live > G4.pre * 0.8,
+  `內湖 roads for traffic: ${G4.roads} (${G4.ow} one-way), ${G4.lanes} lanes / ${G4.km} km kept (${G4.pre - G4.live} dead-end lanes dropped); every kept lane leads on, none into a dropped one; graphs ${G4.load.graphs} ms`);
+check(G4.nhSide > 500 && G4.onCar === 0, `內湖 sidewalks for people: ${G4.nhSide} pieces, none on a car lane (also where a big road is drawn as two one-way halves)`);
+const A4 = await p.evaluate(() => {
+  const D = window.__D(), N = window.__N(), V = D.VIL, W = N.peds.graph, sp = V.places.neihu.spawn; window.__pol()?.clear();
+  D.drv.teleport({ x: sp.x, z: sp.z, heading: sp.heading }); window.__dstep(5);
+  const k0 = N.peds.stats.knocks, h0 = N.hits; let vs = 0, vn = 0, offRoad = 0, cars = 0, ppl = 0, onLane = 0, minC = 99, minP = 99, avg = 0;
+  for (let k = 0; k < 10; k++) { window.__dstep(120);
+    const cs = N.traffic.cars.filter((c) => c.active && V.neihu.inside(c.x, c.z)), ps = N.peds.people.filter((q) => V.neihu.inside(q.x, q.z));
+    if (k >= 4) { minC = Math.min(minC, cs.length); minP = Math.min(minP, ps.length); }
+    cars += cs.length; ppl += ps.length;
+    for (const c of cs) { vs += c.v; vn++; const s = V.surfaceAt(c.x, c.z); if (s !== 0 && s !== 3) offRoad++; }
+    for (const q of ps) if (q.mode === 'walk' && q.rn && W.edges[q.route[q.ri]].kind === 'side' && V.npcOnRoad(q.x, q.z)) onLane++;
+  }
+  avg = N.avg;
+  return { minC, minP, kmh: +(vs / Math.max(1, vn) * 3.6).toFixed(1), offRoad, onLane, samples: [cars, ppl], knocks: N.peds.stats.knocks - k0, hits: N.hits - h0, avg: +avg.toFixed(2), max: +N.max.toFixed(1), stuckGone: N.traffic.stats.stuckGone };
+});
+console.log('4b in 內湖', JSON.stringify(A4));
+check(A4.minC >= 4 && A4.kmh > 15 && A4.offRoad === 0, `cars drive in 內湖 now (at least ${A4.minC} around you, ${A4.kmh} km/h on average, ${A4.offRoad} off the road)`);
+check(A4.minP >= 5 && A4.onLane === 0, `people walk in 內湖 now (at least ${A4.minP} around you), on the sidewalks (${A4.onLane} walking in a car lane; they only step on the road at crossings)`);
+check(A4.knocks === 0 && A4.hits === 0 && A4.avg < 1.5, `nobody gets hit while you wait (knocks ${A4.knocks}); cars + people ${A4.avg} ms/frame on average (max ${A4.max} ms)`);
+shots.nhTraffic = await drawAndShot('4b-neihu-traffic');
+const B4 = await p.evaluate(() => { // 回村子：內湖的車和人收掉，村子的車又出來
+  const D = window.__D(), N = window.__N(), V = D.VIL; D.drv.teleport(V.places.garage.spawn); window.__dstep(600);
+  return { nh: N.traffic.cars.filter((c) => c.active && V.neihu.inside(c.x, c.z)).length + N.peds.people.filter((q) => V.neihu.inside(q.x, q.z)).length, vil: N.traffic.cars.filter((c) => c.active).length };
+});
+console.log('4b back home', JSON.stringify(B4));
+check(B4.nh === 0 && B4.vil >= 4, `back in the village: 內湖's cars and people are put away (${B4.nh} left) and the village has traffic again (${B4.vil} cars)`);
+await p.evaluate(() => { const D = window.__D(), sp = D.VIL.places.neihu.spawn; D.drv.teleport({ x: sp.x, z: sp.z, heading: sp.heading }); window.__dstep(30); window.__pol()?.clear(); });
 
 // ==== 5 房子擋車：找一面臨路的牆（中間沒有別的東西），對著開過去油門踩到底 ====
 const b5 = await p.evaluate(() => {

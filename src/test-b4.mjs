@@ -793,7 +793,8 @@ const bi = await p.evaluate(() => { const D = window.__D(), H = window.__H, OB =
 await p.evaluate(() => { const H = window.__H, W = window.__D().walker; W.setCamera({ yaw: window.__D().OB.rot + Math.PI / 2 + 0.75 }); H.step(30); }); // 鏡頭朝停車格（設計的 −z 那邊，偏向裡面）
 await drawAndShot('15-orbay-inside');
 const bi2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, OB = D.OB, O = H.OD;
-  const r = H.walkPath(H.oww([[O.IX1 - 9, O.ZC], [O.B0X, O.B0Z + 4.35]])); // 走到怪獸卡車前面（車頭前 0.7 公尺：格子變深了，不是格口）
+  const wc = D.walker.cars.find((q) => q.key === 'monster'), h = wc.heading, c = Math.cos(h), s = Math.sin(h), bx = wc.x + (wc.cx || 0) * c + (wc.cz || 0) * s, bz = wc.z - (wc.cx || 0) * s + (wc.cz || 0) * c, f = wc.hx + 0.7;
+  const r = H.walkPath([...H.oww([[O.IX1 - 9, O.ZC]]), [bx + c * f, bz - s * f]]); // 走到怪獸卡車前面（車頭前 0.7 公尺；修 6 以後車頭朝通道）
   return { ok: r.ok, at: r.at, inside: OB.inside(r.x, r.z), act: H.actText(), bad: H.checkFrame(H.cols()), maxY: +D.gcam.maxY.toFixed(2) }; });
 console.log('  into the annex:', JSON.stringify(bi), JSON.stringify(bi2));
 check(bi.rA && bi.pressed === '開鐵捲門' && bi.door >= 0.98 && bi.r0 && bi2.ok && bi2.inside && bi2.act === '上車 · 怪獸卡車' && !bi2.bad.length && bi2.maxY < 6.5,

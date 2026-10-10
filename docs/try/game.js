@@ -14999,6 +14999,7 @@ const NEIHU_DATA = {"v":2,"wide":1.5,"center":{"lat":25.07943,"lon":121.57687},"
 //     V.surfaceAt、V.route 包一層：內湖、聯外道路照這裡算（大路 0、小路／人行道／水泥地 3、公園草地 1），外面完全照舊
 //     V.route(x, z, 'neihu')：從世界任何地方開到內湖（港墘站下面）；在內湖裡往外的目的地：照路網（單行道照方向）開出去，再接原本的
 //     V.places.neihu：{ name: '內湖', pos, zone（港墘站下面的內湖路一段）, spawn }
+//     V.npcRoads：路上的車、走路的人用的內湖的路 [{ kind: 'main'|'street'|'alley', w, pts, ow（1 單行道）, so（人行道離中線多遠）}]（npc.js；修 10）
 //   N.inside(x, z)：在內湖（範圍裡、聯外道路上）；N.update(camera)：每一幀（遠的格子收起來）；N.info：{ meshes, tris, colliders, buildings, ms }；N.dispose()
 // 效能：房子照 250 公尺一格合併成一個網格（牆、屋頂、騎樓、頂樓加蓋、高架、車站都是同一個材質：一張 2048×1024 的貼圖，
 //   著色器裡 fract() 重複一格一格的窗戶，所以一面牆只要兩個四邊形）；路、人行道、標線、地面 500 公尺一格；樹 250 公尺一格 InstancedMesh（山上的樹一個、八面體）；
@@ -15243,6 +15244,31 @@ function buildNeihu(V, opt = {}) {
   // 路口：一個點有幾條路（3 以上＝路口）、路口多大（最寬那條的半寬＋人行道）
   const deg = new Uint8Array(ND.length / 2); for (const r of N.roads) r.n.forEach((ni, i) => { deg[ni] += i === 0 || i === r.n.length - 1 ? 1 : 2; });
   const jR = new Float32Array(ND.length / 2); for (const r of N.roads) for (const ni of r.n) jR[ni] = Math.max(jR[ni], r.w / 2 + r.sw);
+  // 修 10（2026-10-10）：路上的車、走路的人（npc.js 的 V.npcRoads）：大路、一般的路、巷子（cls ≤ 4；4＝residential，內湖大部分的路），在路口（三段以上）切開，中間直直接著的（一樣寬、一樣的單行道）接成一條；
+  //   ow 1＝單行道，照點的順序開（OSM 的 −1 先反過來）；so＝人行道中間離路中線多遠（走路的人走人行道）
+  function npcRoads() {
+    const use = N.roads.filter((r) => r.cls <= 4 && r.n.length >= 2), dg = new Uint8Array(ND.length / 2);
+    for (const r of use) r.n.forEach((ni, i) => { dg[ni] += i === 0 || i === r.n.length - 1 ? 1 : 2; });
+    let ps = [];
+    for (const r of use) {
+      const n = r.ow === -1 ? r.n.slice().reverse() : r.n; let a = 0;
+      for (let i = 1; i < n.length; i++) if (i === n.length - 1 || dg[n[i]] >= 3) { ps.push({ n: n.slice(a, i + 1), cls: r.cls, w: r.w, sw: r.sw, ow: r.ow ? 1 : 0 }); a = i; }
+    }
+    const same = (p, q) => p.cls === q.cls && Math.abs(p.w - q.w) < 0.01 && Math.abs(p.sw - q.sw) < 0.01 && p.ow === q.ow;
+    for (let more = true; more;) { // 一個點剛好是兩段的頭尾（沒有別的路）、兩段一樣：接起來（p 的尾巴接 q 的頭）
+      more = false; const ends = new Map();
+      for (const p of ps) for (const ni of [p.n[0], p.n[p.n.length - 1]]) { let a = ends.get(ni); if (!a) ends.set(ni, (a = [])); a.push(p); }
+      for (const [ni, a] of ends) {
+        if (a.length !== 2 || dg[ni] !== 2 || a[0] === a[1] || !same(a[0], a[1])) continue;
+        let [p, q] = a; if (p.n[p.n.length - 1] !== ni) [p, q] = [q, p];
+        if (p.n[p.n.length - 1] !== ni) { if (p.ow) continue; p.n.reverse(); } // 兩段都從這裡出發：雙向的那段反過來
+        if (q.n[0] !== ni) { if (q.ow) continue; q.n.reverse(); }
+        p.n = p.n.concat(q.n.slice(1)); ps = ps.filter((x) => x !== q); more = true; break;
+      }
+    }
+    return ps.map((p) => ({ kind: p.cls <= 2 ? 'main' : p.cls === 3 ? 'street' : 'alley', w: p.w, pts: p.n.map((i) => [nx(i), nz(i)]), ow: p.ow, so: p.w / 2 + (p.sw > 0.5 ? p.sw / 2 : 0.75) }));
+  }
+  V.npcRoads = (V.npcRoads || []).concat(npcRoads());
   const colliders = [];
   // ---- 材質 ----
   const FA = facadeAtlas(aniso);
@@ -16024,6 +16050,11 @@ function buildNeihu(V, opt = {}) {
 
   // ==== 地面種類（surfaceAt）：2 公尺一格，第一次問才算 ====
   const roadAt2 = mkRoadGrid();
+  { // 修 10（npc.js）：在車走的路（cls ≤ 4）上嗎（走路的人行道不能在這裡）；10 公尺一格
+    const G = 10, grid = new Map(), key = (i, j) => i * 73856093 + j;
+    N.roads.forEach((r) => { if (r.cls > 4) return; for (let k = 1; k < r.n.length; k++) { const a = r.n[k - 1], b = r.n[k], m = r.w / 2; for (let i = Math.floor((Math.min(nx(a), nx(b)) - m) / G); i <= Math.floor((Math.max(nx(a), nx(b)) + m) / G); i++) for (let j = Math.floor((Math.min(nz(a), nz(b)) - m) / G); j <= Math.floor((Math.max(nz(a), nz(b)) + m) / G); j++) { const kk = key(i, j); let L = grid.get(kk); if (!L) grid.set(kk, (L = [])); L.push(nx(a), nz(a), nx(b), nz(b), (r.w / 2 - 0.2) ** 2); } } });
+    V.npcOnRoad = (x, z) => { const L = grid.get(key(Math.floor(x / G), Math.floor(z / G))); if (L) for (let i = 0; i < L.length; i += 5) if (segD2(x, z, L[i], L[i + 1], L[i + 2], L[i + 3]) < L[i + 4]) return true; return false; };
+  }
   const grassAreas = N.areas.filter((a) => a.t === 'park' || a.t === 'pitch');
   const SX0 = BX0 - 20, SZ0 = BZ0 - 20, SNX = Math.ceil((BX1 - BX0 + 40) / 2), SNZ = Math.ceil((BZ1 - BZ0 + 40) / 2), SM = new Uint8Array(SNX * SNZ).fill(255);
   const LB = LK.box, LGN = Math.ceil((LB[2] - LB[0]) / 2), LGM = Math.ceil((LB[3] - LB[1]) / 2), LG = new Uint8Array(LGN * LGM); // 聯外道路：2 公尺一格（0 還沒算、1 在路上、2 不在）
@@ -26656,17 +26687,20 @@ function projectOn(L, x, z) { // 折線上離 (x, z) 最近的點的距離 s
 
 // ---- 路網：V.roads 的大路、村子的路、農路 → 節點（路口、端點）＋路（兩個節點之間的折線）----
 // cars：開車用的（死路剪掉，除了接快速道路的那頭）；不是 cars：走路用的（全部的路都留著）
-const KIND = { main: { v: 50 / 3.6, rank: 3, spawn: 1 }, street: { v: 30 / 3.6, rank: 2, spawn: 0.9 }, farm: { v: 25 / 3.6, rank: 1, spawn: 0.3 } };
+const KIND = { main: { v: 50 / 3.6, rank: 3, spawn: 1 }, street: { v: 30 / 3.6, rank: 2, spawn: 0.9 }, farm: { v: 25 / 3.6, rank: 1, spawn: 0.3 }, alley: { v: 25 / 3.6, rank: 1, spawn: 0.4 } }; // alley：內湖的巷子（修 10）
 function roadNet(V, cars) {
   let roads = [];
-  for (const r of V.roads) if (KIND[r.kind] && !r.noNpc) { const pts = dedupe(r.pts); if (pts.length >= 2) roads.push({ kind: r.kind, w: r.w, pts }); } // noNpc：不給車流、居民走的路（越野車場的聯外水泥路：盡頭是大門）
-  // 丁字路口：一條路的端點在另一條路中間 → 那條路切成兩段
+  for (const r of V.roads) if (KIND[r.kind] && !r.noNpc) { const pts = dedupe(r.pts); if (pts.length >= 2) roads.push({ kind: r.kind, w: r.w, pts, ow: 0, so: r.w / 2 + WALK_OFF, pre: false }); } // noNpc：不給車流、居民走的路（越野車場的聯外水泥路：盡頭是大門）
+  // 修 10：內湖的路（neihu.js 的 V.npcRoads）：已經在路口切好了（pre）、ow 1＝單行道（照點的順序）、so＝人行道離中線多遠
+  for (const r of V.npcRoads || []) if (KIND[r.kind]) { const pts = dedupe(r.pts); if (pts.length >= 2) roads.push({ kind: r.kind, w: r.w, pts, ow: r.ow ? 1 : 0, so: r.so ?? r.w / 2 + WALK_OFF, pre: true }); }
+  // 丁字路口：一條路的端點在另一條路中間 → 那條路切成兩段（切好的不用找）
   for (let guard = 0; guard < 50; guard++) {
     let hit = null;
     for (const A of roads) {
+      if (A.pre) continue;
       for (const e of [A.pts[0], A.pts[A.pts.length - 1]]) {
         for (const B of roads) {
-          if (B === A) continue;
+          if (B === A || B.pre) continue;
           const L = plen(B.pts); let acc = 0;
           for (let i = 0; i < B.pts.length - 1 && !hit; i++) {
             const a = B.pts[i], b = B.pts[i + 1], l = Math.hypot(b[0] - a[0], b[1] - a[1]), [d, t] = segDist(e[0], e[1], a[0], a[1], b[0], b[1]);
@@ -26688,7 +26722,13 @@ function roadNet(V, cars) {
   let nodes = [];
   const build = () => {
     nodes = [];
-    const nodeAt = (p) => { for (const n of nodes) if (Math.hypot(n.x - p[0], n.z - p[1]) < 0.6) return n; const n = { id: nodes.length, x: p[0], z: p[1], arms: [] }; nodes.push(n); return n; };
+    const grid = new Map(), gk = (i, j) => i * 100003 + j; // 1 公尺的格子（找 0.6 公尺內最早的那個點，跟一個一個找一樣）
+    const nodeAt = (p) => {
+      const ci = Math.floor(p[0]), cj = Math.floor(p[1]); let got = null;
+      for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) { const a = grid.get(gk(i, j)); if (a) for (const n of a) if ((!got || n.id < got.id) && Math.hypot(n.x - p[0], n.z - p[1]) < 0.6) got = n; }
+      if (got) return got;
+      const n = { id: nodes.length, x: p[0], z: p[1], arms: [] }; nodes.push(n); const k = gk(ci, cj); let a = grid.get(k); if (!a) grid.set(k, (a = [])); a.push(n); return n;
+    };
     for (const r of roads) {
       r.a = nodeAt(r.pts[0]); r.b = nodeAt(r.pts[r.pts.length - 1]);
       r.pts[0] = [r.a.x, r.a.z]; r.pts[r.pts.length - 1] = [r.b.x, r.b.z]; r.len = plen(r.pts);
@@ -26696,7 +26736,7 @@ function roadNet(V, cars) {
     for (const r of roads) for (const end of [0, 1]) {
       const n = end ? r.b : r.a, q = end ? r.pts.slice().reverse() : r.pts, o = pt(); lineAt(mkLine(q), Math.min(3, r.len * 0.5), o);
       const dx = o.x - n.x, dz = o.z - n.z, l = Math.hypot(dx, dz) || 1;
-      n.arms.push({ road: r, end, dir: [dx / l, dz / l], hw: r.w / 2, ang: Math.atan2(dz, dx) });
+      n.arms.push({ road: r, end, dir: [dx / l, dz / l], hw: r.w / 2, so: r.so, ang: Math.atan2(dz, dx) });
     }
     for (const n of nodes) n.arms.sort((a, b) => a.ang - b.ang);
   };
@@ -26704,7 +26744,7 @@ function roadNet(V, cars) {
   // 接快速道路的死路：端點離快速道路中線不到半寬＋3 公尺
   for (const n of nodes) n.hwy = n.arms.length === 1 && nearHwy(n.x, n.z) < (H ? H.half + 3 : 0);
   if (cars) { // 死路剪掉（賽道入口那段）
-    for (let guard = 0; guard < 20; guard++) {
+    for (let guard = 0; guard < 60; guard++) {
       const dead = nodes.filter((n) => n.arms.length === 1 && !n.hwy);
       if (!dead.length) break;
       const drop = new Set(dead.map((n) => n.arms[0].road));
@@ -26715,10 +26755,10 @@ function roadNet(V, cars) {
   }
   // 兩條路直直接在一起（同一種、一樣寬）：併成一條
   for (let guard = 0; guard < 100; guard++) {
-    const n = nodes.find((m) => m.arms.length === 2 && m.arms[0].road !== m.arms[1].road && m.arms[0].road.kind === m.arms[1].road.kind && Math.abs(m.arms[0].road.w - m.arms[1].road.w) < 0.01 && m.arms[0].dir[0] * m.arms[1].dir[0] + m.arms[0].dir[1] * m.arms[1].dir[1] < -0.985);
+    const n = nodes.find((m) => m.arms.length === 2 && m.arms[0].road !== m.arms[1].road && !m.arms[0].road.pre && !m.arms[1].road.pre && m.arms[0].road.kind === m.arms[1].road.kind && Math.abs(m.arms[0].road.w - m.arms[1].road.w) < 0.01 && m.arms[0].dir[0] * m.arms[1].dir[0] + m.arms[0].dir[1] * m.arms[1].dir[1] < -0.985);
     if (!n) break;
     const [A, B] = n.arms, pa = A.end ? A.road.pts : A.road.pts.slice().reverse(), pb = B.end ? B.road.pts.slice().reverse() : B.road.pts; // pa 走到 n、pb 從 n 出去
-    const merged = { kind: A.road.kind, w: A.road.w, pts: dedupe(pa.concat(pb.slice(1))) };
+    const merged = { kind: A.road.kind, w: A.road.w, pts: dedupe(pa.concat(pb.slice(1))), ow: 0, so: A.road.so, pre: false };
     const hw = new Set(nodes.filter((m) => m.hwy).map((m) => `${m.x},${m.z}`));
     roads = roads.filter((r) => r !== A.road && r !== B.road).concat([merged]);
     build(); for (const m of nodes) m.hwy = hw.has(`${m.x},${m.z}`);
@@ -26735,7 +26775,7 @@ function laneGraph(V) {
   const net = roadNet(V, true), edges = [], juncs = [];
   const E = (o) => { // 全部欄位先放好（同一個形狀）
     const e = { id: edges.length, conn: false, road: '', pts: null, line: null, len: 0, vmax: 0, w: 0, spawn: 0, cap: null, next: [], node: null, from: null, to: null, prio: 2, turn: 'S', gapT: 4, junc: null,
-      conf: null, dense: null, bb: null, sib: null, hwy: '', lane: -1, link: false, zone: false, shift: 0, fromNode: null, toNode: null, hwyOnly: false };
+      conf: null, dense: null, bb: null, sib: null, hwy: '', lane: -1, link: false, zone: false, shift: 0, fromNode: null, toNode: null, hwyOnly: false, pre: false, dead: false };
     for (const k in o) { if (!(k in e)) throw new Error('npc: edge 欄位 ' + k); e[k] = o[k]; }
     e.line = mkLine(e.pts); e.len = e.line.len; edges.push(e); return e;
   };
@@ -26758,23 +26798,24 @@ function laneGraph(V) {
   };
   for (const r of net.roads) {
     const armA = r.a.arms.find((a) => a.road === r && a.end === 0), armB = r.b.arms.find((a) => a.road === r && a.end === 1);
-    const s0 = setback(r.a, armA), s1 = setback(r.b, armB);
-    if (r.len - s0 - s1 < 4) continue;
+    let s0 = setback(r.a, armA), s1 = setback(r.b, armB);
+    if (r.pre && r.len - s0 - s1 < 4) { const keep = Math.min(4, r.len * 0.5), k = Math.max(0, r.len - keep) / (s0 + s1 || 1); s0 *= k; s1 *= k; } // 修 10：內湖很短的路（兩個路口很近）：停止線往路口靠（不然路網斷掉）
+    if (r.len - s0 - s1 < (r.pre ? 1 : 4)) continue;
     const L = [];
-    for (const dir of [1, -1]) {
-      const c = dir > 0 ? r.pts : r.pts.slice().reverse(), off = offsetPts(c, r.w / 4), cut = dir > 0 ? [s0, r.len - s1] : [s1, r.len - s0];
+    for (const dir of r.ow ? [1] : [1, -1]) { // 修 10：單行道只有一條（在路中間）
+      const c = dir > 0 ? r.pts : r.pts.slice().reverse(), off = r.ow ? c : offsetPts(c, r.w / 4), cut = dir > 0 ? [s0, r.len - s1] : [s1, r.len - s0];
       const pts = subPts(off, cut[0], cut[1] + (plen(off) - r.len));
       L.push({ dir, pts, line: mkLine(pts), from: dir > 0 ? r.a : r.b, to: dir > 0 ? r.b : r.a, armOut: dir > 0 ? armA : armB, armIn: dir > 0 ? armB : armA });
     }
     // 每 1 公尺看車子放不放得下 → 擋住的區間（換成第一條車道的距離）
-    const iv = [], o = pt();
+    const iv = [], o = pt(), fs = r.pre ? 2 : 1; // 修 10：內湖每 2 公尺看一次
     for (const l of L) {
       let a = -1;
-      for (let s = 0; s <= l.line.len + 0.01; s += 1) {
+      for (let s = 0; s <= l.line.len + 0.01; s += fs) {
         const bad = !fitsOn(l.line, s, 0, o);
         if (bad && a < 0) a = s;
-        if ((!bad || s + 1 > l.line.len) && a >= 0) {
-          const b = bad ? s : s - 1, pa = lineAt(l.line, a, pt()), pb = lineAt(l.line, b, pt());
+        if ((!bad || s + fs > l.line.len) && a >= 0) {
+          const b = bad ? s : s - fs, pa = lineAt(l.line, a, pt()), pb = lineAt(l.line, b, pt());
           let x0 = l === L[0] ? a : projectOn(L[0].line, pb.x, pb.z), x1 = l === L[0] ? b : projectOn(L[0].line, pa.x, pa.z);
           if (x0 > x1) { const t = x0; x0 = x1; x1 = t; }
           iv.push([x0 - 1 - RAMP, x1 + 1 + RAMP]); a = -1;
@@ -26794,7 +26835,7 @@ function laneGraph(V) {
       return out;
     });
     const edgesOf = pieces.map((ps, li) => ps.map((pc) => {
-      if (pc.lane) return E({ conn: false, road: r.kind, pts: pc.pts, vmax: KIND[r.kind].v, w: r.w, spawn: KIND[r.kind].spawn, node: null });
+      if (pc.lane) return E({ conn: false, road: r.kind, pts: pc.pts, vmax: KIND[r.kind].v, w: r.w, spawn: KIND[r.kind].spawn, node: null, pre: r.pre });
       // 窄路段：擋住就往旁邊閃（左右都試，選閃比較少的那邊），頭尾 RAMP 公尺慢慢閃出去、閃回來
       const zl = mkLine(resample(pc.pts, 1)), n = zl.n, q = pt(), need = [0, 0], ok = [true, true];
       for (let i = 0; i < n; i++) {
@@ -26813,18 +26854,18 @@ function laneGraph(V) {
         const s = zl.cum[i], u = Math.min(clamp(s / RAMP, 0, 1), clamp((zl.len - s) / RAMP, 0, 1)), k = shift * u * u * (3 - 2 * u);
         lineAt(zl, s, q); pts.push([q.x - q.dz * k, q.z + q.dx * k]);
       }
-      return E({ conn: true, road: r.kind, pts, vmax: KIND[r.kind].v * (Math.abs(shift) > 0.45 ? 0.75 : 1), w: r.w, spawn: 0, prio: Math.abs(shift) > 0.45 ? 0 : 2, turn: 'S', gapT: 4.5, zone: true, shift });
+      return E({ conn: true, road: r.kind, pts, vmax: KIND[r.kind].v * (Math.abs(shift) > 0.45 ? 0.75 : 1), w: r.w, spawn: 0, prio: Math.abs(shift) > 0.45 ? 0 : 2, turn: 'S', gapT: 4.5, zone: true, shift, pre: r.pre });
     }));
     // 接起來；每個窄路段一個小路口
     const nz = cuts[0].length;
     for (let zi = 0; zi < nz; zi++) {
       const p = lineAt(L[0].line, (good[zi][0] + good[zi][1]) / 2, pt()), J = { id: juncs.length, x: p.x, z: p.z, conns: [], hwy: false, zone: true }; juncs.push(J); zones.push(J);
-      for (let li = 0; li < 2; li++) {
+      for (let li = 0; li < L.length; li++) {
         const ci = li ? nz - 1 - zi : zi, before = edgesOf[li][ci * 2], z = edgesOf[li][ci * 2 + 1], after = edgesOf[li][ci * 2 + 2];
         z.from = before; z.to = after; z.junc = J; z.next.push(after); before.next.push(z); before.node = J; J.conns.push(z);
       }
     }
-    for (let li = 0; li < 2; li++) {
+    for (let li = 0; li < L.length; li++) {
       const l = L[li], first = edgesOf[li][0], last = edgesOf[li][edgesOf[li].length - 1];
       first.fromNode = l.from; last.toNode = l.to;
       (l.to.inL ||= []).push({ e: last, arm: l.armIn }); (l.from.outL ||= []).push({ e: first, arm: l.armOut });
@@ -26850,7 +26891,7 @@ function laneGraph(V) {
       const dh = wrapA(headOf(d3[0], d3[1]) - headOf(d0[0], d0[1])), turn = dh > 0.45 ? 'L' : dh < -0.45 ? 'R' : 'S';
       const onMajor = major && (I.arm === major[0] || I.arm === major[1]);
       const prio = n.arms.length <= 2 ? 2 : onMajor ? (turn === 'L' ? 1 : 2) : 0;
-      const c = E({ conn: true, road: ie.road, pts: turnCurve(p0, d0, p3, d3), vmax: Math.min(ie.vmax, oe.vmax), w: Math.min(ie.w, oe.w), spawn: 0, from: ie, to: oe, prio, turn, gapT: 4, junc: J });
+      const c = E({ conn: true, road: ie.road, pts: turnCurve(p0, d0, p3, d3), vmax: Math.min(ie.vmax, oe.vmax), w: Math.min(ie.w, oe.w), spawn: 0, from: ie, to: oe, prio, turn, gapT: 4, junc: J, pre: ie.pre });
       c.next.push(oe); ie.next.push(c); ie.node = J; J.conns.push(c);
     }
   }
@@ -26897,7 +26938,7 @@ function laneGraph(V) {
   // ---- 會撞到的 connector：同一個路口、不是從同一條車道來的，出去是同一條（匯入）或路線靠太近（交叉）----
   const bbox = (P) => { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; for (const p of P) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); } return [x0, z0, x1, z1]; };
   for (const J of juncs) {
-    for (const c of J.conns) { c.conf = []; c.dense = resample(c.pts, 0.5); c.bb = bbox(c.dense); }
+    for (const c of J.conns) { c.conf = []; c.dense = resample(c.pts, c.pre ? 1 : 0.5); c.bb = bbox(c.dense); } // 修 10：內湖的路口很多：1 公尺一點
     for (let i = 0; i < J.conns.length; i++) for (let j = 0; j < J.conns.length; j++) {
       if (i === j) continue;
       const a = J.conns[i], b = J.conns[j];
@@ -26927,6 +26968,27 @@ function laneGraph(V) {
     if (n > 2) { cap[0] = cap[1]; cap[n - 1] = cap[n - 2]; }
     for (let i = n - 2; i >= 0; i--) cap[i] = Math.min(cap[i], Math.sqrt(cap[i + 1] * cap[i + 1] + 2 * B_COMF * (e.line.cum[i + 1] - e.line.cum[i])));
     e.cap = cap;
+  }
+  // 修 10：內湖的路有單行道、範圍的邊是死路：開進去就出不來的車道（不在大的強連通區塊裡）不用（不生車、別的車道不接過去）
+  if (edges.some((e) => e.pre)) {
+    const N = edges.length, idx = new Int32Array(N).fill(-1), low = new Int32Array(N), on = new Uint8Array(N), comp = new Int32Array(N).fill(-1), stk = [], csz = [];
+    let t = 0;
+    for (let s0 = 0; s0 < N; s0++) {
+      if (idx[s0] >= 0) continue;
+      const cs = [[s0, 0]]; idx[s0] = low[s0] = t++; stk.push(s0); on[s0] = 1;
+      while (cs.length) {
+        const f = cs[cs.length - 1], v = f[0], nx = edges[v].next;
+        if (f[1] < nx.length) {
+          const w = nx[f[1]++].id;
+          if (idx[w] < 0) { idx[w] = low[w] = t++; stk.push(w); on[w] = 1; cs.push([w, 0]); } else if (on[w]) low[v] = Math.min(low[v], idx[w]);
+          continue;
+        }
+        cs.pop(); if (cs.length) { const u = cs[cs.length - 1][0]; low[u] = Math.min(low[u], low[v]); }
+        if (low[v] === idx[v]) { const c = csz.length; let n = 0, w; do { w = stk.pop(); on[w] = 0; comp[w] = c; n++; } while (w !== v); csz.push(n); }
+      }
+    }
+    for (const e of edges) if (e.pre && csz[comp[e.id]] < 12) { e.dead = true; e.spawn = 0; }
+    for (const e of edges) if (e.next.some((q) => q.dead)) e.next = e.next.filter((q) => !q.dead);
   }
   // 開到底只能上快速道路的車道（大路西段）：機車不要開進去（台灣的快速道路機車不能上）
   const toOf = (q) => q.to || (q.next.length === 1 ? q.next[0] : null); // 閃開障礙物的那段（zone）沒有 to：接下去的那條
@@ -27050,8 +27112,10 @@ function walkGraph(V) {
   const nearHwy = (x, z) => { if (!hb || x < hb[0] - 40 || x > hb[2] + 40 || z < hb[1] - 40 || z > hb[3] + 40) return false; for (let i = 0; i < hc.length - 1; i++) if (segD2(x, z, hc[i][0], hc[i][1], hc[i + 1][0], hc[i + 1][1]) < HR2) return true; return false; };
   const clearAt = (x, z, r = WALK_CLR) => { if (!circleFree(cg, x, z, r)) return false; const s = V.surfaceAt(x, z); if (s === 2 || s === 4) return false; return !nearHwy(x, z); };
   const segClear = (x0, z0, x1, z1, r = 0.3) => { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(L / 0.3)); for (let i = 0; i <= n; i++) if (!clearAt(x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n, r)) return false; return true; };
+  for (const r of net.roads) { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const q of r.pts) { a = Math.min(a, q[0]); b = Math.min(b, q[1]); c = Math.max(c, q[0]); d = Math.max(d, q[1]); } r.bb = [a, b, c, d]; }
   const crossesRoad = (x0, z0, x1, z1) => {
     for (const r of net.roads) for (let i = 0; i < r.pts.length - 1; i++) {
+      if (Math.max(x0, x1) < r.bb[0] || Math.min(x0, x1) > r.bb[2] || Math.max(z0, z1) < r.bb[1] || Math.min(z0, z1) > r.bb[3]) break;
       const [ax, az] = r.pts[i], [bx, bz] = r.pts[i + 1], d1 = (bx - ax) * (z0 - az) - (bz - az) * (x0 - ax), d2 = (bx - ax) * (z1 - az) - (bz - az) * (x1 - ax), d3 = (x1 - x0) * (az - z0) - (z1 - z0) * (ax - x0), d4 = (x1 - x0) * (bz - z0) - (z1 - z0) * (bx - x0);
       if (d1 * d2 < 0 && d3 * d4 < 0) return true;
     }
@@ -27059,7 +27123,7 @@ function walkGraph(V) {
   };
   // 1) 每條路兩邊的側線（sd 1：路的右邊、−1：左邊）
   const SL = [];
-  for (const r of net.roads) { r.side = {}; for (const sd of [1, -1]) { const pts = offsetPts(r.pts, sd * (r.w / 2 + WALK_OFF)), line = mkLine(pts); const L = { id: SL.length, r, sd, pts, line, t0: 0, t1: line.len, n: 0, marks: [] }; SL.push(L); r.side[sd] = L; } }
+  for (const r of net.roads) { r.side = {}; for (const sd of [1, -1]) { const pts = offsetPts(r.pts, sd * r.so), line = mkLine(pts); const L = { id: SL.length, r, sd, pts, line, t0: 0, t1: line.len, n: 0, marks: [] }; SL.push(L); r.side[sd] = L; } }
   // 2) 路口的轉角：相鄰兩支路的側線接起來（內角：兩條側線交叉的地方；幾乎直的：中間；外角：繞一個圓弧）
   const corners = [], trim = (L, end, st) => { if (end === 0) L.t0 = Math.max(L.t0, st); else L.t1 = Math.min(L.t1, st); };
   for (const n of net.nodes) {
@@ -27067,7 +27131,7 @@ function walkGraph(V) {
     for (let i = 0; i < k; i++) {
       const A = n.arms[i], B = n.arms[(i + 1) % k], sA = A.road.side[A.end === 0 ? 1 : -1], sB = B.road.side[B.end === 0 ? -1 : 1];
       let d = B.ang - A.ang; if (d <= 1e-6) d += TAU;
-      const oA = A.hw + WALK_OFF, oB = B.hw + WALK_OFF, rA = [-A.dir[1], A.dir[0]], lB = [B.dir[1], -B.dir[0]];
+      const oA = A.so, oB = B.so, rA = [-A.dir[1], A.dir[0]], lB = [B.dir[1], -B.dir[0]];
       let pts;
       if (d < Math.PI * 0.9) {
         const cx = lB[0] * oB - rA[0] * oA, cz = lB[1] * oB - rA[1] * oA, det = -A.dir[0] * B.dir[1] + A.dir[1] * B.dir[0], t = (-cx * B.dir[1] + cz * B.dir[0]) / det;
@@ -27081,21 +27145,24 @@ function walkGraph(V) {
   }
   // 3) 側線每 0.5 公尺一點：擋到東西（電線桿、樹、郵筒、長椅、機車⋯）就往旁邊閃（先試往外、再試往路上，最多 1.6 公尺），閃不過就切斷
   //    死路（往賽道、往快速道路的路）最後 30 公尺不走
-  const deadEnds = net.nodes.filter((n) => n.arms.length === 1);
+  const deadEnds = net.nodes.filter((n) => n.arms.length === 1), DG = new Map(), dk = (x, z) => Math.floor(x / 30) * 100003 + Math.floor(z / 30); // 30 公尺的格子（內湖的死路很多）
+  for (const q of deadEnds) for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const k = dk(q.x + i * 30, q.z + j * 30); let a = DG.get(k); if (!a) DG.set(k, (a = [])); if (!a.includes(q)) a.push(q); }
+  const nearDead = (x, z) => { const a = DG.get(dk(x, z)); if (a) for (const q of a) if (Math.hypot(q.x - x, q.z - z) < 30) return true; return false; };
   for (const L of SL) {
     const len = L.t1 - L.t0; if (len < 1) continue;
-    const n = Math.max(2, Math.round(len / WALK_ST) + 1), st = len / (n - 1), o = pt();
+    const pre = L.r.pre, n = Math.max(2, Math.round(len / (pre ? 1 : WALK_ST)) + 1), st = len / (n - 1), o = pt(), ds = pre ? 0.3 : 0.1; // 修 10：內湖的路很多：每 1 公尺一點、閃的時候 0.3 公尺試一次（載入快一點）
     Object.assign(L, { n, st, bx: new Float64Array(n), bz: new Float64Array(n), nx: new Float64Array(n), nz: new Float64Array(n), fx: new Float64Array(n), fz: new Float64Array(n), ok: new Uint8Array(n), edge: new Int32Array(n).fill(-1), est: new Float32Array(n), node: new Int32Array(n).fill(-1) });
     for (let i = 0; i < n; i++) { lineAt(L.line, L.t0 + i * st, o); L.bx[i] = o.x; L.bz[i] = o.z; L.nx[i] = -o.dz * L.sd; L.nz[i] = o.dx * L.sd; }
     const need = new Float32Array(n), bad = new Uint8Array(n), d = new Float32Array(n);
+    const sideAt = pre ? (x, z, r = WALK_CLR) => circleFree(cg, x, z, r) && !(V.npcOnRoad && V.npcOnRoad(x, z)) : clearAt; // 修 10：內湖（地面沒有水、沒有快速道路）：只看擋到東西、在不在車道上（雙向分開畫的大路：這條的人行道會在另一條的車道上）
     // 每一點：往外要閃多少（needA）、往路上要閃多少（needR）；一整段擋住的地方選同一邊（兩邊混著閃會卡住）
     const needA = new Float32Array(n), needR = new Float32Array(n), blk = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
-      if (deadEnds.some((q) => Math.hypot(q.x - L.bx[i], q.z - L.bz[i]) < 30)) { bad[i] = 1; continue; }
-      if (clearAt(L.bx[i], L.bz[i])) continue;
+      if (nearDead(L.bx[i], L.bz[i])) { bad[i] = 1; continue; }
+      if (sideAt(L.bx[i], L.bz[i])) continue;
       blk[i] = 1; needA[i] = needR[i] = Infinity;
-      for (let k = 1; k <= 25; k++) if (clearAt(L.bx[i] + L.nx[i] * k * 0.1, L.bz[i] + L.nz[i] * k * 0.1)) { needA[i] = k * 0.1; break; }
-      for (let k = 1; k <= 16; k++) if (clearAt(L.bx[i] - L.nx[i] * k * 0.1, L.bz[i] - L.nz[i] * k * 0.1)) { needR[i] = k * 0.1; break; }
+      for (let k = 1; k * ds <= 2.501; k++) if (sideAt(L.bx[i] + L.nx[i] * k * ds, L.bz[i] + L.nz[i] * k * ds)) { needA[i] = k * ds; break; }
+      for (let k = 1; k * ds <= 1.601; k++) if (sideAt(L.bx[i] - L.nx[i] * k * ds, L.bz[i] - L.nz[i] * k * ds)) { needR[i] = k * ds; break; }
     }
     for (let i = 0; i < n; i++) {
       if (!blk[i]) continue;
@@ -27106,7 +27173,7 @@ function walkGraph(V) {
       i = j;
     }
     for (let i = 0; i < n; i++) if (need[i]) { const m = Math.abs(need[i]), sg = Math.sign(need[i]), K = Math.ceil(m / (0.5 * st)); for (let j = Math.max(0, i - K); j <= Math.min(n - 1, i + K); j++) { const v = m - 0.5 * st * Math.abs(i - j); if (v > Math.abs(d[j])) d[j] = sg * v; } }
-    for (let i = 0; i < n; i++) { L.fx[i] = L.bx[i] + L.nx[i] * d[i]; L.fz[i] = L.bz[i] + L.nz[i] * d[i]; L.ok[i] = !bad[i] && clearAt(L.fx[i], L.fz[i], WALK_CLR - 0.04) ? 1 : 0; }
+    for (let i = 0; i < n; i++) { L.fx[i] = L.bx[i] + L.nx[i] * d[i]; L.fz[i] = L.bz[i] + L.nz[i] * d[i]; L.ok[i] = !bad[i] && sideAt(L.fx[i], L.fz[i], WALK_CLR - 0.04) ? 1 : 0; }
   }
   const sampleNear = (L, x, z) => { if (!L.n) return -1; const s = projectOn(L.line, x, z); return clamp(Math.round((s - L.t0) / L.st), 0, L.n - 1); };
   // 4) 斑馬線：路口每一支路（轉角再往外 1.2 公尺）；大路、村子的路很長的話中間每 55 公尺
@@ -27120,7 +27187,7 @@ function walkGraph(V) {
     const o = pt();
     for (const c of sts) {
       if (c < 0.5 || c > rl.len - 0.5) continue;
-      lineAt(rl, c, o); const off = r.w / 2 + WALK_OFF, ia = sampleNear(A, o.x - o.dz * off, o.z + o.dx * off), ib = sampleNear(Bs, o.x + o.dz * off, o.z - o.dx * off);
+      lineAt(rl, c, o); const off = r.so, ia = sampleNear(A, o.x - o.dz * off, o.z + o.dx * off), ib = sampleNear(Bs, o.x + o.dz * off, o.z - o.dx * off);
       if (ia < 0 || ib < 0 || !A.ok[ia] || !Bs.ok[ib]) continue;
       if (!segClear(A.fx[ia], A.fz[ia], Bs.fx[ib], Bs.fz[ib], 0.3)) continue;
       A.marks.push(ia); Bs.marks.push(ib); crossings.push({ r, A, ia, B: Bs, ib });
@@ -27220,11 +27287,14 @@ function walkGraph(V) {
   const doorsNear = (x, z) => { let k = 0; for (const d of doors) if (Math.abs(d.x - x) < 40 && Math.abs(d.z - z) < 40) k++; return k; };
   const slots = [];
   for (const e of edges) if (e.kind === 'side' && e.len > 2 && csize[comp[e.a]] > 30) {
-    const m = e.pts[(e.pts.length / 2) | 0], w = e.len * ({ street: 1, main: 0.6, farm: 0.15 }[e.road] ?? 0.3) * (0.25 + Math.min(1, doorsNear(m[0], m[1]) / 8));
+    const m = e.pts[(e.pts.length / 2) | 0], w = e.len * ({ street: 1, main: 0.6, farm: 0.15, alley: 0.8 }[e.road] ?? 0.3) * (0.25 + Math.min(1, doorsNear(m[0], m[1]) / 8));
     slots.push({ e: e.id, w, x: m[0], z: m[1] });
   }
   const seats = props.seats.filter((s) => s.node >= 0);
-  return { nodes, edges, doors: doors.filter((d) => d.node >= 0), seats, props, comp, csize, slots, SL, cg, clearAt, segClear, net };
+  // 修 10（內湖很大）：側線的範圍（回到路網找最近的點：遠的整條跳過）、路網的點放進 50 公尺的格子（隨便走走：找附近的點）
+  for (const L of SL) { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (let i = 0; i < L.n; i++) { a = Math.min(a, L.fx[i]); b = Math.min(b, L.fz[i]); c = Math.max(c, L.fx[i]); d = Math.max(d, L.fz[i]); } L.bb = [a, b, c, d]; }
+  const NG = new Map(); for (const q of nodes) if (!q.door && !q.seat) { const k = Math.floor(q.x / 50) * 100003 + Math.floor(q.z / 50); let a = NG.get(k); if (!a) NG.set(k, (a = [])); a.push(q.id); }
+  return { nodes, edges, doors: doors.filter((d) => d.node >= 0), seats, props, comp, csize, slots, SL, cg, clearAt, segClear, net, NG };
 }
 
 
@@ -27937,8 +28007,9 @@ function createPedestrians(o = {}) {
         if (plan(p, eid, st0, d.node)) { p.gk = 'door'; p.door = d; return true; }
       }
     }
-    for (let k = 0; k < 10; k++) { // 隨便走走（走到某個路邊，看一看再走）
-      const q = NODES[(R() * NN) | 0], dd = hyp(q.x - x, q.z - z); if (q.door || q.seat || W.comp[q.id] !== cp || dd < 25 || dd > 110) continue;
+    for (let k = 0; k < 10; k++) { // 隨便走走（走到某個路邊，看一看再走）；修 10：附近 ±2 格（50 公尺）裡挑一個點（內湖很大：整張圖亂挑幾乎都太遠）
+      const a = W.NG.get((Math.floor(x / 50) + ((R() * 5) | 0) - 2) * 100003 + Math.floor(z / 50) + ((R() * 5) | 0) - 2); if (!a) continue;
+      const q = NODES[a[(R() * a.length) | 0]], dd = hyp(q.x - x, q.z - z); if (W.comp[q.id] !== cp || dd < 25 || dd > 110) continue;
       if (plan(p, eid, st0, q.id)) { p.gk = 'wander'; return true; }
     }
     for (let k = 0; k < 12; k++) { const d = W.doors[(R() * W.doors.length) | 0]; if (W.comp[d.node] === cp && plan(p, eid, st0, d.node)) { p.gk = 'door'; p.door = d; return true; } }
@@ -27952,7 +28023,7 @@ function createPedestrians(o = {}) {
     for (let pass = 0; pass < 2 && best < 0; pass++) {
       const R0 = pass ? 25 : 10;
       for (let k = 0; k < W.SL.length; k++) {
-        const L = W.SL[k]; if (!L.n) continue;
+        const L = W.SL[k]; if (!L.n || p.x < L.bb[0] - R0 || p.x > L.bb[2] + R0 || p.z < L.bb[1] - R0 || p.z > L.bb[3] + R0) continue;
         for (let i = 0; i < L.n; i += 2) {
           if (!L.ok[i] || L.edge[i] < 0) continue;
           const d = Math.abs(L.fx[i] - p.x) + Math.abs(L.fz[i] - p.z); if (d > R0 || d >= bd) continue;

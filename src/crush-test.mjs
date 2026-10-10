@@ -541,14 +541,15 @@ const back9 = await p.evaluate(() => {
   const away = () => { D.drv.teleport(V.places.circuit.spawn); H.step(10); }; // 賽車場（很遠）
   const near = () => { const a = q.a, d = q.e + 6; D.drv.teleport({ x: c.x - Math.cos(a) * d, z: c.z + Math.sin(a) * d, heading: a }); H.step(10); return +Math.hypot(D.drv.telemetry().x - c.x, D.drv.telemetry().z - c.z).toFixed(1); };
   const since = () => (j ? +j.since.toFixed(1) : null);
+  const calm = (n) => { for (let i = 0; i < n; i += 30) { H.step(Math.min(30, n - i), 1 / 30); window.__pol().clear(); } }; // 輾扁東西會有星星：警察來抓的話會回車庫（全部長回來），這裡測的不是警察
   const flat = { crushed: !!c.crushed, maxY: j ? H.segMaxY(j) : null, wireY: wireLow(c.x, c.z), wires: C.stats.wires - w0 };
-  away(); H.step(360, 1 / 30); // 離得很遠，可是才 12 秒
+  window.__pol().clear(); away(); calm(360); // 離得很遠，可是才 12 秒
   const early = { crushed: !!c.crushed, phase: j ? j.phase : null, since: since() };
-  const nd = near(); H.step(450, 1 / 30); // 回到旁邊（15 公尺內）再 15 秒：超過 20 秒了，可是人在旁邊
-  const close = { crushed: !!c.crushed, phase: j ? j.phase : null, since: since(), d: nd };
+  const nd = near(); calm(450); // 回到旁邊（15 公尺內）再 15 秒：超過 20 秒了，可是人在旁邊
+  const tE = D.drv && D.drv.telemetry(), close = { crushed: !!c.crushed, phase: j ? j.phase : null, since: since(), d: nd, on: window.__D().on, drv: !!window.__D().drv, dEnd: tE ? +Math.hypot(tE.x - c.x, tE.z - c.z).toFixed(1) : null };
   away(); H.step(6); // 一離開就開始長
   const grow = { phase: j ? j.phase : null, k: j ? +j.k.toFixed(2) : null, crushed: !!c.crushed };
-  H.step(150, 1 / 30); // 5 秒
+  calm(150); // 5 秒
   let wd = 0; wl.forEach((m, n) => { const P = m.geometry.attributes.position.array, S = snap[n]; for (let i = 1; i < P.length; i += 3) wd = Math.max(wd, Math.abs(P[i] - S[i])); });
   let md = 0; if (j) for (const sg of j.segs) { const P = sg.A.array; for (let i = 0; i < sg.idx.length; i++) md = Math.max(md, Math.abs(P[sg.idx[i] * 3 + 1] - sg.y0[i])); }
   return { q, r, before: wireBefore, flat, early, close, grow, back: { crushed: !!c.crushed, inBig: !!j && C.big.includes(j), n: C.big.length, wireDiff: +wd.toFixed(5), meshDiff: +md.toFixed(5), restored: C.stats.restored - r0, wireY: wireLow(c.x, c.z) },
@@ -556,7 +557,7 @@ const back9 = await p.evaluate(() => {
 });
 console.log('  pole + wires, grow back:', JSON.stringify(back9));
 check(!back9.none && back9.flat.crushed && back9.flat.maxY <= 1.2 && back9.flat.wires > 0 && back9.before > 6 && back9.flat.wireY < 1, `a power pole flattened and the wires on it came down to the ground with it (${back9.flat?.wires} wire points; lowest end ${back9.before} → ${back9.flat?.wireY} m)`);
-check(!back9.none && back9.early.crushed && back9.early.phase === 2 && back9.close.crushed && back9.close.phase === 2 && back9.close.since > 20 && back9.close.d < 15, `it stays flat for 20 s (${back9.early?.since} s, far away) and while you are close (${back9.close?.since} s, ${back9.close?.d} m away)`);
+check(!back9.none && back9.early.crushed && back9.early.phase === 2 && back9.close.crushed && back9.close.phase === 2 && back9.close.since > 20 && back9.close.d < 15 && back9.close.dEnd < 15, `it stays flat for 20 s (${back9.early?.since} s, far away) and while you are close (${back9.close?.since} s, ${back9.close?.d}–${back9.close?.dEnd} m away)`);
 check(!back9.none && back9.grow.phase === 4 && back9.grow.k < 0.5, `after 20 s with you 15 m+ away it grows back slowly (k ${back9.grow?.k} a moment after leaving)`);
 check(!back9.none && !back9.back.crushed && !back9.back.inBig && back9.back.wireDiff < 1e-4 && back9.back.meshDiff < 1e-4 && back9.back.wireY > 6, `the pole is back (solid again) and the wires hang where they were (max wire change ${back9.back?.wireDiff}, pole ${back9.back?.meshDiff})`);
 check(!back9.none && back9.back.n === 0 && back9.left === 0 && back9.doors === 0, `everything flattened earlier came back too (${back9.back?.restored} restored here; nothing still flat, no doors shut)`);

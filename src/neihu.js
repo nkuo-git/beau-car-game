@@ -11,6 +11,7 @@
 //     V.surfaceAt、V.route 包一層：內湖、聯外道路照這裡算（大路 0、小路／人行道／水泥地 3、公園草地 1），外面完全照舊
 //     V.route(x, z, 'neihu')：從世界任何地方開到內湖（港墘站下面）；在內湖裡往外的目的地：照路網（單行道照方向）開出去，再接原本的
 //     V.places.neihu：{ name: '內湖', pos, zone（港墘站下面的內湖路一段）, spawn }
+//     V.npcRoads：路上的車、走路的人用的內湖的路 [{ kind: 'main'|'street'|'alley', w, pts, ow（1 單行道）, so（人行道離中線多遠）}]（npc.js；修 10）
 //   N.inside(x, z)：在內湖（範圍裡、聯外道路上）；N.update(camera)：每一幀（遠的格子收起來）；N.info：{ meshes, tris, colliders, buildings, ms }；N.dispose()
 // 效能：房子照 250 公尺一格合併成一個網格（牆、屋頂、騎樓、頂樓加蓋、高架、車站都是同一個材質：一張 2048×1024 的貼圖，
 //   著色器裡 fract() 重複一格一格的窗戶，所以一面牆只要兩個四邊形）；路、人行道、標線、地面 500 公尺一格；樹 250 公尺一格 InstancedMesh（山上的樹一個、八面體）；
@@ -257,6 +258,31 @@ function buildNeihu(V, opt = {}) {
   // 路口：一個點有幾條路（3 以上＝路口）、路口多大（最寬那條的半寬＋人行道）
   const deg = new Uint8Array(ND.length / 2); for (const r of N.roads) r.n.forEach((ni, i) => { deg[ni] += i === 0 || i === r.n.length - 1 ? 1 : 2; });
   const jR = new Float32Array(ND.length / 2); for (const r of N.roads) for (const ni of r.n) jR[ni] = Math.max(jR[ni], r.w / 2 + r.sw);
+  // 修 10（2026-10-10）：路上的車、走路的人（npc.js 的 V.npcRoads）：大路、一般的路、巷子（cls ≤ 4；4＝residential，內湖大部分的路），在路口（三段以上）切開，中間直直接著的（一樣寬、一樣的單行道）接成一條；
+  //   ow 1＝單行道，照點的順序開（OSM 的 −1 先反過來）；so＝人行道中間離路中線多遠（走路的人走人行道）
+  function npcRoads() {
+    const use = N.roads.filter((r) => r.cls <= 4 && r.n.length >= 2), dg = new Uint8Array(ND.length / 2);
+    for (const r of use) r.n.forEach((ni, i) => { dg[ni] += i === 0 || i === r.n.length - 1 ? 1 : 2; });
+    let ps = [];
+    for (const r of use) {
+      const n = r.ow === -1 ? r.n.slice().reverse() : r.n; let a = 0;
+      for (let i = 1; i < n.length; i++) if (i === n.length - 1 || dg[n[i]] >= 3) { ps.push({ n: n.slice(a, i + 1), cls: r.cls, w: r.w, sw: r.sw, ow: r.ow ? 1 : 0 }); a = i; }
+    }
+    const same = (p, q) => p.cls === q.cls && Math.abs(p.w - q.w) < 0.01 && Math.abs(p.sw - q.sw) < 0.01 && p.ow === q.ow;
+    for (let more = true; more;) { // 一個點剛好是兩段的頭尾（沒有別的路）、兩段一樣：接起來（p 的尾巴接 q 的頭）
+      more = false; const ends = new Map();
+      for (const p of ps) for (const ni of [p.n[0], p.n[p.n.length - 1]]) { let a = ends.get(ni); if (!a) ends.set(ni, (a = [])); a.push(p); }
+      for (const [ni, a] of ends) {
+        if (a.length !== 2 || dg[ni] !== 2 || a[0] === a[1] || !same(a[0], a[1])) continue;
+        let [p, q] = a; if (p.n[p.n.length - 1] !== ni) [p, q] = [q, p];
+        if (p.n[p.n.length - 1] !== ni) { if (p.ow) continue; p.n.reverse(); } // 兩段都從這裡出發：雙向的那段反過來
+        if (q.n[0] !== ni) { if (q.ow) continue; q.n.reverse(); }
+        p.n = p.n.concat(q.n.slice(1)); ps = ps.filter((x) => x !== q); more = true; break;
+      }
+    }
+    return ps.map((p) => ({ kind: p.cls <= 2 ? 'main' : p.cls === 3 ? 'street' : 'alley', w: p.w, pts: p.n.map((i) => [nx(i), nz(i)]), ow: p.ow, so: p.w / 2 + (p.sw > 0.5 ? p.sw / 2 : 0.75) }));
+  }
+  V.npcRoads = (V.npcRoads || []).concat(npcRoads());
   const colliders = [];
   // ---- 材質 ----
   const FA = facadeAtlas(aniso);
@@ -1038,6 +1064,11 @@ function buildNeihu(V, opt = {}) {
 
   // ==== 地面種類（surfaceAt）：2 公尺一格，第一次問才算 ====
   const roadAt2 = mkRoadGrid();
+  { // 修 10（npc.js）：在車走的路（cls ≤ 4）上嗎（走路的人行道不能在這裡）；10 公尺一格
+    const G = 10, grid = new Map(), key = (i, j) => i * 73856093 + j;
+    N.roads.forEach((r) => { if (r.cls > 4) return; for (let k = 1; k < r.n.length; k++) { const a = r.n[k - 1], b = r.n[k], m = r.w / 2; for (let i = Math.floor((Math.min(nx(a), nx(b)) - m) / G); i <= Math.floor((Math.max(nx(a), nx(b)) + m) / G); i++) for (let j = Math.floor((Math.min(nz(a), nz(b)) - m) / G); j <= Math.floor((Math.max(nz(a), nz(b)) + m) / G); j++) { const kk = key(i, j); let L = grid.get(kk); if (!L) grid.set(kk, (L = [])); L.push(nx(a), nz(a), nx(b), nz(b), (r.w / 2 - 0.2) ** 2); } } });
+    V.npcOnRoad = (x, z) => { const L = grid.get(key(Math.floor(x / G), Math.floor(z / G))); if (L) for (let i = 0; i < L.length; i += 5) if (segD2(x, z, L[i], L[i + 1], L[i + 2], L[i + 3]) < L[i + 4]) return true; return false; };
+  }
   const grassAreas = N.areas.filter((a) => a.t === 'park' || a.t === 'pitch');
   const SX0 = BX0 - 20, SZ0 = BZ0 - 20, SNX = Math.ceil((BX1 - BX0 + 40) / 2), SNZ = Math.ceil((BZ1 - BZ0 + 40) / 2), SM = new Uint8Array(SNX * SNZ).fill(255);
   const LB = LK.box, LGN = Math.ceil((LB[2] - LB[0]) / 2), LGM = Math.ceil((LB[3] - LB[1]) / 2), LG = new Uint8Array(LGN * LGM); // 聯外道路：2 公尺一格（0 還沒算、1 在路上、2 不在）
