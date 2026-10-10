@@ -40,7 +40,7 @@ const srv = http.createServer((req, res) => {
   res.end(body);
 }).listen(0);
 const URL0 = `http://127.0.0.1:${srv.address().port}/site/`;
-const b = await pw.chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+const b = await pw.chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'] });
 const errs = [], fails = [];
 const check = (ok, what) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) fails.push(what); };
 const T0 = Date.now(), el = () => `${((Date.now() - T0) / 1000).toFixed(0)}s`;
