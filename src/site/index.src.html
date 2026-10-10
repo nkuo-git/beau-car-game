@@ -107,7 +107,7 @@
   </div>
 </div>
 
-<!-- 連線：要先登入、取名字、連線選單、排行榜（site/online.js） -->
+<!-- 連線：要先登入、取名字、連線選單、排行榜（site/online.js）；房間、一起比賽、參觀車庫（site/room.js） -->
 <div class="imp" id="netDlg" role="dialog" aria-modal="true" aria-labelledby="netTitle" hidden>
   <div class="imp-card cl-card nw-card">
     <div class="cl-head"><h2 id="netTitle">連線</h2><button type="button" class="cl-x" id="netX" aria-label="關掉">✕</button></div>
@@ -125,9 +125,44 @@
       <p class="cl-note">名字裡不能有髒話，也不會顯示你的 email。</p>
     </div>
     <div class="cl-sec" id="nwMenu" hidden>
-      <button type="button" class="imp-yes cl-btn" id="nwBoardBtn">🏆 排行榜</button>
-      <p class="cl-note">一起開車、一起比賽、參觀朋友的車庫還在做，做好會出現在這裡。</p>
+      <button type="button" class="imp-yes cl-btn" id="nwRoomBtn">開一個房間<small>給朋友房間碼，他就能進來</small></button>
+      <button type="button" class="imp-no cl-btn" id="nwJoinBtn">輸入房間碼加入</button>
+      <button type="button" class="imp-no cl-btn" id="nwBoardBtn">🏆 排行榜</button>
+      <button type="button" class="imp-no cl-btn" id="nwVisitBtn">🚗 參觀朋友的車庫</button>
+      <p class="cl-note" id="nwMenuNote">只有拿到房間碼的人才進得來，陌生人進不來。一個房間最多 4 個人。</p>
       <div class="nw-me"><span>你的名字：<b id="nwMyName"></b></span><button type="button" class="nw-link" id="nwRename">改名字</button></div>
+    </div>
+    <div class="cl-sec" id="nwJoin" hidden>
+      <p class="cl-note">輸入朋友給你的 4 個字：</p>
+      <input class="nw-field nw-code-in" id="nwCodeIn" type="text" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go" placeholder="K7Q2" aria-label="房間碼">
+      <p class="cl-err" id="nwJoinErr" hidden></p>
+      <button type="button" class="imp-yes cl-btn" id="nwJoinOk">加入</button>
+      <button type="button" class="nw-link" id="nwJoinBack">← 回連線選單</button>
+    </div>
+    <div class="cl-sec" id="nwRoom" hidden>
+      <p class="cl-note" id="nwRoomTip">把這 4 個字告訴朋友：</p>
+      <div class="nw-code" id="nwCode"></div>
+      <div class="nw-lbl" id="nwWhoLbl">在房間裡的人</div>
+      <ul class="nw-who" id="nwWho"></ul>
+      <p class="cl-err" id="nwRoomErr" hidden></p>
+      <button type="button" class="imp-yes cl-btn" id="nwOut">一起出門</button>
+      <button type="button" class="imp-no cl-btn" id="nwRaceBtn">🏁 一起比賽</button>
+      <p class="cl-note" id="nwRoomNote" hidden>房主可以叫大家一起出門、選要比什麼。</p>
+      <button type="button" class="nw-link" id="nwLeave">離開房間</button>
+    </div>
+    <div class="cl-sec" id="nwRace" hidden>
+      <button type="button" class="imp-no cl-btn" data-k="circuit">🏁 大便龍賽車場（3 圈）</button>
+      <button type="button" class="imp-no cl-btn" data-k="drag">⏱ 400 公尺直線加速</button>
+      <button type="button" class="imp-no cl-btn" data-k="hill">⛰ 爬山計時賽</button>
+      <button type="button" class="imp-no cl-btn" disabled>🟤 泥巴賽（越野車）<small>下次做</small></button>
+      <p class="cl-note">房主選，大家一起到起點。比賽的時候撞不到別人的車（會穿過去），不會被擋住。</p>
+      <button type="button" class="nw-link" id="nwRaceBack">← 回房間</button>
+    </div>
+    <div class="cl-sec" id="nwVisit" hidden>
+      <ul class="nw-who" id="nwVisitList"></ul>
+      <p class="cl-note" id="nwVisitNote"></p>
+      <p class="cl-err" id="nwVisitErr" hidden></p>
+      <button type="button" class="nw-link" id="nwVisitBack">← 回連線選單</button>
     </div>
     <div class="cl-sec" id="nwBoard" hidden>
       <div class="nw-tabs" id="nwTabs" role="tablist"><button type="button" data-b="drag" role="tab">400 公尺</button><button type="button" data-b="lap" role="tab">賽車場一圈</button><button type="button" data-b="hill" role="tab">爬山</button></div>

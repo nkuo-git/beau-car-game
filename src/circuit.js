@@ -22,6 +22,9 @@
 //     onFinish(result) → { lines: [多顯示的字] }（獎金由呼叫的人加）；onDone({ again })：「再比一次」／「開走」；onAbort(why)：'quit'、'left'（開出賽車場）
 //     → { update(dt)（drive.update 之後叫）, abort(why), dispose(), standings(), state（'grid' | 'run' | 'done' | 'off'）, time, me, ais, result }
 //     result：{ place, n, time, best（最快一圈）, laps, won }
+//   一起比賽（net.src.js；連線第 3 步）多的選項：grid＝你在第幾格（預設最後一格）；startIn() → 還有幾秒熄燈（null＝還在等大家：紅燈不亮）；
+//     rivals：[{ name, p, fin }]（別支手機的人：p＝跑多遠，跟 me.p 一樣算法；fin＝跑完的秒數）呼叫的人每一格自己改，算名次、列在名單上（不擋路、不是碰撞）；
+//     result: false＝跑完不出自己的結果（呼叫的人自己顯示大家的成績），「放棄比賽」照樣有
 // 效能：地面（草、柏油、碎石、白線＋路緣石）、護欄、看台、建築都照材質合併（450 公尺一塊）；樹一個 InstancedMesh；對手一台 4 個 draw call（輕量車）＋影子一個
 import * as THREE from 'three';
 
@@ -738,7 +741,7 @@ function createCircuitRace(o) {
   const TMP = {}, PR = { s: 0, d: 0, i: 0, dist: 0 }, MEAS = new THREE.Box3();
   const nA = o.opps.length;
   // 起跑：你在最後一格，對手照順序排在前面
-  const meGrid = P.grid(nA);
+  const meGrid = P.grid(o.grid ?? nA), RIV = o.rivals || [];
   if (drv.teleport) drv.teleport({ x: meGrid.x - pCX, z: meGrid.z, heading: 0 });
   if (drv.setInput) drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 });
   if (drv.setDestination) drv.setDestination(null);
@@ -774,7 +777,7 @@ function createCircuitRace(o) {
     if (hud) { hud.lamps.forEach((e, q) => e.classList.toggle('on', q < k)); hud.lt.hidden = k < 0; }
   }
   setLamps(0);
-  function standings() { const all = [me, ...ais]; return all.slice().sort((a, b) => (a.fin != null && b.fin != null ? a.fin - b.fin : a.fin != null ? -1 : b.fin != null ? 1 : b.p - a.p)); }
+  function standings() { const all = [me, ...ais, ...RIV]; return all.slice().sort((a, b) => (a.fin != null && b.fin != null ? a.fin - b.fin : a.fin != null ? -1 : b.fin != null ? 1 : b.p - a.p)); }
   function crossGate(c, x0, z0, x1, z1) {
     const s0 = (x0 - c.x) * c.tx + (z0 - c.z) * c.tz, s1 = (x1 - c.x) * c.tx + (z1 - c.z) * c.tz;
     if (!(s0 < 0 && s1 >= 0)) return false;
@@ -858,10 +861,11 @@ function createCircuitRace(o) {
   function finish() {
     state = 'done';
     if (drv.setInput) drv.setInput({ throttle: 0, brake: 1, steer: 0 }); // 先煞車（很快的時候拉手煞車會甩尾），停住了再拉手煞車（playerTick）
-    const place = 1 + ais.filter((a) => a.fin != null && a.fin < me.fin).length, N = ais.length + 1;
+    const place = 1 + [...ais, ...RIV].filter((a) => a.fin != null && a.fin < me.fin).length, N = ais.length + RIV.length + 1;
     result = { place, n: N, time: me.fin, best: me.best, laps, won: place === 1 };
     const extra = (o.onFinish && o.onFinish(result)) || {};
-    if (hud) {
+    if (hud && o.result === false) hud.quit.hidden = true; // 一起比賽：成績呼叫的人顯示，名單留著（等別人跑完）
+    else if (hud) {
       const r = hud.res; r.replaceChildren();
       const h = document.createElement('h3'); h.textContent = place === 1 ? '第 1 名！' : `第 ${place} 名`;
       const p1 = document.createElement('p'); p1.textContent = `${o.title ? `對手：${o.title} · ` : ''}你 ${fmtT(me.fin)}${me.best ? `（最快一圈 ${fmtT(me.best)}）` : ''}`;
@@ -887,7 +891,8 @@ function createCircuitRace(o) {
     dt = Math.min(0.1, Math.max(0, +dt || 0)); if (!dt) return;
     if (state === 'grid') {
       gT += dt;
-      const k = gT < 1 ? 0 : Math.min(5, 1 + Math.floor((gT - 1) / 0.8));
+      let k = gT < 1 ? 0 : Math.min(5, 1 + Math.floor((gT - 1) / 0.8));
+      if (o.startIn) { const r = o.startIn(); if (r == null) { k = 0; goAt = Infinity; } else { k = r > 4 ? 0 : Math.min(5, 1 + Math.floor((4 - r) / 0.8)); goAt = r <= 0 ? 0 : Infinity; } } // 一起比賽：照大家約好的時間熄燈
       if (gT >= goAt) { state = 'run'; t = 0; setLamps(-1); say('出發！', 900); if (drv.setInput) drv.setInput(null); } else setLamps(k);
     } else t += dt;
     if (msgT > 0) msgT -= dt;

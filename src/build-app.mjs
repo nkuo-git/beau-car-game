@@ -50,7 +50,7 @@ let js = cut('<script type="module">', '</script>')
 for (const [key, , txt] of CARS) { if (!js.includes(`'${txt}'`)) throw new Error('找不到 ' + txt); js = js.replace(`'${txt}'`, `'tune/${key}.glb?h=${hashes[key]}'`); }
 js = js.replace('/*__INLINE__*/', () => code).replace('__SIZES__', JSON.stringify(sizes))
   .replace('/*__RACE__*/', () => `// ---- race.src.js ----\n${read('race.src.js')}`)
-  .replace('/*__TOWN__*/', () => `// ---- town.src.js ----\n${read('town.src.js')}\n// ---- circuit.src.js ----\n${read('circuit.src.js')}\n// ---- neihu.src.js ----\n${read('neihu.src.js')}\n// ---- ghost.src.js ----\n${read('ghost.src.js')}`);
+  .replace('/*__TOWN__*/', () => `// ---- town.src.js ----\n${read('town.src.js')}\n// ---- circuit.src.js ----\n${read('circuit.src.js')}\n// ---- neihu.src.js ----\n${read('neihu.src.js')}\n// ---- ghost.src.js ----\n${read('ghost.src.js')}\n// ---- net.src.js ----\n${read('net.src.js')}`);
 js = `// 大便龍的萬能軟體 — 改車（3D 車庫＋開車出門的小村莊＋400 公尺直線加速）
 // 這個檔是產生出來的，不要直接改：原始碼和指令在專案檔案 tune-game/supra3d/（build-app.mjs）
 ${js.trim()}

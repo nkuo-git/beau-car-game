@@ -36,7 +36,8 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
-  const f = u.startsWith('/three/') ? path.join(three, u.slice(7)) : path.join(repo, u === '/' ? 'index.html' : u);
+  let f = u.startsWith('/three/') ? path.join(three, u.slice(7)) : path.join(repo, u === '/' ? 'index.html' : u);
+  if (!fs.existsSync(f) && path.basename(repo) === 'try' && u.startsWith('/tune/')) f = path.join(repo, '..', u); // 試玩頁 docs/try：車身檔用正式網站的（'../tune/…'，從根目錄看就是 /tune/）
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; }
   let body = fs.readFileSync(f);
   if (f.endsWith('.html')) body = body.toString('utf8').replaceAll('https://cdn.jsdelivr.net/npm/three@0.186.1/', '/three/');
@@ -464,7 +465,11 @@ const w2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = 
 const bd2 = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(); H.step(40); const D = window.__D(); return { pressed, modes: r.modes, drv: !!D.drv, cur: D.cur, act: H.actText(), act2: H.act2() }; });
 console.log('  上車 GC8:', JSON.stringify(w2), JSON.stringify(bd2));
 check(w2.ok && w2.act === '上車 · GC8' && bd2.pressed === '上車 · GC8' && bd2.modes.join('>') === 'in>seat>off' && bd2.drv && bd2.cur === 'gc8' && bd2.act === '開鐵捲門' && bd2.act2 === '下車', 'walked to GC8 in the middle of the garage and got in (開鐵捲門 + 下車)');
-await p.evaluate(() => document.querySelector('#dests button[data-d="offroad"]').click());
+// 全螢幕開車：「去哪裡」平常收起來（Nick 2026-10-10）：按「📍 去哪裡 ▾」打開 → 選了收起來 → 再打開量排法
+const fold2 = await p.evaluate(() => { const B = document.body.classList, sh = B.contains('destsopen'), list0 = getComputedStyle(document.getElementById('dests')).display; document.getElementById('destTog').click(); const op = B.contains('destsopen');
+  document.querySelector('#dests button[data-d="offroad"]').click(); const picked = B.contains('destsopen'); document.getElementById('destTog').click(); return { sh, list0, op, picked, again: B.contains('destsopen') }; });
+console.log('  去哪裡 folded:', JSON.stringify(fold2));
+check(!fold2.sh && fold2.list0 === 'none' && fold2.op && !fold2.picked && fold2.again, 'in the car (fullscreen) the destinations are folded into 「📍 去哪裡 ▾」: tap opens, picking one folds it, tap opens again');
 const pd2 = await pillsAbove('#stage .dv-steer');
 console.log('  in the car, dests:', JSON.stringify(pd2));
 check(pd2.fs && pd2.d.length === 8 && new Set(pd2.d.map((q) => q.x)).size === 1 && new Set(pd2.d.map((q) => q.y)).size === 8 && pd2.top != null && Math.max(...pd2.d.map((q) => q.b)) <= pd2.top,
@@ -613,7 +618,8 @@ di = await driveInfo();
 const aft = await p.evaluate(() => ({ race: window.__O().orRace, hud: !!document.querySelector('.orr'), orcp: !!window.__D().VIL.places.orcp }));
 console.log('  after 開走:', JSON.stringify(aft), JSON.stringify(di));
 check(aft.race === null && !aft.hud && !aft.orcp && di.brake < 0.05 && !di.paused && di.dest === 'garage', `開走: race cleared, brake released (${di.brake}), destination home`);
-check(await p.evaluate(() => !document.body.classList.contains('orracing') && getComputedStyle(document.getElementById('dests')).display !== 'none'), 'destination pills back after the race');
+check(await p.evaluate(() => { const B = document.body.classList, tog = getComputedStyle(document.getElementById('destTog')).display !== 'none'; if (!B.contains('destsopen')) document.getElementById('destTog').click();
+  const list = getComputedStyle(document.getElementById('dests')).display !== 'none'; document.getElementById('destTog').click(); return !B.contains('orracing') && tog && list && !B.contains('destsopen'); }), 'destination pills back after the race (「📍 去哪裡 ▾」 opens them)');
 await p.evaluate(() => { const d = window.__D().drv; d.setInput({ throttle: 0, brake: 1, steer: 0 }); for (let i = 0; i < 400 && Math.abs(d.telemetry().v) > 0.3; i++) window.__dstep(1); d.setInput(null); }); // 開走：先停下來（跟玩的人一樣）
 
 // ---- 6b 走路爬坡：下車，走上賽道最陡的那段（跳台）：每一步腳都踩在地面上、鏡頭不會鑽進地底；走回來上車 ----
@@ -765,11 +771,11 @@ const bs = await p.evaluate(() => {
     bay: D.baySpot('monster')?.bay, bays: OB.bays.length, size: OB.size, mark: !!D.VIL.group.getObjectByName('bigspot'), place: !!D.VIL.places.orbay,
     sign: OB.signs.wall, bayText: OB.signs.bay, signTris: sg ? sg.geometry.attributes.position.count / 3 : 0, meshes: OB.info.meshes, obTris: OB.info.tris,
     walk: wc ? { h: wc.h, hz: +wc.hz.toFixed(2) } : null, decks: D.DECK.map((k) => k || '-').join(','), tris: L.lod.tris, draws: L.lod.draws, shadow: L.shadow.visible,
-    pf: Object.keys(window.__O().PFULL), mini: D.VIL.buildings.filter((b) => b.name === '越野車車庫').length };
+    pf: Object.keys(window.__O().PFULL), mini: D.VIL.buildings.filter((b) => b.name === '越野車車庫').length, face: +window.__H.wrapA(b0.heading - OB.rot).toFixed(3) };
 });
 console.log('12', el(), 'orbay:', JSON.stringify(bs), '| plates', JSON.stringify(await plates('town')));
-check(bs.cur === 'gc8' && bs.at < 0.05 && Math.abs(bs.dh) < 0.01 && bs.y === 0 && bs.bay === 0 && !bs.mark && bs.shadow && !bs.decks.includes('monster') && !(await plates('town')).length && !bs.pf.length,
-  'going out in GC8: the monster truck waits as the light-weight model in bay 1 of the 越野車車庫 annex (the old apron 大車位 marks are gone), not on a lift, no name plates');
+check(bs.cur === 'gc8' && bs.at < 0.05 && Math.abs(bs.dh) < 0.01 && Math.abs(bs.face + Math.PI / 2) < 0.01 && bs.y === 0 && bs.bay === 0 && !bs.mark && bs.shadow && !bs.decks.includes('monster') && !(await plates('town')).length && !bs.pf.length,
+  'going out in GC8: the monster truck waits as the light-weight model in bay 1 of the 越野車車庫 annex, nose out towards the aisle (the old apron 大車位 marks are gone), not on a lift, no name plates');
 check(bs.bays === 4 && bs.size.bayW === 5.4 && bs.size.bayD === 8 && bs.size.ceil >= 6.5 && bs.size.doorH >= 5.6 && bs.size.doorW >= 9 && bs.sign === '越野車專用' && bs.bayText === '越野車' && bs.signTris > 0 && bs.meshes <= 8 && bs.place && bs.mini === 1,
   `the annex: ${bs.bays} bays of ${bs.size.bayW} × ${bs.size.bayD} m, ${bs.size.ceil} m inside, a ${bs.size.doorH} m roller door, the 「${bs.sign}」 sign over it, ${bs.meshes} merged meshes / ${bs.obTris} triangles, and it draws on the mini-map like the garage`);
 check(bs.walk && bs.walk.h === 3 && bs.walk.hz >= 1.9 && bs.tris < 40000 && bs.draws <= 5, `its light model is phone-light (${bs.draws} draw calls, ${bs.tris} triangles) and walkable-to like the other parked cars (camera height ${bs.walk?.h} m)`);
@@ -800,7 +806,8 @@ const bi = await p.evaluate(() => { const D = window.__D(), H = window.__H, OB =
 await p.evaluate(() => { const H = window.__H, W = window.__D().walker; W.setCamera({ yaw: window.__D().OB.rot + Math.PI / 2 + 0.75 }); H.step(30); }); // 鏡頭朝停車格（設計的 −z 那邊，偏向裡面）
 await drawAndShot('15-orbay-inside');
 const bi2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, OB = D.OB, O = H.OD;
-  const r = H.walkPath(H.oww([[O.IX1 - 9, O.ZC], [O.B0X, O.B0Z + 4.35]])); // 走到怪獸卡車前面（車頭前 0.7 公尺：格子變深了，不是格口）
+  const wc = D.walker.cars.find((q) => q.key === 'monster'), h = wc.heading, c = Math.cos(h), s = Math.sin(h), bx = wc.x + (wc.cx || 0) * c + (wc.cz || 0) * s, bz = wc.z - (wc.cx || 0) * s + (wc.cz || 0) * c, f = wc.hx + 0.7;
+  const r = H.walkPath([...H.oww([[O.IX1 - 9, O.ZC]]), [bx + c * f, bz - s * f]]); // 走到怪獸卡車前面（車頭前 0.7 公尺；修 6 以後車頭朝通道）
   return { ok: r.ok, at: r.at, inside: OB.inside(r.x, r.z), act: H.actText(), bad: H.checkFrame(H.cols()), maxY: +D.gcam.maxY.toFixed(2) }; });
 console.log('  into the annex:', JSON.stringify(bi), JSON.stringify(bi2));
 check(bi.rA && bi.pressed === '開鐵捲門' && bi.door >= 0.98 && bi.r0 && bi2.ok && bi2.inside && bi2.act === '上車 · 怪獸卡車' && !bi2.bad.length && bi2.maxY < 6.5,
@@ -819,53 +826,69 @@ await drawAndShot('17-monster-in-bay');
 // 開車的機器人（設計座標）：倒車（停著按煞車 0.25 秒換倒車、倒車時煞車踏板就是油門）、前進（倒車中用力踩油門換前進）、照路點開（目標在後面就倒車）
 await p.evaluate(() => {
   const H = window.__H;
-  H.obBot = () => { const D = window.__D(), d = D.drv, tel = () => { const t = d.telemetry(), q = H.od(t.x, t.z); return { ...t, dx: q[0], dz: q[1], dh: H.wrapA(t.heading - D.OB.rot) }; }, log = [];
+  H.obBot = () => { const D = window.__D(), d = D.drv, tel = () => { const t = d.telemetry(), q = H.od(t.x, t.z); return { ...t, dx: q[0], dz: q[1], dh: H.wrapA(t.heading - D.OB.rot) }; }, log = []; let nb = 0; // nb：倒車了幾格
     const rev = (steer, until, maxS) => { for (let i = 0; i < maxS * 60; i++) { const t = tel(); if (until(t)) break;
-        if (t.gear !== -1) d.setInput({ throttle: 0, brake: 1, steer: 0 }); else d.setInput({ throttle: 0, brake: t.v > -1.3 ? 0.3 : 0, steer }); window.__dstep(1); } };
+        if (t.gear !== -1) d.setInput({ throttle: 0, brake: 1, steer: 0 }); else d.setInput({ throttle: 0, brake: t.v > -1.3 ? 0.3 : 0, steer }); window.__dstep(1); nb++; } };
     const fwd = (steer, until, maxS) => { for (let i = 0; i < maxS * 60; i++) { const t = tel(); if (until(t)) break;
         d.setInput({ throttle: t.gear === -1 ? 0.8 : Math.abs(t.v) < 1.6 ? 0.35 : 0, brake: 0, steer }); window.__dstep(1); } };
     const goW = (tx, tz, maxS) => { let n = 0; for (; n < maxS * 60; n++) { const t = d.telemetry(), dx = tx - t.x, dz = tz - t.z;
         if (Math.hypot(dx, dz) < 2.2) break;
         const want = Math.atan2(-dz, dx), err = H.wrapA(want - t.heading), back = Math.abs(err) > 1.9;
         if (back) { const st = Math.max(-1, Math.min(1, H.wrapA(want - t.heading - Math.PI) * 1.5));
-          if (t.gear !== -1) d.setInput({ throttle: 0, brake: 1, steer: 0 }); else d.setInput({ throttle: 0, brake: t.v > -1.5 ? 0.3 : 0, steer: st }); }
+          if (t.gear !== -1) d.setInput({ throttle: 0, brake: 1, steer: 0 }); else d.setInput({ throttle: 0, brake: t.v > -1.5 ? 0.3 : 0, steer: st }); nb++; }
         else d.setInput({ throttle: t.gear === -1 ? 0.8 : Math.abs(t.v) < 2.3 ? 0.35 : 0, brake: 0, steer: Math.max(-1, Math.min(1, -err * 1.5)) });
         window.__dstep(1); }
       log.push([+tx.toFixed(1), +tz.toFixed(1), +(n / 60).toFixed(1)]); return n / 60; };
     const go = (x, z, maxS) => { const w = H.ow(x, z); return goW(w.x, w.z, maxS); };
-    // 倒車出格 → 前進打右滿舵轉身（借隔壁空的格子）→ 從鐵捲門開出去（直直開到路上）
-    const out = () => { const O = H.OD;
-      rev(0, (t) => t.dz > O.BZ1 + 1.9, 10); log.push(['倒車出格', +tel().dz.toFixed(1)]);
-      fwd(1, (t) => Math.abs(t.dh) < 0.3 || t.dz < O.BZ1 - 1.8 || t.dx > O.X1 - 2.5, 15); log.push(['打右滿舵轉身', +tel().dh.toFixed(2)]);
-      return go(O.X1 - 9, O.ZC - 1, 20) + go(O.X1 - 3, O.ZC + 0.1, 20) + go(O.X1 + 6, O.ZC + 0.2, 25); };
-    return { d, tel, rev, fwd, go, goW, out, log };
+    // 修 6：格子裡車頭朝外（通道）＝直接往前開、轉向鐵捲門開出去（不用倒車）；車頭朝裡面停的才倒車出格 → 前進打右滿舵轉身 → 開出去
+    const out = () => { const O = H.OD, t0 = tel(); let s = 0;
+      if (Math.abs(H.wrapA(t0.dh - Math.PI / 2)) < 0.6) {
+        rev(0, (t) => t.dz > O.BZ1 + 1.9, 10); log.push(['倒車出格', +tel().dz.toFixed(1)]);
+        fwd(1, (t) => Math.abs(t.dh) < 0.3 || t.dz < O.BZ1 - 1.8 || t.dx > O.X1 - 2.5, 15); log.push(['打右滿舵轉身', +tel().dh.toFixed(2)]);
+      } else { log.push(['往前開出格', +t0.dh.toFixed(2)]); s += go(O.B0X + 4, O.BZ1 + 4, 15); }
+      return s + go(O.X1 - 9, O.ZC - 1, 20) + go(O.X1 - 3, O.ZC + 0.1, 20) + go(O.X1 + 6, O.ZC + 0.2, 25); };
+    return { d, tel, rev, fwd, go, goW, out, log, nb: () => nb };
   };
 });
 const ex = await p.evaluate(() => { const D = window.__D(), OB = D.OB, d = D.drv, H = window.__H, B = H.obBot();
-  const s1 = B.out(); window.__dstep(40); d.setInput(null); const t = d.telemetry(), q = H.od(t.x, t.z);
-  return { log: B.log, s: +s1.toFixed(1), x: +t.x.toFixed(2), z: +t.z.toFixed(2), dx: +q[0].toFixed(2), h: +t.heading.toFixed(2), inside: OB.inside(t.x, t.z), door: +OB.door.t.toFixed(2) };
+  const s1 = B.out(); window.__dstep(40); d.setInput(null); const t = d.telemetry(), q = H.od(t.x, t.z), P = window.__pol(), pol = P ? { wanted: P.wanted, state: P.state } : null; if (P?.wanted) P.clear(); // 開到路上不小心撞到人／車 → 警察會來抓（警察在 test-b3.mjs 測）：清掉、記下來
+  return { log: B.log, nb: B.nb(), s: +s1.toFixed(1), x: +t.x.toFixed(2), z: +t.z.toFixed(2), dx: +q[0].toFixed(2), h: +t.heading.toFixed(2), inside: OB.inside(t.x, t.z), door: +OB.door.t.toFixed(2), pol, drvAfter: !!window.__D().drv };
 });
 console.log('  drove out of the bay:', JSON.stringify(ex));
-check(!ex.inside && ex.dx > 14.6 && ex.door >= 0.98, 'reversed out of bay 1, turned round inside (borrowing the empty bays) and drove out through the annex roller door onto the road');
+check(!ex.inside && ex.dx > 14.6 && ex.door >= 0.98 && ex.log[0][0] === '往前開出格' && ex.nb === 0, `drove straight out of bay 1 (nose out, no reversing, no three-point turn: ${ex.s} s) and out through the annex roller door onto the road`);
 await drawAndShot('18-monster-out');
 // 門關起來：車開不進去 → 坐在車上按「開鐵捲門」→ 開進去停回 1 號格 → 下車
 const ob3 = await p.evaluate(() => { const D = window.__D(), OB = D.OB, d = D.drv, H = window.__H, O = H.OD, dX = () => { const t = d.telemetry(); return H.od(t.x, t.z)[0]; };
   d.teleport(H.ow(O.X1 - 10, O.ZC, 0)); window.__dstep(10); OB.door.t = 0; OB.door.close(0.001); window.__dstep(30); // 通道上、車頭朝門；門關起來
   let n = 0; for (; n < 600; n++) { const t = d.telemetry(); if (dX() > O.X1 + 2) break; d.setInput({ throttle: Math.abs(t.v) < 2 ? 0.4 : 0, brake: 0, steer: 0 }); window.__dstep(1); }
   window.__dstep(60); const t1 = dX(); // 煞車不按住（停著按住＝換倒車）
+  const tq = d.telemetry(), dbg = { paused: tq.paused, v: +tq.v.toFixed(2), wanted: window.__pol()?.wanted, moving: OB.door.moving, on: window.__D().on, drv: !!window.__D().drv, mode: window.__D().walker?.mode };
   const act = H.actText(), pressed = H.press();
   let m = 0; for (; m < 900 && OB.door.t < 0.98; m++) window.__dstep(1);
   let k = 0; for (; k < 900; k++) { const t = d.telemetry(); if (dX() > O.X1 + 4) break; d.setInput({ throttle: Math.abs(t.v) < 3 ? 0.4 : 0, brake: 0, steer: 0 }); window.__dstep(1); }
   window.__dstep(30); d.setInput(null); const t2 = d.telemetry();
-  return { blocked: +t1.toFixed(2), act, pressed, door: +OB.door.t.toFixed(2), out: +dX().toFixed(2), inside: OB.inside(t2.x, t2.z), X1: O.X1 }; });
+  return { blocked: +t1.toFixed(2), act, pressed, door: +OB.door.t.toFixed(2), out: +dX().toFixed(2), inside: OB.inside(t2.x, t2.z), X1: O.X1, dbg, drvEnd: !!window.__D().drv }; });
 console.log('  door blocks the truck:', JSON.stringify(ob3));
 check(ob3.blocked < ob3.X1 - 0.3 && ob3.act === '開鐵捲門' && ob3.pressed === '開鐵捲門' && ob3.door >= 0.98 && ob3.out > ob3.X1 + 4 && !ob3.inside,
   `the closed annex door stops the truck inside (x ${ob3.blocked} in the annex's own frame, door at ${ob3.X1}); 「開鐵捲門」 from the driver seat opens it and the truck drives out again`);
+// 修 7：在越野車車庫裡面、門關著，按「去哪裡」：鐵捲門自己打開，照著路線開出去不會卡在門上
+const ob7 = await p.evaluate(() => { const D = window.__D(), OB = D.OB, d = D.drv, H = window.__H, O = H.OD, dX = () => { const t = d.telemetry(); return H.od(t.x, t.z)[0]; };
+  d.teleport(H.ow(O.X1 - 10, O.ZC, 0)); window.__dstep(10); OB.door.t = 0; OB.door.close(0.001); window.__dstep(30);
+  const shut = +OB.door.t.toFixed(2), btn = document.querySelector('#dests button[data-d="shop"]'); btn.click(); window.__dstep(2);
+  const moving = OB.door.moving;
+  let n = 0; for (; n < 900 && OB.door.t < 0.98; n++) window.__dstep(1);
+  let k = 0; for (; k < 900; k++) { const t = d.telemetry(); if (dX() > O.X1 + 4) break; d.setInput({ throttle: Math.abs(t.v) < 3 ? 0.4 : 0, brake: 0, steer: 0 }); window.__dstep(1); }
+  d.setInput(null); window.__dstep(30); const t2 = d.telemetry();
+  return { shut, moving, door: +OB.door.t.toFixed(2), s: +(n / 60).toFixed(1), out: +dX().toFixed(2), inside: OB.inside(t2.x, t2.z), dest: t2.dest, X1: O.X1 }; });
+console.log('  destination from inside the annex:', JSON.stringify(ob7));
+check(ob7.shut === 0 && ob7.moving && ob7.door >= 0.98 && ob7.dest === 'shop' && ob7.out > ob7.X1 + 4 && !ob7.inside,
+  `inside the annex with the door shut, picking 「去改車廠」 opens the roller door by itself (${ob7.s} s) and the truck drives out along the route`);
+await p.evaluate(() => window.__D().drv.setDestination(null));
 const ob4 = await p.evaluate(() => { const D = window.__D(), OB = D.OB, d = D.drv, H = window.__H, O = H.OD;
-  d.teleport(H.ow(O.B0X, O.BZ1 + 2.7, Math.PI / 2)); window.__dstep(10); // 1 號格的格口，車頭朝裡面
-  let n = 0; for (; n < 900; n++) { const t = d.telemetry(), stop = H.od(t.x, t.z)[1] < O.B0Z + 1.3;
-    d.setInput({ throttle: stop ? 0 : t.v < 2.5 ? 0.35 : 0, brake: stop ? 1 : 0, steer: 0 }); window.__dstep(1);
-    if (stop && Math.abs(d.telemetry().v) < 0.1) break; }
+  d.teleport(H.ow(O.B0X, O.BZ1 + 2.7, -Math.PI / 2)); window.__dstep(10); // 1 號格的格口，車頭朝外（修 6：倒車停進去，下次直接開出來）
+  let n = 0; for (; n < 900; n++) { const t = d.telemetry(), stop = H.od(t.x, t.z)[1] < O.B0Z + 1.3; // 倒車：停著按煞車換倒車、倒車的時候煞車踏板是油門；到了踩油門＝煞車
+    d.setInput(stop ? { throttle: 1, brake: 0, steer: 0 } : t.gear !== -1 ? { throttle: 0, brake: 1, steer: 0 } : { throttle: 0, brake: t.v > -2.5 ? 0.35 : 0, steer: 0 }); window.__dstep(1);
+    if (stop && Math.abs(d.telemetry().v) < 0.15) break; }
   d.setInput(null); window.__dstep(30);
   const t = d.telemetry(), sp = D.orbaySpot(t);
   return { s: +(n / 60).toFixed(1), bay: sp?.bay, act2: H.act2() }; });

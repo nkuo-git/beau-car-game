@@ -36,11 +36,12 @@ src/                 遊戲原始碼（平的一層，腳本都用自己的資�
   *.js               模組（village street police npc walk drive terrain offroad circuit neihu mountain orbay crush police-ai guns gunshop character lookpanel room cabin damage carlod ghost …）
   bigmap.js          大地圖（點小地圖打開：拖、放大、點地方「去這裡」）；town.src.js 的 mapStep 接小地圖（比賽：看整個賽道、對手號碼點）
   ghost.src.js       鬼影車排行榜：錄爬山／賽車場一圈／400 公尺、發 'beau-run'、window.beauGame.setGhost（接在 neihu.src.js 後面）
+  net.src.js         一起開車／一起比賽／參觀車庫的遊戲那一邊：朋友的車和人、名字牌、表情、地圖上的點、一起比賽、參觀車庫畫面（window.beauGame.net／visit；接在 ghost.src.js 後面）
   *-look.js *-spec.js 每台車的外觀／規格；body-*-q.glb（車庫用）、body-*-lod.glb（輕量車）＝車身檔
   build-art.mjs      試做頁 → src/art/garage.html（＋car-*.txt）；make-free.mjs → src/art/garage-free.html（錢用不完）
   build-site.mjs     網站 → docs/（用 build-app.mjs 的打包，再加 site/ 的東西）
   build-app.mjs      萬能軟體的改車頁（tune.html／tune.js／tune.css／tune/*.glb）；只有萬能軟體要更新遊戲時才用
-  site/              網站才有的：index.src.html、site.js（版本號、更新條、搬進度）、cloud.js（登入、雲端存檔）、online.js（連線：名字、排行榜）、site.css、sw.src.js、manifest、icons、make-icons.py
+  site/              網站才有的：index.src.html、site.js（版本號、更新條、搬進度）、cloud.js（登入、雲端存檔）、online.js（連線：名字、排行榜）、room.js（房間：開、加入、位置、一起比賽、參觀車庫、讚；Realtime Database）、site.css、sw.src.js、manifest、icons、make-icons.py
   app/               萬能軟體改車頁的外框（build-app.mjs 用）
   data/neihu3.osm.gz 內湖的 OSM 原始資料（neihu-conv.mjs 讀，產生 neihu-data.js）
   test-*.mjs …       測試（下面）；test-fixtures/trunk-0.8.35/ ＝ drift-test 比對用的舊 drive.js
@@ -85,21 +86,22 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 
 | 指令（在 src/） | 測什麼 | main 上應該是 |
 |---|---|---|
-| `node test-b1.mjs ../out/b1/b1` | 整個開放世界：車庫、走路、升降停車格、開車、改車廠、車店、快速道路、賽車、警察局、房子、行人車流、全螢幕版面 | 144 ok，ALL CHECKS OK（約 8–12 分；含 400 公尺的鬼影車） |
-| `node test-b4.mjs ../out/b4/b4` | 越野車場、怪獸卡車、越野車行、泥巴賽、越野車車庫 | 74 ok |
+| `node test-b1.mjs ../out/b1/b1` | 整個開放世界：車庫、走路、升降停車格、開車、改車廠、車店、快速道路、賽車、警察局、房子、行人車流、全螢幕版面 | 149 ok，ALL CHECKS OK（約 8–13 分；含 400 公尺的鬼影車、全螢幕按鈕收起來／按鈕大小） |
+| `node test-b4.mjs ../out/b4/b4` | 越野車場、怪獸卡車、越野車行、泥巴賽、越野車車庫 | 76 ok |
 | `node test-b3.mjs ../out/b3/b3` | 警察（星星、追、抓、拘留、罰款）、槍店、靶場、槍 | 56 ok |
-| `node neihu-test.mjs ../out/nh/nh` | 內湖：轉換程式重跑一樣、地標、開到港墘站、路牌、走路 | 29 ok |
+| `node neihu-test.mjs ../out/nh/nh` | 內湖：轉換程式重跑一樣、地標、開到港墘站、路牌、走路、內湖的車流和行人 | 35 ok |
 | `node circuit-test.mjs ../out/ci/ci` | 賽車場、AI、名次、每一圈錄下來＋鬼影車；大地圖（走路、開車、拖、點地方、去這裡）、比賽的小地圖（對手號碼點、整個賽道）、撞到對手 | 37 ok，PASSED |
 | `node drift-test.mjs ../out/drift/drift` | 甩尾（Node＋瀏覽器；沒甩的時候跟舊 drive.js 一模一樣） | 42 ok |
 | `node bump-test.mjs` | 撞到會動的車（比賽的對手）：追撞掉到差不多前車的速度、前車被推快、撞牆照舊、擦到旁邊（Node，一秒） | 7 ok |
-| `node crush-test.mjs ../out/crush/crush` | 怪獸卡車輾扁車、騎的機車和路邊的東西、人跳開 | 53 ok |
+| `node crush-test.mjs ../out/crush/crush` | 怪獸卡車輾扁車、騎的機車和路邊的東西、人跳開、輾扁的東西長回來 | 57 ok |
 | `node mountain-test.mjs ../out/mt/mt` | 山：去山頂、爬山計時賽、上山下山貼著路、山頂走路、越野車捷徑、輾扁山上的東西、警察追上山、爬山的鬼影車 | 42 ok |
 | `node free-test.mjs` | 試做頁錢用不完、正常頁存檔的錢 | 2 ok（先跑 make-free.mjs） |
-| `node test-app-b1.mjs ../docs ../out/app1/app` | 網站（docs/）整趟：跟 test-b1 一樣＋版本號、標題列、App 外殼的全螢幕 | 146 ok |
-| `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場 | 74 ok |
+| `node test-app-b1.mjs ../docs ../out/app1/app` | 網站（docs/）整趟：跟 test-b1 一樣＋版本號、標題列、App 外殼的全螢幕 | 151 ok（試玩頁 docs/try 標題寫「試玩」，版本號那一項會不過） |
+| `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場 | 76 ok |
 | `node site-test.mjs ../docs ../out/site/site` | 網站：打開、開車、有新版本那一條、App 有新版本、搬進度 | 22 ok |
 | `node cloud-test.mjs ../docs ../out/cloud/cloud` | 登入＋雲端存檔（假的雲端、兩支手機、沒網路、App 外殼） | 20 ok |
 | `node online-test.mjs ../docs ../out/online/online` | 連線：要先登入、取名字（擋髒話）、跑完自己上傳、排行榜、鬼影車按鈕（假的 Firestore） | 30 ok |
+| `node room-test.mjs ../docs ../out/room/room` | 兩支假手機（兩個瀏覽器、假的即時資料庫）：開房間、加入、一起出門、表情、一起爬山／400 公尺、成績、回房間一起開、參觀車庫按讚、離開、斷線、滿了、關房間 | 49 ok，ALL CHECKS OK（約 4 分） |
 
 - test-app-b1／b4 給萬能軟體的 repo（有 tune.html）也可以跑，就是測萬能軟體的改車頁。
 - **不可以為了變綠燈把測試改鬆**；找出原因修好。新加或改的測試要真的有在測東西。
@@ -120,6 +122,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `carid.tune.full` | 全螢幕 `'on'`／`'off'` |
 | `carid.sound` | 引擎聲 `'on'`／`'off'` |
 | `carid.roomq` | 車庫畫質 `'high'`／`'low'` |
+| `carid.btnsize` | 全螢幕按鈕大小 `'s'`／`'m'`／`'l'`（內容 8 起；搬家不帶） |
 | `carid.theme`、`carid.accent` | 萬能軟體設定裡的亮暗、主色（網站的 head 會照它；這裡沒有設定頁） |
 
 **搬家格式（萬能軟體那邊的「搬家」要照這個做）**：
@@ -152,17 +155,15 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - **鬼影排行榜（2026-10-10 上線＝內容 6）**：右上角「👥 連線」→ 取名字 → 🏆 排行榜（400 公尺／賽車場一圈／爬山 × 大家／同一台車）→「👻 跟第 1 名的鬼影車跑」。說明在 `notes/online.md`。
     Firestore 規則（`notes/online.md` 裡那一段，也包含原本的 saves）家長 2026-10-10 已經貼到 Firebase 主控台。試做頁 artifact 連不到 Firebase：只有遊戲那一邊（錄下來、鬼影車），看不到排行榜。
 - **內容 7（2026-10-10 上線，試做頁 v30＋v31）＝ 大地圖＋撞前車**：點右上角的小地圖（下面寫「🗺 大地圖」）→ 整張地圖（拖、兩指放大、點地方「去這裡」）；賽車場比賽時小地圖上的對手是有號碼的點（名次），點小地圖看整個賽道；比賽撞到前車照兩台車的動量算，不會整台停住（警車、路上的車還是像牆）。草稿 https://claude.ai/artifact/VF5wb2U1PpAnzBRyJsSSW6，說明在 `notes/bigmap.md`。一起開車時朋友也會畫在大地圖上（連線第 2 步）。
+- **連線第 2–4 步（做好了，在試玩頁 docs/try，還沒上線＝下一個內容 8）＝ 房間＋一起開車＋一起比賽＋參觀車庫**：「👥 連線」→ 開一個房間（4 個字的房間碼，最多 4 個人）／輸入房間碼加入；房主按「一起出門」「🏁 一起比賽」（賽車場 3 圈、400 公尺、爬山；泥巴賽「下次做」）；遊戲裡右邊「房間 CODE」＋💬 表情（只有 5 個固定的，不能打字）；參觀車庫只能看、按讚。用 Firebase 的 Realtime Database（家長 2026-10-10 開好、規則貼好）。說明、規則在 `notes/room.md`。
+- **修 5–12（2026-10-10，做好了，在試玩頁 docs/try，跟連線第 2–4 步一起＝下一個內容 8）**：越野車車庫的追車鏡頭不會跑到屋頂上面（drive.js `setCamCeil`）；停車格車頭朝外，直接開出去；在車庫裡選目的地鐵捲門自己開；輾扁的東西 20 秒以後、你離 15 公尺以上就 0.8 秒慢慢長回來；電線桿扁了電線一起垂下來（長回來一起拉回去）、內湖大路牌整支一起扁；內湖有車流和走人行道的人（neihu.js `V.npcRoads`：大路、一般的路、巷子，單行道一條車道；npc.js 路口切好的不再找丁字路口、走不出去的車道剪掉）；手機橫拿全螢幕「去哪裡」收成一顆「📍 去哪裡 ▾」、小畫面「下車」在左邊、手煞車一行；撞到警車、路上的車照動量算（不像牆）；App 的字固定大小（`setTextZoom(100)`，要新的 APK：上線 push main 才會編）。
+  - **按鈕收起來＋按鈕大小（Nick 2026-10-10 說好，草稿 https://claude.ai/artifact/UKuAXoAiocDidxbjYY8EE9 ）**：全螢幕開車（直拿、橫拿都一樣）平常只有「📍 去哪裡 ▾」和「⋯」；按「⋯」才出現聲音、全螢幕、換視角、「Aa」；再按一次、選了地方、車子開起來（超過時速約 14 公里；車已經在動才打開的話 8 秒）就收起來（town.src.js `FOLD`、`foldStep`）。「Aa」→「按鈕大小 小／中／大」＝0.8／1／1.15 倍（CSS `--hudz`、`zoom`），每支手機自己記在 localStorage `carid.btnsize`（不在存檔裡）。
 - **已知問題**
-  - 越野車車庫裡坐在駕駛座（或追車鏡頭）會看到天空（屋頂被剔除）。
-  - 越野車車庫 1 號格要倒車、打方向、再前進（三點迴轉）才出得來。
-  - 從越野車車庫裡面按自動開車（去哪裡），會卡在鐵捲門。
-  - 輾扁的東西要離開一段時間（140 公尺、25 秒）才會回來。
-  - 電線桿被輾扁以後，電線還掛在空中；內湖的大路牌伸出去的橫桿只有在邊邊附近才會一起扁。
-  - 內湖沒有車流和行人；內湖的路是平的。
-  - 非全螢幕的橫向手機、和平板／電腦的一般版面（小舞台 426×320）：「下車」會蓋到油門煞車（全螢幕沒有這個問題）。
+  - 內湖的路是平的（真的港墘一帶本來就很平）。
+  - 內湖的車流、行人讓第一次出門的載入多約 0.4–0.7 秒（電腦上；npc.js 路網，`NPC.load.graphs`）。
   - 引擎、輪胎尖叫、警笛的音量都沒有真的聽過（測試是靜音的）。
 - **暫停中**：更多越野車（吉普車、小型越野車、皮卡、沙灘車）——一台一台做，每台先給 Nick 看圖。
 - **價錢（萬，新台幣）**：GC8 75（一開始就有）、YARIS 130、SUPRA 200、GT-R 400、918 3000、SP3 6000、JESKO 7500（阿財車行）；怪獸卡車 100（越野車行）。槍：手槍 3、衝鋒槍 12、霰彈槍 18、步槍 30；靶場第一次全中每把槍 2 萬。泥巴賽獎金 20／80／300。被抓罰款每顆星 2 萬。零件、輪胎的價錢在 garage.src.html 的 `PERF`。
 
 ## 筆記（notes/）
-以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）、mountain（山）、online（鬼影排行榜）、bigmap（大地圖、撞前車）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。
+以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）、mountain（山）、online（鬼影排行榜）、room（房間、一起開車、一起比賽、參觀車庫）、bigmap（大地圖、撞前車）、fixes（已知問題 5–12 的修法：越野車車庫、輾扁長回來、電線、內湖車流行人、橫拿手機的按鈕）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。

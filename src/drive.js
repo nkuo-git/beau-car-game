@@ -45,6 +45,7 @@
 //   drive.addColliders(list, tag) / drive.removeColliders(tag)   會變的碰撞物（鐵捲門關著才擋、停著的車），格式跟 world.colliders 一樣；
 //                          會動的車多給 vx、vz（它的速度 m/s）、m（比你重幾倍，預設 1）：撞到照兩台車的動量算（追撞不會整台停住），它被推的速度加在原來那個的 dvx、dvz（它自己拿去用、歸零）；
 //                          同一個 tag 可以加很多次，removeColliders(tag) 一次全部拿掉；回傳加了／拿掉幾個
+//   drive.setCamCeil(fn | null)   fn(x, z) → 鏡頭在這裡最高多高（Infinity＝不管）：追車鏡頭壓在屋頂下面（越野車車庫，大車的鏡頭拉高了會穿出去）
 //   drive.setMapTap({ label, onClick } | null)   點小地圖做什麼（大地圖、比賽看整個賽道）；label＝小地圖下面那一條字；drive.mapTap＝現在的字
 //   drive.setMapView({ x0, z0, x1, z1 } | null)   小地圖改成看整個範圍（北朝上、你的箭頭照車頭轉）；null＝回到跟著你轉；drive.mapView
 //   drive.setMarkers(list | null, tag?)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝這幀不畫）, label（點上的字）, fg }]；tag＝另外一組（比賽的對手 'race'），null 拿掉；
@@ -155,12 +156,12 @@ const CSS = `
 .dv-ped b.on{transform:translateY(4px);box-shadow:none}
 /* 第 3 批（甩尾）：手煞車（油門上面；矮的畫面放煞車左邊；更矮的（沒全螢幕的手機橫拿）再往左，不壓到「下車」）、速度表上面的「甩尾 35°」 */
 .dv{container-type:size}
-.dv-hb{right:10px;bottom:124px;width:74px;height:46px;display:grid;place-items:center;border-radius:16px;background:#2B2E35;color:#FF6A1F;font-size:17px;font-weight:700;letter-spacing:.04em;box-shadow:0 5px 0 #111216;pointer-events:auto;touch-action:none;cursor:pointer}
+.dv-hb{right:10px;bottom:124px;width:74px;height:46px;display:grid;place-items:center;border-radius:16px;background:#2B2E35;color:#FF6A1F;font-size:17px;font-weight:700;letter-spacing:.04em;white-space:nowrap;box-shadow:0 5px 0 #111216;pointer-events:auto;touch-action:none;cursor:pointer}
 .dv-hb.on{background:#FF6A1F;color:#1A0F07;transform:translateY(4px);box-shadow:none}
-@media (max-height:560px){.dv-hb{right:166px;bottom:12px;width:62px;height:70px;border-radius:18px}}
+@media (max-height:560px){.dv-hb{right:166px;bottom:12px;width:62px;height:70px;border-radius:18px;font-size:15px;letter-spacing:0}}
 @container (max-height:290px){.dv-hb{right:288px}}
 /* 第 3 批（b3-int）：App 沒全螢幕、螢幕又高又寬（平板、電腦）：畫面只是中間一小塊（426×320），手煞車（油門上面）會壓到換視角、全螢幕鈕 → 放到全螢幕鈕左邊（同一排）；通緝中跟著往下推 */
-@media (min-height:561px){@container (max-height:409px){.dv-hb{top:142px;right:114px;bottom:auto;height:44px}.pw-host.pw-on .dv-hb{margin-top:46px}}}
+@media (min-height:561px){@container (max-height:409px){.dv-hb{top:142px;right:114px;bottom:auto;height:44px}.pw-host.pw-on .dv-hb{margin-top:46px}.dv-act2{top:auto;right:auto;left:10px;bottom:98px}}} /* 修 11（2026-10-10）：小舞台（平板、電腦、426×320）「下車」放左邊、轉彎鍵上面（本來在右邊壓到油門） */
 .dv-spd i{position:absolute;bottom:calc(100% + 24px);left:50%;transform:translateX(-50%);padding:5px 13px;border-radius:999px;background:#FF6A1F;color:#1A0F07;font:700 17px/1 ${SANS};font-style:normal;letter-spacing:.04em;white-space:nowrap;box-shadow:0 3px 0 #9E4213}
 .dv-spd i span{font:700 19px/1 ${COND};color:inherit;margin:0 0 0 5px;letter-spacing:0}
 .dv-toast{top:34%;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:9px 20px;border-radius:22px;background:rgba(14,15,18,0.78);font-size:20px;font-weight:700;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,-50%) scale(.92);transition:opacity .15s,transform .15s}
@@ -697,6 +698,7 @@ function createDrive(o) {
   // 晃：撞到（shake，照撞的力道）＋200 km/h 以上路面的小震動（幾個不同頻率的正弦，不是每幀亂跳）
   const isCop = (c) => c.police === true && c.t === 'box'; // 第 3 批（b3-int）：警車的碰撞物（鏡頭抬高用）
   const cam = { yaw: st.th, ox: 0, oy: 0, oz: 0, d: 6.5, ok: false, shake: 0, spd: 0, acc: 0, t: 0, cop: 0 }, V1 = new THREE.Vector3(), V2 = new THREE.Vector3();
+  let camCeil = null; // setCamCeil(fn)：fn(x, z) → 這裡鏡頭最高多高（Infinity＝不管）；追車鏡頭不會穿出矮的屋頂（越野車車庫：修 5）
   const defEye = { eye: [CX - 0.3, 1.12, S.spec.interior?.wheelZ ?? 0.37], look: [CX + 9, 0.95, S.spec.interior?.wheelZ ?? 0.37], fov: 72 };
   const wob = (t, a) => Math.sin(t * 71 + a) * 0.5 + Math.sin(t * 113 + 2 * a + 1.7) * 0.3 + Math.sin(t * 163 + 3 * a + 4.1) * 0.2;
   const setFov = (f) => { if (Math.abs(f - camera.fov) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } };
@@ -736,6 +738,7 @@ function createDrive(o) {
     }
     const la = 3 + 5 * q; camera.lookAt(px + fx2 * la, 1.0 - 0.1 * q, pz + fz2 * la);
     if (rc) { camera.position.y = Math.max(camera.position.y + rc.y, rc.floor(camera.position.x, camera.position.z)); camera.lookAt(px + fx2 * la, 1.0 - 0.1 * q + rc.look + rc.y, pz + fz2 * la); } // 第 4 批：跟著車子的高度、不鑽到地底下
+    if (camCeil) { const cy = camCeil(camera.position.x, camera.position.z); if (camera.position.y > cy) { camera.position.y = cy; camera.lookAt(px + fx2 * la, 1.0 - 0.1 * q + (rc ? rc.look + rc.y : 0), pz + fz2 * la); } } // 修 5：屋頂下面
     // 直的長畫面（手機全螢幕，寬÷高 0.6 以下）：上下多看一點（412×915 大約 86°），車子才不會大到擋住路、左右也看得到；0.6 以上照舊
     const tall = 93 * clamp(0.6 - (camera.aspect || 1), 0, 0.2), base = clamp((2 * Math.atan(Math.tan((56 * Math.PI) / 360) / (camera.aspect || 1)) * 180) / Math.PI, 50, 72 + tall);
     setFov(Math.min(86 + tall, base + 12 * q));
@@ -1049,6 +1052,7 @@ function createDrive(o) {
     setMapView: (b) => { mapWhole = b && b.x1 > b.x0 && b.z1 > b.z0 ? { x0: +b.x0, z0: +b.z0, x1: +b.x1, z1: +b.z1 } : null; if (hud) hud.mapT = 0; },
     get mapTap() { return mapTap ? mapTap.label : null; }, get mapView() { return mapWhole; },
     setDamage: (p) => { dmgP.power = p && p.power > 0 ? Math.min(1, p.power) : 1; dmgP.top = p && p.top > 0 ? Math.min(1, p.top) : 1; dmgP.maxKmh = p && p.maxKmh > 0 ? p.maxKmh : Infinity; dmgP.steerPull = p ? clamp(+p.steerPull || 0, -1, 1) : 0; },
+    setCamCeil: (fn) => { camCeil = typeof fn === 'function' ? fn : null; }, // 修 5（2026-10-10）
     setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
     carInfo: { nose: info.nose, tail: info.tail, len: info.len, halfW: Math.max(info.halfW, +o.halfW || 0), wheelbase: L, vmax: P.vmax }, hud: hud && hud.root, // halfW：碰撞的半寬（怪獸卡車：輪胎比車身寬）

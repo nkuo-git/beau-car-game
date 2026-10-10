@@ -322,7 +322,7 @@ async function enterRace() {
   TR.scene.add(S.car); S.car.visible = true; S.body.position.y = +CARS[cur].state.height;
   putCar(S, race.me, LANE, race.meInfo);
   hudIdle();
-  showOpp();
+  if (!netDragInit(race)) showOpp(); // 一起比賽（net.src.js）：對手是朋友，不放 AI
   lastT = performance.now();
   stage.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
 }
@@ -336,6 +336,7 @@ function exitRace(village = false) {
     if (!Sx || !Object.values(built).includes(Sx)) continue;
     scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.visible = Sx === S; Sx.wheels.forEach((w) => (w.rotation.z = 0));
   }
+  if (race.net) netDragDrop(race); // 一起比賽：朋友的車收掉（還沒跑完＝沒跑完）
   dropOppCar(); sndStop(); ghHide();
   for (const f of TR.flames) f.visible = false;
   for (const s of TR.shadows) s.visible = false; // 開車的時候看得到賽道：比賽的影子收掉、燈樹熄掉
@@ -344,7 +345,7 @@ function exitRace(village = false) {
   renderOptions(); refreshCarBtns(); // 錢可能變多了：零件、車子買不買得起要重畫
 }
 async function startRace() {
-  if (!race || ['intro', 'stage', 'run'].includes(race.phase)) return;
+  if (!race || race.net || ['intro', 'stage', 'run'].includes(race.phase)) return;
   engineAudio.resume();
   const o = oppById(raceOpp);
   if (race.oppS && (!oppCar || race.oppS !== oppCar.S || oppCar.id !== o.id)) race.oppS = null; // 換了對手：舊的那台 getOppCar 會釋放
@@ -375,6 +376,7 @@ function pressGo() {
   const c = race.me;
   if (race.phase === 'stage' || race.phase === 'intro') { // 綠燈前按＝偷跑
     if (race.phase === 'intro') return;
+    if (race.net) { netDragFoul(race); return; } // 一起比賽：偷跑＝沒跑完
     race.foul = true; finishRace(); toast('偷跑！', 1500); return;
   }
   if (race.phase !== 'run') return;
@@ -518,13 +520,14 @@ function raceFrame(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000 || 0); lastT = now;
   const R = race, me = R.me, op = R.opp;
   R.t += dt;
+  if (R.net) netDragTick(R, dt); // 一起比賽：綠燈照大家約好的時間
   // 燈樹：進場 1.6 秒 → 隨機等一下 → 三個黃燈每 0.5 秒亮一個 → 綠燈
-  if (R.phase === 'intro' && R.t > 1.6) { R.phase = 'stage'; R.stageT = R.t; R.greenAt = R.t + 1.0 + Math.random() * 0.9 + 1.5; toast('準備', 800); }
+  if (R.phase === 'intro' && R.t > 1.6 && !R.net) { R.phase = 'stage'; R.stageT = R.t; R.greenAt = R.t + 1.0 + Math.random() * 0.9 + 1.5; toast('準備', 800); }
   if (R.phase === 'stage') {
     const n = Math.max(0, Math.min(3, Math.floor((R.t - (R.greenAt - 1.5)) / 0.5) + 1));
     lights(R.t >= R.greenAt - 1.5 ? n : 0, false, false);
     goBtn.disabled = false;
-    if (R.t >= R.greenAt) { R.phase = 'run'; R.green = R.t; lights(3, true, false); }
+    if (R.t >= R.greenAt) { R.phase = 'run'; R.green = R.t; R.greenNow = Date.now(); lights(3, true, false); }
   }
   if (R.phase === 'run' || R.phase === 'done' || R.phase === 'stage' || R.phase === 'intro') {
     if (op && (R.phase === 'run' || (R.phase === 'done' && !R.foul))) { // 對手：反應時間、換檔點、氮氣時機有點隨機
@@ -537,10 +540,11 @@ function raceFrame(now) {
     }
     const steps = Math.max(1, Math.ceil(dt / (1 / 240))), hs = dt / steps;
     for (let i = 0; i < steps; i++) { R.ts = R.t - dt + (i + 1) * hs; stepRacer(me, hs, R); if (op) stepRacer(op, hs, R); }
-    if (R.phase === 'run' && me.fin != null && (op.fin != null || R.t - R.green - me.fin > 4)) finishRace();
-    if (R.phase === 'run' && me.go == null && op.fin != null && R.t - R.green > op.fin + 2) finishRace();
+    if (R.phase === 'run' && op && me.fin != null && (op.fin != null || R.t - R.green - me.fin > 4)) finishRace();
+    if (R.phase === 'run' && op && me.go == null && op.fin != null && R.t - R.green > op.fin + 2) finishRace();
   }
   ghDragFrame(R); // 鬼影車：錄你的、播鬼影的
+  if (R.net) netDragFrame(R); // 一起比賽：朋友的車（照他送來跑多遠）、跑完了沒
   // 引擎聲：起跑線上踩著等（起步控制頂在 0.6）、跑的時候全油門、換檔和過終點放油門；對手離越遠越小聲
   const feed = (v, c) => v?.set({ rpm: c.rpm, speed: c.v, limit: c.go == null ? 0.6 : 1,
     throttle: c.go == null ? (R.phase === 'stage' || R.phase === 'run' ? 1 : 0) : c.fin != null || c.shiftT > 0 ? 0 : 1 });

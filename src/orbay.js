@@ -14,7 +14,7 @@
 //     V 多了：V.places.orbay、V.colliders 多了牆和架子、V.areas.pave 多了地板和車道、V.roads 多一條車道（kind 'drive'：路上的車不走）、
 //             V.buildings 多一棟（kind 'garage'，沒有門：走進房子、居民、車流都不理它）、V.info.orbay；V.surfaceAt 包一層（地板、車道算水泥地 3）
 //   OB.door：鐵捲門 { t（0 關…1 開）, open(sec), close(sec), update(dt) → 還在動就 true, moving }（用法跟 room.js 的門一樣）
-//   OB.bays：四個停車格停車的位置 [{ x, z, heading }]（世界座標、車子原點，車頭朝北）；OB.zones.bays[i]＝那一格的長方形
+//   OB.bays：四個停車格停車的位置 [{ x, z, heading }]（世界座標、車子原點，車頭朝南＝朝通道，開出去不用倒車）；OB.zones.bays[i]＝那一格的長方形
 //   OB.zones：{ inside（裡面的地板）, aisle（通道）, apron（門外的車道）, door（門口：站在這裡給「開鐵捲門」）, bays }
 //   OB.doorCols(open)：門的碰撞（門關著才有；開車、走路都要）；OB.cull(camera)：鏡頭在裡面而且比屋頂高就不畫屋頂
 //   OB.update(dt)：門在動（每一格叫）；OB.signs：牆上、地上寫的字；OB.info：{ meshes, tris, ms }；OB.dispose()
@@ -286,7 +286,7 @@ function buildOrbay(V, o = {}) {
   };
   const bays = [];
   for (let i = 0; i < G.N; i++) {
-    const cx = bayX(i), b = toW({ x: cx, z: (IZ0 + BZ1) / 2, rot: Math.PI / 2 }); // 車頭朝裡面（開進去）
+    const cx = bayX(i), b = toW({ x: cx, z: (IZ0 + BZ1) / 2, rot: -Math.PI / 2 }); // 車頭朝外面（修 6，2026-10-10：以前車頭朝裡面，1 號格貼著牆要三點迴轉才出得來；現在直接往前開出去）
     bays.push({ x: b.x, z: b.z, heading: b.rot });
     zones.bays.push(toW({ x: cx, z: (IZ0 + BZ1) / 2, hx: G.BW / 2, hz: G.BD / 2, rot: 0 }));
   }

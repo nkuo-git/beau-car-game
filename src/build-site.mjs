@@ -35,6 +35,7 @@ js = js.replace(HEAD, '// 大便龍的改車遊戲（3D 車庫＋開車出門的
 js += '\n' + read('site/site.js').replace('__V__', V).replace('__TRY__', String(TRY));
 js += '\n' + read('site/cloud.js'); // 第 12 批：登入＋雲端存檔
 js += '\n' + read('site/online.js'); // 連線第 1 步：鬼影車排行榜（用 cloud.js 的 window.beauCloud）
+js += '\n' + read('site/room.js'); // 連線第 2–4 步：房間（一起開車、一起比賽）、參觀車庫（用 online.js 的 window.beauNetUI）
 
 // 3. game.css
 let css = fs.readFileSync(path.join(tmp, 'tune.css'), 'utf8');

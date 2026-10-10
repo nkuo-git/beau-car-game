@@ -1,6 +1,7 @@
 // ---- 連線第 1 步：鬼影車排行榜（Nick 2026-10-10「開始做吧」；草稿 https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo 第 1、2、7、8 張，Nick 和爸媽都說好）----
 // src/site/online.js，build-site.mjs 接在 cloud.js 後面（用 cloud.js 的 window.beauCloud：同一個 Firebase、同一個登入）
-// 右上角「👥 連線」→ 沒登入：要先登入 → 第一次：取一個名字（別人只看得到這個；不能有髒話、email、電話）→ 連線選單（🏆 排行榜；其他的還在做）
+// 右上角「👥 連線」→ 沒登入：要先登入 → 第一次：取一個名字（別人只看得到這個；不能有髒話、email、電話）→ 連線選單（房間、🏆 排行榜、🚗 參觀車庫）
+// 房間、參觀車庫在 site/room.js：用 window.beauNetUI 加自己的畫面（add）、打開（open）；排行榜上點別人的名字 → window.beauRoom.visit
 // 排行榜：400 公尺／賽車場一圈／爬山 × 大家／同一台車（現在開的這台），前 20 名，你那一行框起來（不在前 20 名也列出你第幾名）
 //   「👻 跟第 1 名的鬼影車跑」→ 下載那一趟 → window.beauGame.setGhost（ghost.src.js）→ 下一次跑那一種的時候多一台半透明的車
 // 上傳：遊戲每跑完一趟發 'beau-run'（{ board, car, t, g }）→ 先記在這支手機（beau.lbq：每一種每台車最好的那趟）→ 登入、有名字了就傳：
@@ -44,15 +45,17 @@
   // ---- 畫面 ----
   const chip = $n('netChip'), dlg = $n('netDlg'), titleEl = $n('netTitle');
   const SECS = { in: $n('nwIn'), name: $n('nwName'), menu: $n('nwMenu'), board: $n('nwBoard') };
+  const EXTRA = {}; // room.js 加的畫面：key → { title, paint }
   function paint() {
     if (!chip || !dlg) return;
     chip.hidden = false;
     dlg.hidden = !view;
     if (!view) return;
     for (const [k, el] of Object.entries(SECS)) el.hidden = k !== view;
-    titleEl.textContent = view === 'in' ? '連線' : view === 'name' ? '取一個名字' : view === 'menu' ? '連線' : '🏆 排行榜';
+    titleEl.textContent = EXTRA[view] ? (typeof EXTRA[view].title === 'function' ? EXTRA[view].title() : EXTRA[view].title) : view === 'in' ? '連線' : view === 'name' ? '取一個名字' : view === 'menu' ? '連線' : '🏆 排行榜';
     if (view === 'menu') $n('nwMyName').textContent = name || '';
     if (view === 'board') paintBoard();
+    for (const [k, x] of Object.entries(EXTRA)) if (k === view || k === 'menu') x.paint?.();
   }
   function paintBoard() {
     for (const b of $n('nwTabs').children) b.setAttribute('aria-selected', String(b.dataset.b === tab));
@@ -65,6 +68,7 @@
       a.className = 'n'; w.className = 'w'; t.className = 't';
       a.textContent = String(n); w.textContent = `${r.name} · ${carName(r.car)}`; t.textContent = fmt(tab, r.t);
       if (r.uid === me) li.className = 'me';
+      else if (window.beauRoom) { li.classList.add('tap'); li.title = '看他的車庫'; li.addEventListener('click', () => window.beauRoom.visit(r.uid, r.name)); } // 點名字：參觀他的車庫
       li.append(a, w, t); to.append(li);
     };
     rows.forEach((r, i) => row(i + 1, r));
@@ -181,6 +185,17 @@
     if (view === 'board') loadBoard();
   }
 
+  // room.js 用的：同一個對話框、同一個名字
+  window.beauNetUI = {
+    add(key, el, o = {}) { SECS[key] = el; EXTRA[key] = o; },
+    show(v) { view = v; paint(); },
+    close,
+    paint,
+    get view() { return view; },
+    get name() { return name; },
+    ensureName,
+    askName() { view = 'name'; $n('nwNameIn').value = ''; $n('nwNameErr').hidden = true; paint(); },
+  };
   if (chip && dlg) {
     chip.addEventListener('click', open);
     $n('netX').addEventListener('click', close);

@@ -34,7 +34,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="./game.css?v=6">
+<link rel="stylesheet" href="./game.css?v=8">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
 </head>
 <body>
@@ -91,6 +91,10 @@
       <p class="how">綠燈一亮就按「起步」；指針進到綠色區按「換檔」，太早太晚都會慢；「氮氣」一場只能用一次。綠燈前按起步算偷跑，輸了、偷跑都沒有獎金。電腦可以用空白鍵起步和換檔、N 鍵放氮氣。</p>
     </section>
     <section class="drivebar" id="drivebar" hidden aria-label="出門">
+      <button type="button" class="dtog" id="destTog" aria-expanded="false">📍 去哪裡 ▾</button>
+      <button type="button" class="moretog" id="moreTog" aria-expanded="false" aria-label="更多按鈕（聲音、全螢幕、換視角）">⋯</button>
+      <button type="button" class="sizetog" id="sizeTog" aria-expanded="false" aria-label="按鈕大小">Aa</button>
+      <div class="sizepop" id="sizePop" role="group" aria-label="按鈕大小"><span>按鈕大小</span><button type="button" data-z="s">小</button><button type="button" data-z="m">中</button><button type="button" data-z="l">大</button></div>
       <div class="dests" id="dests" role="group" aria-label="要去哪裡"><button type="button" data-d="shop" aria-pressed="false">去改車廠</button><button type="button" data-d="dealer" aria-pressed="false">去車店</button><button type="button" data-d="circuit" aria-pressed="false">去賽車場</button><button type="button" data-d="highway" aria-pressed="false">去快速道路</button><button type="button" data-d="offroad" aria-pressed="false">去越野車場</button><button type="button" data-d="neihu" aria-pressed="false">去內湖</button><button type="button" data-d="mountain" aria-pressed="false">去山頂</button><button type="button" data-d="garage" aria-pressed="false">回車庫</button></div>
       <div class="minirow"><button type="button" class="ghost snd" id="dSndBtn" aria-pressed="true" aria-label="引擎聲音"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path class="off" d="M16.5 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><button type="button" class="ghost" id="driveHome">直接回車庫</button></div>
       <p class="how">走路：左下角推著走，推到底用跑的，右邊滑動看四周；走到車子旁邊按「上車」（每一台都可以開）。開車：左下角 ◀ ▶ 轉彎，右下角「油門」「煞車」（停住了按著煞車會倒車）；停住了按右邊的「下車」。開快的時候一邊轉彎一邊按「手煞車」可以甩尾，往反方向按就拉回來。跟著左上角的箭頭、右上角小地圖的橘色路線走；地圖下面的鈕換視角。改車廠、車店要自己開進去停好；回家按「開鐵捲門」開進車庫停好、下車。電腦可以用方向鍵（走路也可以 WASD，Shift 跑），空白鍵手煞車，C 換視角，E 按畫面上的大按鈕。</p>
@@ -182,7 +186,7 @@
   </div>
 </div>
 
-<!-- 連線：要先登入、取名字、連線選單、排行榜（site/online.js） -->
+<!-- 連線：要先登入、取名字、連線選單、排行榜（site/online.js）；房間、一起比賽、參觀車庫（site/room.js） -->
 <div class="imp" id="netDlg" role="dialog" aria-modal="true" aria-labelledby="netTitle" hidden>
   <div class="imp-card cl-card nw-card">
     <div class="cl-head"><h2 id="netTitle">連線</h2><button type="button" class="cl-x" id="netX" aria-label="關掉">✕</button></div>
@@ -200,9 +204,44 @@
       <p class="cl-note">名字裡不能有髒話，也不會顯示你的 email。</p>
     </div>
     <div class="cl-sec" id="nwMenu" hidden>
-      <button type="button" class="imp-yes cl-btn" id="nwBoardBtn">🏆 排行榜</button>
-      <p class="cl-note">一起開車、一起比賽、參觀朋友的車庫還在做，做好會出現在這裡。</p>
+      <button type="button" class="imp-yes cl-btn" id="nwRoomBtn">開一個房間<small>給朋友房間碼，他就能進來</small></button>
+      <button type="button" class="imp-no cl-btn" id="nwJoinBtn">輸入房間碼加入</button>
+      <button type="button" class="imp-no cl-btn" id="nwBoardBtn">🏆 排行榜</button>
+      <button type="button" class="imp-no cl-btn" id="nwVisitBtn">🚗 參觀朋友的車庫</button>
+      <p class="cl-note" id="nwMenuNote">只有拿到房間碼的人才進得來，陌生人進不來。一個房間最多 4 個人。</p>
       <div class="nw-me"><span>你的名字：<b id="nwMyName"></b></span><button type="button" class="nw-link" id="nwRename">改名字</button></div>
+    </div>
+    <div class="cl-sec" id="nwJoin" hidden>
+      <p class="cl-note">輸入朋友給你的 4 個字：</p>
+      <input class="nw-field nw-code-in" id="nwCodeIn" type="text" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go" placeholder="K7Q2" aria-label="房間碼">
+      <p class="cl-err" id="nwJoinErr" hidden></p>
+      <button type="button" class="imp-yes cl-btn" id="nwJoinOk">加入</button>
+      <button type="button" class="nw-link" id="nwJoinBack">← 回連線選單</button>
+    </div>
+    <div class="cl-sec" id="nwRoom" hidden>
+      <p class="cl-note" id="nwRoomTip">把這 4 個字告訴朋友：</p>
+      <div class="nw-code" id="nwCode"></div>
+      <div class="nw-lbl" id="nwWhoLbl">在房間裡的人</div>
+      <ul class="nw-who" id="nwWho"></ul>
+      <p class="cl-err" id="nwRoomErr" hidden></p>
+      <button type="button" class="imp-yes cl-btn" id="nwOut">一起出門</button>
+      <button type="button" class="imp-no cl-btn" id="nwRaceBtn">🏁 一起比賽</button>
+      <p class="cl-note" id="nwRoomNote" hidden>房主可以叫大家一起出門、選要比什麼。</p>
+      <button type="button" class="nw-link" id="nwLeave">離開房間</button>
+    </div>
+    <div class="cl-sec" id="nwRace" hidden>
+      <button type="button" class="imp-no cl-btn" data-k="circuit">🏁 大便龍賽車場（3 圈）</button>
+      <button type="button" class="imp-no cl-btn" data-k="drag">⏱ 400 公尺直線加速</button>
+      <button type="button" class="imp-no cl-btn" data-k="hill">⛰ 爬山計時賽</button>
+      <button type="button" class="imp-no cl-btn" disabled>🟤 泥巴賽（越野車）<small>下次做</small></button>
+      <p class="cl-note">房主選，大家一起到起點。比賽的時候撞不到別人的車（會穿過去），不會被擋住。</p>
+      <button type="button" class="nw-link" id="nwRaceBack">← 回房間</button>
+    </div>
+    <div class="cl-sec" id="nwVisit" hidden>
+      <ul class="nw-who" id="nwVisitList"></ul>
+      <p class="cl-note" id="nwVisitNote"></p>
+      <p class="cl-err" id="nwVisitErr" hidden></p>
+      <button type="button" class="nw-link" id="nwVisitBack">← 回連線選單</button>
     </div>
     <div class="cl-sec" id="nwBoard" hidden>
       <div class="nw-tabs" id="nwTabs" role="tablist"><button type="button" data-b="drag" role="tab">400 公尺</button><button type="button" data-b="lap" role="tab">賽車場一圈</button><button type="button" data-b="hill" role="tab">爬山</button></div>
@@ -217,6 +256,6 @@
   </div>
 </div>
 
-<script type="module" src="./game.js?v=6"></script>
+<script type="module" src="./game.js?v=8"></script>
 </body>
 </html>

@@ -412,6 +412,7 @@ function makeDrv(pose) {
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
+  if (OB) drv.setCamCeil((x, z) => (OB.inside(x, z, 0.6) ? OB.size.ceil - 0.75 : Infinity)); // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
   if (police) drv.setMarkers(police.markers); // 第 3 批（b3-int）：小地圖上的警車
   drv.teleport(pose);
   tripFull = cur; tripPose[cur] = { x: pose.x, z: pose.z, heading: pose.heading }; if (parkShadow) parkShadow.visible = false;
@@ -428,9 +429,42 @@ function canShop() {
 function setDest(d) {
   tripDest = d || null;
   drv?.setDestination(d); walker?.setDestination(d); // 開車、走路都跟著這個目的地（左上角、小地圖的路線、光柱）
+  if (d && OB && drv && walker?.mode === 'off') { const t = drv.telemetry(); if (OB.inside(t.x, t.z)) openOrbay(); } // 修 7：在越野車車庫裡面按「去哪裡」：鐵捲門自己打開（不然路線穿過關著的門，開過去就卡住）
   destBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.d === d)));
+  destOpen(false);
 }
 destBtns.forEach((b) => b.addEventListener('click', () => { if (DRIVE.on) setDest(b.dataset.d); }));
+// 修 11：手機橫拿全螢幕開車的時候「去哪裡」收成一顆（garage.css .dtog）：按了打開，選了、開走了就收起來
+// Nick 2026-10-10「按鈕不用總是全部顯示 可以效法目的地選單那樣 點了再列出來 再點一次就收起來」：去哪裡、⋯（聲音、全螢幕、換視角）
+//   平常收起來（garage.css）；停著打開的，開走了（超過 4 m/s）就收；開著的時候打開的，8 秒後收（FOLD：−1 開走就收、> 0 還有幾秒）
+const FOLD = { destsopen: -1, moreopen: -1 };
+const foldStart = () => { const t = drv && DRIVE.on ? drv.telemetry() : null; return t && Math.abs(t.v) > 4 ? 8 : -1; };
+function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.destsopen = foldStart(); }
+function moreOpen(on) { if (!on) sizeOpen(false); if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
+// 按鈕大小（Nick 2026-10-10）：小 0.8、中 1（原本的）、大 1.15；每支手機自己記（carid.btnsize，不用搬家、不上雲端）
+const BTN_Z = { s: 0.8, m: 1, l: 1.15 }, BTN_KEY = 'carid.btnsize';
+// 「大」只放大到排得下：直拿看寬（390 寬剛好排滿＝1 倍）、橫拿看高（340 高＝1 倍）；小螢幕（或手機「顯示大小」調大）上「大」＝「中」
+let btnK = 'm';
+function btnZoom() { const z = BTN_Z[btnK]; if (z <= 1) return z; const W = innerWidth, H = innerHeight, cap = H <= 560 ? H / 340 : W / 390; return +Math.max(1, Math.min(z, cap)).toFixed(2); }
+function btnApply() { const z = String(btnZoom()); if (document.documentElement.style.getPropertyValue('--hudz') !== z) document.documentElement.style.setProperty('--hudz', z); }
+addEventListener('resize', btnApply);
+function btnSize(k, keep) {
+  if (!BTN_Z[k]) k = 'm';
+  btnK = k; btnApply();
+  for (const b of document.querySelectorAll('#sizePop button')) b.setAttribute('aria-pressed', String(b.dataset.z === k));
+  if (keep) try { localStorage.setItem(BTN_KEY, k); } catch {}
+}
+function sizeOpen(on) { if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+try { btnSize(localStorage.getItem(BTN_KEY)); } catch { btnSize('m'); }
+$('sizeTog').addEventListener('click', () => sizeOpen(true));
+for (const b of document.querySelectorAll('#sizePop button')) b.addEventListener('click', () => { btnSize(b.dataset.z, true); sizeOpen(false); });
+function foldStep(dt, v) { // 每一格（開車）
+  if (bodyFlags.destsopen && (FOLD.destsopen < 0 ? Math.abs(v) > 4 : (FOLD.destsopen -= dt) <= 0)) destOpen(false);
+  if (bodyFlags.moreopen && (FOLD.moreopen < 0 ? Math.abs(v) > 4 : (FOLD.moreopen -= dt) <= 0)) moreOpen(false);
+}
+$('destTog').addEventListener('click', () => destOpen(!bodyFlags.destsopen));
+$('moreTog').addEventListener('click', () => moreOpen(!bodyFlags.moreopen));
+
 // 撞到東西：手機震一下（按過畫面才可以震）
 function bump(s) {
   if (s > 3 && navigator.vibrate && navigator.userActivation?.hasBeenActive) try { navigator.vibrate(Math.min(60, s * 8)); } catch { /* 不能震就算了 */ }
@@ -494,7 +528,7 @@ function hillStep(t, dt) {
     if (fin) {
       const tt = Math.round(HILL.t * 100) / 100, old = GAME.best.hill[cur], rec = !old || tt < old;
       if (rec) { GAME.best.hill[cur] = tt; save(); }
-      const vs = ghVs('hill', tt); ghHillEnd(t, tt); // 交給網站的排行榜
+      const vs = ghVs('hill', tt); ghHillEnd(t, tt); netHill(tt); // 交給網站的排行榜；一起比賽（net.src.js）
       HILL.on = false; HILL.tm.textContent = hillFmt(tt); HILL.bs.textContent = rec ? '新紀錄！' : `最快 ${hillFmt(old)}`;
       drv.toast((rec ? `到山頂了！${hillFmt(tt)}　新紀錄！` : `到山頂了！${hillFmt(tt)}（最快 ${hillFmt(old)}）`) + vs, 3200);
       HILL.doneT = 4; // 結果留 4 秒
@@ -1247,6 +1281,7 @@ function leaveDrive() {
   ciLeave(); // 賽車場的比賽、選對手收掉
   nhLeave(); // 內湖：「地圖資料 © OpenStreetMap 貢獻者」收起來
   police?.clear(); police?.setEnabled(false); bodyFlag('wanted', false); bodyFlag('jailed', false); // 第 3 批（b3-int）：星星、警車、拘留室都清掉（回車庫頁）
+  netRaceEnd(); netHideAll(); // 一起開車：朋友的車、人收起來（回車庫頁）
   drv?.dispose(); drv = null; home = null;
   walker?.pause({ hide: true });
   npcShow(false);
@@ -1659,6 +1694,7 @@ function driveStep(dt) {
       const t = drv.telemetry();
       dvoice?.set({ rpm: t.rpm, throttle: t.load, speed: Math.abs(t.v) });
       tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); // 駕駛座視角看得到轉速表、速度表
+      foldStep(dt, t.v); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {
         drv.setAction(homeAct(t) || orbayAct(t) || bayAct(t)); // HUD 的大按鈕：開鐵捲門（車庫、越野車車庫）、停在這裡改車／看車
@@ -1683,6 +1719,7 @@ function driveStep(dt) {
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
+  netStep(dt); // 一起開車（net.src.js）：朋友的車、人、名字、表情、一起比賽
   mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）
 }
@@ -1699,7 +1736,7 @@ function bigMake() {
   BIGMAP = createBigMap({ parent: stage, world: VIL, layer: () => MAPT.layer || (MAPT.layer = walker?.mapLayer), // 小地圖同一張底圖
     me: () => { if (mapWalking()) { const t = walker.telemetry(); return { x: t.x, z: t.z, h: t.heading }; } const t = drv?.telemetry(); return t ? { x: t.x, z: t.z, h: t.heading } : null; },
     route: () => (mapWalking() ? walker.route : drv?.route),
-    dots: () => [police?.markers, MAPT.race ? MAPT.marks : null],
+    dots: () => [police?.markers, MAPT.race ? MAPT.marks : null, NET.on ? NET.marks : null], // 一起開車的朋友（名字寫在點旁邊）
     dest: () => tripDest,
     onGo: (k, name) => { setDest(k); (mapWalking() ? walker : drv)?.toast(`去${name}：跟著左上角的箭頭`, 2200); },
     onOpen: () => { document.body.classList.add('bigmap'); if (mapWalking()) walker.setInput({ x: 0, y: 0 }); else drv?.setInput({ throttle: 0, brake: 0.5, steer: 0 }); }, // 車子自己慢慢停

@@ -33,7 +33,7 @@
 //                          y0（多的）：碰撞物的底有多高（天花板、捲起來一半的門）：比頭高的不擋人、只擋鏡頭（drive.js 不看 y0：這種不要給開車的）
 //   walker.setMovers(array | null)   會動的東西（路上的車、居民）：陣列、裡面的物件頁面每一格自己改（x、z、rot⋯），走路每一格照現在的值擋人、擋鏡頭（不用再叫）
 //   walker.setMapTap({ label, onClick } | null)   點小地圖做什麼（大地圖）；label＝小地圖下面那一條字；walker.mapTap＝現在的字
-//   walker.setMarkers(array | null)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝不畫） }]；跟 drive.setMarkers 一樣（只記住陣列，每一幀照現在的值畫）
+//   walker.setMarkers(array | null, tag?)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝不畫）, label（點上的字）, fg }]；跟 drive.setMarkers 一樣（只記住陣列，每一幀照現在的值畫）；tag＝另外一組（一起開車的朋友 'net'）
 //   walker.setCars(list)       可以上的車（車庫車位的車、路邊的車⋯）：[{ key, name?, x, z, heading, hx, hz, cx?, cz?, h?, door?, object?, solid? }]
 //                          x, z, heading＝車子原點（跟 spots、drv.teleport 一樣）；hx, hz＝車身長方形的半長、半寬；cx, cz＝長方形中心在車子本地的位置（LODS[k].cx、cz）；
 //                          door＝駕駛座車門在車身長方形中間往前幾公尺（預設 0）；solid: false＝不要幫它加碰撞（預設會加，頁面不用再 addColliders）
@@ -279,6 +279,7 @@ function createWalker(o) {
   const cw = colGrid(); cw.add(world.colliders, 'world'); cw.add(o.colliders); cw.add(fronts(world)); // 村子的碰撞標 'world'：走進房子（interiors.js）頁面先拿掉（房子的地板被村子的盒子蓋住），出來再放回去
   let movers = null; const mq = []; let mqN = 0; // 會動的（頁面的陣列）→ 算好的
   let marks = null; // 別的模組給的小地圖點（setMarkers）：[{ x, z, fill, ring, r, on }]
+  const marksT = {}; // setMarkers(list, tag)：另外一組（一起開車的朋友），label＝點上面的字
   let mapTap = null; // setMapTap：點小地圖做什麼（大地圖），下面一條字
 
   // ---- 狀態 ----
@@ -796,13 +797,17 @@ function createWalker(o) {
       g.fillStyle = d.fg; g.font = `700 ${Math.round(r * 1.15)}px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(d.icon, s / 2 + sx, s / 2 + sy + 0.5 * H.dpr);
     }
     // 別的模組給的點（警車⋯）：小圓點；地圖外面的貼在邊上；on: false 的不畫
-    if (marks) for (let i = 0; i < marks.length; i++) {
-      const m = marks[i]; if (!m || m.on === false) continue;
+    const drawMarks = (list) => { for (let i = 0; i < list.length; i++) {
+      const m = list[i]; if (!m || m.on === false) continue;
       const wx = m.x - cx, wz = m.z - cz; let sx = (wx * cs - wz * sn) * k, sy = (wx * sn + wz * cs) * k + oy; const l = Math.max(Math.abs(sx), Math.abs(sy));
       if (l > Rr) { sx *= Rr / l; sy *= Rr / l; }
-      g.beginPath(); g.arc(s / 2 + sx, s / 2 + sy, (m.r || 5) * H.dpr, 0, TAU); g.fillStyle = m.fill || '#FF3B30'; g.fill();
+      const rr = (m.r || 5) * H.dpr;
+      g.beginPath(); g.arc(s / 2 + sx, s / 2 + sy, rr, 0, TAU); g.fillStyle = m.fill || '#FF3B30'; g.fill();
       if (m.ring) { g.lineWidth = 1.5 * H.dpr; g.strokeStyle = m.ring; g.stroke(); }
-    }
+      if (m.label != null) { g.fillStyle = m.fg || '#FFFFFF'; g.font = `700 ${Math.round(rr * 1.25)}px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(m.label), s / 2 + sx, s / 2 + sy + 0.5 * H.dpr); }
+    } };
+    if (marks) drawMarks(marks);
+    for (const t in marksT) drawMarks(marksT[t]);
     // 你：中間偏下的箭頭（照臉朝的方向轉；地圖是照鏡頭轉的）
     const u = H.dpr; g.translate(s / 2, s / 2 + oy); g.rotate(-wrapA(st.th - yaw)); g.beginPath(); g.moveTo(0, -9 * u); g.lineTo(7 * u, 7 * u); g.lineTo(0, 3.5 * u); g.lineTo(-7 * u, 7 * u); g.closePath();
     g.fillStyle = '#F2F3F5'; g.fill(); g.lineWidth = 2 * u; g.strokeStyle = '#FF6A1F'; g.stroke(); g.setTransform(1, 0, 0, 1, 0, 0);
@@ -951,7 +956,7 @@ function createWalker(o) {
     setDoors: (src) => { doorSrc = src; doorList = buildDoors(src); armDoors(); },
     setInput: (i) => { forced = i ? { x: clamp(+i.x || 0, -1, 1), y: clamp(+i.y || 0, -1, 1), run: i.run } : null; },
     setMovers: (list) => { movers = Array.isArray(list) ? list : null; },
-    setMarkers: (list) => { marks = Array.isArray(list) ? list : null; },
+    setMarkers: (list, tag) => { const L = Array.isArray(list) ? list : null; if (tag == null) marks = L; else if (L) marksT[tag] = L; else delete marksT[tag]; },
     setMapTap: (t) => { mapTap = t && typeof t.onClick === 'function' ? { label: String(t.label || ''), onClick: t.onClick } : null; if (hud) { hud.mapBox.classList.toggle('tap', !!mapTap); hud.mapB.hidden = !mapTap || !mapTap.label; if (mapTap) hud.mapB.textContent = mapTap.label; } },
     get mapTap() { return mapTap ? mapTap.label : null; }, get route() { return routeData; },
     setCarReach: (on) => { reach = !!on; },
