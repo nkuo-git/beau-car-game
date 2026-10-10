@@ -42,14 +42,15 @@ const errs = [], fails = [];
 const check = (ok, what) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) fails.push(what); };
 const T0 = Date.now(), el = () => `${((Date.now() - T0) / 1000).toFixed(0)}s`;
 const UA = (apk) => 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36' + (apk ? ` BeauCarApp/${apk}` : '');
-async function newPage({ apk = null, sw = 'block', release = null } = {}) {
+async function newPage({ apk = null, sw = 'block', release = null, install = false } = {}) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, serviceWorkers: sw, userAgent: UA(apk) });
   await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => {
     if (release && /api\.github\.com\/repos\/nkuo-git\/beau-car-game\/releases\/latest/.test(r.request().url())) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(release) });
     return r.abort();
   });
   await ctx.addInitScript(() => { window.__roomWatch = false; });
-  if (apk) await ctx.addInitScript(() => { window.__fsCalls = []; window.__ready = 0; window.BeauCarApp = { ready() { window.__ready++; }, setFullscreen(on) { window.__fsCalls.push(on); } }; });
+  if (apk) await ctx.addInitScript((install) => { window.__fsCalls = []; window.__ready = 0; window.__apk = []; window.BeauCarApp = { ready() { window.__ready++; }, setFullscreen(on) { window.__fsCalls.push(on); } };
+    if (install) window.BeauCarApp.installApk = (u) => { window.__apk.push(u); }; }, install); // 新的 App（自己下載、跳出安裝）
   const p = await ctx.newPage();
   p.setDefaultTimeout(300000);
   p.on('pageerror', (e) => { errs.push(e.message); console.log('pageerror', e.message); });
@@ -143,6 +144,29 @@ const vis = (p, sel) => p.evaluate((s) => { const e = document.querySelector(s);
   await p.screenshot({ path: `${prefix}-4-apk-bar.png` });
   check(r.app && !r.web && r.txt === 'App 有新版本' && r.link === '下載安裝' && r.href === release.assets[0].browser_download_url, `APK 7, GitHub apk-9: only 「${r.txt}／${r.link}」 → ${r.href}`);
   await ctx.close();
+  // 新的 App（有 BeauCarApp.installApk）：按「下載安裝」不打開 GitHub，交給 App 自己下載；進度、跳出安裝、失敗再按一次
+  {
+    const n = await newPage({ apk: 7, release, install: true });
+    await n.p.goto(root + '/', { waitUntil: 'domcontentloaded' }); await ready(n.p);
+    await n.p.waitForFunction(() => !document.getElementById('appUpdateBar').hidden, null, { timeout: 30000 }).catch(() => {});
+    const url0 = n.p.url();
+    await n.p.click('#appUpdateLink'); await n.p.waitForTimeout(300);
+    const st = () => n.p.evaluate(() => ({ txt: document.querySelector('#appUpdateBar .txt').textContent, btn: getComputedStyle(document.getElementById('appUpdateLink')).visibility !== 'hidden', calls: window.__apk.slice() }));
+    const a0 = await st(), stayed = n.p.url() === url0, pages = n.ctx.pages().length;
+    await n.p.click('#appUpdateLink', { force: true }).catch(() => {}); // 下載中再按：不會再下載一次
+    const a1 = await st();
+    await n.p.evaluate(() => window.beauApkProgress(42, 'dl')); const a2 = await st();
+    await n.p.screenshot({ path: `${prefix}-4b-apk-download.png` });
+    await n.p.evaluate(() => window.beauApkProgress(100, 'install')); const a3 = await st();
+    await n.p.evaluate(() => window.beauApkProgress(0, 'fail')); const a4 = await st();
+    await n.p.click('#appUpdateLink'); await n.p.waitForTimeout(200); const a5 = await st();
+    console.log('  in-app install:', JSON.stringify({ a0, a1, a2, a3, a4, a5, stayed, pages }));
+    check(stayed && pages === 1 && a0.calls.length === 1 && a0.calls[0] === release.assets[0].browser_download_url && a0.txt === '下載新版本⋯ 0%' && !a0.btn && a1.calls.length === 1,
+      `new App: 「下載安裝」 hands the .apk to the App (BeauCarApp.installApk) instead of opening GitHub; 「${a0.txt}」, no second download while busy`);
+    check(a2.txt === '下載新版本⋯ 42%' && a3.txt === '按「安裝」就好' && !a3.btn && a4.txt === '下載失敗，再按一次' && a4.btn && a5.calls.length === 2,
+      `progress 「${a2.txt}」 → 「${a3.txt}」; failed: 「${a4.txt}」 and tapping again downloads again`);
+    await n.ctx.close();
+  }
   const q = await newPage({ apk: 9, release });
   await q.p.goto(root + '/', { waitUntil: 'domcontentloaded' }); await ready(q.p); await q.p.waitForTimeout(2500);
   check(await q.p.evaluate(() => document.getElementById('appUpdateBar').hidden && document.getElementById('updateBar').hidden), 'APK 9, GitHub apk-9: no bar');
