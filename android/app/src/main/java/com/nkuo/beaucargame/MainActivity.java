@@ -70,6 +70,7 @@ public class MainActivity extends Activity {
     s.setDomStorageEnabled(true);          // 存檔在 localStorage，沒有這個就存不住
     s.setUseWideViewPort(true);
     s.setLoadWithOverviewMode(true);
+    s.setTextZoom(100); // 字固定用遊戲自己的大小：手機「字型大小」調大的時候按鈕上的字（手煞車）不會擠成兩行（2026-10-10）
     s.setMediaPlaybackRequiresUserGesture(false); // 引擎聲
     // 外殼版號寫進 User-Agent：網頁才知道自己跑在 App 裡、是哪一版（標題旁的 0.<這個>.<內容>、查有沒有新的 APK）
     s.setUserAgentString(s.getUserAgentString() + " BeauCarApp/" + versionCode());

@@ -252,6 +252,16 @@ body.fs #drivebar .minirow .snd svg { width: 22px; height: 22px; }
 body.fs #drivebar .minirow .snd[aria-pressed="false"] { color: #9AA1AC; }
 /* 矮的畫面（手機橫拿、小視窗）：去哪裡固定排兩排、往右排過去（以後多了目的地也一樣高），才不會高到碰到上面的按鈕 */
 @media (max-height: 560px) { body.fs #dests { display: grid; grid-template-columns: none; grid-template-rows: repeat(2, auto); grid-auto-flow: column; grid-auto-columns: auto; justify-items: start; } }
+/* 修 11（Nick 2026-10-10 兩張截圖：顯示大小調大的手機，兩排目的地蓋住路和車）：手機橫拿全螢幕「開車」的時候收成一顆「📍 去哪裡 ▾」；
+   按了才打開（三欄，「直接回車庫」在上面）；選了、開走了就收起來（town.src.js 的 destOpen）。走路、直拿手機、不是全螢幕的照舊 */
+.dtog { display: none; }
+@media (max-height: 560px) {
+  body.fs.driving:not(.walking) #drivebar .dtog { display: block; height: 34px; padding: 0 13px; border: 0; border-radius: 999px; background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 13px/1 var(--sans); white-space: nowrap; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  body.fs.driving:not(.walking).destsopen #drivebar .dtog { background: var(--accent); color: var(--on-accent); }
+  body.fs.driving:not(.walking):not(.destsopen) #dests, body.fs.driving:not(.walking):not(.destsopen) #drivebar .minirow .ghost:not(.snd) { display: none; }
+  body.fs.driving:not(.walking).destsopen #dests { grid-template-rows: none; grid-template-columns: repeat(3, auto); grid-auto-flow: row; }
+}
+body.fs #dests button, body.fs #drivebar .minirow .ghost { white-space: nowrap; }
 /* 比賽：下面拉上來的一片（成績、開始比賽、選對手）；跑的時候（body.race-live，race.src.js）收起來 */
 body.fs #race { position: fixed; z-index: 51; left: 0; right: 0; bottom: 0; max-width: 560px; margin: 0 auto; max-height: min(60vh, 620px); max-height: min(60dvh, 620px); overflow-y: auto; overscroll-behavior: contain;
   padding: 16px calc(var(--fs-r) + 10px) calc(var(--fs-b) + 8px) calc(var(--fs-l) + 10px); gap: 12px; border-radius: 20px 20px 0 0;
