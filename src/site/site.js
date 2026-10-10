@@ -15,7 +15,7 @@
   if (ver) ver.textContent = '0.' + (apkBuild() ?? 0) + '.' + GAME_BUILD + (TRY_PAGE ? ' 試玩' : '');
 
   // ---- 有新版本的那一條（跟萬能軟體一樣：一次只跳一條、不自己更新，按了才換）----
-  // App 有新版 → 「App 有新版本／下載安裝」（開 GitHub 上的 .apk）；只有內容有新版 → 「有新版本，要更新嗎／更新」
+  // App 有新版 → 「App 有新版本／下載安裝」（新的 App 自己下載、跳出安裝；舊的 App 開 GitHub 上的 .apk）；只有內容有新版 → 「有新版本，要更新嗎／更新」
   const APK_API = 'https://api.github.com/repos/nkuo-git/beau-car-game/releases/latest';
   const APK_NEW = 'beaucar.apknew', APK_SEEN = 'beaucar.apkcheck';
   let webWaiting = false, apkNew = null, apkAsking = false;
@@ -31,6 +31,28 @@
     if (webBar) webBar.hidden = !webWaiting || !!apkNew;
   }
   paintUpdate();
+  // 新的 App（2026-10-10 之後編的）會自己下載、跳出安裝（BeauCarApp.installApk）：按「下載安裝」不再打開 GitHub。舊的 App 照舊開連結
+  // App 回報進度：window.beauApkProgress(百分比, 狀態)；狀態 'dl' 下載中、'install' 跳出安裝了、'perm' 去設定允許安裝、'denied' 沒允許、'fail' 失敗
+  const APK_MSG = { install: '按「安裝」就好', perm: '打開「允許安裝應用程式」，再按返回', denied: '沒有允許安裝，再按一次', fail: '下載失敗，再按一次' };
+  let apkBusy = false;
+  function apkText(t, btnOn) {
+    const txt = document.querySelector('#appUpdateBar .txt'), link = $id('appUpdateLink');
+    if (txt) txt.textContent = t;
+    if (link) { link.toggleAttribute('aria-disabled', !btnOn); link.style.visibility = btnOn ? '' : 'hidden'; }
+  }
+  window.beauApkProgress = (pct, st) => {
+    if (st === 'dl') { apkBusy = true; apkText('下載新版本⋯ ' + Math.max(0, Math.min(100, Math.round(Number(pct) || 0))) + '%', false); return; }
+    apkBusy = st === 'install' || st === 'perm';
+    apkText(APK_MSG[st] || 'App 有新版本', !apkBusy);
+  };
+  $id('appUpdateLink')?.addEventListener('click', (e) => {
+    const app = window.BeauCarApp;
+    if (!app || typeof app.installApk !== 'function' || !apkNew) return; // 舊的 App：照舊打開連結
+    e.preventDefault();
+    if (apkBusy) return;
+    apkBusy = true; apkText('下載新版本⋯ 0%', false);
+    try { app.installApk(apkNew.url); } catch { window.beauApkProgress(0, 'fail'); }
+  });
   async function checkAppUpdate() {
     const mine = apkBuild();
     if (mine === null || apkAsking) return; // 不在 App 裡不用查

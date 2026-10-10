@@ -5,7 +5,9 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -13,6 +15,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -32,6 +35,13 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
 /**
  * 大便龍的改車遊戲：很薄的一層殼，整個畫面就是 WebView，載入 GitHub Pages 上的遊戲。
  * 改遊戲只要重新部署網頁，App 不用重編。這裡只處理：
@@ -41,6 +51,9 @@ import org.json.JSONObject;
  *   4. User-Agent 帶 BeauCarApp/<版號>：網頁拿它跟 GitHub Release 的 apk-<版號> 比，有新的就跳「App 有新版本」
  *   5. 用 Google 帳號登入（雲端存檔）：網頁叫 BeauCarApp.googleSignIn() → 手機跳出「選 Google 帳號」→
  *      把 Google 給的 ID token 交給網頁的 window.beauGoogleSignIn(idToken, 錯誤)，網頁再拿去登入 Firebase
+ *   6. App 新版本自己下載、跳出安裝（Nick 2026-10-10「不要再經過 github」）：網頁按「下載安裝」叫 BeauCarApp.installApk(網址)
+ *      → 下載到 App 的暫存資料夾（進度交給 window.beauApkProgress(百分比, 狀態)）→ 檢查是這個 App、比較新 → 手機的「安裝」畫面
+ *      （一定要人按「安裝」：Android 不讓 App 自己偷偷裝）。第一次要在設定裡允許「安裝不明應用程式」。
  */
 public class MainActivity extends Activity {
 
@@ -54,6 +67,15 @@ public class MainActivity extends Activity {
 
   /** 收到的搬家資料（save=…），先收著，等網頁準備好（BeauCarApp.ready()）再交給它。 */
   private volatile String pendingSave;
+
+  /** 新版 APK 只從這裡下載（GitHub Release 的檔案；GitHub 會轉到它自己的下載伺服器，一樣是 https）。 */
+  private static final String APK_PREFIX = "https://github.com/nkuo-git/beau-car-game/releases/download/";
+
+  /** 正在下載新版 APK（一次只下載一個）。 */
+  private volatile boolean apkDownloading;
+
+  /** 下載好了、在等人去設定裡允許「安裝不明應用程式」，回來（onResume）再接著安裝。 */
+  private File apkWaiting;
 
   /** 網頁要全螢幕（開車、比賽的時候 setFullscreen(true)）：狀態列、導覽列藏起來。 */
   private volatile boolean fullscreen;
@@ -159,6 +181,15 @@ public class MainActivity extends Activity {
       runOnUiThread(MainActivity.this::startGoogleSignIn);
     }
 
+    /** 網頁按「下載安裝」：在 App 裡下載新版 APK，下載好跳出安裝（不打開 GitHub）。 */
+    @JavascriptInterface
+    public void installApk(String url) {
+      if (url == null || !url.startsWith(APK_PREFIX) || !url.endsWith(".apk")) { apkProgress(0, "fail"); return; }
+      if (apkDownloading) return;
+      apkDownloading = true;
+      new Thread(() -> downloadApk(url), "apk").start();
+    }
+
     /** 開車、比賽的時候 true（全螢幕）、回到車庫頁 false。 */
     @JavascriptInterface
     public void setFullscreen(boolean on) {
@@ -211,6 +242,74 @@ public class MainActivity extends Activity {
         + (error == null ? "null" : JSONObject.quote(error)) + ")", null);
   }
 
+  /** 下載新版 APK 到 cache/apk/update.apk（背景執行緒），每多 2% 告訴網頁一次；好了就檢查、安裝。 */
+  private void downloadApk(String url) {
+    File dir = new File(getCacheDir(), "apk"), out = new File(dir, "update.apk");
+    try {
+      dir.mkdirs();
+      HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+      c.setInstanceFollowRedirects(true); // GitHub → 它的下載伺服器（都是 https）
+      c.setConnectTimeout(15000);
+      c.setReadTimeout(30000);
+      if (c.getResponseCode() != 200) throw new Exception("http " + c.getResponseCode());
+      long total = c.getContentLengthLong(), got = 0;
+      int last = -1;
+      try (InputStream in = c.getInputStream(); OutputStream o = new FileOutputStream(out)) {
+        byte[] buf = new byte[64 * 1024];
+        for (int n; (n = in.read(buf)) > 0; ) {
+          o.write(buf, 0, n);
+          got += n;
+          int pct = total > 0 ? (int) (got * 100 / total) : 0;
+          if (pct >= last + 2) { last = pct; apkProgress(pct, "dl"); }
+        }
+      } finally {
+        c.disconnect();
+      }
+      if (total > 0 && got != total) throw new Exception("short");
+      // 一定要是這個 App（同一個 package）、而且比現在的新，才拿去安裝
+      android.content.pm.PackageInfo info = getPackageManager().getPackageArchiveInfo(out.getPath(), 0);
+      if (info == null || !getPackageName().equals(info.packageName) || info.versionCode <= versionCode()) throw new Exception("bad apk");
+      apkProgress(100, "dl");
+      runOnUiThread(() -> installNow(out));
+    } catch (Exception e) {
+      out.delete();
+      apkProgress(0, "fail");
+    } finally {
+      apkDownloading = false;
+    }
+  }
+
+  /** 跳出手機的「安裝」畫面；還沒允許這個 App 安裝應用程式的話，先打開那個設定（回來 onResume 再接著）。 */
+  private void installNow(File apk) {
+    if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+      apkWaiting = apk;
+      apkProgress(100, "perm");
+      try {
+        startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
+      } catch (Exception e) {
+        apkWaiting = null;
+        apkProgress(0, "fail");
+      }
+      return;
+    }
+    try {
+      Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".files", apk);
+      Intent i = new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+          .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+      startActivity(i);
+      apkProgress(100, "install");
+    } catch (Exception e) {
+      apkProgress(0, "fail");
+    }
+  }
+
+  /** 把下載、安裝的進度交給網頁：window.beauApkProgress(百分比, 狀態)。 */
+  private void apkProgress(int pct, String state) {
+    runOnUiThread(() -> {
+      if (web != null) web.evaluateJavascript("window.beauApkProgress&&window.beauApkProgress(" + pct + "," + JSONObject.quote(state) + ")", null);
+    });
+  }
+
   /** 照 fullscreen 藏起／放回狀態列和導覽列。藏起來的時候從螢幕邊邊滑一下會暫時跑出來，過一下又自己收回去。 */
   private void applyFullscreen() {
     WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
@@ -226,6 +325,12 @@ public class MainActivity extends Activity {
   protected void onResume() {
     super.onResume();
     if (fullscreen) applyFullscreen(); // 切到別的 App 再回來：還在全螢幕就再藏一次
+    if (apkWaiting != null) { // 從「允許安裝不明應用程式」的設定回來
+      File apk = apkWaiting;
+      apkWaiting = null;
+      if (Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls()) installNow(apk);
+      else apkProgress(0, "denied");
+    }
   }
 
   @Override
