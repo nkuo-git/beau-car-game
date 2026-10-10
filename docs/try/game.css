@@ -629,6 +629,8 @@ html.lk-open, html.lk-open body { overflow: hidden; }
 .cta.alt { min-height: 52px; background: var(--surf); color: var(--ink); border: 1px solid var(--line); }
 .cta.alt::after { display: none; }
 .cta.alt span { color: var(--soft); opacity: 1; }
+/* 大地圖（bigmap.js）打開的時候：去哪裡那一排收起來（全螢幕的時候它在舞台上面，會蓋到地圖） */
+body.bigmap #drivebar { display: none !important; }
 
 /* ================= 改車遊戲（獨立的網站／App）才有的：src/site/site.css ================= */
 /* 標題列：只有圖示、遊戲名字、版本號（沒有萬能軟體的設定、切換、分頁） */
@@ -773,3 +775,15 @@ body.racing .updatebar, body.driving .updatebar, body.fs .updatebar { display: n
 .nw-list .w { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nw-list .t { font: 700 17px "Barlow Condensed", "Noto Sans TC", sans-serif; font-variant-numeric: tabular-nums; }
 .nw-empty[hidden] { display: none; }
+/* 房間（site/room.js） */
+.nw-code-in { text-align: center; text-transform: uppercase; letter-spacing: .4em; font: 700 26px "Barlow Condensed", "Noto Sans TC", sans-serif; height: 54px; }
+.nw-code { display: flex; justify-content: center; gap: 8px; }
+.nw-code span { width: 50px; height: 58px; display: grid; place-items: center; border: 1.5px solid var(--accent); border-radius: 12px; background: var(--surface-2); color: var(--accent); font: 700 34px "Barlow Condensed", "Noto Sans TC", sans-serif; }
+.nw-who { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.nw-who li { display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 5px 8px; border-radius: 11px; background: var(--surface-2); font-size: 14px; }
+.nw-who .ava { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 50%; color: #1a0d05; font-weight: 800; font-size: 14px; }
+.nw-who .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nw-who .nm small { color: var(--ink-soft); font-size: 12px; }
+.nw-who button { flex: none; min-height: 32px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface); color: var(--ink); font: 700 13px "Noto Sans TC", system-ui, sans-serif; cursor: pointer; }
+.nw-list li.tap { cursor: pointer; }
+#nwRoomBtn b { font-family: "Barlow Condensed", "Noto Sans TC", sans-serif; letter-spacing: .06em; }

@@ -494,7 +494,7 @@ function hillStep(t, dt) {
     if (fin) {
       const tt = Math.round(HILL.t * 100) / 100, old = GAME.best.hill[cur], rec = !old || tt < old;
       if (rec) { GAME.best.hill[cur] = tt; save(); }
-      const vs = ghVs('hill', tt); ghHillEnd(t, tt); // 交給網站的排行榜
+      const vs = ghVs('hill', tt); ghHillEnd(t, tt); netHill(tt); // 交給網站的排行榜；一起比賽（net.src.js）
       HILL.on = false; HILL.tm.textContent = hillFmt(tt); HILL.bs.textContent = rec ? '新紀錄！' : `最快 ${hillFmt(old)}`;
       drv.toast((rec ? `到山頂了！${hillFmt(tt)}　新紀錄！` : `到山頂了！${hillFmt(tt)}（最快 ${hillFmt(old)}）`) + vs, 3200);
       HILL.doneT = 4; // 結果留 4 秒
@@ -1247,6 +1247,7 @@ function leaveDrive() {
   ciLeave(); // 賽車場的比賽、選對手收掉
   nhLeave(); // 內湖：「地圖資料 © OpenStreetMap 貢獻者」收起來
   police?.clear(); police?.setEnabled(false); bodyFlag('wanted', false); bodyFlag('jailed', false); // 第 3 批（b3-int）：星星、警車、拘留室都清掉（回車庫頁）
+  netRaceEnd(); netHideAll(); // 一起開車：朋友的車、人收起來（回車庫頁）
   drv?.dispose(); drv = null; home = null;
   walker?.pause({ hide: true });
   npcShow(false);
@@ -1683,6 +1684,7 @@ function driveStep(dt) {
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
+  netStep(dt); // 一起開車（net.src.js）：朋友的車、人、名字、表情、一起比賽
   mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）
 }
@@ -1699,7 +1701,7 @@ function bigMake() {
   BIGMAP = createBigMap({ parent: stage, world: VIL, layer: () => MAPT.layer || (MAPT.layer = walker?.mapLayer), // 小地圖同一張底圖
     me: () => { if (mapWalking()) { const t = walker.telemetry(); return { x: t.x, z: t.z, h: t.heading }; } const t = drv?.telemetry(); return t ? { x: t.x, z: t.z, h: t.heading } : null; },
     route: () => (mapWalking() ? walker.route : drv?.route),
-    dots: () => [police?.markers, MAPT.race ? MAPT.marks : null],
+    dots: () => [police?.markers, MAPT.race ? MAPT.marks : null, NET.on ? NET.marks : null], // 一起開車的朋友（名字寫在點旁邊）
     dest: () => tripDest,
     onGo: (k, name) => { setDest(k); (mapWalking() ? walker : drv)?.toast(`去${name}：跟著左上角的箭頭`, 2200); },
     onOpen: () => { document.body.classList.add('bigmap'); if (mapWalking()) walker.setInput({ x: 0, y: 0 }); else drv?.setInput({ throttle: 0, brake: 0.5, steer: 0 }); }, // 車子自己慢慢停
