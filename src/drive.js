@@ -45,7 +45,9 @@
 //   drive.addColliders(list, tag) / drive.removeColliders(tag)   會變的碰撞物（鐵捲門關著才擋、停著的車），格式跟 world.colliders 一樣；
 //                          會動的車多給 vx、vz（它的速度 m/s）、m（比你重幾倍，預設 1）：撞到照兩台車的動量算（追撞不會整台停住），它被推的速度加在原來那個的 dvx、dvz（它自己拿去用、歸零）；
 //                          同一個 tag 可以加很多次，removeColliders(tag) 一次全部拿掉；回傳加了／拿掉幾個
-//   drive.setMarkers(list | null)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝這幀不畫） }]；
+//   drive.setMapTap({ label, onClick } | null)   點小地圖做什麼（大地圖、比賽看整個賽道）；label＝小地圖下面那一條字；drive.mapTap＝現在的字
+//   drive.setMapView({ x0, z0, x1, z1 } | null)   小地圖改成看整個範圍（北朝上、你的箭頭照車頭轉）；null＝回到跟著你轉；drive.mapView
+//   drive.setMarkers(list | null, tag?)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝這幀不畫）, label（點上的字）, fg }]；tag＝另外一組（比賽的對手 'race'），null 拿掉；
 //                          只記住陣列本身，每一幀照裡面現在的值畫（陣列可以一直改，不用再叫）；地圖外面的貼在邊上；null＝不畫
 //   drive.setCameraMode('chase' | 'eye' | 'none', view?)   追車／駕駛座／不管鏡頭；drive.cameraMode 是現在的
 //   drive.teleport({ x, z, heading }, { intro })   把車放到那裡停好（不叫 onZone）；intro：鏡頭從車前面繞到後面（出門的時候）
@@ -76,7 +78,7 @@ import * as THREE from 'three';
 import { createRide } from './terrain.js'; // 第 4 批：地形（越野車場）
 
 // 打包時全部接在同一個 script 裡：只露出 createDrive
-export const { createDrive } = (() => {
+export const { createDrive, DRIVE_DEST } = (() => {
 const TAU = Math.PI * 2, GEARS = [3.3, 2.2, 1.62, 1.28, 1.05, 0.86];
 const AERO = 0.55, STEP = 0.25, HZ = 120; // 風阻（街機）、一步最多走幾公尺（碰撞）、物理每秒最少幾步
 const torqueAt = (x) => 0.8 + 0.4 * x - 0.4 * x * x;
@@ -123,6 +125,8 @@ const CSS = `
 @media (hover:hover) and (pointer:fine){.dv-act kbd{display:block}}
 .dv-map{top:10px;right:10px;width:124px;height:124px;border-radius:18px;background:rgba(14,15,18,0.62);overflow:hidden}
 .dv-map canvas{display:block;width:100%;height:100%}
+.dv-map.tap{pointer-events:auto;cursor:pointer;touch-action:manipulation;box-shadow:inset 0 0 0 1.5px rgba(255,106,31,0.8)}
+.dv-mapb{position:absolute;left:0;right:0;bottom:0;padding:4px 0 5px;background:rgba(14,15,18,0.8);font:700 11px/1 ${SANS};text-align:center;letter-spacing:.02em;white-space:nowrap}
 .dv-cam{top:142px;right:10px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(14,15,18,0.62);pointer-events:auto;cursor:pointer;touch-action:manipulation}
 .dv-cam svg{width:24px;height:24px;fill:none;stroke:#F2F3F5;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .dv-cam[aria-pressed="true"]{background:#FF6A1F}
@@ -340,6 +344,8 @@ function createDrive(o) {
   const human = { thr: 0, brk: 0, steer: 0, hb: 0, kb: {} };
   let forced = null, paused = false, auto = null, alive = true, dest = null, mode = 'chase', view = null, intro = null, now = 0, action = null, action2 = null;
   let marks = null; // 第 3 批（b3-int）別的模組給的小地圖點（setMarkers）：[{ x, z, fill, ring, r, on }]
+  const marksT = {}; // 大地圖那一批：setMarkers(list, tag) 另外一組（比賽的對手 'race'），label＝點上面的字（名次）
+  let mapTap = null, mapWhole = null; // setMapTap：點小地圖做什麼（下面一條字）；setMapView：小地圖看整個範圍（北朝上，比賽的整個賽道）
   const zoneIn = {}, events = []; let zoneNow = null, routeData = null, routeT = 0, routeS = 0;
   // ==== 第 4 批：地形（越野車場）：world 有高度才有；一般的車沒開進越野車場 ride.on＝false（照舊）；越野車（perf.offroad）一直開著 ====
   const CRU = o.crush || null; // 第 7 批（輾扁）：怪獸卡車才有（crush.js）：{ heightAt（墊子的高度）, can(c)（輾得過去嗎）, hit(c, speed)（輾到了，這個碰撞物不擋了）}
@@ -749,7 +755,7 @@ function createDrive(o) {
   function buildHud() {
     if (!document.getElementById('dv-style')) { const s = document.createElement('style'); s.id = 'dv-style'; s.textContent = CSS; document.head.append(s); }
     const root = document.createElement('div'); root.className = 'dv';
-    root.innerHTML = `<div class="dv-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="dv-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="dv-map"><canvas></canvas></div>`
+    root.innerHTML = `<div class="dv-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="dv-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="dv-map"><canvas></canvas><b class="dv-mapb" hidden></b></div>`
       + `<b class="dv-cam" role="button" aria-label="換視角" aria-pressed="false">${ICON.cam}</b><button type="button" class="dv-act2" hidden><i></i><span></span></button><div class="dv-spd"><b>0</b><span>KM/H</span><em>1</em><i hidden>甩尾<span></span></i></div>`
       + `<div class="dv-steer"><b role="button" aria-label="左轉">${ICON.L}</b><b role="button" aria-label="右轉">${ICON.R}</b></div>`
       + `<div class="dv-ped"><b class="dv-brk" role="button" aria-label="煞車">煞車</b><b class="dv-gas" role="button" aria-label="油門">油門</b></div><div class="dv-toast" role="status"></div>`
@@ -774,6 +780,7 @@ function createDrive(o) {
     const fingers = new Map(), steerNow = () => { let s = 0; for (const v of fingers.values()) s = v; human.steer = s; H.steerB[0].classList.toggle('on', s < 0); H.steerB[1].classList.toggle('on', s > 0); };
     hold(H.steer, (e) => { const r = H.steer.getBoundingClientRect(); fingers.delete(e.pointerId); fingers.set(e.pointerId, e.clientX < r.left + r.width / 2 ? -1 : 1); steerNow(); }, (e) => { fingers.delete(e.pointerId); steerNow(); });
     on(H.cam, 'click', () => setCameraMode(mode === 'eye' ? 'chase' : 'eye'));
+    H.mapBox = q('.dv-map'); H.mapB = q('.dv-mapb'); on(H.mapBox, 'click', (e) => { if (mapTap) { e.preventDefault(); mapTap.onClick(); } }); // 點小地圖（setMapTap）：大地圖、比賽看整個賽道
     // 大按鈕：按下去縮一下，放開（click）才做；另一隻手指按著油門也按得到
     on(H.act, 'pointerdown', () => H.act.classList.add('on'));
     for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.act, t, () => H.act.classList.remove('on'));
@@ -803,13 +810,14 @@ function createDrive(o) {
     return { c, ms, x0, z0 };
   }
   function drawMap(dt) {
-    const H = hud, g = H.mctx, s = H.mapPx, cx = st.x + Math.cos(st.th) * CX, cz = st.z - Math.sin(st.th) * CX, oy = s * 0.13, rot = st.th - Math.PI / 2;
+    const H = hud, g = H.mctx, s = H.mapPx, W = mapWhole, mx = st.x + Math.cos(st.th) * CX, mz = st.z - Math.sin(st.th) * CX;
+    const cx = W ? (W.x0 + W.x1) / 2 : mx, cz = W ? (W.z0 + W.z1) / 2 : mz, oy = W ? 0 : s * 0.13, rot = W ? 0 : st.th - Math.PI / 2; // 看整個範圍：北朝上、不轉
     H.span += (150 + 300 * smooth01((Math.abs(st.v) * 3.6 - 60) / 190) - H.span) * (1 - Math.exp(-dt * 1.5));
-    const k = s / H.span;
+    const k = W ? (s * 0.92) / Math.max(W.x1 - W.x0, W.z1 - W.z0, 1) : s / H.span;
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, s, s);
     g.save(); g.translate(s / 2, s / 2 + oy); g.rotate(rot); g.scale(k, k); g.translate(-cx, -cz);
     g.drawImage(H.layer.c, H.layer.x0, H.layer.z0, H.layer.c.width / H.layer.ms, H.layer.c.height / H.layer.ms);
-    if (world.mapLive) world.mapLive(g, cx, cz, H.span); // 內湖（neihu.js）：附近的路、房子、公園自己畫（底圖只畫原本的範圍）
+    if (world.mapLive) world.mapLive(g, cx, cz, W ? s / k : H.span); // 內湖（neihu.js）：附近的路、房子、公園自己畫（底圖只畫原本的範圍）
     if (routeData && routeData.pts.length > 1) {
       g.strokeStyle = '#FF6A1F'; g.lineWidth = (3.4 * H.dpr) / k; g.lineCap = 'round'; g.lineJoin = 'round'; g.setLineDash(routeData.straight ? [(6 * H.dpr) / k, (5 * H.dpr) / k] : []); g.beginPath();
       routeData.pts.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z))); g.stroke(); g.setLineDash([]);
@@ -821,7 +829,7 @@ function createDrive(o) {
       const p = places[key], d = DEST[key] || (key === dest ? destStyle(key) : null), q = d && placeAt(p); if (!q) continue;
       const wx = q[0] - cx, wz = q[1] - cz;
       let sx = (wx * cs - wz * sn) * k, sy = (wx * sn + wz * cs) * k + oy; const l = Math.max(Math.abs(sx), Math.abs(sy));
-      if (l > R) { sx *= R / l; sy *= R / l; }
+      if (l > R) { if (W) continue; sx *= R / l; sy *= R / l; } // 看整個賽道的時候：外面的地方不畫（不貼在邊上）
       ic.push({ key, d, sx, sy, r: (key === dest ? 11 : 9) * H.dpr });
     }
     ic.sort((a, b) => (a.key === dest) - (b.key === dest)); // 目的地最後畫（在最上面）
@@ -835,15 +843,21 @@ function createDrive(o) {
       g.fillStyle = d.fg; g.font = `700 ${Math.round(r * 1.15)}px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(d.icon, s / 2 + sx, s / 2 + sy + 0.5 * H.dpr);
     }
     // 第 3 批（b3-int）：別的模組給的點（警車⋯）：小圓點；地圖外面的貼在邊上；on: false 的不畫
-    if (marks) for (let i = 0; i < marks.length; i++) {
-      const m = marks[i]; if (!m || m.on === false) continue;
+    const drawMarks = (list) => { for (let i = 0; i < list.length; i++) {
+      const m = list[i]; if (!m || m.on === false) continue;
       const wx = m.x - cx, wz = m.z - cz; let sx = (wx * cs - wz * sn) * k, sy = (wx * sn + wz * cs) * k + oy; const l = Math.max(Math.abs(sx), Math.abs(sy));
       if (l > R) { sx *= R / l; sy *= R / l; }
-      g.beginPath(); g.arc(s / 2 + sx, s / 2 + sy, (m.r || 5) * H.dpr, 0, TAU); g.fillStyle = m.fill || '#FF3B30'; g.fill();
+      const rr = (m.r || 5) * H.dpr;
+      g.beginPath(); g.arc(s / 2 + sx, s / 2 + sy, rr, 0, TAU); g.fillStyle = m.fill || '#FF3B30'; g.fill();
       if (m.ring) { g.lineWidth = 1.5 * H.dpr; g.strokeStyle = m.ring; g.stroke(); }
-    }
-    // 你：中間偏下的箭頭（永遠朝上）
-    const u = H.dpr; g.translate(s / 2, s / 2 + oy); g.beginPath(); g.moveTo(0, -9 * u); g.lineTo(7 * u, 7 * u); g.lineTo(0, 3.5 * u); g.lineTo(-7 * u, 7 * u); g.closePath();
+      if (m.label != null) { g.fillStyle = m.fg || '#FFFFFF'; g.font = `700 ${Math.round(rr * 1.45)}px ${COND}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(m.label), s / 2 + sx, s / 2 + sy + 0.5 * H.dpr); }
+    } };
+    if (marks) drawMarks(marks);
+    for (const t in marksT) drawMarks(marksT[t]);
+    // 你：中間偏下的箭頭（永遠朝上）；看整個範圍的時候：在你的位置、照車頭轉
+    const u = H.dpr;
+    if (W) { const wx = mx - cx, wz = mz - cz; g.translate(s / 2 + wx * k, s / 2 + wz * k); g.rotate(Math.PI / 2 - st.th); } else g.translate(s / 2, s / 2 + oy);
+    g.beginPath(); g.moveTo(0, -9 * u); g.lineTo(7 * u, 7 * u); g.lineTo(0, 3.5 * u); g.lineTo(-7 * u, 7 * u); g.closePath();
     g.fillStyle = '#F2F3F5'; g.fill(); g.lineWidth = 2 * u; g.strokeStyle = '#FF6A1F'; g.stroke(); g.setTransform(1, 0, 0, 1, 0, 0);
   }
   function hudTick(dt) {
@@ -1030,7 +1044,10 @@ function createDrive(o) {
     update, telemetry, setDestination, setCameraMode, teleport, parkAt, pause, resume, release, dispose, toast, setAction, setAction2,
     addColliders: (list, tag) => cw.add(Array.isArray(list) ? list : [list], tag ?? null),
     removeColliders: (tag) => cw.remove(tag),
-    setMarkers: (list) => { marks = Array.isArray(list) ? list : null; }, // 第 3 批（b3-int）
+    setMarkers: (list, tag) => { const L = Array.isArray(list) ? list : null; if (tag == null) marks = L; else if (L) marksT[tag] = L; else delete marksT[tag]; }, // 第 3 批（b3-int）；tag：另外一組（比賽的對手）
+    setMapTap: (t) => { mapTap = t && typeof t.onClick === 'function' ? { label: String(t.label || ''), onClick: t.onClick } : null; if (hud) { hud.mapBox.classList.toggle('tap', !!mapTap); hud.mapB.hidden = !mapTap || !mapTap.label; if (mapTap) hud.mapB.textContent = mapTap.label; } },
+    setMapView: (b) => { mapWhole = b && b.x1 > b.x0 && b.z1 > b.z0 ? { x0: +b.x0, z0: +b.z0, x1: +b.x1, z1: +b.z1 } : null; if (hud) hud.mapT = 0; },
+    get mapTap() { return mapTap ? mapTap.label : null; }, get mapView() { return mapWhole; },
     setDamage: (p) => { dmgP.power = p && p.power > 0 ? Math.min(1, p.power) : 1; dmgP.top = p && p.top > 0 ? Math.min(1, p.top) : 1; dmgP.maxKmh = p && p.maxKmh > 0 ? p.maxKmh : Infinity; dmgP.steerPull = p ? clamp(+p.steerPull || 0, -1, 1) : 0; },
     setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
@@ -1040,5 +1057,5 @@ function createDrive(o) {
   setCameraMode('chase');
   return api;
 }
-return { createDrive };
+return { createDrive, DRIVE_DEST: DEST };
 })();

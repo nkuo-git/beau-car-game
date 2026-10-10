@@ -22,7 +22,7 @@ const CARS = [
 const NOLOD = []; // 沒有輕量車的車（不停車位、不擺阿財車行）；怪獸卡車現在有了（body-monster-lod.glb）
 const read = (f) => fs.readFileSync(path.join(dir, f), 'utf8');
 const strip = (f) => read(f).split('\n').filter((l) => !/^import /.test(l)).join('\n').replace(/^export (const|function) /gm, '$1 ');
-let code = ['masks.js', 'gtr-look.js', 'parts.js', 'supra.js', 'cabin.js', 'wings.js', 'wide.js', 'room.js', 'sound.js', 'street.js', 'police.js', 'village.js', 'interiors.js', 'terrain.js', 'drive.js', 'offroad.js', 'circuit.js', 'neihu-data.js', 'neihu.js', 'mountain.js', 'orbay.js', 'damage.js', 'walk.js', 'character.js', 'lookpanel.js', ...CARS.flatMap((c) => c[3]), 'carlod.js', 'ghost.js', 'npc.js', 'crush.js', 'police-ai.js', 'guns.js', 'gunshop.js'].map((f) => `// ---- ${f} ----\n${strip(f)}`).join('\n');
+let code = ['masks.js', 'gtr-look.js', 'parts.js', 'supra.js', 'cabin.js', 'wings.js', 'wide.js', 'room.js', 'sound.js', 'street.js', 'police.js', 'village.js', 'interiors.js', 'terrain.js', 'drive.js', 'offroad.js', 'circuit.js', 'neihu-data.js', 'neihu.js', 'mountain.js', 'orbay.js', 'damage.js', 'walk.js', 'bigmap.js', 'character.js', 'lookpanel.js', ...CARS.flatMap((c) => c[3]), 'carlod.js', 'ghost.js', 'npc.js', 'crush.js', 'police-ai.js', 'guns.js', 'gunshop.js'].map((f) => `// ---- ${f} ----\n${strip(f)}`).join('\n');
 const src = read('garage.src.html');
 const cut = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); if (i < 0 || j < 0) throw new Error('找不到 ' + a); return src.slice(i + a.length, j); };
 

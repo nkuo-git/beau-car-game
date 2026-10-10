@@ -34,6 +34,7 @@ src/                 遊戲原始碼（平的一層，腳本都用自己的資�
   garage.src.html    車庫頁（畫面＋主程式；<!--__GARAGE__--> 框起來的是畫面）、garage.css
   town.src.js race.src.js circuit.src.js neihu.src.js   接在頁面 module 裡的程式（出門、比賽、賽車場、內湖）
   *.js               模組（village street police npc walk drive terrain offroad circuit neihu mountain orbay crush police-ai guns gunshop character lookpanel room cabin damage carlod ghost …）
+  bigmap.js          大地圖（點小地圖打開：拖、放大、點地方「去這裡」）；town.src.js 的 mapStep 接小地圖（比賽：看整個賽道、對手號碼點）
   ghost.src.js       鬼影車排行榜：錄爬山／賽車場一圈／400 公尺、發 'beau-run'、window.beauGame.setGhost（接在 neihu.src.js 後面）
   *-look.js *-spec.js 每台車的外觀／規格；body-*-q.glb（車庫用）、body-*-lod.glb（輕量車）＝車身檔
   build-art.mjs      試做頁 → src/art/garage.html（＋car-*.txt）；make-free.mjs → src/art/garage-free.html（錢用不完）
@@ -66,7 +67,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 ## 版本號
 - 標題旁：`0.<APK 版號>.<內容版號>`。APK 版號＝「編 APK」workflow 的 run number（Release `apk-N`），網頁版（不在 App 裡）是 0。內容版號＝`docs/version.json`。
 - 內容 1 ＝ 跟萬能軟體 0.9.37／內容 38 一樣的遊戲（main 第一次）。
-- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4；v29 ＝ 內容 5）；下一個試做頁是 v31（v30 ＝ 撞前車不會整台停住）。
+- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4；v29 ＝ 內容 5）；下一個試做頁是 v32（v30 ＝ 撞前車不會整台停住；v31 ＝ 大地圖；v30＋v31 ＝ 內容 7）。
 
 ## 試做頁（artifact）
 - https://claude.ai/artifact/29pHoiqGVBs34ERLnJ9T8s（Nick 的；新的專案第一次發佈前要先用 Artifact 的 `read` 讀它，才能更新同一個網址）。
@@ -88,9 +89,9 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `node test-b4.mjs ../out/b4/b4` | 越野車場、怪獸卡車、越野車行、泥巴賽、越野車車庫 | 74 ok |
 | `node test-b3.mjs ../out/b3/b3` | 警察（星星、追、抓、拘留、罰款）、槍店、靶場、槍 | 56 ok |
 | `node neihu-test.mjs ../out/nh/nh` | 內湖：轉換程式重跑一樣、地標、開到港墘站、路牌、走路 | 29 ok |
-| `node circuit-test.mjs ../out/ci/ci` | 賽車場、AI、名次、每一圈錄下來＋鬼影車 | 28 ok，PASSED |
+| `node circuit-test.mjs ../out/ci/ci` | 賽車場、AI、名次、每一圈錄下來＋鬼影車；大地圖（走路、開車、拖、點地方、去這裡）、比賽的小地圖（對手號碼點、整個賽道）、撞到對手 | 37 ok，PASSED |
 | `node drift-test.mjs ../out/drift/drift` | 甩尾（Node＋瀏覽器；沒甩的時候跟舊 drive.js 一模一樣） | 42 ok |
-| `node bump-test.mjs` | 撞到會動的車（比賽的對手）：追撞掉到差不多前車的速度、前車被推快、撞牆照舊（Node，一秒） | 6 ok |
+| `node bump-test.mjs` | 撞到會動的車（比賽的對手）：追撞掉到差不多前車的速度、前車被推快、撞牆照舊、擦到旁邊（Node，一秒） | 7 ok |
 | `node crush-test.mjs ../out/crush/crush` | 怪獸卡車輾扁車、騎的機車和路邊的東西、人跳開 | 53 ok |
 | `node mountain-test.mjs ../out/mt/mt` | 山：去山頂、爬山計時賽、上山下山貼著路、山頂走路、越野車捷徑、輾扁山上的東西、警察追上山、爬山的鬼影車 | 42 ok |
 | `node free-test.mjs` | 試做頁錢用不完、正常頁存檔的錢 | 2 ok（先跑 make-free.mjs） |
@@ -150,6 +151,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - **接下來（Nick 選「做1236」，草稿和家長都同意了）**：連線 https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo ——照順序：鬼影排行榜（爬山計時賽也接上去）→ 一起開車 → 一起比賽 → 參觀車庫。每做好一個先放試做頁（要連網路的放試玩頁 docs/try/）。
   - **鬼影排行榜（2026-10-10 上線＝內容 6）**：右上角「👥 連線」→ 取名字 → 🏆 排行榜（400 公尺／賽車場一圈／爬山 × 大家／同一台車）→「👻 跟第 1 名的鬼影車跑」。說明在 `notes/online.md`。
     Firestore 規則（`notes/online.md` 裡那一段，也包含原本的 saves）家長 2026-10-10 已經貼到 Firebase 主控台。試做頁 artifact 連不到 Firebase：只有遊戲那一邊（錄下來、鬼影車），看不到排行榜。
+- **內容 7（2026-10-10 上線，試做頁 v30＋v31）＝ 大地圖＋撞前車**：點右上角的小地圖（下面寫「🗺 大地圖」）→ 整張地圖（拖、兩指放大、點地方「去這裡」）；賽車場比賽時小地圖上的對手是有號碼的點（名次），點小地圖看整個賽道；比賽撞到前車照兩台車的動量算，不會整台停住（警車、路上的車還是像牆）。草稿 https://claude.ai/artifact/VF5wb2U1PpAnzBRyJsSSW6，說明在 `notes/bigmap.md`。一起開車時朋友也會畫在大地圖上（連線第 2 步）。
 - **已知問題**
   - 越野車車庫裡坐在駕駛座（或追車鏡頭）會看到天空（屋頂被剔除）。
   - 越野車車庫 1 號格要倒車、打方向、再前進（三點迴轉）才出得來。
@@ -163,4 +165,4 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - **價錢（萬，新台幣）**：GC8 75（一開始就有）、YARIS 130、SUPRA 200、GT-R 400、918 3000、SP3 6000、JESKO 7500（阿財車行）；怪獸卡車 100（越野車行）。槍：手槍 3、衝鋒槍 12、霰彈槍 18、步槍 30；靶場第一次全中每把槍 2 萬。泥巴賽獎金 20／80／300。被抓罰款每顆星 2 萬。零件、輪胎的價錢在 garage.src.html 的 `PERF`。
 
 ## 筆記（notes/）
-以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）、mountain（山）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。
+以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）、mountain（山）、online（鬼影排行榜）、bigmap（大地圖、撞前車）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。

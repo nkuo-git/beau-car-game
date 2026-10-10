@@ -928,7 +928,7 @@ function createCircuitRace(o) {
     if (hud) hud.root.remove();
   }
   update(1e-6);
-  return { update, abort, dispose, standings: () => standings().map((c) => ({ name: c.name, p: c.p, fin: c.fin, me: c === me })), get state() { return state; }, get time() { return t; }, laps, ais, me, get result() { return result; }, drive: drv, get lights() { return lightsOn; } };
+  return { update, abort, dispose, standings: () => standings().map((c) => ({ name: c.name, p: c.p, fin: c.fin, me: c === me })), get state() { return state; }, get time() { return t; }, laps, ais, me, get result() { return result; }, drive: drv, get lights() { return lightsOn; }, colliders: AIC };
 }
 
 return { buildCircuit, circuitFonts, CIRCUIT_TEXT, CIRCUIT_KEEP, createCircuitRace, CIRCUIT_SKILL: SKILL, circuitCourse: makeCourse, circuitCSS: cssOnce, circuitFmt: fmtT, circuitCar: carModel, circuitProfile: speedProfile };

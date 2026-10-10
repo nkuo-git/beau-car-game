@@ -877,7 +877,7 @@ function dressWalker() {
 $('lookBtn').addEventListener('click', () => openLook('page'));
 { // App 的返回鍵（外殼先叫 window.caridExitFullscreen）：自訂角色打開的時候先關它（不存）
   const exitFs = window.caridExitFullscreen;
-  window.caridExitFullscreen = () => { if (LOOKP.isOpen) { LOOKP.cancel(); return true; } return exitFs(); };
+  window.caridExitFullscreen = () => { if (LOOKP.isOpen) { LOOKP.cancel(); return true; } if (BIGMAP?.isOpen) { BIGMAP.close(); return true; } return exitFs(); }; // 大地圖打開的時候：先關地圖
 }
 
 renderer.setAnimationLoop((now) => {

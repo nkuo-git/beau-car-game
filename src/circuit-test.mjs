@@ -27,6 +27,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__look = () => LOOKP; window.__cam = () => ({ camCap, maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__O = () => ({ orRace, oDisp, oLoading, dealerAt, trophies: trophyCount(), bigCam, lvl: orLevel(), PFULL });' // 第 4 批：越野賽、越野車行展示台、鏡頭、停在村子裡的完整的車（沒有輕量車的）
   + ' window.__CI = () => ({ race: ciRace, menu: ciMenuEl, cars: ciCars, sel: ciSel, P: VIL?.circuit, prof: circuitProfile, car: circuitCar, PERF, hp: hpOf(cur) });' // 賽車場
+  + ' window.__BM = () => ({ BIGMAP, MAPT, dest: tripDest });' // 大地圖（bigmap.js）
   + ' window.__GH = () => GH; window.__ghostUnpack = (g) => ghostUnpack(g); window.__ghostAt = (G, t, o) => ghostAt(G, t, o);' // 鬼影車排行榜（ghost.src.js）
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };';
@@ -481,6 +482,37 @@ const b1 = await p.evaluate(() => { const D = window.__D(), V = D.VIL, I = V.inf
 console.log('1', el(), 'circuit built:', JSON.stringify(b1));
 check(b1.info && b1.info.lap > 3500 && b1.info.lap < 5000 && b1.place && b1.track && b1.roads >= 2, `circuit built into the village (lap ${b1.info?.lap} m, ${b1.info?.meshes} meshes, ${b1.info?.tris} tris, ${b1.info?.colliders} colliders, ${b1.info?.ms} ms); drag strip place still there`);
 check(b1.pills.length === 8 && b1.pills.includes('neihu:去內湖') && b1.pills.includes('mountain:去山頂') && b1.pills.includes('circuit:去賽車場*') && !b1.pills.some((q) => q.startsWith('track:')), `eight destination pills (內湖, 山頂 added), 去賽車場 replaces 去賽道 and is the default with no money (${b1.pills.join(' ')})`);
+// ---- 大地圖（bigmap.js，Nick 2026-10-10「大地圖OK」）：走路的時候點小地圖 → 大地圖 → 點地方 →「去這裡」 ----
+const bmA = await p.evaluate(async () => {
+  window.__wstep(2);
+  const el = document.querySelector('#stage .wk-map'), b = el.querySelector('.wk-mapb'), D = window.__D();
+  const r0 = { tap: el.classList.contains('tap'), label: b.hidden ? null : b.textContent, api: D.walker.mapTap };
+  el.click();
+  const M = window.__BM().BIGMAP; if (!M || !M.isOpen) return { r0, open: false };
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const root = M.el, rr = root.getBoundingClientRect(), st = document.getElementById('stage').getBoundingClientRect();
+  const open = { cover: Math.abs(rr.width - st.width) < 2 && Math.abs(rr.height - st.height) < 2, body: document.body.classList.contains('bigmap'), osm: root.querySelector('.bm-osm').textContent, info: M.info, view: M.view };
+  const k = M.pick('shop'), card = root.querySelector('.bm-card'), cardTxt = card.hidden ? null : card.innerText.replace(/\s+/g, ' ');
+  const w0 = M.view.w; M.zoom(2); const w1 = M.view.w; M.home();
+  root.querySelector('.bm-go').click();
+  return { r0, open, k, cardTxt, w0, w1, closed: !M.isOpen, bodyAfter: document.body.classList.contains('bigmap'), dest: window.__BM().dest, pill: document.querySelector('#dests [data-d="shop"]').getAttribute('aria-pressed'), toast: document.querySelector('#stage .wk-toast')?.textContent || '' };
+});
+console.log('  bigmap (walking):', JSON.stringify(bmA));
+check(bmA.r0.tap && bmA.r0.label === '🗺 大地圖' && bmA.r0.api === '🗺 大地圖' && bmA.open && bmA.open.cover && bmA.open.body && /OpenStreetMap/.test(bmA.open.osm) && bmA.open.info.places >= 5, `walking: the minimap says 「🗺 大地圖」; tapping it opens a full-screen map with the places (${bmA.open?.info?.places} icons, ${bmA.open?.info?.ms} ms to draw) and the OSM credit`);
+check(bmA.k === 'shop' && /阿輝改車廠/.test(bmA.cardTxt || '') && /離你 \d+ 公尺/.test(bmA.cardTxt || '') && /去這裡/.test(bmA.cardTxt || '') && Math.abs(bmA.w1 - bmA.w0 / 2) < 1, `picking 阿輝改車廠 shows a card (${bmA.cardTxt}); ＋ zooms in (${Math.round(bmA.w0)} → ${Math.round(bmA.w1)} m wide)`);
+check(bmA.closed && !bmA.bodyAfter && bmA.dest === 'shop' && bmA.pill === 'true' && /去阿輝改車廠/.test(bmA.toast), `「去這裡」 closes the map and makes it the destination (${bmA.dest}, pill pressed, toast 「${bmA.toast}」)`);
+// 真的手指：拖一拖、點地方（車行）、✕ 關掉
+const bmA2 = await p.evaluate(async () => { document.querySelector('#stage .wk-map').click(); await new Promise((r) => requestAnimationFrame(r)); const M = window.__BM().BIGMAP, r = M.el.querySelector('canvas').getBoundingClientRect(); return { open: M.isOpen, r: [r.left, r.top, r.width, r.height], v: M.view }; });
+const cx = bmA2.r[0] + bmA2.r[2] / 2, cy = bmA2.r[1] + bmA2.r[3] / 2;
+await p.mouse.move(cx, cy); await p.mouse.down(); await p.mouse.move(cx - 60, cy + 40, { steps: 4 }); await p.mouse.up();
+const bmA3 = await p.evaluate(() => { const M = window.__BM().BIGMAP, V = M.view, r = M.el.querySelector('canvas').getBoundingClientRect(), q = window.__D().VIL.places.dealer.pos, k = r.width / V.w; return { v: V, tap: [r.left + (q[0] - V.x) * k + r.width / 2, r.top + (q[1] - V.z) * k + r.height / 2], sel: M.selected }; });
+await p.mouse.click(bmA3.tap[0], bmA3.tap[1]); await p.waitForTimeout(100);
+await p.screenshot({ path: `${prefix}-bigmap-walk.png` });
+const bmA4 = await p.evaluate(() => { const M = window.__BM().BIGMAP, sel = M.selected, card = M.el.querySelector('.bm-card').innerText.replace(/\s+/g, ' '); M.el.querySelector('.bm-x').click(); return { sel, card, closed: !M.isOpen }; });
+console.log('  bigmap fingers:', JSON.stringify({ v0: bmA2.v, v1: bmA3.v, ...bmA4 }));
+check(bmA2.open && Math.abs(bmA3.v.x - bmA2.v.x - 60 * bmA2.v.w / bmA2.r[2]) < 2 && Math.abs(bmA3.v.z - bmA2.v.z + 40 * bmA2.v.w / bmA2.r[2]) < 2, 'dragging the map with a finger moves it (60 px left, 40 px down)');
+check(bmA4.sel === 'dealer' && /阿財車行/.test(bmA4.card) && bmA4.closed, `tapping the 車 icon picks 阿財車行 (${bmA4.card}); ✕ closes the map`);
+await p.evaluate(() => { document.querySelector('#dests [data-d="circuit"]').click(); window.__wstep(1); }); // 目的地換回賽車場（下面照舊）
 const w2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker; W.teleport(H.gw(-4.6, -7.7, -1.05)); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); return { ok: r.ok, act: H.actText() }; });
 const bd2 = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(); H.step(40); const D = window.__D(); return { pressed, modes: r.modes, drv: !!D.drv, cur: D.cur, dest: D.drv?.telemetry().dest }; });
 console.log('  上車:', JSON.stringify(w2), JSON.stringify(bd2));
@@ -489,6 +521,15 @@ check(bd2.drv && bd2.cur === 'gc8' && bd2.dest === 'circuit', `got in GC8; drivi
 const mp = await p.evaluate(() => { const L = window.__D().walker.mapLayer, g = L.c.getContext('2d'), px = (x, z) => [...g.getImageData(Math.round((x - L.x0) * L.ms), Math.round((z - L.z0) * L.ms), 1, 1).data]; return { size: [L.c.width, L.c.height], ms: +L.ms.toFixed(2), main: px(800, -160), back: px(450, -740), grass: px(600, -400) }; });
 console.log('  minimap:', JSON.stringify(mp));
 check(mp.main[3] > 200 && mp.back[3] > 200 && mp.grass[3] < 60, `minimap shows the circuit outline (main straight ${mp.main}, back straight ${mp.back}, infield ${mp.grass}; ${mp.size.join('×')} px)`);
+
+// 開車的時候：點小地圖 → 大地圖（車子自己停：踩油門也不會走）→ Esc 關掉 → 油門又有用了
+const bmB0 = await p.evaluate(() => { window.__dstep(2); const el = document.querySelector('#stage .dv-map'), b = el.querySelector('.dv-mapb'); const r = { tap: el.classList.contains('tap'), label: b.hidden ? null : b.textContent }; el.click(); return { ...r, open: window.__BM().BIGMAP.isOpen }; });
+await p.keyboard.down('ArrowUp');
+const bmB1 = await p.evaluate(() => { const D = window.__D(), t0 = D.drv.telemetry(); window.__dstep(40); const t1 = D.drv.telemetry(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); const closed = !window.__BM().BIGMAP.isOpen; window.__dstep(25); const t2 = D.drv.telemetry(); return { moved: +Math.hypot(t1.x - t0.x, t1.z - t0.z).toFixed(2), closed, v2: +t2.v.toFixed(2) }; });
+await p.keyboard.up('ArrowUp');
+await p.evaluate(() => { const d = window.__D().drv; d.setInput({ throttle: 0, brake: 1, steer: 0 }); window.__dstep(40); d.setInput(null); window.__dstep(2); });
+console.log('  bigmap (driving):', JSON.stringify({ ...bmB0, ...bmB1 }));
+check(bmB0.tap && bmB0.label === '🗺 大地圖' && bmB0.open && bmB1.moved < 0.05 && bmB1.closed && bmB1.v2 > 0.3, `driving: tapping the minimap opens the big map and the car stays stopped even with the throttle down (moved ${bmB1.moved} m); Esc closes it and the throttle works again (${bmB1.v2} m/s)`);
 
 // ---- 2 開去賽車場：開鐵捲門 → 村子 → 直線加速賽道入口往北的路 → 維修區 → 報名處自己停好 → 選對手 ----
 let r = await leg('circuit', '!!window.__CI().menu', { act: ['開鐵捲門'] }, 400);
@@ -509,6 +550,24 @@ let s3 = await ci();
 const grid = await p.evaluate(() => { const X = window.__CI(), R = X.race, D = window.__D(), t = D.drv.telemetry(); return { me: [+t.x.toFixed(1), +t.z.toFixed(1)], ais: R.ais.map((a) => [+a.x.toFixed(1), +a.z.toFixed(1), a.name]), lod: R.ais.every((a) => a.car.parent === D.TR.scene && a.obj.draws <= 6), toast: document.querySelector('#stage .dv-toast')?.textContent || '' }; });
 console.log('3', el(), 'grid:', JSON.stringify(grid), JSON.stringify(s3));
 check(s3.race === 'grid' && s3.laps === 2 && s3.ais.length === 3 && s3.ais[0].name === '隔壁同學' && grid.ais.every((a) => a[0] > grid.me[0] + 4) && grid.lod && !s3.menu, `race set up: you start at the back of the grid behind 3 light (LOD) opponents (隔壁同學 on pole), 2 laps`);
+// 比賽：小地圖上的對手是有號碼的點（名次）；點小地圖＝看整個賽道（不是大地圖）、再點回來；你撞到的對手（drive.js 加在 colliders 的 dvx）下一格速度加上去
+const bmC = await p.evaluate(() => {
+  window.__dstep(1); const D = window.__D(), X = window.__BM(), el = document.querySelector('#stage .dv-map'), b = el.querySelector('.dv-mapb');
+  const r0 = { label: b.hidden ? null : b.textContent, marks: X.MAPT.marks.map((q) => [q.label, q.fill]), view: D.drv.mapView };
+  el.click(); window.__dstep(1); const r1 = { view: D.drv.mapView, label: b.textContent, big: !!X.BIGMAP?.isOpen };
+  return { r0, r1 };
+});
+await drawAndShot('05-minimap-whole-track');
+const bmC2 = await p.evaluate(() => {
+  const D = window.__D(), el = document.querySelector('#stage .dv-map'), b = el.querySelector('.dv-mapb');
+  el.click(); window.__dstep(1); const r2 = { view: D.drv.mapView, label: b.textContent };
+  const R = window.__CI().race, a = R.ais[2], c = R.colliders[2], v0 = a.v; c.dvx = Math.cos(a.th) * 4; c.dvz = -Math.sin(a.th) * 4; R.update(1 / 60);
+  return { r2, v0, v1: +a.v.toFixed(2), left: c.dvx === 0 && c.dvz === 0 };
+});
+console.log('  race minimap:', JSON.stringify({ ...bmC, ...bmC2 }));
+check(bmC.r0.label === '看整個賽道' && bmC.r0.marks.length === 3 && bmC.r0.marks.map((q) => q[0]).sort().join() === '1,2,3' && bmC.r0.marks.every((q) => q[1] === '#e5484d'), `race: the minimap says 「看整個賽道」 and shows the 3 opponents as numbered dots 1–3, red = ahead of you (${JSON.stringify(bmC.r0.marks)})`);
+check(bmC.r1.view && bmC.r1.view.x1 - bmC.r1.view.x0 > 800 && bmC.r1.label === '回來' && !bmC.r1.big && bmC2.r2.view === null && bmC2.r2.label === '看整個賽道', `tapping the minimap in a race shows the whole track (${bmC.r1.view ? Math.round(bmC.r1.view.x1 - bmC.r1.view.x0) : 0} m wide, no big map), tapping again goes back`);
+check(bmC2.v0 === 0 && bmC2.v1 > 3 && bmC2.left, `a bump from you (dvx on the opponent's collider) speeds the opponent up next frame (0 → ${bmC2.v1} m/s) and is used up`);
 // 紅燈：一顆一顆亮，熄掉才可以開（踩油門也不會動）
 await p.evaluate(() => { window.__runs = []; window.addEventListener('beau-run', (e) => window.__runs.push(e.detail)); }); // 鬼影車排行榜：每一圈錄下來
 await p.keyboard.down('ArrowUp'); // 踩油門（鍵盤＝手指）：熄燈前不會動

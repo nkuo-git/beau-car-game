@@ -1683,7 +1683,69 @@ function driveStep(dt) {
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
+  mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）
+}
+// ==== 大地圖（bigmap.js；Nick 2026-10-10「可以瀏覽完整地圖」「大地圖OK」，草稿 https://claude.ai/artifact/VF5wb2U1PpAnzBRyJsSSW6）====
+// 開車、走路：點右上角的小地圖（下面寫「🗺 大地圖」）→ 大地圖（車子自己慢慢停、走路的人站著）；點地方 →「去這裡」＝目的地（setDest）
+// 賽車場比賽：點小地圖＝小地圖變成整個賽道（比賽不會停）、再點一下回來；小地圖上的對手是有號碼的點（號碼＝名次：前面紅、後面灰）
+// 越野賽、400 公尺、被抓、在房子裡面、自動開車的時候：小地圖不能點
+let BIGMAP = null;
+const MAPT = { drv: null, wk: null, d: null, w: null, whole: false, box: null, marks: [], race: null };
+const MAP_BIG = { label: '🗺 大地圖', onClick: () => bigOpen() }, MAP_LAP = { label: '看整個賽道', onClick: () => lapView(true) }, MAP_BACK = { label: '回來', onClick: () => lapView(false) };
+const mapWalking = () => !!walker && walker.mode === 'walk';
+function bigMake() {
+  if (BIGMAP || !VIL) return BIGMAP;
+  BIGMAP = createBigMap({ parent: stage, world: VIL, layer: () => MAPT.layer || (MAPT.layer = walker?.mapLayer), // 小地圖同一張底圖
+    me: () => { if (mapWalking()) { const t = walker.telemetry(); return { x: t.x, z: t.z, h: t.heading }; } const t = drv?.telemetry(); return t ? { x: t.x, z: t.z, h: t.heading } : null; },
+    route: () => (mapWalking() ? walker.route : drv?.route),
+    dots: () => [police?.markers, MAPT.race ? MAPT.marks : null],
+    dest: () => tripDest,
+    onGo: (k, name) => { setDest(k); (mapWalking() ? walker : drv)?.toast(`去${name}：跟著左上角的箭頭`, 2200); },
+    onOpen: () => { document.body.classList.add('bigmap'); if (mapWalking()) walker.setInput({ x: 0, y: 0 }); else drv?.setInput({ throttle: 0, brake: 0.5, steer: 0 }); }, // 車子自己慢慢停
+    onClose: () => { document.body.classList.remove('bigmap'); walker?.setInput(null); if (!ciRace && !orRace) drv?.setInput(null); },
+  });
+  return BIGMAP;
+}
+function bigOpen() { if (mapMode() === MAP_BIG) bigMake()?.open(); }
+function lapView(on) { // 賽車場：小地圖看整個賽道
+  MAPT.whole = !!on;
+  if (on && !MAPT.box) { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; const r = (VIL.roads || []).filter((r) => r.kind === 'circuit').sort((a, b) => b.pts.length - a.pts.length)[0]; for (const [x, z] of r ? r.pts : []) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); } MAPT.box = r ? { x0: x0 - 20, x1: x1 + 20, z0: z0 - 20, z1: z1 + 20 } : null; }
+  drv?.setMapView(on ? MAPT.box : null); MAPT.d = null; // 字下一格換
+}
+// 現在點小地圖做什麼：MAP_BIG（大地圖）、MAP_LAP／MAP_BACK（賽車場）、null（不能點）
+function mapMode() {
+  if (!DRIVE.on || indoor || jailed() || doorFade) return null;
+  if (mapWalking()) return MAP_BIG;
+  if (!drv || walker?.mode && walker.mode !== 'off') return null;
+  if (ciRace) return MAPT.whole ? MAP_BACK : MAP_LAP;
+  if (orRace || (race && race.phase && race.phase !== 'idle')) return null;
+  const t = drv.telemetry(); if (t.auto || t.paused) return null;
+  return MAP_BIG;
+}
+function mapStep() {
+  if (BIGMAP?.isOpen && (!DRIVE.on || mapMode() !== MAP_BIG)) BIGMAP.close(); // 回車庫、被抓、上下車了：關掉
+  if (MAPT.drv !== drv) { MAPT.drv = drv; MAPT.d = null; MAPT.whole = false; MAPT.race = null; }
+  if (MAPT.wk !== walker) { MAPT.wk = walker; MAPT.w = null; }
+  const m = mapMode(), md = m && !mapWalking() ? m : null, mw = m && mapWalking() ? m : null;
+  if (drv && MAPT.d !== md) { MAPT.d = md; drv.setMapTap(md); }
+  if (walker && MAPT.w !== mw) { MAPT.w = mw; walker.setMapTap(mw); }
+  // 賽車場的對手點（每一格只改數字，不 new）
+  const R = ciRace;
+  if (R !== MAPT.race) {
+    if (MAPT.whole && !R) lapView(false);
+    MAPT.race = R; if (drv) drv.setMarkers(R ? MAPT.marks : null, 'race');
+    if (R) { MAPT.marks.length = R.ais.length; for (let i = 0; i < R.ais.length; i++) MAPT.marks[i] = MAPT.marks[i] || { x: 0, z: 0, fill: '#e5484d', ring: '#ffffff', r: 6.5, label: 1, on: true }; }
+  }
+  if (R) {
+    const me = R.me, ahead = (c) => (c.fin != null ? -1e9 + c.fin : -c.p); // 跑完的照時間，沒跑完的照跑多遠（小的在前面）
+    for (let i = 0; i < R.ais.length; i++) {
+      const a = R.ais[i], m = MAPT.marks[i], ka = ahead(a); let n = 1;
+      if (ahead(me) < ka) n++;
+      for (let j = 0; j < R.ais.length; j++) if (j !== i && ahead(R.ais[j]) < ka) n++;
+      m.x = a.x; m.z = a.z; m.label = n; m.fill = ka < ahead(me) ? '#e5484d' : '#6b7280';
+    }
+  }
 }
 // 走路的時候 body.walking（garage.css：全螢幕的時候去哪裡那一排放到搖桿上面，不要蓋到搖桿）
 function bodyWalking(on) { if (on !== bodyWalking.on) { bodyWalking.on = on; document.body.classList.toggle('walking', on); } }

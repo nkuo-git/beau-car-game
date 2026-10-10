@@ -32,6 +32,7 @@
 //                          world.colliders（村子的）的 tag 是 'world'：走進房子（interiors.js）removeColliders('world')，出來 addColliders(V.colliders, 'world')
 //                          y0（多的）：碰撞物的底有多高（天花板、捲起來一半的門）：比頭高的不擋人、只擋鏡頭（drive.js 不看 y0：這種不要給開車的）
 //   walker.setMovers(array | null)   會動的東西（路上的車、居民）：陣列、裡面的物件頁面每一格自己改（x、z、rot⋯），走路每一格照現在的值擋人、擋鏡頭（不用再叫）
+//   walker.setMapTap({ label, onClick } | null)   點小地圖做什麼（大地圖）；label＝小地圖下面那一條字；walker.mapTap＝現在的字
 //   walker.setMarkers(array | null)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝不畫） }]；跟 drive.setMarkers 一樣（只記住陣列，每一幀照現在的值畫）
 //   walker.setCars(list)       可以上的車（車庫車位的車、路邊的車⋯）：[{ key, name?, x, z, heading, hx, hz, cx?, cz?, h?, door?, object?, solid? }]
 //                          x, z, heading＝車子原點（跟 spots、drv.teleport 一樣）；hx, hz＝車身長方形的半長、半寬；cx, cz＝長方形中心在車子本地的位置（LODS[k].cx、cz）；
@@ -120,6 +121,8 @@ const CSS = `
 @media (hover:hover) and (pointer:fine){.wk-act kbd{display:block}}
 .wk-map{top:10px;right:10px;width:124px;height:124px;border-radius:18px;background:rgba(14,15,18,0.62);overflow:hidden}
 .wk-map canvas{display:block;width:100%;height:100%}
+.wk-map.tap{pointer-events:auto;cursor:pointer;touch-action:manipulation;box-shadow:inset 0 0 0 1.5px rgba(255,106,31,0.8)}
+.wk-mapb{position:absolute;left:0;right:0;bottom:0;padding:4px 0 5px;background:rgba(14,15,18,0.8);font:700 11px/1 ${SANS};text-align:center;letter-spacing:.02em;white-space:nowrap}
 .wk-cam{top:142px;right:10px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(14,15,18,0.62);pointer-events:auto;cursor:pointer;touch-action:manipulation}
 .wk-cam svg{width:24px;height:24px;fill:none;stroke:#F2F3F5;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .wk-cam[aria-pressed="true"]{background:#FF6A1F}
@@ -276,6 +279,7 @@ function createWalker(o) {
   const cw = colGrid(); cw.add(world.colliders, 'world'); cw.add(o.colliders); cw.add(fronts(world)); // 村子的碰撞標 'world'：走進房子（interiors.js）頁面先拿掉（房子的地板被村子的盒子蓋住），出來再放回去
   let movers = null; const mq = []; let mqN = 0; // 會動的（頁面的陣列）→ 算好的
   let marks = null; // 別的模組給的小地圖點（setMarkers）：[{ x, z, fill, ring, r, on }]
+  let mapTap = null; // setMapTap：點小地圖做什麼（大地圖），下面一條字
 
   // ---- 狀態 ----
   let ch = null, R = 0.28, BH = 1.72, alive = true, active = false, now = 0, lockT = 0;
@@ -702,7 +706,7 @@ function createWalker(o) {
     if (!document.getElementById('wk-style')) { const s = document.createElement('style'); s.id = 'wk-style'; s.textContent = CSS; document.head.append(s); }
     const root = document.createElement('div'); root.className = 'wk'; root.hidden = true;
     root.innerHTML = `<div class="wk-look"></div><div class="wk-pad"></div><div class="wk-stick rest">${ICON.ring}<div class="wk-knob"></div></div>`
-      + `<div class="wk-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="wk-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="wk-map"><canvas></canvas></div>`
+      + `<div class="wk-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="wk-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="wk-map"><canvas></canvas><b class="wk-mapb" hidden></b></div>`
       + `<b class="wk-cam" role="button" aria-label="換視角（第一人稱）" aria-pressed="false">${ICON.eye}</b><div class="wk-btns" hidden></div><div class="wk-toast" role="status"></div>`;
     o.hudParent.append(root);
     const q = (s) => root.querySelector(s), H = { root, look: q('.wk-look'), pad: q('.wk-pad'), stick: q('.wk-stick'), knob: q('.wk-knob'), chip: q('.wk-chip'), arrow: q('.wk-chip svg'), name: q('.wk-chip b'), dist: q('.wk-chip small'),
@@ -745,6 +749,7 @@ function createWalker(o) {
     for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) on(H.look, t, lookUp);
     on(H.look, 'wheel', (e) => { if (!active || cam.mode !== 'follow') return; e.preventDefault(); cam.dist = clamp(cam.dist * (1 + clamp(e.deltaY, -120, 120) * 0.0012), 2.2, 6.5); }, { passive: false });
     on(H.cam, 'click', () => { if (active) setCamera({ mode: cam.mode === 'eye' ? 'follow' : 'eye' }); });
+    H.mapBox = q('.wk-map'); H.mapB = q('.wk-mapb'); on(H.mapBox, 'pointerdown', (e) => e.stopPropagation()); on(H.mapBox, 'click', (e) => { if (mapTap && active) { e.preventDefault(); mapTap.onClick(); } }); // 點小地圖（setMapTap）：大地圖
     on(H.act, 'pointerdown', () => H.act.classList.add('on'));
     for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.act, t, () => H.act.classList.remove('on'));
     on(H.act, 'click', (e) => { e.preventDefault(); doAction(); });
@@ -947,6 +952,8 @@ function createWalker(o) {
     setInput: (i) => { forced = i ? { x: clamp(+i.x || 0, -1, 1), y: clamp(+i.y || 0, -1, 1), run: i.run } : null; },
     setMovers: (list) => { movers = Array.isArray(list) ? list : null; },
     setMarkers: (list) => { marks = Array.isArray(list) ? list : null; },
+    setMapTap: (t) => { mapTap = t && typeof t.onClick === 'function' ? { label: String(t.label || ''), onClick: t.onClick } : null; if (hud) { hud.mapBox.classList.toggle('tap', !!mapTap); hud.mapB.hidden = !mapTap || !mapTap.label; if (mapTap) hud.mapB.textContent = mapTap.label; } },
+    get mapTap() { return mapTap ? mapTap.label : null; }, get route() { return routeData; },
     setCarReach: (on) => { reach = !!on; },
     play: (state) => { if (state) st.play = String(state); },
     addColliders: (list, tag) => cw.add(Array.isArray(list) ? list : [list], tag ?? null).length,
