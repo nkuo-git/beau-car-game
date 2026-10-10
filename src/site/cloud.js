@@ -39,6 +39,15 @@
       out: () => A.signOut(auth),
       get: async (uid) => { const s = await F.getDoc(ref(uid)); return s.exists() ? s.data() : null; },
       put: (uid, data) => F.setDoc(ref(uid), data),
+      // 連線（site/online.js）：名字 players/{uid}；排行榜 lb/{板}/runs/{uid}（名字、車、秒數）＋ lb/{板}/ghosts/{uid}（鬼影車）
+      nameGet: async (uid) => { const s = await F.getDoc(F.doc(db, 'players', uid)); return s.exists() ? s.data().name || null : null; },
+      namePut: (uid, name) => F.setDoc(F.doc(db, 'players', uid), { name, t: Date.now() }),
+      lbTop: async (b, n) => (await F.getDocs(F.query(F.collection(db, 'lb', b, 'runs'), F.orderBy('t'), F.limit(n)))).docs.map((d) => ({ uid: d.id, ...d.data() })),
+      lbRank: async (b, t) => (await F.getCount(F.query(F.collection(db, 'lb', b, 'runs'), F.where('t', '<', t)))).data().count + 1,
+      lbGet: async (b, uid) => { const s = await F.getDoc(F.doc(db, 'lb', b, 'runs', uid)); return s.exists() ? s.data() : null; },
+      lbPut: (b, uid, run, ghost) => { const w = F.writeBatch(db); w.set(F.doc(db, 'lb', b, 'runs', uid), { ...run, at: F.serverTimestamp() }); w.set(F.doc(db, 'lb', b, 'ghosts', uid), ghost); return w.commit(); },
+      lbName: (b, uid, name) => { const w = F.writeBatch(db); w.update(F.doc(db, 'lb', b, 'runs', uid), { name }); w.update(F.doc(db, 'lb', b, 'ghosts', uid), { name }); return w.commit(); },
+      ghostGet: async (b, uid) => { const s = await F.getDoc(F.doc(db, 'lb', b, 'ghosts', uid)); return s.exists() ? s.data() : null; },
     };
   }
 
@@ -109,15 +118,16 @@
       const first = !user || user.uid !== u.uid;
       user = { uid: u.uid, email: u.email || '', displayName: u.displayName || '' };
       if (view === 'in') view = null;
-      paint();
+      paint(); userEv();
       if (first) sync();
     } else {
       user = null; picking = null; status = ''; dirty = false;
       if (meta) setMeta(null); // 登入過期了，或是登出
       if (view === 'acct' || view === 'pick') view = null;
-      paint();
+      paint(); userEv();
     }
   }
+  const userEv = () => { try { window.dispatchEvent(new Event('beau-user')); } catch { /* 沒有人聽就算了 */ } }; // 連線（site/online.js）聽這個
   async function sync() {
     const u = user; if (!u) return;
     status = '讀取中⋯'; paint();
@@ -191,8 +201,10 @@
   async function logout() {
     clearTimeout(saveT); saveT = 0;
     try { if (be) await be.out(); } catch { /* 登出失敗：這支手機這邊還是當作登出 */ }
-    user = null; picking = null; status = ''; dirty = false; setMeta(null); view = null; paint();
+    user = null; picking = null; status = ''; dirty = false; setMeta(null); view = null; paint(); userEv();
   }
+  // 連線（site/online.js）用的：同一個雲端、同一個登入
+  window.beauCloud = { get user() { return user; }, backend: () => load(), login: async () => { await login(); return err; } };
 
   if (chip && dlg) {
     chip.addEventListener('click', () => open(user ? 'acct' : 'in'));

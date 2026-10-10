@@ -33,12 +33,13 @@
 src/                 遊戲原始碼（平的一層，腳本都用自己的資料夾找檔案）
   garage.src.html    車庫頁（畫面＋主程式；<!--__GARAGE__--> 框起來的是畫面）、garage.css
   town.src.js race.src.js circuit.src.js neihu.src.js   接在頁面 module 裡的程式（出門、比賽、賽車場、內湖）
-  *.js               模組（village street police npc walk drive terrain offroad circuit neihu orbay crush police-ai guns gunshop character lookpanel room cabin damage carlod …）
+  *.js               模組（village street police npc walk drive terrain offroad circuit neihu mountain orbay crush police-ai guns gunshop character lookpanel room cabin damage carlod ghost …）
+  ghost.src.js       鬼影車排行榜：錄爬山／賽車場一圈／400 公尺、發 'beau-run'、window.beauGame.setGhost（接在 neihu.src.js 後面）
   *-look.js *-spec.js 每台車的外觀／規格；body-*-q.glb（車庫用）、body-*-lod.glb（輕量車）＝車身檔
   build-art.mjs      試做頁 → src/art/garage.html（＋car-*.txt）；make-free.mjs → src/art/garage-free.html（錢用不完）
   build-site.mjs     網站 → docs/（用 build-app.mjs 的打包，再加 site/ 的東西）
   build-app.mjs      萬能軟體的改車頁（tune.html／tune.js／tune.css／tune/*.glb）；只有萬能軟體要更新遊戲時才用
-  site/              網站才有的：index.src.html、site.js（版本號、更新條、搬進度）、site.css、sw.src.js、manifest、icons、make-icons.py
+  site/              網站才有的：index.src.html、site.js（版本號、更新條、搬進度）、cloud.js（登入、雲端存檔）、online.js（連線：名字、排行榜）、site.css、sw.src.js、manifest、icons、make-icons.py
   app/               萬能軟體改車頁的外框（build-app.mjs 用）
   data/neihu3.osm.gz 內湖的 OSM 原始資料（neihu-conv.mjs 讀，產生 neihu-data.js）
   test-*.mjs …       測試（下面）；test-fixtures/trunk-0.8.35/ ＝ drift-test 比對用的舊 drive.js
@@ -83,19 +84,20 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 
 | 指令（在 src/） | 測什麼 | main 上應該是 |
 |---|---|---|
-| `node test-b1.mjs ../out/b1/b1` | 整個開放世界：車庫、走路、升降停車格、開車、改車廠、車店、快速道路、賽車、警察局、房子、行人車流、全螢幕版面 | 140 ok，ALL CHECKS OK（約 8–12 分） |
+| `node test-b1.mjs ../out/b1/b1` | 整個開放世界：車庫、走路、升降停車格、開車、改車廠、車店、快速道路、賽車、警察局、房子、行人車流、全螢幕版面 | __B1__ ok，ALL CHECKS OK（約 8–12 分；含 400 公尺的鬼影車） |
 | `node test-b4.mjs ../out/b4/b4` | 越野車場、怪獸卡車、越野車行、泥巴賽、越野車車庫 | 74 ok |
 | `node test-b3.mjs ../out/b3/b3` | 警察（星星、追、抓、拘留、罰款）、槍店、靶場、槍 | 56 ok |
 | `node neihu-test.mjs ../out/nh/nh` | 內湖：轉換程式重跑一樣、地標、開到港墘站、路牌、走路 | 29 ok |
-| `node circuit-test.mjs ../out/ci/ci` | 賽車場、AI、名次 | 24 ok，PASSED |
+| `node circuit-test.mjs ../out/ci/ci` | 賽車場、AI、名次、每一圈錄下來＋鬼影車 | 28 ok，PASSED |
 | `node drift-test.mjs ../out/drift/drift` | 甩尾（Node＋瀏覽器；沒甩的時候跟舊 drive.js 一模一樣） | 42 ok |
 | `node crush-test.mjs ../out/crush/crush` | 怪獸卡車輾扁車、騎的機車和路邊的東西、人跳開 | 53 ok |
-| `node mountain-test.mjs ../out/mt/mt` | 山：去山頂、爬山計時賽、上山下山貼著路、山頂走路、越野車捷徑、輾扁山上的東西、警察追上山 | 34 ok |
+| `node mountain-test.mjs ../out/mt/mt` | 山：去山頂、爬山計時賽、上山下山貼著路、山頂走路、越野車捷徑、輾扁山上的東西、警察追上山、爬山的鬼影車 | __MT__ ok |
 | `node free-test.mjs` | 試做頁錢用不完、正常頁存檔的錢 | 2 ok（先跑 make-free.mjs） |
 | `node test-app-b1.mjs ../docs ../out/app1/app` | 網站（docs/）整趟：跟 test-b1 一樣＋版本號、標題列、App 外殼的全螢幕 | 146 ok |
 | `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場 | 74 ok |
 | `node site-test.mjs ../docs ../out/site/site` | 網站：打開、開車、有新版本那一條、App 有新版本、搬進度 | 22 ok |
 | `node cloud-test.mjs ../docs/try ../out/cloud/cloud` | 登入＋雲端存檔（假的雲端、兩支手機、沒網路、App 外殼） | 20 ok |
+| `node online-test.mjs ../docs/try ../out/online/online` | 連線：要先登入、取名字（擋髒話）、跑完自己上傳、排行榜、鬼影車按鈕（假的 Firestore） | __ONLINE__ ok |
 
 - test-app-b1／b4 給萬能軟體的 repo（有 tune.html）也可以跑，就是測萬能軟體的改車頁。
 - **不可以為了變綠燈把測試改鬆**；找出原因修好。新加或改的測試要真的有在測東西。
@@ -144,7 +146,9 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - 試玩頁 `docs/try/`（`node src/build-site.mjs <版號> --try`）：要真的連網路才能試的東西（試做頁 artifact 連不到 Firebase）放這裡；跟正式網站同網域、用同一份存檔；不裝 Service Worker。
 - **內容 4（2026-10-09 上線，試做頁 v28）**：越野車也輾得扁路上騎的機車（騎士先跳車跑掉，只有機車扁；`notes/crush.md` 第 13 批）。
 - **內容 5（2026-10-10 上線，試做頁 v29）＝ 山**：村子北邊一座約 102 公尺高的山，約 1 公里的之字形山路（護欄、急彎牌、反光鏡）、山頂停車場＋紅色涼亭＋觀景台、越野車泥土捷徑、「去山頂」、爬山計時賽（每台車記最快的，存在 `best.hill`）。草稿 https://claude.ai/artifact/NhH4i6Gw2C8Yk2ZhEx6Poj （說 120 公尺、1.5 公里，做出來比較小）。說明在 `notes/mountain.md`。
-- **接下來（Nick 選「做1236」，草稿和家長都同意了）**：連線 https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo ——照順序：鬼影排行榜（爬山計時賽也接上去）→ 一起開車 → 一起比賽 → 參觀車庫。每做好一個先放試做頁。
+- **接下來（Nick 選「做1236」，草稿和家長都同意了）**：連線 https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo ——照順序：鬼影排行榜（爬山計時賽也接上去）→ 一起開車 → 一起比賽 → 參觀車庫。每做好一個先放試做頁（要連網路的放試玩頁 docs/try/）。
+  - **鬼影排行榜（2026-10-10 做好，在試玩頁 docs/try/ 內容 6，還沒上線）**：右上角「👥 連線」→ 取名字 → 🏆 排行榜（400 公尺／賽車場一圈／爬山 × 大家／同一台車）→「👻 跟第 1 名的鬼影車跑」。說明在 `notes/online.md`。
+    要 Nick／家長把 Firestore 規則（`notes/online.md` 裡那一段，也包含原本的 saves）貼到 Firebase 主控台才會真的動。試做頁 artifact 連不到 Firebase：只有遊戲那一邊（錄下來、鬼影車），看不到排行榜。
 - **已知問題**
   - 越野車車庫裡坐在駕駛座（或追車鏡頭）會看到天空（屋頂被剔除）。
   - 越野車車庫 1 號格要倒車、打方向、再前進（三點迴轉）才出得來。

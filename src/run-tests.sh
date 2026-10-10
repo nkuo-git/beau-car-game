@@ -10,6 +10,7 @@ for t in $LIST; do
   case $t in
     test-app-b1|test-app-b4) args="../docs ../out/$t/app" ;;
     site-test) args="../docs ../out/$t/site" ;;
+    online-test|cloud-test) args="../docs/try ../out/$t/${t%-test}" ;; # 試玩頁（上線以後也可以給 ../docs）
     free-test) args="" ;;
     *) args="../out/$t/$t" ;;
   esac

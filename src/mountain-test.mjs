@@ -1,6 +1,7 @@
 // 山（mountain.js）：開車上山、爬山計時賽、山頂走路、下山、越野車走捷徑、輾扁山上的東西、警察追上山（art/garage.html 整頁跑一次）
 //   1 開局：「去山頂」的按鈕、山的大小（高度、山路多長）、路線、路面、警察的路網接上山路
 //   2 GC8 從山腳開上山：爬山計時賽開始、到山頂停、記最快的（存檔）；車子貼著路面（高度）；看效能（山腳、半山、山頂）
+//     這一趟錄下來（鬼影車排行榜：'beau-run'）→ 當鬼影車再跑一次（比較慢）：鬼影車照錄的跑、半透明、在前面、到了說比鬼影慢
 //   3 山頂下車走路：腳下的高度、走到涼亭、觀景台的欄杆擋人
 //   4 開下山：一路貼著路面、不會飛出去
 //   5 換怪獸卡車：從泥土捷徑直接爬上山頂；輾扁山上的樹、護欄（扁在地上、不報警）；涼亭不輾
@@ -20,7 +21,7 @@ const hook = 'window.__G = () => GAME; window.__S = () => S; window.__scene = ()
   + ' window.__money = (n) => { GAME.money = n; save(true); renderWallet(); renderOptions(); refreshCarBtns(); };'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, trip, tripS, tripPose, tripFull, cur, walker, LODS, TR, PERF, indoor });'
   + ' window.__N = () => NPC; window.__C = () => crushFx; window.__pol = () => (typeof police !== "undefined" ? police : null);'
-  + ' window.__HILL = () => HILL;'
+  + ' window.__HILL = () => HILL; window.__GH = () => GH; window.__ghostUnpack = (g) => ghostUnpack(g); window.__ghostAt = (G, t, o) => ghostAt(G, t, o);'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -174,6 +175,7 @@ const up = await p.evaluate(() => {
   const t1 = D.drv.telemetry(), y0 = t1.y;
   const pts = V.route(t1.x, t1.z, 'mountain').pts;
   const pk = M.park, hill0 = { ...window.__HILL() };
+  window.__runs = []; window.addEventListener('beau-run', (e) => window.__runs.push(e.detail));
   let started = null, fin = null;
   const r = H.follow(pts, 240, { vmax: 24, until: (t) => { const Hl = window.__HILL(); if (Hl.on && !started) started = { x: +t.x.toFixed(1), z: +t.z.toFixed(1) }; if (started && !Hl.on && !fin) fin = { vis: !!Hl.el && !Hl.el.hidden, txt: Hl.el ? Hl.el.textContent : null }; return !!started && !Hl.on && t.x > pk.x0 && t.x < pk.x1 && t.z > pk.z0 && t.z < pk.z1; } });
   const st = H.stop(), Hl = window.__HILL();
@@ -189,21 +191,68 @@ check(/爬山計時賽/.test(up.el || '') && up.elVis, `the timer shows the resu
 check(up.r.maxDY < 0.6 && up.r.airT < 0.5 && up.r.stuck === 0, `the GC8 stays on the road surface all the way up (max ${up.r.maxDY} m off, ${up.r.airT} s in the air, stuck ${up.r.stuck})`);
 check(up.y > 90 && Math.abs(up.y - up.hy) < 0.6, `parked at the summit at ${up.y} m (ground ${up.hy} m)`);
 check(up.zone === 'mountain', `the summit zone is 「山頂」 (${up.zone})`);
+// 鬼影車排行榜：這一趟錄下來了（'beau-run'）
+const rec = await p.evaluate(() => {
+  const runs = window.__runs, r = runs[runs.length - 1], G = r && window.__ghostUnpack(r.g), M = window.__D().VIL.mountain, o = [0, 0, 0];
+  if (!G) return { n: runs.length };
+  window.__ghostAt(G, 0, o); const a = o.slice(); window.__ghostAt(G, 1e9, o); const b = o.slice(), S = M.summit;
+  const pa = M.road.project(a[0], a[1], 20);
+  return { n: runs.length, board: r.board, car: r.car, t: r.t, c: G.c, samples: G.n, dur: +G.dur.toFixed(2), chars: r.g.d.length, startS: +pa.s.toFixed(1), s0: M.trial.s0, end: b.map((v) => +v.toFixed(1)), atTop: b[0] > S.x0 - 30 && b[0] < S.x1 + 30 && b[1] > S.z0 - 30 && b[1] < S.z1 + 30 };
+});
+console.log('  ghost run:', JSON.stringify(rec));
+check(rec.n === 1 && rec.board === 'hill' && rec.car === 'gc8' && rec.t === up.best && rec.c === 3, `the climb is sent to the leaderboard ('beau-run': hill, gc8, ${rec.t} s)`);
+check(Math.abs(rec.dur - up.best) < 0.15 && Math.abs(rec.startS - rec.s0) < 3 && rec.atTop && rec.chars < 12000, `its ghost: ${rec.samples} positions (10 a second, ${rec.dur} s), starts at the start gate (s ${rec.startS} vs ${rec.s0}), ends at the top, ${rec.chars} characters`);
+const armed = await p.evaluate(async () => {
+  const r = window.__runs[0], ok = window.beauGame.setGhost('hill', { name: '我自己', car: r.car, t: r.t, g: r.g });
+  for (let i = 0; i < 400 && !window.beauGame.ghost?.ready; i++) await new Promise((res) => setTimeout(res, 50));
+  return { ok, g: window.beauGame.ghost, dest: window.__D().drv.telemetry().dest };
+});
+check(armed.ok && armed.g.ready && armed.g.board === 'hill' && armed.dest === 'mountain', `beauGame.setGhost('hill', that run) → ghost car built, route set to the mountain (${JSON.stringify(armed)})`);
 // 效能：山頂往下看、半山、山腳（追車鏡頭）
 const perf = {};
 perf.top = await drawAndShot('1-summit');
-// 再跑一次（比較慢）：不是新紀錄
-const again = await p.evaluate(() => {
+// 再跑一次（比較慢）：不是新紀錄；鬼影車（剛才那一趟）一起跑
+await p.evaluate(() => { window.__ghStop = 3.5; });
+const near = await p.evaluate(() => {
   const D = window.__D(), V = D.VIL, M = V.mountain, H = window.__H, R = M.road, p0 = R.at(30);
   D.drv.teleport({ x: p0.x, z: p0.z, heading: Math.atan2(-p0.tz, p0.tx) }); H.step(30);
   const p1 = R.at(10); D.drv.teleport({ x: p1.x, z: p1.z, heading: Math.atan2(-p1.tz, p1.tx) }); H.step(30);
-  const t1 = D.drv.telemetry(), pts = V.route(t1.x, t1.z, 'mountain').pts, pk = M.park; let started = false;
-  const r = H.follow(pts, 300, { vmax: 12, until: (t) => { const Hl = window.__HILL(); if (Hl.on) started = true; return started && !Hl.on; } });
+  const t1 = D.drv.telemetry(), pts = V.route(t1.x, t1.z, 'mountain').pts, before = { play: !!window.__GH().play, vis: window.__GH().obj.car.visible };
+  const r = H.follow(pts, 120, { vmax: 12, until: () => window.__HILL().on && window.__HILL().t >= window.__ghStop });
+  return { r: r.until, before };
+});
+perf.ghostNear = await drawAndShot('1a-ghost-near');
+await p.evaluate(() => { window.__ghStop = 15; });
+const mid = await p.evaluate((near) => {
+  const D = window.__D(), V = D.VIL, M = V.mountain, H = window.__H, R = M.road;
+  const t1 = D.drv.telemetry(), pts = V.route(t1.x, t1.z, 'mountain').pts;
+  const before = near.before;
+  const r = H.follow(pts, 120, { vmax: 12, until: () => window.__HILL().on && window.__HILL().t >= window.__ghStop });
+  const GH = window.__GH(), O = GH.obj, P = GH.play, me = D.drv.telemetry(), o = [0, 0, 0];
+  window.__ghostAt(GH.arm.G, P.t, o);
+  const sg = R.project(O.car.position.x, O.car.position.z, 20).s, sm = R.project(me.x, me.z, 20).s;
+  const mats = []; O.car.traverse((m) => { if (m.isMesh && m.visible) mats.push(m.material); });
+  let inVillage = false; for (let q = O.car.parent; q; q = q.parent) if (q === V.group) inVillage = true;
+  return { r: r.until, before, hillT: +window.__HILL().t.toFixed(2), gt: +P.t.toFixed(2), vis: O.car.visible, off: +Math.hypot(O.car.position.x - o[0], O.car.position.z - o[1]).toFixed(2),
+    dy: +Math.abs(O.car.position.y - V.heightAt(o[0], o[1])).toFixed(2), sg: Math.round(sg), sm: Math.round(sm), see: mats.every((m) => m.transparent && m.opacity < 0.5 && !m.depthWrite),
+    parent: O.car.parent === D.TR.scene, inVillage, tag: !!O.car.children.find((c) => c.isSprite) };
+}, near);
+console.log('  ghost mid-run:', JSON.stringify(mid));
+check(!mid.before.play && !mid.before.vis, 'before the start gate the ghost is not out');
+check(mid.r && mid.vis && Math.abs(mid.gt - mid.hillT) < 0.05 && mid.off < 0.05 && mid.dy < 0.05, `15 s after the gate the ghost is driving the recorded line (clock ${mid.gt} vs timer ${mid.hillT}; ${mid.off} m off the recording, ${mid.dy} m off the ground)`);
+check(mid.sg > mid.sm + 20, `the ghost (faster run) is ahead of you (road ${mid.sg} m vs ${mid.sm} m)`);
+check(mid.see && mid.tag && mid.parent && !mid.inVillage, 'the ghost is see-through, has a name tag, and is not part of the village (no crushing, no colliders)');
+perf.ghost = await drawAndShot('1b-ghost');
+const again = await p.evaluate(() => {
+  const D = window.__D(), V = D.VIL, M = V.mountain, H = window.__H, t1 = D.drv.telemetry(), pts = V.route(t1.x, t1.z, 'mountain').pts;
+  let said = '';
+  const r = H.follow(pts, 300, { vmax: 12, until: () => { const Hl = window.__HILL(); if (!Hl.on && !said) said = [...document.querySelectorAll('#stage *')].map((e) => (e.children.length ? '' : e.textContent)).find((x) => /鬼影/.test(x)) || '-'; return !Hl.on; } });
   H.stop(); const Hl = window.__HILL();
-  return { r, t: +Hl.t.toFixed(2), best: window.__G().best.hill.gc8, el: Hl.el.textContent };
+  return { r, t: +Hl.t.toFixed(2), best: window.__G().best.hill.gc8, el: Hl.el.textContent, said, runs: window.__runs.length };
 });
 console.log('  again (slow):', JSON.stringify(again));
 check(again.r.until && again.t > up.best && again.best === up.best && /最快/.test(again.el), `a slower climb (${again.t} s) keeps the best time (${again.best} s)`);
+check(/比鬼影慢 [0-9.]+ 秒/.test(again.said) && again.runs === 2, `at the top: 「${again.said}」; that run is sent too (the website keeps only the best)`);
 
 // ================= 3 山頂下車走路 =================
 const walk = await p.evaluate(() => {
@@ -258,7 +307,7 @@ check(Math.max(down.r.maxDY, down2.r.maxDY) < 0.6 && down.r.airT + down2.r.airT 
 check(!down2.hill, 'driving down does not start the time trial');
 perf.foot = await p.evaluate(() => { const D = window.__D(), H = window.__H; H.step(5); return null; });
 perf.foot = await drawAndShot('4-foot');
-summary.push(`GC8 up in ${up.best} s; perf summit ${JSON.stringify(perf.top)}, view ${JSON.stringify(perf.view)}, halfway ${JSON.stringify(perf.mid)}, foot ${JSON.stringify(perf.foot)}`);
+summary.push(`GC8 up in ${up.best} s; perf summit ${JSON.stringify(perf.top)}, with ghost ${JSON.stringify(perf.ghost)}, view ${JSON.stringify(perf.view)}, halfway ${JSON.stringify(perf.mid)}, foot ${JSON.stringify(perf.foot)}`);
 
 // ================= 5 怪獸卡車：泥土捷徑、輾扁山上的東西 =================
 await p.evaluate(() => { window.__hold = false; document.getElementById('driveHome').click(); });

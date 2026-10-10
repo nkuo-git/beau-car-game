@@ -22,7 +22,7 @@ const CARS = [
 const NOLOD = []; // 沒有輕量車的車（不停車位、不擺阿財車行）；怪獸卡車現在有了（body-monster-lod.glb）
 const read = (f) => fs.readFileSync(path.join(dir, f), 'utf8');
 const strip = (f) => read(f).split('\n').filter((l) => !/^import /.test(l)).join('\n').replace(/^export (const|function) /gm, '$1 ');
-let code = ['masks.js', 'gtr-look.js', 'parts.js', 'supra.js', 'cabin.js', 'wings.js', 'wide.js', 'room.js', 'sound.js', 'street.js', 'police.js', 'village.js', 'interiors.js', 'terrain.js', 'drive.js', 'offroad.js', 'circuit.js', 'neihu-data.js', 'neihu.js', 'mountain.js', 'orbay.js', 'damage.js', 'walk.js', 'character.js', 'lookpanel.js', ...CARS.flatMap((c) => c[3]), 'carlod.js', 'npc.js', 'crush.js', 'police-ai.js', 'guns.js', 'gunshop.js'].map((f) => `// ---- ${f} ----\n${strip(f)}`).join('\n');
+let code = ['masks.js', 'gtr-look.js', 'parts.js', 'supra.js', 'cabin.js', 'wings.js', 'wide.js', 'room.js', 'sound.js', 'street.js', 'police.js', 'village.js', 'interiors.js', 'terrain.js', 'drive.js', 'offroad.js', 'circuit.js', 'neihu-data.js', 'neihu.js', 'mountain.js', 'orbay.js', 'damage.js', 'walk.js', 'character.js', 'lookpanel.js', ...CARS.flatMap((c) => c[3]), 'carlod.js', 'ghost.js', 'npc.js', 'crush.js', 'police-ai.js', 'guns.js', 'gunshop.js'].map((f) => `// ---- ${f} ----\n${strip(f)}`).join('\n');
 const src = read('garage.src.html');
 const cut = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); if (i < 0 || j < 0) throw new Error('找不到 ' + a); return src.slice(i + a.length, j); };
 
@@ -50,7 +50,7 @@ let js = cut('<script type="module">', '</script>')
 for (const [key, , txt] of CARS) { if (!js.includes(`'${txt}'`)) throw new Error('找不到 ' + txt); js = js.replace(`'${txt}'`, `'tune/${key}.glb?h=${hashes[key]}'`); }
 js = js.replace('/*__INLINE__*/', () => code).replace('__SIZES__', JSON.stringify(sizes))
   .replace('/*__RACE__*/', () => `// ---- race.src.js ----\n${read('race.src.js')}`)
-  .replace('/*__TOWN__*/', () => `// ---- town.src.js ----\n${read('town.src.js')}\n// ---- circuit.src.js ----\n${read('circuit.src.js')}\n// ---- neihu.src.js ----\n${read('neihu.src.js')}`);
+  .replace('/*__TOWN__*/', () => `// ---- town.src.js ----\n${read('town.src.js')}\n// ---- circuit.src.js ----\n${read('circuit.src.js')}\n// ---- neihu.src.js ----\n${read('neihu.src.js')}\n// ---- ghost.src.js ----\n${read('ghost.src.js')}`);
 js = `// 大便龍的萬能軟體 — 改車（3D 車庫＋開車出門的小村莊＋400 公尺直線加速）
 // 這個檔是產生出來的，不要直接改：原始碼和指令在專案檔案 tune-game/supra3d/（build-app.mjs）
 ${js.trim()}

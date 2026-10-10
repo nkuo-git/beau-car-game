@@ -28,6 +28,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
   + ' window.__look = () => LOOKP; window.__cam = () => ({ camCap, maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
+  + ' window.__GH = () => GH; window.__ghostUnpack = (g) => ghostUnpack(g); window.__ghostAt = (G, t, o) => ghostAt(G, t, o);' // 鬼影車排行榜（ghost.src.js）
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -839,6 +840,7 @@ await p.evaluate(() => document.body.classList.add('race-live')); // 跑的時�
 const clashLive = await sizeSweep();
 await p.evaluate(() => document.body.classList.remove('race-live'));
 check(!clash && !clashLive, `race fullscreen on other screens, before the start and while running: none overlapping (${[clash, clashLive].filter(Boolean).join(' / ') || 'ok'})`);
+await p.evaluate(() => { window.__runs = []; window.addEventListener('beau-run', (e) => window.__runs.push(e.detail)); }); // 鬼影車排行榜：這一場錄下來
 await p.evaluate(() => document.getElementById('raceGo').click());
 await p.waitForFunction(() => { const r = window.__R(); return r && r.phase === 'run'; }, null, { timeout: 300000 });
 fi = await fsInfo(); clash = await hudClash();
@@ -850,6 +852,28 @@ console.log('6', el(), 'race:', await txt('#result'));
 await p.waitForFunction(() => !document.body.classList.contains('race-live'), null, { timeout: 60000 });
 fi = await fsInfo();
 check(fullView(fi) && fi.race && await shown('#result'), 'race done: the result comes back up in the sheet');
+// 鬼影車排行榜（400 公尺）：這一場錄下來了 → 當鬼影車再比一次：鬼影車在你的車道照錄的跑、比完說比它快還是慢
+const dr = await p.evaluate(() => { const R = window.__R(), me = R.me, r = window.__runs[0], G = r && window.__ghostUnpack(r.g), o = [0]; if (!G) return { n: window.__runs.length }; window.__ghostAt(G, 1e9, o);
+  return { n: window.__runs.length, board: r.board, car: r.car, cur: window.__D().cur, t: r.t, et: +(me.fin - me.react).toFixed(3), c: G.c, dur: +G.dur.toFixed(2), fin: +me.fin.toFixed(2), end: +o[0].toFixed(1), chars: r.g.d.length }; });
+console.log('  drag run:', JSON.stringify(dr));
+check(dr.n === 1 && dr.board === 'drag' && dr.car === dr.cur && Math.abs(dr.t - dr.et) < 0.002 && dr.c === 1 && Math.abs(dr.dur - dr.fin) < 0.15 && dr.end >= 400 && dr.chars < 2000, `the 400 m run goes to the leaderboard ('beau-run' drag, ${dr.car}, ${dr.t} s without the reaction time; ghost ${dr.dur} s to ${dr.end} m, ${dr.chars} characters)`);
+const darm = await p.evaluate(async () => { const r = window.__runs[0], ok = window.beauGame.setGhost('drag', { name: '剛才的你', car: r.car, t: r.t, g: r.g }); for (let i = 0; i < 400 && !window.beauGame.ghost?.ready; i++) await new Promise((res) => setTimeout(res, 50)); return { ok, g: window.beauGame.ghost }; });
+check(darm.ok && darm.g.ready, `beauGame.setGhost('drag', that run) → ghost car ready`);
+await p.evaluate(() => {
+  window.__fast = true; window.__ghChk = null;
+  const chk = () => { const r = window.__R(); if (!r) return; if (r.phase === 'run' && r.green != null && r.t - r.green > 2.5 && !window.__ghChk) { const GH = window.__GH(), O = GH.obj, o = [0]; window.__ghostAt(GH.arm.G, r.t - r.green, o);
+    const mats = []; O.car.traverse((m) => { if (m.isMesh && m.visible) mats.push(m.material); });
+    window.__ghChk = { play: GH.play?.board, vis: O.car.visible, dx: +Math.abs(O.car.position.x - (o[0] - O.nose)).toFixed(3), z: O.car.position.z, lane: r.meInfo && +r.meS.car.position.z.toFixed(2), see: mats.every((m) => m.transparent && m.opacity < 0.5) }; }
+    if (!window.__ghChk) requestAnimationFrame(chk); };
+  chk(); document.getElementById('raceGo').click();
+});
+await p.waitForFunction(() => { const r = window.__R(); return r && r.phase === 'done' && window.__ghChk; }, null, { timeout: 900000 });
+await p.evaluate(() => { window.__fast = false; }); await p.waitForTimeout(1500);
+const dg = await p.evaluate(() => ({ chk: window.__ghChk, res: document.getElementById('result').textContent, runs: window.__runs.length }));
+console.log('  drag ghost:', JSON.stringify(dg));
+check(dg.chk.play === 'drag' && dg.chk.vis && dg.chk.dx < 0.01 && Math.abs(dg.chk.z - dg.chk.lane) < 0.01 && dg.chk.see, `again with the ghost: the see-through ghost runs in your lane exactly as recorded (${dg.chk.dx} m off)`);
+check(/👻 剛才的你 [0-9.]+ 秒：你(比鬼影(快|慢) [0-9.]+ 秒|跟鬼影一樣快！)/.test(dg.res) && dg.runs === 2, `the result says how you did against the ghost (${(dg.res.match(/👻[^。]*秒/) || [''])[0]})`);
+await p.evaluate(() => window.beauGame.clearGhost());
 await p.evaluate(() => document.getElementById('raceBack').click());
 di = await driveInfo();
 console.log('  back to village:', JSON.stringify(di));

@@ -267,6 +267,7 @@ function lineUp() {
   race.me.spin = 0; putCar(S, race.me, LANE, race.meInfo); setWheels(S, race.me);
   lights(0, false, false); hudIdle(); for (const f of TR.flames) f.visible = false;
   $('raceGo').textContent = '開始比賽'; resultEl.hidden = true; // 上一場的結果收起來（換了對手）
+  ghHide();
 }
 function toast(text, ms = 900) {
   toastEl.textContent = text; toastEl.classList.add('show');
@@ -335,7 +336,7 @@ function exitRace(village = false) {
     if (!Sx || !Object.values(built).includes(Sx)) continue;
     scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.visible = Sx === S; Sx.wheels.forEach((w) => (w.rotation.z = 0));
   }
-  dropOppCar(); sndStop();
+  dropOppCar(); sndStop(); ghHide();
   for (const f of TR.flames) f.visible = false;
   for (const s of TR.shadows) s.visible = false; // 開車的時候看得到賽道：比賽的影子收掉、燈樹熄掉
   lights(0, false, false);
@@ -359,6 +360,7 @@ async function startRace() {
   race.me = racer(mySetup()); race.opp = racer(o); race.oppDef = o; race.oppS = O; race.oppInfo = carSize(O);
   sndOpp(o); if (!snd.me?.alive) snd.me = engineAudio.voice(cur, { parts: partsOf(cur) });
   race.phase = 'intro'; raceLive(true); race.t = 0; race.green = null; race.greenAt = null; race.foul = false; race.doneT = null; race.paid = false;
+  ghDragStart(race); // 鬼影車（ghost.src.js）：排行榜選了 400 公尺的鬼影車才有；這一趟也錄下來
   const d = DRIVERS[o.drv], U = (r) => r[0] + Math.random() * (r[1] - r[0]);
   race.ai = { d, react: U(d.react), shiftAt: U(d.shift), nitroAt: d.nitro ? U(d.nitro) : null };
   TR.scene.add(O.car); O.car.visible = true; O.body.position.y = +oppLook(o).height;
@@ -464,6 +466,10 @@ function finishRace() {
     resultEl.append(note);
   }
   if (race.foul) { resultEl.hidden = false; lights(0, false, true); showResult(); return; }
+  if (me.fin != null) { // 跑完了：交給網站的排行榜（ghost.src.js）；有鬼影車就說比它快還是慢
+    const vs = ghVs('drag', et(me)); ghDragEnd(race, et(me));
+    if (vs) { const gp = document.createElement('p'); gp.className = 'res-note'; gp.textContent = `👻 ${GH.arm.name} ${GH.arm.t.toFixed(2)} 秒：你${vs.trim()}`; resultEl.append(gp); }
+  }
   const tb = document.createElement('table');
   const rows = [['', `你 · ${CARS[me.key].btn[0]}`, `${o.name} · ${CARS[op.key].btn[0]}`],
     ['反應時間', `${f(me.react)} 秒`, `${f(op.react)} 秒`], ['400 公尺', `${f(et(me), 2)} 秒`, `${f(et(op), 2)} 秒`],
@@ -534,6 +540,7 @@ function raceFrame(now) {
     if (R.phase === 'run' && me.fin != null && (op.fin != null || R.t - R.green - me.fin > 4)) finishRace();
     if (R.phase === 'run' && me.go == null && op.fin != null && R.t - R.green > op.fin + 2) finishRace();
   }
+  ghDragFrame(R); // 鬼影車：錄你的、播鬼影的
   // 引擎聲：起跑線上踩著等（起步控制頂在 0.6）、跑的時候全油門、換檔和過終點放油門；對手離越遠越小聲
   const feed = (v, c) => v?.set({ rpm: c.rpm, speed: c.v, limit: c.go == null ? 0.6 : 1,
     throttle: c.go == null ? (R.phase === 'stage' || R.phase === 'run' ? 1 : 0) : c.fin != null || c.shiftT > 0 ? 0 : 1 });

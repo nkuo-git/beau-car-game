@@ -24,6 +24,7 @@ function ciTick(dt) {
     ciRace.update(dt);
     if (ciRace && tripS?.dmg) { drv.setDamage(null); ciDmgOff = true; } // 比賽中撞壞了不變慢
   }
+  ghLapTick(); // 鬼影車排行榜（ghost.src.js）：錄每一圈、鬼影車每圈重新跑
   if (ciMenuEl && (!drv || drv.telemetry().paused)) ciMenuClose();
 }
 // 每一格（沒暫停的時候、越野車場之後）：開進報名處、比賽中沒有「下車」

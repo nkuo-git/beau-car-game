@@ -34,6 +34,7 @@ if (!HEAD.test(js)) throw new Error('tune.js 開頭的說明不一樣了（build
 js = js.replace(HEAD, '// 大便龍的改車遊戲（3D 車庫＋開車出門的小村莊、賽車場、越野車場、內湖）\n// 這個檔是產生出來的，不要直接改：原始碼在 beau-car-game 的 src/（node src/build-site.mjs <版號>）\n');
 js += '\n' + read('site/site.js').replace('__V__', V).replace('__TRY__', String(TRY));
 js += '\n' + read('site/cloud.js'); // 第 12 批：登入＋雲端存檔
+js += '\n' + read('site/online.js'); // 連線第 1 步：鬼影車排行榜（用 cloud.js 的 window.beauCloud）
 
 // 3. game.css
 let css = fs.readFileSync(path.join(tmp, 'tune.css'), 'utf8');

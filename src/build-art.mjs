@@ -19,7 +19,7 @@ if (yaris) CARS.splice(4, 0, ['yaris', 'body-yaris-q.glb', 'car-yaris.txt', ['ya
 const strip = (f) => fs.readFileSync(path.join(dir, f), 'utf8')
   .split('\n').filter((l) => !/^import /.test(l)).join('\n')
   .replace(/^export (const|function) /gm, '$1 ');
-const files = ['masks.js', 'gtr-look.js', 'parts.js', 'supra.js', 'cabin.js', 'wings.js', 'wide.js', 'room.js', 'sound.js', 'street.js', 'police.js', 'village.js', 'interiors.js', 'terrain.js', 'drive.js', 'offroad.js', 'circuit.js', 'neihu-data.js', 'neihu.js', 'mountain.js', 'orbay.js', 'damage.js', 'walk.js', 'character.js', 'lookpanel.js', ...CARS.flatMap((c) => c[3]), 'carlod.js', 'npc.js', 'crush.js', 'police-ai.js', 'guns.js', 'gunshop.js'];
+const files = ['masks.js', 'gtr-look.js', 'parts.js', 'supra.js', 'cabin.js', 'wings.js', 'wide.js', 'room.js', 'sound.js', 'street.js', 'police.js', 'village.js', 'interiors.js', 'terrain.js', 'drive.js', 'offroad.js', 'circuit.js', 'neihu-data.js', 'neihu.js', 'mountain.js', 'orbay.js', 'damage.js', 'walk.js', 'character.js', 'lookpanel.js', ...CARS.flatMap((c) => c[3]), 'carlod.js', 'ghost.js', 'npc.js', 'crush.js', 'police-ai.js', 'guns.js', 'gunshop.js'];
 const code = files.map((f) => `// ---- ${f} ----\n${strip(f)}`).join('\n');
 fs.mkdirSync(path.join(dir, 'art'), { recursive: true });
 const sizes = {}, lodSizes = {};
@@ -36,7 +36,7 @@ if (code.split('{/*__LOD_SIZES__*/}').length !== 2) throw new Error('carlod.js �
 let html = fs.readFileSync(path.join(dir, 'garage.src.html'), 'utf8').replace('/*__INLINE__*/', () => code.replace('{/*__LOD_SIZES__*/}', JSON.stringify(lodSizes))).replace('__SIZES__', JSON.stringify(sizes))
   .replace('/*__GARAGE_CSS__*/', () => fs.readFileSync(path.join(dir, 'garage.css'), 'utf8'))
   .replace('/*__RACE__*/', () => `// ---- race.src.js ----\n${fs.readFileSync(path.join(dir, 'race.src.js'), 'utf8')}`) // 賽道
-  .replace('/*__TOWN__*/', () => `// ---- town.src.js ----\n${fs.readFileSync(path.join(dir, 'town.src.js'), 'utf8')}\n// ---- circuit.src.js ----\n${fs.readFileSync(path.join(dir, 'circuit.src.js'), 'utf8')}\n// ---- neihu.src.js ----\n${fs.readFileSync(path.join(dir, 'neihu.src.js'), 'utf8')}`); // 開車出門（小村莊）
+  .replace('/*__TOWN__*/', () => `// ---- town.src.js ----\n${fs.readFileSync(path.join(dir, 'town.src.js'), 'utf8')}\n// ---- circuit.src.js ----\n${fs.readFileSync(path.join(dir, 'circuit.src.js'), 'utf8')}\n// ---- neihu.src.js ----\n${fs.readFileSync(path.join(dir, 'neihu.src.js'), 'utf8')}\n// ---- ghost.src.js ----\n${fs.readFileSync(path.join(dir, 'ghost.src.js'), 'utf8')}`); // 開車出門（小村莊）
 if (yaris) html = html.replace('/*__YARIS__*/', "yaris: { file: 'car-yaris.txt', size: SIZES.yaris, spec: YARIS_SPEC, btn: ['YARIS', '豐田 GR · 白'], ...YARIS_GARAGE },");
 fs.writeFileSync(path.join(dir, 'art/garage.html'), html);
 fs.rmSync(path.join(dir, 'art/car.glb'), { force: true });

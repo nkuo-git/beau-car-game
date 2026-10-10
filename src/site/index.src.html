@@ -45,6 +45,8 @@
       <h1 class="brand-name">大便龍的改車遊戲<span class="brand-ver" id="brandVer"></span></h1>
     </div>
     <!-- 登入＋雲端存檔（site/cloud.js 接好了才出現） -->
+    <!-- 連線（site/online.js 接好了才出現）：取名字、排行榜（鬼影車）；一起開車、一起比賽、參觀車庫還在做 -->
+    <button type="button" class="cloudchip netchip" id="netChip" hidden>👥 連線</button>
     <button type="button" class="cloudchip" id="cloudChip" hidden><span class="cl-dot ok" aria-hidden="true"></span><span id="cloudChipTxt">☁ 登入</span></button>
   </header>
 
@@ -101,6 +103,41 @@
       </div>
       <button type="button" class="imp-yes cl-btn" id="clUseCloud">用雲端的</button>
       <button type="button" class="imp-no cl-btn" id="clUseLocal">用這支手機的<small>雲端的會被蓋掉</small></button>
+    </div>
+  </div>
+</div>
+
+<!-- 連線：要先登入、取名字、連線選單、排行榜（site/online.js） -->
+<div class="imp" id="netDlg" role="dialog" aria-modal="true" aria-labelledby="netTitle" hidden>
+  <div class="imp-card cl-card nw-card">
+    <div class="cl-head"><h2 id="netTitle">連線</h2><button type="button" class="cl-x" id="netX" aria-label="關掉">✕</button></div>
+    <div class="cl-sec" id="nwIn" hidden>
+      <p class="cl-note">要先登入才能連線。登入以後，別人只會看到你取的名字。</p>
+      <button type="button" class="imp-yes cl-btn" id="nwLogin">用 Google 帳號登入</button>
+      <p class="cl-err" id="nwInErr" hidden></p>
+    </div>
+    <div class="cl-sec" id="nwName" hidden>
+      <p class="cl-note">連線的時候別人只會看到這個名字。不要用真的名字。</p>
+      <label class="nw-lbl" for="nwNameIn">你的名字</label>
+      <input class="nw-field" id="nwNameIn" type="text" maxlength="10" autocomplete="off" spellcheck="false" enterkeyhint="done" placeholder="例如：大便龍車神">
+      <p class="cl-err" id="nwNameErr" hidden></p>
+      <button type="button" class="imp-yes cl-btn" id="nwNameOk">好了</button>
+      <p class="cl-note">名字裡不能有髒話，也不會顯示你的 email。</p>
+    </div>
+    <div class="cl-sec" id="nwMenu" hidden>
+      <button type="button" class="imp-yes cl-btn" id="nwBoardBtn">🏆 排行榜</button>
+      <p class="cl-note">一起開車、一起比賽、參觀朋友的車庫還在做，做好會出現在這裡。</p>
+      <div class="nw-me"><span>你的名字：<b id="nwMyName"></b></span><button type="button" class="nw-link" id="nwRename">改名字</button></div>
+    </div>
+    <div class="cl-sec" id="nwBoard" hidden>
+      <div class="nw-tabs" id="nwTabs" role="tablist"><button type="button" data-b="drag" role="tab">400 公尺</button><button type="button" data-b="lap" role="tab">賽車場一圈</button><button type="button" data-b="hill" role="tab">爬山</button></div>
+      <div class="nw-tabs nw-two" id="nwFilt" role="tablist"><button type="button" data-f="all" role="tab">大家</button><button type="button" data-f="car" role="tab" id="nwFiltCar">同一台車</button></div>
+      <ol class="nw-list nw-scroll" id="nwList"></ol>
+      <ol class="nw-list" id="nwMine" hidden></ol>
+      <p class="cl-note nw-empty" id="nwEmpty" hidden></p>
+      <button type="button" class="imp-yes cl-btn" id="nwGhost">👻 跟第 1 名的鬼影車跑</button>
+      <p class="cl-note" id="nwGhostMsg" hidden></p>
+      <p class="cl-note">不用同時上線。你的最好成績會自己上傳。</p>
     </div>
   </div>
 </div>

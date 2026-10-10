@@ -472,12 +472,12 @@ function hillHud(on) {
 }
 function hillStop(why) {
   if (!HILL.on) return;
-  HILL.on = false; hillHud(false);
+  HILL.on = false; hillHud(false); ghHillStop(); // 鬼影車（ghost.src.js）也收掉
   if (why && drv) drv.toast(why, 2200);
 }
 function hillStep(t, dt) {
   const M = VIL?.mountain; if (!M || !drv) return;
-  if (HILL.drv !== drv) { HILL.drv = drv; HILL.prev = -1; hillStop(); } // 換了一台、重新出門、比賽回來
+  if (HILL.drv !== drv) { HILL.drv = drv; HILL.prev = -1; hillStop(); ghHillStop(); } // 換了一台、重新出門、比賽回來
   if (t.paused || t.auto || jailed() || (walker && walker.mode === 'walk') || ciRace || orRace) { HILL.prev = -1; hillStop(HILL.on ? '爬山計時賽取消了' : null); if (HILL.doneT > 0) { HILL.doneT = 0; hillHud(false); } return; } // 下車：結果也收起來
   const tr = M.trial, onM = M.inMountain(t.x, t.z) || M.onRoad(t.x, t.z);
   const p = onM ? M.road.project(t.x, t.z, 12, HILL.pr) : null, s = p && p.i >= 0 ? p.s : -1;
@@ -485,16 +485,18 @@ function hillStep(t, dt) {
     if (s >= 0 && HILL.prev >= 0 && HILL.prev < tr.s0 && s >= tr.s0 && p.d < 6 && t.v > 0.5) { // 往上開過起點
       HILL.on = true; HILL.t = 0; HILL.shown = ''; hillHud(true);
       const b = GAME.best.hill[cur]; HILL.bs.textContent = b ? `最快 ${hillFmt(b)}` : '開到山頂！';
-      drv.toast('爬山計時賽開始！開到山頂', 1800);
+      drv.toast(GH.arm?.board === 'hill' ? `爬山計時賽開始！追 👻 ${GH.arm.name}` : '爬山計時賽開始！開到山頂', 1800);
+      ghHillStart(t); // 錄這一趟、鬼影車出發
     }
   } else {
-    HILL.t += dt;
+    HILL.t += dt; ghHillRec(t);
     const fin = (s >= tr.s1 && p.d < 8) || (t.x > M.summit.x0 && t.x < M.summit.x1 && t.z > M.summit.z0 && t.z < M.summit.z1); // 越野車走捷徑上來也算
     if (fin) {
       const tt = Math.round(HILL.t * 100) / 100, old = GAME.best.hill[cur], rec = !old || tt < old;
       if (rec) { GAME.best.hill[cur] = tt; save(); }
+      const vs = ghVs('hill', tt); ghHillEnd(t, tt); // 交給網站的排行榜
       HILL.on = false; HILL.tm.textContent = hillFmt(tt); HILL.bs.textContent = rec ? '新紀錄！' : `最快 ${hillFmt(old)}`;
-      drv.toast(rec ? `到山頂了！${hillFmt(tt)}　新紀錄！` : `到山頂了！${hillFmt(tt)}（最快 ${hillFmt(old)}）`, 3200);
+      drv.toast((rec ? `到山頂了！${hillFmt(tt)}　新紀錄！` : `到山頂了！${hillFmt(tt)}（最快 ${hillFmt(old)}）`) + vs, 3200);
       HILL.doneT = 4; // 結果留 4 秒
     } else if (HILL.t > 600 || !onM || (s >= 0 && s < tr.s0 - 40)) { HILL.prev = s; hillStop('爬山計時賽取消了'); return; }
     else { const txt = hillFmt(HILL.t); if (txt !== HILL.shown) { HILL.shown = txt; HILL.tm.textContent = txt; } }
@@ -1666,7 +1668,7 @@ function driveStep(dt) {
         if (drv && !drv.telemetry().paused) orStep(t); // 第 4 批：越野車場（展示台的車、起跑區）
         if (drv && !drv.telemetry().paused) ciStep(t); // 賽車場：報名處、比賽中沒有「下車」
       }
-      if (drv && DRIVE.on) hillStep(drv.telemetry(), dt); // 爬山計時賽（mountain.js）
+      if (drv && DRIVE.on) { hillStep(drv.telemetry(), dt); ghHillTick(dt); } // 爬山計時賽（mountain.js）、鬼影車（ghost.src.js）
       if (snooze.track && Math.hypot(t.x - VIL.places.track.zone.x, t.z - VIL.places.track.zone.z) > 30) snooze.track = false;
     }
   }

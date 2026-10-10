@@ -27,6 +27,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__look = () => LOOKP; window.__cam = () => ({ camCap, maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__O = () => ({ orRace, oDisp, oLoading, dealerAt, trophies: trophyCount(), bigCam, lvl: orLevel(), PFULL });' // 第 4 批：越野賽、越野車行展示台、鏡頭、停在村子裡的完整的車（沒有輕量車的）
   + ' window.__CI = () => ({ race: ciRace, menu: ciMenuEl, cars: ciCars, sel: ciSel, P: VIL?.circuit, prof: circuitProfile, car: circuitCar, PERF, hp: hpOf(cur) });' // 賽車場
+  + ' window.__GH = () => GH; window.__ghostUnpack = (g) => ghostUnpack(g); window.__ghostAt = (G, t, o) => ghostAt(G, t, o);' // 鬼影車排行榜（ghost.src.js）
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };';
 const srv = http.createServer((req, res) => {
@@ -509,6 +510,7 @@ const grid = await p.evaluate(() => { const X = window.__CI(), R = X.race, D = w
 console.log('3', el(), 'grid:', JSON.stringify(grid), JSON.stringify(s3));
 check(s3.race === 'grid' && s3.laps === 2 && s3.ais.length === 3 && s3.ais[0].name === '隔壁同學' && grid.ais.every((a) => a[0] > grid.me[0] + 4) && grid.lod && !s3.menu, `race set up: you start at the back of the grid behind 3 light (LOD) opponents (隔壁同學 on pole), 2 laps`);
 // 紅燈：一顆一顆亮，熄掉才可以開（踩油門也不會動）
+await p.evaluate(() => { window.__runs = []; window.addEventListener('beau-run', (e) => window.__runs.push(e.detail)); }); // 鬼影車排行榜：每一圈錄下來
 await p.keyboard.down('ArrowUp'); // 踩油門（鍵盤＝手指）：熄燈前不會動
 const lamps = []; let moved = 0;
 for (let k = 0; k < 14; k++) { const q = await p.evaluate(() => { window.__dstep(30); const R = window.__CI().race, D = window.__D(); return { st: R.state, l: R.lights, on: document.querySelectorAll('#stage .cir-l i.on').length, gl: (() => { const c = D.VIL.circuit.group.getObjectByName('ci-lamps').geometry.attributes.color; let n = 0; for (let i = 0; i < c.count; i += 4) if (c.getX(i) > 0.5) n++; return n; })(), v: D.drv.telemetry().v }; }); lamps.push(`${q.st}:${q.l}/${q.on}/${q.gl}`); if (q.st === 'grid' && Math.abs(q.v) > 0.3) moved++; if (k === 6) await drawAndShot('02-grid-lights'); if (q.st === 'run') break; }
@@ -544,10 +546,41 @@ check(aiF.every((a) => a.fin > s4.me.fin && a.p >= 2 * 3600), `all 3 opponents d
 const perfUpd = await p.evaluate(() => { const R = window.__CI().race; const t0 = performance.now(); for (let i = 0; i < 120; i++) R.update(1 / 60); return +((performance.now() - t0) / 120).toFixed(3); });
 console.log('  race.update (3 opponents):', perfUpd, 'ms/frame');
 
+// 鬼影車排行榜：兩圈都錄下來了（'beau-run'）→ 最快那一圈當鬼影車
+const laps = await p.evaluate(() => {
+  const R = window.__CI().race, sf = window.__D().VIL.circuit.gates.at(-1), o = [0, 0, 0];
+  return { laps: R.me.laps.map((t) => +t.toFixed(3)), runs: window.__runs.map((r) => { const G = window.__ghostUnpack(r.g); if (!G) return null; window.__ghostAt(G, 0, o); const a = o.slice(); window.__ghostAt(G, 1e9, o);
+    return { board: r.board, car: r.car, t: r.t, n: G.n, dur: +G.dur.toFixed(2), start: Math.round(Math.hypot(a[0] - sf.x, a[1] - sf.z)), end: Math.round(Math.hypot(o[0] - sf.x, o[1] - sf.z)), chars: r.g.d.length }; }) };
+});
+console.log('  laps recorded:', JSON.stringify(laps));
+check(laps.runs.length === 2 && laps.runs.every((r, i) => r && r.board === 'lap' && r.car === 'gc8' && Math.abs(r.t - laps.laps[i]) < 0.002 && Math.abs(r.dur - r.t) < 0.15 && r.start < 25 && r.end < 25 && r.chars < 20000), `both laps are sent to the leaderboard ('beau-run' lap, gc8: ${laps.runs.map((r) => `${r?.t} s, ${r?.n} positions`).join('; ')}), each starts and ends at the start/finish line`);
+const lapArm = await p.evaluate(async () => {
+  const r = window.__runs.slice().sort((a, b) => a.t - b.t)[0], ok = window.beauGame.setGhost('lap', { name: '最快的一圈', car: r.car, t: r.t, g: r.g });
+  for (let i = 0; i < 400 && !window.beauGame.ghost?.ready; i++) await new Promise((res) => setTimeout(res, 50));
+  return { ok, g: window.beauGame.ghost };
+});
+check(lapArm.ok && lapArm.g.ready && lapArm.g.board === 'lap', `beauGame.setGhost('lap', best lap) → ghost car ready (${JSON.stringify(lapArm.g)})`);
+
 // ---- 5 再比一次：放到起跑格；只開過起終點來回不算一圈（要照檢查點）；開反了會說；放棄比賽 ----
 await p.evaluate(() => [...document.querySelectorAll('#stage .cir-r button')].find((b) => b.textContent === '再比一次').click());
 await p.waitForFunction(() => window.__CI().race && window.__CI().race.state === 'grid', null, { timeout: 120000 });
 await p.evaluate(() => { const R = window.__CI().race; for (let i = 0; i < 60 * 8 && R.state === 'grid'; i++) window.__dstep(1); });
+// 鬼影車：從起跑格開過終點線 → 一圈開始，鬼影車照錄的那一圈跑
+const lapG = await p.evaluate(() => {
+  const D = window.__D(), d = D.drv, R = window.__CI().race, GH = window.__GH(), before = !!GH.play && GH.obj.car.visible;
+  d.setInput({ throttle: 1, brake: 0, steer: 0 });
+  for (let i = 0; i < 60 * 20 && R.me.lap0 == null; i++) window.__dstep(1);
+  for (let i = 0; i < 60 * 3; i++) window.__dstep(1);
+  d.setInput(null);
+  const O = GH.obj, P = GH.play, o = [0, 0, 0], mats = [];
+  if (!P) return { before, play: false, lap0: R.me.lap0 };
+  window.__ghostAt(GH.arm.G, R.time - R.me.lap0, o);
+  O.car.traverse((m) => { if (m.isMesh && m.visible) mats.push(m.material); });
+  return { before, play: P.board, lap0: R.me.lap0 != null, vis: O.car.visible, off: +Math.hypot(O.car.position.x - o[0], O.car.position.z - o[1]).toFixed(2), see: mats.every((m) => m.transparent && m.opacity < 0.5) };
+});
+console.log('  lap ghost:', JSON.stringify(lapG));
+check(!lapG.before && lapG.play === 'lap' && lapG.lap0 && lapG.vis && lapG.off < 0.05 && lapG.see, `on the grid the ghost is not out; crossing the line starts the lap and the see-through ghost drives the recorded lap (${lapG.off} m off)`);
+await drawAndShot('05b-lap-ghost');
 const cheat = await p.evaluate(() => {
   const D = window.__D(), d = D.drv, R = window.__CI().race, sf = D.VIL.circuit.gates.at(-1), ci = d.carInfo, c0 = (ci.nose + ci.tail) / 2, out = [];
   for (let k = 0; k < 3; k++) { d.teleport({ x: sf.x - 12 - c0, z: -160, heading: 0 }); d.setInput({ throttle: 1, brake: 0, steer: 0 }); for (let i = 0; i < 120; i++) window.__dstep(1); out.push(R.me.lapsDone); }
@@ -562,6 +595,8 @@ check(/開反了/.test(cheat.warn), `driving the wrong way: 「${cheat.warn}」`
 await p.evaluate(() => [...document.querySelectorAll('#stage .cir-p button')].find((b) => b.textContent === '放棄比賽').click());
 await p.evaluate(() => window.__dstep(5));
 const ab = await ci();
+const abG = await p.evaluate(() => ({ play: !!window.__GH().play, vis: window.__GH().obj.car.visible }));
+check(!abG.play && !abG.vis, '放棄比賽 also puts the ghost away');
 check(ab.race === null && !ab.cls.includes('ciracing') && await p.evaluate(() => !window.__D().TR.scene.children.some((o) => o.name === 'ci-racer-shadows') && window.__D().drv.telemetry().brake < 0.05), '放棄比賽: race cleared (opponents, shadows, HUD), controls back to you');
 
 // ---- 6 賽道的樣子：幾個地方截圖（追車、駕駛座、空中）、每個地方畫了多少 ----
