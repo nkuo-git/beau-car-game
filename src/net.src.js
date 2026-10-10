@@ -384,7 +384,7 @@ function netRaceTick(dt) {
     const sig = big + '|' + sub;
     if (sig !== H.sig) { H.sig = sig; H.big.textContent = big; H.big.className = big === '出發！' ? 'go' : ''; H.sub.textContent = sub; H.sub.hidden = !sub; }
     H.rc.hidden = left != null && (R.kind === 'circuit' || R.kind === 'drag' && left <= 0); // 賽車場有自己的紅燈、400 公尺有燈樹
-    if (left != null && left <= 0 && R.phase === 'wait') { R.phase = 'run'; R.runAt = tk; R.runGap = tk - tk0; // runGap：跟上一格差多久（出發是在 go 以後的第一格） if (R.kind === 'hill' && drv) { drv.setInput(null); R.held = false; } }
+    if (left != null && left <= 0 && R.phase === 'wait') { R.phase = 'run'; R.runAt = tk; R.runGap = tk - tk0; if (R.kind === 'hill' && drv) { drv.setInput(null); R.held = false; } } // runGap：跟上一格差多久（出發是在 go 以後的第一格）
     if (R.kind === 'hill' && R.held && drv && Math.abs(drv.telemetry().v) > 0.3) drv.setInput(NET_HOLD);
   } else if (!H.rc.hidden && R.phase !== 'prep') H.rc.hidden = true;
   const q = (R.phase === 'wait' || R.phase === 'run') && R.myT == null && (R.kind === 'hill' ? netWorld() : R.kind === 'drag' && RACE.on && document.body.classList.contains('fs')); // 爬山、全螢幕的 400 公尺（下面那一塊藏起來了）：「放棄這場」；賽車場有自己的、一般版面的 400 公尺按「開回村子」
