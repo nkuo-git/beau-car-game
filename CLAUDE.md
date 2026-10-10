@@ -84,20 +84,20 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 
 | 指令（在 src/） | 測什麼 | main 上應該是 |
 |---|---|---|
-| `node test-b1.mjs ../out/b1/b1` | 整個開放世界：車庫、走路、升降停車格、開車、改車廠、車店、快速道路、賽車、警察局、房子、行人車流、全螢幕版面 | __B1__ ok，ALL CHECKS OK（約 8–12 分；含 400 公尺的鬼影車） |
+| `node test-b1.mjs ../out/b1/b1` | 整個開放世界：車庫、走路、升降停車格、開車、改車廠、車店、快速道路、賽車、警察局、房子、行人車流、全螢幕版面 | 144 ok，ALL CHECKS OK（約 8–12 分；含 400 公尺的鬼影車） |
 | `node test-b4.mjs ../out/b4/b4` | 越野車場、怪獸卡車、越野車行、泥巴賽、越野車車庫 | 74 ok |
 | `node test-b3.mjs ../out/b3/b3` | 警察（星星、追、抓、拘留、罰款）、槍店、靶場、槍 | 56 ok |
 | `node neihu-test.mjs ../out/nh/nh` | 內湖：轉換程式重跑一樣、地標、開到港墘站、路牌、走路 | 29 ok |
 | `node circuit-test.mjs ../out/ci/ci` | 賽車場、AI、名次、每一圈錄下來＋鬼影車 | 28 ok，PASSED |
 | `node drift-test.mjs ../out/drift/drift` | 甩尾（Node＋瀏覽器；沒甩的時候跟舊 drive.js 一模一樣） | 42 ok |
 | `node crush-test.mjs ../out/crush/crush` | 怪獸卡車輾扁車、騎的機車和路邊的東西、人跳開 | 53 ok |
-| `node mountain-test.mjs ../out/mt/mt` | 山：去山頂、爬山計時賽、上山下山貼著路、山頂走路、越野車捷徑、輾扁山上的東西、警察追上山、爬山的鬼影車 | __MT__ ok |
+| `node mountain-test.mjs ../out/mt/mt` | 山：去山頂、爬山計時賽、上山下山貼著路、山頂走路、越野車捷徑、輾扁山上的東西、警察追上山、爬山的鬼影車 | 42 ok |
 | `node free-test.mjs` | 試做頁錢用不完、正常頁存檔的錢 | 2 ok（先跑 make-free.mjs） |
 | `node test-app-b1.mjs ../docs ../out/app1/app` | 網站（docs/）整趟：跟 test-b1 一樣＋版本號、標題列、App 外殼的全螢幕 | 146 ok |
 | `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場 | 74 ok |
 | `node site-test.mjs ../docs ../out/site/site` | 網站：打開、開車、有新版本那一條、App 有新版本、搬進度 | 22 ok |
 | `node cloud-test.mjs ../docs/try ../out/cloud/cloud` | 登入＋雲端存檔（假的雲端、兩支手機、沒網路、App 外殼） | 20 ok |
-| `node online-test.mjs ../docs/try ../out/online/online` | 連線：要先登入、取名字（擋髒話）、跑完自己上傳、排行榜、鬼影車按鈕（假的 Firestore） | __ONLINE__ ok |
+| `node online-test.mjs ../docs/try ../out/online/online` | 連線：要先登入、取名字（擋髒話）、跑完自己上傳、排行榜、鬼影車按鈕（假的 Firestore） | 30 ok |
 
 - test-app-b1／b4 給萬能軟體的 repo（有 tune.html）也可以跑，就是測萬能軟體的改車頁。
 - **不可以為了變綠燈把測試改鬆**；找出原因修好。新加或改的測試要真的有在測東西。

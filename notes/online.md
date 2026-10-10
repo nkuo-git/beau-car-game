@@ -100,8 +100,8 @@ service cloud.firestore {
 ```
 
 ## Tests
-- `node online-test.mjs ../docs/try ../out/online/online` → 35 ok. It uses a fake Firestore in Node with the same write rules:
-  - chips fit at 390 px;
+- `node online-test.mjs ../docs/try ../out/online/online` → 30 ok. It uses a fake Firestore in Node with the same write rules:
+  - chips fit at 390 and 320 px;
   - sign-in, then names (refused and accepted);
   - upload, slower, faster, other car, bad runs;
   - offline queue, then upload after sign-in;
