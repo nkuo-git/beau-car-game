@@ -11650,6 +11650,7 @@ return { createRide, RIDE: { CLS, SURF } };
 //   drive.addColliders(list, tag) / drive.removeColliders(tag)   會變的碰撞物（鐵捲門關著才擋、停著的車），格式跟 world.colliders 一樣；
 //                          會動的車多給 vx、vz（它的速度 m/s）、m（比你重幾倍，預設 1）：撞到照兩台車的動量算（追撞不會整台停住），它被推的速度加在原來那個的 dvx、dvz（它自己拿去用、歸零）；
 //                          同一個 tag 可以加很多次，removeColliders(tag) 一次全部拿掉；回傳加了／拿掉幾個
+//   drive.setCamCeil(fn | null)   fn(x, z) → 鏡頭在這裡最高多高（Infinity＝不管）：追車鏡頭壓在屋頂下面（越野車車庫，大車的鏡頭拉高了會穿出去）
 //   drive.setMapTap({ label, onClick } | null)   點小地圖做什麼（大地圖、比賽看整個賽道）；label＝小地圖下面那一條字；drive.mapTap＝現在的字
 //   drive.setMapView({ x0, z0, x1, z1 } | null)   小地圖改成看整個範圍（北朝上、你的箭頭照車頭轉）；null＝回到跟著你轉；drive.mapView
 //   drive.setMarkers(list | null, tag?)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝這幀不畫）, label（點上的字）, fg }]；tag＝另外一組（比賽的對手 'race'），null 拿掉；
@@ -11758,12 +11759,12 @@ const CSS = `
 .dv-ped b.on{transform:translateY(4px);box-shadow:none}
 /* 第 3 批（甩尾）：手煞車（油門上面；矮的畫面放煞車左邊；更矮的（沒全螢幕的手機橫拿）再往左，不壓到「下車」）、速度表上面的「甩尾 35°」 */
 .dv{container-type:size}
-.dv-hb{right:10px;bottom:124px;width:74px;height:46px;display:grid;place-items:center;border-radius:16px;background:#2B2E35;color:#FF6A1F;font-size:17px;font-weight:700;letter-spacing:.04em;box-shadow:0 5px 0 #111216;pointer-events:auto;touch-action:none;cursor:pointer}
+.dv-hb{right:10px;bottom:124px;width:74px;height:46px;display:grid;place-items:center;border-radius:16px;background:#2B2E35;color:#FF6A1F;font-size:17px;font-weight:700;letter-spacing:.04em;white-space:nowrap;box-shadow:0 5px 0 #111216;pointer-events:auto;touch-action:none;cursor:pointer}
 .dv-hb.on{background:#FF6A1F;color:#1A0F07;transform:translateY(4px);box-shadow:none}
-@media (max-height:560px){.dv-hb{right:166px;bottom:12px;width:62px;height:70px;border-radius:18px}}
+@media (max-height:560px){.dv-hb{right:166px;bottom:12px;width:62px;height:70px;border-radius:18px;font-size:15px;letter-spacing:0}}
 @container (max-height:290px){.dv-hb{right:288px}}
 /* 第 3 批（b3-int）：App 沒全螢幕、螢幕又高又寬（平板、電腦）：畫面只是中間一小塊（426×320），手煞車（油門上面）會壓到換視角、全螢幕鈕 → 放到全螢幕鈕左邊（同一排）；通緝中跟著往下推 */
-@media (min-height:561px){@container (max-height:409px){.dv-hb{top:142px;right:114px;bottom:auto;height:44px}.pw-host.pw-on .dv-hb{margin-top:46px}}}
+@media (min-height:561px){@container (max-height:409px){.dv-hb{top:142px;right:114px;bottom:auto;height:44px}.pw-host.pw-on .dv-hb{margin-top:46px}.dv-act2{top:auto;right:auto;left:10px;bottom:98px}}} /* 修 11（2026-10-10）：小舞台（平板、電腦、426×320）「下車」放左邊、轉彎鍵上面（本來在右邊壓到油門） */
 .dv-spd i{position:absolute;bottom:calc(100% + 24px);left:50%;transform:translateX(-50%);padding:5px 13px;border-radius:999px;background:#FF6A1F;color:#1A0F07;font:700 17px/1 ${SANS};font-style:normal;letter-spacing:.04em;white-space:nowrap;box-shadow:0 3px 0 #9E4213}
 .dv-spd i span{font:700 19px/1 ${COND};color:inherit;margin:0 0 0 5px;letter-spacing:0}
 .dv-toast{top:34%;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:9px 20px;border-radius:22px;background:rgba(14,15,18,0.78);font-size:20px;font-weight:700;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,-50%) scale(.92);transition:opacity .15s,transform .15s}
@@ -12300,6 +12301,7 @@ function createDrive(o) {
   // 晃：撞到（shake，照撞的力道）＋200 km/h 以上路面的小震動（幾個不同頻率的正弦，不是每幀亂跳）
   const isCop = (c) => c.police === true && c.t === 'box'; // 第 3 批（b3-int）：警車的碰撞物（鏡頭抬高用）
   const cam = { yaw: st.th, ox: 0, oy: 0, oz: 0, d: 6.5, ok: false, shake: 0, spd: 0, acc: 0, t: 0, cop: 0 }, V1 = new THREE.Vector3(), V2 = new THREE.Vector3();
+  let camCeil = null; // setCamCeil(fn)：fn(x, z) → 這裡鏡頭最高多高（Infinity＝不管）；追車鏡頭不會穿出矮的屋頂（越野車車庫：修 5）
   const defEye = { eye: [CX - 0.3, 1.12, S.spec.interior?.wheelZ ?? 0.37], look: [CX + 9, 0.95, S.spec.interior?.wheelZ ?? 0.37], fov: 72 };
   const wob = (t, a) => Math.sin(t * 71 + a) * 0.5 + Math.sin(t * 113 + 2 * a + 1.7) * 0.3 + Math.sin(t * 163 + 3 * a + 4.1) * 0.2;
   const setFov = (f) => { if (Math.abs(f - camera.fov) > 0.05) { camera.fov = f; camera.updateProjectionMatrix(); } };
@@ -12339,6 +12341,7 @@ function createDrive(o) {
     }
     const la = 3 + 5 * q; camera.lookAt(px + fx2 * la, 1.0 - 0.1 * q, pz + fz2 * la);
     if (rc) { camera.position.y = Math.max(camera.position.y + rc.y, rc.floor(camera.position.x, camera.position.z)); camera.lookAt(px + fx2 * la, 1.0 - 0.1 * q + rc.look + rc.y, pz + fz2 * la); } // 第 4 批：跟著車子的高度、不鑽到地底下
+    if (camCeil) { const cy = camCeil(camera.position.x, camera.position.z); if (camera.position.y > cy) { camera.position.y = cy; camera.lookAt(px + fx2 * la, 1.0 - 0.1 * q + (rc ? rc.look + rc.y : 0), pz + fz2 * la); } } // 修 5：屋頂下面
     // 直的長畫面（手機全螢幕，寬÷高 0.6 以下）：上下多看一點（412×915 大約 86°），車子才不會大到擋住路、左右也看得到；0.6 以上照舊
     const tall = 93 * clamp(0.6 - (camera.aspect || 1), 0, 0.2), base = clamp((2 * Math.atan(Math.tan((56 * Math.PI) / 360) / (camera.aspect || 1)) * 180) / Math.PI, 50, 72 + tall);
     setFov(Math.min(86 + tall, base + 12 * q));
@@ -12652,6 +12655,7 @@ function createDrive(o) {
     setMapView: (b) => { mapWhole = b && b.x1 > b.x0 && b.z1 > b.z0 ? { x0: +b.x0, z0: +b.z0, x1: +b.x1, z1: +b.z1 } : null; if (hud) hud.mapT = 0; },
     get mapTap() { return mapTap ? mapTap.label : null; }, get mapView() { return mapWhole; },
     setDamage: (p) => { dmgP.power = p && p.power > 0 ? Math.min(1, p.power) : 1; dmgP.top = p && p.top > 0 ? Math.min(1, p.top) : 1; dmgP.maxKmh = p && p.maxKmh > 0 ? p.maxKmh : Infinity; dmgP.steerPull = p ? clamp(+p.steerPull || 0, -1, 1) : 0; },
+    setCamCeil: (fn) => { camCeil = typeof fn === 'function' ? fn : null; }, // 修 5（2026-10-10）
     setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
     carInfo: { nose: info.nose, tail: info.tail, len: info.len, halfW: Math.max(info.halfW, +o.halfW || 0), wheelbase: L, vmax: P.vmax }, hud: hud && hud.root, // halfW：碰撞的半寬（怪獸卡車：輪胎比車身寬）
@@ -16895,7 +16899,7 @@ return { buildMountain, mountainFonts, MOUNT_TEXT, mountainLayout };
 //     V 多了：V.places.orbay、V.colliders 多了牆和架子、V.areas.pave 多了地板和車道、V.roads 多一條車道（kind 'drive'：路上的車不走）、
 //             V.buildings 多一棟（kind 'garage'，沒有門：走進房子、居民、車流都不理它）、V.info.orbay；V.surfaceAt 包一層（地板、車道算水泥地 3）
 //   OB.door：鐵捲門 { t（0 關…1 開）, open(sec), close(sec), update(dt) → 還在動就 true, moving }（用法跟 room.js 的門一樣）
-//   OB.bays：四個停車格停車的位置 [{ x, z, heading }]（世界座標、車子原點，車頭朝北）；OB.zones.bays[i]＝那一格的長方形
+//   OB.bays：四個停車格停車的位置 [{ x, z, heading }]（世界座標、車子原點，車頭朝南＝朝通道，開出去不用倒車）；OB.zones.bays[i]＝那一格的長方形
 //   OB.zones：{ inside（裡面的地板）, aisle（通道）, apron（門外的車道）, door（門口：站在這裡給「開鐵捲門」）, bays }
 //   OB.doorCols(open)：門的碰撞（門關著才有；開車、走路都要）；OB.cull(camera)：鏡頭在裡面而且比屋頂高就不畫屋頂
 //   OB.update(dt)：門在動（每一格叫）；OB.signs：牆上、地上寫的字；OB.info：{ meshes, tris, ms }；OB.dispose()
@@ -17166,7 +17170,7 @@ function buildOrbay(V, o = {}) {
   };
   const bays = [];
   for (let i = 0; i < G.N; i++) {
-    const cx = bayX(i), b = toW({ x: cx, z: (IZ0 + BZ1) / 2, rot: Math.PI / 2 }); // 車頭朝裡面（開進去）
+    const cx = bayX(i), b = toW({ x: cx, z: (IZ0 + BZ1) / 2, rot: -Math.PI / 2 }); // 車頭朝外面（修 6，2026-10-10：以前車頭朝裡面，1 號格貼著牆要三點迴轉才出得來；現在直接往前開出去）
     bays.push({ x: b.x, z: b.z, heading: b.rot });
     zones.bays.push(toW({ x: cx, z: (IZ0 + BZ1) / 2, hx: G.BW / 2, hz: G.BD / 2, rot: 0 }));
   }
@@ -27789,12 +27793,19 @@ function createTraffic(o = {}) {
 
   // ---- 給開車（drive.js addColliders）、走路的碰撞：現在的車（重複用同一批物件，不要留著）----
   const colOut = [], colPool = [];
+  //   會動的車（vx、vz、m）：撞到照兩台車的動量算（drive.js），不會像撞牆一樣整台停住；被你推的（dvx、dvz）下一次叫的時候加到它的速度（只算往前的那份，路上的車不會倒退）
   function colliders(x, z, r) {
+    for (let i = 0; i < colOut.length; i++) { // 上一格被推的
+      const b = colOut[i], c = b.car; if (!b.dvx && !b.dvz) continue;
+      if (c && !c.crushed && act.includes(c)) c.v = Math.min(30, Math.max(0, c.v + b.dvx * Math.cos(c.heading) - b.dvz * Math.sin(c.heading)));
+      b.dvx = b.dvz = 0;
+    }
     colOut.length = 0;
     for (let i = 0; i < act.length; i++) {
       const c = act[i]; if (x != null && hyp(c.x - x, c.z - z) > r + c.hx) continue;
-      const b = colPool[colOut.length] || (colPool[colOut.length] = { t: 'box', x: -0, z: -0, hx: 1.5, hz: 1.5, rot: -0, h: 1.4, npc: true });
-      b.x = c.x; b.z = c.z; b.hx = c.hx; b.hz = c.hz; b.rot = c.heading; b.h = c.kind === 'scooter' ? 1.2 : 1.4; colOut.push(b);
+      const b = colPool[colOut.length] || (colPool[colOut.length] = { t: 'box', x: -0, z: -0, hx: 1.5, hz: 1.5, rot: -0, h: 1.4, npc: true, vx: 0, vz: 0, m: 1, dvx: 0, dvz: 0, car: null });
+      b.x = c.x; b.z = c.z; b.hx = c.hx; b.hz = c.hz; b.rot = c.heading; b.h = c.kind === 'scooter' ? 1.2 : 1.4;
+      b.vx = Math.cos(c.heading) * c.v; b.vz = -Math.sin(c.heading) * c.v; b.m = c.kind === 'scooter' ? 0.4 : c.hx > 3.2 ? 2.5 : 1; b.car = c; b.dvx = b.dvz = 0; colOut.push(b);
     }
     return colOut;
   }
@@ -28546,7 +28557,8 @@ return { createTraffic, createPedestrians, npcGraphs };
 //         賽車場（circuit）、長的圍牆／護欄（地圖的邊、快速道路：14 公尺以上）
 //   房子怎麼壓：輾到的那一下把那棟（同一個 g 的碰撞物＋貼在上面的小東西）記下來 → 分幾幀（每幀最多 SEL_MS 毫秒）從合併網格裡挑出它的三角形
 //     （三角形中心往裡面縮一點，在這棟的範圍裡、而且比較靠這棟不是靠隔壁）→ 0.6 秒內頂點的 y 往下壓（y × 瓦礫高／樓高）＋灰塵、瓦礫（共用的 InstancedMesh）
-//   壓扁的房子：離開 140 公尺以上 25 秒（或回車庫頁）一次全部長回來（頂點的 y 原本是多少記著）；重新載入也會回來
+//   壓扁的東西（大的、路邊的小東西都一樣）：扁了 20 秒、你離它 15 公尺以上就 0.8 秒慢慢長回來（頂點的 y 原本是多少記著）；回車庫頁、重新載入也會回來（修 8，2026-10-10）
+//   電線桿扁了：接在它上面的電線垂到地上，長回來的時候拉回去（修 9）
 //   o.any() → 現在開的是不是越野車；o.protect(x, z) → 這裡不能輾；o.copWreck(i, x, z) → police-ai 的 wreck（回傳 { x, z, th, hl, hw } 或 null）
 // 【效能】每幀只跑現在的墊子（最多 16 個）：約 0.01 ms，不配置記憶體；壓扁的頂點是輾到的那一下做一次（一台／一個東西 0.2–3 ms，只傳改到的那一段）
 
@@ -28563,7 +28575,10 @@ const CRIME_GAP = 8; // 一路輾過去只報一次警（一次 1★；不然一
 const V3 = new THREE.Vector3();
 // 第 9 批：大東西（房子、樹、路燈⋯）
 const LONG = 14; // 長的圍牆、護欄（地圖的邊、快速道路）不輾
-const FALL_T = 0.6, SEL_MS = 1.6, FAR = 140, AWAY = 25, REC_MAX = 64; // 壓下去幾秒；挑三角形每幀最多幾毫秒；離多遠多久全部長回來；最多記幾個
+const FALL_T = 0.6, SEL_MS = 1.6, REC_MAX = 96; // 壓下去幾秒；挑三角形每幀最多幾毫秒；最多記幾個
+// 修 8（Nick 2026-10-10「修5-12」）：輾扁的東西 20 秒後、你離它 15 公尺以上就慢慢長回來（0.8 秒，冒一團灰）；以前是離開 140 公尺 25 秒
+const BACK = 20, BACK_D = 15, GROW_BACK = 0.8;
+const WIRE_AT = 1.3, WIRE_REACH = 36; // 修 9：電線桿扁了，接在它上面（1.3 公尺內）的電線垂到地上；電線最長 36 公尺（等長回來的順序用）
 const SKIP_MESH = /(^|[-_|])(ground|area|walk|road|paint|hill|grass|paddy|water|asph|line|lane|trail)\b/i; // 地上的（壓不到）不用找
 
 // 哪些東西輾得過去（照碰撞物的大小分：跟 street.js 畫影子一樣的辦法）
@@ -28599,7 +28614,7 @@ function createCrush(o = {}) {
   const heightOf = typeof V.heightAt === 'function' ? V.heightAt : () => 0;
   let alive = true, colVer = 0, jN = 0, jBusy = false, awayT = 0, toldPark = false, crimeT = -99, clock = 0;
   const ME = { x: -0, z: -0, heading: -0, v: -0, hx: 2.8, hz: 1.9, big: false };
-  const st = { cars: 0, junk: 0, props: 0, bails: 0, pads: 0, flats: 0, ms: -0, maxMs: -0, frames: 0, types: [], big: 0, cops: 0, restored: 0, bigMs: -0, hitMs: -0 };
+  const st = { cars: 0, junk: 0, props: 0, bails: 0, pads: 0, flats: 0, ms: -0, maxMs: -0, frames: 0, types: [], big: 0, cops: 0, restored: 0, bigMs: -0, hitMs: -0, wires: 0 };
   // 墊子（池子裡重複用；小數欄位 -0／x.5 開始）
   const PAD = [];
   for (let i = 0; i < 16; i++) PAD.push({ on: false, kind: '', x: -0, z: -0, c: 1.5, s: -0, hx: 1.5, hz: 1.5, h0: 1.5, hf: 0.5, h: -0, sq: -0, sqA: -0, grow: -0, t: -0, snd: 0, ct: -0, flat: false, car: null, lod: null, col: null, junk: -1 });
@@ -28658,6 +28673,7 @@ function createCrush(o = {}) {
   const RGP = []; for (let i = 0; i < 8; i++) RGP.push({ start: 0, count: 0 });
   let rgi = 0;
   let meshKids = -1;
+  const WIRES = []; // { A, tx, ty, tz }：電線的 LineSegments（每條電線 8 段＝16 個頂點，一條接一條）
   function meshes() {
     const root = V.group || null;
     if (MESH && (!root || root.children.length === meshKids)) return MESH; // 第 9 批：後來加進來的（內湖）再找一次
@@ -28665,7 +28681,9 @@ function createCrush(o = {}) {
     if (!root) return MESH;
     meshKids = root.children.length;
     root.updateMatrixWorld(true);
+    WIRES.length = 0;
     root.traverse((m) => {
+      if (m.isLineSegments && /(^|-)wires$/.test(m.name || '')) { const A = m.geometry && m.geometry.attributes.position; if (A && A.array instanceof Float32Array) { const e = m.matrixWorld.elements; WIRES.push({ A, tx: e[12], ty: e[13], tz: e[14] }); } return; } // 修 9：電線（village 的 wires、street 的 st-wires）
       if (!m.isMesh || m.isInstancedMesh || m.isSkinnedMesh) return;
       const g = m.geometry, p = g && g.attributes && g.attributes.position;
       if (!p || p.count > 600000 || !(p.array instanceof Float32Array)) return;
@@ -28678,7 +28696,7 @@ function createCrush(o = {}) {
     });
     return MESH;
   }
-  function flatten(c) { // c＝碰撞物（drive.js 的那一份）
+  function flatten(c, rec) { // c＝碰撞物（drive.js 的那一份）；rec：記下改了哪些頂點、原本的 y（修 8：會長回來）
     const h = Math.max(0.25, c.h ?? 1), cs = Math.cos(c.rot || 0), sn = Math.sin(c.rot || 0);
     const rx = (c.t === 'box' ? c.hx : c.r) + 0.22, rz = (c.t === 'box' ? c.hz : c.r) + 0.22, reach = Math.sqrt(rx * rx + rz * rz);
     const k = PROP_FLAT / h, rr = c.t === 'circle' ? rx * rx : 0;
@@ -28688,8 +28706,8 @@ function createCrush(o = {}) {
     for (let j = 0; j < L.length; j++) {
       const q = L[j];
       if (Math.abs(q.cx - c.x) > q.r + reach || Math.abs(q.cz - c.z) > q.r + reach) continue;
-      const A = q.m.geometry.attributes.position, arr = A.array;
-      let lo = -1, hi = -1;
+      const A = q.m.geometry.attributes.position, arr = A.array, T = q.id ? 0 : q.ty;
+      let lo = -1, hi = -1; const ri = rec ? [] : null, ry = rec ? [] : null, rg = rec && tb ? [] : null;
       for (let i = 0; i < arr.length; i += 3) {
         const y = arr[i + 1], wy = q.id ? y : y + q.ty;
         if (tb ? wy - b0 < -1.5 || wy - b0 > h + 2 : y <= 0.04 || y > h + 0.5) continue;
@@ -28698,11 +28716,13 @@ function createCrush(o = {}) {
         const dx = x - c.x, dz = z - c.z;
         if (rr) { if (dx * dx + dz * dz > rr) continue; }
         else if (Math.abs(dx * cs - dz * sn) > rx || Math.abs(dx * sn + dz * cs) > rz) continue;
-        if (tb) { const g = heightOf(x, z), yr = wy - g; if (yr <= 0.04 || yr > h + 0.5) continue; arr[i + 1] = g + yr * k - (wy - y); }
+        if (tb) { const g = heightOf(x, z), yr = wy - g; if (yr <= 0.04 || yr > h + 0.5) continue; arr[i + 1] = g + yr * k - (wy - y); if (rg) rg.push(g); }
         else arr[i + 1] = y * k;
+        if (ri) { ri.push(i / 3); ry.push(y); }
         n++;
         if (lo < 0) lo = i; hi = i + 3;
       }
+      if (ri && ri.length) rec.push({ A, idx: Int32Array.from(ri), y0: Float32Array.from(ry), gb: rg ? Float32Array.from(rg) : null, lo: lo / 3, hi: (hi - 3) / 3, ty: tb ? T : 0, R: { start: 0, count: 0 } }); // setK 的算法：平地 y×k；山上 (y＋ty−地面)×k＋地面−ty（跟上面一樣）
       if (lo >= 0) { const R = RGP[rgi++ % RGP.length]; R.start = lo; R.count = hi - lo; if (A.updateRanges.length) { A.clearUpdateRanges(); A.needsUpdate = true; } else { A.updateRanges.push(R); A.needsUpdate = true; } } // 只上傳改到的那一段（第 9 批：還有別的沒上傳的：整個上傳，範圍才不會亂）
     }
     st.flats += n;
@@ -28825,9 +28845,11 @@ function createCrush(o = {}) {
     let b0 = 1e9, b1 = 1e9, b2 = -1e9, b3 = -1e9, top = 0;
     for (const g of grp) { const e = g.t === 'box' ? Math.abs(Math.cos(g.rot || 0)) * g.hx + Math.abs(Math.sin(g.rot || 0)) * g.hz : g.r, f = g.t === 'box' ? Math.abs(Math.sin(g.rot || 0)) * g.hx + Math.abs(Math.cos(g.rot || 0)) * g.hz : g.r; b0 = Math.min(b0, g.x - e); b2 = Math.max(b2, g.x + e); b1 = Math.min(b1, g.z - f); b3 = Math.max(b3, g.z + f); top = Math.max(top, g.h ?? 9); }
     const tree = src.t === 'circle', thin = tree && src.r < 0.45;
-    const M = thin ? clamp(top * 0.6, 0.6, 4.5) : tree ? clamp(top * 0.45, 0.6, 4.2) : top >= 2.4 ? 1.6 : 0.5; // 往外多抓幾公尺（樹冠、路燈的燈頭、招牌、屋簷）
+    const M = Math.max(thin ? clamp(top * 0.6, 0.6, 4.5) : tree ? clamp(top * 0.45, 0.6, 4.2) : top >= 2.4 ? 1.6 : 0.5, src.reach || 0); // 往外多抓幾公尺（樹冠、路燈的燈頭、招牌、屋簷）；修 9：內湖的大路牌（reach＝橫桿多長）整支橫桿＋牌子一起
+    const wire = thin && top >= 6; // 修 9：電線桿（高的細桿子）：接在上面的電線一起垂下來
+    settle(b0 - M - (wire ? WIRE_REACH : 0), b1 - M - (wire ? WIRE_REACH : 0), b2 + M + (wire ? WIRE_REACH : 0), b3 + M + (wire ? WIRE_REACH : 0));
     const rub = thin ? 0.12 : tree ? 0.18 : clamp(top * 0.1, 0.15, 0.8);
-    const j = { grp, items: pack(grp), nb: null, x: (b0 + b2) / 2, z: (b1 + b3) / 2, b0, b1, b2, b3, top, rub, M, tree, phase: 0, cand: [], mi: 0, ti: 0, sel: [], segs: [], t: 0, inst: null, chunks: [], bld: [], k: 1, away: 0, tb: false };
+    const j = { grp, items: pack(grp), nb: null, x: (b0 + b2) / 2, z: (b1 + b3) / 2, b0, b1, b2, b3, top, rub, M, ov: M + (wire ? WIRE_REACH : 0), tree, phase: 0, cand: [], mi: 0, ti: 0, sel: [], segs: [], t: 0, inst: null, chunks: [], bld: [], k: 1, kf: rub / Math.max(top, rub + 0.01), since: 0, wires: null, tb: false };
     j.tb = heightOf(j.x, j.z) !== 0 || terrainAt(j.x, j.z); // 山上：地面多高要一個一個量
     // 別的東西（三角形比較靠它們的不要壓）
     const nb = []; for (const q of cgNear(b0 - M - 2, b1 - M - 2, b2 + M + 2, b3 + M + 2, NB)) if (!grp.includes(q) && (q.h ?? 9) > 0.3) nb.push(q);
@@ -28840,6 +28862,7 @@ function createCrush(o = {}) {
     const L = meshes();
     for (let i = 0; i < L.length; i++) { const q = L[i]; if (q.skip) continue; if (q.cx + q.r < b0 - M || q.cx - q.r > b2 + M || q.cz + q.r < b1 - M || q.cz - q.r > b3 + M) continue; j.cand.push(q); }
     if (j.inst) j.cand.length = 0; // 內湖的樹：只有它自己（InstancedMesh）
+    if (wire) j.wires = wireDrop(src.x, src.z);
     BIG.push(j);
     st.big++; note(tree ? (thin ? 'pole' : 'tree') : top >= 2.4 ? 'building' : 'wall');
     const sz = Math.min(5, 1 + Math.sqrt((b2 - b0) * (b3 - b1)) * 0.25);
@@ -28897,6 +28920,10 @@ function createCrush(o = {}) {
       else for (let i = 0; i < I.length; i++) P[I[i] * 3 + 1] = (Y[i] + ty) * k - ty;
       upd(sg.A, sg.R, sg.lo * 3, (sg.hi - sg.lo + 1) * 3);
     }
+    if (j.wires) { // 修 9：電線（扁下去的時候一起垂下來，長回來的時候一起拉回去）
+      const f = j.kf < 1 ? clamp((1 - k) / (1 - j.kf), 0, 1) : 1;
+      for (const w of j.wires) { const P = w.A.array, I = w.idx, Y = w.y0, F = w.yf; for (let i = 0; i < I.length; i++) P[I[i] * 3 + 1] = Y[i] + (F[i] - Y[i]) * f; upd(w.A, w.R, w.lo * 3, (w.hi - w.lo + 1) * 3); }
+    }
     if (j.inst) { // 內湖的樹：矩陣的 y 軸縮下去、x z 放大一點（扁扁的一片）
       const A = j.inst.m.instanceMatrix, E = A.array, o16 = j.inst.i * 16, e = j.inst.e, kk = Math.max(k, 0.06), w = 1 + (1 - kk) * 0.35;
       for (let r = 0; r < 16; r++) E[o16 + r] = e[r] * (r < 3 || (r >= 8 && r < 11) ? w : r >= 4 && r < 7 ? kk : 1);
@@ -28905,11 +28932,38 @@ function createCrush(o = {}) {
     j.k = k;
   }
   function restoreJob(j) {
-    if (j.phase > 0 || j.segs.length || j.inst) setK(j, 1);
+    if (j.phase > 0 || j.segs.length || j.inst || j.wires) setK(j, 1);
     for (const g of j.grp) g.crushed = false;
     for (const b of j.bld) b.crushed = false;
+    hideRubble(j); j.phase = 3; st.restored++;
+  }
+  function hideRubble(j) {
     if (RUBM && j.chunks.length) { M4.makeScale(0, 0, 0); for (const id of j.chunks) RUBM.setMatrixAt(id, M4); RUBM.instanceMatrix.needsUpdate = true; }
-    j.chunks.length = 0; j.phase = 3; st.restored++;
+    j.chunks.length = 0;
+  }
+  const lap = (q, j) => q.b0 - q.ov < j.b2 + j.ov && q.b2 + q.ov > j.b0 - j.ov && q.b1 - q.ov < j.b3 + j.ov && q.b3 + q.ov > j.b1 - j.ov; // 兩個的範圍（含電線）碰得到
+  function settle(x0, z0, x1, z1) { // 要壓新的之前：碰得到的、正在長回來的先一次長好（不然新的會把長一半的 y 當成原本的）
+    for (let i = BIG.length - 1; i >= 0; i--) { const q = BIG[i]; if (q.phase < 4 || q.b0 - q.ov > x1 || q.b2 + q.ov < x0 || q.b1 - q.ov > z1 || q.b3 + q.ov < z0) continue; restoreJob(q); BIG.splice(i, 1); }
+  }
+  // 修 9：電線桿 (px, pz) 扁了：一端接在它上面的電線垂下來（那一端到地上，另一端不動，中間照離它多遠：(1−0)²）
+  function wireDrop(px, pz) {
+    meshes(); const out = [];
+    for (const W of WIRES) {
+      const P = W.A.array, n = W.A.count >> 4, idx = [], y0 = [], yf = []; let lo = 1e9, hi = -1;
+      for (let c = 0; c < n; c++) {
+        const s = c * 48, ds = Math.hypot(P[s] + W.tx - px, P[s + 2] + W.tz - pz), de = Math.hypot(P[s + 45] + W.tx - px, P[s + 47] + W.tz - pz);
+        if (ds > WIRE_AT && de > WIRE_AT) continue;
+        const atS = ds <= de;
+        for (let v = 0; v < 16; v++) {
+          const i = c * 16 + v, t = ((v + 1) >> 1) / 8, f = atS ? t : 1 - t; if (f >= 1) continue; // 第 v 個頂點是第 (v+1)/2 個點
+          const y = P[i * 3 + 1], g = heightOf(P[i * 3] + W.tx, P[i * 3 + 2] + W.tz) + 0.06 - W.ty;
+          idx.push(i); y0.push(y); yf.push(g + (y - g) * f * f); if (i < lo) lo = i; if (i > hi) hi = i;
+        }
+      }
+      if (idx.length) out.push({ A: W.A, idx: Int32Array.from(idx), y0: Float32Array.from(y0), yf: Float32Array.from(yf), lo, hi, R: { start: 0, count: 0 } });
+    }
+    st.wires += out.reduce((a, w) => a + w.idx.length, 0);
+    return out.length ? out : null;
   }
   function restoreAll() { // 全部長回來（後來壓的先回去：頂點原本的 y 才對）
     for (let i = BIG.length - 1; i >= 0; i--) restoreJob(BIG[i]);
@@ -28922,23 +28976,27 @@ function createCrush(o = {}) {
     for (let i = 0; i < BIG.length; i++) {
       const j = BIG[i];
       if (j.phase === 0) { if (selectStep(j, tEnd)) { j.phase = 1; j.t = 0; rubble(j); } }
-      else if (j.phase === 1) { j.t += dt; const f = ease(j.t / FALL_T), kf = j.rub / Math.max(j.top, j.rub + 0.01); setK(j, 1 - f * (1 - kf)); if (j.t >= FALL_T) j.phase = 2; }
-      j.away = live && Math.abs(ME.x - j.x) < FAR && Math.abs(ME.z - j.z) < FAR ? 0 : j.away + dt; // 離它多久了
+      else if (j.phase === 1) { j.t += dt; const f = ease(j.t / FALL_T); setK(j, 1 - f * (1 - j.kf)); if (j.t >= FALL_T) { j.phase = 2; j.since = 0; } }
+      else if (j.phase === 2) j.since += dt;
+      else if (j.phase === 4) { j.t += dt; setK(j, j.kf + (1 - j.kf) * ease(j.t / GROW_BACK)); if (j.t >= GROW_BACK) j.phase = 5; } // 修 8：長回來（慢慢變高）
     }
     const ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0; if (ms > st.bigMs) st.bigMs = ms;
-    // 離開 140 公尺以上 25 秒：長回來（後來壓的、範圍重疊的還扁著的話先等它：頂點原本的 y 才對）
+    // 修 8：扁了 20 秒、你離它 15 公尺以上：長回來（後來壓的、範圍重疊的還在的話先等它：頂點原本的 y 才對）
     for (let i = BIG.length - 1; i >= 0; i--) {
-      const j = BIG[i]; if (j.away <= AWAY || j.phase === 0) continue;
-      let busy = false; for (let k = i + 1; k < BIG.length; k++) { const q = BIG[k]; if (q.b0 - q.M < j.b2 + j.M && q.b2 + q.M > j.b0 - j.M && q.b1 - q.M < j.b3 + j.M && q.b3 + q.M > j.b1 - j.M) { busy = true; break; } }
+      const j = BIG[i];
+      if (j.phase === 5) { restoreJob(j); BIG.splice(i, 1); continue; } // 長好了：擋路的東西回來
+      if (j.phase !== 2 || j.since <= BACK) continue;
+      if (live) { const dx = Math.max(j.b0 - ME.x, 0, ME.x - j.b2), dz = Math.max(j.b1 - ME.z, 0, ME.z - j.b3); if (dx * dx + dz * dz < BACK_D * BACK_D) continue; }
+      let busy = false; for (let k = i + 1; k < BIG.length; k++) if (lap(BIG[k], j)) { busy = true; break; }
       if (busy) continue;
-      restoreJob(j); BIG.splice(i, 1);
+      j.phase = 4; j.t = 0; hideRubble(j); if (!j.prop) puff(j.x, j.z, Math.min(2.5, 0.8 + j.top * 0.12));
     }
     if (!BIG.length && RUBM) { rubN = 0; RUBM.count = 0; RUBM.visible = false; }
   }
   function bigHeight(x, z) { // 壓扁的房子（瓦礫）上面多高（開得上去）
     let best = 0;
     for (let i = 0; i < BIG.length; i++) {
-      const j = BIG[i]; if (j.phase === 0 || j.rub < 0.3 || x < j.b0 - RAMP || x > j.b2 + RAMP || z < j.b1 - RAMP || z > j.b3 + RAMP) continue;
+      const j = BIG[i]; if ((j.phase !== 1 && j.phase !== 2) || j.rub < 0.3 || x < j.b0 - RAMP || x > j.b2 + RAMP || z < j.b1 - RAMP || z > j.b3 + RAMP) continue;
       const L = j.items, top = j.rub * (j.phase === 2 ? 1 : ease(j.t / FALL_T)), d = outD(L, L.length, x, z);
       if (d >= RAMP) continue;
       const h = d <= 0 ? top : top * ease(1 - d / RAMP); if (h > best) best = h;
@@ -28974,13 +29032,20 @@ function createCrush(o = {}) {
     st.props++; note(label(c));
     if (o.sound) o.sound('crunch', c.x, c.z, clamp(0.16 + Math.abs(speed || 0) / 40, 0.14, 0.4));
     q.snd |= 1;
-    flatten(c);
-    q.flat = true;
-    police(c.x, c.z);
     // 村子本來的碰撞物（V.colliders）那一份也記起來：換別台車出門、走路的時候也知道它扁了（不擋）
-    if (c.src) { c.src.crushed = true; return true; } // 第 9 批：drive.js 的那一份記著原來那個（src）
+    let org = c.src || null; // 第 9 批：drive.js 的那一份記著原來那個（src）
     const L = V.colliders;
-    if (L) for (let i = 0; i < L.length; i++) { const q = L[i]; if (q.crushed !== true && q.t === c.t && q.x === c.x && q.z === c.z) { q.crushed = true; break; } }
+    if (!org && L) for (let i = 0; i < L.length; i++) { const k = L[i]; if (k.crushed !== true && k.t === c.t && k.x === c.x && k.z === c.z) { org = k; break; } }
+    org = org || c; org.crushed = true;
+    // 修 8：記下來（20 秒後長回來）
+    const e = c.t === 'box' ? Math.abs(Math.cos(c.rot || 0)) * c.hx + Math.abs(Math.sin(c.rot || 0)) * c.hz : c.r, f = c.t === 'box' ? Math.abs(Math.sin(c.rot || 0)) * c.hx + Math.abs(Math.cos(c.rot || 0)) * c.hz : c.r;
+    settle(c.x - e - 0.6, c.z - f - 0.6, c.x + e + 0.6, c.z + f + 0.6);
+    const segs = [], ph = Math.max(0.25, c.h ?? 1);
+    flatten(c, segs);
+    q.flat = true;
+    if (BIG.length >= REC_MAX) { let fi = 0, fd = -1; for (let i = 0; i < BIG.length; i++) { const d = Math.abs(BIG[i].x - ME.x) + Math.abs(BIG[i].z - ME.z); if (d > fd) { fd = d; fi = i; } } restoreJob(BIG[fi]); BIG.splice(fi, 1); }
+    BIG.push({ grp: [org], items: pack([org]), nb: null, x: c.x, z: c.z, b0: c.x - e, b1: c.z - f, b2: c.x + e, b3: c.z + f, top: ph, rub: 0, M: 0.3, ov: 0.6, tree: false, phase: 2, cand: [], segs, t: 0, inst: null, chunks: [], bld: [], k: PROP_FLAT / ph, kf: PROP_FLAT / ph, since: 0, wires: null, tb: false, prop: true });
+    police(c.x, c.z);
     return true;
   }
   function hitTraffic(car) { // npc.js：路上的車被怪獸卡車輾到（npc.js 已經把它從車流裡拿出來、停住）
@@ -30877,12 +30942,17 @@ function createPolice(o = {}) {
     if (c.group) c.group.scale.set(1 + 0.07 * e, 1 - 0.6 * e, 1 + 0.07 * e);
     c.v = 0; c.wreckT -= dt; if (c.wreckT <= 0) removeCar(c);
   }
-  function colliders(x, z, r) { // 現在的警車（長方形；陣列、物件都是重複用的）
+  function colliders(x, z, r) { // 現在的警車（長方形；陣列、物件都是重複用的）；會動的車（vx、vz、m）：撞到照動量算，被你推的（dvx、dvz）下一次加到它的速度
+    for (let i = 0; i < colOut.length; i++) {
+      const b = colOut[i]; if (!b.dvx && !b.dvz) continue;
+      const c = cars[b.pi]; if (c && c.on && !(c.wreckT > 0)) c.v = Math.max(-8, Math.min(40, c.v + b.dvx * Math.cos(c.th) - b.dvz * Math.sin(c.th)));
+      b.dvx = b.dvz = 0;
+    }
     colOut.length = 0;
     for (const c of cars) {
       if (!c.on || c.wreckT > 0 || (x != null && Math.hypot(c.x - x, c.z - z) > r + c.hl)) continue; // 第 9 批：輾扁的不擋（crush.js 的墊子：開得上去）
-      const b = colPool[colOut.length] || (colPool[colOut.length] = { t: 'box', x: 0, z: 0, hx: 1, hz: 1, rot: 0, h: 1.6, police: true, pi: 0 });
-      b.x = c.x; b.z = c.z; b.hx = c.hl; b.hz = c.hw; b.rot = c.th; b.pi = c.id; colOut.push(b); // pi：第幾台（第 9 批：越野車輾到 → wreck(pi)）
+      const b = colPool[colOut.length] || (colPool[colOut.length] = { t: 'box', x: 0, z: 0, hx: 1, hz: 1, rot: 0, h: 1.6, police: true, pi: 0, vx: 0, vz: 0, m: 1.2, dvx: 0, dvz: 0 });
+      b.x = c.x; b.z = c.z; b.hx = c.hl; b.hz = c.hw; b.rot = c.th; b.pi = c.id; b.vx = Math.cos(c.th) * c.v; b.vz = -Math.sin(c.th) * c.v; b.dvx = b.dvz = 0; colOut.push(b); // pi：第幾台（第 9 批：越野車輾到 → wreck(pi)）
     }
     return colOut;
   }
@@ -35319,6 +35389,7 @@ function makeDrv(pose) {
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
+  if (OB) drv.setCamCeil((x, z) => (OB.inside(x, z, 0.6) ? OB.size.ceil - 0.75 : Infinity)); // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
   if (police) drv.setMarkers(police.markers); // 第 3 批（b3-int）：小地圖上的警車
   drv.teleport(pose);
   tripFull = cur; tripPose[cur] = { x: pose.x, z: pose.z, heading: pose.heading }; if (parkShadow) parkShadow.visible = false;
@@ -35335,9 +35406,15 @@ function canShop() {
 function setDest(d) {
   tripDest = d || null;
   drv?.setDestination(d); walker?.setDestination(d); // 開車、走路都跟著這個目的地（左上角、小地圖的路線、光柱）
+  if (d && OB && drv && walker?.mode === 'off') { const t = drv.telemetry(); if (OB.inside(t.x, t.z)) openOrbay(); } // 修 7：在越野車車庫裡面按「去哪裡」：鐵捲門自己打開（不然路線穿過關著的門，開過去就卡住）
   destBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.d === d)));
+  destOpen(false);
 }
 destBtns.forEach((b) => b.addEventListener('click', () => { if (DRIVE.on) setDest(b.dataset.d); }));
+// 修 11：手機橫拿全螢幕開車的時候「去哪裡」收成一顆（garage.css .dtog）：按了打開，選了、開走了就收起來
+function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); }
+$('destTog').addEventListener('click', () => destOpen(!bodyFlags.destsopen));
+
 // 撞到東西：手機震一下（按過畫面才可以震）
 function bump(s) {
   if (s > 3 && navigator.vibrate && navigator.userActivation?.hasBeenActive) try { navigator.vibrate(Math.min(60, s * 8)); } catch { /* 不能震就算了 */ }
@@ -36567,6 +36644,7 @@ function driveStep(dt) {
       const t = drv.telemetry();
       dvoice?.set({ rpm: t.rpm, throttle: t.load, speed: Math.abs(t.v) });
       tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); // 駕駛座視角看得到轉速表、速度表
+      if (bodyFlags.destsopen && Math.abs(t.v) > 4) destOpen(false); // 修 11：開走了「去哪裡」收起來
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {
         drv.setAction(homeAct(t) || orbayAct(t) || bayAct(t)); // HUD 的大按鈕：開鐵捲門（車庫、越野車車庫）、停在這裡改車／看車
@@ -37355,7 +37433,7 @@ function netHill(tt) {
   netFin(R, R.go ? Math.round((netNow() - R.go) / 10) / 100 : tt);
 }
 function netRaceTick(dt) {
-  const R = NET.race, H = NET.hud; if (!R || !H) return;
+  const R = NET.race, H = NET.hud, tk = netNow(), tk0 = NET.tickAt || tk; NET.tickAt = tk; if (!R || !H) return;
   const left = R.go ? (R.go - netNow()) / 1000 : null;
   // 賽車場：朋友跑多遠（名次）、跑完的秒數
   for (const v of R.riv) { const P = NET.P.get(v.uid); if (P && P.cur.rs === R.seq && typeof P.cur.rp === 'number') v.p = P.cur.rp; const t = R.res[v.uid]; v.fin = t > 0 ? t : null; if (P && P.n) v.name = P.n; }
@@ -37367,7 +37445,7 @@ function netRaceTick(dt) {
     const sig = big + '|' + sub;
     if (sig !== H.sig) { H.sig = sig; H.big.textContent = big; H.big.className = big === '出發！' ? 'go' : ''; H.sub.textContent = sub; H.sub.hidden = !sub; }
     H.rc.hidden = left != null && (R.kind === 'circuit' || R.kind === 'drag' && left <= 0); // 賽車場有自己的紅燈、400 公尺有燈樹
-    if (left != null && left <= 0 && R.phase === 'wait') { R.phase = 'run'; R.runAt = netNow(); if (R.kind === 'hill' && drv) { drv.setInput(null); R.held = false; } }
+    if (left != null && left <= 0 && R.phase === 'wait') { R.phase = 'run'; R.runAt = tk; R.runGap = tk - tk0; // runGap：跟上一格差多久（出發是在 go 以後的第一格） if (R.kind === 'hill' && drv) { drv.setInput(null); R.held = false; } }
     if (R.kind === 'hill' && R.held && drv && Math.abs(drv.telemetry().v) > 0.3) drv.setInput(NET_HOLD);
   } else if (!H.rc.hidden && R.phase !== 'prep') H.rc.hidden = true;
   const q = (R.phase === 'wait' || R.phase === 'run') && R.myT == null && (R.kind === 'hill' ? netWorld() : R.kind === 'drag' && RACE.on && document.body.classList.contains('fs')); // 爬山、全螢幕的 400 公尺（下面那一塊藏起來了）：「放棄這場」；賽車場有自己的、一般版面的 400 公尺按「開回村子」
@@ -37452,7 +37530,7 @@ function netDragInit(Rc) {
   return true;
 }
 function netDragTick(Rc, dt) { // raceFrame 一開始：出發時間換成比賽的時鐘
-  const R = Rc.net;
+  const R = Rc.net, wall = Date.now(); Rc.gapMs = wall - (Rc.wallAt || wall); Rc.wallAt = wall; // 這一格跟上一格差多久（測試看綠燈是不是 go 以後的第一格）
   netRaceTick(dt);
   if (R.go) R.goT = Rc.t + (R.go - netNow()) / 1000; // 每一格重算：手機卡卡的（一格超過 0.1 秒）比賽的時鐘會慢，綠燈還是照伺服器的時間亮
   if (Rc.phase === 'intro' && R.goT != null && Rc.t > 1.6) { Rc.phase = 'stage'; Rc.stageT = Rc.t; toast('準備', 800); }
@@ -37621,7 +37699,7 @@ Object.assign(window.beauGame, {
     race: netRace,
     results: netResults,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
-    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, car: !!P.obj, walk: !!P.chr })), race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, cols: NET.cols.length }; },
+    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, car: !!P.obj, walk: !!P.chr })), race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, cols: NET.cols.length }; },
   },
   visit: netVisit,
 });
