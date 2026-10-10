@@ -43,6 +43,7 @@
 //   drive.setAction2({ label, onClick, icon } | null)   第二顆（右邊、換視角鈕下面，深色的，例如「下車」）：跟大按鈕同時在，不會被「開鐵捲門」蓋掉；
 //                          沒有大按鈕的時候鍵盤 E 按這顆；icon 預設 'walk'（走路的人）；drive.action2＝現在的字
 //   drive.addColliders(list, tag) / drive.removeColliders(tag)   會變的碰撞物（鐵捲門關著才擋、停著的車），格式跟 world.colliders 一樣；
+//                          會動的車多給 vx、vz（它的速度 m/s）、m（比你重幾倍，預設 1）：撞到照兩台車的動量算（追撞不會整台停住），它被推的速度加在原來那個的 dvx、dvz（它自己拿去用、歸零）；
 //                          同一個 tag 可以加很多次，removeColliders(tag) 一次全部拿掉；回傳加了／拿掉幾個
 //   drive.setMarkers(list | null)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝這幀不畫） }]；
 //                          只記住陣列本身，每一幀照裡面現在的值畫（陣列可以一直改，不用再叫）；地圖外面的貼在邊上；null＝不畫
@@ -379,8 +380,14 @@ function createDrive(o) {
   };
   // 撞進去（w＝撞進去的速度 m/s）：法向吃掉、彈回一點；沿著牆的速度照摩擦（0.35）掉一些；車頭往沿著牆的方向轉一點
   function impact(w, fn, nx, nz, px, pz, f, c) {
+    if (c && c.vx !== undefined) { // 撞到會動的車（比賽的對手：c.vx、c.vz 它的速度，c.m 它比你重幾倍）：照兩台車一起算（動量、有一點點彈），w＝兩台車靠近多快
+      const m = c.m > 0 ? c.m : 1, J = 1.15 * w; // 1.15＝彈回 0.15
+      st.v += (J * m / (1 + m)) * fn; // 追撞前車：你掉到差不多它的速度（不是整台停住），它被推快一點
+      const s = c.src, k = J / (1 + m); s.dvx = (s.dvx || 0) - k * nx; s.dvz = (s.dvz || 0) - k * nz; c.vx -= k * nx; c.vz -= k * nz; // 它被推的（下一格它自己拿去用；這一格剩下的小步先用新的速度，才不會一直撞）
+    } else {
     const e = Math.min(0.25 * w, 2), ft2 = Math.max(0, 1 - fn * fn), vt = Math.abs(st.v) * Math.sqrt(ft2), mu = vt > 1e-3 ? Math.min(1, (0.35 * (w + e)) / vt) : 1;
     st.v = st.v * ft2 * (1 - mu) + e * fn;
+    }
     const tx = -nz, tz = nx, ft = f[0] * tx + f[1] * tz;
     // 擦到：轉成沿著牆；正面：照撞到的點（力矩），慢慢頂著（10 km/h 以下）就不轉（方向盤轉得出來）；一次最多轉 20°（不會打轉）
     const dth = Math.abs(ft) > 0.2 ? wrapA(Math.atan2(-tz * Math.sign(ft), tx * Math.sign(ft)) - st.th) : clamp(pz * nx - px * nz, -1, 1) * 0.2 * clamp((w - 0.3) / 2, 0, 1);
@@ -411,7 +418,7 @@ function createDrive(o) {
         if (!p) continue;
         if (CRU && CRU.can(c)) { if (CRU.hit(c, Math.abs(st.v)) === false) c.crushed = true; continue; } // 第 7 批：怪獸卡車輾過去（不擋、不彈開、不算撞到；車子照 crush.js 的墊子爬上去）
         st.x += p[0]; st.z += p[1]; cx += p[0]; cz += p[1]; moved = true; hit++; st.touch = 0.2;
-        const fn = st.slip !== 0 ? Math.cos(st.th + st.slip) * p[2] - Math.sin(st.th + st.slip) * p[3] : f[0] * p[2] + f[1] * p[3], w = -st.v * fn; // 第 3 批：甩尾的時候照「走的方向」算撞進去多快
+        const fn = st.slip !== 0 ? Math.cos(st.th + st.slip) * p[2] - Math.sin(st.th + st.slip) * p[3] : f[0] * p[2] + f[1] * p[3], w = -st.v * fn + (c.vx !== undefined ? c.vx * p[2] + c.vz * p[3] : 0); // 第 3 批：甩尾的時候照「走的方向」算撞進去多快；會動的車：照兩台車靠近多快
         if (w > 0.05) { impact(w, fn, p[2], p[3], p[4], p[5], f, c); if (st.slip !== 0) hitSlide(w); }
         else { const pen = Math.hypot(p[0], p[1]), cr = p[5] * p[2] - p[4] * p[3]; st.th = wrapA(st.th + clamp((2 * cr * pen) / (p[4] * p[4] + p[5] * p[5] + 0.5), -0.04, 0.04)); } // 慢慢頂著：照碰到的點轉一點（滑開）
       }

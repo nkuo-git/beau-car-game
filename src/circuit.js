@@ -837,7 +837,9 @@ function createCircuitRace(o) {
     if (vt > a.v) a.v = Math.min(vt, a.v + Math.max(0.3, acc) * h); else a.v = Math.max(vt, a.v - brk * h);
     a.brake = vt < a.v - 0.6 || state === 'grid';
     a.p += a.v * h * (CO.ds / Math.max(0.5, CO.lq[i]));
-    const d0 = a.d; a.d += clamp(target - a.d, -2.2 * h, 2.2 * h); a.dd += ((a.d - d0) / h - a.dd) * (1 - Math.exp(-h * 5));
+    const d0 = a.d; a.d += clamp(target - a.d, -2.2 * h, 2.2 * h);
+    if (a.pushD) { a.d = clamp(a.d + a.pushD * h, -HW + 1, HW - 1); a.pushD *= Math.exp(-h * 4); if (Math.abs(a.pushD) < 0.05) a.pushD = 0; } // 被你撞到旁邊（慢慢停下來，不會被推出跑道）
+    a.dd += ((a.d - d0) / h - a.dd) * (1 - Math.exp(-h * 5));
     const c = CO.at(a.p, TMP);
     a.x = c.x - c.tz * a.d; a.z = c.z + c.tx * a.d; a.k = c.k;
     a.th = Math.atan2(-c.tz, c.tx) - Math.atan2(a.dd, Math.max(6, a.v));
@@ -852,7 +854,7 @@ function createCircuitRace(o) {
     M4.compose(V3.set(a.x, 0.05, a.z), Q.setFromAxisAngle(UP, a.th), S3.set(a.info.len + 0.6, 1, a.info.halfW * 2 + 0.4)); sIM.setMatrixAt(j, M4);
   }
   const HOLD = { throttle: 0, brake: 1, steer: 0, handbrake: 1 }; // 手煞車：停住了只按煞車會換倒車
-  const AIC = ais.map(() => ({ t: 'box', x: 0, z: 0, hx: 2, hz: 1, rot: 0, h: 1.6 }));
+  const AIC = ais.map(() => ({ t: 'box', x: 0, z: 0, hx: 2, hz: 1, rot: 0, h: 1.6, vx: 0, vz: 0, m: 1, dvx: 0, dvz: 0 }));
   function finish() {
     state = 'done';
     if (drv.setInput) drv.setInput({ throttle: 0, brake: 1, steer: 0 }); // 先煞車（很快的時候拉手煞車會甩尾），停住了再拉手煞車（playerTick）
@@ -891,11 +893,16 @@ function createCircuitRace(o) {
     if (msgT > 0) msgT -= dt;
     playerTick(dt);
     const ns = Math.max(1, Math.ceil(dt * 60 - 1e-6)), h = dt / ns;
+    ais.forEach((a, j) => { // 你撞到它（drive.js 加在 AIC 的 dvx、dvz）：往前的那份加到它的速度，往旁邊的那份推它換一點車道
+      const c = AIC[j]; if (!c.dvx && !c.dvz) return;
+      const fx = Math.cos(a.th), fz = -Math.sin(a.th);
+      a.v = Math.max(0, a.v + c.dvx * fx + c.dvz * fz); a.pushD = clamp((a.pushD || 0) + c.dvx * -fz + c.dvz * fx, -6, 6); c.dvx = c.dvz = 0;
+    });
     for (let q = 0; q < ns; q++) for (const a of ais) aiStep(a, h);
     ais.forEach((a, j) => aiPose(a, j));
     sIM.instanceMatrix.needsUpdate = true;
     // 對手的車是會動的碰撞（撞到會被擋住）
-    if (drv.removeColliders) { drv.removeColliders('ciai'); ais.forEach((a, j) => { const c = AIC[j]; c.x = a.x + Math.cos(a.th) * a.info.CX; c.z = a.z - Math.sin(a.th) * a.info.CX; c.hx = a.info.len / 2; c.hz = a.info.halfW; c.rot = a.th; }); drv.addColliders(AIC, 'ciai'); }
+    if (drv.removeColliders) { drv.removeColliders('ciai'); ais.forEach((a, j) => { const c = AIC[j]; c.x = a.x + Math.cos(a.th) * a.info.CX; c.z = a.z - Math.sin(a.th) * a.info.CX; c.hx = a.info.len / 2; c.hz = a.info.halfW; c.rot = a.th; c.vx = Math.cos(a.th) * a.v; c.vz = -Math.sin(a.th) * a.v; }); drv.addColliders(AIC, 'ciai'); } // vx、vz：撞到照兩台車的速度算（追撞不會整台停住）
     if (hud) {
       const big = msgT > 0 ? msg : '';
       if (hud.last.cd !== big) { hud.last.cd = big; hud.cd.textContent = big; hud.cd.className = 'cir-c' + (big === '出發！' ? ' go' : /開反/.test(big) ? ' warn' : ''); hud.cd.hidden = !big; }
