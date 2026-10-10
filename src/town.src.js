@@ -412,6 +412,7 @@ function makeDrv(pose) {
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
+  if (OB) drv.setCamCeil((x, z) => (OB.inside(x, z, 0.6) ? OB.size.ceil - 0.75 : Infinity)); // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
   if (police) drv.setMarkers(police.markers); // 第 3 批（b3-int）：小地圖上的警車
   drv.teleport(pose);
   tripFull = cur; tripPose[cur] = { x: pose.x, z: pose.z, heading: pose.heading }; if (parkShadow) parkShadow.visible = false;

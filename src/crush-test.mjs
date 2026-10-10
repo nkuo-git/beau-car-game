@@ -523,16 +523,43 @@ console.log('  neihu building:', JSON.stringify(nh));
 check(!nh.none && nh.crushed === 0 && nh.can === 0 && nh.verts === 0 && (nh.r.bumps > 0 || nh.r.kmh < 12), `a building in 內湖 (${nh.n} collider boxes) stops the truck and is not flattened (bumps ${nh.r?.bumps})`);
 check(!nh.none && nh.tops <= 7.5, `內湖 buildings are at most 2 floors now (tallest ordinary building ${nh.tops} m)`);
 await drawAndShot('10-neihu-solid');
-// 6g 長回來：離開 140 公尺以上 25 秒
-const back9 = await p.evaluate((hq) => {
+// 6g 修 8＋9（2026-10-10）：電線桿輾扁了，接在上面的電線垂到地上；扁了 20 秒、離開 15 公尺以上才 0.8 秒長回來（電線也拉回去），擋路的又擋了
+const back9 = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, C = window.__C(), V = D.VIL;
-  const c = hq ? V.colliders.find((k) => k.t === 'box' && k.x === hq.x && k.z === hq.z) : null, n0 = C.big.length;
-  D.drv.teleport(V.places.circuit.spawn); H.step(30); // 賽車場（離村子、越野車場、內湖都很遠）
-  H.step(900, 1 / 30); // 30 秒
-  return { n0, n1: C.big.length, crushed: c ? !!c.crushed : null, doors: V.buildings.filter((b) => b.crushed).length, restored: C.stats.restored, nhCrushed: V.colliders.filter((k) => k.g != null && k.crushed).length };
-}, hs.none ? null : hs);
-console.log('  after being away:', JSON.stringify(back9));
-check(back9.n0 >= 1 && back9.n1 === 0 && back9.crushed === false && back9.doors === 0 && back9.nhCrushed === 0, `everything flattened came back after being away for a while (${back9.restored} things restored; houses were never flattened)`);
+  window.__pol().clear();
+  D.drv.teleport(V.places.garage.spawn); H.step(30);
+  const wl = []; V.group.traverse((m) => { if (m.isLineSegments && /(^|-)wires$/.test(m.name)) wl.push(m); });
+  const wireLow = (x, z) => { let lo = 99; for (const m of wl) { const P = m.geometry.attributes.position.array; for (let i = 0; i < P.length; i += 3) if (Math.hypot(P[i] - x, P[i + 2] - z) < 1.3) lo = Math.min(lo, P[i + 1]); } return +lo.toFixed(2); };
+  const t = D.drv.telemetry();
+  const q = H.pickBig(t.x, t.z, (c) => c.t === 'circle' && Math.abs(c.r - 0.24) < 0.01 && (c.h ?? 0) > 10 && wireLow(c.x, c.z) < 20, 400); // 村子的電線桿（有電線接著的）
+  if (q.none) return { none: true, n: q.n };
+  const c = q.c; delete q.c;
+  const snap = wl.map((m) => m.geometry.attributes.position.array.slice()), w0 = C.stats.wires, r0 = C.stats.restored;
+  const wireBefore = wireLow(c.x, c.z);
+  const r = H.ram(q, 0.5, 4);
+  const j = C.big.find((k) => k.grp.includes(c));
+  const away = () => { D.drv.teleport(V.places.circuit.spawn); H.step(10); }; // 賽車場（很遠）
+  const near = () => { const a = q.a, d = q.e + 6; D.drv.teleport({ x: c.x - Math.cos(a) * d, z: c.z + Math.sin(a) * d, heading: a }); H.step(10); return +Math.hypot(D.drv.telemetry().x - c.x, D.drv.telemetry().z - c.z).toFixed(1); };
+  const since = () => (j ? +j.since.toFixed(1) : null);
+  const flat = { crushed: !!c.crushed, maxY: j ? H.segMaxY(j) : null, wireY: wireLow(c.x, c.z), wires: C.stats.wires - w0 };
+  away(); H.step(360, 1 / 30); // 離得很遠，可是才 12 秒
+  const early = { crushed: !!c.crushed, phase: j ? j.phase : null, since: since() };
+  const nd = near(); H.step(450, 1 / 30); // 回到旁邊（15 公尺內）再 15 秒：超過 20 秒了，可是人在旁邊
+  const close = { crushed: !!c.crushed, phase: j ? j.phase : null, since: since(), d: nd };
+  away(); H.step(6); // 一離開就開始長
+  const grow = { phase: j ? j.phase : null, k: j ? +j.k.toFixed(2) : null, crushed: !!c.crushed };
+  H.step(150, 1 / 30); // 5 秒
+  let wd = 0; wl.forEach((m, n) => { const P = m.geometry.attributes.position.array, S = snap[n]; for (let i = 1; i < P.length; i += 3) wd = Math.max(wd, Math.abs(P[i] - S[i])); });
+  let md = 0; if (j) for (const sg of j.segs) { const P = sg.A.array; for (let i = 0; i < sg.idx.length; i++) md = Math.max(md, Math.abs(P[sg.idx[i] * 3 + 1] - sg.y0[i])); }
+  return { q, r, before: wireBefore, flat, early, close, grow, back: { crushed: !!c.crushed, inBig: !!j && C.big.includes(j), n: C.big.length, wireDiff: +wd.toFixed(5), meshDiff: +md.toFixed(5), restored: C.stats.restored - r0, wireY: wireLow(c.x, c.z) },
+    left: V.colliders.filter((k) => k.crushed).length, doors: V.buildings.filter((b) => b.crushed).length };
+});
+console.log('  pole + wires, grow back:', JSON.stringify(back9));
+check(!back9.none && back9.flat.crushed && back9.flat.maxY <= 1.2 && back9.flat.wires > 0 && back9.before > 6 && back9.flat.wireY < 1, `a power pole flattened and the wires on it came down to the ground with it (${back9.flat?.wires} wire points; lowest end ${back9.before} → ${back9.flat?.wireY} m)`);
+check(!back9.none && back9.early.crushed && back9.early.phase === 2 && back9.close.crushed && back9.close.phase === 2 && back9.close.since > 20 && back9.close.d < 15, `it stays flat for 20 s (${back9.early?.since} s, far away) and while you are close (${back9.close?.since} s, ${back9.close?.d} m away)`);
+check(!back9.none && back9.grow.phase === 4 && back9.grow.k < 0.5, `after 20 s with you 15 m+ away it grows back slowly (k ${back9.grow?.k} a moment after leaving)`);
+check(!back9.none && !back9.back.crushed && !back9.back.inBig && back9.back.wireDiff < 1e-4 && back9.back.meshDiff < 1e-4 && back9.back.wireY > 6, `the pole is back (solid again) and the wires hang where they were (max wire change ${back9.back?.wireDiff}, pole ${back9.back?.meshDiff})`);
+check(!back9.none && back9.back.n === 0 && back9.left === 0 && back9.doors === 0, `everything flattened earlier came back too (${back9.back?.restored} restored here; nothing still flat, no doors shut)`);
 summary.push(`off-road truck: house solid, ${tr.t} ${tree?.verts} verts, police car +${cop ? cop.w1 - cop.w0 : '?'}★, neihu building solid (${nh.n} boxes); picking triangles max ${nh.ms} ms/frame, the hit itself max ${nh.hit} ms`);
 
 // ================= 7 第 9 批（路變大）：路變寬（村子、內湖）、車流照跑、內湖左上角的路名 =================

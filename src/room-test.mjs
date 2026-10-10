@@ -42,7 +42,7 @@ const srv = http.createServer((req, res) => {
   res.end(body);
 }).listen(0);
 const URL0 = `http://127.0.0.1:${srv.address().port}/site/`;
-const LAUNCH = { executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'] };
+const LAUNCH = { executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-accelerated-2d-canvas', '--disable-gpu-compositing'] };
 // 一支手機一個瀏覽器：同一個瀏覽器的兩個分頁共用一個（軟體）GPU，一支一直在畫，另一支會等好幾分鐘
 const BR = {}, b = { close: () => Promise.all(Object.values(BR).map((x) => x.close())) };
 const errs = [], fails = [];
@@ -146,18 +146,6 @@ async function phone(key, uid, name) {
 // 兩支手機都用軟體畫（CPU 不夠）：遊戲照常跑（計時器一秒 30 次），但 300 次才真的畫 1 次；拍照、量 draw calls 前先每次都畫
 const shot = async (p, file) => { await p.evaluate(() => window.__thin(1)); await p.waitForTimeout(1500); await p.screenshot({ path: file }); await p.evaluate(() => window.__thin(300)); };
 const A = await phone('A', 'u1', '大便龍車神');
-if (process.env.PROBE) { // 只看一支手機的速度
-  await A.evaluate(() => window.__thin(+localStorage.getItem('x') || 20));
-  const f0 = await A.evaluate(() => new Promise((ok) => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < 3000) requestAnimationFrame(f); else ok(n / 3); }; requestAnimationFrame(f); }));
-  await A.click('#driveOut'); await A.waitForFunction(() => window.__D().on && window.__D().walker, null, { timeout: 120000, polling: 100 }); await A.waitForTimeout(3000);
-  for (const n of [20, 1]) {
-    await A.evaluate((n) => window.__thin(n), n);
-    const fp = await A.evaluate(() => new Promise((ok) => { const k0 = window.__ticks, t0 = performance.now(), w0 = window.__D().walker.telemetry(); window.__D().walker.setInput({ y: -1 }); setTimeout(() => { const w1 = window.__D().walker.telemetry(); window.__D().walker.setInput(null); ok([(window.__ticks - k0) / ((performance.now() - t0) / 1000), Math.hypot(w1.x - w0.x, w1.z - w0.z) / ((performance.now() - t0) / 1000)]); }, 4000); }));
-    const st = await A.evaluate(() => { const t0 = performance.now(); window.__dstep(10); return (performance.now() - t0) / 10; });
-    console.log('probe thin', n, 'garage fps', f0, 'out fps', fp, 'driveStep ms', st.toFixed(1), JSON.stringify(await A.evaluate(() => window.__rinfo())));
-  }
-  await b.close(); srv.close(); process.exit(0);
-}
 const B = await phone('B', 'u2', '阿明快車手');
 for (const p of [A, B]) await p.evaluate(() => window.__thin(300));
 console.log('loaded', el());
@@ -214,8 +202,9 @@ const outOK = await Promise.all([A, B].map((p) => waitFor(p, () => window.__D().
 console.log('3', el(), outOK);
 check(outOK[0] && outOK[1], 'host pressed 一起出門: both phones went out (walking at the garage)');
 check(await A.evaluate(() => document.getElementById('netDlg').hidden), 'the dialog closed so the game shows');
-const seeB = await waitFor(A, () => { const i = window.beauGame.net.info; return i.peers[0] && i.peers[0].vis && i.peers[0].walk && i.marks === 1; }, null, 30000);
-const seeA = await waitFor(B, () => { const i = window.beauGame.net.info; return i.peers[0] && i.peers[0].vis && i.peers[0].walk; }, null, 30000);
+const seeB = await waitFor(A, () => { const i = window.beauGame.net.info; return i.peers[0] && i.peers[0].vis && i.peers[0].walk && i.marks === 1; }, null, 60000);
+const seeA = await waitFor(B, () => { const i = window.beauGame.net.info; return i.peers[0] && i.peers[0].vis && i.peers[0].walk; }, null, 60000);
+console.log('   see', seeB, seeA, JSON.stringify(await info(B)));
 if (!seeB || !seeA) { const s0 = await B.evaluate(() => window.__beauRoom.sent); await B.waitForTimeout(5000); console.log('   stale', JSON.stringify({ sentIn5s: (await B.evaluate(() => window.__beauRoom.sent)) - s0, age: await A.evaluate(() => Date.now() + window.__NET().off - window.__NET().P.get('u2').last), db: getAt(`rooms/${CODE}/p/u2`), now: Date.now() })); }
 const i3 = await info(A);
 console.log('  ', JSON.stringify(i3));
@@ -224,7 +213,7 @@ const hud3 = await A.evaluate(() => { const r = document.querySelector('.nt'); r
 check(/房間 \S{4} · 2 個人/.test(hud3 || ''), `room box in the game: ${hud3}`);
 // 走一下：B 往前走，A 看到的位置跟著動
 const w0 = await A.evaluate(() => ({ ...window.__NET().P.get('u2').mk }));
-await B.evaluate(() => window.__D().walker.setInput({ y: -1 }) /* 往鏡頭走：前面是車 */); await B.waitForTimeout(1500); await B.evaluate(() => window.__D().walker.setInput(null));
+await B.evaluate(() => window.__D().walker.setInput({ y: -1 }) /* 往鏡頭走：前面是車 */); await B.waitForTimeout(3000); await B.evaluate(() => window.__D().walker.setInput(null));
 await A.waitForTimeout(800);
 const w1 = await A.evaluate(() => ({ ...window.__NET().P.get('u2').mk }));
 console.log('   walk', JSON.stringify(w0), JSON.stringify(w1), JSON.stringify(getAt(`rooms/${CODE}/p/u2`)), await B.evaluate(() => JSON.stringify({ sent: window.__beauRoom.sent, st: window.beauGame.net.state(), wk: (({ x, z, paused, speed }) => ({ x, z, paused, speed }))(window.__D().walker.telemetry()), mode: window.__D().walker.mode, ae: document.activeElement?.id || document.activeElement?.tagName })), await A.evaluate(() => { const P = window.__NET().P.get('u2'); return JSON.stringify({ n: P.buf.length, last: P.buf[P.buf.length - 1], now: Date.now() }); }));
@@ -261,10 +250,10 @@ await A.waitForTimeout(800);
 const held = await A.evaluate(() => Math.abs(window.__D().drv.telemetry().v));
 check(held < 0.5, `before the start the car stays put even with throttle (${held.toFixed(2)} m/s)`);
 await A.evaluate(() => window.__D().drv.setInput(null));
-await shot(A, `${prefix}-5-hill-countdown.png`);
-const runAt = await Promise.all([A, B].map((p) => waitFor(p, () => window.beauGame.net.info.race?.phase === 'run', null, 60000).then(() => p.evaluate(() => window.beauGame.net.info.race.runAt))));
-const goGap = runAt.map((t) => t - go5);
-check(goGap.every((g) => g >= 0 && g < 1500), `both started at the agreed time (start − go: ${goGap.join(' / ')} ms)`);
+const runAt = await Promise.all([A, B].map((p) => waitFor(p, () => window.beauGame.net.info.race?.phase === 'run', null, 60000).then(() => p.evaluate(() => { const r = window.beauGame.net.info.race; return { at: r.runAt, gap: r.runGap }; }))));
+const goGap = runAt.map((r) => r.at - go5);
+// 出發要在 go 以後的第一格（這台測試機器有時候一格要好幾秒，所以跟那一格的長度比）
+check(runAt.every((r, i) => goGap[i] >= 0 && goGap[i] <= r.gap + 50), `both started on the first frame after the agreed time (start − go: ${goGap.join(' / ')} ms; frame ${runAt.map((r) => r.gap).join(' / ')} ms)`);
 // A 開過起點門，然後放到山頂前面開過終點
 const hill = await A.evaluate(async () => {
   const D = window.__D(), d = D.drv, M = D.VIL.mountain;
@@ -301,10 +290,8 @@ for (const p of [A, B]) await p.evaluate(() => { // 機器人：綠燈 0.2 秒�
   const tick = () => { const r = window.__R(); if (!r || !r.net) return; if (r.phase === 'run' && r.me.fin == null) { const c = r.me; if (c.go == null) { if (r.t - r.green > 0.2) press('goBtn'); } else if (c.rpm >= 0.93 && c.shiftT <= 0 && c.gear < 5) press('goBtn'); } };
   setInterval(tick, 30); // 不用 requestAnimationFrame（這台機器一秒不到 1 格）
 });
-const dragDbg = async () => { for (const [k, p] of [['A', A], ['B', B]]) console.log('   drag', k, await p.evaluate(() => { const r = window.__R(), i = window.beauGame.net.info.race; return JSON.stringify({ race: i && { seq: i.seq, phase: i.phase, go: i.go, goT: window.__NET().race?.goT }, R: r && { phase: r.phase, t: r.t, greenAt: r.greenAt, green: r.green }, now: Date.now() }); })); console.log('   db', JSON.stringify(getAt(`rooms/${CODE}/race`)), JSON.stringify(getAt(`rooms/${CODE}/r`))); };
-await A.waitForTimeout(6000); await dragDbg();
-const greens = await Promise.all([A, B].map((p) => p.waitForFunction(() => { const r = window.__R(); return r && r.greenNow ? r.greenNow - r.net.go : false; }, null, { timeout: 90000, polling: 100 }).then((h) => h.jsonValue())));
-check(greens.every((g) => g >= 0 && g < 800), `green light at the agreed time on both phones (green − go: ${greens.join(' / ')} ms)`);
+const greens = await Promise.all([A, B].map((p) => p.waitForFunction(() => { const r = window.__R(); return r && r.greenNow ? { d: r.greenNow - r.net.go, gap: r.gapMs } : false; }, null, { timeout: 90000, polling: 100 }).then((h) => h.jsonValue())));
+check(greens.every((g) => g.d >= 0 && g.d <= g.gap + 50), `green light on the first frame after the agreed time on both phones (green − go: ${greens.map((g) => g.d).join(' / ')} ms; frame ${greens.map((g) => g.gap).join(' / ')} ms)`);
 await A.waitForFunction(() => window.__R()?.me.x > 120, null, { timeout: 60000, polling: 100 });
 const mid = await A.evaluate(() => { const r = window.__R(), o = r.nOpp[0]; return { me: r.me.x, opp: o.x, vis: !!o.obj && o.obj.car.visible, z: o.obj?.car.position.z }; });
 console.log('6', el(), JSON.stringify(mid));
@@ -319,6 +306,7 @@ await shot(B, `${prefix}-6-drag-results.png`);
 // ---- 7 回房間：接著一起開車 ----
 for (const p of [A, B]) await click(p, '.nt-res .b');
 const back = await Promise.all([A, B].map((p) => waitFor(p, () => window.__D().on && window.__D().drv && !window.__R() && !window.beauGame.net.info.race, null, 30000)));
+if (!back[0] || !back[1]) for (const p of [A, B]) console.log('   back', await p.evaluate(() => JSON.stringify({ on: window.__D().on, drv: !!window.__D().drv, R: !!window.__R(), Rnet: !!window.__R()?.net, race: window.beauGame.net.info.race, done: window.__NET().doneSeq, res: !document.querySelector('.nt-res')?.hidden, racing: document.body.classList.contains('racing') })));
 check(back[0] && back[1], '回房間: both driving again (next to the drag strip)');
 for (const p of [A, B]) await p.evaluate(() => { if (!document.getElementById('netDlg').hidden) document.getElementById('netX').click(); });
 const seeCar = await waitFor(A, () => { const i = window.beauGame.net.info; return i.peers[0]?.vis && i.peers[0].car && i.cols === 1; }, null, 30000);
@@ -344,8 +332,9 @@ await toRoom(B);
 await click(B, '#nwWho li:nth-child(1) button');
 const vis = await waitFor(B, () => window.beauGame.visiting?.loaded && document.querySelector('.nv'), null, 120000);
 if (!vis) console.log('   visit', await B.evaluate(() => JSON.stringify({ v: window.beauGame.visiting, msg: document.getElementById('msg').textContent, st: document.getElementById('status').hidden })));
-const v8 = await B.evaluate(() => ({ title: document.querySelector('.nv-top h3').textContent, info: document.querySelector('.nv-info').innerText.replace(/\s+/g, ' '), like: document.querySelector('.nv-like').textContent, dlg: !document.getElementById('netDlg').hidden, cls: document.body.classList.contains('visiting') }));
+const v8 = await B.evaluate(() => ({ title: document.querySelector('.nv-top h3').textContent, info: document.querySelector('.nv-info').innerText.replace(/\s+/g, ' '), like: document.querySelector('.nv-like').textContent, dlg: !document.getElementById('netDlg').hidden, cls: document.body.classList.contains('visiting'), hud: !document.querySelector('.nt') || document.querySelector('.nt').hidden, page: getComputedStyle(document.getElementById('cars')).display === 'none' && getComputedStyle(document.getElementById('wallet')).display === 'none', stageH: document.getElementById('stage').clientHeight }));
 console.log('8', el(), JSON.stringify(v8));
+check(v8.hud && v8.page && v8.stageH > 500, `visiting: only the 3D view shows (room box, car tabs, money hidden; view ${v8.stageH} px tall)`);
 check(vis && v8.title === '大便龍車神的車庫' && /GC8.*（1\/1）/.test(v8.info) && /♥ 0/.test(v8.info) && !v8.dlg && v8.cls, `B is visiting A’s garage: ${v8.title} · ${v8.info}`);
 await shot(B, `${prefix}-8-visit.png`);
 await click(B, '.nv-like');

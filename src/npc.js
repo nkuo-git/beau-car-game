@@ -1350,12 +1350,19 @@ function createTraffic(o = {}) {
 
   // ---- 給開車（drive.js addColliders）、走路的碰撞：現在的車（重複用同一批物件，不要留著）----
   const colOut = [], colPool = [];
+  //   會動的車（vx、vz、m）：撞到照兩台車的動量算（drive.js），不會像撞牆一樣整台停住；被你推的（dvx、dvz）下一次叫的時候加到它的速度（只算往前的那份，路上的車不會倒退）
   function colliders(x, z, r) {
+    for (let i = 0; i < colOut.length; i++) { // 上一格被推的
+      const b = colOut[i], c = b.car; if (!b.dvx && !b.dvz) continue;
+      if (c && !c.crushed && act.includes(c)) c.v = Math.min(30, Math.max(0, c.v + b.dvx * Math.cos(c.heading) - b.dvz * Math.sin(c.heading)));
+      b.dvx = b.dvz = 0;
+    }
     colOut.length = 0;
     for (let i = 0; i < act.length; i++) {
       const c = act[i]; if (x != null && hyp(c.x - x, c.z - z) > r + c.hx) continue;
-      const b = colPool[colOut.length] || (colPool[colOut.length] = { t: 'box', x: -0, z: -0, hx: 1.5, hz: 1.5, rot: -0, h: 1.4, npc: true });
-      b.x = c.x; b.z = c.z; b.hx = c.hx; b.hz = c.hz; b.rot = c.heading; b.h = c.kind === 'scooter' ? 1.2 : 1.4; colOut.push(b);
+      const b = colPool[colOut.length] || (colPool[colOut.length] = { t: 'box', x: -0, z: -0, hx: 1.5, hz: 1.5, rot: -0, h: 1.4, npc: true, vx: 0, vz: 0, m: 1, dvx: 0, dvz: 0, car: null });
+      b.x = c.x; b.z = c.z; b.hx = c.hx; b.hz = c.hz; b.rot = c.heading; b.h = c.kind === 'scooter' ? 1.2 : 1.4;
+      b.vx = Math.cos(c.heading) * c.v; b.vz = -Math.sin(c.heading) * c.v; b.m = c.kind === 'scooter' ? 0.4 : c.hx > 3.2 ? 2.5 : 1; b.car = c; b.dvx = b.dvz = 0; colOut.push(b);
     }
     return colOut;
   }

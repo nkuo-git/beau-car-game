@@ -37158,6 +37158,7 @@ const V_NET = new THREE.Vector3();
 function netHideAll() {
   for (const P of NET.P.values()) { if (P.obj) { P.obj.car.visible = false; P.obj.sh.visible = false; } if (P.chr) P.chr.group.visible = false; if (P.tag) P.tag.visible = false; if (P.bub) P.bub.visible = false; P.mk.on = false; }
   drv?.removeColliders('net'); walker?.removeColliders('net');
+  if (NET.hud) { NET.hud.root.hidden = true; netTray(false); } // 回車庫頁：房間那一塊收起來（netHudTick 只有在外面才跑）
 }
 
 // ---- 畫面：房間那一塊（點了打開網站的房間）、表情 ----
@@ -37181,6 +37182,9 @@ function netHud() {
 .nt-race span{display:inline-block;margin-top:6px;padding:6px 14px;border-radius:999px;background:rgba(14,15,18,0.72);font-size:15px;font-weight:700;text-shadow:none}
 .nt-quit{position:absolute;z-index:6;top:calc(var(--fs-t,0px) + 150px);left:calc(var(--fs-l,0px) + 10px);padding:8px 14px;border:0;border-radius:999px;background:rgba(14,15,18,0.72);color:#F2F3F5;font:700 14px "Noto Sans TC",sans-serif;cursor:pointer;touch-action:manipulation}
 .nt-quit[hidden]{display:none}
+body.netdrag .nt-quit{left:auto;right:calc(var(--fs-r,0px) + 10px);top:calc(var(--fs-t,0px) + 240px)}
+body.fs.netdrag #race{display:none}
+body.netdrag #race :is(.minirow,.group,.me,.how){display:none}
 .nt-res{position:absolute;z-index:9;left:50%;bottom:calc(var(--fs-b,0px) + 12px);transform:translateX(-50%);width:min(340px,calc(100% - 20px));box-sizing:border-box;padding:14px 13px;border-radius:18px;background:rgba(20,21,24,0.94);border:1px solid #34363c;color:#F2F3F5;font-family:"Noto Sans TC",sans-serif;display:flex;flex-direction:column;gap:7px;pointer-events:auto}
 .nt-res h3{margin:0 0 2px;font-size:18px}
 .nt-res ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px}
@@ -37366,7 +37370,7 @@ function netRaceTick(dt) {
     if (left != null && left <= 0 && R.phase === 'wait') { R.phase = 'run'; R.runAt = netNow(); if (R.kind === 'hill' && drv) { drv.setInput(null); R.held = false; } }
     if (R.kind === 'hill' && R.held && drv && Math.abs(drv.telemetry().v) > 0.3) drv.setInput(NET_HOLD);
   } else if (!H.rc.hidden && R.phase !== 'prep') H.rc.hidden = true;
-  const q = R.kind === 'hill' && (R.phase === 'wait' || R.phase === 'run') && R.myT == null && netWorld(); // 爬山：沒有自己的「放棄」（賽車場有、400 公尺按「開回村子」）
+  const q = (R.phase === 'wait' || R.phase === 'run') && R.myT == null && (R.kind === 'hill' ? netWorld() : R.kind === 'drag' && RACE.on && document.body.classList.contains('fs')); // 爬山、全螢幕的 400 公尺（下面那一塊藏起來了）：「放棄這場」；賽車場有自己的、一般版面的 400 公尺按「開回村子」
   if (H.quit.hidden === q) H.quit.hidden = !q;
   if (R.phase === 'done' && !H.res.hidden) { R.resT = (R.resT || 0) - dt; if (R.resT <= 0) { R.resT = 0.5; netResShow(R); } }
 }
@@ -37620,8 +37624,9 @@ Object.assign(window.beauGame, {
     get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, car: !!P.obj, walk: !!P.chr })), race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, cols: NET.cols.length }; },
   },
   visit: netVisit,
-  get visiting() { return NV ? { car: NV.key(), loaded: !!NV.car } : null; },
 });
+// Object.assign 會把 getter 當下的值抄過去，所以這個要用 defineProperty
+Object.defineProperty(window.beauGame, 'visiting', { configurable: true, get: () => (NV ? { car: NV.key(), loaded: !!NV.car } : null) });
 
 
 // ---- 全螢幕（Nick 2026-09-28：「可以全螢幕」）----

@@ -1760,12 +1760,17 @@ function createPolice(o = {}) {
     if (c.group) c.group.scale.set(1 + 0.07 * e, 1 - 0.6 * e, 1 + 0.07 * e);
     c.v = 0; c.wreckT -= dt; if (c.wreckT <= 0) removeCar(c);
   }
-  function colliders(x, z, r) { // 現在的警車（長方形；陣列、物件都是重複用的）
+  function colliders(x, z, r) { // 現在的警車（長方形；陣列、物件都是重複用的）；會動的車（vx、vz、m）：撞到照動量算，被你推的（dvx、dvz）下一次加到它的速度
+    for (let i = 0; i < colOut.length; i++) {
+      const b = colOut[i]; if (!b.dvx && !b.dvz) continue;
+      const c = cars[b.pi]; if (c && c.on && !(c.wreckT > 0)) c.v = Math.max(-8, Math.min(40, c.v + b.dvx * Math.cos(c.th) - b.dvz * Math.sin(c.th)));
+      b.dvx = b.dvz = 0;
+    }
     colOut.length = 0;
     for (const c of cars) {
       if (!c.on || c.wreckT > 0 || (x != null && Math.hypot(c.x - x, c.z - z) > r + c.hl)) continue; // 第 9 批：輾扁的不擋（crush.js 的墊子：開得上去）
-      const b = colPool[colOut.length] || (colPool[colOut.length] = { t: 'box', x: 0, z: 0, hx: 1, hz: 1, rot: 0, h: 1.6, police: true, pi: 0 });
-      b.x = c.x; b.z = c.z; b.hx = c.hl; b.hz = c.hw; b.rot = c.th; b.pi = c.id; colOut.push(b); // pi：第幾台（第 9 批：越野車輾到 → wreck(pi)）
+      const b = colPool[colOut.length] || (colPool[colOut.length] = { t: 'box', x: 0, z: 0, hx: 1, hz: 1, rot: 0, h: 1.6, police: true, pi: 0, vx: 0, vz: 0, m: 1.2, dvx: 0, dvz: 0 });
+      b.x = c.x; b.z = c.z; b.hx = c.hl; b.hz = c.hw; b.rot = c.th; b.pi = c.id; b.vx = Math.cos(c.th) * c.v; b.vz = -Math.sin(c.th) * c.v; b.dvx = b.dvz = 0; colOut.push(b); // pi：第幾台（第 9 批：越野車輾到 → wreck(pi)）
     }
     return colOut;
   }
