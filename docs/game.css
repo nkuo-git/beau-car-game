@@ -629,6 +629,8 @@ html.lk-open, html.lk-open body { overflow: hidden; }
 .cta.alt { min-height: 52px; background: var(--surf); color: var(--ink); border: 1px solid var(--line); }
 .cta.alt::after { display: none; }
 .cta.alt span { color: var(--soft); opacity: 1; }
+/* 大地圖（bigmap.js）打開的時候：去哪裡那一排收起來（全螢幕的時候它在舞台上面，會蓋到地圖） */
+body.bigmap #drivebar { display: none !important; }
 
 /* ================= 改車遊戲（獨立的網站／App）才有的：src/site/site.css ================= */
 /* 標題列：只有圖示、遊戲名字、版本號（沒有萬能軟體的設定、切換、分頁） */

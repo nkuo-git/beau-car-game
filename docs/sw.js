@@ -1,7 +1,7 @@
 // 大便龍的改車遊戲 — Service Worker（build-site.mjs 從 src/site/sw.src.js 產生，不要直接改 docs/sw.js）
 // 跟萬能軟體的 sw.js 同一個做法：殼先存起來（離線也打得開），新版先在旁邊待命，畫面上按了「更新」才接手（不自己更新）
 
-const V = "6"; // 跟 index.html 裡 game.css／game.js 後面的 ?v= 一樣：換版就換網址，任何一層快取都不會給到舊檔
+const V = "7"; // 跟 index.html 裡 game.css／game.js 後面的 ?v= 一樣：換版就換網址，任何一層快取都不會給到舊檔
 const CACHE = "beaucar-v" + V;
 // 車身檔（tune/<車>.glb?h=<雜湊>）：網址帶內容的雜湊，車身沒改網址就不變 → 放在另一個不會隨版號清掉的快取，換版不用重新下載（每台 1–2 MB）
 const GLB_CACHE = "beaucar-glb";

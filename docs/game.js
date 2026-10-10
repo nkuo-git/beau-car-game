@@ -11648,8 +11648,11 @@ return { createRide, RIDE: { CLS, SURF } };
 //   drive.setAction2({ label, onClick, icon } | null)   第二顆（右邊、換視角鈕下面，深色的，例如「下車」）：跟大按鈕同時在，不會被「開鐵捲門」蓋掉；
 //                          沒有大按鈕的時候鍵盤 E 按這顆；icon 預設 'walk'（走路的人）；drive.action2＝現在的字
 //   drive.addColliders(list, tag) / drive.removeColliders(tag)   會變的碰撞物（鐵捲門關著才擋、停著的車），格式跟 world.colliders 一樣；
+//                          會動的車多給 vx、vz（它的速度 m/s）、m（比你重幾倍，預設 1）：撞到照兩台車的動量算（追撞不會整台停住），它被推的速度加在原來那個的 dvx、dvz（它自己拿去用、歸零）；
 //                          同一個 tag 可以加很多次，removeColliders(tag) 一次全部拿掉；回傳加了／拿掉幾個
-//   drive.setMarkers(list | null)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝這幀不畫） }]；
+//   drive.setMapTap({ label, onClick } | null)   點小地圖做什麼（大地圖、比賽看整個賽道）；label＝小地圖下面那一條字；drive.mapTap＝現在的字
+//   drive.setMapView({ x0, z0, x1, z1 } | null)   小地圖改成看整個範圍（北朝上、你的箭頭照車頭轉）；null＝回到跟著你轉；drive.mapView
+//   drive.setMarkers(list | null, tag?)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝這幀不畫）, label（點上的字）, fg }]；tag＝另外一組（比賽的對手 'race'），null 拿掉；
 //                          只記住陣列本身，每一幀照裡面現在的值畫（陣列可以一直改，不用再叫）；地圖外面的貼在邊上；null＝不畫
 //   drive.setCameraMode('chase' | 'eye' | 'none', view?)   追車／駕駛座／不管鏡頭；drive.cameraMode 是現在的
 //   drive.teleport({ x, z, heading }, { intro })   把車放到那裡停好（不叫 onZone）；intro：鏡頭從車前面繞到後面（出門的時候）
@@ -11678,7 +11681,7 @@ return { createRide, RIDE: { CLS, SURF } };
 //         看得到聽得到：輪胎冒煙、地上的胎痕（慢慢淡掉）、輪胎叫（跟著滑多少）、鏡頭往走的方向轉一點、畫面上「甩尾 35°」
 
 // 打包時全部接在同一個 script 裡：只露出 createDrive
-const { createDrive } = (() => {
+const { createDrive, DRIVE_DEST } = (() => {
 const TAU = Math.PI * 2, GEARS = [3.3, 2.2, 1.62, 1.28, 1.05, 0.86];
 const AERO = 0.55, STEP = 0.25, HZ = 120; // 風阻（街機）、一步最多走幾公尺（碰撞）、物理每秒最少幾步
 const torqueAt = (x) => 0.8 + 0.4 * x - 0.4 * x * x;
@@ -11725,6 +11728,8 @@ const CSS = `
 @media (hover:hover) and (pointer:fine){.dv-act kbd{display:block}}
 .dv-map{top:10px;right:10px;width:124px;height:124px;border-radius:18px;background:rgba(14,15,18,0.62);overflow:hidden}
 .dv-map canvas{display:block;width:100%;height:100%}
+.dv-map.tap{pointer-events:auto;cursor:pointer;touch-action:manipulation;box-shadow:inset 0 0 0 1.5px rgba(255,106,31,0.8)}
+.dv-mapb{position:absolute;left:0;right:0;bottom:0;padding:4px 0 5px;background:rgba(14,15,18,0.8);font:700 11px/1 ${SANS};text-align:center;letter-spacing:.02em;white-space:nowrap}
 .dv-cam{top:142px;right:10px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(14,15,18,0.62);pointer-events:auto;cursor:pointer;touch-action:manipulation}
 .dv-cam svg{width:24px;height:24px;fill:none;stroke:#F2F3F5;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .dv-cam[aria-pressed="true"]{background:#FF6A1F}
@@ -11942,6 +11947,8 @@ function createDrive(o) {
   const human = { thr: 0, brk: 0, steer: 0, hb: 0, kb: {} };
   let forced = null, paused = false, auto = null, alive = true, dest = null, mode = 'chase', view = null, intro = null, now = 0, action = null, action2 = null;
   let marks = null; // 第 3 批（b3-int）別的模組給的小地圖點（setMarkers）：[{ x, z, fill, ring, r, on }]
+  const marksT = {}; // 大地圖那一批：setMarkers(list, tag) 另外一組（比賽的對手 'race'），label＝點上面的字（名次）
+  let mapTap = null, mapWhole = null; // setMapTap：點小地圖做什麼（下面一條字）；setMapView：小地圖看整個範圍（北朝上，比賽的整個賽道）
   const zoneIn = {}, events = []; let zoneNow = null, routeData = null, routeT = 0, routeS = 0;
   // ==== 第 4 批：地形（越野車場）：world 有高度才有；一般的車沒開進越野車場 ride.on＝false（照舊）；越野車（perf.offroad）一直開著 ====
   const CRU = o.crush || null; // 第 7 批（輾扁）：怪獸卡車才有（crush.js）：{ heightAt（墊子的高度）, can(c)（輾得過去嗎）, hit(c, speed)（輾到了，這個碰撞物不擋了）}
@@ -11982,8 +11989,14 @@ function createDrive(o) {
   };
   // 撞進去（w＝撞進去的速度 m/s）：法向吃掉、彈回一點；沿著牆的速度照摩擦（0.35）掉一些；車頭往沿著牆的方向轉一點
   function impact(w, fn, nx, nz, px, pz, f, c) {
+    if (c && c.vx !== undefined) { // 撞到會動的車（比賽的對手：c.vx、c.vz 它的速度，c.m 它比你重幾倍）：照兩台車一起算（動量、有一點點彈），w＝兩台車靠近多快
+      const m = c.m > 0 ? c.m : 1, J = 1.15 * w; // 1.15＝彈回 0.15
+      st.v += (J * m / (1 + m)) * fn; // 追撞前車：你掉到差不多它的速度（不是整台停住），它被推快一點
+      const s = c.src, k = J / (1 + m); s.dvx = (s.dvx || 0) - k * nx; s.dvz = (s.dvz || 0) - k * nz; c.vx -= k * nx; c.vz -= k * nz; // 它被推的（下一格它自己拿去用；這一格剩下的小步先用新的速度，才不會一直撞）
+    } else {
     const e = Math.min(0.25 * w, 2), ft2 = Math.max(0, 1 - fn * fn), vt = Math.abs(st.v) * Math.sqrt(ft2), mu = vt > 1e-3 ? Math.min(1, (0.35 * (w + e)) / vt) : 1;
     st.v = st.v * ft2 * (1 - mu) + e * fn;
+    }
     const tx = -nz, tz = nx, ft = f[0] * tx + f[1] * tz;
     // 擦到：轉成沿著牆；正面：照撞到的點（力矩），慢慢頂著（10 km/h 以下）就不轉（方向盤轉得出來）；一次最多轉 20°（不會打轉）
     const dth = Math.abs(ft) > 0.2 ? wrapA(Math.atan2(-tz * Math.sign(ft), tx * Math.sign(ft)) - st.th) : clamp(pz * nx - px * nz, -1, 1) * 0.2 * clamp((w - 0.3) / 2, 0, 1);
@@ -12014,7 +12027,7 @@ function createDrive(o) {
         if (!p) continue;
         if (CRU && CRU.can(c)) { if (CRU.hit(c, Math.abs(st.v)) === false) c.crushed = true; continue; } // 第 7 批：怪獸卡車輾過去（不擋、不彈開、不算撞到；車子照 crush.js 的墊子爬上去）
         st.x += p[0]; st.z += p[1]; cx += p[0]; cz += p[1]; moved = true; hit++; st.touch = 0.2;
-        const fn = st.slip !== 0 ? Math.cos(st.th + st.slip) * p[2] - Math.sin(st.th + st.slip) * p[3] : f[0] * p[2] + f[1] * p[3], w = -st.v * fn; // 第 3 批：甩尾的時候照「走的方向」算撞進去多快
+        const fn = st.slip !== 0 ? Math.cos(st.th + st.slip) * p[2] - Math.sin(st.th + st.slip) * p[3] : f[0] * p[2] + f[1] * p[3], w = -st.v * fn + (c.vx !== undefined ? c.vx * p[2] + c.vz * p[3] : 0); // 第 3 批：甩尾的時候照「走的方向」算撞進去多快；會動的車：照兩台車靠近多快
         if (w > 0.05) { impact(w, fn, p[2], p[3], p[4], p[5], f, c); if (st.slip !== 0) hitSlide(w); }
         else { const pen = Math.hypot(p[0], p[1]), cr = p[5] * p[2] - p[4] * p[3]; st.th = wrapA(st.th + clamp((2 * cr * pen) / (p[4] * p[4] + p[5] * p[5] + 0.5), -0.04, 0.04)); } // 慢慢頂著：照碰到的點轉一點（滑開）
       }
@@ -12345,7 +12358,7 @@ function createDrive(o) {
   function buildHud() {
     if (!document.getElementById('dv-style')) { const s = document.createElement('style'); s.id = 'dv-style'; s.textContent = CSS; document.head.append(s); }
     const root = document.createElement('div'); root.className = 'dv';
-    root.innerHTML = `<div class="dv-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="dv-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="dv-map"><canvas></canvas></div>`
+    root.innerHTML = `<div class="dv-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="dv-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="dv-map"><canvas></canvas><b class="dv-mapb" hidden></b></div>`
       + `<b class="dv-cam" role="button" aria-label="換視角" aria-pressed="false">${ICON.cam}</b><button type="button" class="dv-act2" hidden><i></i><span></span></button><div class="dv-spd"><b>0</b><span>KM/H</span><em>1</em><i hidden>甩尾<span></span></i></div>`
       + `<div class="dv-steer"><b role="button" aria-label="左轉">${ICON.L}</b><b role="button" aria-label="右轉">${ICON.R}</b></div>`
       + `<div class="dv-ped"><b class="dv-brk" role="button" aria-label="煞車">煞車</b><b class="dv-gas" role="button" aria-label="油門">油門</b></div><div class="dv-toast" role="status"></div>`
@@ -12370,6 +12383,7 @@ function createDrive(o) {
     const fingers = new Map(), steerNow = () => { let s = 0; for (const v of fingers.values()) s = v; human.steer = s; H.steerB[0].classList.toggle('on', s < 0); H.steerB[1].classList.toggle('on', s > 0); };
     hold(H.steer, (e) => { const r = H.steer.getBoundingClientRect(); fingers.delete(e.pointerId); fingers.set(e.pointerId, e.clientX < r.left + r.width / 2 ? -1 : 1); steerNow(); }, (e) => { fingers.delete(e.pointerId); steerNow(); });
     on(H.cam, 'click', () => setCameraMode(mode === 'eye' ? 'chase' : 'eye'));
+    H.mapBox = q('.dv-map'); H.mapB = q('.dv-mapb'); on(H.mapBox, 'click', (e) => { if (mapTap) { e.preventDefault(); mapTap.onClick(); } }); // 點小地圖（setMapTap）：大地圖、比賽看整個賽道
     // 大按鈕：按下去縮一下，放開（click）才做；另一隻手指按著油門也按得到
     on(H.act, 'pointerdown', () => H.act.classList.add('on'));
     for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.act, t, () => H.act.classList.remove('on'));
@@ -12399,13 +12413,14 @@ function createDrive(o) {
     return { c, ms, x0, z0 };
   }
   function drawMap(dt) {
-    const H = hud, g = H.mctx, s = H.mapPx, cx = st.x + Math.cos(st.th) * CX, cz = st.z - Math.sin(st.th) * CX, oy = s * 0.13, rot = st.th - Math.PI / 2;
+    const H = hud, g = H.mctx, s = H.mapPx, W = mapWhole, mx = st.x + Math.cos(st.th) * CX, mz = st.z - Math.sin(st.th) * CX;
+    const cx = W ? (W.x0 + W.x1) / 2 : mx, cz = W ? (W.z0 + W.z1) / 2 : mz, oy = W ? 0 : s * 0.13, rot = W ? 0 : st.th - Math.PI / 2; // 看整個範圍：北朝上、不轉
     H.span += (150 + 300 * smooth01((Math.abs(st.v) * 3.6 - 60) / 190) - H.span) * (1 - Math.exp(-dt * 1.5));
-    const k = s / H.span;
+    const k = W ? (s * 0.92) / Math.max(W.x1 - W.x0, W.z1 - W.z0, 1) : s / H.span;
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, s, s);
     g.save(); g.translate(s / 2, s / 2 + oy); g.rotate(rot); g.scale(k, k); g.translate(-cx, -cz);
     g.drawImage(H.layer.c, H.layer.x0, H.layer.z0, H.layer.c.width / H.layer.ms, H.layer.c.height / H.layer.ms);
-    if (world.mapLive) world.mapLive(g, cx, cz, H.span); // 內湖（neihu.js）：附近的路、房子、公園自己畫（底圖只畫原本的範圍）
+    if (world.mapLive) world.mapLive(g, cx, cz, W ? s / k : H.span); // 內湖（neihu.js）：附近的路、房子、公園自己畫（底圖只畫原本的範圍）
     if (routeData && routeData.pts.length > 1) {
       g.strokeStyle = '#FF6A1F'; g.lineWidth = (3.4 * H.dpr) / k; g.lineCap = 'round'; g.lineJoin = 'round'; g.setLineDash(routeData.straight ? [(6 * H.dpr) / k, (5 * H.dpr) / k] : []); g.beginPath();
       routeData.pts.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z))); g.stroke(); g.setLineDash([]);
@@ -12417,7 +12432,7 @@ function createDrive(o) {
       const p = places[key], d = DEST[key] || (key === dest ? destStyle(key) : null), q = d && placeAt(p); if (!q) continue;
       const wx = q[0] - cx, wz = q[1] - cz;
       let sx = (wx * cs - wz * sn) * k, sy = (wx * sn + wz * cs) * k + oy; const l = Math.max(Math.abs(sx), Math.abs(sy));
-      if (l > R) { sx *= R / l; sy *= R / l; }
+      if (l > R) { if (W) continue; sx *= R / l; sy *= R / l; } // 看整個賽道的時候：外面的地方不畫（不貼在邊上）
       ic.push({ key, d, sx, sy, r: (key === dest ? 11 : 9) * H.dpr });
     }
     ic.sort((a, b) => (a.key === dest) - (b.key === dest)); // 目的地最後畫（在最上面）
@@ -12431,15 +12446,21 @@ function createDrive(o) {
       g.fillStyle = d.fg; g.font = `700 ${Math.round(r * 1.15)}px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(d.icon, s / 2 + sx, s / 2 + sy + 0.5 * H.dpr);
     }
     // 第 3 批（b3-int）：別的模組給的點（警車⋯）：小圓點；地圖外面的貼在邊上；on: false 的不畫
-    if (marks) for (let i = 0; i < marks.length; i++) {
-      const m = marks[i]; if (!m || m.on === false) continue;
+    const drawMarks = (list) => { for (let i = 0; i < list.length; i++) {
+      const m = list[i]; if (!m || m.on === false) continue;
       const wx = m.x - cx, wz = m.z - cz; let sx = (wx * cs - wz * sn) * k, sy = (wx * sn + wz * cs) * k + oy; const l = Math.max(Math.abs(sx), Math.abs(sy));
       if (l > R) { sx *= R / l; sy *= R / l; }
-      g.beginPath(); g.arc(s / 2 + sx, s / 2 + sy, (m.r || 5) * H.dpr, 0, TAU); g.fillStyle = m.fill || '#FF3B30'; g.fill();
+      const rr = (m.r || 5) * H.dpr;
+      g.beginPath(); g.arc(s / 2 + sx, s / 2 + sy, rr, 0, TAU); g.fillStyle = m.fill || '#FF3B30'; g.fill();
       if (m.ring) { g.lineWidth = 1.5 * H.dpr; g.strokeStyle = m.ring; g.stroke(); }
-    }
-    // 你：中間偏下的箭頭（永遠朝上）
-    const u = H.dpr; g.translate(s / 2, s / 2 + oy); g.beginPath(); g.moveTo(0, -9 * u); g.lineTo(7 * u, 7 * u); g.lineTo(0, 3.5 * u); g.lineTo(-7 * u, 7 * u); g.closePath();
+      if (m.label != null) { g.fillStyle = m.fg || '#FFFFFF'; g.font = `700 ${Math.round(rr * 1.45)}px ${COND}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(m.label), s / 2 + sx, s / 2 + sy + 0.5 * H.dpr); }
+    } };
+    if (marks) drawMarks(marks);
+    for (const t in marksT) drawMarks(marksT[t]);
+    // 你：中間偏下的箭頭（永遠朝上）；看整個範圍的時候：在你的位置、照車頭轉
+    const u = H.dpr;
+    if (W) { const wx = mx - cx, wz = mz - cz; g.translate(s / 2 + wx * k, s / 2 + wz * k); g.rotate(Math.PI / 2 - st.th); } else g.translate(s / 2, s / 2 + oy);
+    g.beginPath(); g.moveTo(0, -9 * u); g.lineTo(7 * u, 7 * u); g.lineTo(0, 3.5 * u); g.lineTo(-7 * u, 7 * u); g.closePath();
     g.fillStyle = '#F2F3F5'; g.fill(); g.lineWidth = 2 * u; g.strokeStyle = '#FF6A1F'; g.stroke(); g.setTransform(1, 0, 0, 1, 0, 0);
   }
   function hudTick(dt) {
@@ -12626,7 +12647,10 @@ function createDrive(o) {
     update, telemetry, setDestination, setCameraMode, teleport, parkAt, pause, resume, release, dispose, toast, setAction, setAction2,
     addColliders: (list, tag) => cw.add(Array.isArray(list) ? list : [list], tag ?? null),
     removeColliders: (tag) => cw.remove(tag),
-    setMarkers: (list) => { marks = Array.isArray(list) ? list : null; }, // 第 3 批（b3-int）
+    setMarkers: (list, tag) => { const L = Array.isArray(list) ? list : null; if (tag == null) marks = L; else if (L) marksT[tag] = L; else delete marksT[tag]; }, // 第 3 批（b3-int）；tag：另外一組（比賽的對手）
+    setMapTap: (t) => { mapTap = t && typeof t.onClick === 'function' ? { label: String(t.label || ''), onClick: t.onClick } : null; if (hud) { hud.mapBox.classList.toggle('tap', !!mapTap); hud.mapB.hidden = !mapTap || !mapTap.label; if (mapTap) hud.mapB.textContent = mapTap.label; } },
+    setMapView: (b) => { mapWhole = b && b.x1 > b.x0 && b.z1 > b.z0 ? { x0: +b.x0, z0: +b.z0, x1: +b.x1, z1: +b.z1 } : null; if (hud) hud.mapT = 0; },
+    get mapTap() { return mapTap ? mapTap.label : null; }, get mapView() { return mapWhole; },
     setDamage: (p) => { dmgP.power = p && p.power > 0 ? Math.min(1, p.power) : 1; dmgP.top = p && p.top > 0 ? Math.min(1, p.top) : 1; dmgP.maxKmh = p && p.maxKmh > 0 ? p.maxKmh : Infinity; dmgP.steerPull = p ? clamp(+p.steerPull || 0, -1, 1) : 0; },
     setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
@@ -12636,7 +12660,7 @@ function createDrive(o) {
   setCameraMode('chase');
   return api;
 }
-return { createDrive };
+return { createDrive, DRIVE_DEST: DEST };
 })();
 
 // ---- offroad.js ----
@@ -14849,7 +14873,9 @@ function createCircuitRace(o) {
     if (vt > a.v) a.v = Math.min(vt, a.v + Math.max(0.3, acc) * h); else a.v = Math.max(vt, a.v - brk * h);
     a.brake = vt < a.v - 0.6 || state === 'grid';
     a.p += a.v * h * (CO.ds / Math.max(0.5, CO.lq[i]));
-    const d0 = a.d; a.d += clamp(target - a.d, -2.2 * h, 2.2 * h); a.dd += ((a.d - d0) / h - a.dd) * (1 - Math.exp(-h * 5));
+    const d0 = a.d; a.d += clamp(target - a.d, -2.2 * h, 2.2 * h);
+    if (a.pushD) { a.d = clamp(a.d + a.pushD * h, -HW + 1, HW - 1); a.pushD *= Math.exp(-h * 4); if (Math.abs(a.pushD) < 0.05) a.pushD = 0; } // 被你撞到旁邊（慢慢停下來，不會被推出跑道）
+    a.dd += ((a.d - d0) / h - a.dd) * (1 - Math.exp(-h * 5));
     const c = CO.at(a.p, TMP);
     a.x = c.x - c.tz * a.d; a.z = c.z + c.tx * a.d; a.k = c.k;
     a.th = Math.atan2(-c.tz, c.tx) - Math.atan2(a.dd, Math.max(6, a.v));
@@ -14864,7 +14890,7 @@ function createCircuitRace(o) {
     M4.compose(V3.set(a.x, 0.05, a.z), Q.setFromAxisAngle(UP, a.th), S3.set(a.info.len + 0.6, 1, a.info.halfW * 2 + 0.4)); sIM.setMatrixAt(j, M4);
   }
   const HOLD = { throttle: 0, brake: 1, steer: 0, handbrake: 1 }; // 手煞車：停住了只按煞車會換倒車
-  const AIC = ais.map(() => ({ t: 'box', x: 0, z: 0, hx: 2, hz: 1, rot: 0, h: 1.6 }));
+  const AIC = ais.map(() => ({ t: 'box', x: 0, z: 0, hx: 2, hz: 1, rot: 0, h: 1.6, vx: 0, vz: 0, m: 1, dvx: 0, dvz: 0 }));
   function finish() {
     state = 'done';
     if (drv.setInput) drv.setInput({ throttle: 0, brake: 1, steer: 0 }); // 先煞車（很快的時候拉手煞車會甩尾），停住了再拉手煞車（playerTick）
@@ -14903,11 +14929,16 @@ function createCircuitRace(o) {
     if (msgT > 0) msgT -= dt;
     playerTick(dt);
     const ns = Math.max(1, Math.ceil(dt * 60 - 1e-6)), h = dt / ns;
+    ais.forEach((a, j) => { // 你撞到它（drive.js 加在 AIC 的 dvx、dvz）：往前的那份加到它的速度，往旁邊的那份推它換一點車道
+      const c = AIC[j]; if (!c.dvx && !c.dvz) return;
+      const fx = Math.cos(a.th), fz = -Math.sin(a.th);
+      a.v = Math.max(0, a.v + c.dvx * fx + c.dvz * fz); a.pushD = clamp((a.pushD || 0) + c.dvx * -fz + c.dvz * fx, -6, 6); c.dvx = c.dvz = 0;
+    });
     for (let q = 0; q < ns; q++) for (const a of ais) aiStep(a, h);
     ais.forEach((a, j) => aiPose(a, j));
     sIM.instanceMatrix.needsUpdate = true;
     // 對手的車是會動的碰撞（撞到會被擋住）
-    if (drv.removeColliders) { drv.removeColliders('ciai'); ais.forEach((a, j) => { const c = AIC[j]; c.x = a.x + Math.cos(a.th) * a.info.CX; c.z = a.z - Math.sin(a.th) * a.info.CX; c.hx = a.info.len / 2; c.hz = a.info.halfW; c.rot = a.th; }); drv.addColliders(AIC, 'ciai'); }
+    if (drv.removeColliders) { drv.removeColliders('ciai'); ais.forEach((a, j) => { const c = AIC[j]; c.x = a.x + Math.cos(a.th) * a.info.CX; c.z = a.z - Math.sin(a.th) * a.info.CX; c.hx = a.info.len / 2; c.hz = a.info.halfW; c.rot = a.th; c.vx = Math.cos(a.th) * a.v; c.vz = -Math.sin(a.th) * a.v; }); drv.addColliders(AIC, 'ciai'); } // vx、vz：撞到照兩台車的速度算（追撞不會整台停住）
     if (hud) {
       const big = msgT > 0 ? msg : '';
       if (hud.last.cd !== big) { hud.last.cd = big; hud.cd.textContent = big; hud.cd.className = 'cir-c' + (big === '出發！' ? ' go' : /開反/.test(big) ? ' warn' : ''); hud.cd.hidden = !big; }
@@ -14933,7 +14964,7 @@ function createCircuitRace(o) {
     if (hud) hud.root.remove();
   }
   update(1e-6);
-  return { update, abort, dispose, standings: () => standings().map((c) => ({ name: c.name, p: c.p, fin: c.fin, me: c === me })), get state() { return state; }, get time() { return t; }, laps, ais, me, get result() { return result; }, drive: drv, get lights() { return lightsOn; } };
+  return { update, abort, dispose, standings: () => standings().map((c) => ({ name: c.name, p: c.p, fin: c.fin, me: c === me })), get state() { return state; }, get time() { return t; }, laps, ais, me, get result() { return result; }, drive: drv, get lights() { return lightsOn; }, colliders: AIC };
 }
 
 return { buildCircuit, circuitFonts, CIRCUIT_TEXT, CIRCUIT_KEEP, createCircuitRace, CIRCUIT_SKILL: SKILL, circuitCourse: makeCourse, circuitCSS: cssOnce, circuitFmt: fmtT, circuitCar: carModel, circuitProfile: speedProfile };
@@ -18925,6 +18956,7 @@ void main() {
 //                          world.colliders（村子的）的 tag 是 'world'：走進房子（interiors.js）removeColliders('world')，出來 addColliders(V.colliders, 'world')
 //                          y0（多的）：碰撞物的底有多高（天花板、捲起來一半的門）：比頭高的不擋人、只擋鏡頭（drive.js 不看 y0：這種不要給開車的）
 //   walker.setMovers(array | null)   會動的東西（路上的車、居民）：陣列、裡面的物件頁面每一格自己改（x、z、rot⋯），走路每一格照現在的值擋人、擋鏡頭（不用再叫）
+//   walker.setMapTap({ label, onClick } | null)   點小地圖做什麼（大地圖）；label＝小地圖下面那一條字；walker.mapTap＝現在的字
 //   walker.setMarkers(array | null)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝不畫） }]；跟 drive.setMarkers 一樣（只記住陣列，每一幀照現在的值畫）
 //   walker.setCars(list)       可以上的車（車庫車位的車、路邊的車⋯）：[{ key, name?, x, z, heading, hx, hz, cx?, cz?, h?, door?, object?, solid? }]
 //                          x, z, heading＝車子原點（跟 spots、drv.teleport 一樣）；hx, hz＝車身長方形的半長、半寬；cx, cz＝長方形中心在車子本地的位置（LODS[k].cx、cz）；
@@ -19012,6 +19044,8 @@ const CSS = `
 @media (hover:hover) and (pointer:fine){.wk-act kbd{display:block}}
 .wk-map{top:10px;right:10px;width:124px;height:124px;border-radius:18px;background:rgba(14,15,18,0.62);overflow:hidden}
 .wk-map canvas{display:block;width:100%;height:100%}
+.wk-map.tap{pointer-events:auto;cursor:pointer;touch-action:manipulation;box-shadow:inset 0 0 0 1.5px rgba(255,106,31,0.8)}
+.wk-mapb{position:absolute;left:0;right:0;bottom:0;padding:4px 0 5px;background:rgba(14,15,18,0.8);font:700 11px/1 ${SANS};text-align:center;letter-spacing:.02em;white-space:nowrap}
 .wk-cam{top:142px;right:10px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(14,15,18,0.62);pointer-events:auto;cursor:pointer;touch-action:manipulation}
 .wk-cam svg{width:24px;height:24px;fill:none;stroke:#F2F3F5;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .wk-cam[aria-pressed="true"]{background:#FF6A1F}
@@ -19168,6 +19202,7 @@ function createWalker(o) {
   const cw = colGrid(); cw.add(world.colliders, 'world'); cw.add(o.colliders); cw.add(fronts(world)); // 村子的碰撞標 'world'：走進房子（interiors.js）頁面先拿掉（房子的地板被村子的盒子蓋住），出來再放回去
   let movers = null; const mq = []; let mqN = 0; // 會動的（頁面的陣列）→ 算好的
   let marks = null; // 別的模組給的小地圖點（setMarkers）：[{ x, z, fill, ring, r, on }]
+  let mapTap = null; // setMapTap：點小地圖做什麼（大地圖），下面一條字
 
   // ---- 狀態 ----
   let ch = null, R = 0.28, BH = 1.72, alive = true, active = false, now = 0, lockT = 0;
@@ -19594,7 +19629,7 @@ function createWalker(o) {
     if (!document.getElementById('wk-style')) { const s = document.createElement('style'); s.id = 'wk-style'; s.textContent = CSS; document.head.append(s); }
     const root = document.createElement('div'); root.className = 'wk'; root.hidden = true;
     root.innerHTML = `<div class="wk-look"></div><div class="wk-pad"></div><div class="wk-stick rest">${ICON.ring}<div class="wk-knob"></div></div>`
-      + `<div class="wk-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="wk-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="wk-map"><canvas></canvas></div>`
+      + `<div class="wk-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="wk-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="wk-map"><canvas></canvas><b class="wk-mapb" hidden></b></div>`
       + `<b class="wk-cam" role="button" aria-label="換視角（第一人稱）" aria-pressed="false">${ICON.eye}</b><div class="wk-btns" hidden></div><div class="wk-toast" role="status"></div>`;
     o.hudParent.append(root);
     const q = (s) => root.querySelector(s), H = { root, look: q('.wk-look'), pad: q('.wk-pad'), stick: q('.wk-stick'), knob: q('.wk-knob'), chip: q('.wk-chip'), arrow: q('.wk-chip svg'), name: q('.wk-chip b'), dist: q('.wk-chip small'),
@@ -19637,6 +19672,7 @@ function createWalker(o) {
     for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) on(H.look, t, lookUp);
     on(H.look, 'wheel', (e) => { if (!active || cam.mode !== 'follow') return; e.preventDefault(); cam.dist = clamp(cam.dist * (1 + clamp(e.deltaY, -120, 120) * 0.0012), 2.2, 6.5); }, { passive: false });
     on(H.cam, 'click', () => { if (active) setCamera({ mode: cam.mode === 'eye' ? 'follow' : 'eye' }); });
+    H.mapBox = q('.wk-map'); H.mapB = q('.wk-mapb'); on(H.mapBox, 'pointerdown', (e) => e.stopPropagation()); on(H.mapBox, 'click', (e) => { if (mapTap && active) { e.preventDefault(); mapTap.onClick(); } }); // 點小地圖（setMapTap）：大地圖
     on(H.act, 'pointerdown', () => H.act.classList.add('on'));
     for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.act, t, () => H.act.classList.remove('on'));
     on(H.act, 'click', (e) => { e.preventDefault(); doAction(); });
@@ -19839,6 +19875,8 @@ function createWalker(o) {
     setInput: (i) => { forced = i ? { x: clamp(+i.x || 0, -1, 1), y: clamp(+i.y || 0, -1, 1), run: i.run } : null; },
     setMovers: (list) => { movers = Array.isArray(list) ? list : null; },
     setMarkers: (list) => { marks = Array.isArray(list) ? list : null; },
+    setMapTap: (t) => { mapTap = t && typeof t.onClick === 'function' ? { label: String(t.label || ''), onClick: t.onClick } : null; if (hud) { hud.mapBox.classList.toggle('tap', !!mapTap); hud.mapB.hidden = !mapTap || !mapTap.label; if (mapTap) hud.mapB.textContent = mapTap.label; } },
+    get mapTap() { return mapTap ? mapTap.label : null; }, get route() { return routeData; },
     setCarReach: (on) => { reach = !!on; },
     play: (state) => { if (state) st.play = String(state); },
     addColliders: (list, tag) => cw.add(Array.isArray(list) ? list : [list], tag ?? null).length,
@@ -19852,6 +19890,199 @@ function createWalker(o) {
   return api;
 }
 return { createWalker };
+})();
+
+// ---- bigmap.js ----
+// 大地圖（Nick 2026-10-10「可以瀏覽完整地圖」，草稿 https://claude.ai/artifact/VF5wb2U1PpAnzBRyJsSSW6 第 2 張，「大地圖OK」）
+// 開車、走路的時候點右上角的小地圖（下面寫「🗺 大地圖」）→ 整個畫面一張地圖：拖一拖、兩指放大（電腦：滑輪）、＋－、📍 回到你
+//   點一個地方（家、改、車⋯）→ 下面一張卡：名字、離你多遠、「去這裡」（＝目的地：左上角的箭頭、橘色路線）
+//   地圖是小地圖同一張底圖（walk.js 的 mapLayer：村子、越野車場、賽車場、山、快速道路）＋內湖自己畫（world.mapLive）；下面一定寫 OSM 的字
+//   只有打開的時候才畫（拖的時候每一幀、沒動的時候一秒 4 次：你和點會動）
+// const M = createBigMap({ parent, world, layer: () => walker.mapLayer, me: () => ({ x, z, h }), dots: () => [陣列, …], dest: () => 目的地,
+//                          onGo(key), onOpen(), onClose() })
+//   M.open()、M.close()、M.isOpen、M.pick(key)（測試：點那個地方）、M.view（{ x, z, w }：畫面中間、寬幾公尺）、M.zoom(f)、M.home()、M.el、M.info（畫一次幾毫秒）、M.dispose()
+//   dots：小地圖上的點同一種（{ x, z, fill, ring, r, on, label, name }）；name＝旁邊寫名字（一起開車的朋友）
+//   h：你朝哪裡（drive.js 的 heading：0＝往 +x）
+// 打包（build-art.mjs／build-app.mjs）：接在 walk.js 後面（用 drive.js 的 DRIVE_DEST）
+
+const { createBigMap, BIGMAP_STYLE } = (() => {
+  const COND = '"Barlow Condensed", "Arial Narrow", sans-serif', SANS = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
+  const TAU = Math.PI * 2, clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  // 地圖上的地方：小地圖那幾個＋賽車場（小地圖只有要去的時候才畫）
+  const STYLE = { ...DRIVE_DEST, circuit: { label: '去賽車場', icon: '圈', bg: '#D0342C', fg: '#FFFFFF' } };
+  const NAME = { track: '直線加速（400 公尺）', circuit: '大便龍賽車場', mountain: '山頂', garage: '你的車庫' };
+  const CSS = `
+.bm{position:absolute;inset:0;z-index:30;background:#1A1C20;color:#F2F3F5;font-family:${SANS};-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;overflow:hidden}
+.bm[hidden]{display:none}
+.bm canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.bm-top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;padding:10px 10px 22px 16px;background:linear-gradient(rgba(10,11,13,0.92),rgba(10,11,13,0));pointer-events:none}
+.bm-top b{font-size:20px;font-weight:700}
+.bm-top small{font-size:13px;color:#B8BCC4}
+.bm-x{margin-left:auto;width:44px;height:44px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.28);background:rgba(14,15,18,0.82);color:#F2F3F5;font:700 20px/1 ${SANS};display:grid;place-items:center;pointer-events:auto;cursor:pointer;padding:0}
+.bm-z{position:absolute;right:10px;bottom:104px;display:flex;flex-direction:column;gap:8px}
+.bm-z button{width:46px;height:46px;border-radius:13px;border:1.5px solid rgba(255,255,255,0.22);background:rgba(14,15,18,0.85);color:#F2F3F5;font:700 22px/1 ${SANS};display:grid;place-items:center;cursor:pointer;padding:0}
+.bm-z button svg{width:22px;height:22px}
+.bm-card{position:absolute;left:10px;right:10px;bottom:12px;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:11px 12px 11px 14px;border-radius:18px;background:rgba(20,21,25,0.95);border:1.5px solid rgba(255,255,255,0.12)}
+.bm-card[hidden]{display:none}
+.bm-card i{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font:700 19px/1 ${SANS};font-style:normal}
+.bm-card div{min-width:0;flex:1}
+.bm-card b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bm-card small{font-size:13px;color:#B8BCC4}
+.bm-go{flex:none;height:46px;padding:0 18px;border:0;border-radius:999px;background:#FF6A1F;color:#1A0F07;font:900 16px/1 ${SANS};cursor:pointer}
+.bm-go[disabled]{background:#3DDC84;cursor:default}
+.bm-hint{position:absolute;left:0;right:0;bottom:20px;text-align:center;font-size:14px;color:#C6CAD1;pointer-events:none}
+.bm-osm{position:absolute;left:10px;bottom:84px;font-size:10px;color:rgba(255,255,255,0.62);pointer-events:none}
+`;
+  const PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z" fill="#FF6A1F"/><circle cx="12" cy="10" r="2.6" fill="#1A0F07"/></svg>';
+
+  function createBigMap(o) {
+    const world = o.world, places = world.places || {};
+    if (!document.getElementById('bm-style')) { const s = document.createElement('style'); s.id = 'bm-style'; s.textContent = CSS; document.head.append(s); }
+    const root = document.createElement('div'); root.className = 'bm'; root.hidden = true; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', '地圖');
+    root.innerHTML = '<canvas></canvas><div class="bm-top"><b>地圖</b><small>拖一拖、兩指放大</small><button type="button" class="bm-x" aria-label="關掉地圖">✕</button></div>'
+      + `<div class="bm-z"><button type="button" data-z="in" aria-label="放大">＋</button><button type="button" data-z="out" aria-label="縮小">－</button><button type="button" data-z="me" aria-label="回到你">${PIN}</button></div>`
+      + '<div class="bm-osm">內湖：地圖資料 © OpenStreetMap 貢獻者</div><div class="bm-hint">點一個地方，可以叫它帶你去</div>'
+      + '<div class="bm-card" hidden><i></i><div><b></b><small></small></div><button type="button" class="bm-go">去這裡</button></div>';
+    o.parent.append(root);
+    const q = (s) => root.querySelector(s), cv = q('canvas'), g = cv.getContext('2d'), card = q('.bm-card'), hint = q('.bm-hint'), goB = q('.bm-go');
+    const off = [], on = (el, t, f, opt) => { el.addEventListener(t, f, opt); off.push(() => el.removeEventListener(t, f, opt)); };
+    const V = { x: 0, z: 0, w: 700 }; // 畫面中間（世界座標）、畫面寬幾公尺
+    const B = world.bounds || { x0: -1100, x1: 1800, z0: -800, z1: 1700 }, MAXW = Math.max(B.x1 - B.x0, B.z1 - B.z0) * 1.15, MINW = 90;
+    let open = false, sel = null, dirty = true, raf = 0, tick = 0, cw = 1, ch = 1, dpr = 1, ms = 0;
+    const ic = []; // 這一次畫的地方（點的時候找最近的）：{ key, sx, sy }
+    const ptr = new Map(); let moved = 0, pinch = 0;
+    const placeXZ = (p) => (p.pos ? p.pos : p.x != null ? [p.x, p.z] : p.zone ? [p.zone.x, p.zone.z] : p.lot ? [p.lot.x, p.lot.z] : null);
+    const nameOf = (k) => NAME[k] || (places[k] && places[k].name) || k;
+    const toS = (x, z) => { const k = cw / V.w; return [(x - V.x) * k + cw / 2, (z - V.z) * k + ch / 2]; };
+
+    function size() {
+      const r = root.getBoundingClientRect(); dpr = Math.min(2, (typeof devicePixelRatio === 'number' && devicePixelRatio) || 1);
+      cw = Math.max(1, r.width); ch = Math.max(1, r.height);
+      const W = Math.round(cw * dpr), H = Math.round(ch * dpr);
+      if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+      dirty = true;
+    }
+    function draw() {
+      const t0 = performance.now(), k = cw / V.w, vh = (ch / cw) * V.w;
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#1A1C20'; g.fillRect(0, 0, cw, ch);
+      g.save(); g.translate(cw / 2, ch / 2); g.scale(k, k); g.translate(-V.x, -V.z);
+      const L = o.layer && o.layer(); g.imageSmoothingEnabled = true;
+      if (L) g.drawImage(L.c, L.x0, L.z0, L.c.width / L.ms, L.c.height / L.ms);
+      if (world.mapLive) world.mapLive(g, V.x, V.z, Math.hypot(V.w, vh) / 1.8); // 內湖：畫面裡的路、房子、公園
+      const route = o.route && o.route();
+      if (route && route.pts && route.pts.length > 1) {
+        g.strokeStyle = '#FF6A1F'; g.lineWidth = 4 / k; g.lineCap = 'round'; g.lineJoin = 'round'; g.setLineDash(route.straight ? [7 / k, 6 / k] : []); g.beginPath();
+        route.pts.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z))); g.stroke(); g.setLineDash([]);
+      }
+      g.restore();
+      // 地方（字是正的；不跟著放大）
+      const dest = o.dest && o.dest(); ic.length = 0;
+      for (const key in STYLE) {
+        const p = places[key], xz = p && placeXZ(p); if (!xz) continue;
+        const [sx, sy] = toS(xz[0], xz[1]); if (sx < -30 || sy < -30 || sx > cw + 30 || sy > ch + 30) continue;
+        ic.push({ key, sx, sy });
+      }
+      ic.sort((a, b) => (a.key === sel || a.key === dest) - (b.key === sel || b.key === dest));
+      for (const { key, sx, sy } of ic) {
+        const d = STYLE[key], big = key === sel, r = big ? 15 : key === dest ? 13 : 12;
+        g.beginPath(); g.arc(sx, sy, r, 0, TAU); g.fillStyle = d.bg; g.fill();
+        g.lineWidth = big ? 3.5 : 2; g.strokeStyle = big || key === dest ? '#FF6A1F' : 'rgba(242,243,245,0.88)'; g.stroke();
+        g.fillStyle = d.fg; g.font = `700 ${Math.round(r * 1.15)}px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(d.icon, sx, sy + 0.5);
+      }
+      // 點（警車、比賽的對手、朋友）
+      const lists = (o.dots && o.dots()) || [];
+      for (const list of lists) for (let i = 0; list && i < list.length; i++) {
+        const m = list[i]; if (!m || m.on === false) continue;
+        const [sx, sy] = toS(m.x, m.z); if (sx < -20 || sy < -20 || sx > cw + 20 || sy > ch + 20) continue;
+        const rr = (m.r || 5) * 1.25;
+        g.beginPath(); g.arc(sx, sy, rr, 0, TAU); g.fillStyle = m.fill || '#FF3B30'; g.fill();
+        if (m.ring) { g.lineWidth = 1.6; g.strokeStyle = m.ring; g.stroke(); }
+        if (m.label != null) { g.fillStyle = m.fg || '#FFFFFF'; g.font = `700 ${Math.round(rr * 1.4)}px ${COND}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(m.label), sx, sy + 0.5); }
+        if (m.name) { g.font = `700 13px ${SANS}`; const w = g.measureText(m.name).width + 12; g.fillStyle = 'rgba(14,15,18,0.82)'; g.beginPath(); g.roundRect ? g.roundRect(sx + rr + 3, sy - 10, w, 20, 10) : g.rect(sx + rr + 3, sy - 10, w, 20); g.fill(); g.fillStyle = '#FFFFFF'; g.textAlign = 'left'; g.fillText(m.name, sx + rr + 9, sy + 0.5); }
+      }
+      // 你
+      const me = o.me && o.me();
+      if (me) {
+        const [sx, sy] = toS(me.x, me.z);
+        g.save(); g.translate(sx, sy); g.rotate(Math.PI / 2 - (me.h || 0));
+        g.beginPath(); g.moveTo(0, -12); g.lineTo(9.5, 9.5); g.lineTo(0, 4.5); g.lineTo(-9.5, 9.5); g.closePath();
+        g.fillStyle = '#F2F3F5'; g.fill(); g.lineWidth = 2.6; g.lineJoin = 'round'; g.strokeStyle = '#FF6A1F'; g.stroke(); g.restore();
+      }
+      dirty = false; ms = performance.now() - t0;
+    }
+    function loop(now) {
+      raf = 0; if (!open) return;
+      if (now - tick > 250) { tick = now; dirty = true; } // 你、點會動：一秒 4 次
+      if (dirty) { draw(); if (sel) showCard(); }
+      raf = requestAnimationFrame(loop);
+    }
+    const kick = () => { dirty = true; if (open && !raf) raf = requestAnimationFrame(loop); };
+    function showCard() {
+      const k = sel, d = k && STYLE[k], p = k && places[k], xz = p && placeXZ(p);
+      if (!xz) { card.hidden = true; hint.hidden = false; return; }
+      card.hidden = false; hint.hidden = true;
+      const i = card.querySelector('i'), me = o.me && o.me(), dist = me ? Math.hypot(xz[0] - me.x, xz[1] - me.z) : 0;
+      if (i.textContent !== d.icon) { i.textContent = d.icon; i.style.background = d.bg; i.style.color = d.fg; }
+      const nm = nameOf(k), here = dist < 30, txt = here ? '你就在這裡' : `離你 ${dist >= 1000 ? (dist / 1000).toFixed(1) + ' 公里' : Math.round(dist / 10) * 10 + ' 公尺'}`;
+      card.querySelector('b').textContent = nm; card.querySelector('small').textContent = txt;
+      const going = o.dest && o.dest() === k; goB.disabled = going; goB.textContent = going ? '正在去 ✓' : '去這裡';
+    }
+    function pick(k) { sel = STYLE[k] && places[k] ? k : null; showCard(); kick(); return sel; }
+    function zoom(f, sx = cw / 2, sy = ch / 2) {
+      const k0 = cw / V.w, wx = V.x + (sx - cw / 2) / k0, wz = V.z + (sy - ch / 2) / k0;
+      V.w = clamp(V.w / f, MINW, MAXW); const k1 = cw / V.w;
+      V.x = wx - (sx - cw / 2) / k1; V.z = wz - (sy - ch / 2) / k1; keep(); kick();
+    }
+    function keep() { V.x = clamp(V.x, B.x0 - 200, B.x1 + 200); V.z = clamp(V.z, B.z0 - 200, B.z1 + 200); } // 不會拖到世界外面很遠
+    function home() { const me = o.me && o.me(); if (me) { V.x = me.x; V.z = me.z; } V.w = Math.min(V.w, 700); kick(); }
+    // ---- 手指 ----
+    on(cv, 'pointerdown', (e) => { e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch { /* 沒有就算了 */ } ptr.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY }); if (ptr.size === 1) moved = 0; pinch = 0; });
+    on(cv, 'pointermove', (e) => {
+      const P = ptr.get(e.pointerId); if (!P) return;
+      const r = cv.getBoundingClientRect(), dx = e.clientX - P.x, dy = e.clientY - P.y; P.x = e.clientX; P.y = e.clientY;
+      if (ptr.size === 1) { moved = Math.max(moved, Math.hypot(e.clientX - P.x0, e.clientY - P.y0)); const k = cw / V.w; V.x -= dx / k; V.z -= dy / k; keep(); kick(); }
+      else if (ptr.size === 2) {
+        const [a, b] = [...ptr.values()], d = Math.hypot(a.x - b.x, a.y - b.y); moved = 99;
+        if (pinch) zoom(d / pinch, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+        pinch = d;
+      }
+    });
+    const up = (e) => {
+      if (!ptr.has(e.pointerId)) return; ptr.delete(e.pointerId); pinch = 0;
+      if (e.type !== 'pointerup' || ptr.size || moved > 8) return;
+      const r = cv.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top; let best = null, bd = 26; // 點：最近的地方（26 px 以內）
+      for (const it of ic) { const d = Math.hypot(it.sx - sx, it.sy - sy); if (d < bd) { bd = d; best = it.key; } }
+      pick(best);
+    };
+    for (const t of ['pointerup', 'pointercancel']) on(cv, t, up);
+    on(cv, 'wheel', (e) => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoom(e.deltaY < 0 ? 1.25 : 1 / 1.25, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+    on(q('.bm-x'), 'click', () => close());
+    on(root, 'contextmenu', (e) => e.preventDefault());
+    for (const b of root.querySelectorAll('.bm-z button')) on(b, 'click', () => { const z = b.dataset.z; if (z === 'in') zoom(1.6); else if (z === 'out') zoom(1 / 1.6); else home(); });
+    on(goB, 'click', () => { if (!sel || goB.disabled) return; const k = sel; if (o.onGo) o.onGo(k, nameOf(k)); close(); });
+    on(document, 'keydown', (e) => { if (open && e.key === 'Escape') { e.preventDefault(); close(); } });
+    if (typeof ResizeObserver === 'function') { const ro = new ResizeObserver(() => { if (open) { size(); kick(); } }); ro.observe(root); off.push(() => ro.disconnect()); }
+
+    function show() {
+      if (open) return;
+      open = true; root.hidden = false; sel = null; card.hidden = true; hint.hidden = false;
+      const me = o.me && o.me(); if (me) { V.x = me.x; V.z = me.z; } V.w = 700;
+      size(); kick();
+      if (o.onOpen) o.onOpen();
+    }
+    function close() {
+      if (!open) return;
+      open = false; root.hidden = true; ptr.clear(); if (raf) cancelAnimationFrame(raf); raf = 0;
+      if (o.onClose) o.onClose();
+    }
+    return {
+      open: show, close, pick, zoom, home, el: root,
+      get isOpen() { return open; }, get view() { return { ...V }; }, get selected() { return sel; }, get info() { return { ms: +ms.toFixed(2), places: ic.length }; },
+      draw() { if (open) { size(); draw(); } },
+      dispose() { close(); for (const f of off) f(); root.remove(); },
+    };
+  }
+  return { createBigMap, BIGMAP_STYLE: STYLE };
 })();
 
 // ---- character.js ----
@@ -36345,7 +36576,69 @@ function driveStep(dt) {
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
+  mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）
+}
+// ==== 大地圖（bigmap.js；Nick 2026-10-10「可以瀏覽完整地圖」「大地圖OK」，草稿 https://claude.ai/artifact/VF5wb2U1PpAnzBRyJsSSW6）====
+// 開車、走路：點右上角的小地圖（下面寫「🗺 大地圖」）→ 大地圖（車子自己慢慢停、走路的人站著）；點地方 →「去這裡」＝目的地（setDest）
+// 賽車場比賽：點小地圖＝小地圖變成整個賽道（比賽不會停）、再點一下回來；小地圖上的對手是有號碼的點（號碼＝名次：前面紅、後面灰）
+// 越野賽、400 公尺、被抓、在房子裡面、自動開車的時候：小地圖不能點
+let BIGMAP = null;
+const MAPT = { drv: null, wk: null, d: null, w: null, whole: false, box: null, marks: [], race: null };
+const MAP_BIG = { label: '🗺 大地圖', onClick: () => bigOpen() }, MAP_LAP = { label: '看整個賽道', onClick: () => lapView(true) }, MAP_BACK = { label: '回來', onClick: () => lapView(false) };
+const mapWalking = () => !!walker && walker.mode === 'walk';
+function bigMake() {
+  if (BIGMAP || !VIL) return BIGMAP;
+  BIGMAP = createBigMap({ parent: stage, world: VIL, layer: () => MAPT.layer || (MAPT.layer = walker?.mapLayer), // 小地圖同一張底圖
+    me: () => { if (mapWalking()) { const t = walker.telemetry(); return { x: t.x, z: t.z, h: t.heading }; } const t = drv?.telemetry(); return t ? { x: t.x, z: t.z, h: t.heading } : null; },
+    route: () => (mapWalking() ? walker.route : drv?.route),
+    dots: () => [police?.markers, MAPT.race ? MAPT.marks : null],
+    dest: () => tripDest,
+    onGo: (k, name) => { setDest(k); (mapWalking() ? walker : drv)?.toast(`去${name}：跟著左上角的箭頭`, 2200); },
+    onOpen: () => { document.body.classList.add('bigmap'); if (mapWalking()) walker.setInput({ x: 0, y: 0 }); else drv?.setInput({ throttle: 0, brake: 0.5, steer: 0 }); }, // 車子自己慢慢停
+    onClose: () => { document.body.classList.remove('bigmap'); walker?.setInput(null); if (!ciRace && !orRace) drv?.setInput(null); },
+  });
+  return BIGMAP;
+}
+function bigOpen() { if (mapMode() === MAP_BIG) bigMake()?.open(); }
+function lapView(on) { // 賽車場：小地圖看整個賽道
+  MAPT.whole = !!on;
+  if (on && !MAPT.box) { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; const r = (VIL.roads || []).filter((r) => r.kind === 'circuit').sort((a, b) => b.pts.length - a.pts.length)[0]; for (const [x, z] of r ? r.pts : []) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); } MAPT.box = r ? { x0: x0 - 20, x1: x1 + 20, z0: z0 - 20, z1: z1 + 20 } : null; }
+  drv?.setMapView(on ? MAPT.box : null); MAPT.d = null; // 字下一格換
+}
+// 現在點小地圖做什麼：MAP_BIG（大地圖）、MAP_LAP／MAP_BACK（賽車場）、null（不能點）
+function mapMode() {
+  if (!DRIVE.on || indoor || jailed() || doorFade) return null;
+  if (mapWalking()) return MAP_BIG;
+  if (!drv || walker?.mode && walker.mode !== 'off') return null;
+  if (ciRace) return MAPT.whole ? MAP_BACK : MAP_LAP;
+  if (orRace || (race && race.phase && race.phase !== 'idle')) return null;
+  const t = drv.telemetry(); if (t.auto || t.paused) return null;
+  return MAP_BIG;
+}
+function mapStep() {
+  if (BIGMAP?.isOpen && (!DRIVE.on || mapMode() !== MAP_BIG)) BIGMAP.close(); // 回車庫、被抓、上下車了：關掉
+  if (MAPT.drv !== drv) { MAPT.drv = drv; MAPT.d = null; MAPT.whole = false; MAPT.race = null; }
+  if (MAPT.wk !== walker) { MAPT.wk = walker; MAPT.w = null; }
+  const m = mapMode(), md = m && !mapWalking() ? m : null, mw = m && mapWalking() ? m : null;
+  if (drv && MAPT.d !== md) { MAPT.d = md; drv.setMapTap(md); }
+  if (walker && MAPT.w !== mw) { MAPT.w = mw; walker.setMapTap(mw); }
+  // 賽車場的對手點（每一格只改數字，不 new）
+  const R = ciRace;
+  if (R !== MAPT.race) {
+    if (MAPT.whole && !R) lapView(false);
+    MAPT.race = R; if (drv) drv.setMarkers(R ? MAPT.marks : null, 'race');
+    if (R) { MAPT.marks.length = R.ais.length; for (let i = 0; i < R.ais.length; i++) MAPT.marks[i] = MAPT.marks[i] || { x: 0, z: 0, fill: '#e5484d', ring: '#ffffff', r: 6.5, label: 1, on: true }; }
+  }
+  if (R) {
+    const me = R.me, ahead = (c) => (c.fin != null ? -1e9 + c.fin : -c.p); // 跑完的照時間，沒跑完的照跑多遠（小的在前面）
+    for (let i = 0; i < R.ais.length; i++) {
+      const a = R.ais[i], m = MAPT.marks[i], ka = ahead(a); let n = 1;
+      if (ahead(me) < ka) n++;
+      for (let j = 0; j < R.ais.length; j++) if (j !== i && ahead(R.ais[j]) < ka) n++;
+      m.x = a.x; m.z = a.z; m.label = n; m.fill = ka < ahead(me) ? '#e5484d' : '#6b7280';
+    }
+  }
 }
 // 走路的時候 body.walking（garage.css：全螢幕的時候去哪裡那一排放到搖桿上面，不要蓋到搖桿）
 function bodyWalking(on) { if (on !== bodyWalking.on) { bodyWalking.on = on; document.body.classList.toggle('walking', on); } }
@@ -36736,7 +37029,7 @@ function dressWalker() {
 $('lookBtn').addEventListener('click', () => openLook('page'));
 { // App 的返回鍵（外殼先叫 window.caridExitFullscreen）：自訂角色打開的時候先關它（不存）
   const exitFs = window.caridExitFullscreen;
-  window.caridExitFullscreen = () => { if (LOOKP.isOpen) { LOOKP.cancel(); return true; } return exitFs(); };
+  window.caridExitFullscreen = () => { if (LOOKP.isOpen) { LOOKP.cancel(); return true; } if (BIGMAP?.isOpen) { BIGMAP.close(); return true; } return exitFs(); }; // 大地圖打開的時候：先關地圖
 }
 
 renderer.setAnimationLoop((now) => {
@@ -36763,7 +37056,7 @@ function keepOutOfBays() {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 6; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 7; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
