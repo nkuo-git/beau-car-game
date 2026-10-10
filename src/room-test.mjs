@@ -24,6 +24,8 @@ const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '
 const hook = 'window.__R = () => race; window.__D = () => ({ on: DRIVE.on, drv, walker, trip, VIL, cur, indoor });'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
   + ' window.__NET = () => NET; window.__HILL = () => HILL;'
+  + ' renderer.setAnimationLoop = function (cb) { clearInterval(this.__iv); this.__iv = cb ? setInterval(() => { const t = performance.now(); cb(t); window.__ticks = (window.__ticks || 0) + 1; }, 30) : 0; };'
+  + ' window.__thin = (n) => { if (!renderer.__rr) { renderer.__rr = renderer.render.bind(renderer); renderer.__rn = 0; renderer.render = (s, c) => { if (++renderer.__rn % renderer.__every === 0) renderer.__rr(s, c); }; } renderer.__every = Math.max(1, n | 0); }; window.__thin(300);'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
 let gameJs = null;
 const srv = http.createServer((req, res) => {
@@ -40,7 +42,9 @@ const srv = http.createServer((req, res) => {
   res.end(body);
 }).listen(0);
 const URL0 = `http://127.0.0.1:${srv.address().port}/site/`;
-const b = await pw.chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'] });
+const LAUNCH = { executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'] };
+// 一支手機一個瀏覽器：同一個瀏覽器的兩個分頁共用一個（軟體）GPU，一支一直在畫，另一支會等好幾分鐘
+const BR = {}, b = { close: () => Promise.all(Object.values(BR).map((x) => x.close())) };
 const errs = [], fails = [];
 const check = (ok, what) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) fails.push(what); };
 const T0 = Date.now(), el = () => `${((Date.now() - T0) / 1000).toFixed(0)}s`;
@@ -73,7 +77,7 @@ function notify() {
     const v = getAt(w.path), j = JSON.stringify(v);
     if (j === w.last) continue;
     w.last = j;
-    pages[w.ctx]?.evaluate(([i, val]) => window.__rtPush && window.__rtPush(i, val), [id, v]).catch(() => {});
+    pages[w.ctx]?.evaluate(([i, val]) => window.__rtPush && window.__rtPush(i, val), [id, v]).catch((e) => console.log('   push failed', id, e.message.slice(0, 200)));
   }
 }
 function write(uid, ops) { // ops：[[路徑, 值]]（一次全部檢查，全部可以才寫）
@@ -81,7 +85,7 @@ function write(uid, ops) { // ops：[[路徑, 值]]（一次全部檢查，全�
   for (const [p, v] of ops) putAt(after, p, v);
   for (const [p, v] of ops) if (!allowed(uid, p, v, after)) throw new Error('PERMISSION_DENIED ' + p);
   for (const [p, v] of ops) putAt(DB, p, v);
-  notify();
+  setTimeout(notify, 0);
   return true;
 }
 const DISC = {}; // 斷線的時候伺服器做的事：ctx → [[路徑, 值（物件＝update，null＝刪掉）]]
@@ -91,7 +95,8 @@ function drop(ctx) { const list = DISC[ctx] || []; DISC[ctx] = []; for (const [p
 const FS = new Map([['players/u1', { name: '大便龍車神' }], ['players/u2', { name: '阿明快車手' }]]);
 const UA = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36';
 async function phone(key, uid, name) {
-  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, serviceWorkers: 'block', userAgent: UA });
+  BR[key] = await pw.chromium.launch(LAUNCH);
+  const ctx = await BR[key].newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, serviceWorkers: 'block', userAgent: UA });
   await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
   await ctx.exposeFunction('__cloudGet', () => null);
   await ctx.exposeFunction('__cloudPut', () => true);
@@ -134,21 +139,40 @@ async function phone(key, uid, name) {
   pages[key] = p;
   await p.goto(URL0, { waitUntil: 'domcontentloaded' });
   const prog = setInterval(() => p.evaluate(() => JSON.stringify({ st: document.getElementById('status')?.hidden, room: !!window.beauRoom, net: !!window.beauGame?.net, user: !!window.beauCloud?.user })).then((x) => console.log('   load', key, el(), x), () => {}), 20000);
-  await p.waitForFunction(() => document.getElementById('status')?.hidden && window.beauRoom && window.beauGame?.net && window.beauCloud?.user, null, { timeout: 300000 });
+  await p.waitForFunction(() => document.getElementById('status')?.hidden && window.beauRoom && window.beauGame?.net && window.beauCloud?.user, null, { timeout: 300000, polling: 100 });
   clearInterval(prog);
   return p;
 }
+// 兩支手機都用軟體畫（CPU 不夠）：遊戲照常跑（計時器一秒 30 次），但 300 次才真的畫 1 次；拍照、量 draw calls 前先每次都畫
+const shot = async (p, file) => { await p.evaluate(() => window.__thin(1)); await p.waitForTimeout(1500); await p.screenshot({ path: file }); await p.evaluate(() => window.__thin(300)); };
 const A = await phone('A', 'u1', '大便龍車神');
+if (process.env.PROBE) { // 只看一支手機的速度
+  await A.evaluate(() => window.__thin(+localStorage.getItem('x') || 20));
+  const f0 = await A.evaluate(() => new Promise((ok) => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < 3000) requestAnimationFrame(f); else ok(n / 3); }; requestAnimationFrame(f); }));
+  await A.click('#driveOut'); await A.waitForFunction(() => window.__D().on && window.__D().walker, null, { timeout: 120000, polling: 100 }); await A.waitForTimeout(3000);
+  for (const n of [20, 1]) {
+    await A.evaluate((n) => window.__thin(n), n);
+    const fp = await A.evaluate(() => new Promise((ok) => { const k0 = window.__ticks, t0 = performance.now(), w0 = window.__D().walker.telemetry(); window.__D().walker.setInput({ y: -1 }); setTimeout(() => { const w1 = window.__D().walker.telemetry(); window.__D().walker.setInput(null); ok([(window.__ticks - k0) / ((performance.now() - t0) / 1000), Math.hypot(w1.x - w0.x, w1.z - w0.z) / ((performance.now() - t0) / 1000)]); }, 4000); }));
+    const st = await A.evaluate(() => { const t0 = performance.now(); window.__dstep(10); return (performance.now() - t0) / 10; });
+    console.log('probe thin', n, 'garage fps', f0, 'out fps', fp, 'driveStep ms', st.toFixed(1), JSON.stringify(await A.evaluate(() => window.__rinfo())));
+  }
+  await b.close(); srv.close(); process.exit(0);
+}
 const B = await phone('B', 'u2', '阿明快車手');
+for (const p of [A, B]) await p.evaluate(() => window.__thin(300));
 console.log('loaded', el());
-const waitFor = (p, fn, arg, ms = 60000) => p.waitForFunction(fn, arg, { timeout: ms }).then(() => true, () => false);
+const waitFor = (p, fn, arg, ms = 60000) => p.waitForFunction(fn, arg, { timeout: ms, polling: 100 }).then(() => true, () => false);
 const dlg = (p) => p.evaluate(() => { const $ = (id) => document.getElementById(id), shown = (id) => { const e = $(id); return !!e && !e.closest('[hidden]'); };
   return { open: !$('netDlg').hidden, title: $('netTitle').textContent, sec: ['nwIn', 'nwName', 'nwMenu', 'nwBoard', 'nwJoin', 'nwRoom', 'nwRace', 'nwVisit'].filter(shown).join(),
     code: $('nwCode').textContent, who: [...$('nwWho').children].map((li) => li.innerText.replace(/\s+/g, ' ').trim()), lbl: $('nwWhoLbl').textContent,
     joinErr: shown('nwJoinErr') ? $('nwJoinErr').textContent : '', visitErr: shown('nwVisitErr') ? $('nwVisitErr').textContent : '', room: window.__beauRoom.room }; });
-const click = (p, sel) => p.click(sel);
+// 這台機器軟體畫圖、一秒不到 1 格：點擊不等「穩定」（要好幾格），等條件用計時器輪詢（不用 requestAnimationFrame）
+const click = (p, sel) => p.click(sel, { force: true });
 const info = (p) => p.evaluate(() => window.beauGame.net.info);
-const openNet = async (p) => { if (await p.evaluate(() => document.getElementById('netDlg').hidden)) await click(p, '#netChip'); await p.waitForTimeout(200); };
+// 打開連線：車庫頁按上面的「👥 連線」；在外面（標題列藏起來）按遊戲裡的「房間 XXXX」
+const openNet = async (p) => { if (await p.evaluate(() => document.getElementById('netDlg').hidden)) await click(p, (await p.isVisible('#netChip')) ? '#netChip' : '.nt-room'); await p.waitForTimeout(200); };
+
+const toRoom = async (p) => { await openNet(p); if (await p.isHidden('#nwRoom')) await click(p, '#nwRoomBtn'); await p.waitForTimeout(150); };
 
 // ---- 1 開房間 ----
 await openNet(A);
@@ -160,11 +184,11 @@ a = await dlg(A);
 const CODE = a.room?.code || '';
 console.log('1', el(), JSON.stringify(a));
 check(/^[2-9A-HJKMNP-Z]{4}$/.test(CODE) && a.code === CODE, `room code is 4 easy characters (${CODE})`);
-check(a.lbl === '在房間裡的人（1/4）' && /大便龍車神（你，房主）/.test(a.who[0] || '') && a.title === '你的房間', `member list 1/4: you, host (${a.who})`);
+check(a.lbl === '在房間裡的人（1/4）' && /大便龍車神\s*（你，房主）/.test(a.who[0] || '') && a.title === '你的房間', `member list 1/4: you, host (${a.who})`);
 check(getAt(`rooms/${CODE}/host`) === 'u1' && getAt(`rooms/${CODE}/s/0`) === 'u1' && getAt(`rooms/${CODE}/m/u1/n`) === '大便龍車神', 'database: host, slot 0, member u1');
 await waitFor(A, () => true, null, 500);
 check(!!getAt('garages/u1/cars/gc8') && getAt('garages/u1/n') === '大便龍車神', `my garage is published for visits (${JSON.stringify(getAt('garages/u1'))?.slice(0, 80)})`);
-await A.screenshot({ path: `${prefix}-1-room.png` });
+await shot(A, `${prefix}-1-room.png`);
 
 // ---- 2 加入 ----
 await openNet(B);
@@ -178,11 +202,11 @@ await waitFor(B, () => window.__beauRoom.room && !document.getElementById('nwRoo
 await waitFor(A, () => document.getElementById('nwWhoLbl').textContent.includes('2/4'), null, 10000);
 bb = await dlg(B); a = await dlg(A);
 console.log('2', el(), JSON.stringify(bb.who), JSON.stringify(a.who));
-check(bb.lbl.includes('2/4') && /大便龍車神（房主）/.test(bb.who[0]) && /阿明快車手（你）/.test(bb.who[1]) && bb.title === '房間', `B joined with lower-case code: 2/4, host listed first (${bb.who})`);
+check(bb.lbl.includes('2/4') && /大便龍車神\s*（房主）/.test(bb.who[0]) && /阿明快車手\s*（你）/.test(bb.who[1]) && bb.title === '房間', `B joined with lower-case code: 2/4, host listed first (${bb.who})`);
 check(a.lbl.includes('2/4') && /阿明快車手/.test(a.who[1]) && /車庫/.test(a.who[1]), `A sees B join (with a 🚗 車庫 button) (${a.who})`);
 check(await B.evaluate(() => document.getElementById('nwOut').hidden && !document.getElementById('nwRoomNote').hidden), 'only the host has 一起出門 / 一起比賽');
 check(getAt(`rooms/${CODE}/s/1`) === 'u2', 'B took slot 1');
-await B.screenshot({ path: `${prefix}-2-joined.png` });
+await shot(B, `${prefix}-2-joined.png`);
 
 // ---- 3 一起出門 ----
 await click(A, '#nwOut');
@@ -192,6 +216,7 @@ check(outOK[0] && outOK[1], 'host pressed 一起出門: both phones went out (wa
 check(await A.evaluate(() => document.getElementById('netDlg').hidden), 'the dialog closed so the game shows');
 const seeB = await waitFor(A, () => { const i = window.beauGame.net.info; return i.peers[0] && i.peers[0].vis && i.peers[0].walk && i.marks === 1; }, null, 30000);
 const seeA = await waitFor(B, () => { const i = window.beauGame.net.info; return i.peers[0] && i.peers[0].vis && i.peers[0].walk; }, null, 30000);
+if (!seeB || !seeA) { const s0 = await B.evaluate(() => window.__beauRoom.sent); await B.waitForTimeout(5000); console.log('   stale', JSON.stringify({ sentIn5s: (await B.evaluate(() => window.__beauRoom.sent)) - s0, age: await A.evaluate(() => Date.now() + window.__NET().off - window.__NET().P.get('u2').last), db: getAt(`rooms/${CODE}/p/u2`), now: Date.now() })); }
 const i3 = await info(A);
 console.log('  ', JSON.stringify(i3));
 check(seeB && seeA, 'each sees the other walking (character + name tag) and A has a minimap dot');
@@ -199,24 +224,28 @@ const hud3 = await A.evaluate(() => { const r = document.querySelector('.nt'); r
 check(/房間 \S{4} · 2 個人/.test(hud3 || ''), `room box in the game: ${hud3}`);
 // 走一下：B 往前走，A 看到的位置跟著動
 const w0 = await A.evaluate(() => ({ ...window.__NET().P.get('u2').mk }));
-await B.keyboard.down('KeyW'); await B.waitForTimeout(1500); await B.keyboard.up('KeyW');
+await B.evaluate(() => window.__D().walker.setInput({ y: -1 }) /* 往鏡頭走：前面是車 */); await B.waitForTimeout(1500); await B.evaluate(() => window.__D().walker.setInput(null));
 await A.waitForTimeout(800);
 const w1 = await A.evaluate(() => ({ ...window.__NET().P.get('u2').mk }));
+console.log('   walk', JSON.stringify(w0), JSON.stringify(w1), JSON.stringify(getAt(`rooms/${CODE}/p/u2`)), await B.evaluate(() => JSON.stringify({ sent: window.__beauRoom.sent, st: window.beauGame.net.state(), wk: (({ x, z, paused, speed }) => ({ x, z, paused, speed }))(window.__D().walker.telemetry()), mode: window.__D().walker.mode, ae: document.activeElement?.id || document.activeElement?.tagName })), await A.evaluate(() => { const P = window.__NET().P.get('u2'); return JSON.stringify({ n: P.buf.length, last: P.buf[P.buf.length - 1], now: Date.now() }); }));
 check(Math.hypot(w1.x - w0.x, w1.z - w0.z) > 1, `B walked → A sees B move (${Math.hypot(w1.x - w0.x, w1.z - w0.z).toFixed(1)} m)`);
-await A.screenshot({ path: `${prefix}-3-walk-together.png` });
+await shot(A, `${prefix}-3-walk-together.png`);
 
+const fpsOf = (p) => p.evaluate(() => new Promise((ok) => { const k0 = window.__ticks; setTimeout(() => ok((window.__ticks - k0) / 2), 2000); }));
+console.log('   ticks/s', JSON.stringify(await Promise.all([fpsOf(A), fpsOf(B)])));
 // ---- 4 表情 ----
 await click(A, '.nt-emo');
 await click(A, '.nt-tray button:nth-child(3)');
+await waitFor(A, () => /你：/.test(document.querySelector('.nt-room').textContent), null, 2500); // 下一格才換字
+const emoA = await A.evaluate(() => document.querySelector('.nt-room').textContent);
 const emoB = await waitFor(B, () => /大便龍車神：好車！/.test(document.querySelector('.nt-room')?.textContent || ''), null, 8000);
 const bub = await B.evaluate(() => { const P = window.__NET().P.get('u1'); return !!P.bub && P.bub.visible; });
-const emoA = await A.evaluate(() => document.querySelector('.nt-room').textContent);
 check(emoB && bub, 'B sees 「大便龍車神：好車！」 and a bubble over A');
 check(/你：好車！/.test(emoA) && getAt(`rooms/${CODE}/e/u1/e`) === 2, `A sees 「你：好車！」 (${emoA})`);
-await B.screenshot({ path: `${prefix}-4-emote.png` });
+await shot(B, `${prefix}-4-emote.png`);
 
 // ---- 5 爬山 ----
-await openNet(A); await click(A, '#nwRoomBtn'); await click(A, '#nwRaceBtn');
+await toRoom(A); await click(A, '#nwRaceBtn');
 check((await dlg(A)).title === '要比什麼？', 'host: 要比什麼？ (賽車場 / 400 公尺 / 爬山 / 泥巴賽下次做)');
 await click(A, '#nwRace [data-k="hill"]');
 const prep = await Promise.all([A, B].map((p) => waitFor(p, () => { const r = window.beauGame.net.info.race; return r && r.kind === 'hill' && (r.phase === 'wait' || r.phase === 'run'); }, null, 120000)));
@@ -232,10 +261,10 @@ await A.waitForTimeout(800);
 const held = await A.evaluate(() => Math.abs(window.__D().drv.telemetry().v));
 check(held < 0.5, `before the start the car stays put even with throttle (${held.toFixed(2)} m/s)`);
 await A.evaluate(() => window.__D().drv.setInput(null));
-await A.screenshot({ path: `${prefix}-5-hill-countdown.png` });
-await Promise.all([A, B].map((p) => waitFor(p, () => window.beauGame.net.info.race?.phase === 'run', null, 20000)));
-const goGap = Date.now() - go5;
-check(goGap > -500 && goGap < 3000, `both started at the agreed time (now − go ${goGap} ms)`);
+await shot(A, `${prefix}-5-hill-countdown.png`);
+const runAt = await Promise.all([A, B].map((p) => waitFor(p, () => window.beauGame.net.info.race?.phase === 'run', null, 60000).then(() => p.evaluate(() => window.beauGame.net.info.race.runAt))));
+const goGap = runAt.map((t) => t - go5);
+check(goGap.every((g) => g >= 0 && g < 1500), `both started at the agreed time (start − go: ${goGap.join(' / ')} ms)`);
 // A 開過起點門，然後放到山頂前面開過終點
 const hill = await A.evaluate(async () => {
   const D = window.__D(), d = D.drv, M = D.VIL.mountain;
@@ -257,33 +286,35 @@ console.log('  ', JSON.stringify(res5));
 check(res5[0].ok && res5[1].ok, 'both phones show the results: A’s time, B 沒跑完');
 check(/^爬山計時賽：第 1 名 1 大便龍車神（你）/.test(res5[0].txt) && /第 2 名|沒跑完/.test(res5[1].txt) && /1 大便龍車神/.test(res5[1].txt), 'same order on both phones (A first)');
 check(/再來一場/.test(res5[0].txt) && /等房主再來一場/.test(res5[1].txt), 'only the host can press 再來一場');
-await A.screenshot({ path: `${prefix}-5-hill-results.png` });
+await shot(A, `${prefix}-5-hill-results.png`);
 
 // ---- 6 再來一場 → 換 400 公尺 ----
 const seq5 = getAt(`rooms/${CODE}/race/seq`);
 await click(A, '.nt-res .a');
 await waitFor(B, (s) => window.beauGame.net.info.race?.seq === s + 1, seq5, 20000);
 check(getAt(`rooms/${CODE}/race/seq`) === seq5 + 1 && getAt(`rooms/${CODE}/race/kind`) === 'hill', '再來一場: a new hill race for everyone');
-await openNet(A); await click(A, '#nwRoomBtn'); await click(A, '#nwRaceBtn'); await click(A, '#nwRace [data-k="drag"]');
+await toRoom(A); await click(A, '#nwRaceBtn'); await click(A, '#nwRace [data-k="drag"]');
 const inDrag = await Promise.all([A, B].map((p) => waitFor(p, () => { const r = window.__R(); return r && r.net && window.beauGame.net.info.race?.kind === 'drag' && window.beauGame.net.info.race.phase === 'wait'; }, null, 120000)));
 check(inDrag[0] && inDrag[1], 'switched to 400 m: both on the drag strip, no AI opponent');
 for (const p of [A, B]) await p.evaluate(() => { // 機器人：綠燈 0.2 秒後起步、轉速到了換檔
   const press = (id) => document.getElementById(id).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-  const tick = () => { const r = window.__R(); if (!r || !r.net) return; if (r.phase === 'run' && r.me.fin == null) { const c = r.me; if (c.go == null) { if (r.t - r.green > 0.2) press('goBtn'); } else if (c.rpm >= 0.93 && c.shiftT <= 0 && c.gear < 5) press('goBtn'); } requestAnimationFrame(tick); };
-  tick();
+  const tick = () => { const r = window.__R(); if (!r || !r.net) return; if (r.phase === 'run' && r.me.fin == null) { const c = r.me; if (c.go == null) { if (r.t - r.green > 0.2) press('goBtn'); } else if (c.rpm >= 0.93 && c.shiftT <= 0 && c.gear < 5) press('goBtn'); } };
+  setInterval(tick, 30); // 不用 requestAnimationFrame（這台機器一秒不到 1 格）
 });
-const greens = await Promise.all([A, B].map((p) => p.waitForFunction(() => { const r = window.__R(); return r && r.green != null ? Date.now() - (r.t - r.green) * 1000 : false; }, null, { timeout: 90000 }).then((h) => h.jsonValue())));
-check(Math.abs(greens[0] - greens[1]) < 400, `green light at the same time on both phones (${Math.abs(greens[0] - greens[1]).toFixed(0)} ms apart)`);
-await A.waitForFunction(() => window.__R()?.me.x > 120, null, { timeout: 60000 });
+const dragDbg = async () => { for (const [k, p] of [['A', A], ['B', B]]) console.log('   drag', k, await p.evaluate(() => { const r = window.__R(), i = window.beauGame.net.info.race; return JSON.stringify({ race: i && { seq: i.seq, phase: i.phase, go: i.go, goT: window.__NET().race?.goT }, R: r && { phase: r.phase, t: r.t, greenAt: r.greenAt, green: r.green }, now: Date.now() }); })); console.log('   db', JSON.stringify(getAt(`rooms/${CODE}/race`)), JSON.stringify(getAt(`rooms/${CODE}/r`))); };
+await A.waitForTimeout(6000); await dragDbg();
+const greens = await Promise.all([A, B].map((p) => p.waitForFunction(() => { const r = window.__R(); return r && r.greenNow ? r.greenNow - r.net.go : false; }, null, { timeout: 90000, polling: 100 }).then((h) => h.jsonValue())));
+check(greens.every((g) => g >= 0 && g < 800), `green light at the agreed time on both phones (green − go: ${greens.join(' / ')} ms)`);
+await A.waitForFunction(() => window.__R()?.me.x > 120, null, { timeout: 60000, polling: 100 });
 const mid = await A.evaluate(() => { const r = window.__R(), o = r.nOpp[0]; return { me: r.me.x, opp: o.x, vis: !!o.obj && o.obj.car.visible, z: o.obj?.car.position.z }; });
 console.log('6', el(), JSON.stringify(mid));
 check(mid.vis && mid.opp > 50 && mid.z < 0, `B’s car runs in the other lane on A’s screen (B at ${mid.opp.toFixed(0)} m, A at ${mid.me.toFixed(0)} m)`);
-await A.screenshot({ path: `${prefix}-6-drag.png` });
+await shot(A, `${prefix}-6-drag.png`);
 const res6 = await Promise.all([A, B].map((p) => waitFor(p, () => { const r = document.querySelector('.nt-res'); return r && !r.hidden && (r.innerText.match(/\d+\.\d\d 秒/g) || []).length === 2; }, null, 90000).then(async (ok) => ({ ok, txt: await p.evaluate(() => document.querySelector('.nt-res').innerText.replace(/\s+/g, ' ')) }))));
 console.log('  ', JSON.stringify(res6));
 const rows = (t) => (t.match(/\d (大便龍車神|阿明快車手)(（你）)? (\d+\.\d\d) 秒/g) || []).map((s) => s.replace('（你）', ''));
 check(res6[0].ok && res6[1].ok && JSON.stringify(rows(res6[0].txt)) === JSON.stringify(rows(res6[1].txt)) && rows(res6[0].txt).length === 2, `both finished: same names, places and times on both phones (${rows(res6[0].txt)})`);
-await B.screenshot({ path: `${prefix}-6-drag-results.png` });
+await shot(B, `${prefix}-6-drag-results.png`);
 
 // ---- 7 回房間：接著一起開車 ----
 for (const p of [A, B]) await click(p, '.nt-res .b');
@@ -292,14 +323,15 @@ check(back[0] && back[1], '回房間: both driving again (next to the drag strip
 for (const p of [A, B]) await p.evaluate(() => { if (!document.getElementById('netDlg').hidden) document.getElementById('netX').click(); });
 const seeCar = await waitFor(A, () => { const i = window.beauGame.net.info; return i.peers[0]?.vis && i.peers[0].car && i.cols === 1; }, null, 30000);
 await A.waitForTimeout(1500);
+await A.evaluate(() => window.__thin(1)); await A.waitForTimeout(1500);
 const perf = await A.evaluate(() => { const r = window.__rinfo(), i = window.beauGame.net.info, t = window.__D().drv.telemetry(), m = window.__NET().P.get('u2').mk; return { ...r, cols: i.cols, d: Math.hypot(t.x - m.x, t.z - m.z) }; });
 console.log('7', el(), JSON.stringify(perf));
 check(seeCar, 'A sees B’s car (name tag, shadow) and it blocks like a moving car in free driving');
 check(perf.calls < 400, `draw calls with a friend’s car in view: ${perf.calls} calls, ${(perf.tris / 1e6).toFixed(2)} M triangles`);
-await A.screenshot({ path: `${prefix}-7-drive-together.png` });
+await shot(A, `${prefix}-7-drive-together.png`);
 
 // ---- 8 參觀車庫 ----
-await openNet(A); await click(A, '#nwRoomBtn');
+await toRoom(A);
 await click(A, '#nwWho li:nth-child(2) button');
 await waitFor(A, () => !document.getElementById('nwVisitErr').hidden, null, 5000);
 check(/要在車庫頁才能參觀/.test((await dlg(A)).visitErr), 'while driving: 「要在車庫頁才能參觀」');
@@ -308,13 +340,14 @@ await B.evaluate(() => { if (!document.getElementById('netDlg').hidden) document
 await B.evaluate(() => document.getElementById('driveHome').click());
 await waitFor(B, () => !window.__D().trip && document.getElementById('status').hidden, null, 30000);
 check(await A.evaluate(() => window.beauGame.net.info.peers[0].vis === false) || await waitFor(A, () => !window.beauGame.net.info.peers[0].vis, null, 10000), 'B went home → A no longer sees B’s car');
-await openNet(B); await click(B, '#nwRoomBtn');
+await toRoom(B);
 await click(B, '#nwWho li:nth-child(1) button');
-const vis = await waitFor(B, () => window.beauGame.visiting?.loaded && document.querySelector('.nv'), null, 60000);
+const vis = await waitFor(B, () => window.beauGame.visiting?.loaded && document.querySelector('.nv'), null, 120000);
+if (!vis) console.log('   visit', await B.evaluate(() => JSON.stringify({ v: window.beauGame.visiting, msg: document.getElementById('msg').textContent, st: document.getElementById('status').hidden })));
 const v8 = await B.evaluate(() => ({ title: document.querySelector('.nv-top h3').textContent, info: document.querySelector('.nv-info').innerText.replace(/\s+/g, ' '), like: document.querySelector('.nv-like').textContent, dlg: !document.getElementById('netDlg').hidden, cls: document.body.classList.contains('visiting') }));
 console.log('8', el(), JSON.stringify(v8));
 check(vis && v8.title === '大便龍車神的車庫' && /GC8.*（1\/1）/.test(v8.info) && /♥ 0/.test(v8.info) && !v8.dlg && v8.cls, `B is visiting A’s garage: ${v8.title} · ${v8.info}`);
-await B.screenshot({ path: `${prefix}-8-visit.png` });
+await shot(B, `${prefix}-8-visit.png`);
 await click(B, '.nv-like');
 await waitFor(B, () => /♥ 1/.test(document.querySelector('.nv-heart').textContent), null, 5000);
 check(getAt('likes/u1/u2') === true && /已經讚了/.test(await B.textContent('.nv-like')), 'like → ♥ 1 (likes/u1/u2 in the database)');
@@ -328,7 +361,7 @@ const after8 = await B.evaluate(() => ({ nv: !!document.querySelector('.nv'), cl
 check(!after8.nv && !after8.cls && after8.opts !== 'none', `closed: my garage is back (${JSON.stringify(after8)})`);
 
 // ---- 9 離開、斷線、滿了、房主關掉 ----
-await openNet(B); await click(B, '#nwRoomBtn'); await click(B, '#nwLeave');
+await toRoom(B); await click(B, '#nwLeave');
 await waitFor(A, () => window.beauGame.net.info.peers.length === 0, null, 10000);
 check(getAt(`rooms/${CODE}/m/u2`) == null && getAt(`rooms/${CODE}/s/1`) == null && (await info(A)).peers.length === 0, 'B left: slot freed, A no longer has B');
 await B.evaluate(() => document.getElementById('nwJoinBtn').click());
@@ -344,7 +377,7 @@ await openNet(B); await B.evaluate(() => { document.getElementById('nwJoinBtn').
 await B.fill('#nwCodeIn', CODE); await click(B, '#nwJoinOk');
 await waitFor(B, () => !document.getElementById('nwJoinErr').hidden, null, 10000);
 check(/滿了/.test((await dlg(B)).joinErr), `5th person: 「這個房間滿了（最多 4 個人）」`);
-await openNet(A); await click(A, '#nwRoomBtn');
+await toRoom(A);
 check((await dlg(A)).lbl.includes('4/4'), 'host sees 4/4');
 await click(A, '#nwLeave');
 await A.waitForTimeout(500);

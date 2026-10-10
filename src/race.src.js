@@ -527,7 +527,7 @@ function raceFrame(now) {
     const n = Math.max(0, Math.min(3, Math.floor((R.t - (R.greenAt - 1.5)) / 0.5) + 1));
     lights(R.t >= R.greenAt - 1.5 ? n : 0, false, false);
     goBtn.disabled = false;
-    if (R.t >= R.greenAt) { R.phase = 'run'; R.green = R.t; lights(3, true, false); }
+    if (R.t >= R.greenAt) { R.phase = 'run'; R.green = R.t; R.greenNow = Date.now(); lights(3, true, false); }
   }
   if (R.phase === 'run' || R.phase === 'done' || R.phase === 'stage' || R.phase === 'intro') {
     if (op && (R.phase === 'run' || (R.phase === 'done' && !R.foul))) { // 對手：反應時間、換檔點、氮氣時機有點隨機
