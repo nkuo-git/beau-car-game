@@ -65,7 +65,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 ## 版本號
 - 標題旁：`0.<APK 版號>.<內容版號>`。APK 版號＝「編 APK」workflow 的 run number（Release `apk-N`），網頁版（不在 App 裡）是 0。內容版號＝`docs/version.json`。
 - 內容 1 ＝ 跟萬能軟體 0.9.37／內容 38 一樣的遊戲（main 第一次）。
-- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4；v29 ＝ 山）；下一個試做頁是 v30。
+- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4；v29 ＝ 內容 5）；下一個試做頁是 v30。
 
 ## 試做頁（artifact）
 - https://claude.ai/artifact/29pHoiqGVBs34ERLnJ9T8s（Nick 的；新的專案第一次發佈前要先用 Artifact 的 `read` 讀它，才能更新同一個網址）。
@@ -143,7 +143,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - App 要新版外殼（apk-4 起，`BeauCarApp.googleSignIn()`）才能登入，而且 Firebase 要有 Android 應用程式（`com.nkuo.beaucargame`＋SHA-1，見 notes/cloud.md）；舊 App 按登入會叫他先更新。
   - 試玩頁 `docs/try/`（`node src/build-site.mjs <版號> --try`）：要真的連網路才能試的東西（試做頁 artifact 連不到 Firebase）放這裡；跟正式網站同網域、用同一份存檔；不裝 Service Worker。
 - **內容 4（2026-10-09 上線，試做頁 v28）**：越野車也輾得扁路上騎的機車（騎士先跳車跑掉，只有機車扁；`notes/crush.md` 第 13 批）。
-- **山（試做頁 v29，等 Nick 試、說「上線」；在分支 `claude/project-thread-q5ydzq`）**：村子北邊一座約 102 公尺高的山，約 1 公里的之字形山路（護欄、急彎牌、反光鏡）、山頂停車場＋紅色涼亭＋觀景台、越野車泥土捷徑、「去山頂」、爬山計時賽（每台車記最快的，存在 `best.hill`）。草稿 https://claude.ai/artifact/NhH4i6Gw2C8Yk2ZhEx6Poj （說 120 公尺、1.5 公里，做出來比較小）。說明在 `notes/mountain.md`。
+- **內容 5（2026-10-10 上線，試做頁 v29）＝ 山**：村子北邊一座約 102 公尺高的山，約 1 公里的之字形山路（護欄、急彎牌、反光鏡）、山頂停車場＋紅色涼亭＋觀景台、越野車泥土捷徑、「去山頂」、爬山計時賽（每台車記最快的，存在 `best.hill`）。草稿 https://claude.ai/artifact/NhH4i6Gw2C8Yk2ZhEx6Poj （說 120 公尺、1.5 公里，做出來比較小）。說明在 `notes/mountain.md`。
 - **接下來（Nick 選「做1236」，草稿和家長都同意了）**：連線 https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo ——照順序：鬼影排行榜（爬山計時賽也接上去）→ 一起開車 → 一起比賽 → 參觀車庫。每做好一個先放試做頁。
 - **已知問題**
   - 越野車車庫裡坐在駕駛座（或追車鏡頭）會看到天空（屋頂被剔除）。
