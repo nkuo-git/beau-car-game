@@ -26070,6 +26070,132 @@ const { buildLodCar, LOD_CARS } = (() => {
   return { buildLodCar, LOD_CARS };
 })();
 
+// ---- ghost.js ----
+// 鬼影車（連線第 1 步：排行榜，Nick 2026-10-10「開始做吧」，草稿 https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo 第 7、8 張）
+// 錄下一趟（每秒 10 個位置）→ 打包成一小段字串（網站把最好的一趟傳到雲端）→ 照著錄下來的樣子開一台半透明的車（撞不到：不加進任何碰撞）
+// 錄：const rec = ghostRecorder(3); rec.reset(); 每一格 rec.add(開始後幾秒, x, z, heading)；到了 rec.end(…)（多補一個，過終點線）；rec.pack() → { hz, c, n, s, d }
+//   c＝一組幾個數字：3（x、z、heading：開車的世界，heading 跟 drive.js 一樣）或 1（直線加速：車頭離起跑線幾公尺）
+//   n＝幾組；s＝第一組（整數：位置 ×10、方向 ×100）；d＝後面每一組跟前一組的差（Int16、little endian）的 base64
+//   方向先接成連續的（不會從 π 跳到 −π），差才會小
+// 播：const G = ghostUnpack(包)（看不懂的回 null）；ghostAt(G, 秒, out) 把那一刻的 [x, z, heading] 寫進 out，播完了回 false（停在最後一個）
+// 車：ghostCar(LOD_CARS[key] 載好的, key, { label }) → { car, nose, tail, place(x, y, z, heading, pitch), dispose() }
+//   淡藍色、半透明、不寫深度；頭上一塊「👻 名字 秒數」；每一格只改位置（不 new 東西）
+// 打包（build-art.mjs／build-app.mjs）：接在 carlod.js 後面（用 buildLodCar）
+
+const { ghostRecorder, ghostPack, ghostUnpack, ghostAt, ghostCar, GHOST_HZ } = (() => {
+  const HZ = 10, MAX = 12000, Q = [10, 10, 100]; // 最多 20 分鐘
+  const PI2 = Math.PI * 2;
+
+  function ghostRecorder(c, max = MAX) {
+    const buf = new Float32Array(max * c);
+    let n = 0, pt = -1, px = 0, pz = 0, ph = 0;
+    const put = (k, x, z, h) => { const o = n * c; buf[o] = px + (x - px) * k; if (c === 3) { buf[o + 1] = pz + (z - pz) * k; buf[o + 2] = ph + (h - ph) * k; } n++; };
+    return {
+      reset() { n = 0; pt = -1; },
+      add(t, x, z = 0, h = 0) { // 這一格和上一格中間經過的整數格（每 0.1 秒）都補上（線性內插）
+        if (pt < 0) { pt = t; px = x; pz = z; ph = h; }
+        if (c === 3) { while (h - ph > Math.PI) h -= PI2; while (h - ph < -Math.PI) h += PI2; }
+        while (n < max && n / HZ <= t + 1e-6) { const k = t > pt ? (n / HZ - pt) / (t - pt) : 1; put(k < 0 ? 0 : k > 1 ? 1 : k, x, z, h); }
+        pt = t; px = x; pz = z; ph = h;
+      },
+      end(t, x, z = 0, h = 0) { // 最後一格：照最後的速度再往前補一個，播的時候才會開過終點線（不會停在前面一點點）
+        this.add(t, x, z, h);
+        const tn = n / HZ, tl = (n - 1) / HZ;
+        if (n < 1 || n >= max || tn <= t + 1e-6) return;
+        const o = (n - 1) * c, dt = t - tl, k = dt > 0.02 ? (tn - t) / dt : 0;
+        const ex = px + (px - buf[o]) * k, ez = c === 3 ? pz + (pz - buf[o + 1]) * k : 0, eh = c === 3 ? ph + (ph - buf[o + 2]) * k : 0;
+        put(1, ex, ez, eh); // put 從 px 內插到 ex，k＝1 就是 ex
+      },
+      get n() { return n; },
+      pack() { return n ? ghostPack(buf, n, c) : null; },
+    };
+  }
+
+  function b64(u8) {
+    let s = '';
+    for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    return btoa(s);
+  }
+  function ghostPack(buf, n, c) {
+    const s = [];
+    for (let j = 0; j < c; j++) s.push(Math.round(buf[j] * Q[j]));
+    const prev = s.slice(), dv = new DataView(new ArrayBuffer(Math.max(0, n - 1) * c * 2));
+    for (let i = 1; i < n; i++) for (let j = 0; j < c; j++) {
+      let d = Math.round(buf[i * c + j] * Q[j]) - prev[j];
+      d = d > 32767 ? 32767 : d < -32767 ? -32767 : d;
+      dv.setInt16(((i - 1) * c + j) * 2, d, true); prev[j] += d;
+    }
+    return { hz: HZ, c, n, s, d: b64(new Uint8Array(dv.buffer)) };
+  }
+  function ghostUnpack(p) {
+    try {
+      if (!p || p.hz !== HZ || (p.c !== 1 && p.c !== 3) || !Number.isInteger(p.n) || p.n < 2 || p.n > MAX) return null;
+      const c = p.c, n = p.n;
+      if (!Array.isArray(p.s) || p.s.length !== c || !p.s.every(Number.isFinite) || typeof p.d !== 'string') return null;
+      const bin = atob(p.d);
+      if (bin.length !== (n - 1) * c * 2) return null;
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const dv = new DataView(u8.buffer), v = new Float32Array(n * c), cur = p.s.slice();
+      for (let j = 0; j < c; j++) v[j] = cur[j] / Q[j];
+      for (let i = 1; i < n; i++) for (let j = 0; j < c; j++) { cur[j] += dv.getInt16(((i - 1) * c + j) * 2, true); v[i * c + j] = cur[j] / Q[j]; }
+      return { hz: HZ, c, n, v, dur: (n - 1) / HZ };
+    } catch { return null; }
+  }
+  function ghostAt(G, t, out) {
+    const f = Math.max(0, t) * G.hz, i = Math.floor(f), c = G.c, v = G.v;
+    if (i >= G.n - 1) { const o = (G.n - 1) * c; for (let j = 0; j < c; j++) out[j] = v[o + j]; return false; }
+    const k = f - i, o = i * c;
+    for (let j = 0; j < c; j++) out[j] = v[o + j] + (v[o + c + j] - v[o + j]) * k;
+    return true;
+  }
+
+  // ---- 鬼影車：輕量車換成淡藍色、半透明 ----
+  const BOX = new THREE.Box3();
+  function tagTexture(text) {
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 96;
+    const g = cv.getContext('2d');
+    g.font = '700 46px "Noto Sans TC","PingFang TC",sans-serif';
+    const w = Math.min(500, g.measureText(text).width + 44);
+    g.fillStyle = 'rgba(10,10,12,0.75)';
+    const x0 = (512 - w) / 2, r = 18;
+    g.beginPath(); g.moveTo(x0 + r, 8); g.arcTo(x0 + w, 8, x0 + w, 88, r); g.arcTo(x0 + w, 88, x0, 88, r); g.arcTo(x0, 88, x0, 8, r); g.arcTo(x0, 8, x0 + w, 8, r); g.closePath(); g.fill();
+    g.fillStyle = '#eaf4ff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 256, 50, 470);
+    const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
+    return tx;
+  }
+  function ghostCar(sc, key, o = {}) {
+    const lod = buildLodCar(key, sc, { paint: '#cfe6ff', finish: 'gloss', glow: 'none', livery: 'none', tint: 'light', wing: o.wing });
+    const { body, glass, rims } = lod.meshes, bm = body.material, gm = glass.material, rm = rims.material;
+    Object.assign(bm, { transparent: true, opacity: 0.42, depthWrite: false, side: THREE.FrontSide }); bm.needsUpdate = true; // 車身和輪胎同一個材質
+    Object.assign(rm, { transparent: true, opacity: 0.42, depthWrite: false }); rm.needsUpdate = true;
+    gm.opacity = 0.16;
+    lod.car.traverse((m) => { if (m.isMesh) { m.renderOrder = 5; m.frustumCulled = true; } });
+    glass.renderOrder = 6;
+    lod.car.position.set(0, 0, 0); lod.car.rotation.set(0, 0, 0); lod.car.updateMatrixWorld(true);
+    BOX.setFromObject(lod.car);
+    const nose = BOX.max.x, tail = BOX.min.x, top = BOX.max.y;
+    lod.car.rotation.order = 'YXZ'; // 先轉方向（y），再抬頭（z：車頭朝 +x）
+    let tag = null;
+    if (o.label) {
+      const mat = new THREE.SpriteMaterial({ map: tagTexture(o.label), transparent: true, depthTest: false, depthWrite: false, sizeAttenuation: false }); // 遠近都一樣大（畫面高的 4.5%）
+      tag = new THREE.Sprite(mat); tag.scale.set(0.24, 0.045, 1); tag.position.set((nose + tail) / 2, top + 0.75, 0); tag.renderOrder = 7;
+      lod.car.add(tag);
+    }
+    lod.car.name = 'ghost-' + key;
+    return {
+      car: lod.car, nose, tail, key,
+      place(x, y, z, h, pitch = 0) { lod.car.position.set(x, y, z); lod.car.rotation.set(0, h, pitch); },
+      roll(dist) { lod.setRoll(dist); },
+      dispose() {
+        if (tag) { tag.material.map.dispose(); tag.material.dispose(); tag.removeFromParent(); }
+        lod.dispose();
+      },
+    };
+  }
+  return { ghostRecorder, ghostPack, ghostUnpack, ghostAt, ghostCar, GHOST_HZ: HZ };
+})();
+
 // ---- npc.js ----
 // ---- 路上的人和車（第 2 批）：別人開的車、騎機車的、快速道路上的車流；村子裡走來走去的居民 ----
 // Nick 2026-09-28：「要有居民也要有別人在開車」「城市做越真越好」
@@ -34198,6 +34324,7 @@ function lineUp() {
   race.me.spin = 0; putCar(S, race.me, LANE, race.meInfo); setWheels(S, race.me);
   lights(0, false, false); hudIdle(); for (const f of TR.flames) f.visible = false;
   $('raceGo').textContent = '開始比賽'; resultEl.hidden = true; // 上一場的結果收起來（換了對手）
+  ghHide();
 }
 function toast(text, ms = 900) {
   toastEl.textContent = text; toastEl.classList.add('show');
@@ -34266,7 +34393,7 @@ function exitRace(village = false) {
     if (!Sx || !Object.values(built).includes(Sx)) continue;
     scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.visible = Sx === S; Sx.wheels.forEach((w) => (w.rotation.z = 0));
   }
-  dropOppCar(); sndStop();
+  dropOppCar(); sndStop(); ghHide();
   for (const f of TR.flames) f.visible = false;
   for (const s of TR.shadows) s.visible = false; // 開車的時候看得到賽道：比賽的影子收掉、燈樹熄掉
   lights(0, false, false);
@@ -34290,6 +34417,7 @@ async function startRace() {
   race.me = racer(mySetup()); race.opp = racer(o); race.oppDef = o; race.oppS = O; race.oppInfo = carSize(O);
   sndOpp(o); if (!snd.me?.alive) snd.me = engineAudio.voice(cur, { parts: partsOf(cur) });
   race.phase = 'intro'; raceLive(true); race.t = 0; race.green = null; race.greenAt = null; race.foul = false; race.doneT = null; race.paid = false;
+  ghDragStart(race); // 鬼影車（ghost.src.js）：排行榜選了 400 公尺的鬼影車才有；這一趟也錄下來
   const d = DRIVERS[o.drv], U = (r) => r[0] + Math.random() * (r[1] - r[0]);
   race.ai = { d, react: U(d.react), shiftAt: U(d.shift), nitroAt: d.nitro ? U(d.nitro) : null };
   TR.scene.add(O.car); O.car.visible = true; O.body.position.y = +oppLook(o).height;
@@ -34395,6 +34523,10 @@ function finishRace() {
     resultEl.append(note);
   }
   if (race.foul) { resultEl.hidden = false; lights(0, false, true); showResult(); return; }
+  if (me.fin != null) { // 跑完了：交給網站的排行榜（ghost.src.js）；有鬼影車就說比它快還是慢
+    const vs = ghVs('drag', et(me)); ghDragEnd(race, et(me));
+    if (vs) { const gp = document.createElement('p'); gp.className = 'res-note'; gp.textContent = `👻 ${GH.arm.name} ${GH.arm.t.toFixed(2)} 秒：你${vs.trim()}`; resultEl.append(gp); }
+  }
   const tb = document.createElement('table');
   const rows = [['', `你 · ${CARS[me.key].btn[0]}`, `${o.name} · ${CARS[op.key].btn[0]}`],
     ['反應時間', `${f(me.react)} 秒`, `${f(op.react)} 秒`], ['400 公尺', `${f(et(me), 2)} 秒`, `${f(et(op), 2)} 秒`],
@@ -34465,6 +34597,7 @@ function raceFrame(now) {
     if (R.phase === 'run' && me.fin != null && (op.fin != null || R.t - R.green - me.fin > 4)) finishRace();
     if (R.phase === 'run' && me.go == null && op.fin != null && R.t - R.green > op.fin + 2) finishRace();
   }
+  ghDragFrame(R); // 鬼影車：錄你的、播鬼影的
   // 引擎聲：起跑線上踩著等（起步控制頂在 0.6）、跑的時候全油門、換檔和過終點放油門；對手離越遠越小聲
   const feed = (v, c) => v?.set({ rpm: c.rpm, speed: c.v, limit: c.go == null ? 0.6 : 1,
     throttle: c.go == null ? (R.phase === 'stage' || R.phase === 'run' ? 1 : 0) : c.fin != null || c.shiftT > 0 ? 0 : 1 });
@@ -35001,12 +35134,12 @@ function hillHud(on) {
 }
 function hillStop(why) {
   if (!HILL.on) return;
-  HILL.on = false; hillHud(false);
+  HILL.on = false; hillHud(false); ghHillStop(); // 鬼影車（ghost.src.js）也收掉
   if (why && drv) drv.toast(why, 2200);
 }
 function hillStep(t, dt) {
   const M = VIL?.mountain; if (!M || !drv) return;
-  if (HILL.drv !== drv) { HILL.drv = drv; HILL.prev = -1; hillStop(); } // 換了一台、重新出門、比賽回來
+  if (HILL.drv !== drv) { HILL.drv = drv; HILL.prev = -1; hillStop(); ghHillStop(); } // 換了一台、重新出門、比賽回來
   if (t.paused || t.auto || jailed() || (walker && walker.mode === 'walk') || ciRace || orRace) { HILL.prev = -1; hillStop(HILL.on ? '爬山計時賽取消了' : null); if (HILL.doneT > 0) { HILL.doneT = 0; hillHud(false); } return; } // 下車：結果也收起來
   const tr = M.trial, onM = M.inMountain(t.x, t.z) || M.onRoad(t.x, t.z);
   const p = onM ? M.road.project(t.x, t.z, 12, HILL.pr) : null, s = p && p.i >= 0 ? p.s : -1;
@@ -35014,16 +35147,18 @@ function hillStep(t, dt) {
     if (s >= 0 && HILL.prev >= 0 && HILL.prev < tr.s0 && s >= tr.s0 && p.d < 6 && t.v > 0.5) { // 往上開過起點
       HILL.on = true; HILL.t = 0; HILL.shown = ''; hillHud(true);
       const b = GAME.best.hill[cur]; HILL.bs.textContent = b ? `最快 ${hillFmt(b)}` : '開到山頂！';
-      drv.toast('爬山計時賽開始！開到山頂', 1800);
+      drv.toast(GH.arm?.board === 'hill' ? `爬山計時賽開始！追 👻 ${GH.arm.name}` : '爬山計時賽開始！開到山頂', 1800);
+      ghHillStart(t); // 錄這一趟、鬼影車出發
     }
   } else {
-    HILL.t += dt;
+    HILL.t += dt; ghHillRec(t);
     const fin = (s >= tr.s1 && p.d < 8) || (t.x > M.summit.x0 && t.x < M.summit.x1 && t.z > M.summit.z0 && t.z < M.summit.z1); // 越野車走捷徑上來也算
     if (fin) {
       const tt = Math.round(HILL.t * 100) / 100, old = GAME.best.hill[cur], rec = !old || tt < old;
       if (rec) { GAME.best.hill[cur] = tt; save(); }
+      const vs = ghVs('hill', tt); ghHillEnd(t, tt); // 交給網站的排行榜
       HILL.on = false; HILL.tm.textContent = hillFmt(tt); HILL.bs.textContent = rec ? '新紀錄！' : `最快 ${hillFmt(old)}`;
-      drv.toast(rec ? `到山頂了！${hillFmt(tt)}　新紀錄！` : `到山頂了！${hillFmt(tt)}（最快 ${hillFmt(old)}）`, 3200);
+      drv.toast((rec ? `到山頂了！${hillFmt(tt)}　新紀錄！` : `到山頂了！${hillFmt(tt)}（最快 ${hillFmt(old)}）`) + vs, 3200);
       HILL.doneT = 4; // 結果留 4 秒
     } else if (HILL.t > 600 || !onM || (s >= 0 && s < tr.s0 - 40)) { HILL.prev = s; hillStop('爬山計時賽取消了'); return; }
     else { const txt = hillFmt(HILL.t); if (txt !== HILL.shown) { HILL.shown = txt; HILL.tm.textContent = txt; } }
@@ -36195,7 +36330,7 @@ function driveStep(dt) {
         if (drv && !drv.telemetry().paused) orStep(t); // 第 4 批：越野車場（展示台的車、起跑區）
         if (drv && !drv.telemetry().paused) ciStep(t); // 賽車場：報名處、比賽中沒有「下車」
       }
-      if (drv && DRIVE.on) hillStep(drv.telemetry(), dt); // 爬山計時賽（mountain.js）
+      if (drv && DRIVE.on) { hillStep(drv.telemetry(), dt); ghHillTick(dt); } // 爬山計時賽（mountain.js）、鬼影車（ghost.src.js）
       if (snooze.track && Math.hypot(t.x - VIL.places.track.zone.x, t.z - VIL.places.track.zone.z) > 30) snooze.track = false;
     }
   }
@@ -36258,6 +36393,7 @@ function ciTick(dt) {
     ciRace.update(dt);
     if (ciRace && tripS?.dmg) { drv.setDamage(null); ciDmgOff = true; } // 比賽中撞壞了不變慢
   }
+  ghLapTick(); // 鬼影車排行榜（ghost.src.js）：錄每一圈、鬼影車每圈重新跑
   if (ciMenuEl && (!drv || drv.telemetry().paused)) ciMenuClose();
 }
 // 每一格（沒暫停的時候、越野車場之後）：開進報名處、比賽中沒有「下車」
@@ -36416,6 +36552,125 @@ function nhTick() {
 }
 function nhLeave() { nhIn = false; if (nhCredit) nhCredit.hidden = true; if (nhRoad) { nhRoad.hidden = true; nhRoadNm = ''; } VIL?.neihu?.uncull(); } // 藏起來的小村莊（在內湖的時候）放回去
 
+// ---- ghost.src.js ----
+// ==== 鬼影車排行榜（ghost.js；連線第 1 步，Nick 2026-10-10「開始做吧」）：build-art.mjs／build-app.mjs 接在 neihu.src.js 後面 ====
+// 錄：爬山計時賽（town.src.js hillStep）、賽車場每一圈（circuit.src.js ciTick → ghLapTick）、400 公尺（race.src.js）
+//   跑完一趟發 window 事件 'beau-run'：detail ＝ { board: 'hill'|'lap'|'drag', car, t（秒）, g（ghost.js 的包） }
+//     t：爬山＝起點門到終點；lap＝一圈；drag＝400 公尺（不含反應時間，跟比完的表一樣）
+//   網站（site/online.js）聽這個：比雲端上自己的好才上傳，沒登入先記著；試做頁沒有網站＝沒有人聽
+// 播：網站叫 window.beauGame.setGhost(board, { name, car, t, g })（排行榜的「跟第 1 名的鬼影車跑」）→ 下一次跑那一種的時候多一台半透明的車
+//   爬山：過起點門就出發；賽車場：每過一次終點線重新跑一圈；400 公尺：綠燈亮就出發（在你的車道，從你的車穿過去）
+//   一次只放一台；再選一台、或 clearGhost() 就收掉；不加進任何碰撞（撞不到、警察和路人看不到它）
+const GH = { arm: null, obj: null, job: 0, play: null, out: [0, 0, 0], hill: ghostRecorder(3), lap: ghostRecorder(3), drag: ghostRecorder(1), lapAt: undefined, lapN: 0, last: null, runs: 0 };
+const GH_C = { hill: 3, lap: 3, drag: 1 };
+const ghFmt = (board, t) => (board === 'drag' ? t.toFixed(2) : `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, '0')}`);
+const ghH = (x, z) => (VIL && VIL.heightAt ? VIL.heightAt(x, z) : 0);
+// 跑完一趟（rec 錄好了）
+function ghRun(board, t) {
+  const g = GH[board].pack();
+  if (!g || g.n < 2 || !(t > 1)) return;
+  const detail = { board, car: cur, t: Math.round(t * 1000) / 1000, g };
+  GH.last = detail; GH.runs++;
+  try { window.dispatchEvent(new CustomEvent('beau-run', { detail })); } catch { /* 沒有人聽就算了 */ }
+}
+// 鬼影車：選好就先載（比賽開始馬上看得到）；沒有這台的輕量車（試做頁沒打包 Yaris）就換一台
+function ghPrep() {
+  const A = GH.arm; if (!A) return;
+  const job = ++GH.job, keys = Object.keys(LOD_CARS);
+  const k = LOD_CARS[A.car] ? A.car : LOD_CARS.gc8 ? 'gc8' : keys[0];
+  if (!k) return;
+  LOD_CARS[k].load().then((sc) => {
+    if (job !== GH.job || GH.arm !== A) return;
+    GH.obj = ghostCar(sc, k, { label: `👻 ${A.name} ${ghFmt(A.board, A.t)}` });
+    GH.obj.car.visible = false;
+  }, (e) => console.warn('鬼影車沒載好', e));
+}
+function ghDrop() { GH.job++; ghHide(); if (GH.obj) { GH.obj.dispose(); GH.obj = null; } }
+// 開始跑（t0：那一種比賽的時間從哪裡算）；車子還沒載好也先開始算，好了就出現
+function ghShow(board, scene, t0 = 0) {
+  if (!GH.arm || GH.arm.board !== board) return false;
+  GH.play = { board, scene, t: 0, t0, dist: 0, px: null, pz: null };
+  return true;
+}
+function ghHide() { GH.play = null; if (GH.obj) GH.obj.car.visible = false; }
+// 開車的世界（爬山、賽車場）：t 秒的位置，貼著地面、跟著坡度抬頭；回傳 false＝播完了
+function ghPose(t) {
+  const P = GH.play, A = GH.arm, O = GH.obj;
+  if (!P || !A) return false;
+  const more = ghostAt(A.G, t, GH.out);
+  if (!O) return more;
+  if (O.car.parent !== P.scene) P.scene.add(O.car);
+  O.car.visible = true;
+  const x = GH.out[0], z = GH.out[1], h = GH.out[2], fx = Math.cos(h) * 1.3, fz = -Math.sin(h) * 1.3;
+  const y = ghH(x, z), pitch = Math.atan2(ghH(x + fx, z + fz) - ghH(x - fx, z - fz), 2.6);
+  O.place(x, y, z, h, pitch);
+  if (P.px != null) { P.dist += Math.hypot(x - P.px, z - P.pz); O.roll(P.dist); }
+  P.px = x; P.pz = z;
+  return more;
+}
+// ---- 爬山（hillStep 叫）----
+function ghHillStart(t) { GH.hill.reset(); GH.hill.add(0, t.x, t.z, t.heading); ghShow('hill', TR.scene); }
+function ghHillRec(t) { GH.hill.add(HILL.t, t.x, t.z, t.heading); }
+function ghHillEnd(t, tt) { GH.hill.end(HILL.t, t.x, t.z, t.heading); ghRun('hill', tt); } // 到了：鬼影車自己跑完才收
+function ghHillStop() { if (GH.play && GH.play.board === 'hill') ghHide(); }
+function ghHillTick(dt) { // 每一格（hillStep 後面）
+  const P = GH.play; if (!P || P.board !== 'hill') return;
+  P.t = HILL.on ? HILL.t : P.t + dt; // 跑的時候跟計時器一樣；你到了以後鬼影車自己跑完
+  if (!ghPose(P.t) && P.t > GH.arm.G.dur + 1.5) ghHide();
+}
+// 爬山計時賽到了：比鬼影快還是慢（toast 後面加的那一句）
+function ghVs(board, t) {
+  const A = GH.arm; if (!A || A.board !== board) return '';
+  const d = t - A.t;
+  return Math.abs(d) < 0.005 ? '　跟鬼影一樣快！' : d < 0 ? `　比鬼影快 ${(-d).toFixed(2)} 秒` : `　比鬼影慢 ${d.toFixed(2)} 秒`;
+}
+// ---- 賽車場（ciTick 叫，比賽 update 之後）：每過一次終點線＝一圈錄好了、鬼影車重新跑一圈 ----
+function ghLapTick() {
+  const R = ciRace;
+  if (!R) { if (GH.lapAt !== undefined) { GH.lapAt = undefined; if (GH.play && GH.play.board === 'lap') ghHide(); } return; }
+  const me = R.me, t = R.time;
+  if (me.lap0 !== GH.lapAt) {
+    const tl = drv.telemetry();
+    if (GH.lapAt != null && me.laps.length > GH.lapN) { GH.lap.end(t - GH.lapAt, tl.x, tl.z, tl.heading); ghRun('lap', me.laps[me.laps.length - 1]); }
+    GH.lapAt = me.lap0 ?? null; GH.lapN = me.laps.length;
+    if (me.lap0 != null && me.fin == null) { GH.lap.reset(); GH.lap.add(0, tl.x, tl.z, tl.heading); ghShow('lap', TR.scene, me.lap0); }
+  } else if (me.lap0 != null && me.fin == null) { const tl = drv.telemetry(); GH.lap.add(t - me.lap0, tl.x, tl.z, tl.heading); }
+  const P = GH.play;
+  if (P && P.board === 'lap' && !ghPose(t - P.t0) && t - P.t0 > GH.arm.G.dur + 1.5) ghHide();
+}
+// ---- 400 公尺（race.src.js 叫）：x＝車頭離起跑線幾公尺，鬼影車在你的車道 ----
+function ghDragStart(R) { R.ghDone = false; GH.drag.reset(); ghShow('drag', TR.scene); ghDragPose(0); }
+function ghDragFrame(R) {
+  if (R.green != null && R.phase === 'run' && !R.ghDone) { if (R.me.fin != null) { GH.drag.end(R.t - R.green, R.me.x); R.ghDone = true; } else GH.drag.add(R.t - R.green, R.me.x); }
+  if (GH.play && GH.play.board === 'drag') ghDragPose(R.green == null ? 0 : R.t - R.green);
+}
+function ghDragPose(tt) {
+  const P = GH.play, A = GH.arm, O = GH.obj;
+  if (!P || !A || !O) return;
+  if (O.car.parent !== P.scene) P.scene.add(O.car);
+  O.car.visible = true;
+  ghostAt(A.G, tt, GH.out);
+  O.place(GH.out[0] - O.nose, 0, LANE, 0); O.roll(GH.out[0]);
+}
+function ghDragEnd(R, et) { if (!R.ghDone && R.me.fin != null) GH.drag.end(Math.max(R.me.fin, R.t - R.green), R.me.x); R.ghDone = true; ghRun('drag', et); }
+// ---- 網站叫的（site/online.js）----
+window.beauGame = {
+  cars() { const o = {}; for (const k of Object.keys(CARS)) o[k] = CARS[k].btn[0]; return o; },
+  get cur() { return cur; },
+  setGhost(board, run) {
+    if (!GH_C[board] || !run) return false;
+    const G = ghostUnpack(run.g);
+    if (!G || G.c !== GH_C[board]) return false;
+    ghDrop();
+    GH.arm = { board, name: String(run.name || '').slice(0, 12), car: String(run.car || ''), t: +run.t > 0 ? +run.t : G.dur, G };
+    ghPrep();
+    if (DRIVE.on && drv) { setDest(board === 'hill' ? 'mountain' : board === 'lap' ? 'circuit' : 'track'); drv.toast('鬼影車準備好了！照著路線開過去', 2600); }
+    return true;
+  },
+  clearGhost() { ghDrop(); GH.arm = null; },
+  get ghost() { const A = GH.arm; return A ? { board: A.board, name: A.name, car: A.car, t: A.t, ready: !!GH.obj, showing: !!GH.play } : null; },
+};
+
 
 // ---- 全螢幕（Nick 2026-09-28：「可以全螢幕」）----
 // 開車（在村子裡開；改車廠、車店打開的時候不算，照舊可以往下捲看零件）、比賽的時候：畫面蓋滿整個螢幕（garage.css 的 body.fs）
@@ -36508,7 +36763,7 @@ function keepOutOfBays() {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 5; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 6; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -36681,6 +36936,15 @@ function keepOutOfBays() {
       out: () => A.signOut(auth),
       get: async (uid) => { const s = await F.getDoc(ref(uid)); return s.exists() ? s.data() : null; },
       put: (uid, data) => F.setDoc(ref(uid), data),
+      // 連線（site/online.js）：名字 players/{uid}；排行榜 lb/{板}/runs/{uid}（名字、車、秒數）＋ lb/{板}/ghosts/{uid}（鬼影車）
+      nameGet: async (uid) => { const s = await F.getDoc(F.doc(db, 'players', uid)); return s.exists() ? s.data().name || null : null; },
+      namePut: (uid, name) => F.setDoc(F.doc(db, 'players', uid), { name, t: Date.now() }),
+      lbTop: async (b, n) => (await F.getDocs(F.query(F.collection(db, 'lb', b, 'runs'), F.orderBy('t'), F.limit(n)))).docs.map((d) => ({ uid: d.id, ...d.data() })),
+      lbRank: async (b, t) => (await F.getCount(F.query(F.collection(db, 'lb', b, 'runs'), F.where('t', '<', t)))).data().count + 1,
+      lbGet: async (b, uid) => { const s = await F.getDoc(F.doc(db, 'lb', b, 'runs', uid)); return s.exists() ? s.data() : null; },
+      lbPut: (b, uid, run, ghost) => { const w = F.writeBatch(db); w.set(F.doc(db, 'lb', b, 'runs', uid), { ...run, at: F.serverTimestamp() }); w.set(F.doc(db, 'lb', b, 'ghosts', uid), ghost); return w.commit(); },
+      lbName: (b, uid, name) => { const w = F.writeBatch(db); w.update(F.doc(db, 'lb', b, 'runs', uid), { name }); w.update(F.doc(db, 'lb', b, 'ghosts', uid), { name }); return w.commit(); },
+      ghostGet: async (b, uid) => { const s = await F.getDoc(F.doc(db, 'lb', b, 'ghosts', uid)); return s.exists() ? s.data() : null; },
     };
   }
 
@@ -36751,15 +37015,16 @@ function keepOutOfBays() {
       const first = !user || user.uid !== u.uid;
       user = { uid: u.uid, email: u.email || '', displayName: u.displayName || '' };
       if (view === 'in') view = null;
-      paint();
+      paint(); userEv();
       if (first) sync();
     } else {
       user = null; picking = null; status = ''; dirty = false;
       if (meta) setMeta(null); // 登入過期了，或是登出
       if (view === 'acct' || view === 'pick') view = null;
-      paint();
+      paint(); userEv();
     }
   }
+  const userEv = () => { try { window.dispatchEvent(new Event('beau-user')); } catch { /* 沒有人聽就算了 */ } }; // 連線（site/online.js）聽這個
   async function sync() {
     const u = user; if (!u) return;
     status = '讀取中⋯'; paint();
@@ -36833,8 +37098,10 @@ function keepOutOfBays() {
   async function logout() {
     clearTimeout(saveT); saveT = 0;
     try { if (be) await be.out(); } catch { /* 登出失敗：這支手機這邊還是當作登出 */ }
-    user = null; picking = null; status = ''; dirty = false; setMeta(null); view = null; paint();
+    user = null; picking = null; status = ''; dirty = false; setMeta(null); view = null; paint(); userEv();
   }
+  // 連線（site/online.js）用的：同一個雲端、同一個登入
+  window.beauCloud = { get user() { return user; }, backend: () => load(), login: async () => { await login(); return err; } };
 
   if (chip && dlg) {
     chip.addEventListener('click', () => open(user ? 'acct' : 'in'));
@@ -36847,5 +37114,211 @@ function keepOutOfBays() {
     $c('clUseLocal').addEventListener('click', () => { if (!picking) return; picking = null; view = null; paint(); upload(true); });
     paint();
     if (meta) load().catch(() => { /* 沒有網路：下次再登入 */ }); // 登入過：背景接上雲端（Firebase 自己記得登入）
+  }
+}
+
+// ---- 連線第 1 步：鬼影車排行榜（Nick 2026-10-10「開始做吧」；草稿 https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo 第 1、2、7、8 張，Nick 和爸媽都說好）----
+// src/site/online.js，build-site.mjs 接在 cloud.js 後面（用 cloud.js 的 window.beauCloud：同一個 Firebase、同一個登入）
+// 右上角「👥 連線」→ 沒登入：要先登入 → 第一次：取一個名字（別人只看得到這個；不能有髒話、email、電話）→ 連線選單（🏆 排行榜；其他的還在做）
+// 排行榜：400 公尺／賽車場一圈／爬山 × 大家／同一台車（現在開的這台），前 20 名，你那一行框起來（不在前 20 名也列出你第幾名）
+//   「👻 跟第 1 名的鬼影車跑」→ 下載那一趟 → window.beauGame.setGhost（ghost.src.js）→ 下一次跑那一種的時候多一台半透明的車
+// 上傳：遊戲每跑完一趟發 'beau-run'（{ board, car, t, g }）→ 先記在這支手機（beau.lbq：每一種每台車最好的那趟）→ 登入、有名字了就傳：
+//   比雲端上自己的好才寫（lb/<板>-<車> 和 lb/<板> 兩份；規則也擋：只能寫自己的、只能變快）
+// Firestore（規則要 Nick 貼到 Firebase 主控台，見 notes/online.md）：
+//   players/{uid} ＝ { name, t }；lb/{板}/runs/{uid} ＝ { name, car, t, at }；lb/{板}/ghosts/{uid} ＝ { name, car, t, hz, c, n, s, d }
+//   板 ＝ drag|lap|hill（大家：每個人最好的一趟，不管哪台車）或 drag-gc8…（同一台車）
+// 測試：cloud.js 的 window.__beauCloudBackend（假的雲端）也要有 nameGet／namePut／lbTop／lbRank／lbGet／lbPut／lbName／ghostGet；window.__beauNet 看狀態
+{
+  const BOARDS = ['drag', 'lap', 'hill'], QK = 'beau.lbq', TOP = 20;
+  const $n = (id) => document.getElementById(id);
+  const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+  const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* 不給存就算了 */ } };
+  const lsJson = (k) => { try { const v = JSON.parse(lsGet(k) || 'null'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } };
+  const fmt = (b, t) => (b === 'drag' ? t.toFixed(2) : `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, '0')}`);
+  const carName = (k) => { try { return (window.beauGame && window.beauGame.cars()[k]) || String(k).toUpperCase(); } catch { return String(k).toUpperCase(); } };
+  const curCar = () => { try { return (window.beauGame && window.beauGame.cur) || 'gc8'; } catch { return 'gc8'; } };
+  const C = () => window.beauCloud;
+  const uid = () => (C() && C().user ? C().user.uid : null);
+
+  // ---- 名字：2–10 個字；不能有髒話、email、網址、電話 ----
+  const BAD = ['幹', '操你', '操他', '靠北', '靠杯', '靠腰', '雞掰', '機掰', '雞巴', '白癡', '白痴', '智障', '王八', '去死', '媽的', '他媽', '你媽', '賤', '婊', '屁眼', '肏', '屌',
+    'fuck', 'fuk', 'shit', 'bitch', 'dick', 'cunt', 'sex', 'porn', 'nigg', 'damn', 'penis', 'vagina', 'asshole', 'bastard', 'wtf', 'stfu'];
+  function nameErr(s) {
+    const t = s.trim().replace(/\s+/g, ' ');
+    if ([...t].length < 2) return '名字至少要 2 個字。';
+    if ([...t].length > 10) return '名字最多 10 個字。';
+    if (/@|https?:|www\.|\.(com|net|org|tw)\b/i.test(t)) return '名字裡不要放 email 或網址。';
+    if (/\d{6,}/.test(t.replace(/[\s-]/g, ''))) return '名字裡不要放電話號碼。';
+    if (!/^[\p{L}\p{N} _\-·.]+$/u.test(t)) return '名字只能用字、數字、空格。';
+    const norm = t.toLowerCase().replace(/[\s_\-·.0-9]/g, '');
+    if (BAD.some((w) => norm.includes(w))) return '名字裡不能有髒話，換一個吧。';
+    return '';
+  }
+
+  // ---- 狀態 ----
+  let view = null, name = null, nameFor = null, busy = false, tab = 'drag', filt = 'all', rows = [], mine = null, boardKey = '', boardErr = '', boardBusy = false, ghostMsg = '', flushing = false;
+  const best = {}; // 這次打開以後知道的：雲端上自己的秒數（板 → 秒，null＝沒有）
+  const S = (window.__beauNet = { get view() { return view; }, get name() { return name; }, get rows() { return rows; }, get mine() { return mine; }, get queue() { return lsJson(QK); }, uploads: 0, fetches: 0 });
+
+  // ---- 畫面 ----
+  const chip = $n('netChip'), dlg = $n('netDlg'), titleEl = $n('netTitle');
+  const SECS = { in: $n('nwIn'), name: $n('nwName'), menu: $n('nwMenu'), board: $n('nwBoard') };
+  function paint() {
+    if (!chip || !dlg) return;
+    chip.hidden = false;
+    dlg.hidden = !view;
+    if (!view) return;
+    for (const [k, el] of Object.entries(SECS)) el.hidden = k !== view;
+    titleEl.textContent = view === 'in' ? '連線' : view === 'name' ? '取一個名字' : view === 'menu' ? '連線' : '🏆 排行榜';
+    if (view === 'menu') $n('nwMyName').textContent = name || '';
+    if (view === 'board') paintBoard();
+  }
+  function paintBoard() {
+    for (const b of $n('nwTabs').children) b.setAttribute('aria-selected', String(b.dataset.b === tab));
+    for (const b of $n('nwFilt').children) b.setAttribute('aria-selected', String(b.dataset.f === filt));
+    $n('nwFiltCar').textContent = `同一台車（${carName(curCar())}）`;
+    const list = $n('nwList'), mineEl = $n('nwMine'), me = uid();
+    list.replaceChildren(); mineEl.replaceChildren();
+    const row = (n, r, to = list) => {
+      const li = document.createElement('li'), a = document.createElement('span'), w = document.createElement('span'), t = document.createElement('span');
+      a.className = 'n'; w.className = 'w'; t.className = 't';
+      a.textContent = String(n); w.textContent = `${r.name} · ${carName(r.car)}`; t.textContent = fmt(tab, r.t);
+      if (r.uid === me) li.className = 'me';
+      li.append(a, w, t); to.append(li);
+    };
+    rows.forEach((r, i) => row(i + 1, r));
+    const below = !!mine && !rows.some((r) => r.uid === me); // 不在前 20 名：你那一行放在捲的那一塊下面（一直看得到）
+    mineEl.hidden = !below;
+    if (below) { const g = document.createElement('li'); g.className = 'gap'; g.textContent = '⋮'; mineEl.append(g); row(mine.rank, mine, mineEl); }
+    const empty = $n('nwEmpty');
+    empty.hidden = !(boardErr || (!boardBusy && !rows.length));
+    empty.textContent = boardErr || (filt === 'car' ? `還沒有人開 ${carName(curCar())} 跑過。你跑一趟就是第 1 名！` : '還沒有人跑過。你跑一趟就是第 1 名！');
+    if (boardBusy && !rows.length) { empty.hidden = false; empty.textContent = '讀取中⋯'; }
+    const gb = $n('nwGhost'), top = rows[0];
+    gb.disabled = !top || busy || !window.beauGame;
+    gb.textContent = top && top.uid === me ? '👻 跟自己的鬼影車跑' : '👻 跟第 1 名的鬼影車跑';
+    const gm = $n('nwGhostMsg'); gm.hidden = !ghostMsg; gm.textContent = ghostMsg;
+  }
+  const close = () => { view = null; paint(); };
+  async function open() {
+    if (!C()) return;
+    ghostMsg = '';
+    if (!uid()) { view = 'in'; $n('nwInErr').hidden = true; paint(); return; }
+    view = 'menu'; paint();
+    await ensureName();
+    if (!name && view === 'menu') { view = 'name'; paint(); $n('nwNameIn').value = ''; }
+  }
+  async function ensureName() {
+    const u = uid(); if (!u) return null;
+    if (nameFor === u && name) return name;
+    const cached = lsGet('beau.name.' + u);
+    if (cached) { name = cached; nameFor = u; paint(); return name; }
+    try { const be = await C().backend(); const n = await be.nameGet(u); if (n && uid() === u) { name = n; nameFor = u; lsSet('beau.name.' + u, n); paint(); } } catch { /* 沒有網路：之後再問 */ }
+    return name;
+  }
+  async function saveName() {
+    const inp = $n('nwNameIn'), errEl = $n('nwNameErr'), v = inp.value.trim().replace(/\s+/g, ' '), e = nameErr(v), u = uid();
+    errEl.hidden = !e; errEl.textContent = e;
+    if (e || !u || busy) return;
+    busy = true; $n('nwNameOk').disabled = true;
+    try {
+      const be = await C().backend();
+      await be.namePut(u, v);
+      const old = name;
+      name = v; nameFor = u; lsSet('beau.name.' + u, v);
+      if (old && old !== v) for (const [b, t] of Object.entries(best)) if (t != null) be.lbName(b, u, v).catch(() => {}); // 改名字：排行榜上的也換
+      view = 'menu'; paint();
+      flush();
+    } catch { errEl.hidden = false; errEl.textContent = '存不進去，有網路再試一次。'; }
+    finally { busy = false; $n('nwNameOk').disabled = false; }
+  }
+
+  // ---- 排行榜 ----
+  async function loadBoard() {
+    const u = uid(); if (!u) return;
+    const key = filt === 'all' ? tab : `${tab}-${curCar()}`;
+    boardKey = key; boardBusy = true; boardErr = ''; rows = []; mine = null; paint();
+    try {
+      const be = await C().backend();
+      const top = await be.lbTop(key, TOP); S.fetches++;
+      if (boardKey !== key) return;
+      rows = top.filter((r) => r && typeof r.name === 'string' && typeof r.t === 'number');
+      if (!rows.some((r) => r.uid === u)) {
+        const d = await be.lbGet(key, u);
+        best[key] = d ? d.t : null;
+        if (d && boardKey === key) mine = { ...d, uid: u, rank: await be.lbRank(key, d.t) };
+      } else best[key] = rows.find((r) => r.uid === u).t;
+    } catch (e) { if (boardKey === key) boardErr = '排行榜現在打不開，等一下再試。'; console.warn('排行榜', e); }
+    if (boardKey === key) { boardBusy = false; paint(); }
+  }
+  async function raceGhost() {
+    const top = rows[0], key = boardKey, b = tab; if (!top || busy) return;
+    busy = true; ghostMsg = '鬼影車下載中⋯'; paint();
+    try {
+      const be = await C().backend();
+      const g = await be.ghostGet(key, top.uid);
+      const ok = g && window.beauGame && window.beauGame.setGhost(b, { name: top.name, car: top.car, t: top.t, g });
+      ghostMsg = ok ? (b === 'hill' ? '鬼影車準備好了！開到山腳的起點門，往上開過去就一起出發。'
+        : b === 'lap' ? '鬼影車準備好了！去賽車場比賽，每一圈鬼影車都會跟你一起跑。'
+        : '鬼影車準備好了！去 400 公尺直線加速，綠燈一亮就一起出發。') : '這一趟的鬼影車壞掉了，換一個試試看。';
+    } catch { ghostMsg = '下載不了，有網路再試一次。'; }
+    busy = false; paint();
+  }
+
+  // ---- 上傳：每一種每台車最好的一趟先記在這支手機，登入、有名字才傳 ----
+  function okRun(r) {
+    return r && BOARDS.includes(r.board) && /^[a-z0-9]{1,10}$/.test(r.car || '') && typeof r.t === 'number' && r.t > 1 && r.t < 900
+      && r.g && typeof r.g.d === 'string' && r.g.d.length < 200000 && Number.isInteger(r.g.n) && Array.isArray(r.g.s);
+  }
+  function onRun(e) {
+    const r = e && e.detail; if (!okRun(r)) return;
+    const q = lsJson(QK), k = `${r.board}-${r.car}`;
+    if (q[k] && q[k].t <= r.t) return;
+    q[k] = { board: r.board, car: r.car, t: r.t, g: r.g };
+    lsSet(QK, JSON.stringify(q));
+    flush();
+  }
+  async function flush() {
+    const u = uid(); if (!u || flushing) return;
+    const q = lsJson(QK); if (!Object.keys(q).length) return;
+    if (!(await ensureName())) return; // 還沒取名字：先記著（取好名字再傳）
+    flushing = true;
+    try {
+      const be = await C().backend();
+      for (const [k, r] of Object.entries(q)) {
+        if (uid() !== u) break;
+        if (okRun(r)) for (const key of [`${r.board}-${r.car}`, r.board]) {
+          if (best[key] === undefined) { const d = await be.lbGet(key, u); best[key] = d ? d.t : null; }
+          if (best[key] != null && best[key] <= r.t) continue;
+          await be.lbPut(key, u, { name, car: r.car, t: r.t }, { name, car: r.car, t: r.t, hz: r.g.hz, c: r.g.c, n: r.g.n, s: r.g.s, d: r.g.d });
+          best[key] = r.t; S.uploads++;
+        }
+        const now = lsJson(QK); if (now[k] && now[k].t === r.t) { delete now[k]; lsSet(QK, JSON.stringify(now)); }
+      }
+    } catch (e) { console.warn('排行榜上傳', e); } // 沒有網路：留著，下次再傳
+    flushing = false;
+    if (view === 'board') loadBoard();
+  }
+
+  if (chip && dlg) {
+    chip.addEventListener('click', open);
+    $n('netX').addEventListener('click', close);
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) close(); });
+    $n('nwLogin').addEventListener('click', async () => {
+      const el = $n('nwInErr'); el.hidden = true;
+      const err = C() ? await C().login() : '連不到雲端。';
+      if (uid()) open(); else if (err) { el.hidden = false; el.textContent = err; }
+    });
+    $n('nwNameOk').addEventListener('click', saveName);
+    $n('nwNameIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveName(); });
+    $n('nwBoardBtn').addEventListener('click', () => { view = 'board'; ghostMsg = ''; paint(); loadBoard(); });
+    $n('nwRename').addEventListener('click', () => { view = 'name'; $n('nwNameIn').value = name || ''; $n('nwNameErr').hidden = true; paint(); });
+    for (const b of $n('nwTabs').children) b.addEventListener('click', () => { if (tab === b.dataset.b) return; tab = b.dataset.b; ghostMsg = ''; loadBoard(); });
+    for (const b of $n('nwFilt').children) b.addEventListener('click', () => { if (filt === b.dataset.f) return; filt = b.dataset.f; ghostMsg = ''; loadBoard(); });
+    $n('nwGhost').addEventListener('click', raceGhost);
+    window.addEventListener('beau-run', onRun);
+    window.addEventListener('beau-user', () => { if (!uid()) { name = null; nameFor = null; if (view && view !== 'in') close(); } else { if (view === 'in') open(); flush(); } });
+    window.addEventListener('online', flush);
+    paint();
   }
 }
