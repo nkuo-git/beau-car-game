@@ -856,6 +856,19 @@ const ob3 = await p.evaluate(() => { const D = window.__D(), OB = D.OB, d = D.dr
 console.log('  door blocks the truck:', JSON.stringify(ob3));
 check(ob3.blocked < ob3.X1 - 0.3 && ob3.act === '開鐵捲門' && ob3.pressed === '開鐵捲門' && ob3.door >= 0.98 && ob3.out > ob3.X1 + 4 && !ob3.inside,
   `the closed annex door stops the truck inside (x ${ob3.blocked} in the annex's own frame, door at ${ob3.X1}); 「開鐵捲門」 from the driver seat opens it and the truck drives out again`);
+// 修 7：在越野車車庫裡面、門關著，按「去哪裡」：鐵捲門自己打開，照著路線開出去不會卡在門上
+const ob7 = await p.evaluate(() => { const D = window.__D(), OB = D.OB, d = D.drv, H = window.__H, O = H.OD, dX = () => { const t = d.telemetry(); return H.od(t.x, t.z)[0]; };
+  d.teleport(H.ow(O.X1 - 10, O.ZC, 0)); window.__dstep(10); OB.door.t = 0; OB.door.close(0.001); window.__dstep(30);
+  const shut = +OB.door.t.toFixed(2), btn = document.querySelector('#dests button[data-d="shop"]'); btn.click(); window.__dstep(2);
+  const moving = OB.door.moving;
+  let n = 0; for (; n < 900 && OB.door.t < 0.98; n++) window.__dstep(1);
+  let k = 0; for (; k < 900; k++) { const t = d.telemetry(); if (dX() > O.X1 + 4) break; d.setInput({ throttle: Math.abs(t.v) < 3 ? 0.4 : 0, brake: 0, steer: 0 }); window.__dstep(1); }
+  d.setInput(null); window.__dstep(30); const t2 = d.telemetry();
+  return { shut, moving, door: +OB.door.t.toFixed(2), s: +(n / 60).toFixed(1), out: +dX().toFixed(2), inside: OB.inside(t2.x, t2.z), dest: t2.dest, X1: O.X1 }; });
+console.log('  destination from inside the annex:', JSON.stringify(ob7));
+check(ob7.shut === 0 && ob7.moving && ob7.door >= 0.98 && ob7.dest === 'shop' && ob7.out > ob7.X1 + 4 && !ob7.inside,
+  `inside the annex with the door shut, picking 「去改車廠」 opens the roller door by itself (${ob7.s} s) and the truck drives out along the route`);
+await p.evaluate(() => window.__D().drv.setDestination(null));
 const ob4 = await p.evaluate(() => { const D = window.__D(), OB = D.OB, d = D.drv, H = window.__H, O = H.OD;
   d.teleport(H.ow(O.B0X, O.BZ1 + 2.7, -Math.PI / 2)); window.__dstep(10); // 1 號格的格口，車頭朝外（修 6：倒車停進去，下次直接開出來）
   let n = 0; for (; n < 900; n++) { const t = d.telemetry(), stop = H.od(t.x, t.z)[1] < O.B0Z + 1.3; // 倒車：停著按煞車換倒車、倒車的時候煞車踏板是油門；到了踩油門＝煞車

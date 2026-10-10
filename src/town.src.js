@@ -429,6 +429,7 @@ function canShop() {
 function setDest(d) {
   tripDest = d || null;
   drv?.setDestination(d); walker?.setDestination(d); // 開車、走路都跟著這個目的地（左上角、小地圖的路線、光柱）
+  if (d && OB && drv && walker?.mode === 'off') { const t = drv.telemetry(); if (OB.inside(t.x, t.z)) openOrbay(); } // 修 7：在越野車車庫裡面按「去哪裡」：鐵捲門自己打開（不然路線穿過關著的門，開過去就卡住）
   destBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.d === d)));
 }
 destBtns.forEach((b) => b.addEventListener('click', () => { if (DRIVE.on) setDest(b.dataset.d); }));
