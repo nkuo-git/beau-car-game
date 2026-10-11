@@ -21,6 +21,7 @@ const hook = 'window.__G = () => GAME; window.__S = () => S; window.__scene = ()
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
   + ' window.__money = (n) => { GAME.money = n; save(true); renderWallet(); renderOptions(); refreshCarBtns(); };'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, trip, tripS, tripPose, tripFull, cur, walker, LODS, TR, PERF, indoor });'
+  + ' window.__safe = (x, z) => crushSafe(x, z);'
   + ' window.__N = () => NPC; window.__C = () => crushFx; window.__pol = () => (typeof police !== "undefined" ? police : null);'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
 const srv = http.createServer((req, res) => {
@@ -120,14 +121,25 @@ await p.addInitScript(() => {
   H.pol = () => { const P = window.__pol(); return P ? { wanted: P.wanted, types: P.telemetry().crimes.map((c) => c.type) } : null; };
   H.cst = () => { const C = window.__C(); return C ? { ...C.stats, types: C.stats.types.slice(), junk: C.stats.junk, pads: C.pads.filter((q) => q.on).length, junkCars: C.junk.length } : null; };
   // 路上的車：最近的一台汽車（kind＝'scooter'：機車）；停住它（測試用：stun），回它的位置
-  H.pickTraffic = (r = 70, kind = 'car', clear = 0) => { // clear：前面這麼多公尺不能經過你家車庫那塊（輾不到的地方，town.src.js crushSafe）＝輾完還開得下去
+  H.pickTraffic = (r = 70, kind = 'car', clear = 0, farPol = 0) => { // farPol：離警察局這麼遠（輾了有星星，太近的話等一下 10 秒就被抓走了） // clear：輾完還開得下去：前面（車寬那麼寬）沒有輾不到的地方（town.src.js crushSafe：你家車庫、警察局⋯）、不上山，房子（撞不倒）要在 clear 公尺以後
     const D = window.__D(), N = window.__N(), t = D.drv.telemetry();
-    const Z = D.VIL.places.garage.zone, zc = Math.abs(Math.cos(Z.rot || 0)), zs = Math.abs(Math.sin(Z.rot || 0)), ex = zc * Z.hx + zs * Z.hz + 1.5 + 2.2, ez = zs * Z.hx + zc * Z.hz + 1.5 + 2.2;
-    const blocked = (c) => { for (let s = 0; s <= clear; s += 2) { const x = c.x + Math.cos(c.heading) * s, z = c.z - Math.sin(c.heading) * s; if (Math.abs(x - Z.x) < ex && Math.abs(z - Z.z) < ez) return true; } return false; };
+    const solid = D.VIL.colliders.filter((q) => q.t === 'box' && (q.h ?? 9) >= 2.6 && q.hx >= 1 && q.hz >= 1); // crush.js isBld
+    const inBox = (q, x, z) => { const dx = x - q.x, dz = z - q.z, c = Math.cos(q.rot || 0), s = Math.sin(q.rot || 0); return Math.abs(dx * c - dz * s) < q.hx && Math.abs(dx * s + dz * c) < q.hz; };
+    const hAt = typeof D.VIL.heightAt === 'function' ? D.VIL.heightAt : () => 0;
+    const blocked = (c) => { // 往前開 130 公尺（5 秒）：輾不到的地方、上坡（山）＝不行；房子要在 clear 公尺以後才擋（停在那裡沒關係）
+      const fx = Math.cos(c.heading), fz = -Math.sin(c.heading);
+      for (let s = 0; s <= 130; s += 1.5) for (const l of [-2.2, 0, 2.2]) {
+        const x = c.x + fx * s - fz * l, z = c.z + fz * s + fx * l;
+        if (solid.some((q) => inBox(q, x, z))) return s < clear;
+        if (window.__safe(x, z) || Math.abs(hAt(x, z)) > 0.25) return true;
+      }
+      return false;
+    };
     let best = null, bd = r;
     for (const c of N.traffic.cars) {
       if (c.kind !== kind) continue;
       if (clear && blocked(c)) continue;
+      if (farPol && Math.hypot(c.x - D.VIL.places.police.pos[0], c.z - D.VIL.places.police.pos[1]) < farPol) continue;
       const d = Math.hypot(c.x - t.x, c.z - t.z); if (d > bd) continue;
       let busy = false; // 後面 10 公尺要空（怪獸卡車要放在那裡）
       const bx = c.x - Math.cos(c.heading) * 10, bz = c.z + Math.sin(c.heading) * 10;
@@ -275,7 +287,7 @@ check(bd2.mode === 'off' && bd2.cur === 'monster' && bd2.drv, `walked to the mon
 check(await p.evaluate(() => !!window.__D().drv.telemetry().rideOn && window.__D().drv.carInfo.halfW === 1.905), 'the monster truck drives with the terrain ride on (half width 1.905)');
 await p.evaluate(() => { const D = window.__D(), H = window.__H; D.drv.teleport(D.VIL.places.garage.spawn); H.step(20); window.__pol()?.clear(); });
 let tgt2 = null;
-for (let i = 0; i < 20 && !tgt2; i++) { await p.evaluate(() => window.__H.step(90)); tgt2 = await p.evaluate(() => window.__H.pickTraffic(90, 'car', 45)); } // 輾完要再開 25 公尺以上：前面 45 公尺不能撞進你家車庫那塊（那裡的路牌、電線桿輾不到）
+for (let i = 0; i < 20 && !tgt2; i++) { await p.evaluate(() => window.__H.step(90)); tgt2 = await p.evaluate(() => window.__H.pickTraffic(90, 'car', 48)); } // 輾完要再開 25 公尺以上：前面 48 公尺不能有輾不到的地方或房子
 console.log('  traffic target:', JSON.stringify(tgt2));
 check(!!tgt2, 'found a traffic car for the monster truck');
 const crush2 = await p.evaluate((q) => {
@@ -306,7 +318,7 @@ await drawAndShot('3-drives-on');
 // ================= 2b 第 13 批：輾路上騎的機車（騎士先跳車跑掉，只有機車扁）=================
 await p.evaluate(() => { const D = window.__D(); D.drv.teleport(D.VIL.places.garage.spawn); window.__H.step(20); window.__pol()?.clear(); });
 let tgtM = null;
-for (let i = 0; i < 30 && !tgtM; i++) { await p.evaluate(() => window.__H.step(90)); tgtM = await p.evaluate(() => window.__H.pickTraffic(90, 'scooter')); }
+for (let i = 0; i < 30 && !tgtM; i++) { await p.evaluate(() => window.__H.step(90)); tgtM = await p.evaluate(() => window.__H.pickTraffic(90, 'scooter', 0, 80)); }
 console.log('2b', el(), 'scooter target:', JSON.stringify(tgtM));
 check(!!tgtM, 'found a scooter (with a rider) on the road');
 const crushM = tgtM ? await p.evaluate((q) => {
