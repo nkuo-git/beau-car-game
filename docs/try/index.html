@@ -183,6 +183,17 @@
       <button type="button" class="imp-yes cl-btn" id="clUseCloud">用雲端的</button>
       <button type="button" class="imp-no cl-btn" id="clUseLocal">用這支手機的<small>雲端的會被蓋掉</small></button>
     </div>
+    <!-- 一個帳號只能一支手機（Nick 2026-10-11；草稿 HY57ifTtvknBBRDBoNJk6k 第 4 張） -->
+    <div class="cl-sec" id="clDev" hidden>
+      <p class="cl-note">這個 Google 帳號已經在另一支手機登入了。一個帳號只能在一支手機玩。</p>
+      <button type="button" class="imp-yes cl-btn" id="clKick">把那支手機登出<small>那支的進度還在，只是不會存到雲端</small></button>
+      <button type="button" class="imp-no cl-btn" id="clNoLogin">不要在這支登入</button>
+    </div>
+    <div class="cl-sec" id="clKicked" hidden>
+      <p class="cl-note">你的帳號在另一支手機登入了，所以這支登出了。這支手機上的進度還在。</p>
+      <button type="button" class="imp-yes cl-btn" id="clKickOk">知道了</button>
+      <button type="button" class="imp-no cl-btn" id="clRelogin">再登入這支<small>會把另一支登出</small></button>
+    </div>
   </div>
 </div>
 

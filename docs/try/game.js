@@ -38262,6 +38262,9 @@ function keepOutOfBays() {
 //   之後遊戲每存一次（garage.src.html 的 save() 發 'beau-save'）→ 2.5 秒後存到雲端；沒有網路就記著，有網路、切回來的時候再存
 // Firebase 的程式（gstatic 上的）登入過或按了登入才下載；App（BeauCarApp）裡面 Google 不給用網頁登入：外殼 BeauCarApp.googleSignIn() 用手機上的帳號登入，
 //   拿到的 ID token 交回 window.beauGoogleSignIn(idToken, error)，再給 Firebase（舊版外殼沒有這個 → 請他更新 App）
+// 一個帳號只能一支手機（Nick 2026-10-11「一個帳號只能登入一支手機 若有人要登入第二隻 詢問他要把前一支登出還是放棄登入第二隻」；草稿 HY57ifTtvknBBRDBoNJk6k 第 4 張）：
+//   每支手機一個號碼 beau.dev（不在存檔裡）；saves/{uid}.dev ＝ 現在用這個帳號的手機。按登入時雲端寫的是別支 → 問「把那支手機登出／不要在這支登入」；
+//   已經登入的手機（打開遊戲、每分鐘、切回來、存檔以前）看到 dev 變成別支 → 這支登出，跳「已經登出了」（這支的進度還在）；登出的時候把 dev 清掉
 // 測試：window.__beauCloudBackend ＝ 假的雲端（跟 firebaseBackend() 一樣的介面），window.__beauCloud 看狀態
 {
   const FIREBASE = {
@@ -38277,6 +38280,7 @@ function keepOutOfBays() {
   const RTDB_URL = 'https://beau-car-game-default-rtdb.asia-southeast1.firebasedatabase.app';
   const KEYS = ['carid.tune', 'carid.tune.full', 'carid.sound', 'carid.roomq', 'carid.theme', 'carid.accent']; // 跟搬家一樣
   const META = 'beau.cloud', MAX = 512 * 1024, SAVE_DELAY = 2500;
+  const DEV = (() => { let d = null; try { d = localStorage.getItem('beau.dev'); if (!d || !/^[a-z0-9]{8,16}$/.test(d)) { d = Math.random().toString(36).slice(2, 10).padEnd(8, '0'); localStorage.setItem('beau.dev', d); } } catch { d = d || Math.random().toString(36).slice(2, 10).padEnd(8, '0'); } return d; })();
   const $c = (id) => document.getElementById(id);
   const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
   const set = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* 不給存就算了 */ } };
@@ -38327,9 +38331,10 @@ function keepOutOfBays() {
 
   // ---- 狀態 ----
   let be = null, loading = null, user = null, meta = null, picking = null, saveT = 0, dirty = false, busy = false, status = '', err = '';
+  let mode = 'resume', devDoc = null, kicking = false, devT = 0, devOk = false; // mode：'ask'（按了登入）／'claim'（被登出以後按「再登入這支」）／'resume'（打開遊戲時本來就登入）；devDoc：問「把那支登出」時的雲端那一份；devOk：看過雲端、確定是這支手機在用（之前連線、存檔都先等）
   try { meta = JSON.parse(get(META) || 'null'); if (!meta || typeof meta.uid !== 'string') meta = null; } catch { meta = null; }
   const setMeta = (m) => { meta = m; set(META, m ? JSON.stringify(m) : null); };
-  const S = (window.__beauCloud = { get user() { return user; }, get meta() { return meta; }, get status() { return status; }, get picking() { return !!picking; }, get dirty() { return dirty; }, uploads: 0, applied: 0 });
+  const S = (window.__beauCloud = { get user() { return user; }, get meta() { return meta; }, get status() { return status; }, get picking() { return !!picking; }, get dirty() { return dirty; }, get dev() { return DEV; }, get view() { return view; }, uploads: 0, applied: 0, kicked: 0 });
 
   function summary(tune) {
     let d = null; try { d = JSON.parse(tune || 'null'); } catch { d = null; }
@@ -38348,19 +38353,21 @@ function keepOutOfBays() {
 
   // ---- 畫面 ----
   const chip = $c('cloudChip'), chipTxt = $c('cloudChipTxt'), dlg = $c('cloudDlg'), title = $c('cloudTitle');
-  const secIn = $c('clIn'), secAcct = $c('clAcct'), secPick = $c('clPick'), errEl = $c('clErr');
-  let view = null; // 'in' | 'acct' | 'pick' | null（關著）
+  const secIn = $c('clIn'), secAcct = $c('clAcct'), secPick = $c('clPick'), secDev = $c('clDev'), secKicked = $c('clKicked'), errEl = $c('clErr');
+  let view = null; // 'in' | 'acct' | 'pick' | 'dev'（這個帳號在別的手機）| 'kicked'（已經登出了）| null（關著）
   function paint() {
     if (!chip) return;
     chip.hidden = false;
     chip.classList.toggle('on', !!user);
-    chipTxt.textContent = user ? '已登入' : (meta && !user && loading ? '登入中⋯' : '☁ 登入');
+    chipTxt.textContent = user ? '已登入' : (meta && !user && loading && !kicking ? '登入中⋯' : '☁ 登入'); // 被別支手機登出：記著 meta，可是不是在登入
     if (!dlg) return;
     dlg.hidden = !view;
     if (!view) return;
     secIn.hidden = view !== 'in'; secAcct.hidden = view !== 'acct'; secPick.hidden = view !== 'pick';
-    title.textContent = view === 'in' ? '登入' : view === 'acct' ? '帳號' : '要用哪一個進度？';
-    $c('cloudX').hidden = view === 'pick'; // 選進度一定要選一個
+    if (secDev) secDev.hidden = view !== 'dev'; if (secKicked) secKicked.hidden = view !== 'kicked';
+    title.textContent = view === 'in' ? '登入' : view === 'acct' ? '帳號' : view === 'dev' ? '這個帳號在別的手機' : view === 'kicked' ? '已經登出了' : '要用哪一個進度？';
+    $c('cloudX').hidden = view === 'pick' || view === 'dev'; // 選進度、要不要把那支登出：一定要選一個
+    if ($c('clRelogin')) $c('clRelogin').disabled = busy;
     $c('clGoogle').disabled = busy; $c('clGoogle').textContent = busy ? '登入中⋯' : '用 Google 帳號登入';
     errEl.hidden = !err; errEl.textContent = err;
     if (user) {
@@ -38375,7 +38382,7 @@ function keepOutOfBays() {
     }
   }
   const open = (v) => { view = v; err = ''; paint(); };
-  const close = () => { if (view === 'pick') return; view = null; paint(); };
+  const close = () => { if (view === 'pick' || view === 'dev') return; view = null; paint(); };
 
   // ---- 雲端 ----
   function load() {
@@ -38390,14 +38397,15 @@ function keepOutOfBays() {
   function onUser(u) {
     if (u) {
       const first = !user || user.uid !== u.uid;
+      if (first) devOk = false;
       user = { uid: u.uid, email: u.email || '', displayName: u.displayName || '' };
-      if (view === 'in') view = null;
+      if (view === 'in' || view === 'kicked') view = null;
       paint(); userEv();
       if (first) sync();
     } else {
-      user = null; picking = null; status = ''; dirty = false;
-      if (meta) setMeta(null); // 登入過期了，或是登出
-      if (view === 'acct' || view === 'pick') view = null;
+      user = null; picking = null; status = ''; dirty = false; devDoc = null; devOk = false;
+      if (meta && !kicking) setMeta(null); // 登入過期了，或是登出（被別支手機登出：記著上次一樣的雜湊，再登入這支的時候不用問）
+      if (view === 'acct' || view === 'pick' || view === 'dev') view = null;
       paint(); userEv();
     }
   }
@@ -38408,6 +38416,16 @@ function keepOutOfBays() {
     let docu;
     try { docu = await be.get(u.uid); } catch { status = '連不到雲端，有網路再試'; dirty = true; paint(); return; }
     if (user !== u) return;
+    const m = mode; mode = 'resume';
+    if (docu && docu.dev && docu.dev !== DEV) { // 雲端寫的是別支手機
+      if (m === 'resume') { kicked(); return; } // 這支本來登入著：已經被別支登出了
+      if (m === 'ask') { devDoc = docu; status = ''; view = 'dev'; paint(); return; } // 按了登入：問要不要把那支登出
+    }
+    if (docu && docu.dev !== DEV) { try { await be.put(u.uid, { ...docu, dev: DEV }); } catch { /* 存不上去：下次存檔的時候會寫 */ } if (user !== u) return; }
+    devReady(); syncWith(u, docu);
+  }
+  function devReady() { if (devOk) return; devOk = true; userEv(); } // 確定是這支手機：連線（online.js、world.js）現在才看得到登入
+  async function syncWith(u, docu) {
     const local = get('carid.tune'), lh = local ? hash(local) : null;
     const keys = docu ? okKeys(docu.keys) : null, ct = keys ? keys['carid.tune'] : null, ch = ct ? hash(ct) : null;
     const mh = meta && meta.uid === u.uid ? meta.h : null;
@@ -38427,13 +38445,16 @@ function keepOutOfBays() {
   }
   async function upload(force) {
     clearTimeout(saveT); saveT = 0;
-    const u = user; if (!u || picking) return;
+    const u = user; if (!u || picking || !devOk) return;
     const tune = get('carid.tune'); if (!tune || tune.length > MAX) return;
     if (!force && !dirty && meta && meta.uid === u.uid && meta.h === hash(tune)) return; // 跟上次存上去的一樣：不用再存（省雲端的次數）
     const keys = {}; for (const k of KEYS) { const v = get(k); if (v != null && v.length <= MAX) keys[k] = v; }
     status = '存檔中⋯'; paint();
     try {
-      await be.put(u.uid, { v: 1, t: Date.now(), keys, sum: summary(tune) });
+      const cur = await be.get(u.uid); // 先看是不是被別支手機登出了（多讀一次，免得把別支的進度蓋掉）
+      if (user !== u) return;
+      if (cur && cur.dev && cur.dev !== DEV) { kicked(); return; }
+      await be.put(u.uid, { v: 1, t: Date.now(), keys, sum: summary(tune), dev: DEV });
     } catch { if (user === u) { dirty = true; status = navigator.onLine === false ? '沒有網路，有網路再存' : '存不進去，等一下再試'; paint(); } return; }
     S.uploads++;
     if (user !== u) return;
@@ -38450,8 +38471,9 @@ function keepOutOfBays() {
   // ---- 登入 ----
   let tokenWait = null;
   window.beauGoogleSignIn = (idToken, e) => { const w = tokenWait; tokenWait = null; if (w) w(idToken ? { idToken } : { error: e || 'cancel' }); };
-  async function login() {
+  async function login(claim) {
     if (busy) return;
+    mode = claim === true ? 'claim' : 'ask'; // 按了登入：雲端是別支手機的話要問；被登出以後按「再登入這支」：直接把那支登出
     err = ''; busy = true; paint();
     try {
       await load();
@@ -38473,19 +38495,46 @@ function keepOutOfBays() {
     } finally { busy = false; paint(); }
   }
   async function logout() {
-    clearTimeout(saveT); saveT = 0;
+    clearTimeout(saveT); saveT = 0; kicking = false;
+    const u = user;
+    if (u && be) { try { const d = await be.get(u.uid); if (d && d.dev === DEV) { const { dev, ...rest } = d; await be.put(u.uid, rest); } } catch { /* 清不掉：下一支手機登入的時候會多問一次 */ } } // 登出：雲端不再寫這支（下一支登入不用問）
     try { if (be) await be.out(); } catch { /* 登出失敗：這支手機這邊還是當作登出 */ }
     user = null; picking = null; status = ''; dirty = false; setMeta(null); view = null; paint(); userEv();
   }
+  async function kicked() { // 別支手機用這個帳號登入了：這支登出（進度留著），跳「已經登出了」
+    if (!user) return;
+    kicking = true; S.kicked++; // kicking：記著 beau.cloud（上次跟雲端一樣的雜湊），再登入這支的時候不用問；登出才清掉
+    clearTimeout(saveT); saveT = 0;
+    user = null; picking = null; status = ''; dirty = false; devDoc = null; devOk = false;
+    view = 'kicked'; err = ''; paint(); userEv();
+    try { if (be) await be.out(); } catch { /* 登出失敗：這邊還是當作登出 */ }
+  }
+  async function devCheck() { // 每分鐘、切回來的時候：還是這支手機在用這個帳號嗎？
+    const u = user; if (!u || !be || picking || view === 'dev' || document.hidden) return;
+    devT = Date.now();
+    let d; try { d = await be.get(u.uid); } catch { return; }
+    if (user === u && d && d.dev && d.dev !== DEV) kicked();
+  }
+  setInterval(() => { if (user && Date.now() - devT >= (window.__beauDevEvery || 60000)) devCheck(); }, 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) devCheck(); });
   // 連線（site/online.js）用的：同一個雲端、同一個登入
-  window.beauCloud = { get user() { return user; }, backend: () => load(), login: async () => { await login(); return err; } };
+  window.beauCloud = { get user() { return devOk ? user : null; }, backend: () => load(), login: async () => { await login(); return err; } };
 
   if (chip && dlg) {
     chip.addEventListener('click', () => open(user ? 'acct' : 'in'));
     $c('cloudX').addEventListener('click', close);
     $c('clLater').addEventListener('click', close);
     dlg.addEventListener('click', (e) => { if (e.target === dlg) close(); });
-    $c('clGoogle').addEventListener('click', login);
+    $c('clGoogle').addEventListener('click', () => login());
+    $c('clKick')?.addEventListener('click', async () => { // 把那支手機登出：雲端寫這支，再照原本的（問要用哪一個進度⋯）
+      const u = user, d = devDoc; if (!u || !d) return;
+      devDoc = null; view = null; status = '讀取中⋯'; paint();
+      try { await be.put(u.uid, { ...d, dev: DEV }); } catch { status = '連不到雲端，有網路再試'; dirty = true; paint(); return; }
+      if (user === u) { devReady(); syncWith(u, d); }
+    });
+    $c('clNoLogin')?.addEventListener('click', async () => { devDoc = null; view = null; try { if (be) await be.out(); } catch { /* 登出失敗：當作沒登入 */ } paint(); }); // 不要在這支登入：什麼都不改
+    $c('clKickOk')?.addEventListener('click', () => { view = null; paint(); });
+    $c('clRelogin')?.addEventListener('click', () => login(true));
     $c('clOut').addEventListener('click', logout);
     $c('clUseCloud').addEventListener('click', () => { const p = picking; if (!p) return; picking = null; view = null; apply(p.keys, p.h); paint(); });
     $c('clUseLocal').addEventListener('click', () => { if (!picking) return; picking = null; view = null; paint(); upload(true); });

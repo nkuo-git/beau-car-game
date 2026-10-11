@@ -72,7 +72,7 @@ const st = (p) => p.evaluate(() => {
   const C = window.__beauCloud, t = localStorage.getItem('carid.tune'), $ = (id) => document.getElementById(id), shown = (id) => { const e = $(id); return !!e && !e.closest('[hidden]'); };
   let money = null; try { money = JSON.parse(t).money; } catch { /* 沒有存檔 */ }
   return { chip: $('cloudChip').hidden ? null : $('cloudChipTxt').textContent, user: C.user?.email || null, status: C.status, picking: C.picking, dirty: C.dirty, meta: C.meta, tune: t, money,
-    dlg: !$('cloudDlg').hidden, title: $('cloudTitle').textContent, sec: ['clIn', 'clAcct', 'clPick'].filter(shown).join(), err: shown('clErr') ? $('clErr').textContent : '' };
+    dlg: !$('cloudDlg').hidden, title: $('cloudTitle').textContent, sec: ['clIn', 'clAcct', 'clPick', 'clDev', 'clKicked'].filter(shown).join(), dev: C.dev, view: C.view, err: shown('clErr') ? $('clErr').textContent : '' };
 });
 const waitFor = (p, fn, arg) => p.waitForFunction(fn, arg, { timeout: 30000 }).then(() => true, () => false);
 const setMoney = (p, n) => p.evaluate((n) => { const d = JSON.parse(localStorage.getItem('carid.tune')); d.money = n; localStorage.setItem('carid.tune', JSON.stringify(d)); window.dispatchEvent(new Event('beau-save')); }, n);
@@ -130,8 +130,24 @@ await open(B.p);
 {
   // B 自己也玩過（錢不一樣）
   await B.p.evaluate(() => { const t = localStorage.getItem('carid.tune'); const d = t ? JSON.parse(t) : { v: 2, cur: 'gc8', owned: ['gc8'], money: 0 }; d.money = 75; localStorage.setItem('carid.tune', JSON.stringify(d)); });
+  // 一個帳號只能一支手機（Nick 2026-10-11）：A 在用這個帳號 → B 按登入先問「把那支手機登出／不要在這支登入」
   await B.p.click('#cloudChip'); await B.p.click('#clGoogle');
+  const dev1 = await waitFor(B.p, () => window.__beauCloud.view === 'dev');
+  const sd = await st(B.p);
+  const aDev = CLOUD.get('u1')?.dev;
+  console.log('3', el(), JSON.stringify({ sec: sd.sec, title: sd.title, aDev, bDev: sd.dev }));
+  check(dev1 && sd.title === '這個帳號在別的手機' && sd.sec === 'clDev' && !!aDev && aDev !== sd.dev && await B.p.evaluate(() => document.getElementById('cloudX').hidden), `phone B signs in while phone A uses the account → 「這個帳號在別的手機」: 把那支手機登出／不要在這支登入 (no ✕)`);
+  await B.p.screenshot({ path: `${prefix}-3-other-phone.png` });
+  const p0 = puts;
+  await B.p.click('#clNoLogin');
+  await waitFor(B.p, () => !window.__beauCloud.user && document.getElementById('cloudDlg').hidden);
+  const sn = await st(B.p);
+  check(!sn.user && !sn.dlg && sn.chip === '☁ 登入' && CLOUD.get('u1').dev === aDev && puts === p0 && sn.money === 75, `「不要在這支登入」 → B stays signed out, nothing changed (cloud still phone A's, B keeps 75 萬)`);
+  await B.p.click('#cloudChip'); await B.p.click('#clGoogle');
+  await waitFor(B.p, () => window.__beauCloud.view === 'dev');
+  await B.p.click('#clKick');
   const asked = await waitFor(B.p, () => window.__beauCloud.picking);
+  check(CLOUD.get('u1').dev === sd.dev, `「把那支手機登出」 → the cloud now says phone B uses the account`);
   const s = await st(B.p);
   const sums = [await B.p.textContent('#clCloudSum'), await B.p.textContent('#clLocalSum')];
   console.log('3', el(), JSON.stringify(sums));
@@ -152,13 +168,37 @@ await open(B.p);
   await new Promise((r) => setTimeout(r, 3000));
   check(cloudMoney() === 520, `phone B: 520 萬 → cloud 520 (${cloudMoney()})`);
   await blank(B.p);
-  await open(A.p); // A 上次之後沒改過
+  await open(A.p); // A 上次之後沒改過；可是帳號已經給 B 了
+  const kick = await waitFor(A.p, () => window.__beauCloud.view === 'kicked');
+  const sk = await st(A.p);
+  console.log('4', el(), JSON.stringify({ sec: sk.sec, title: sk.title, user: sk.user, money: sk.money }));
+  check(kick && sk.title === '已經登出了' && sk.sec === 'clKicked' && !sk.user && sk.chip === '☁ 登入' && sk.money === 470 && cloudMoney() === 520, `phone A reopens after B took the account → 「已經登出了」, signed out, A keeps its own 470 萬 (cloud stays 520)`);
+  await A.p.screenshot({ path: `${prefix}-4-logged-out.png` });
+  await A.p.click('#clRelogin'); // 再登入這支（會把 B 登出）
   const got = await waitFor(A.p, () => { try { return JSON.parse(localStorage.getItem('carid.tune')).money === 520; } catch { return false; } });
   if (got) await ready(A.p).catch(() => {});
   await waitFor(A.p, () => window.__beauCloud && window.__beauCloud.user && window.__beauCloud.status === '跟雲端一樣');
   const s = await st(A.p);
   console.log('4', el(), s.money, s.status, s.picking);
-  check(got && s.money === 520 && !s.picking && s.status === '跟雲端一樣', `phone A (unchanged since its last sync) reopens → takes the cloud's 520 萬 without asking (${s.money}, ${s.status})`);
+  check(got && s.money === 520 && !s.picking && s.status === '跟雲端一樣' && CLOUD.get('u1').dev === s.dev, `「再登入這支」 → A takes the account back; A was unchanged since its last sync → takes the cloud's 520 萬 without asking (${s.money}, ${s.status})`);
+  // A 開著的時候 B 拿走帳號（這裡直接改雲端的 dev）：A 存檔以前先看 → 不會蓋掉，跳「已經登出了」
+  const n1 = puts;
+  CLOUD.set('u1', { ...CLOUD.get('u1'), dev: 'phoneb000' });
+  await setMoney(A.p, 530);
+  const k2 = await waitFor(A.p, () => window.__beauCloud.view === 'kicked');
+  await new Promise((r) => setTimeout(r, 500));
+  check(k2 && puts === n1 && cloudMoney() === 520 && CLOUD.get('u1').dev === 'phoneb000', `A saves while another phone holds the account → checks first: nothing overwritten (cloud 520), A shows 「已經登出了」`);
+  await A.p.click('#clRelogin');
+  await waitFor(A.p, () => window.__beauCloud.user && /跟雲端一樣|剛剛存好了/.test(window.__beauCloud.status));
+  // 每分鐘看一次（測試：1 秒）
+  await A.p.evaluate(() => { window.__beauDevEvery = 1000; });
+  CLOUD.set('u1', { ...CLOUD.get('u1'), dev: 'phonec000' });
+  const k3 = await waitFor(A.p, () => window.__beauCloud.view === 'kicked');
+  check(k3, 'A just sitting there: the regular check notices the other phone → 「已經登出了」');
+  await A.p.evaluate(() => { window.__beauDevEvery = 0; });
+  await A.p.click('#clRelogin');
+  await waitFor(A.p, () => window.__beauCloud.user && /跟雲端一樣|剛剛存好了/.test(window.__beauCloud.status));
+  await setMoney(A.p, 520); await waitFor(A.p, () => window.__beauCloud.status === '剛剛存好了');
 }
 
 // ---- 5 兩邊都改了 → 問 → 用這支手機的 ----
@@ -169,12 +209,16 @@ await open(B.p);
   await blank(A.p); // 還是沒有網路的時候放下 A
   offline = false;
   await open(B.p);
+  await waitFor(B.p, () => window.__beauCloud.view === 'kicked'); // 帳號在 A 那裡：B 打開就是「已經登出了」→ 再登入這支
+  await B.p.click('#clRelogin');
   await waitFor(B.p, () => window.__beauCloud.user && window.__beauCloud.status === '跟雲端一樣');
   await setMoney(B.p, 610);
   await waitFor(B.p, () => window.__beauCloud.status === '剛剛存好了' && JSON.parse(localStorage.getItem('carid.tune')).money === 610);
   await new Promise((r) => setTimeout(r, 3000));
   await blank(B.p);
   await open(A.p);
+  await waitFor(A.p, () => window.__beauCloud.view === 'kicked');
+  await A.p.click('#clRelogin');
   const asked = await waitFor(A.p, () => window.__beauCloud.picking);
   const sums = asked ? [await A.p.textContent('#clCloudSum'), await A.p.textContent('#clLocalSum')] : [];
   check(asked && /610/.test(sums[0]) && /600/.test(sums[1]), `both changed (A offline 600, B 610) → A asks (cloud 610 / this phone 600) ${JSON.stringify(sums)}`);
@@ -202,8 +246,11 @@ await open(B.p);
 // ---- 7 登出 ----
 {
   await A.p.click('#cloudChip'); await A.p.click('#clOut');
+  await waitFor(A.p, () => !window.__beauCloud.user);
+  await new Promise((r) => setTimeout(r, 500));
   const s = await st(A.p);
   const n0 = puts;
+  check(!CLOUD.get('u1').dev, `登出 → the cloud no longer names this phone (the next phone signs in without being asked)`);
   await setMoney(A.p, 700);
   await new Promise((r) => setTimeout(r, 3500));
   check(s.chip === '☁ 登入' && !s.user && !s.meta && s.money === 650 && puts === n0 && cloudMoney() === 650, `登出 → 「☁ 登入」, this phone keeps its progress (650), no more cloud saves (${s.chip}, cloud ${cloudMoney()})`);

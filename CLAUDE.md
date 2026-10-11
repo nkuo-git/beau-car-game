@@ -99,7 +99,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `node test-app-b1.mjs ../docs ../out/app1/app` | 網站（docs/）整趟：跟 test-b1 一樣＋版本號、標題列、App 外殼的全螢幕 | 151 ok（試玩頁 docs/try 標題寫「試玩」，版本號那一項會不過） |
 | `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場 | 76 ok |
 | `node site-test.mjs ../docs ../out/site/site` | 網站：打開、開車、有新版本那一條、App 有新版本、搬進度 | 24 ok |
-| `node cloud-test.mjs ../docs ../out/cloud/cloud` | 登入＋雲端存檔（假的雲端、兩支手機、沒網路、App 外殼） | 20 ok |
+| `node cloud-test.mjs ../docs ../out/cloud/cloud` | 登入＋雲端存檔（假的雲端、兩支手機、沒網路、App 外殼）、一個帳號一支手機（把那支登出／不要在這支登入、已經登出了、存檔前先看、每分鐘看） | 27 ok |
 | `node online-test.mjs ../docs ../out/online/online` | 連線：要先登入、取名字（擋髒話）、跑完自己上傳、排行榜、鬼影車按鈕（假的 Firestore） | 30 ok |
 | `node world-test.mjs ../docs ../out/world/world` | 兩支假手機（兩個瀏覽器、假的即時資料庫）：進入世界、線上的人、各自出門看得到對方、去找他、表情、找人比賽（邀請卡片 好／不要／沒回答）、爬山／400 公尺、再比一次、回去開車、封鎖、關掉邀請、參觀車庫、離開、斷線、滿了（16）、清掉斷線的人、自己進去、車庫街（名牌、看他的車庫）、改車朋友看得到 | 65 ok，ALL CHECKS OK（約 3 分） |
 
