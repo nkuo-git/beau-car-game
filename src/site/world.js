@@ -80,7 +80,7 @@
   }
   async function start(slot) {
     const r = rt, me = uid();
-    W = { me, slot, mem: [], all: {}, pos: {}, offs: [], last: null, lastT: 0, conn: true, seen: {}, myBl: {}, blMe: new Set(), inc: {}, showing: null, answered: {}, out: null, match: null, myCar: '', w: '', n: myName(), wT: 0, cleanT: 0, rejoin: false };
+    W = { me, slot, mem: [], all: {}, pos: {}, offs: [], last: null, lastT: 0, conn: true, seen: {}, myBl: {}, blMe: new Set(), inc: {}, showing: null, answered: {}, out: null, match: null, myCar: '', w: '', n: myName(), wT: 0, cleanT: 0, rejoin: false, lkK: lookKey(), lkT: 0 };
     await discSet();
     G()?.net?.join({ code: 'world', me, host: '', name: myName() });
     G()?.net?.clock(r.now() - Date.now());
@@ -191,15 +191,20 @@
     o.t = rt.now(); W.last = o; W.lastT = now;
     rt.set(`world/p/${W.me}`, o).then(() => { S.sent++; }, (e) => console.warn('位置', e));
     if (s.k && s.k !== W.myCar) { // 換開別台：大家看到的車也換
-      W.myCar = s.k; const lk = G().net.look();
+      W.myCar = s.k; W.lkK = lookKey(); const lk = G().net.look();
       if (lk) rt.update(`world/m/${W.me}`, { car: String(lk.car).slice(0, 12), l: lk.l || null }).catch((e) => console.warn('換車', e));
     }
   }
+  function lookKey() { const lk = G()?.net?.look(); return lk ? lk.car + JSON.stringify(lk.l || null) : null; }
   function tick() {
     if (!W || !rt) return;
     G()?.net?.clock(rt.now() - Date.now());
     const now = performance.now(), w = place(), n = myName();
     if (W.conn && (w !== W.w || n !== W.n) && now - W.wT > 2500) { W.w = w; W.n = n; W.wT = now; rt.update(`world/m/${W.me}`, { w: w || '在路上', n: n.slice(0, 12) }).catch((e) => console.warn('在哪裡', e)); }
+    if (W.conn && now - W.lkT > 2500) { // 改了車（顏色、輪框、套件⋯）：大家看到的也換（Nick 2026-10-11「改車別人只看得到原樣」：以前只有進世界、換車的時候送）
+      const lk = G()?.net?.look(), key = lookKey();
+      if (lk && key !== W.lkK) { W.lkK = key; W.lkT = now; rt.update(`world/m/${W.me}`, { car: String(lk.car).slice(0, 12), l: lk.l || null }).catch((e) => console.warn('改車', e)); }
+    }
     if (W.out && !W.match && now - W.out.at > INV_MS) cancelOut('他沒有回答。');
     if (W.out && UI().view === 'wait') paintWait();
     invites(); hostTick();

@@ -331,10 +331,11 @@ function createDrive(o) {
   const fd = (wr * RR) / (GR[5] * vrl), Tpk = (P.hp * 745.7) / (wr * 0.95 * torqueAt(0.95)), tract = 1.35 * m * 9.81 * (P.awd ? 0.9 : P.drive ?? 0.74);
   const xOf = (u, g) => (Math.abs(u) * GR[g]) / (GR[5] * vrl), kGeo0 = Math.tan(0.6) / L; let kGeo = kGeo0; // 第 4 批：kGeo 四輪轉向會變 // 轉速÷紅線；方向盤打死的曲率
   // ---- 第 3 批（甩尾）：這台車的個性：後驅大馬力最好甩（角度大、踩油門撐得久）、四驅穩一點（角度小、自己慢慢抓回來）、越野車最穩（只有手煞車甩得動）----
+  // Nick 2026-10-11「甩尾甩太多了 可以不要滑那麼遠」：dec 1.15／1.5 → 1.7／2.2（放開抓回來快一點）、甩的時候多掉的速度 bleed 0.55 → 0.9（越野車照舊）
   // amax＝最大的角度（弧度）、sus＝踩油門撐住多少、pow＝油門甩得出來嗎、dec＝放開以後多快抓回來、bias＝後輪出力的比例、cg＝甩的時候繞哪裡轉（重心附近，車子座標 x）
   const pwk = (P.hp || 250) / (P.kg || 1300), rwd = !P.awd, ofr = !!P.offroad;
   const DR = { rwd, ofr, bias: rwd ? 1 : 0.42, amax: ofr ? 0.3 : rwd ? clamp(0.6 + 0.3 * (pwk - 0.3), 0.6, 0.78) : clamp(0.4 + 0.25 * (pwk - 0.2), 0.4, 0.52),
-    sus: ofr ? 0.06 : rwd ? clamp(0.5 + (pwk - 0.3), 0.5, 1) : clamp(0.3 + 0.5 * (pwk - 0.2), 0.25, 0.5), pow: ofr ? 0 : rwd ? 1 : 0.4, dec: rwd ? 1.15 : 1.5, cg: W.xr + 0.47 * (W.xf - W.xr) };
+    sus: ofr ? 0.06 : rwd ? clamp(0.5 + (pwk - 0.3), 0.5, 1) : clamp(0.3 + 0.5 * (pwk - 0.2), 0.25, 0.5), pow: ofr ? 0 : rwd ? 1 : 0.4, dec: ofr ? (rwd ? 1.15 : 1.5) : rwd ? 1.7 : 2.2, cg: W.xr + 0.47 * (W.xf - W.xr) };
 
   const st = { x: car.position.x, z: car.position.z, th: car.rotation.y, v: 0, steer: 0, thr: 0, brk: 0, hb: 0, thrEff: 0, load: 0, cutLoad: 0, gear: 0, rev: false, hold: 0, cut: 0, rpm: 0.13, spin: 0,
     surf: 0, cap: vtop, bumps: 0, shifts: 0, touch: 0, blocked: 0, roll: 0, rollV: 0, pitch: 0, pitchV: 0, alat: 0, along: 0, kap: 0, scrub: 0, push: 0, jit: 0, jitT: 0, hitW: 0, hitT: -9, impT: -9, impW: 0 };
@@ -582,7 +583,7 @@ function createDrive(o) {
     if (dm > 0 && !air) {
       const fr = 0.5 * aG * (1 - 0.35 * L) * sat(st.slip / 0.1), dR = st.steer * 0.32, ff = 0.5 * aG * sat(dR / 0.15), aD = a * (1 - 0.3 * L * DR.bias);
       DRO.wD = -(fr + ff + aD * Math.sin(st.slip)) / Math.max(3, u);
-      DRO.bleed = 0.55 * (Math.abs(fr * Math.sin(st.slip)) + Math.abs(ff * Math.sin(dR))) * dm; DRO.cap = (DR.rwd ? 0.32 : 0.26) * aG * Math.cos(st.slip);
+      DRO.bleed = (DR.ofr ? 0.55 : 0.9) * (Math.abs(fr * Math.sin(st.slip)) + Math.abs(ff * Math.sin(dR))) * dm; DRO.cap = (DR.rwd ? 0.32 : 0.26) * aG * Math.cos(st.slip);
       DRO.fwd = Math.cos(st.slip) * (1 - 0.3 * L * DR.bias); DRO.rev = 0.12 * go * L * DR.bias;
     }
     return DRO;

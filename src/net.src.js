@@ -93,7 +93,8 @@ function netCar(P, k) {
   const job = P.job;
   LOD_CARS[kk].load().then((sc) => {
     if (job !== P.job || NET.P.get(P.uid) !== P) return;
-    const lod = buildLodCar(kk, sc, kk === k ? netLook(kk, P.l) : { ...DEFAULT_LOOK[kk], paint: netLook(k, P.l).paint || DEFAULT_LOOK[kk].paint });
+    const lk = kk === k ? netLook(kk, P.l) : { ...DEFAULT_LOOK[kk], paint: netLook(k, P.l).paint || DEFAULT_LOOK[kk].paint }, lod = buildLodCar(kk, sc, lk);
+    P.objPaint = lk.paint; // 測試用：做出來的車是什麼顏色
     lod.car.position.set(0, 0, 0); lod.car.rotation.set(0, 0, 0); lod.car.updateMatrixWorld(true);
     const B = new THREE.Box3().setFromObject(lod.car);
     lod.car.rotation.order = 'YXZ'; lod.car.name = 'net-' + P.uid; lod.car.visible = false;
@@ -801,7 +802,7 @@ Object.assign(window.beauGame, {
     goTo: netGoTo,
     place: netPlace,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
-    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, car: !!P.obj, walk: !!P.chr })), race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, cols: NET.cols.length, gst: NET_GST.own.map((o) => o.n), gstAt: NET_GST.at }; },
+    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr })), race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, cols: NET.cols.length, gst: NET_GST.own.map((o) => o.n), gstAt: NET_GST.at }; },
   },
   visit: netVisit,
 });

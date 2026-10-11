@@ -24,7 +24,7 @@ fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.glb': 'model/gltf-binary', '.json': 'application/json', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 const hook = 'window.__R = () => race; window.__D = () => ({ on: DRIVE.on, drv, walker, trip, VIL, cur, indoor });'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
-  + ' window.__NET = () => NET; window.__HILL = () => HILL; window.__TD = () => tripDest;'
+  + ' window.__NET = () => NET; window.__CARS = () => CARS; window.__HILL = () => HILL; window.__TD = () => tripDest;'
   + ' renderer.setAnimationLoop = function (cb) { clearInterval(this.__iv); this.__iv = cb ? setInterval(() => { const t = performance.now(); cb(t); window.__ticks = (window.__ticks || 0) + 1; }, 30) : 0; };'
   + ' window.__thin = (n) => { if (!renderer.__rr) { renderer.__rr = renderer.render.bind(renderer); renderer.__rn = 0; renderer.render = (s, c) => { if (++renderer.__rn % renderer.__every === 0) renderer.__rr(s, c); }; } renderer.__every = Math.max(1, n | 0); }; window.__thin(300);'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
@@ -365,6 +365,12 @@ const perf = await A.evaluate(() => { const r = window.__rinfo(); return { ...r 
 console.log('   perf', JSON.stringify(perf));
 check(seeCar, 'A sees B’s car (name tag, shadow, collider)');
 check(perf.calls < 400, `draw calls with a friend’s car in view: ${perf.calls} calls, ${(perf.tris / 1e6).toFixed(2)} M triangles`);
+// Nick 2026-10-11「改車別人只看得到原樣」：在世界裡改車（換顏色），朋友看到的車也跟著換
+const repaint = await B.evaluate(() => { const C = window.__CARS()[window.__D().cur], old = C.state.paint, p = C.paints.map((x) => x[0]).find((x) => x !== old); C.state.paint = p; return { old, p }; });
+const seenPaint = await waitFor(A, (p) => window.beauGame.net.info.peers[0]?.paint === p, repaint.p, 20000);
+console.log('   repaint', JSON.stringify(repaint), JSON.stringify(await A.evaluate(() => window.beauGame.net.info.peers[0])));
+check(seenPaint, `B repaints the car while in the world (${repaint.old} → ${repaint.p}): A sees B’s car in the new colour`);
+await B.evaluate((o) => { window.__CARS()[window.__D().cur].state.paint = o; }, repaint.old);
 await A.evaluate(() => window.__thin(300));
 
 // ---- 8 封鎖、關掉邀請、沒回答 ----
