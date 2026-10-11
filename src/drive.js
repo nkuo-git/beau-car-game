@@ -142,6 +142,18 @@ const CSS = `
 .dv-spd span{font-size:11px;font-weight:600;letter-spacing:.06em;color:#C6CAD1;margin-top:2px}
 .dv-spd em{position:absolute;top:-9px;right:-9px;width:22px;height:22px;border-radius:50%;background:#F2F3F5;color:#0E0F12;font:700 15px/22px ${COND};font-style:normal;text-align:center}
 .dv-spd em.r{background:#FF3B30;color:#fff}
+/* 第三人稱（追車）：速度表變成圓的轉速表（橘色弧、紅區），檔位大大的在中間、速度在下面；駕駛座照舊 */
+.dv-spd svg{display:none}
+.dv-spd.tach{width:80px;height:80px;min-width:0;padding:0;border-radius:50%;justify-content:center;box-sizing:border-box}
+.dv-spd.tach svg{display:block;position:absolute;inset:0;width:100%;height:100%;fill:none;stroke-width:7}
+.dv-spd.tach svg .t{stroke:rgba(242,243,245,0.2)}
+.dv-spd.tach svg .z{stroke:rgba(255,59,48,0.6)}
+.dv-spd.tach svg .a{stroke:#FF6A1F}
+.dv-spd.tach svg.red .a{stroke:#FF3B30}
+.dv-spd.tach em{position:static;order:-1;width:auto;height:auto;margin-top:4px;background:none;color:#F2F3F5;font:700 30px/1 ${COND};font-style:normal}
+.dv-spd.tach em.r{background:none;color:#FF3B30}
+.dv-spd.tach>b{font-size:17px;margin-top:1px}
+.dv-spd.tach>span{font-size:8px;margin-top:1px}
 .dv-steer{bottom:12px;left:10px;display:flex;gap:8px;pointer-events:auto;touch-action:none}
 .dv-steer b,.dv-ped b{display:grid;place-items:center;touch-action:none;cursor:pointer}
 .dv-steer b{width:70px;height:74px;border-radius:18px;background:rgba(14,15,18,0.62);box-shadow:0 4px 0 rgba(0,0,0,0.35)}
@@ -159,7 +171,7 @@ const CSS = `
 .dv-hb{right:10px;bottom:124px;width:74px;height:46px;display:grid;place-items:center;border-radius:16px;background:#2B2E35;color:#FF6A1F;font-size:17px;font-weight:700;letter-spacing:.04em;white-space:nowrap;box-shadow:0 5px 0 #111216;pointer-events:auto;touch-action:none;cursor:pointer}
 .dv-hb.on{background:#FF6A1F;color:#1A0F07;transform:translateY(4px);box-shadow:none}
 @media (max-height:560px){.dv-hb{right:166px;bottom:12px;width:62px;height:70px;border-radius:18px;font-size:15px;letter-spacing:0}}
-@container (max-height:290px){.dv-hb{right:288px}}
+@container (max-height:290px){.dv-hb{right:288px}.dv-spd.tach{left:auto;right:366px;transform:none}} /* 轉速表（80 寬）放手煞車左邊 */
 /* 第 3 批（b3-int）：App 沒全螢幕、螢幕又高又寬（平板、電腦）：畫面只是中間一小塊（426×320），手煞車（油門上面）會壓到換視角、全螢幕鈕 → 放到全螢幕鈕左邊（同一排）；通緝中跟著往下推 */
 @media (min-height:561px){@container (max-height:409px){.dv-hb{top:142px;right:114px;bottom:auto;height:44px}.pw-host.pw-on .dv-hb{margin-top:46px}.dv-act2{top:auto;right:auto;left:10px;bottom:98px}}} /* 修 11（2026-10-10）：小舞台（平板、電腦、426×320）「下車」放左邊、轉彎鍵上面（本來在右邊壓到油門） */
 .dv-spd i{position:absolute;bottom:calc(100% + 24px);left:50%;transform:translateX(-50%);padding:5px 13px;border-radius:999px;background:#FF6A1F;color:#1A0F07;font:700 17px/1 ${SANS};font-style:normal;letter-spacing:.04em;white-space:nowrap;box-shadow:0 3px 0 #9E4213}
@@ -751,7 +763,7 @@ function createDrive(o) {
       if (m === 'eye') camera.fov = (view || o.eye || defEye).fov || 72;
       camera.updateProjectionMatrix(); cam.ok = false; cam.yaw = st.th; cam.d = 6.5;
     }
-    if (hud) hud.cam.setAttribute('aria-pressed', String(m === 'eye'));
+    if (hud) { hud.cam.setAttribute('aria-pressed', String(m === 'eye')); hud.spdBox.classList.toggle('tach', m !== 'eye'); }
   }
 
   // ---- HUD：左上目的地（下面一顆大按鈕）、右上小地圖、下面方向鍵、速度、油門煞車 ----
@@ -760,7 +772,7 @@ function createDrive(o) {
     if (!document.getElementById('dv-style')) { const s = document.createElement('style'); s.id = 'dv-style'; s.textContent = CSS; document.head.append(s); }
     const root = document.createElement('div'); root.className = 'dv';
     root.innerHTML = `<div class="dv-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="dv-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="dv-map"><canvas></canvas><b class="dv-mapb" hidden></b></div>`
-      + `<b class="dv-cam" role="button" aria-label="換視角" aria-pressed="false">${ICON.cam}</b><button type="button" class="dv-act2" hidden><i></i><span></span></button><div class="dv-spd"><b>0</b><span>KM/H</span><em>1</em><i hidden>甩尾<span></span></i></div>`
+      + `<b class="dv-cam" role="button" aria-label="換視角" aria-pressed="false">${ICON.cam}</b><button type="button" class="dv-act2" hidden><i></i><span></span></button><div class="dv-spd"><svg viewBox="0 0 100 100" aria-hidden="true"><path class="t" d="M20.3 79.7A42 42 0 1 1 79.7 79.7"/><path class="z" d="M91.87 53.3A42 42 0 0 1 79.7 79.7"/><path class="a" d="M20.3 79.7A42 42 0 1 1 79.7 79.7" pathLength="100" stroke-dasharray="0 100"/></svg><b>0</b><span>KM/H</span><em>1</em><i hidden>甩尾<span></span></i></div>`
       + `<div class="dv-steer"><b role="button" aria-label="左轉">${ICON.L}</b><b role="button" aria-label="右轉">${ICON.R}</b></div>`
       + `<div class="dv-ped"><b class="dv-brk" role="button" aria-label="煞車">煞車</b><b class="dv-gas" role="button" aria-label="油門">油門</b></div><div class="dv-toast" role="status"></div>`
       + `<b class="dv-hb" role="button" aria-label="手煞車">手煞車</b>`; // 第 3 批（甩尾）
@@ -770,6 +782,7 @@ function createDrive(o) {
       spd: q('.dv-spd b'), gear: q('.dv-spd em'), steer: q('.dv-steer'), steerB: [...root.querySelectorAll('.dv-steer b')], gas: q('.dv-gas'), brk: q('.dv-brk'), toast: q('.dv-toast'), off: [] };
     if (o.camButton === false) H.cam.hidden = true;
     H.hb = q('.dv-hb'); H.drift = q('.dv-spd i'); H.driftA = q('.dv-spd i span'); // 第 3 批
+    H.spdBox = q('.dv-spd'); H.tach = q('.dv-spd svg'); H.tachA = q('.dv-spd svg .a'); H.spdBox.classList.toggle('tach', mode !== 'eye'); // 轉速表
     const on = (el, t, f, opt) => { el.addEventListener(t, f, opt); H.off.push(() => el.removeEventListener(t, f, opt)); };
     on(root, 'contextmenu', (e) => e.preventDefault());
     // 按住：手指按下去就抓住（滑出去也算按著），放開才放
@@ -868,6 +881,7 @@ function createDrive(o) {
     const H = hud; if (!H) return;
     const kmh = Math.round(Math.abs(st.v) * 3.6), gear = st.rev ? 'R' : String(st.gear + 1), set = (k, v, f) => { if (H.last[k] !== v) { H.last[k] = v; f(v); } };
     set('spd', kmh, (v) => (H.spd.textContent = v)); set('gear', gear, (v) => { H.gear.textContent = v; H.gear.classList.toggle('r', v === 'R'); });
+    if (mode !== 'eye') { const r = Math.min(1, st.rpm); set('rpm', Math.round(r * 50), (v) => H.tachA.setAttribute('stroke-dasharray', `${v * 2} 100`)); set('redl', r > 0.86, (v) => H.tach.classList.toggle('red', v)); } // 轉速表：50 格，紅區（86% 以上）弧變紅
     set('rev', st.rev, (v) => { H.brk.textContent = v ? '倒車' : '煞車'; H.brk.classList.toggle('rev', v); });
     const dd = dest && destStyle(dest); set('dest', dest, () => { H.chip.hidden = !dd; if (dd) H.name.textContent = dd.label; });
     if (dd && routeData) {
