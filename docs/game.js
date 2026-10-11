@@ -34654,7 +34654,14 @@ function buildTrack() {
 // ---- 比賽狀態 ----
 let TR = null, race = null, rcam = null, raceOpp = null, oppFor = null, lastT = 0, orbitA = 0, oppCar = null;
 const RACE = { on: false, frame: raceFrame };
-function carSize(Sx) { const b = new THREE.Box3().setFromObject(Sx.body); return { nose: b.max.x, len: b.max.x - b.min.x, tail: b.min.x }; }
+// 車子自己的長度（車頭、車尾離原點多遠）：先搬回原點再量（比完再比一次的時候車子還停在終點，照世界座標量會差 400 公尺，對手就跑到看不到的地方）
+function carSize(Sx) {
+  const p = Sx.car.position, x = p.x, y = p.y, z = p.z;
+  p.set(0, 0, 0); Sx.car.updateMatrixWorld(true);
+  const b = new THREE.Box3().setFromObject(Sx.body);
+  p.set(x, y, z); Sx.car.updateMatrixWorld(true);
+  return { nose: b.max.x, len: b.max.x - b.min.x, tail: b.min.x };
+}
 function putCar(Sx, c, z, info) {
   Sx.car.position.set(c.x - info.nose, 0, z);
 }
@@ -37898,7 +37905,7 @@ function keepOutOfBays() {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 9; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 10; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
