@@ -98,7 +98,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `node free-test.mjs` | 試做頁錢用不完、正常頁存檔的錢 | 2 ok（先跑 make-free.mjs） |
 | `node test-app-b1.mjs ../docs ../out/app1/app` | 網站（docs/）整趟：跟 test-b1 一樣＋版本號、標題列、App 外殼的全螢幕 | 151 ok（試玩頁 docs/try 標題寫「試玩」，版本號那一項會不過） |
 | `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場 | 76 ok |
-| `node site-test.mjs ../docs ../out/site/site` | 網站：打開、開車、有新版本那一條、App 有新版本、搬進度 | 22 ok |
+| `node site-test.mjs ../docs ../out/site/site` | 網站：打開、開車、有新版本那一條、App 有新版本、搬進度 | 24 ok |
 | `node cloud-test.mjs ../docs ../out/cloud/cloud` | 登入＋雲端存檔（假的雲端、兩支手機、沒網路、App 外殼） | 20 ok |
 | `node online-test.mjs ../docs ../out/online/online` | 連線：要先登入、取名字（擋髒話）、跑完自己上傳、排行榜、鬼影車按鈕（假的 Firestore） | 30 ok |
 | `node room-test.mjs ../docs ../out/room/room` | 兩支假手機（兩個瀏覽器、假的即時資料庫）：開房間、加入、一起出門、表情、一起爬山／400 公尺、成績、回房間一起開、參觀車庫按讚、離開、斷線、滿了、關房間 | 49 ok，ALL CHECKS OK（約 4 分） |
@@ -136,13 +136,14 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 ## App（APK）
 - `android/`：WebView 殼，package `com.nkuo.beaucargame`，名字「大便龍的改車遊戲」（桌面上「改車遊戲」），開 START_URL＝網站。直的、橫的都可以。
 - 網頁那邊叫 `window.BeauCarApp`：`setFullscreen(on)`、`ready()`、`googleSignIn()`（apk-4 起；結果回 `window.beauGoogleSignIn(idToken, 錯誤)`）。User-Agent 帶 `BeauCarApp/<版號>`。返回鍵先問網頁 `window.caridExitFullscreen()`（關自訂角色、離開這一趟的全螢幕），網頁回 false 才離開。
+- App 更新（apk-7 起）：網頁按「下載安裝」叫 `BeauCarApp.installApk(url)`（只收這個 repo 的 Release `.apk`），App 自己下載到 cache、檢查是同一個 package 而且版號比較大，再跳 Android 的「安裝」（第一次要打開「允許安裝應用程式」）；進度回 `window.beauApkProgress(百分比, 'dl'|'install'|'perm'|'denied'|'fail')`（site.js）。舊 App 沒有 `installApk` 就照舊開 GitHub。Android 一定要按一次「安裝」，不能安靜裝。
 - 搬家連結 `beaucargame://import?save=…` → `window.beauImport(save)`。
 - workflow 只有在 main 才發 Release；在別的分支手動跑（workflow_dispatch）只是試編（apk-3 就是這樣用掉的號碼）。
 - 簽章：workflow 第一次跑用 repo secret **`BEAU_KEY_PASS`** 產生 `android/keystore/beaucargame.jks` 並 commit（之後都用同一把，新版才能直接蓋過去裝）。沒有那個 secret：用臨時的 debug 簽章，Release 發成「預先發行」（遊戲裡的「App 有新版本」不會指到它），裝正式版前要先移除（存檔會不見）。
 - 這個機器的 GitHub 代理不給碰 Actions secrets 和 Pages 設定（403）：這兩個要 Nick（或家長）在 GitHub 網頁上設。
 - 圖示：萬能軟體的橘色車＋右下角格子旗徽章（蓋掉保桿上的貼紙字），深色底（`src/site/make-icons.py`）。
 
-## 現在的狀態（2026-10-10）
+## 現在的狀態（2026-10-11）
 - **main** ＝ 手機上的 0.9.37 遊戲（萬能軟體內容 37／38 的 tune.js 跟 `build-app.mjs` 產生的一模一樣）＋這次的網站（內容 1）＋APK 殼。
   - 0.9.37 有：越野車車庫（4 格，越野車專屬）、怪獸卡車輾扁東西（車、路邊小東西；人跳開）、汽車半價、怪獸卡車 100 萬、拿掉撞爛（`CRASH_DAMAGE = false`）、內湖（七個地標、路牌、離村子近）、警察、槍店、甩尾、賽車場。
 - **內容 2（2026-10-09 上線，試做頁 v25–v27）**：路變寬 1.5 倍（村子、內湖；快速道路、賽車場、直線加速沒變）；房子最多 2 層（村子、內湖；地標不變），越野車撞不倒房子，其他的（樹、電線桿、警車⋯）幾乎都輾得扁（不會輾的：人、小孩、房子、你家車庫、改車廠、車店、槍店、警察局、廟、捷運柱子⋯），輾扁的東西你離開 140 公尺 25 秒後會修好；越野車車庫搬到你的車庫前面左邊（門對著路，變大）；你的車庫變高（6 公尺、門 8×5）、裡面變寬（31.4 公尺）；路人不會再卡在門口。說明在 `notes/wide.md`、`notes/tall.md`。
@@ -158,6 +159,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - **內容 8（2026-10-10 上線，apk 也重編）＝ 連線第 2–4 步：房間＋一起開車＋一起比賽＋參觀車庫**：「👥 連線」→ 開一個房間（4 個字的房間碼，最多 4 個人）／輸入房間碼加入；房主按「一起出門」「🏁 一起比賽」（賽車場 3 圈、400 公尺、爬山；泥巴賽「下次做」）；遊戲裡右邊「房間 CODE」＋💬 表情（只有 5 個固定的，不能打字）；參觀車庫只能看、按讚。用 Firebase 的 Realtime Database（家長 2026-10-10 開好、規則貼好）。說明、規則在 `notes/room.md`。
 - **修 5–12（內容 8，2026-10-10 上線）**：越野車車庫的追車鏡頭不會跑到屋頂上面（drive.js `setCamCeil`）；停車格車頭朝外，直接開出去；在車庫裡選目的地鐵捲門自己開；輾扁的東西 20 秒以後、你離 15 公尺以上就 0.8 秒慢慢長回來；電線桿扁了電線一起垂下來（長回來一起拉回去）、內湖大路牌整支一起扁；內湖有車流和走人行道的人（neihu.js `V.npcRoads`：大路、一般的路、巷子，單行道一條車道；npc.js 路口切好的不再找丁字路口、走不出去的車道剪掉）；手機橫拿全螢幕「去哪裡」收成一顆「📍 去哪裡 ▾」、小畫面「下車」在左邊、手煞車一行；撞到警車、路上的車照動量算（不像牆）；App 的字固定大小（`setTextZoom(100)`，內容 8 上線時編的新 APK 才有）。
   - **按鈕收起來＋按鈕大小（內容 8；Nick 2026-10-10 說好，草稿 https://claude.ai/artifact/UKuAXoAiocDidxbjYY8EE9 ）**：全螢幕開車（直拿、橫拿都一樣）平常只有「📍 去哪裡 ▾」和「⋯」；按「⋯」才出現聲音、全螢幕、換視角、「Aa」；再按一次、選了地方、車子開起來（超過時速約 14 公里；車已經在動才打開的話 8 秒）就收起來（town.src.js `FOLD`、`foldStep`）。「Aa」→「按鈕大小 小／中／大」＝0.8／1／1.15 倍（CSS `--hudz`、`zoom`），每支手機自己記在 localStorage `carid.btnsize`（不在存檔裡）。
+- **內容 9（2026-10-11 上線，apk-7）**：App 有新版本時在 App 裡下載、跳出安裝（不用開 GitHub；草稿 https://claude.ai/artifact/SrniCXgzmZ9hpUkPdSCKfn ）。apk-7 要從 GitHub 裝最後一次。
 - **已知問題**
   - 內湖的路是平的（真的港墘一帶本來就很平）。
   - 內湖的車流、行人讓第一次出門的載入多約 0.4–0.7 秒（電腦上；npc.js 路網，`NPC.load.graphs`）。
