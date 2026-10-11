@@ -31,7 +31,7 @@
 //     highway（快速道路）：zone＝路口（上快速道路的地方）、spawn＝外側車道、路口北邊一點、朝北
 //   V.colliders：[{ t: 'box', x, z, hx, hz, rot, h } | { t: 'circle', x, z, r, h }]（xz 平面；h＝高度，鏡頭避開房子用）
 //   V.roads：[{ pts: [[x, z], ...], w, kind }]（小地圖畫路；kind：main 大路、street 村子的路、farm 水泥農路、drive 車道／前庭、strip 賽道、highway 快速道路（中線、w 是整條路寬））
-//   V.route(x, z, dest) → { pts: [[x, z], ...], len }：從 (x, z) 沿著路開到 dest（'garage' | 'shop' | 'track' | 'dealer' | 'highway'）
+//   V.route(x, z, dest) → { pts: [[x, z], ...], len }：從 (x, z) 沿著路開到 dest（'garage' | 'shop' | 'track' | 'dealer' | 'highway'）；places[dest] 有 via＋end：開到 via 那個地方的路上、停在 end
 //       單行道：改車廠、車店都是前面進、另一邊出；快速道路兩個方向分開算（在哪一邊就只能往前開，到路口才出得去）
 //       garage 開到車庫門口再進去停車位；shop 開到改車區；dealer 開到買車區；highway 開到路口（上外側車道）
 //   V.surfaceAt(x, z) → 0 大路（賽道、往賽道的路、往快速道路的路）、3 村子的小路、水泥地、4 快速道路、1 草地、2 稻田
@@ -1020,6 +1020,8 @@ function buildVillage(opts = {}) {
   }
   const walk = (r, from) => (r.a === from ? r.pts : r.pts.slice().reverse()); // 從節點 from 沿著路 r 走的點
   function route(x, z, dest) {
+    const pl = places[dest]; // 車庫街的家（town.src.js）：places.garage.via＝先開到哪個節點、end＝最後停在哪（路線在最靠近那一點的地方切掉，接過去）
+    if (pl && pl.via && pl.end) return trimTo(route(x, z, pl.via), pl.end);
     const tgt = DEST_NODE[dest] || dest, nr = nearestRoad(x, z); if (!nr || !NODES[tgt]) return { pts: [[x, z]], len: 0 };
     const r = nr.r, start = r.oneway ? { [r.b]: r.len - nr.along } : { [r.a]: nr.along, [r.b]: r.len - nr.along }; // 單行道只能往前
     const { dist, prev } = dijkstra(start);
@@ -1030,6 +1032,13 @@ function buildVillage(opts = {}) {
     const pts = [[x, z], [nr.qx, nr.qz]].concat(mid).filter((p, i, a) => !i || Math.hypot(p[0] - a[i - 1][0], p[1] - a[i - 1][1]) > 0.05);
     for (const e of chain) pts.push(...walk(e.r, e.from).slice(1));
     return { pts, len: Math.hypot(x - nr.qx, z - nr.qz) + dist[tgt] };
+  }
+  function trimTo(r, end) {
+    if (!r || r.pts.length < 2) return r;
+    let bi = 0, bd = Infinity, bq = null;
+    for (let i = 0; i < r.pts.length - 1; i++) { const [a, b] = [r.pts[i], r.pts[i + 1]], [d, , qx, qz] = segDist(end[0], end[1], a[0], a[1], b[0], b[1]); if (d < bd) { bd = d; bi = i; bq = [qx, qz]; } }
+    const pts = r.pts.slice(0, bi + 1).concat([bq, end.slice()]).filter((p, i, a) => !i || Math.hypot(p[0] - a[i - 1][0], p[1] - a[i - 1][1]) > 0.05);
+    return { pts, len: plen(pts) };
   }
   // 所有節點之間的最短距離（路標的箭頭用；有方向）
   const APSP = {}; for (const k of Object.keys(NODES)) APSP[k] = dijkstra({ [k]: 0 }).dist;
@@ -1899,6 +1908,7 @@ function buildVillage(opts = {}) {
       apron: { x: -300, z: -83.85, hx: 8.35, hz: 7, rot: -R2 },                 // 門前（本地 x 5.3…22、z ±7）：停在這裡 HUD 給「開鐵捲門」
       inside: { x: -300, z: -101.35, hx: 8.85, hz: 15.7, rot: -R2 },            // 車庫裡面（本地 x −12.7…5、z ±15.7；第 11 批：本來 ±12.7）
       zone: { x: -300, z: -92.85, hx: 17.35, hz: 15.7, rot: -R2 },              // apron＋inside
+      yard: { x: -300, z: -92.85, hx: 17.35, hz: 15.7, rot: -R2 },              // 同 zone（車庫街的家：town.src.js 把 zone 換到車庫街你那間門口；這塊輾不到的地方照舊）
     },
     shop: { // 阿輝改車廠：前門（南）開進改車區、後門（北）出去
       name: '阿輝改車廠', pos: [-160, -35],

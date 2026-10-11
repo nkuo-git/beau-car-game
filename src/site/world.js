@@ -3,7 +3,7 @@
 // src/site/world.js，build-site.mjs 接在 online.js 後面（同一個對話框 window.beauNetUI、同一個登入 window.beauCloud、遊戲那邊 window.beauGame.net／visit：net.src.js）
 // 「👥 連線」→「進入世界」→ 線上的人（名字、開什麼車、在哪裡）：去找他、🏁 找他比賽、🚗 看他的車庫、🚫 封鎖；下次打開遊戲自己進去（beau.world），按「離開世界」才不會
 // 即時資料庫（cloud.js 的 backend().rt()；規則在 notes/world.md，要爸媽貼到 Firebase 主控台）：
-//   world/s/{0–15}：uid（16 個位子＝同時最多 16 個人）
+//   world/s/{0–5}：uid（6 個位子＝同時最多 6 個人＝車庫街 6 間車庫；2026-10-11 本來 16。規則還是收 0–15，舊版的人可能在 6 以後：沒有車庫而已）
 //   world/m/{uid}：{ n, car, l, ch, s（位子）, j（進來的時間）, w（在哪裡）, inv（1＝收比賽邀請、0＝關掉）}
 //   world/p/{uid}：位置（跟房間一樣，一秒 8 次，沒動就少送；被警察追多送 w 幾顆星、pc 警車、jl 被抓了）；world/e/{uid}：表情 { e, t }
 //   world/bl/{uid}/{誰}：他的名字（封鎖；兩邊都看不到對方、不能找對方比賽）
@@ -15,7 +15,7 @@
 // 斷線（關掉 App、沒網路）：伺服器幫你離開世界、收掉你的比賽；網路回來自己再進去
 // 測試：window.__beauCloudBackend().rt 換成假的即時資料庫；window.__beauWorld 看狀態
 {
-  const MAX = 16, INV_MS = 20000, LS_IN = 'beau.world', LS_INV = 'beau.inv';
+  const MAX = 6, INV_MS = 20000, LS_IN = 'beau.world', LS_INV = 'beau.inv';
   const COLS = ['#4a8cff', '#46c46f', '#f2c230', '#ff5fa2', '#a77bff', '#2fd3c7', '#ff8f5a', '#9bd14a', '#5ac8fa', '#e05ad7', '#ffd166', '#7f8cff', '#4cd98f', '#ff6b8b', '#c9a227'], ME_COL = '#ff6a1f'; // 跟 net.src.js 的 NET_COL 一樣
   const KIND = { circuit: '賽車場 3 圈', drag: '400 公尺', hill: '爬山' };
   const $w = (id) => document.getElementById(id);
@@ -82,7 +82,7 @@
     const r = rt, me = uid();
     W = { me, slot, mem: [], all: {}, pos: {}, offs: [], last: null, lastT: 0, conn: true, seen: {}, myBl: {}, blMe: new Set(), inc: {}, showing: null, answered: {}, out: null, match: null, myCar: '', w: '', n: myName(), wT: 0, cleanT: 0, rejoin: false, lkK: lookKey(), lkT: 0 };
     await discSet();
-    G()?.net?.join({ code: 'world', me, host: '', name: myName() });
+    G()?.net?.join({ code: 'world', me, host: '', name: myName(), slot });
     G()?.net?.clock(r.now() - Date.now());
     const on = (p, cb) => W.offs.push(r.on(p, cb, (e) => console.warn('世界', p, e)));
     on('world/bl', onBlocks);
@@ -106,7 +106,7 @@
         const slot = await claim(rt, W.me);
         if (!W) return;
         if (slot < 0) { gone(`世界滿了（最多 ${MAX} 個人），等一下再來。`); return; }
-        W.slot = slot; await discSet();
+        W.slot = slot; G()?.net?.slot?.(slot); await discSet();
       } else if (W) await discSet();
       if (W && W.match) matchDisc(W.match.id);
     } catch (e) { console.warn('再進去', e); }

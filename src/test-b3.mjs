@@ -17,6 +17,7 @@ const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '
 const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () => S; window.__snd = () => snd; window.__room = () => room; window.__scene = () => scene; window.__controls = () => controls;'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
   + ' window.__money = (n) => { GAME.money = n; save(true); renderWallet(); renderOptions(); refreshCarBtns(); };'
+  + ' window.__HOME = () => HOME;'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, home, bayLock, snooze, TR, LODS, camGo, cur, built, walker, tripPose, tripFull, boarding,'
   + '   DECK, DREV, sleep, gcam, liftSnd, deliver, offDeck, runLift, midCar, normPark, CABIN_EYE });'
   + ' window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
@@ -579,19 +580,17 @@ const hidT = s4h.lost.s + s4h.heat0;
 check(s4h.lost.wanted === 0 && s4h.lost.state === 'free' && s4h.lost.escapes === 1 && hidT > 24 && hidT < 26.5 && s4h.lost.said.some((x) => /甩掉警察了/.test(x)), `hiding in the house ${hidT.toFixed(1)} s (25 s rule) cleared the star (「甩掉警察了！」)`);
 check(s4h.out === 'out', 'walked back out of the house');
 const s4b = await ev(() => {
-  const X = window.__X, D = window.__D(), H = window.__H, w = D.walker, P3 = window.__P3(), pol = P3.police, G = D.GAR;
-  // 先走到鐵捲門前面：門關著就按「開鐵捲門」（等一下要馬上躲進去）
-  const a = { door0: G.door.t };
-  w.teleport(H.gw(7.5, 0, Math.PI)); X.step(20);
-  if (G.door.t === 0) { a.open = H.press(); for (let i = 0; i < 200 && G.door.t < 1; i++) X.step(1); }
-  w.teleport(H.gw(16, 4, 0)); X.step(30);
+  const X = window.__X, D = window.__D(), H = window.__H, w = D.walker, P3 = window.__P3(), pol = P3.police, G = D.GAR, HM = window.__HOME();
+  // Nick 2026-10-11「每個人要從自己的車庫出來」：你家＝車庫街你那間（沒連線＝1 號）；在門口揍人 → 馬上「進車庫」（進去鐵捲門是關著的）
+  const a = { door0: G.door.t, in0: HM.in };
+  w.teleport(HM.walk); X.step(30);
   const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300, X.farFromPolice); if (!ad) return { err: 'no adult' };
   X.faceTo(ad); X.punchBtn(); X.step(2);
   a.wanted = pol.wanted; a.adD = +Math.hypot(ad.x - t.x, ad.z - t.z).toFixed(1);
-  // 馬上跑回車庫裡面（揍的那個人在 30 公尺外的話門已經自己關了（doorStep）：先在門口再開一次）
-  for (let i = 0; i < 300 && G.door.moving; i++) X.step(1); // 正在自己關：等它關好
-  if (G.door.t < 1) { w.teleport(H.gw(7.5, 0, Math.PI)); X.step(5); a.open2 = H.press(); for (let i = 0; i < 200 && G.door.t < 1; i++) X.step(1); }
-  w.teleport(H.gw(5, 0.5, Math.PI)); X.step(5);
+  w.teleport(HM.walk); X.step(5);
+  a.enter = H.actText(); a.pressE = H.press(); X.step(2); a.in = HM.in; a.doorIn = G.door.t; a.wanted2 = pol.wanted;
+  // 先把鐵捲門打開（星星還在：門開著警察找得到你）→ 站在門裡面「關鐵捲門」
+  w.teleport(H.gw(3.4, -1.7, 0)); X.step(3); a.open = H.press(); for (let i = 0; i < 200 && G.door.t < 1; i++) X.step(1);
   a.walk = H.walkLocal([[2.5, 0.5]]); X.step(5);
   a.act = H.actText(); a.press = H.press(); let n = 0; for (; n < 300 && pol.wanted > 0; n++) X.step(1);
   a.after = { s: +(n / 60).toFixed(1), door: G.door.t, wanted: pol.wanted, state: pol.state, said: X.toasts.slice(-2), safe: pol.telemetry().player.safe };
@@ -600,7 +599,8 @@ const s4b = await ev(() => {
   return a;
 });
 console.log('  garage:', JSON.stringify(s4b));
-check(s4b.wanted === 1 && s4b.act === '關鐵捲門' && s4b.press === '關鐵捲門', 'wanted, walking inside your garage with the door open: 「關鐵捲門」');
+check(s4b.wanted === 1 && s4b.enter === '進車庫' && s4b.pressE === '進車庫' && s4b.in && s4b.doorIn === 0 && s4b.wanted2 === 1, 'wanted, at your garage on the garage street: 「進車庫」 → inside the marble garage, roller door shut');
+check(s4b.open === '開鐵捲門' && s4b.act === '關鐵捲門' && s4b.press === '關鐵捲門', 'still wanted, opened the door and walked back inside: 「關鐵捲門」');
 check(s4b.after && s4b.after.wanted === 0 && s4b.after.door === 0 && s4b.after.said.some((x) => /躲回車庫/.test(x)), `closed the garage door: stars cleared in ${s4b.after?.s} s (「躲回車庫了，警察找不到你！」)`);
 check(s4b.reopen === '開鐵捲門', 'afterwards the door button is the normal 「開鐵捲門」 again');
 await ev(() => { const pol = window.__P3().police; if (pol.state !== 'free') pol.clear(); }); // 沒過的話：下一段從乾淨的開始

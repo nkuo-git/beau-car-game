@@ -218,7 +218,7 @@ function buildOrbay(V, o = {}) {
   box('main', [TW0 + 0.08, 0, IZ1 - 0.74, TW0 + 0.9, 0.8, IZ1 - 0.08], C('#c9ccd1')); box('main', [TW1 - 0.9, 0, IZ1 - 0.74, TW1 - 0.08, 0.8, IZ1 - 0.08], C('#c9ccd1')); // 工具櫃
   addBox((TW0 + TW1) / 2, IZ1 - 0.41, (TW1 - TW0) / 2, 0.37, 0.95);
   // 牆邊的油桶兩個（西北角）
-  for (const z of [IZ0 + 1.1, IZ0 + 2.0]) { cyl('main', IX0 + 0.42, z, 0, 0.88, 0.28, 10, C('#c23b22')); addBox(IX0 + 0.42, z, 0.3, 0.3, 0.9); }
+  for (const z of [IZ0 + 1.1, IZ0 + 2.0]) { cyl('main', IX0 + 0.34, z, 0, 0.88, 0.28, 10, C('#c23b22')); addBox(IX0 + 0.34, z, 0.28, 0.28, 0.9); } // 貼牆：1 號格停怪獸卡車（寬 3.81）也碰不到（越野車車庫裡面的東西輾不到：town.src.js inGarage）
 
   // ---- 鐵捲門（InstancedMesh：22 片，捲到門上面的捲筒盒裡）----
   const SLAT = 0.2, NS = Math.ceil(G.DH / SLAT) + 1, YT = G.DH + 0.26, R0 = 0.2, HW = (G.DZ1 - G.DZ0) / 2 + 0.07;

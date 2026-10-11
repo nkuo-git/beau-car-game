@@ -457,6 +457,7 @@ body.driving .stage { max-height: 72vh; }
 @media (max-width: 560px) { body.driving .stage { aspect-ratio: auto; height: 560px; width: auto; margin-inline: -16px; border-radius: 0; border-inline: 0; } }
 /* 很窄的手機（不到 390）：速度放不進方向鍵和煞車中間，往上移到方向鍵上面 */
 @media (max-width: 389px) { body.driving .stage .dv-spd { bottom: 96px; } }
+@media (max-width: 399px) { body.driving .stage .dv-spd.tach { bottom: 96px; } } /* 轉速表（圓的，80 寬）：不到 400 就放不下 */
 /* 在改車廠裡：畫面矮一點，停好的車和下面的零件一起看得到 */
 body.driving.shopping .stage { aspect-ratio: 16 / 9; height: auto; max-height: 40vh; }
 .drivebar, .shop { display: flex; flex-direction: column; gap: 12px; }

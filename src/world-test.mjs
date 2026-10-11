@@ -22,9 +22,9 @@ const docs = path.resolve(docsArg || path.join(dir, '../docs/try'));
 const parent = path.dirname(docs);
 fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.glb': 'model/gltf-binary', '.json': 'application/json', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
-const hook = 'window.__R = () => race; window.__D = () => ({ on: DRIVE.on, drv, walker, trip, VIL, cur, indoor });'
+const hook = 'window.__R = () => race; window.__D = () => ({ on: DRIVE.on, drv, walker, trip, VIL, cur, indoor, GAR });'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
-  + ' window.__NET = () => NET; window.__CARS = () => CARS; window.__HILL = () => HILL; window.__TD = () => tripDest; window.__POL = () => police; window.__GAME = () => GAME;'
+  + ' window.__NET = () => NET; window.__CARS = () => CARS; window.__HILL = () => HILL; window.__TD = () => tripDest; window.__POL = () => police; window.__GAME = () => GAME; window.__HOME = () => HOME;'
   + ' renderer.setAnimationLoop = function (cb) { clearInterval(this.__iv); this.__iv = cb ? setInterval(() => { const t = performance.now(); cb(t); window.__ticks = (window.__ticks || 0) + 1; }, 30) : 0; };'
   + ' window.__thin = (n) => { if (!renderer.__rr) { renderer.__rr = renderer.render.bind(renderer); renderer.__rn = 0; renderer.render = (s, c) => { if (++renderer.__rn % renderer.__every === 0) renderer.__rr(s, c); }; } renderer.__every = Math.max(1, n | 0); }; window.__thin(300);'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
@@ -208,7 +208,7 @@ await click(A, '#nwWorldBtn');
 await waitFor(A, () => window.__beauWorld.w && !document.getElementById('nwWorld').hidden);
 a = await dlg(A);
 console.log('1', el(), JSON.stringify(a));
-check(a.title === '線上的人（1/16）' && /大便龍車神（你）/.test(a.ppl[0] || '') && /GC8 · 在車庫/.test(a.ppl[0] || ''), `list 1/16: you, GC8, 在車庫 (${a.ppl})`);
+check(a.title === '線上的人（1/6）' && /大便龍車神（你）/.test(a.ppl[0] || '') && /GC8 · 在車庫/.test(a.ppl[0] || ''), `list 1/6: you, GC8, 在車庫 (${a.ppl})`);
 check(getAt('world/s/0') === 'u1' && getAt('world/m/u1/n') === '大便龍車神' && getAt('world/m/u1/inv') === 1, 'database: slot 0, member u1, invites on');
 check(await A.evaluate(() => localStorage.getItem('beau.world') === '1'), 'remembered: next time the game goes in by itself');
 await waitFor(A, () => true, null, 500);
@@ -224,7 +224,7 @@ await waitFor(B, () => window.__beauWorld.w && document.getElementById('nwPpl').
 await waitFor(A, () => document.getElementById('nwPpl').children.length === 2, null, 10000);
 let bb = await dlg(B); a = await dlg(A);
 console.log('2', el(), JSON.stringify(bb.ppl), JSON.stringify(a.ppl));
-check(bb.title === '線上的人（2/16）' && /大便龍車神 GC8 · 在車庫/.test(bb.ppl[0]) && /阿明快車手（你）/.test(bb.ppl[1]), `B sees both, in join order (${bb.ppl})`);
+check(bb.title === '線上的人（2/6）' && /大便龍車神 GC8 · 在車庫/.test(bb.ppl[0]) && /阿明快車手（你）/.test(bb.ppl[1]), `B sees both, in join order (${bb.ppl})`);
 check(await B.evaluate(() => { const li = document.querySelector('#nwPpl li'); return ['找', '看', '封鎖'].every((l) => li.querySelector(`button[aria-label^="${l}"]`)) && !li.querySelector('button[aria-label^="去找"]'); }), 'other people have 🏁 / 🚗 / 🚫 (no 去找他 while in the garage)');
 check(getAt('world/s/1') === 'u2', 'B took slot 1');
 await shot(B, `${prefix}-2-list.png`);
@@ -233,6 +233,22 @@ await shot(B, `${prefix}-2-list.png`);
 for (const p of [A, B]) { await closeDlg(p); await click(p, '#driveOut'); }
 const outOK = await Promise.all([A, B].map((p) => waitFor(p, () => window.__D().trip && window.__D().on && window.__D().walker, null, 240000)));
 check(outOK[0] && outOK[1], 'both went out on their own (no host needed)');
+// Nick 2026-10-11「每個人要從自己的車庫出來」：A 是世界的 1 號、B 是 2 號＝車庫街 1、2 號是他們家；在自己的大理石車庫裡面朋友看不到（名單「在車庫」）
+const home3 = await Promise.all([A, B].map((p) => p.evaluate(() => ({ slot: window.__HOME().slot, in: window.__HOME().in, g: window.__D().VIL.places.garage.pos }))));
+await A.waitForTimeout(1500);
+const hidden3 = await A.evaluate(() => { const q = window.beauGame.net.info.peers[0]; return !!q && !q.vis; });
+console.log('   homes', JSON.stringify(home3), hidden3, getAt('world/m/u2/w'));
+check(home3[0].slot === 0 && home3[1].slot === 1 && home3[0].in && home3[1].in && hidden3 && getAt('world/m/u2/w') === '在車庫', `each starts inside their own garage = garage street #1 (A) and #2 (B); A can’t see B while B is inside (B: 「${getAt('world/m/u2/w')}」)`);
+const walked3 = []; // 站在鐵捲門裡面、往外走（一步一步走：走出去就停）
+for (const p of [A, B]) walked3.push(await p.evaluate(() => { const D = window.__D(), G = D.GAR, W = D.walker, HM = window.__HOME(); G.door.open(0.1); for (let i = 0; i < 20; i++) window.__dstep(1);
+  W.teleport(G.toWorld({ x: G.zones.door.x - 2, z: 0, heading: 0 })); window.__dstep(2); let n = 0;
+  for (; n < 600 && HM.in; n++) { const t = W.telemetry(); const a = D.VIL.places.garage.lot.heading; W.setInput({ x: -Math.sin(a - t.camYaw) * 0.8, y: Math.cos(a - t.camYaw) * 0.8 }); window.__dstep(1); }
+  W.setInput(null); window.__dstep(3); return !HM.in; }));
+const at3 = await Promise.all([A, B].map((p) => p.evaluate(() => { const t = window.__D().walker.telemetry(), d = window.__HOME().door; return +Math.hypot(t.x - d.x, t.z - d.z).toFixed(1); })));
+console.log('   out the door', JSON.stringify(walked3), JSON.stringify(at3));
+const act3 = await A.evaluate(() => { window.__dstep(2); const W = window.__D().walker, t = W.telemetry(), HM = window.__HOME(); return { act: W.action, mode: t.mode, paused: t.paused, near: t.near, speed: +t.speed.toFixed(2), in: HM.in, d: +Math.hypot(t.x - HM.door.x, t.z - HM.door.z).toFixed(1) }; });
+check(act3.act === '進車庫', `at your own garage door: 「${act3.act}」 (${JSON.stringify(act3)})`);
+check(walked3[0] && walked3[1] && at3[0] < 3 && at3[1] < 3, `walked out of the roller door → standing in front of their own garage on the garage street (${at3} m from the door)`);
 const seeB = await waitFor(A, () => { const i = window.beauGame.net.info; return i.peers[0] && i.peers[0].vis && i.peers[0].walk && i.marks === 1; }, null, 60000);
 const seeA = await waitFor(B, () => { const i = window.beauGame.net.info; return i.peers[0] && i.peers[0].vis && i.peers[0].walk; }, null, 60000);
 console.log('3', el(), seeB, seeA, JSON.stringify(await info(A)));
@@ -427,7 +443,7 @@ await click(A, '#nwWaitX'); await closeDlg(A);
 
 // ---- 9 車庫街：名牌、走到門口「看他的車庫」 ----
 const st9 = await info(A);
-check(JSON.stringify(st9.gst) === JSON.stringify(['大便龍車神', '阿明快車手']), `garage street signs: first is you, then B (${st9.gst})`);
+check(JSON.stringify(st9.gst) === JSON.stringify(['大便龍車神', '阿明快車手', null, null, null, null]), `garage street signs: each person on their world number: #1 A (you), #2 B, the rest empty (${st9.gst})`);
 const door9 = await A.evaluate(() => { const q = window.__D().VIL.places.garst.slots[1]; window.__D().drv.teleport({ x: q.door.x + 1.5, z: q.door.z, heading: 0 }); window.__D().drv.setInput({ throttle: 0, brake: 1, steer: 0 }); return q.door; });
 const near9 = await waitFor(A, () => { const b = document.querySelector('.nt-gar'); return b && !b.hidden && getComputedStyle(b).display !== 'none'; }, null, 15000);
 const btn9 = await A.evaluate(() => document.querySelector('.nt-gar').textContent);
@@ -474,13 +490,13 @@ const blip = await waitFor(A, () => window.__beauWorld.w.mem.length === 2, null,
 check(blip && getAt('world/m/u2') != null, 'B’s connection dropped (server took B out) → B’s phone went back in by itself');
 await B.evaluate(() => window.beauWorld.leave());
 await waitFor(A, () => window.__beauWorld.w.mem.length === 1, null, 10000);
-for (let n = 1; n < 16; n++) { putAt(DB, `world/s/${n}`, `x${n}`); putAt(DB, `world/m/x${n}`, { n: `朋友${n}`, car: 'gc8', s: String(n), j: Date.now(), w: '在路上', inv: 1 }); putAt(DB, `world/p/x${n}`, { t: Date.now(), x: 0, z: 0, h: 0, v: 0, o: 0 }); }
+for (let n = 1; n < 6; n++) { putAt(DB, `world/s/${n}`, `x${n}`); putAt(DB, `world/m/x${n}`, { n: `朋友${n}`, car: 'gc8', s: String(n), j: Date.now(), w: '在路上', inv: 1 }); putAt(DB, `world/p/x${n}`, { t: Date.now(), x: 0, z: 0, h: 0, v: 0, o: 0 }); }
 notify();
 await openNet(B); await click(B, '#nwWorldBtn');
 await waitFor(B, () => /世界滿了/.test(document.getElementById('nwMenuNote').textContent), null, 10000);
-check(/世界滿了（最多 16 個人）/.test(await B.textContent('#nwMenuNote')) && !(await B.evaluate(() => window.__beauWorld.w)), '17th person: 「世界滿了（最多 16 個人），等一下再來。」');
-check((await dlg(A)).title === '線上的人（16/16）' || await A.evaluate(() => window.__beauWorld.w.mem.length === 16), 'A sees 16/16');
-for (let n = 1; n < 16; n++) putAt(DB, `world/p/x${n}/t`, Date.now() - 200000);
+check(/世界滿了（最多 6 個人）/.test(await B.textContent('#nwMenuNote')) && !(await B.evaluate(() => window.__beauWorld.w)), '7th person: 「世界滿了（最多 6 個人），等一下再來。」');
+check((await dlg(A)).title === '線上的人（6/6）' || await A.evaluate(() => window.__beauWorld.w.mem.length === 6), 'A sees 6/6');
+for (let n = 1; n < 6; n++) putAt(DB, `world/p/x${n}/t`, Date.now() - 200000);
 notify();
 const cleaned = await waitFor(A, () => window.__beauWorld.w.mem.length === 1, null, 45000);
 check(cleaned && Object.keys(getAt('world/s') || {}).length === 1, 'people who disconnected without cleaning up (no position for minutes) get cleared');

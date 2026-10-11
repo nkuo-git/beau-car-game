@@ -563,7 +563,7 @@ const back9 = await p.evaluate(() => {
   const nd = near(); calm(450); // 回到旁邊（15 公尺內）再 15 秒：超過 20 秒了，可是人在旁邊
   const tE = D.drv && D.drv.telemetry(), close = { crushed: !!c.crushed, phase: j ? j.phase : null, since: since(), d: nd, on: window.__D().on, drv: !!window.__D().drv, dEnd: tE ? +Math.hypot(tE.x - c.x, tE.z - c.z).toFixed(1) : null };
   away(); H.step(6); // 一離開就開始長
-  const grow = { phase: j ? j.phase : null, k: j ? +j.k.toFixed(2) : null, crushed: !!c.crushed };
+  const grow = { phase: j ? j.phase : null, k: j ? +j.k.toFixed(2) : null, crushed: !!c.crushed, jobs: C.big.map((k) => [+k.x.toFixed(1), +k.z.toFixed(1), k.phase, +(k.since || 0).toFixed(1), k.grp.map((g) => g.t + (g.kind ? ':' + g.kind : '')).slice(0, 3).join('/')]) };
   calm(150); // 5 秒
   let wd = 0; wl.forEach((m, n) => { const P = m.geometry.attributes.position.array, S = snap[n]; for (let i = 1; i < P.length; i += 3) wd = Math.max(wd, Math.abs(P[i] - S[i])); });
   let md = 0; if (j) for (const sg of j.segs) { const P = sg.A.array; for (let i = 0; i < sg.idx.length; i++) md = Math.max(md, Math.abs(P[sg.idx[i] * 3 + 1] - sg.y0[i])); }

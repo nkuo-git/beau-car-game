@@ -519,6 +519,9 @@ console.log('4 targets', JSON.stringify(T4));
 // 內湖路一段往東開到底 → 放回港墘站（港墘路口旁邊）→ 港墘路往南開到底 → 港墘路整條往北開
 for (const [k, road, label] of [['nh:e', '內湖路一段', 'east along 內湖路一段'], ['nh:s', '港墘路|內湖路一段', 'from 港墘站 south to the end of 港墘路'], ['nh:n', '港墘路', 'north along the whole 港墘路']]) {
   if (k === 'nh:s') await p.evaluate(() => { const D = window.__D(), sp = D.VIL.places.neihu.spawn; D.drv.teleport({ x: sp.x, z: sp.z, heading: sp.heading }); window.__dstep(30); });
+  if (k === 'nh:n') await p.evaluate(() => { // 從港墘路的南端（上一段的終點）停好、車頭朝路線出發（上一段開到 14 公尺內就算到：車子滑多遠看當時的車流，不要讓它決定這一段怎麼繞）
+    const D = window.__D(), T = window.__nhT, s = T['nh:s'], r = D.VIL.neihu.routeTo(s[0], s[1], T['nh:n'][0], T['nh:n'][1]), q = r.pts.find((pt) => Math.hypot(pt[0] - s[0], pt[1] - s[1]) > 3) || T['nh:n'];
+    D.drv.teleport({ x: s[0], z: s[1], heading: Math.atan2(-(q[1] - s[1]), q[0] - s[0]) }); window.__dstep(30); });
   await p.evaluate(() => { window.__roadLog = []; });
   const L = await leg(k, `(() => { const t = window.__D().drv.telemetry(), q = window.__nhT['${k}']; return Math.hypot(t.x - q[0], t.z - q[1]) < 14; })()`, {}, 300);
   const log = await p.evaluate(() => window.__roadLog), on = log.filter((r) => road.split('|').includes(r)).length / Math.max(1, log.length), ri = await drawAndShot(`4-${k.slice(3)}-${road.split("|")[0]}`);

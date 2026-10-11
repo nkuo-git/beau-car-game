@@ -12,13 +12,13 @@ Garage street: 6 garages (Nick asked to cut it from 12 to 6), see below.
 - 🏁: pick 賽車場 3 圈 / 400 公尺 / 爬山 → 「等 X 回答⋯」 (20 s bar, 取消). The other phone gets a card 「🏁 X 找你比…！ 他開 GC8」 好／不要 with a 15 s bar (no answer = 不要). Invites are one at a time; while racing or asking someone, invites are auto-answered as busy.
 - Race: same as rooms (seats both at the start, server-time start, results). 再比一次 = the one who asked. 回去開車 ends the match; the other side's card then says 「對方離開了」 (their own race keeps going).
 - 🚫 block: both sides stop seeing each other (list, cars, map, emotes) and the blocked one can't send invites (rules too).
-- Max 16 at once: 「世界滿了（最多 16 個人），等一下再來。」
+- Max 6 at once (16 until 2026-10-11 evening; one per garage on the garage street): 「世界滿了（最多 6 個人），等一下再來。」
 
 ## Data (Realtime Database)
 ```
-world/s/{0..15}   uid                                  (16 slots = capacity)
+world/s/{0..5}    uid                                  (6 slots = capacity = garage street #1–6; rules accept 0..15)
 world/m/{uid}     {n, car, l, ch, s, j, w, inv}
-world/p/{uid}     {t, x, z, h, v, o, k, rp, rs}        8/s moving, heartbeat 1.5 s / 3 s
+world/p/{uid}     {t, x, z, h, v, o, k, rp, rs, w, pc, jl}   8/s moving, heartbeat 1.5 s / 3 s
 world/e/{uid}     {e, t}
 world/bl/{uid}/{other}   other's name                  (block)
 world/ch/{to}/{from}     {kind, t, id}                 (invite)
@@ -202,6 +202,24 @@ A parent has to paste them: Firebase console → Realtime Database → 規則 �
 ## Garage street (車庫街, village.js 第 16 批)
 - West of your garage: the corner of the village road (node GW, -345,-72) became a T junction; a dead-end street runs west to GST (-410,-72). 3 small garages on each side (white walls, closed roll-up door, a dark name board). Nick first got 12, then asked for 6 (「車庫改成六間就好」).
 - Fields/bamboo there were removed with the throwaway-Builder trick (random numbers still consumed, so nothing else in the village moves). `V.places.garst.slots[i]` = { x, z, ry, sign{x,y,z,ry,w,h}, door{x,z} }, order north/south alternating from the junction.
-- net.src.js draws all name boards as one mesh with one canvas atlas (1 draw call) while in the world: slot 1 = you (orange 「名字（你）」), then online people in join order (「小明的車庫」), the rest 「空的」. Offline the boards stay blank.
-- Stop (under 4 m/s) within 6 m of a door: button 「🚗 看小明的車庫」 → the site drives you home and opens the garage visit (world.js `visitStreet`); your own slot says 「🏠 回你的車庫」.
+- net.src.js draws all name boards as one mesh with one canvas atlas (1 draw call) while in the world: each person on their world slot (s 0–5 → garage 1–6; you in orange 「名字（你）」, others 「小明的車庫」), the rest 「空的」. Offline the boards stay blank.
+- Stop (under 4 m/s) within 6 m of someone else's door: button 「🚗 看小明的車庫」 → the site drives you home and opens the garage visit (world.js `visitStreet`). Your own door is 「進車庫」 (below).
 - Walking view on the street: ~59 draw calls, 0.21 M triangles.
+
+## Own garage on the street (2026-10-11 evening, mock https://claude.ai/artifact/HY57ifTtvknBBRDBoNJk6k #1, Nick 「Ok」)
+- Nick: 「每個人要從自己的車庫出來 … 應該不用一開始那個統一的車庫」. Your home = garage street slot `homeSlot()` = your world slot (W.slot, passed as `net.join({ slot })` / `net.slot(n)` after a re-claim); offline = slot 0 (#1).
+- The marble garage (GAR, room.js) still sits at `places.garage.lot` (-300,-97.5) — all the lift/parking/bed/police-safe code is unchanged — but it is a portal now (town.src.js `HOME`):
+  - `HOME.in` true = you are inside. Only then is GAR drawn (`GAR.group.visible`), its exterior never (`GAR.exterior.visible = false` after `cull`), its colliders given to drive/walk, its buttons (lifts, bed, 開鐵捲門, 關鐵捲門 when wanted) shown, and the police `safe` flag possible.
+  - Outside, GAR is invisible and has no colliders; a grass patch (`home-grass`) fills the hole village.js leaves under it for the lift pits. Cars parked inside are hidden and don't block (arrangeCars / walkCars skip them).
+  - Crossing the roller door outwards (car centre or walker more than 0.3 m past the door line) → `homeOut`: teleport to your slot (car on the street in front, heading east toward the GW junction; walker 2 m in front of the door facing out), door snaps shut.
+  - Within 7 m of your slot's door point (a car must be under 4 m/s; on foot any speed) → big button 「進車庫」 → `homeEnter`: back inside GAR (car in the middle facing the door, or 5.6 m deeper if another car is there; walker at the usual start spot), door closed. Wanted? Going in with the door shut counts as hiding (police `safe`), so the stars clear after the usual wait.
+  - Any other jump out (race over, 去這裡, tests' teleport) → HOME.in false; a jump into GAR's inside box → true. A trip always starts inside.
+  - Outside, a low hedge (`home-hedge`, one InstancedMesh, colliders tagged `homehedge`, `noCrush`) rings GAR's footprint so nobody walks or drives into the invisible garage. The old front yard stays crush-proof (`places.garage.yard` = the old zone, used by `crushSafe`), and the 車庫街 garages are crush-proof too (`garst` buildings). Things inside the 越野車車庫 annex are crush-proof as well (`inGarage` covers `OB.inside`), and its two oil drums moved against the wall (`IX0 + 0.34`) so a monster truck in bay 1 doesn't touch them — before, parking there flattened them and called the police.
+- `places.garage` now points at your slot: pos/zone = in front of your door, `via: 'garst'` + `end: door` → village.js `route()` drives to the garage street and trims the line at your door (`trimTo`). So 回車庫 and the minimap 家 lead to your slot.
+- In your garage you count as not out: `net.state()` sends o 0 and `place()` says 在車庫, so friends don't see you and their list says 在車庫.
+- World cap is 6 now (`MAX` in world.js; `NET_MAX` 5 peers). The RTDB rules still accept slots 0–15 (old clients); no rules change.
+
+## Seeing friends chased / arrested (same mock #2)
+- `world/p` carries extra fields while wanted: `w` (stars 1–3), `pc` ([x, z, h] × up to 3 police cars within 200 m, from police-ai `npcCars`), `jl` 1 while caught/jailed. Rules only validate x/z/h/t, so no rules change.
+- Receivers: ★ after the name on the tag (tag texture redrawn when the count changes), up to 4 police cars total (police.js `makePoliceCar`, 2 draw calls each, lights flashing, visual only — no collision), interpolated with the same buffer as the friend's car.
+- jl 0→1 → toast 「🚓 X被警察抓走了！」 (not when you join while they are already jailed). `place()` says 「在拘留室 m:ss」 in 10-second steps (police-ai `jailLeft`), so the list counts down without writing every second.
