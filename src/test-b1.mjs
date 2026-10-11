@@ -28,7 +28,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
   + ' window.__look = () => LOOKP; window.__cam = () => ({ camCap, maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
-  + ' window.__GH = () => GH; window.__ghostUnpack = (g) => ghostUnpack(g); window.__ghostAt = (G, t, o) => ghostAt(G, t, o);' // 鬼影車排行榜（ghost.src.js）
+  + ' window.__box = (o) => new THREE.Box3().setFromObject(o); window.__GH = () => GH; window.__ghostUnpack = (g) => ghostUnpack(g); window.__ghostAt = (G, t, o) => ghostAt(G, t, o);' // 鬼影車排行榜（ghost.src.js）
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -908,7 +908,8 @@ await p.evaluate(() => {
   window.__fast = true; window.__ghChk = null;
   const chk = () => { const r = window.__R(); if (!r) return; if (r.phase === 'run' && r.green != null && r.t - r.green > 2.5 && !window.__ghChk) { const GH = window.__GH(), O = GH.obj, o = [0]; window.__ghostAt(GH.arm.G, r.t - r.green, o);
     const mats = []; O.car.traverse((m) => { if (m.isMesh && m.visible) mats.push(m.material); });
-    window.__ghChk = { play: GH.play?.board, vis: O.car.visible, dx: +Math.abs(O.car.position.x - (o[0] - O.nose)).toFixed(3), z: O.car.position.z, lane: r.meInfo && +r.meS.car.position.z.toFixed(2), see: mats.every((m) => m.transparent && m.opacity < 0.5) }; }
+    window.__ghChk = { play: GH.play?.board, vis: O.car.visible, dx: +Math.abs(O.car.position.x - (o[0] - O.nose)).toFixed(3), z: O.car.position.z, lane: r.meInfo && +r.meS.car.position.z.toFixed(2), see: mats.every((m) => m.transparent && m.opacity < 0.5),
+      opp: (() => { const Q = r.oppS; Q.car.updateMatrixWorld(true); const bx = window.__box(Q.body); return { dx: +Math.abs(bx.max.x - r.opp.x).toFixed(3), x: +r.opp.x.toFixed(1), vis: Q.car.visible }; })() }; }
     if (!window.__ghChk) requestAnimationFrame(chk); };
   chk(); document.getElementById('raceGo').click();
 });
@@ -916,6 +917,7 @@ await p.waitForFunction(() => { const r = window.__R(); return r && r.phase === 
 await p.evaluate(() => { window.__fast = false; }); await p.waitForTimeout(1500);
 const dg = await p.evaluate(() => ({ chk: window.__ghChk, res: document.getElementById('result').textContent, runs: window.__runs.length }));
 console.log('  drag ghost:', JSON.stringify(dg));
+check(dg.chk.opp.vis && dg.chk.opp.dx < 0.05, `again (再比一次): the opponent's car is on its lane where it really is, not left behind at the finish (${dg.chk.opp.dx} m off at ${dg.chk.opp.x} m)`);
 check(dg.chk.play === 'drag' && dg.chk.vis && dg.chk.dx < 0.01 && Math.abs(dg.chk.z - dg.chk.lane) < 0.01 && dg.chk.see, `again with the ghost: the see-through ghost runs in your lane exactly as recorded (${dg.chk.dx} m off)`);
 check(/👻 剛才的你 [0-9.]+ 秒：你(比鬼影(快|慢) [0-9.]+ 秒|跟鬼影一樣快！)/.test(dg.res) && dg.runs === 2, `the result says how you did against the ghost (${(dg.res.match(/👻[^。]*秒/) || [''])[0]})`);
 await p.evaluate(() => window.beauGame.clearGhost());
