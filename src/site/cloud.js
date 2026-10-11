@@ -19,7 +19,7 @@
     appId: '1:793707590323:web:3a8470065243651dd4f6c6',
   };
   const FB = 'https://www.gstatic.com/firebasejs/10.14.1/';
-  // 即時資料庫（Realtime Database）：一起開車、一起比賽、參觀車庫（site/room.js）；規則在 notes/room.md（家長貼到 Firebase 主控台）
+  // 即時資料庫（Realtime Database）：大家的世界、找人比賽、參觀車庫（site/world.js）；規則在 notes/world.md（家長貼到 Firebase 主控台）
   const RTDB_URL = 'https://beau-car-game-default-rtdb.asia-southeast1.firebasedatabase.app';
   const KEYS = ['carid.tune', 'carid.tune.full', 'carid.sound', 'carid.roomq', 'carid.theme', 'carid.accent']; // 跟搬家一樣
   const META = 'beau.cloud', MAX = 512 * 1024, SAVE_DELAY = 2500;
@@ -36,7 +36,7 @@
     const db = F.getFirestore(app), ref = (uid) => F.doc(db, 'saves', uid);
     let rtP = null;
     return {
-      // 即時資料庫：第一次用（開房間、加入、參觀車庫）才下載；路徑都是 'rooms/K7Q2/p/<uid>' 這種字串
+      // 即時資料庫：第一次用（進入世界、參觀車庫）才下載；路徑都是 'world/p/<uid>' 這種字串
       rt: () => (rtP ||= import(FB + 'firebase-database.js').then((D) => {
         const rdb = D.getDatabase(app, RTDB_URL), R = (p) => D.ref(rdb, p);
         let off = 0; D.onValue(R('.info/serverTimeOffset'), (s) => { off = +s.val() || 0; });

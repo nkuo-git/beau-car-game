@@ -1,22 +1,25 @@
-// ==== 連線第 2–4 步：一起開車、一起比賽、參觀車庫（net.src.js；build-art.mjs／build-app.mjs 接在 ghost.src.js 後面）====
-// Nick 2026-10-10「那可以開始做上面12點的前3點」；草稿 https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo 第 3–6、9 張（Nick 和爸媽都說好）
-// 網站（site/room.js）管房間碼、即時資料庫；這裡只管遊戲裡面：朋友的車和人（頭上有名字）、表情、小地圖／大地圖上的朋友、一起比賽、參觀車庫
+// ==== 連線：大家的世界（一起開車、找人比賽、參觀車庫）（net.src.js；build-art.mjs／build-app.mjs 接在 ghost.src.js 後面）====
+// 內容 8：房間（Nick 2026-10-10，草稿 https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo）；2026-10-11 改成只有一個世界（Nick「不用房間 選擇連線的人就加入一個永久的世界」，
+//   草稿 https://claude.ai/artifact/QDwK28dEsEkumkvR2AiP9Y，Nick 說爸媽同意了）：進入世界的人都看得到彼此（最多 16 個人），點名字找他比賽（兩個人），可以封鎖
+// 網站（site/world.js）管世界、邀請、封鎖、即時資料庫；這裡只管遊戲裡面：別人的車和人（頭上有名字）、表情、小地圖／大地圖上的點、比賽、邀請的卡片、去找他、參觀車庫
 // window.beauGame.net（網站叫的）：
-//   join({ code, me, host })／leave()；members([{ uid, n, car, l（外觀）, ch（角色的樣子）}])（不含自己；順序＝進房間的順序，決定顏色）
+//   join({ code, me, host })／leave()；members([{ uid, n, car, l（外觀）, ch（角色的樣子）}])（不含自己、不含封鎖的；順序＝進世界的順序，決定顏色；最多 15 個）
 //   snap(uid, { t, x, z, h, v, o, k, rp, rs })：朋友的位置（t＝伺服器時間毫秒；o：0 不在外面、1 開車、2 走路、3 在 400 公尺；rp＝這一場跑多遠、rs＝第幾場）
 //   emote(uid, e)：朋友送的表情（NET_E 的第幾個）；clock(off)：伺服器時間＝Date.now()＋off
 //   state() → 自己現在的（送給朋友）；look() → { car, l, ch }（自己開的車、外觀、角色）；garage() → { cur, cars: { key: 外觀 } }（參觀車庫用）
-//   race({ seq, kind, go, order })：房主選的（kind：out 一起出門｜circuit 賽車場 3 圈｜drag 400 公尺｜hill 爬山；go＝出發的伺服器時間，0＝還在等大家準備好；order＝房間裡的人：起跑格）
+//   race({ seq, kind, go, order })：比賽（kind：circuit 賽車場 3 圈｜drag 400 公尺｜hill 爬山；go＝出發的伺服器時間，0＝還在等兩個人準備好；order＝比的人：起跑格）；host(uid)＝發起的人（可以按「再比一次」）
 //   results(seq, { uid: 秒 | −1（沒跑完）})；where() → 'garage' | 'out' | 'race'（參觀車庫只能在車庫頁）
-//   遊戲發 window 事件 'beau-net'（detail.type）：emote { e }｜ready { seq }｜fin { seq, t }（t＝−1 沒跑完）｜again（房主按「再來一場」）｜room（點房間那一塊）
+//   invite({ id, name, kind, car })：別人找你比賽（遊戲裡跳出卡片：好／不要，15 秒）；uninvite(id)；goTo(uid)＝去找他（目的地＝他現在在哪裡，跟著箭頭）；place() → 現在在哪裡（給名單看：在車庫、在山頂⋯）
+//   遊戲發 window 事件 'beau-net'（detail.type）：emote { e }｜ready { seq }｜fin { seq, t }（t＝−1 沒跑完）｜again（發起的人按「再比一次」）｜back（「回去開車」）｜list（點右邊那一塊：線上的人）｜answer { id, ok }（邀請：好／不要）
 // window.beauGame.visit({ name, cars: [{ k, l }], likes, liked, onLike, onClose }) → { setLikes(n, liked), close() } | null（不在車庫頁）
 // 安全（草稿說好的）：只有名字（網站擋過髒話）；表情只有固定的幾個；朋友的車在比賽中穿過去，平常會擋（撞到照兩台車的速度算）；朋友走路的人不會被撞到（穿過去）；警察只追自己
 // 效能：朋友一台車＝輕量車 4 個 draw call＋影子＋名字；走路的人 2 個＋名字；每一格不 new（位置照 0.2 秒前的兩筆內插）
 const NET_E = ['👍', '😂', '好車！', '跟我來', '比一場？'];
-const NET_COL = ['#4a8cff', '#46c46f', '#f2c230', '#ff5fa2']; // 朋友的顏色（進房間的順序）；你自己是橘色
+const NET_COL = ['#4a8cff', '#46c46f', '#f2c230', '#ff5fa2', '#a77bff', '#2fd3c7', '#ff8f5a', '#9bd14a', '#5ac8fa', '#e05ad7', '#ffd166', '#7f8cff', '#4cd98f', '#ff6b8b', '#c9a227']; // 別人的顏色（進世界的順序）；你自己是橘色
+const NET_MAX = 15, NET_FAR = 320; // 最多看幾個人；多遠以外只畫地圖上的點（車、人不畫）
 const NET_DELAY = 220; // 畫朋友的位置：0.22 秒前的（網路不穩也平順）
 const NET_HOLD = { throttle: 0, brake: 1, steer: 0, handbrake: 1 };
-const NET = { on: false, code: '', me: '', host: '', off: 0, mem: [], P: new Map(), race: null, doneSeq: 0, outSeq: 0, hud: null, marks: [], cols: [], wkT: 0, setD: null, setW: null, tex: {}, shGeo: null, shMat: null };
+const NET = { on: false, code: '', me: '', host: '', off: 0, mem: [], P: new Map(), race: null, doneSeq: 0, outSeq: 0, hud: null, marks: [], cols: [], wkT: 0, setD: null, setW: null, tex: {}, shGeo: null, shMat: null, inv: null, invT: 0, goal: null };
 const netNow = () => Date.now() + NET.off;
 const netEv = (type, d = {}) => { try { window.dispatchEvent(new CustomEvent('beau-net', { detail: { type, ...d } })); } catch { /* 沒有人聽就算了 */ } };
 const netWorld = () => DRIVE.on && !indoor && !!VIL; // 在外面（開車、走路；不含房子裡面、400 公尺）
@@ -130,17 +133,19 @@ function netStep(dt) {
   netHudTick(dt);
   netRaceTick(dt);
   const show = netWorld(), T = netNow() - NET_DELAY, now = netNow(), race = !!(NET.race && NET.race.kind !== 'out') || !!ciRace || !!orRace;
+  const me = show ? (walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : null) : null, mx = me ? me.x : 0, mz = me ? me.z : 0;
   NET.cols.length = 0;
   for (const P of NET.P.values()) {
     const c = P.cur, fresh = now - P.last < 6000, s = show && fresh && (c.o === 1 || c.o === 2) ? netSample(P, T) : null;
-    const car = !!s && c.o === 1, walkin = !!s && c.o === 2;
+    const near = !!s && (!me || (s.x - mx) * (s.x - mx) + (s.z - mz) * (s.z - mz) < NET_FAR * NET_FAR); // 遠的：只有地圖上的點
+    const car = near && c.o === 1, walkin = near && c.o === 2;
     if (car) netCar(P, c.k);
     if (walkin) netChr(P);
     const O = car ? P.obj : null, C = walkin ? P.chr : null;
     if (P.obj) { P.obj.car.visible = !!O; P.obj.sh.visible = !!O; }
     if (P.chr) P.chr.group.visible = !!C;
     P.mk.on = !!s; P.vis = !!(O || C);
-    if (s) { P.mk.x = s.x; P.mk.z = s.z; }
+    if (s) { P.mk.x = s.x; P.mk.z = s.z; if (NET.goal === P.uid && VIL.places.friend) { VIL.places.friend.pos[0] = s.x; VIL.places.friend.pos[1] = s.z; } }
     if (O) {
       const fx = Math.cos(s.h) * 1.3, fz = -Math.sin(s.h) * 1.3, y = netH(s.x, s.z);
       O.car.position.set(s.x, y, s.z); O.car.rotation.set(0, s.h, Math.atan2(netH(s.x + fx, s.z + fz) - netH(s.x - fx, s.z - fz), 2.6));
@@ -157,11 +162,12 @@ function netStep(dt) {
       C.update(dt, { speed: Math.abs(s.v) });
       if (P.tag) P.tag.position.set(s.x, y + C.height + 0.45, s.z);
     }
-    P.px = s ? s.x : null; P.pz = s ? s.z : null;
+    P.px = O ? s.x : null; P.pz = O ? s.z : null;
     if (P.vis) for (const sp of [P.tag, P.bub]) if (sp && !sp.parent) TR.scene.add(sp);
     if (P.tag) P.tag.visible = P.vis;
     if (P.bub) { P.bubT -= dt; P.bub.visible = P.vis && P.bubT > 0; if (P.bub.visible) P.bub.position.copy(P.tag.position); }
   }
+  netGoalTick(me);
   if (drv) {
     if (NET.setD !== drv) { NET.setD = drv; drv.setMarkers(NET.marks, 'net'); }
     drv.removeColliders('net'); if (NET.cols.length) drv.addColliders(NET.cols, 'net');
@@ -178,7 +184,7 @@ function netHideAll() {
   if (NET.hud) { NET.hud.root.hidden = true; netTray(false); } // 回車庫頁：房間那一塊收起來（netHudTick 只有在外面才跑）
 }
 
-// ---- 畫面：房間那一塊（點了打開網站的房間）、表情 ----
+// ---- 畫面：右邊那一塊（幾個人在線上；點了打開網站的名單）、表情、邀請的卡片 ----
 function netHud() {
   if (NET.hud) return NET.hud;
   const st = document.createElement('style');
@@ -216,6 +222,15 @@ body.netdrag #race :is(.minirow,.group,.me,.how){display:none}
 .nt-res .a{background:#FF6A1F;color:#1a0d05}.nt-res .a:disabled{opacity:.55}
 .nt-res .b{background:#24262b;color:#F2F3F5;border:1px solid #34363c}
 .nt-res p{margin:0;font-size:12px;color:#a3a5ab}
+.nt-inv{position:absolute;z-index:10;left:50%;top:calc(var(--fs-t,0px) + 64px);transform:translateX(-50%);width:min(330px,calc(100% - 20px));box-sizing:border-box;padding:13px;border-radius:16px;background:rgba(20,21,24,0.95);border:2px solid #FF6A1F;color:#F2F3F5;font-family:"Noto Sans TC",sans-serif;display:flex;flex-direction:column;gap:7px;pointer-events:auto}
+.nt-inv[hidden]{display:none}
+.nt-inv b{font-size:16px}
+.nt-inv span{font-size:13px;color:#C6CAD1}
+.nt-invbar{height:4px;border-radius:4px;background:rgba(255,255,255,.15);overflow:hidden}
+.nt-invbar i{display:block;height:100%;background:#FF6A1F}
+.nt-inv .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nt-inv .row button{min-height:44px;border:0;border-radius:11px;font:800 15px "Noto Sans TC",sans-serif;cursor:pointer;touch-action:manipulation}
+.nt-inv .a{background:#FF6A1F;color:#1a0d05}.nt-inv .b{background:#24262b;color:#F2F3F5;border:1px solid #34363c}
 body.bigmap .nt,body.shopping .nt,body.cimenu .nt{display:none}`;
   document.head.appendChild(st);
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -224,15 +239,18 @@ body.bigmap .nt,body.shopping .nt,body.cimenu .nt{display:none}`;
   for (let i = 0; i < NET_E.length; i++) { const b = mk('button', null, NET_E[i]); b.type = 'button'; b.addEventListener('click', () => netSend(i)); tray.append(b); }
   const x = mk('button', null, '✕'); x.type = 'button'; x.setAttribute('aria-label', '收起來'); x.addEventListener('click', () => netTray(false)); tray.append(x);
   tray.hidden = true; root.hidden = true;
-  room.addEventListener('click', () => netEv('room'));
+  room.addEventListener('click', () => netEv('list'));
   emo.addEventListener('click', () => netTray(true));
   root.append(room, emo, tray);
   const rc = mk('div', 'nt-race'), big = mk('b'), sub = mk('span'), quit = mk('button', 'nt-quit', '放棄這場');
   quit.type = 'button'; quit.hidden = true; quit.addEventListener('click', () => netQuit('quit'));
   rc.append(big, mk('br'), sub); rc.hidden = true;
   const res = mk('div', 'nt-res'); res.hidden = true;
-  stage.append(root, rc, quit, res);
-  NET.hud = { root, room, emo, tray, rc, big, sub, quit, res, msg: '', msgT: 0, last: '', sig: '' };
+  const inv = mk('div', 'nt-inv'), invT = mk('b'), invS = mk('span'), invBar = mk('div', 'nt-invbar'), invI = mk('i'), invRow = mk('div', 'row'), invOk = mk('button', 'a', '好'), invNo = mk('button', 'b', '不要');
+  invOk.type = invNo.type = 'button'; invBar.append(invI); invRow.append(invOk, invNo); inv.append(invT, invS, invBar, invRow); inv.hidden = true;
+  invOk.addEventListener('click', () => netAnswer(true)); invNo.addEventListener('click', () => netAnswer(false));
+  stage.append(root, rc, quit, res, inv);
+  NET.hud = { root, room, emo, tray, rc, big, sub, quit, res, inv, invT, invS, invI, msg: '', msgT: 0, last: '', sig: '' };
   return NET.hud;
 }
 function netTray(on) { const H = netHud(); H.tray.hidden = !on; H.room.hidden = on; H.emo.hidden = on; }
@@ -249,11 +267,79 @@ function netHudTick(dt) {
   const out = netWorld() && !RACE.on && !(walker && walker.mode === 'walk' && walker.telemetry().paused);
   if (H.root.hidden === out) H.root.hidden = !out;
   if (H.msgT > 0) H.msgT -= dt;
-  const n = 1 + NET.mem.length, txt = H.msgT > 0 ? H.msg : `房間 ${NET.code} · ${n} 個人`;
+  const n = 1 + NET.mem.length, txt = H.msgT > 0 ? H.msg : `👥 ${n} 人在線上`;
   if (txt !== H.last) {
     H.last = txt; H.room.classList.toggle('msg', H.msgT > 0);
-    if (H.msgT > 0) H.room.textContent = txt; else { H.room.replaceChildren('房間 ', Object.assign(document.createElement('b'), { textContent: NET.code }), ` · ${n} 個人`); }
+    if (H.msgT > 0) H.room.textContent = txt; else { H.room.replaceChildren('👥 ', Object.assign(document.createElement('b'), { textContent: String(n) }), ' 人在線上'); }
   }
+}
+
+// ---- 別人找你比賽：卡片（好／不要），15 秒沒按＝不要；車庫頁也看得到（卡片放在畫面上）----
+const NET_INV_S = 15;
+function netInvite(d) {
+  if (!NET.on || !d || !d.id || !NET_KIND[d.kind]) return false;
+  const H = netHud();
+  if (NET.inv && NET.inv.id !== d.id) return false; // 一次一張（網站排隊）
+  if (NET.race && NET.race.phase !== 'done') return false; // 比賽中：網站說「在比賽」
+  clearTimeout(NET.invT);
+  NET.inv = { id: String(d.id) };
+  H.invT.textContent = `🏁 ${String(d.name || '有人').slice(0, 12)}找你比${NET_KIND[d.kind].replace(' 3 圈', '')}！`;
+  H.invS.textContent = d.car ? `他開 ${String(d.car).slice(0, 24)}` : '';
+  H.inv.hidden = false;
+  H.invI.style.transition = 'none'; H.invI.style.width = '100%'; void H.invI.offsetWidth;
+  H.invI.style.transition = `width ${NET_INV_S}s linear`; H.invI.style.width = '0%';
+  NET.invT = setTimeout(() => netAnswer(false), NET_INV_S * 1000);
+  return true;
+}
+function netUninvite(id) {
+  if (!NET.inv || (id != null && NET.inv.id !== String(id))) return;
+  clearTimeout(NET.invT); NET.inv = null;
+  if (NET.hud) NET.hud.inv.hidden = true;
+}
+function netAnswer(ok) {
+  const I = NET.inv; if (!I) return;
+  netUninvite(I.id);
+  netEv('answer', { id: I.id, ok: !!ok });
+}
+
+// ---- 去找他：目的地＝他現在在哪裡（VIL.places.friend，每一格跟著他動；沒有路線就直直指過去）；走到 14 公尺內就到了 ----
+function netGoTo(uid) {
+  const P = NET.P.get(uid);
+  if (!P) return 'gone';
+  if (!trip || !DRIVE.on || !VIL) return 'garage';
+  if (!(netNow() - P.last < 6000) || !(P.cur.o === 1 || P.cur.o === 2)) return 'away'; // 他在車庫、在比賽：找不到
+  VIL.places.friend = { name: P.n || '朋友', pos: [P.cur.x, P.cur.z] };
+  NET.goal = uid;
+  BIGMAP?.close();
+  setDest('friend');
+  (walker && walker.mode !== 'off' ? walker : drv)?.toast(`去找${P.n}：跟著左上角的箭頭`, 2400);
+  return 'ok';
+}
+function netGoalTick(me) {
+  if (!NET.goal) return;
+  const P = NET.P.get(NET.goal);
+  if (tripDest !== 'friend' || !P) { NET.goal = null; if (tripDest === 'friend') setDest(null); return; }
+  if (!me || !P.mk.on) return;
+  if (Math.hypot(P.mk.x - me.x, P.mk.z - me.z) < 14) { NET.goal = null; setDest(null); (walker && walker.mode !== 'off' ? walker : drv)?.toast(`找到${P.n}了！`, 2000); }
+}
+// 現在在哪裡（名單上寫的；最多 12 個字）
+function netPlace() {
+  if (NET.race && NET.race.phase !== 'done') return '在比賽';
+  if (RACE.on) return '在 400 公尺';
+  if (!trip) return '在車庫';
+  if (jailed()) return '在警察局';
+  if (ciRace) return '在賽車場';
+  if (orRace) return '在越野車場';
+  if (indoor) return indoor.kind === 'police' ? '在警察局' : indoor.kind === 'gunshop' ? '在槍店' : '在房子裡';
+  const t = walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : null;
+  if (!t || !VIL) return '在路上';
+  let best = null, bd = 140;
+  for (const [k, q] of Object.entries(VIL.places)) {
+    if (k === 'friend' || !q || !q.name) continue;
+    const at = q.zone ? [q.zone.x, q.zone.z] : q.pos ? q.pos : q.spawn ? [q.spawn.x, q.spawn.z] : null; if (!at) continue;
+    const d = Math.hypot(at[0] - t.x, at[1] - t.z); if (d < bd) { bd = d; best = k === 'garage' ? '家門口' : q.name; } // 「你的車庫」別人看會看錯
+  }
+  return best ? `在${String(best).slice(0, 11)}` : '在路上';
 }
 
 // ---- 朋友送的表情：頭上一個白色泡泡 3 秒（看不到他的時候房間那一塊寫出來）----
@@ -273,7 +359,7 @@ function netRace(r) {
   if (r.kind === 'out') { if (r.seq !== NET.outSeq) { NET.outSeq = r.seq; netOut(); } return; }
   if (!NET_KIND[r.kind]) return;
   const R = NET.race;
-  if (r.seq <= NET.doneSeq) return; // 已經結束（回房間）的那一場：房間的資料還在，不要又開始
+  if (r.seq <= NET.doneSeq) return; // 已經結束（回去開車）的那一場：資料還在，不要又開始
   if (!R || R.seq !== r.seq) { netRaceEnd(); netRaceNew(r); return; }
   if (Array.isArray(r.order)) R.order = r.order.slice(0, 4);
   if (r.go && !R.go) R.go = +r.go;
@@ -421,16 +507,16 @@ function netResShow(R) {
   const row = document.createElement('div'); row.className = 'row';
   const again = document.createElement('button'), back = document.createElement('button');
   again.type = back.type = 'button'; again.className = 'a'; back.className = 'b';
-  const host = NET.host === NET.me;
-  again.textContent = host ? '再來一場' : '等房主再來一場'; again.disabled = !host;
-  back.textContent = '回房間';
+  const host = NET.host === NET.me, left = !NET.host; // host 空的＝對方回去開車、離開了
+  again.textContent = host ? '再比一次' : left ? '對方離開了' : '等對方按再比一次'; again.disabled = !host;
+  back.textContent = '回去開車';
   again.addEventListener('click', () => { if (NET.host === NET.me) netEv('again'); });
-  back.addEventListener('click', () => { netRaceEnd(); netEv('room'); });
+  back.addEventListener('click', () => { netRaceEnd(); netEv('back'); });
   row.append(again, back);
   H.res.append(h, ol, row);
   H.res.hidden = false;
 }
-// 這一場收掉（回房間、下一場、離開房間）：車子留在原地接著開
+// 這一場收掉（回去開車、下一場、對方走了、離開世界）：車子留在原地接著開
 function netRaceEnd() {
   const R = NET.race; if (!R) return;
   NET.race = null; NET.doneSeq = Math.max(NET.doneSeq, R.seq);
@@ -600,7 +686,7 @@ Object.assign(window.beauGame, {
       netHud();
     },
     leave() {
-      netRaceEnd();
+      netRaceEnd(); netUninvite(); if (NET.goal) { NET.goal = null; if (tripDest === 'friend') setDest(null); }
       NET.on = false; NET.code = ''; NET.mem = [];
       for (const P of [...NET.P.values()]) netDropPeer(P);
       drv?.removeColliders('net'); walker?.removeColliders('net');
@@ -610,7 +696,7 @@ Object.assign(window.beauGame, {
     members(list) {
       if (!NET.on || !Array.isArray(list)) return;
       const keep = new Set();
-      NET.mem = list.filter((m) => m && m.uid && m.uid !== NET.me).slice(0, 3);
+      NET.mem = list.filter((m) => m && m.uid && m.uid !== NET.me).slice(0, NET_MAX);
       NET.mem.forEach((m, i) => {
         const P = netPeer(m.uid), n = String(m.n || '朋友').slice(0, 12), col = NET_COL[i % NET_COL.length];
         keep.add(m.uid);
@@ -637,6 +723,12 @@ Object.assign(window.beauGame, {
     garage: () => ({ cur, cars: Object.fromEntries([...GAME.owned].filter((k) => CARS[k]).map((k) => [k, { ...CARS[k].state }])) }),
     race: netRace,
     results: netResults,
+    end() { netRaceEnd(); }, // 對方走了、對方按「回去開車」：這一場收掉
+    invite: netInvite,
+    say: netSay, // 遊戲右邊那一塊寫一句話（「對方已經取消了」）
+    uninvite: netUninvite,
+    goTo: netGoTo,
+    place: netPlace,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
     get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, car: !!P.obj, walk: !!P.chr })), race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, cols: NET.cols.length }; },
   },

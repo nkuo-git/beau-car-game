@@ -142,10 +142,7 @@ body.racing .updatebar, body.driving .updatebar, body.fs .updatebar { display: n
 .nw-list .w { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nw-list .t { font: 700 17px "Barlow Condensed", "Noto Sans TC", sans-serif; font-variant-numeric: tabular-nums; }
 .nw-empty[hidden] { display: none; }
-/* 房間（site/room.js） */
-.nw-code-in { text-align: center; text-transform: uppercase; letter-spacing: .4em; font: 700 26px "Barlow Condensed", "Noto Sans TC", sans-serif; height: 54px; }
-.nw-code { display: flex; justify-content: center; gap: 8px; }
-.nw-code span { width: 50px; height: 58px; display: grid; place-items: center; border: 1.5px solid var(--accent); border-radius: 12px; background: var(--surface-2); color: var(--accent); font: 700 34px "Barlow Condensed", "Noto Sans TC", sans-serif; }
+/* 大家的世界（site/world.js；草稿 https://claude.ai/artifact/QDwK28dEsEkumkvR2AiP9Y） */
 .nw-who { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .nw-who li { display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 5px 8px; border-radius: 11px; background: var(--surface-2); font-size: 14px; }
 .nw-who .ava { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 50%; color: #1a0d05; font-weight: 800; font-size: 14px; }
@@ -153,4 +150,16 @@ body.racing .updatebar, body.driving .updatebar, body.fs .updatebar { display: n
 .nw-who .nm small { color: var(--ink-soft); font-size: 12px; }
 .nw-who button { flex: none; min-height: 32px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface); color: var(--ink); font: 700 13px "Noto Sans TC", system-ui, sans-serif; cursor: pointer; }
 .nw-list li.tap { cursor: pointer; }
-#nwRoomBtn b { font-family: "Barlow Condensed", "Noto Sans TC", sans-serif; letter-spacing: .06em; }
+.nw-ppl li { gap: 7px; padding: 5px 6px 5px 8px; }
+.nw-ppl .nm { display: flex; flex-direction: column; line-height: 1.3; }
+.nw-ppl .nm b, .nw-ppl .nm small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nw-ppl button { min-width: 34px; padding: 0 7px; }
+.nw-ppl button.go { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.nw-tog { min-width: 52px; min-height: 30px; border: 0; border-radius: 999px; background: var(--surface-2); color: var(--ink-soft); font: 700 13px "Noto Sans TC", system-ui, sans-serif; cursor: pointer; }
+.nw-tog[aria-pressed="true"] { background: var(--ok, #3ddc84); color: #06210f; }
+.nw-blk summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--ink-soft); padding: 4px 0; }
+.nw-blk[hidden] { display: none; }
+.nw-blk ul { margin-top: 6px; }
+.nw-wbar { height: 5px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+.nw-wbar i { display: block; height: 100%; width: 0; background: var(--accent); }
+#nwWorldBtn b { color: inherit; }

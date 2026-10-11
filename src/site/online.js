@@ -1,7 +1,7 @@
 // ---- 連線第 1 步：鬼影車排行榜（Nick 2026-10-10「開始做吧」；草稿 https://claude.ai/artifact/6BtzWH7D5uWYMCra2e7DJo 第 1、2、7、8 張，Nick 和爸媽都說好）----
 // src/site/online.js，build-site.mjs 接在 cloud.js 後面（用 cloud.js 的 window.beauCloud：同一個 Firebase、同一個登入）
-// 右上角「👥 連線」→ 沒登入：要先登入 → 第一次：取一個名字（別人只看得到這個；不能有髒話、email、電話）→ 連線選單（房間、🏆 排行榜、🚗 參觀車庫）
-// 房間、參觀車庫在 site/room.js：用 window.beauNetUI 加自己的畫面（add）、打開（open）；排行榜上點別人的名字 → window.beauRoom.visit
+// 右上角「👥 連線」→ 沒登入：要先登入 → 第一次：取一個名字（別人只看得到這個；不能有髒話、email、電話）→ 連線選單（大家的世界、🏆 排行榜、🚗 參觀車庫）
+// 世界、找人比賽、參觀車庫在 site/world.js：用 window.beauNetUI 加自己的畫面（add）、打開（show）；排行榜上點別人的名字 → window.beauRoom.visit
 // 排行榜：400 公尺／賽車場一圈／爬山 × 大家／同一台車（現在開的這台），前 20 名，你那一行框起來（不在前 20 名也列出你第幾名）
 //   「👻 跟第 1 名的鬼影車跑」→ 下載那一趟 → window.beauGame.setGhost（ghost.src.js）→ 下一次跑那一種的時候多一台半透明的車
 // 上傳：遊戲每跑完一趟發 'beau-run'（{ board, car, t, g }）→ 先記在這支手機（beau.lbq：每一種每台車最好的那趟）→ 登入、有名字了就傳：
@@ -45,7 +45,7 @@
   // ---- 畫面 ----
   const chip = $n('netChip'), dlg = $n('netDlg'), titleEl = $n('netTitle');
   const SECS = { in: $n('nwIn'), name: $n('nwName'), menu: $n('nwMenu'), board: $n('nwBoard') };
-  const EXTRA = {}; // room.js 加的畫面：key → { title, paint }
+  const EXTRA = {}; // world.js 加的畫面：key → { title, paint }
   function paint() {
     if (!chip || !dlg) return;
     chip.hidden = false;
@@ -185,7 +185,7 @@
     if (view === 'board') loadBoard();
   }
 
-  // room.js 用的：同一個對話框、同一個名字
+  // world.js 用的：同一個對話框、同一個名字
   window.beauNetUI = {
     add(key, el, o = {}) { SECS[key] = el; EXTRA[key] = o; },
     show(v) { view = v; paint(); },

@@ -41,7 +41,7 @@ src/                 遊戲原始碼（平的一層，腳本都用自己的資�
   build-art.mjs      試做頁 → src/art/garage.html（＋car-*.txt）；make-free.mjs → src/art/garage-free.html（錢用不完）
   build-site.mjs     網站 → docs/（用 build-app.mjs 的打包，再加 site/ 的東西）
   build-app.mjs      萬能軟體的改車頁（tune.html／tune.js／tune.css／tune/*.glb）；只有萬能軟體要更新遊戲時才用
-  site/              網站才有的：index.src.html、site.js（版本號、更新條、搬進度）、cloud.js（登入、雲端存檔）、online.js（連線：名字、排行榜）、room.js（房間：開、加入、位置、一起比賽、參觀車庫、讚；Realtime Database）、site.css、sw.src.js、manifest、icons、make-icons.py
+  site/              網站才有的：index.src.html、site.js（版本號、更新條、搬進度）、cloud.js（登入、雲端存檔）、online.js（連線：名字、排行榜）、world.js（大家的世界：進入、線上的人、位置、找人比賽、封鎖、參觀車庫、讚；Realtime Database）、site.css、sw.src.js、manifest、icons、make-icons.py
   app/               萬能軟體改車頁的外框（build-app.mjs 用）
   data/neihu3.osm.gz 內湖的 OSM 原始資料（neihu-conv.mjs 讀，產生 neihu-data.js）
   test-*.mjs …       測試（下面）；test-fixtures/trunk-0.8.35/ ＝ drift-test 比對用的舊 drive.js
@@ -101,7 +101,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `node site-test.mjs ../docs ../out/site/site` | 網站：打開、開車、有新版本那一條、App 有新版本、搬進度 | 24 ok |
 | `node cloud-test.mjs ../docs ../out/cloud/cloud` | 登入＋雲端存檔（假的雲端、兩支手機、沒網路、App 外殼） | 20 ok |
 | `node online-test.mjs ../docs ../out/online/online` | 連線：要先登入、取名字（擋髒話）、跑完自己上傳、排行榜、鬼影車按鈕（假的 Firestore） | 30 ok |
-| `node room-test.mjs ../docs ../out/room/room` | 兩支假手機（兩個瀏覽器、假的即時資料庫）：開房間、加入、一起出門、表情、一起爬山／400 公尺、成績、回房間一起開、參觀車庫按讚、離開、斷線、滿了、關房間 | 49 ok，ALL CHECKS OK（約 4 分） |
+| `node world-test.mjs ../docs ../out/world/world` | 兩支假手機（兩個瀏覽器、假的即時資料庫）：進入世界、線上的人、各自出門看得到對方、去找他、表情、找人比賽（邀請卡片 好／不要／沒回答）、爬山／400 公尺、再比一次、回去開車、封鎖、關掉邀請、參觀車庫、離開、斷線、滿了（16）、清掉斷線的人、自己進去 | 61 ok，ALL CHECKS OK（約 3 分；還沒上線前用 ../docs/try） |
 
 - test-app-b1／b4 給萬能軟體的 repo（有 tune.html）也可以跑，就是測萬能軟體的改車頁。
 - **不可以為了變綠燈把測試改鬆**；找出原因修好。新加或改的測試要真的有在測東西。
