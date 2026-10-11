@@ -1,5 +1,5 @@
 // 第 3 批（b3-int）：警察（police-ai.js）＋槍（guns.js）＋槍店（gunshop.js）＋警察局裡面（police.js）接進整個遊戲的測試（Nick 2026-10-04：「警察追人抓人、槍店買槍射擊繼續做」）
-//   揍人 → 星星 → 警車從警察局開出來 → 警察下車用跑的追 → 被抓 → 拘留室 → 繳罰款出來；開車撞人 → 2★ → 警車包圍 → 被抓 → 關 30 秒 → 放出來（車在警察局停車場）
+//   揍人 → 星星 → 警車從警察局開出來 → 警察下車用跑的追 → 被抓 → 拘留室 → 繳罰款出來；開車撞人 → 2★ → 警車包圍 → 被抓 → 關 10 分鐘 → 放出來（車在警察局停車場）
 //   小孩揍不到、撞不到、打不到；躲進房子、關上自己的鐵捲門星星清掉；槍店：櫃台買槍、子彈，靶場第一次全部打倒拿 2 萬；拿槍到外面打人 → 3★；警察不開槍；
 //   存檔重新整理槍還在（舊存檔沒有 guns 也讀得起來）；開車不能用槍；全螢幕、一般的版面（360×800、412×915、915×412、800×360、1280×720）按鈕不重疊；效能（draw call、三角形、一幀幾毫秒）
 // 開車、走路都不是真的即時（SwiftShader 一格要一兩秒）：跟 test-b1.mjs 一樣頁面自己的開車先停住（__hold）、不畫（__noDraw），測試在頁面裡一步一步走、開，要截圖才畫
@@ -344,16 +344,21 @@ await p.addInitScript(() => {
   // 圓按鈕（揍）：walk.js 用 pointerdown
   X.punchBtn = () => { const b = document.querySelector('#stage .wk-btns b'); if (!b || b.closest('[hidden]')) return null; const s = b.textContent; b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })); b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); return s; };
   // 站到那個人前面 0.75 公尺、面對他（周圍找站得到的地方）；人先停住（不要走掉）
-  X.faceTo = (q, d = 0.75) => {
+  X.faceTo = (q, d = 0.75, ok = null) => { // ok(x, z)：站在那裡另外的條件（例如後面沒有別人）
     const w = W();
     for (let a = 0; a < 16; a++) {
       const ang = (a * Math.PI) / 8, x = q.x + Math.cos(ang) * d, z = q.z - Math.sin(ang) * d;
+      if (ok && !ok(x, z)) continue;
       w.teleport({ x, z, heading: ang + Math.PI }); X.step(1); const t = w.telemetry();
       if (Math.hypot(t.x - x, t.z - z) < 0.12) { w.teleport({ x: q.x + Math.cos(ang) * d, z: q.z - Math.sin(ang) * d, heading: ang + Math.PI }); return true; }
     }
     return false;
   };
   // 路人走去哪裡每次不一樣：「離警察局遠一點」揍人的時候，挑從警車出來的地方看不到的（房子擋住；不要剛好挑到警察局門口那條直路上的人）
+  // 從 (x, z) 往 q 開槍：q 後面 60 公尺內、子彈那一線 1.5 公尺內沒有別人（穿過小孩的子彈不會剛好打到後面的大人）
+  X.lineClear = (x, z, q) => { const dx = q.x - x, dz = q.z - z, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L;
+    for (const o of P3().NPC.peds.people) { if (o === q || o.gone || o.active === false) continue; const px = o.x - x, pz = o.z - z, t = px * ux + pz * uz; if (t > 0 && t < L + 60 && Math.abs(px * uz - pz * ux) < 1.5) return false; }
+    return true; };
   X.farFromPolice = (q) => { const D = P3().police._dbg, st = D.station.spawn || window.__D().VIL.places.police?.spawn; return !st || (Math.hypot(q.x - st.x, q.z - st.z) > 60 && D.tall.blocked(st.x, st.z, q.x, q.z, 0)); };
   // 離 (x, z) 最近的人（age：'adult' | 'kid'；站著、走著的）
   X.person = (x, z, age, maxD = 200, ok = null) => { // ok(q)：另外的條件（例如離警察局夠遠）
@@ -446,7 +451,7 @@ const s2c = await ev(() => {
 });
 console.log('  jail:', JSON.stringify(s2c));
 check(s2c.where === 'police:jail' && s2c.inCell && s2c.mode === 'walk' && s2c.mine && !s2c.cellOpen && s2c.doors === 0 && !s2c.punch, 'fade → inside the police station, locked in the cell (cell door closed; you can walk around inside the cell; no 揍 button)');
-check(s2c.jailCard && /30|2[0-9]/.test(s2c.cnt) && /繳罰款 NT\$ 2 萬/.test(s2c.pay) && s2c.stillIn, `jail card: count-down + 「${s2c.pay}」; pushing every way you stay inside the cell`);
+check(s2c.jailCard && /10:00|9:[0-5][0-9]/.test(s2c.cnt) && /繳罰款 NT\$ 2 萬/.test(s2c.pay) && s2c.stillIn, `jail card: count-down + 「${s2c.pay}」; pushing every way you stay inside the cell`);
 await drawAndShot('2c-jail');
 const s2d = await ev(() => {
   const X = window.__X, P3 = window.__P3(), D = window.__D(), m0 = window.__G().money;
@@ -461,7 +466,7 @@ check(s2d.state === 'free' && s2d.wanted === 0 && s2d.paid === 2 && s2d.where ==
 check(s2d.said.some((x) => /繳了 2 萬罰款，放你出去了/.test(x)) && !s2d.said.some((x) => /停車場/.test(x)) && s2d.cellOpen, `release message 「繳了 2 萬罰款，放你出去了」 (arrested on foot: no 'car in the yard' line); cell door opens again`);
 if (UNTIL <= 2) await finish();
 
-// ---- 3 開車撞人：小孩撞不到（跳開／被推開）；大人 → 2★ → 兩台警車追、包圍 → 被抓（手煞車停住）→ 關 30 秒 → 時間到放出來：車停在警察局的停車場 ----
+// ---- 3 開車撞人：小孩撞不到（跳開／被推開）；大人 → 2★ → 兩台警車追、包圍 → 被抓（手煞車停住）→ 關 10 分鐘 → 時間到放出來：車停在警察局的停車場 ----
 const s3a = await ev(() => {
   const X = window.__X, D = window.__D(), H = window.__H, w = D.walker;
   w.teleport(H.gw(-2.6, -2.6, 0)); X.step(10);
@@ -517,16 +522,18 @@ const s3d = await ev(() => {
   for (; n < 6 * 60 && P3.police.state !== 'jail'; n++) X.step(1);
   const Q = window.__P3(), yard = D.VIL.places.police.yard, p = window.__D().tripPose.gc8;
   const a = { where: X.where(), drv: !!window.__D().drv, impounded: Q.impounded, yard: p && +Math.hypot(p.x - yard.x, p.z - yard.z).toFixed(2), carAt: (() => { const c = window.__D().tripS.car; return +Math.hypot(c.position.x - yard.x, c.position.z - yard.z).toFixed(2); })(), jailCard: X.vis('#stage .pw-jail'), drivebar: getComputedStyle(document.getElementById('drivebar')).visibility, jailed: document.body.classList.contains('jailed') };
-  for (n = 0; n < 32 * 60 && window.__P3().police.state !== 'free'; n++) X.step(1);
+  for (n = 0; n < 60 * 60; n++) X.step(1); // 關 10 分鐘（Nick 2026-10-11）：一分鐘以後還關著、牌子寫還要 9 分
+  a.min1 = { state: window.__P3().police.state, cnt: document.querySelector('#stage .pw-jail .cnt')?.textContent };
+  for (; n < 602 * 60 && window.__P3().police.state !== 'free'; n++) X.step(1);
   for (let i = 0; i < 200; i++) X.step(1);
   const w = window.__D().walker, t = w.telemetry(), door = D.VIL.places.police.door;
   a.after = { s: +(n / 60).toFixed(1), state: window.__P3().police.state, where: X.where(), atDoor: +Math.hypot(t.x - door.x, t.z - door.z).toFixed(2), said: X.toasts.slice(-4), cars: w.cars.map((c) => c.key + '@' + Math.hypot(c.x - yard.x, c.z - yard.z).toFixed(1)).join(), drivebar: getComputedStyle(document.getElementById('drivebar')).visibility };
   return a;
 });
-console.log('  jail 30 s:', JSON.stringify(s3d));
+console.log('  jail 10 min:', JSON.stringify(s3d));
 check(s3d.where === 'police:jail' && !s3d.drv && s3d.impounded && s3d.yard < 0.01 && s3d.carAt < 0.01 && s3d.jailCard && s3d.jailed && s3d.drivebar === 'hidden', 'jailed: your car was towed to the police-station yard; destination bar hidden while locked up');
-check(s3d.after.state === 'free' && s3d.after.where === 'out' && s3d.after.atDoor < 0.6 && s3d.after.s > 25 && s3d.after.s < 31.5 && s3d.after.said.some((x) => /時間到/.test(x)) && s3d.after.said.some((x) => /你的車停在警察局的停車場/.test(x)) && /gc8@0\.0/.test(s3d.after.cars) && s3d.after.drivebar === 'visible',
-  `waited it out (${s3d.after.s} s): released at the door, 「時間到」 + 「你的車停在警察局的停車場」, GC8 is there to get in`);
+check(s3d.after.state === 'free' && s3d.after.where === 'out' && s3d.after.atDoor < 0.6 && s3d.min1.state === 'jail' && /還要關 9:0[0-9]/.test(s3d.min1.cnt) && s3d.after.s > 595 && s3d.after.s < 601.5 && s3d.after.said.some((x) => /時間到/.test(x)) && s3d.after.said.some((x) => /你的車停在警察局的停車場/.test(x)) && /gc8@0\.0/.test(s3d.after.cars) && s3d.after.drivebar === 'visible',
+  `still locked up after a minute (「${s3d.min1.cnt}」); waited it out (${s3d.after.s} s = 10 minutes): released at the door, 「時間到」 + 「你的車停在警察局的停車場」, GC8 is there to get in`);
 await drawAndShot('3c-released-yard');
 if (UNTIL <= 3) await finish();
 
@@ -676,7 +683,7 @@ const s6a = await ev(() => {
   // 小孩：5 公尺，瞄準肚子（往下打：沒打到就打在後面的地上）
   const t = w.telemetry(), kid = X.person(t.x, t.z, 'kid', 300);
   if (!kid) return { ...a, err: 'no kid' };
-  X.faceTo(kid, 5); X.step(5); g.setAim(true); X.step(20);
+  X.faceTo(kid, 5, (x, z) => X.lineClear(x, z, kid)); X.step(5); g.setAim(true); X.step(20);
   const k0 = g.telemetry().knocks, c0 = pol.telemetry().crimes.length, m0 = kid.mode; let shots = 0;
   for (let i = 0; i < 3; i++) { X.aimAt(kid.x, 0.7, kid.z, 8); shots += X.fire(); }
   X.step(10); g.setAim(false); X.step(10);

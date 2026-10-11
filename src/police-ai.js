@@ -64,7 +64,7 @@
 //         卡住 8 秒你又沒看到它（20 秒就不管了）、落後 520 公尺以上：收起來，從 200–400 公尺外、你看不到的路上重新開過來
 //   警察下車：你走路的時候警車開到附近就下車用跑的追（格子 A*：繞過房子、牆、警車；遠的走路線）；你離太遠（60 公尺）或上車了就跑回車上
 //   開車被抓：速度 5 km/h 以下、7 公尺內有警車 2.5 秒（兩台以上貼著你 1.5 秒）；走路被抓：警察跑到 1.2 公尺以內（警察跑 5 m/s，比你快一點）
-//   被抓到：「被警察抓到了！」→ 畫面變黑 → 關在拘留室 30 秒（可以繳罰款：每顆星 2 萬）→ 放出來站在警察局門口，車停在警察局的停車場；星星清掉
+//   被抓到：「被警察抓到了！」→ 畫面變黑 → 關在拘留室 10 分鐘（可以繳罰款：每顆星 2 萬，馬上出去）→ 放出來站在警察局門口，車停在警察局的停車場；星星清掉
 // 效能：每一幀不新增物件（路線、碰撞、找點都用事先開好的陣列）；路線 1 秒重算一次（錯開）、看不看得到 0.25 秒算一次；物理每步最多走 0.6 公尺
 import * as THREE from 'three';
 
@@ -83,7 +83,7 @@ const TUNE = {
   seeR: 180, nearR: 30, lose: 25, loseNext: 10, hunt: 45, // 看得到的距離、轉角也算看到的距離、幾秒沒被看到掉一顆星、之後每幾秒再掉一顆
   catchR: 7, catchV: 5 / 3.6, catchT: 2.5, boxT: 1.5, boxR: 6.2, // 開車被抓：幾公尺內、比多慢、幾秒；兩台以上夾著：幾秒、幾公尺
   footR: 1.2, runV: 5.0, // 走路被抓：警察多近；警察跑多快（你跑 4.5）
-  jailS: 30, fine: 2, // 關幾秒、罰款每顆星幾萬
+  jailS: 600, fine: 2, // 關幾秒（Nick 2026-10-11：關 10 分鐘）、罰款每顆星幾萬
   spawnMin: 200, spawnMax: 400, stationR: 600, stagger: 2.5, // 警車從哪裡來、第二台以後隔幾秒
   vmax: 205 / 3.6, vfar: 250 / 3.6, acc: 6.2, brake: 10, comf: 5.5, alat: 9.2, // 警車：極速（離很遠、看不到的時候快一點追上來）、加速、煞車、過彎
   stanK: 3.5, stanPre: 0.25, manIn: 2.4, manOut: 1.0, // 沿著路線開（Stanley 的力道、看前面幾秒的方向）；要去的地方偏幾度（弧度）以上就慢慢倒車、轉頭，轉到幾度以內再照平常開
@@ -1496,7 +1496,7 @@ function createPolice(o = {}) {
     root.innerHTML = '<div class="pw-want" hidden role="status" aria-live="polite"><span class="st"></span><b>通緝中</b><span class="pw-esc" hidden><i></i></span></div>'
       + '<div class="pw-catch" hidden><span>快跑！警察要抓你了</span><div><i></i></div></div>'
       + '<div class="pw-toast" role="status"></div><div class="pw-fade" hidden></div>'
-      + '<div class="pw-jail" hidden><small>警察局 · 拘留室</small><span class="cnt">關 <em>30</em> 秒</span><div class="pw-jbar"><i></i></div><button type="button" class="pw-pay"></button><p></p></div>';
+      + '<div class="pw-jail" hidden><small>警察局 · 拘留室</small><span class="cnt">還要關 <em>10:00</em></span><div class="pw-jbar"><i></i></div><button type="button" class="pw-pay"></button><p></p></div>';
     host.append(root);
     const q = (s) => root.querySelector(s);
     const H = { want: q('.pw-want'), st: q('.pw-want .st'), lab: q('.pw-want b'), esc: q('.pw-esc'), escI: q('.pw-esc i'), cat: q('.pw-catch'), catT: q('.pw-catch span'), catI: q('.pw-catch i'), toast: q('.pw-toast'), fade: q('.pw-fade'),
@@ -1527,7 +1527,7 @@ function createPolice(o = {}) {
       jail(on) { H.jail.hidden = !on; H.last.jl = null; H.last.can = null; if (on) this.jailTick(); },
       jailTick(nope) {
         const left = Math.max(0, Math.ceil(jailLeft));
-        set('jl', left, (v) => { H.cnt.textContent = String(v); });
+        set('jl', left, (v) => { H.cnt.textContent = `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`; }); // 分:秒
         set('jb', Math.round(clamp(jailLeft / T.jailS, 0, 1) * 200), (v) => (H.jbar.style.width = `${v / 2}%`));
         const m = o.money ? +o.money.get() || 0 : 0, can = !!o.money && m >= jailFine;
         set('can', `${can}|${jailFine}`, () => {
