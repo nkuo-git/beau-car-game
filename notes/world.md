@@ -2,7 +2,7 @@
 
 Nick: 「不用房間 選擇連線的人就加入一個永久的世界 大家都可以持續看到對方 隨時可以看有誰在線上 就發起比賽 各人有自己的車庫 所以路上會有很多個車庫屬於不同人」, then 「不用世界碼 反正就只有一個世界 選擇連線 就進入這個唯一的世界 爸媽已同意」.
 Mock: https://claude.ai/artifact/QDwK28dEsEkumkvR2AiP9Y (Nick said 好). Replaces content 8's rooms (src/site/room.js, notes/room.md); the game side (net.src.js) is mostly the same.
-Trial: docs/try (needs Firebase). Garage street (12 garages) is phase 2, not done yet.
+Garage street: 6 garages (Nick asked to cut it from 12 to 6), see below.
 
 ## What it does
 - 👥 連線 menu: 「大家都在同一個世界。現在有 N 個人在線上。」, 進入世界 / 🏆 排行榜 / 🚗 參觀別人的車庫. Entering is remembered (localStorage `beau.world`), so the next launch goes in by itself; 離開世界 forgets it.
@@ -198,3 +198,10 @@ A parent has to paste them: Firebase console → Realtime Database → 規則 �
   }
 }
 ```
+
+## Garage street (車庫街, village.js 第 16 批)
+- West of your garage: the corner of the village road (node GW, -345,-72) became a T junction; a dead-end street runs west to GST (-410,-72). 3 small garages on each side (white walls, closed roll-up door, a dark name board). Nick first got 12, then asked for 6 (「車庫改成六間就好」).
+- Fields/bamboo there were removed with the throwaway-Builder trick (random numbers still consumed, so nothing else in the village moves). `V.places.garst.slots[i]` = { x, z, ry, sign{x,y,z,ry,w,h}, door{x,z} }, order north/south alternating from the junction.
+- net.src.js draws all name boards as one mesh with one canvas atlas (1 draw call) while in the world: slot 1 = you (orange 「名字（你）」), then online people in join order (「小明的車庫」), the rest 「空的」. Offline the boards stay blank.
+- Stop (under 4 m/s) within 6 m of a door: button 「🚗 看小明的車庫」 → the site drives you home and opens the garage visit (world.js `visitStreet`); your own slot says 「🏠 回你的車庫」.
+- Walking view on the street: ~59 draw calls, 0.21 M triangles.

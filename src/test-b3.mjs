@@ -587,8 +587,9 @@ const s4b = await ev(() => {
   w.teleport(H.gw(16, 4, 0)); X.step(30);
   const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300, X.farFromPolice); if (!ad) return { err: 'no adult' };
   X.faceTo(ad); X.punchBtn(); X.step(2);
-  a.wanted = pol.wanted;
-  // 馬上跑回車庫裡面
+  a.wanted = pol.wanted; a.adD = +Math.hypot(ad.x - t.x, ad.z - t.z).toFixed(1);
+  // 馬上跑回車庫裡面（揍的那個人在 30 公尺外的話門已經自己關了（doorStep）：先在門口再開一次）
+  if (G.door.t === 0) { w.teleport(H.gw(7.5, 0, Math.PI)); X.step(5); a.open2 = H.press(); for (let i = 0; i < 200 && G.door.t < 1; i++) X.step(1); }
   w.teleport(H.gw(5, 0.5, Math.PI)); X.step(5);
   a.walk = H.walkLocal([[2.5, 0.5]]); X.step(5);
   a.act = H.actText(); a.press = H.press(); let n = 0; for (; n < 300 && pol.wanted > 0; n++) X.step(1);

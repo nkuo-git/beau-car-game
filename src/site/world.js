@@ -357,6 +357,7 @@
     else if (d.type === 'back') matchEnd(false);
     else if (d.type === 'answer') answer(String(d.id || ''), !!d.ok);
     else if (d.type === 'list') { errMsg = ''; UI().show('world'); }
+    else if (d.type === 'visit') visitStreet(String(d.uid || ''), String(d.name || ''));
   });
 
   // ---- 參觀車庫（跟房間的時候一樣）----
@@ -392,6 +393,15 @@
       if (!ctl) { visitMsg = '要在車庫頁才能參觀：先按「直接回車庫」，再點一次。'; paintAll(); return; }
       visitMsg = ''; UI().close();
     } catch (e) { busy = false; visitMsg = '打不開，等一下再試一次。'; console.warn('參觀', e); paintAll(); }
+  }
+  async function visitStreet(u, n) { // 車庫街：走到他的車庫門口按「🚗 看他的車庫」→ 回車庫頁 → 參觀
+    if (!u) return;
+    const wait = (ms) => new Promise((ok) => setTimeout(ok, ms)), home = () => G()?.net?.where() === 'garage' && document.getElementById('status')?.hidden !== false;
+    if (G()?.net?.where() !== 'garage') document.getElementById('driveHome')?.click();
+    for (let i = 0; i < 160 && !home(); i++) await wait(250);
+    if (!home()) return;
+    await wait(300);
+    visit(u, n);
   }
   function goTo(u, n) {
     const r = G()?.net?.goTo(u);

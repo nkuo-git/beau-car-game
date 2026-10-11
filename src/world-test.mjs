@@ -8,8 +8,9 @@
 //   6 再比一次、兩個都回去開車（比賽收掉）
 //   7 不要；再找一次 400 公尺 → 好、同時綠燈、成績一樣；A 先回去開車 → B 看到「對方離開了」；一起開車的 draw calls
 //   8 封鎖（兩邊都看不到、規則擋邀請）、解除；關掉邀請；沒回答（15 秒＝不要）
-//   9 參觀車庫（名單上 🚗）
-//   10 離開世界、斷線（自己再進去）、滿了（16 個人）、斷線沒收好的人被清掉、重新打開遊戲自己進去
+//   9 車庫街：名牌（第 1 間是你）、停在朋友的車庫門口「🚗 看他的車庫」→ 回車庫頁參觀
+//   10 參觀車庫（名單上 🚗）
+//   11 離開世界、斷線（自己再進去）、滿了（16 個人）、斷線沒收好的人被清掉、重新打開遊戲自己進去
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -397,7 +398,23 @@ const gone8 = await waitFor(A, () => !document.getElementById('nwWaitErr').hidde
 check(gone8 && /說「不要」/.test((await dlg(A)).waitErr) && await B.evaluate(() => document.querySelector('.nt-inv').hidden) && getAt('matches') == null, 'nobody answered: the card goes away after 15 s and counts as 不要');
 await click(A, '#nwWaitX'); await closeDlg(A);
 
-// ---- 9 參觀車庫 ----
+// ---- 9 車庫街：名牌、走到門口「看他的車庫」 ----
+const st9 = await info(A);
+check(JSON.stringify(st9.gst) === JSON.stringify(['大便龍車神', '阿明快車手']), `garage street signs: first is you, then B (${st9.gst})`);
+const door9 = await A.evaluate(() => { const q = window.__D().VIL.places.garst.slots[1]; window.__D().drv.teleport({ x: q.door.x + 1.5, z: q.door.z, heading: 0 }); window.__D().drv.setInput({ throttle: 0, brake: 1, steer: 0 }); return q.door; });
+const near9 = await waitFor(A, () => { const b = document.querySelector('.nt-gar'); return b && !b.hidden && getComputedStyle(b).display !== 'none'; }, null, 15000);
+const btn9 = await A.evaluate(() => document.querySelector('.nt-gar').textContent);
+console.log('9', el(), JSON.stringify(door9), btn9);
+check(near9 && btn9 === '🚗 看阿明快車手的車庫', `stopped at B’s garage on the garage street: 「${btn9}」`);
+await A.evaluate(() => window.__D().drv.setInput(null));
+await shot(A, `${prefix}-9-garage-street.png`);
+await click(A, '.nt-gar');
+const vis9 = await waitFor(A, () => window.beauGame.visiting?.loaded && document.querySelector('.nv'), null, 180000);
+const t9 = await A.evaluate(() => document.querySelector('.nv-top h3')?.textContent);
+check(vis9 && t9 === '阿明快車手的車庫' && await A.evaluate(() => !window.__D().trip), `tap → back to the garage page and visiting: ${t9}`);
+await click(A, '.nv-x');
+
+// ---- 10 參觀車庫 ----
 await B.evaluate(() => document.getElementById('driveHome').click());
 await waitFor(B, () => !window.__D().trip && document.getElementById('status').hidden, null, 30000);
 await waitFor(A, () => !window.beauGame.net.info.peers[0].vis, null, 10000);
@@ -418,7 +435,7 @@ await click(B, '.nv-like'); await waitFor(B, () => /♥ 0/.test(document.querySe
 await click(B, '.nv-x');
 check(!(await B.evaluate(() => !!document.querySelector('.nv'))), 'closed the visit');
 
-// ---- 10 離開、斷線、滿了、自己進去 ----
+// ---- 11 離開、斷線、滿了、自己進去 ----
 await toWorld(B); await click(B, '#nwLeaveW');
 await waitFor(A, () => window.beauGame.net.info.peers.length === 0, null, 10000);
 check(getAt('world/m/u2') == null && getAt('world/s/1') == null && await B.evaluate(() => !window.__beauWorld.w && localStorage.getItem('beau.world') == null), '離開世界: slot freed, A no longer sees B, B won’t go back in by itself');

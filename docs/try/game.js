@@ -7836,7 +7836,7 @@ function hwyAt(s) { // 中線上距離 s（從路口往北算）的 { x, z, th }
 const NODES = {
   T: [-7, 0], E0: [-60, 0], E1: [-112, 0], SHX: [-136, 0], SH: [-160, 0], C: [-250, 0], X: [-300, 0], W: [-345, 0], DEN: [-410, 0], DEX: [-497, 0], HJ: [-518, 0],
   HO: [HW.x + HW.mid, 0], HI: [HW.x - HW.mid, 0], // 快速道路：往北（外圈）、往南（內圈）那一邊的路口
-  G: [-300, -72], GD: [-300, -92.5], GAR: [-300, -97.5], SHB: [-160, -35], DEB: [-484, -17],
+  G: [-300, -72], GW: [-345, -72], GST: [-410, -72], GD: [-300, -92.5], GAR: [-300, -97.5], SHB: [-160, -35], DEB: [-484, -17],
 };
 // 第 9 批（b9-wide）：Nick 2026-10-09「路變大」→ 村子的路都寬 1.5 倍（中線不動）：大路 9 → 13.5、村子的路 8 → 12、7 → 10.5、水泥農路 6 → 9；
 //   車道（drive：改車廠、車店、車庫、警察局、槍店的進出口）、快速道路（一線 3.75 公尺本來就夠寬）、賽道不變
@@ -7853,7 +7853,8 @@ const ROADS = [
   { a: 'DEX', b: 'HJ', kind: 'main', w: 13.5, pts: [[-497, 0], [-518, 0]] },
   { a: 'HJ', b: 'HO', kind: 'link', w: 8, pts: [[-518, 0], [HW.x + HW.mid, 0]] }, // 路口右轉上外圈（往北）、左轉過中間護欄開口上內圈（往南）
   { a: 'HJ', b: 'HI', kind: 'link', w: 8, pts: [[-518, 0], [HW.x - HW.mid, 0]] },
-  { a: 'W', b: 'G', kind: 'street', w: 10.5, pts: [[-345, 0], [-345, -72], [-300, -72]], round: 10 },
+  { a: 'W', b: 'GW', kind: 'street', w: 10.5, pts: [[-345, 0], [-345, -72]] }, // 第 16 批：轉角變成丁字路口（往西是車庫街）；本來 W → G 一條路、轉角圓 10 公尺
+  { a: 'GW', b: 'G', kind: 'street', w: 10.5, pts: [[-345, -72], [-300, -72]] },
   { a: 'G', b: 'C', kind: 'street', w: 10.5, pts: [[-300, -72], [-250, -72], [-250, 0]], round: 10 },
   { a: 'G', b: 'X', kind: 'street', w: 10.5, pts: [[-300, -72], [-300, 0]] }, // 車庫門口直直往南到大路
   { a: 'G', b: 'GD', kind: 'drive', w: 6, pts: [[-300, -72], [-300, -92.5]] }, // 車庫前的水泥地 → 鐵捲門
@@ -7869,6 +7870,9 @@ const DEST_NODE = { garage: 'GAR', shop: 'SHB', track: 'T', dealer: 'DEB', highw
 NODES.POL = [-345, 11]; NODES.GSP = [-163, 9.5];
 ROADS.push({ a: 'W', b: 'POL', kind: 'drive', w: 7, pts: [[-345, 0], [-345, 11]] }, { a: 'SH', b: 'GSP', kind: 'drive', w: 6, pts: [[-160, 0], [-163, 9.5]] });
 DEST_NODE.police = 'POL'; DEST_NODE.gunshop = 'GSP';
+// 第 16 批：車庫街（GW 路口往西的死巷）
+ROADS.push({ a: 'GW', b: 'GST', kind: 'street', w: 10.5, pts: [[-345, -72], [-410, -72]] });
+DEST_NODE.garst = 'GST';
 // ==== 第 3 批 end ====
 const HWK = new Set(['hwyO', 'hwyI']); // 快速道路的兩條（一圈）：路線圖用
 function roundPoly(pts, r, n = 6) { // 轉角改成圓弧（二次貝茲）
@@ -8390,6 +8394,29 @@ function buildVillage(opts = {}) {
     buildings.push({ kind: 'garage', name: '你的車庫', x: -300, z: -101.35, hx: 9.15, hz: 16, rot: LOT.heading, h: 6, door: { x: -300, z: -91.6, ry: 0 } }); // 車庫模組的地（本地 x −13…5.3、z ±16；第 11 批：本來 ±13）：以後走進去、小地圖用
   }
 
+  // ==== 第 16 批：車庫街（Nick 2026-10-11 大家的世界「各人有自己的車庫 所以路上會有很多個車庫屬於不同人」；草稿 https://claude.ai/artifact/QDwK28dEsEkumkvR2AiP9Y 第 5 張）====
+  // 你家車庫西邊：GW 路口（村子的路轉角）往西一條死巷 x −345…−410，兩邊各 3 間小車庫（Nick 2026-10-11「車庫改成六間就好」；本來 12 間）（白牆、關著的鐵捲門、門上一塊深色名牌）
+  // 名牌上的名字是連線的時候 net.src.js 畫的（V.places.garst.slots[i].sign）；沒連線就是空白的牌子。原本的田、竹林讓位（亂數照樣用掉，別的地方不變）
+  const GST_SLOTS = [];
+  {
+    const wallC = C('#f2f0ea'), trimC = C('#d9d8d2'), doorC = C('#a9afb6'), signC = C('#1d2026'), postC = C('#8e9093'), apronC = C('#d2d2cd');
+    for (let i = 0; i < 3; i++) for (const north of [true, false]) {
+      const x = -362 - 16 * i, z = north ? -86 : -58, ry = north ? -Math.PI / 2 : Math.PI / 2, T = frame(x, 0, z, ry); // 本地 +x＝門朝外（北排朝南、南排朝北），本地 z＝寬
+      B.at(x, z);
+      box('main', T, [-6, 0, -7, 5.9, 5, 7], wallC, { _: U.conc });                                   // 牆
+      box('main', T, [-6.2, 5, -7.2, 6.1, 5.35, 7.2], trimC, { _: U.conc, ny: U.conc });              // 屋頂的邊
+      box('main', T, [5.9, 0.03, -4, 5.98, 3.9, 4], doorC, { _: U.corr, nx: false });                 // 鐵捲門（關著）
+      for (const zz of [-4.35, 4]) box('main', T, [5.9, 0, zz, 6.08, 4.1, zz + 0.35], postC);          // 門框
+      box('main', T, [5.9, 3.9, -4.35, 6.08, 4.1, 4.35], postC);
+      box('main', T, [5.9, 4.2, -3.3, 6.02, 4.92, 3.3], signC, { nx: false });                        // 名牌（字是 net.src.js 貼上去的）
+      addPave(x, north ? -78.6 : -65.4, 7, 1.4, 0, apronC);                                           // 門前的水泥地
+      addBox(x, z, 7, 6, 0, 5.35);
+      buildings.push({ kind: 'garst', name: '車庫街', x, z, hx: 7, hz: 6, rot: 0, h: 5.35 });
+      const sp = T.p(6.03, 4.56, 0), dp = T.p(8, 0, 0); // dp：門前 2 公尺（net.src.js 走到這裡 6 公尺內跳「看他的車庫」）
+      GST_SLOTS.push({ x, z, ry, sign: { x: sp[0], y: sp[1], z: sp[2], ry, w: 6.4, h: 0.62 }, door: { x: dp[0], z: dp[2] } });
+    }
+  }
+
   // ---- 阿輝改車廠：鐵皮工廠。前門開進去（中間的改車區），後門出去，從後院、東邊的小路回大路；裡面舉升機、工具牆、輪胎架、零件架、辦公室、日光燈 ----
   {
     const T = frame(-160, 0, -26, 0); B.at(-160, -35); // 本地＝世界 −(−160, −26)：牆 x −18…18、z −18…0（正面在 z 0 朝南）
@@ -8602,14 +8629,14 @@ function buildVillage(opts = {}) {
     { for (let i = 0; i < 12; i++) rnd(); const r2 = rng(7171); paddyArea(-194, 9, -172, 52, 1, 2, r2); paddyArea(-152, 9, -118, 52, 2, 2, r2); paddyArea(-172, 30, -152, 52, 1, 1, r2); } // 第 3 批：中間空出來給槍店（亂數照樣用掉 12 個，後面的田不變）
     paddyArea(-244, 22, -196, 52, 2, 1, rnd);
     paddyArea(-244, 64, -118, 88, 5, 1, rnd);     // 農路南邊
-    paddyArea(-386, -92, -352, -8, 2, 3, rnd);    // 村子西邊（大路北側）
+    { B = new Builder(200); paddyArea(-386, -92, -352, -8, 2, 3, rnd); paddies.pop(); B = VB; paddyArea(-386, -46, -352, -8, 2, 1, rng(16016)); } // 村子西邊（大路北側）；第 16 批：北邊讓給車庫街（亂數照樣用掉）
     for (let i = 0; i < 4; i++) rnd();            // 第 3 批：西邊（大路南側）的田改成警察局（亂數照樣用掉，後面的田不變）
     paddyArea(-296, 64, -250, 88, 2, 1, rnd);
     paddyArea(-386, 34, -352, 88, 2, 2, rnd);
     { B = new Builder(200); paddyArea(-282, -108, -232, -92, 2, 1, rnd); paddies.pop(); B = VB; const r3 = rng(14014); paddyArea(-282, -108, -259, -92, 1, 1, r3); paddyArea(-240, -108, -232, -92, 1, 1, r3); } // 車庫東北邊 // 第 14 批：中間讓出上山的路（亂數照樣用掉）
-    paddyArea(-386, -110, -344, -94, 2, 1, rnd);
+    { B = new Builder(200); paddyArea(-386, -110, -344, -94, 2, 1, rnd); paddies.pop(); B = VB; } // 第 16 批：車庫街北邊那排車庫蓋在這裡（亂數照樣用掉）
     paddyArea(-176, -106, -130, -76, 2, 1, rnd);  // 改車廠後院北邊
-    paddyArea(-512, -108, -398, -56, 5, 2, rnd);  // 車店後面
+    { B = new Builder(200); paddyArea(-512, -108, -398, -56, 5, 2, rnd); paddies.pop(); B = VB; paddyArea(-512, -108, -414, -56, 4, 2, rng(16017)); } // 車店後面；第 16 批：東邊讓給車庫街的路尾
     paddyArea(-512, 24, -395, 88, 4, 2, rnd);     // 往快速道路那段的南邊
   }
 
@@ -8622,7 +8649,7 @@ function buildVillage(opts = {}) {
     for (let i = 0; i < 16; i++) palm(-214 + (i % 4) * 4 + rnd(), 72 + ((i / 4) | 0) * 4 + rnd(), 7 + rnd() * 3, rnd);
     for (let x = -124; x <= -80; x += 9 + rnd() * 3) palm(x, -10.5 - rnd() * 1.5, 7 + rnd() * 3, rnd);         // 往賽道的路邊（改車廠出口的東邊開始）
     for (let x = -186; x <= -120; x += 10 + rnd() * 4) { const gs = x > -168 && x < -155; if (gs) B = new Builder(200); palm(x, 8.5 + rnd(), 6.5 + rnd() * 3, rnd, !gs); B = VB; } // 第 3 批：槍店門口那棵不種（亂數照樣用掉）
-    for (let z = -100; z <= 84; z += 9 + rnd() * 3) { if (Math.abs(z) < 14) continue; bamboo(-389 + rnd() * 2, z, rnd); } // 西邊竹林（大路穿過去）
+    for (let z = -100; z <= 84; z += 9 + rnd() * 3) { if (Math.abs(z) < 14) continue; const gs = z < -44; if (gs) B = new Builder(200); const nc = colliders.length; bamboo(-389 + rnd() * 2, z, rnd); B = VB; if (gs) colliders.length = nc; } // 西邊竹林（大路穿過去）；第 16 批：車庫街那段不種（亂數照樣用掉）
     for (let x = -505; x <= -66; x += 6 + rnd() * 3) { if (x > -320 && x < -280) continue; const mt = x > -260 && x < -241; if (mt) B = new Builder(200); tree(x, -112 + rnd() * 2, 1.2 + rnd() * 0.4, rnd, !mt); B = VB; } // 北邊一排樹（車庫後面空著）// 第 14 批：上山的路穿過去的那兩棵不種（亂數照樣用掉）
     for (let x = -505; x <= -66; x += 6 + rnd() * 3) { const g4 = x > -121 && x < -103; if (g4) B = new Builder(200); tree(x, 91 + rnd() * 2, 1.2 + rnd() * 0.4, rnd, !g4); B = VB; } // 南邊一排樹 // ==== 第 4 批：往越野車場的水泥路穿過去的那兩棵不種（亂數照樣用掉）====
     // 第 2 批（路上的車）：農路邊的兩棵原本種在路面上（(-248.5, 30) 在往北的車道正中間、(-244, 60) 樹幹壓到轉角的路邊）→ 移到路邊的草地上（離路 2 公尺以上、不在稻田裡；亂數照樣用）
@@ -8978,6 +9005,7 @@ function buildVillage(opts = {}) {
   for (const c of PS.colliders) colliders.push(c);
   for (const p of PS.pave) addPave(p.x, p.z, p.hx, p.hz, p.rot || 0, C(p.col), p.y ?? 0.02);
   places.police = PS.place; buildings.push(PS.building);
+  places.garst = { name: '車庫街', pos: [-380, -72], slots: GST_SLOTS }; // 第 16 批：車庫街（6 格：北排、南排輪流，從路口那邊開始）
   const ST = buildStreet({ buildings, roads, places, colliders, paved, nodes: NODES, poles: stPoles, houses: stHouses, rows: stRows }, { renderer: opts.renderer });
   for (const c of ST.colliders) colliders.push(c);
   for (const p of ST.pave) addPave(p.x, p.z, p.hx, p.hz, p.rot || 0, C(p.col), p.y ?? 0.02);
@@ -37336,6 +37364,7 @@ function netStep(dt) {
     if (P.bub) { P.bubT -= dt; P.bub.visible = P.vis && P.bubT > 0; if (P.bub.visible) P.bub.position.copy(P.tag.position); }
   }
   netGoalTick(me);
+  netGstTick(me, show && !race);
   if (drv) {
     if (NET.setD !== drv) { NET.setD = drv; drv.setMarkers(NET.marks, 'net'); }
     drv.removeColliders('net'); if (NET.cols.length) drv.addColliders(NET.cols, 'net');
@@ -37399,7 +37428,9 @@ body.netdrag #race :is(.minirow,.group,.me,.how){display:none}
 .nt-inv .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .nt-inv .row button{min-height:44px;border:0;border-radius:11px;font:800 15px "Noto Sans TC",sans-serif;cursor:pointer;touch-action:manipulation}
 .nt-inv .a{background:#FF6A1F;color:#1a0d05}.nt-inv .b{background:#24262b;color:#F2F3F5;border:1px solid #34363c}
-body.bigmap .nt,body.shopping .nt,body.cimenu .nt{display:none}`;
+.nt-gar{position:absolute;z-index:6;left:50%;bottom:calc(var(--fs-b,0px) + 150px);transform:translateX(-50%);max-width:calc(100% - 20px);padding:11px 18px;border:2px solid #FF6A1F;border-radius:999px;background:rgba(20,21,24,0.92);color:#F2F3F5;font:800 15px "Noto Sans TC",sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;touch-action:manipulation}
+.nt-gar[hidden],body:not(.driving) .nt-gar{display:none}
+body.bigmap .nt,body.shopping .nt,body.cimenu .nt,body.bigmap .nt-gar{display:none}`;
   document.head.appendChild(st);
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const root = mk('div', 'nt'), room = mk('button', 'nt-room'), emo = mk('button', 'nt-emo', '💬'), tray = mk('div', 'nt-tray');
@@ -37417,8 +37448,9 @@ body.bigmap .nt,body.shopping .nt,body.cimenu .nt{display:none}`;
   const inv = mk('div', 'nt-inv'), invT = mk('b'), invS = mk('span'), invBar = mk('div', 'nt-invbar'), invI = mk('i'), invRow = mk('div', 'row'), invOk = mk('button', 'a', '好'), invNo = mk('button', 'b', '不要');
   invOk.type = invNo.type = 'button'; invBar.append(invI); invRow.append(invOk, invNo); inv.append(invT, invS, invBar, invRow); inv.hidden = true;
   invOk.addEventListener('click', () => netAnswer(true)); invNo.addEventListener('click', () => netAnswer(false));
-  stage.append(root, rc, quit, res, inv);
-  NET.hud = { root, room, emo, tray, rc, big, sub, quit, res, inv, invT, invS, invI, msg: '', msgT: 0, last: '', sig: '' };
+  const gar = mk('button', 'nt-gar'); gar.type = 'button'; gar.hidden = true; gar.addEventListener('click', netGstGo);
+  stage.append(root, rc, quit, res, inv, gar);
+  NET.hud = { root, room, emo, tray, rc, big, sub, quit, res, inv, invT, invS, invI, gar, msg: '', msgT: 0, last: '', sig: '' };
   return NET.hud;
 }
 function netTray(on) { const H = netHud(); H.tray.hidden = !on; H.room.hidden = on; H.emo.hidden = on; }
@@ -37440,6 +37472,73 @@ function netHudTick(dt) {
     H.last = txt; H.room.classList.toggle('msg', H.msgT > 0);
     if (H.msgT > 0) H.room.textContent = txt; else { H.room.replaceChildren('👥 ', Object.assign(document.createElement('b'), { textContent: String(n) }), ' 人在線上'); }
   }
+}
+
+// ---- 車庫街（village.js 第 16 批）：6 間車庫的名牌（一張貼圖 6 格＝1 個 draw call）：第 1 間是你，後面是線上的人（進世界的順序），沒有人就「空的」----
+// 走到（或開到）門口 6 公尺內：「🚗 看小明的車庫」（回車庫頁參觀，網站那邊做）／自己那間「🏠 回你的車庫」
+const NET_GST = { mesh: null, cv: null, tex: null, sig: null, at: -1, own: [] };
+const NET_GST_W = 512, NET_GST_H = 50;
+function netGstBuild() {
+  const SL = VIL?.places?.garst?.slots; if (!SL || NET_GST.mesh || !TR?.scene) return !!NET_GST.mesh;
+  const n = SL.length, cv = document.createElement('canvas'); cv.width = NET_GST_W; cv.height = NET_GST_H * n;
+  const P = [], UV = [], I = [];
+  SL.forEach((q, i) => {
+    const g = q.sign, th = g.ry + Math.PI / 2, ux = Math.cos(th) * g.w / 2, uz = -Math.sin(th) * g.w / 2, v0 = 1 - (i + 1) / n, v1 = 1 - i / n, b = i * 4; // 牌子的寬往右（面向牌子看）
+    for (const [a, y, u, v] of [[-1, -1, 0, v0], [1, -1, 1, v0], [1, 1, 1, v1], [-1, 1, 0, v1]]) { P.push(g.x + ux * a, g.y + y * g.h / 2, g.z + uz * a); UV.push(u, v); }
+    I.push(b, b + 1, b + 2, b, b + 2, b + 3);
+  });
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); geo.setIndex(I); geo.computeBoundingSphere();
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+  mesh.name = 'garst-signs'; mesh.matrixAutoUpdate = false;
+  TR.scene.add(mesh);
+  Object.assign(NET_GST, { mesh, cv, tex, sig: null });
+  return true;
+}
+function netGstPaint() {
+  const SL = VIL?.places?.garst?.slots; if (!SL || !NET_GST.cv) return;
+  const own = NET_GST.own; own.length = 0;
+  own.push({ uid: NET.me, n: NET.myName || '你', me: true });
+  for (const m of NET.mem) if (own.length < SL.length) own.push({ uid: m.uid, n: NET.P.get(m.uid)?.n || String(m.n || '朋友').slice(0, 12), col: NET.P.get(m.uid)?.col });
+  const sig = own.map((o) => o.uid + ':' + o.n).join('|');
+  if (sig === NET_GST.sig) return;
+  NET_GST.sig = sig;
+  const g = NET_GST.cv.getContext('2d'), W = NET_GST_W, H = NET_GST_H;
+  g.clearRect(0, 0, W, H * SL.length);
+  for (let i = 0; i < SL.length; i++) {
+    const o = own[i], y = i * H;
+    g.fillStyle = '#1d2026'; g.fillRect(0, y, W, H);
+    g.font = `800 ${o ? 34 : 28}px "Noto Sans TC", "PingFang TC", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (o) { if (!o.me) { g.fillStyle = o.col || '#4a8cff'; g.beginPath(); g.arc(28, y + H / 2, 9, 0, Math.PI * 2); g.fill(); } g.fillStyle = o.me ? '#FF8A3D' : '#F3F3F1'; g.fillText(o.me ? `${o.n}（你）` : `${o.n}的車庫`, W / 2, y + H / 2 + 1, W - 80); }
+    else { g.fillStyle = '#6d717a'; g.fillText('空的', W / 2, y + H / 2 + 1); }
+  }
+  NET_GST.tex.needsUpdate = true;
+}
+function netGstTick(me, out) {
+  if (!netGstBuild()) return;
+  NET_GST.mesh.visible = true;
+  netGstPaint();
+  let at = -1;
+  if (out && me && Math.abs(me.v ?? me.speed ?? 0) < 4) {
+    const SL = VIL.places.garst.slots;
+    for (let i = 0; i < SL.length && i < NET_GST.own.length; i++) { const d = SL[i].door; if ((d.x - me.x) * (d.x - me.x) + (d.z - me.z) * (d.z - me.z) < 36) { at = i; break; } }
+  }
+  if (at === NET_GST.at) return;
+  NET_GST.at = at;
+  const H = netHud(), o = at >= 0 ? NET_GST.own[at] : null;
+  H.gar.hidden = !o;
+  if (o) H.gar.textContent = o.me ? '🏠 回你的車庫' : `🚗 看${o.n}的車庫`;
+}
+function netGstGo() {
+  const o = NET_GST.at >= 0 ? NET_GST.own[NET_GST.at] : null; if (!o) return;
+  NET_GST.at = -1; netHud().gar.hidden = true;
+  if (o.me) { $('driveHome')?.click(); return; }
+  netEv('visit', { uid: o.uid, name: o.n });
+}
+function netGstOff() {
+  if (NET_GST.mesh) NET_GST.mesh.visible = false;
+  NET_GST.at = -1; NET_GST.sig = null; NET_GST.own.length = 0;
+  if (NET.hud) NET.hud.gar.hidden = true;
 }
 
 // ---- 別人找你比賽：卡片（好／不要），15 秒沒按＝不要；車庫頁也看得到（卡片放在畫面上）----
@@ -37855,7 +37954,7 @@ Object.assign(window.beauGame, {
     },
     leave() {
       netRaceEnd(); netUninvite(); if (NET.goal) { NET.goal = null; if (tripDest === 'friend') setDest(null); }
-      NET.on = false; NET.code = ''; NET.mem = [];
+      NET.on = false; NET.code = ''; NET.mem = []; netGstOff();
       for (const P of [...NET.P.values()]) netDropPeer(P);
       drv?.removeColliders('net'); walker?.removeColliders('net');
       if (NET.hud) { NET.hud.root.hidden = true; NET.hud.rc.hidden = true; NET.hud.res.hidden = true; NET.hud.quit.hidden = true; }
@@ -37898,7 +37997,7 @@ Object.assign(window.beauGame, {
     goTo: netGoTo,
     place: netPlace,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
-    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, car: !!P.obj, walk: !!P.chr })), race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, cols: NET.cols.length }; },
+    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, car: !!P.obj, walk: !!P.chr })), race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, cols: NET.cols.length, gst: NET_GST.own.map((o) => o.n), gstAt: NET_GST.at }; },
   },
   visit: netVisit,
 });
@@ -38973,6 +39072,7 @@ function keepOutOfBays() {
     else if (d.type === 'back') matchEnd(false);
     else if (d.type === 'answer') answer(String(d.id || ''), !!d.ok);
     else if (d.type === 'list') { errMsg = ''; UI().show('world'); }
+    else if (d.type === 'visit') visitStreet(String(d.uid || ''), String(d.name || ''));
   });
 
   // ---- 參觀車庫（跟房間的時候一樣）----
@@ -39008,6 +39108,15 @@ function keepOutOfBays() {
       if (!ctl) { visitMsg = '要在車庫頁才能參觀：先按「直接回車庫」，再點一次。'; paintAll(); return; }
       visitMsg = ''; UI().close();
     } catch (e) { busy = false; visitMsg = '打不開，等一下再試一次。'; console.warn('參觀', e); paintAll(); }
+  }
+  async function visitStreet(u, n) { // 車庫街：走到他的車庫門口按「🚗 看他的車庫」→ 回車庫頁 → 參觀
+    if (!u) return;
+    const wait = (ms) => new Promise((ok) => setTimeout(ok, ms)), home = () => G()?.net?.where() === 'garage' && document.getElementById('status')?.hidden !== false;
+    if (G()?.net?.where() !== 'garage') document.getElementById('driveHome')?.click();
+    for (let i = 0; i < 160 && !home(); i++) await wait(250);
+    if (!home()) return;
+    await wait(300);
+    visit(u, n);
   }
   function goTo(u, n) {
     const r = G()?.net?.goTo(u);

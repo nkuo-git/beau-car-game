@@ -168,6 +168,7 @@ function netStep(dt) {
     if (P.bub) { P.bubT -= dt; P.bub.visible = P.vis && P.bubT > 0; if (P.bub.visible) P.bub.position.copy(P.tag.position); }
   }
   netGoalTick(me);
+  netGstTick(me, show && !race);
   if (drv) {
     if (NET.setD !== drv) { NET.setD = drv; drv.setMarkers(NET.marks, 'net'); }
     drv.removeColliders('net'); if (NET.cols.length) drv.addColliders(NET.cols, 'net');
@@ -231,7 +232,9 @@ body.netdrag #race :is(.minirow,.group,.me,.how){display:none}
 .nt-inv .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .nt-inv .row button{min-height:44px;border:0;border-radius:11px;font:800 15px "Noto Sans TC",sans-serif;cursor:pointer;touch-action:manipulation}
 .nt-inv .a{background:#FF6A1F;color:#1a0d05}.nt-inv .b{background:#24262b;color:#F2F3F5;border:1px solid #34363c}
-body.bigmap .nt,body.shopping .nt,body.cimenu .nt{display:none}`;
+.nt-gar{position:absolute;z-index:6;left:50%;bottom:calc(var(--fs-b,0px) + 150px);transform:translateX(-50%);max-width:calc(100% - 20px);padding:11px 18px;border:2px solid #FF6A1F;border-radius:999px;background:rgba(20,21,24,0.92);color:#F2F3F5;font:800 15px "Noto Sans TC",sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;touch-action:manipulation}
+.nt-gar[hidden],body:not(.driving) .nt-gar{display:none}
+body.bigmap .nt,body.shopping .nt,body.cimenu .nt,body.bigmap .nt-gar{display:none}`;
   document.head.appendChild(st);
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const root = mk('div', 'nt'), room = mk('button', 'nt-room'), emo = mk('button', 'nt-emo', '💬'), tray = mk('div', 'nt-tray');
@@ -249,8 +252,9 @@ body.bigmap .nt,body.shopping .nt,body.cimenu .nt{display:none}`;
   const inv = mk('div', 'nt-inv'), invT = mk('b'), invS = mk('span'), invBar = mk('div', 'nt-invbar'), invI = mk('i'), invRow = mk('div', 'row'), invOk = mk('button', 'a', '好'), invNo = mk('button', 'b', '不要');
   invOk.type = invNo.type = 'button'; invBar.append(invI); invRow.append(invOk, invNo); inv.append(invT, invS, invBar, invRow); inv.hidden = true;
   invOk.addEventListener('click', () => netAnswer(true)); invNo.addEventListener('click', () => netAnswer(false));
-  stage.append(root, rc, quit, res, inv);
-  NET.hud = { root, room, emo, tray, rc, big, sub, quit, res, inv, invT, invS, invI, msg: '', msgT: 0, last: '', sig: '' };
+  const gar = mk('button', 'nt-gar'); gar.type = 'button'; gar.hidden = true; gar.addEventListener('click', netGstGo);
+  stage.append(root, rc, quit, res, inv, gar);
+  NET.hud = { root, room, emo, tray, rc, big, sub, quit, res, inv, invT, invS, invI, gar, msg: '', msgT: 0, last: '', sig: '' };
   return NET.hud;
 }
 function netTray(on) { const H = netHud(); H.tray.hidden = !on; H.room.hidden = on; H.emo.hidden = on; }
@@ -272,6 +276,73 @@ function netHudTick(dt) {
     H.last = txt; H.room.classList.toggle('msg', H.msgT > 0);
     if (H.msgT > 0) H.room.textContent = txt; else { H.room.replaceChildren('👥 ', Object.assign(document.createElement('b'), { textContent: String(n) }), ' 人在線上'); }
   }
+}
+
+// ---- 車庫街（village.js 第 16 批）：6 間車庫的名牌（一張貼圖 6 格＝1 個 draw call）：第 1 間是你，後面是線上的人（進世界的順序），沒有人就「空的」----
+// 走到（或開到）門口 6 公尺內：「🚗 看小明的車庫」（回車庫頁參觀，網站那邊做）／自己那間「🏠 回你的車庫」
+const NET_GST = { mesh: null, cv: null, tex: null, sig: null, at: -1, own: [] };
+const NET_GST_W = 512, NET_GST_H = 50;
+function netGstBuild() {
+  const SL = VIL?.places?.garst?.slots; if (!SL || NET_GST.mesh || !TR?.scene) return !!NET_GST.mesh;
+  const n = SL.length, cv = document.createElement('canvas'); cv.width = NET_GST_W; cv.height = NET_GST_H * n;
+  const P = [], UV = [], I = [];
+  SL.forEach((q, i) => {
+    const g = q.sign, th = g.ry + Math.PI / 2, ux = Math.cos(th) * g.w / 2, uz = -Math.sin(th) * g.w / 2, v0 = 1 - (i + 1) / n, v1 = 1 - i / n, b = i * 4; // 牌子的寬往右（面向牌子看）
+    for (const [a, y, u, v] of [[-1, -1, 0, v0], [1, -1, 1, v0], [1, 1, 1, v1], [-1, 1, 0, v1]]) { P.push(g.x + ux * a, g.y + y * g.h / 2, g.z + uz * a); UV.push(u, v); }
+    I.push(b, b + 1, b + 2, b, b + 2, b + 3);
+  });
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); geo.setIndex(I); geo.computeBoundingSphere();
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+  mesh.name = 'garst-signs'; mesh.matrixAutoUpdate = false;
+  TR.scene.add(mesh);
+  Object.assign(NET_GST, { mesh, cv, tex, sig: null });
+  return true;
+}
+function netGstPaint() {
+  const SL = VIL?.places?.garst?.slots; if (!SL || !NET_GST.cv) return;
+  const own = NET_GST.own; own.length = 0;
+  own.push({ uid: NET.me, n: NET.myName || '你', me: true });
+  for (const m of NET.mem) if (own.length < SL.length) own.push({ uid: m.uid, n: NET.P.get(m.uid)?.n || String(m.n || '朋友').slice(0, 12), col: NET.P.get(m.uid)?.col });
+  const sig = own.map((o) => o.uid + ':' + o.n).join('|');
+  if (sig === NET_GST.sig) return;
+  NET_GST.sig = sig;
+  const g = NET_GST.cv.getContext('2d'), W = NET_GST_W, H = NET_GST_H;
+  g.clearRect(0, 0, W, H * SL.length);
+  for (let i = 0; i < SL.length; i++) {
+    const o = own[i], y = i * H;
+    g.fillStyle = '#1d2026'; g.fillRect(0, y, W, H);
+    g.font = `800 ${o ? 34 : 28}px "Noto Sans TC", "PingFang TC", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (o) { if (!o.me) { g.fillStyle = o.col || '#4a8cff'; g.beginPath(); g.arc(28, y + H / 2, 9, 0, Math.PI * 2); g.fill(); } g.fillStyle = o.me ? '#FF8A3D' : '#F3F3F1'; g.fillText(o.me ? `${o.n}（你）` : `${o.n}的車庫`, W / 2, y + H / 2 + 1, W - 80); }
+    else { g.fillStyle = '#6d717a'; g.fillText('空的', W / 2, y + H / 2 + 1); }
+  }
+  NET_GST.tex.needsUpdate = true;
+}
+function netGstTick(me, out) {
+  if (!netGstBuild()) return;
+  NET_GST.mesh.visible = true;
+  netGstPaint();
+  let at = -1;
+  if (out && me && Math.abs(me.v ?? me.speed ?? 0) < 4) {
+    const SL = VIL.places.garst.slots;
+    for (let i = 0; i < SL.length && i < NET_GST.own.length; i++) { const d = SL[i].door; if ((d.x - me.x) * (d.x - me.x) + (d.z - me.z) * (d.z - me.z) < 36) { at = i; break; } }
+  }
+  if (at === NET_GST.at) return;
+  NET_GST.at = at;
+  const H = netHud(), o = at >= 0 ? NET_GST.own[at] : null;
+  H.gar.hidden = !o;
+  if (o) H.gar.textContent = o.me ? '🏠 回你的車庫' : `🚗 看${o.n}的車庫`;
+}
+function netGstGo() {
+  const o = NET_GST.at >= 0 ? NET_GST.own[NET_GST.at] : null; if (!o) return;
+  NET_GST.at = -1; netHud().gar.hidden = true;
+  if (o.me) { $('driveHome')?.click(); return; }
+  netEv('visit', { uid: o.uid, name: o.n });
+}
+function netGstOff() {
+  if (NET_GST.mesh) NET_GST.mesh.visible = false;
+  NET_GST.at = -1; NET_GST.sig = null; NET_GST.own.length = 0;
+  if (NET.hud) NET.hud.gar.hidden = true;
 }
 
 // ---- 別人找你比賽：卡片（好／不要），15 秒沒按＝不要；車庫頁也看得到（卡片放在畫面上）----
@@ -687,7 +758,7 @@ Object.assign(window.beauGame, {
     },
     leave() {
       netRaceEnd(); netUninvite(); if (NET.goal) { NET.goal = null; if (tripDest === 'friend') setDest(null); }
-      NET.on = false; NET.code = ''; NET.mem = [];
+      NET.on = false; NET.code = ''; NET.mem = []; netGstOff();
       for (const P of [...NET.P.values()]) netDropPeer(P);
       drv?.removeColliders('net'); walker?.removeColliders('net');
       if (NET.hud) { NET.hud.root.hidden = true; NET.hud.rc.hidden = true; NET.hud.res.hidden = true; NET.hud.quit.hidden = true; }
@@ -730,7 +801,7 @@ Object.assign(window.beauGame, {
     goTo: netGoTo,
     place: netPlace,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
-    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, car: !!P.obj, walk: !!P.chr })), race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, cols: NET.cols.length }; },
+    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, car: !!P.obj, walk: !!P.chr })), race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, cols: NET.cols.length, gst: NET_GST.own.map((o) => o.n), gstAt: NET_GST.at }; },
   },
   visit: netVisit,
 });

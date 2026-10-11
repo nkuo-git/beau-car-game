@@ -68,7 +68,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 ## 版本號
 - 標題旁：`0.<APK 版號>.<內容版號>`。APK 版號＝「編 APK」workflow 的 run number（Release `apk-N`），網頁版（不在 App 裡）是 0。內容版號＝`docs/version.json`。
 - 內容 1 ＝ 跟萬能軟體 0.9.37／內容 38 一樣的遊戲（main 第一次）。
-- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4；v29 ＝ 內容 5）；下一個試做頁是 v33（v32 ＝ 400 公尺再比一次看得到對手；v30 ＝ 撞前車不會整台停住；v31 ＝ 大地圖；v30＋v31 ＝ 內容 7）。
+- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4；v29 ＝ 內容 5）；下一個試做頁是 v34（v33 ＝ 關 10 分鐘＋大家的世界＋車庫街＝內容 11；v32 ＝ 400 公尺再比一次看得到對手；v30 ＝ 撞前車不會整台停住；v31 ＝ 大地圖；v30＋v31 ＝ 內容 7）。
 
 ## 試做頁（artifact）
 - https://claude.ai/artifact/29pHoiqGVBs34ERLnJ9T8s（Nick 的；新的專案第一次發佈前要先用 Artifact 的 `read` 讀它，才能更新同一個網址）。
@@ -101,7 +101,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `node site-test.mjs ../docs ../out/site/site` | 網站：打開、開車、有新版本那一條、App 有新版本、搬進度 | 24 ok |
 | `node cloud-test.mjs ../docs ../out/cloud/cloud` | 登入＋雲端存檔（假的雲端、兩支手機、沒網路、App 外殼） | 20 ok |
 | `node online-test.mjs ../docs ../out/online/online` | 連線：要先登入、取名字（擋髒話）、跑完自己上傳、排行榜、鬼影車按鈕（假的 Firestore） | 30 ok |
-| `node world-test.mjs ../docs ../out/world/world` | 兩支假手機（兩個瀏覽器、假的即時資料庫）：進入世界、線上的人、各自出門看得到對方、去找他、表情、找人比賽（邀請卡片 好／不要／沒回答）、爬山／400 公尺、再比一次、回去開車、封鎖、關掉邀請、參觀車庫、離開、斷線、滿了（16）、清掉斷線的人、自己進去 | 61 ok，ALL CHECKS OK（約 3 分；還沒上線前用 ../docs/try） |
+| `node world-test.mjs ../docs ../out/world/world` | 兩支假手機（兩個瀏覽器、假的即時資料庫）：進入世界、線上的人、各自出門看得到對方、去找他、表情、找人比賽（邀請卡片 好／不要／沒回答）、爬山／400 公尺、再比一次、回去開車、封鎖、關掉邀請、參觀車庫、離開、斷線、滿了（16）、清掉斷線的人、自己進去、車庫街（名牌、看他的車庫） | 64 ok，ALL CHECKS OK（約 3 分） |
 
 - test-app-b1／b4 給萬能軟體的 repo（有 tune.html）也可以跑，就是測萬能軟體的改車頁。
 - **不可以為了變綠燈把測試改鬆**；找出原因修好。新加或改的測試要真的有在測東西。
@@ -161,6 +161,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - **按鈕收起來＋按鈕大小（內容 8；Nick 2026-10-10 說好，草稿 https://claude.ai/artifact/UKuAXoAiocDidxbjYY8EE9 ）**：全螢幕開車（直拿、橫拿都一樣）平常只有「📍 去哪裡 ▾」和「⋯」；按「⋯」才出現聲音、全螢幕、換視角、「Aa」；再按一次、選了地方、車子開起來（超過時速約 14 公里；車已經在動才打開的話 8 秒）就收起來（town.src.js `FOLD`、`foldStep`）。「Aa」→「按鈕大小 小／中／大」＝0.8／1／1.15 倍（CSS `--hudz`、`zoom`），每支手機自己記在 localStorage `carid.btnsize`（不在存檔裡）。
 - **內容 9（2026-10-11 上線，apk-7）**：App 有新版本時在 App 裡下載、跳出安裝（不用開 GitHub；草稿 https://claude.ai/artifact/SrniCXgzmZ9hpUkPdSCKfn ）。apk-7 要從 GitHub 裝最後一次。
 - **內容 10（2026-10-11 上線，試做頁 v32）**：400 公尺「再比一次」對手的車會停在旁邊的車道（以前被放到 400 公尺後面看不到；race.src.js `carSize` 先搬回原點再量）。
+- **內容 11（2026-10-11 上線，試做頁 v33）**：被警察抓關 10 分鐘（拘留室裡倒數「還要關 分:秒」，繳罰款照樣馬上出去；police-ai.js）。連線改成**大家的世界**（沒有房間了；Nick 說爸媽同意）：按「進入世界」大家都在同一個世界（最多 16 個人），看得到誰在線上、點名字「找他比賽」（兩個人：爬山／400 公尺／賽車場；對方按好才開始）、去找他、🚫 封鎖、關掉邀請、離開世界。車庫街：你家車庫西邊的死巷，6 間車庫（第 1 間是你，其他是線上的人，名牌上寫名字），走到門口按「看他的車庫」（village.js 第 16 批、net.src.js `NET_GST`）。程式在 `src/site/world.js`（取代 room.js），規則、資料在 `notes/world.md`（規則家長 2026-10-11 貼好；`rooms/` 那段留給舊版，以後可以拿掉）。
 - **已知問題**
   - 內湖的路是平的（真的港墘一帶本來就很平）。
   - 內湖的車流、行人讓第一次出門的載入多約 0.4–0.7 秒（電腦上；npc.js 路網，`NPC.load.graphs`）。
@@ -169,4 +170,4 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - **價錢（萬，新台幣）**：GC8 75（一開始就有）、YARIS 130、SUPRA 200、GT-R 400、918 3000、SP3 6000、JESKO 7500（阿財車行）；怪獸卡車 100（越野車行）。槍：手槍 3、衝鋒槍 12、霰彈槍 18、步槍 30；靶場第一次全中每把槍 2 萬。泥巴賽獎金 20／80／300。被抓罰款每顆星 2 萬。零件、輪胎的價錢在 garage.src.html 的 `PERF`。
 
 ## 筆記（notes/）
-以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）、mountain（山）、online（鬼影排行榜）、room（房間、一起開車、一起比賽、參觀車庫）、bigmap（大地圖、撞前車）、fixes（已知問題 5–12 的修法：越野車車庫、輾扁長回來、電線、內湖車流行人、橫拿手機的按鈕）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。
+以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）、mountain（山）、online（鬼影排行榜）、room（房間、一起開車、一起比賽、參觀車庫；內容 11 起換成 world）、world（大家的世界、找人比賽、車庫街）、bigmap（大地圖、撞前車）、fixes（已知問題 5–12 的修法：越野車車庫、輾扁長回來、電線、內湖車流行人、橫拿手機的按鈕）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。

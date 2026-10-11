@@ -120,11 +120,14 @@ await p.addInitScript(() => {
   H.pol = () => { const P = window.__pol(); return P ? { wanted: P.wanted, types: P.telemetry().crimes.map((c) => c.type) } : null; };
   H.cst = () => { const C = window.__C(); return C ? { ...C.stats, types: C.stats.types.slice(), junk: C.stats.junk, pads: C.pads.filter((q) => q.on).length, junkCars: C.junk.length } : null; };
   // 路上的車：最近的一台汽車（kind＝'scooter'：機車）；停住它（測試用：stun），回它的位置
-  H.pickTraffic = (r = 70, kind = 'car') => {
+  H.pickTraffic = (r = 70, kind = 'car', clear = 0) => { // clear：前面這麼多公尺不能經過你家車庫那塊（輾不到的地方，town.src.js crushSafe）＝輾完還開得下去
     const D = window.__D(), N = window.__N(), t = D.drv.telemetry();
+    const Z = D.VIL.places.garage.zone, zc = Math.abs(Math.cos(Z.rot || 0)), zs = Math.abs(Math.sin(Z.rot || 0)), ex = zc * Z.hx + zs * Z.hz + 1.5 + 2.2, ez = zs * Z.hx + zc * Z.hz + 1.5 + 2.2;
+    const blocked = (c) => { for (let s = 0; s <= clear; s += 2) { const x = c.x + Math.cos(c.heading) * s, z = c.z - Math.sin(c.heading) * s; if (Math.abs(x - Z.x) < ex && Math.abs(z - Z.z) < ez) return true; } return false; };
     let best = null, bd = r;
     for (const c of N.traffic.cars) {
       if (c.kind !== kind) continue;
+      if (clear && blocked(c)) continue;
       const d = Math.hypot(c.x - t.x, c.z - t.z); if (d > bd) continue;
       let busy = false; // 後面 10 公尺要空（怪獸卡車要放在那裡）
       const bx = c.x - Math.cos(c.heading) * 10, bz = c.z + Math.sin(c.heading) * 10;
@@ -272,7 +275,7 @@ check(bd2.mode === 'off' && bd2.cur === 'monster' && bd2.drv, `walked to the mon
 check(await p.evaluate(() => !!window.__D().drv.telemetry().rideOn && window.__D().drv.carInfo.halfW === 1.905), 'the monster truck drives with the terrain ride on (half width 1.905)');
 await p.evaluate(() => { const D = window.__D(), H = window.__H; D.drv.teleport(D.VIL.places.garage.spawn); H.step(20); window.__pol()?.clear(); });
 let tgt2 = null;
-for (let i = 0; i < 20 && !tgt2; i++) { await p.evaluate(() => window.__H.step(90)); tgt2 = await p.evaluate(() => window.__H.pickTraffic(90)); }
+for (let i = 0; i < 20 && !tgt2; i++) { await p.evaluate(() => window.__H.step(90)); tgt2 = await p.evaluate(() => window.__H.pickTraffic(90, 'car', 45)); } // 輾完要再開 25 公尺以上：前面 45 公尺不能撞進你家車庫那塊（那裡的路牌、電線桿輾不到）
 console.log('  traffic target:', JSON.stringify(tgt2));
 check(!!tgt2, 'found a traffic car for the monster truck');
 const crush2 = await p.evaluate((q) => {
