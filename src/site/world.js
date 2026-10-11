@@ -5,7 +5,7 @@
 // 即時資料庫（cloud.js 的 backend().rt()；規則在 notes/world.md，要爸媽貼到 Firebase 主控台）：
 //   world/s/{0–15}：uid（16 個位子＝同時最多 16 個人）
 //   world/m/{uid}：{ n, car, l, ch, s（位子）, j（進來的時間）, w（在哪裡）, inv（1＝收比賽邀請、0＝關掉）}
-//   world/p/{uid}：位置（跟房間一樣，一秒 8 次，沒動就少送）；world/e/{uid}：表情 { e, t }
+//   world/p/{uid}：位置（跟房間一樣，一秒 8 次，沒動就少送；被警察追多送 w 幾顆星、pc 警車、jl 被抓了）；world/e/{uid}：表情 { e, t }
 //   world/bl/{uid}/{誰}：他的名字（封鎖；兩邊都看不到對方、不能找對方比賽）
 //   world/ch/{給誰}/{誰找的}：{ kind, t, id }（比賽邀請；20 秒沒回答就算了）
 //   matches/{id}：{ a（找人的）, b, kind, at, ok（1 好、−1 不要、−2 在忙）, seq, go }；matches/{id}/r/{seq}/{uid}：{ t }（0＝準備好，秒數＝跑完，−1＝沒跑完）
@@ -185,7 +185,9 @@
     const s = G().net.state(), now = performance.now();
     const o = { x: rd(s.x, 100), z: rd(s.z, 100), h: rd(s.h, 1000), v: rd(s.v, 10), o: s.o | 0, k: s.k };
     if (s.rp != null) { o.rp = s.rp; o.rs = s.rs; }
-    const L = W.last, moved = !L || L.o !== o.o || L.k !== o.k || L.rs !== o.rs || Math.abs(L.x - o.x) > 0.05 || Math.abs(L.z - o.z) > 0.05 || Math.abs(L.h - o.h) > 0.01 || Math.abs(L.v - o.v) > 0.2 || L.rp !== o.rp;
+    if (s.w) o.w = s.w; if (s.jl) o.jl = 1; // 被警察追：幾顆星、追他的警車；被抓了
+    if (s.pn) { o.pc = []; for (let i = 0; i < s.pn * 3; i++) o.pc.push(rd(s.pc[i], i % 3 === 2 ? 100 : 10)); }
+    const L = W.last, moved = !L || L.o !== o.o || L.k !== o.k || L.rs !== o.rs || L.w !== o.w || L.jl !== o.jl || pcMoved(L.pc, o.pc) || Math.abs(L.x - o.x) > 0.05 || Math.abs(L.z - o.z) > 0.05 || Math.abs(L.h - o.h) > 0.01 || Math.abs(L.v - o.v) > 0.2 || L.rp !== o.rp;
     const gap = now - W.lastT;
     if (!(moved && gap > 110 || gap > (o.o ? 1500 : 3000))) return;
     o.t = rt.now(); W.last = o; W.lastT = now;
@@ -194,6 +196,12 @@
       W.myCar = s.k; W.lkK = lookKey(); const lk = G().net.look();
       if (lk) rt.update(`world/m/${W.me}`, { car: String(lk.car).slice(0, 12), l: lk.l || null }).catch((e) => console.warn('換車', e));
     }
+  }
+  function pcMoved(a, b) {
+    if (!a || !b) return a !== b;
+    if (a.length !== b.length) return true;
+    for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 0.1) return true;
+    return false;
   }
   function lookKey() { const lk = G()?.net?.look(); return lk ? lk.car + JSON.stringify(lk.l || null) : null; }
   function tick() {

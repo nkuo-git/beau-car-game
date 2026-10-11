@@ -48,6 +48,7 @@
 //   police.markers             小地圖的點：[{ x, z, fill, ring, r, on }]（同一個陣列，每幀換內容：紅藍閃、回警察局的灰色）
 //                              → drv.setMarkers(police.markers)、walker.setMarkers(police.markers)（drive.js／walk.js 加的小功能，一次就好）
 //   police.wanted              現在幾顆星（0–3）；police.state：'free' | 'wanted' | 'caught' | 'jail' | 'release'
+//   police.jailLeft            關在拘留室還要幾秒（不是關著＝0）
 //   police.clear()             星星清掉、警車馬上收掉（重新開始、回車庫頁）；police.setEnabled(on)（比賽、車庫頁：false＝警察全部收起來、HUD 藏起來，星星留著）
 //   police.surrender()         第 3 批（b3-int）：通緝中自己走進警察局＝自首（跟被抓到一樣：關起來、可以繳罰款）
 //   police.payFine()           繳罰款（拘留室的按鈕就是叫這個）；police.telemetry() → 見最下面；police.dispose()
@@ -1857,6 +1858,7 @@ function createPolice(o = {}) {
     update, crime, punch, carHit, shot, carObject, shotCar, colliders, wreck, movers, npcCars, markers: markerList, clear, setEnabled, dispose, telemetry, payFine, preload,
     surrender: () => { if (state !== 'wanted') return false; caught('surrender'); return true; }, // 第 3 批（b3-int）：通緝中自己走進警察局＝自首（一樣關、一樣罰）
     get wanted() { return wanted; }, get state() { return state; }, get enabled() { return enabled; },
+    get jailLeft() { return state === 'jail' ? Math.max(0, jailLeft) : 0; }, // 連線：朋友的名單寫「在拘留室 9:30」
     resetPerf() { perf.n = 0; perf.sum = 0; perf.max = 0; },
     _dbg: DBG,
   };

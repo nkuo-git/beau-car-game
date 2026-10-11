@@ -24,7 +24,7 @@ fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.glb': 'model/gltf-binary', '.json': 'application/json', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 const hook = 'window.__R = () => race; window.__D = () => ({ on: DRIVE.on, drv, walker, trip, VIL, cur, indoor });'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
-  + ' window.__NET = () => NET; window.__CARS = () => CARS; window.__HILL = () => HILL; window.__TD = () => tripDest;'
+  + ' window.__NET = () => NET; window.__CARS = () => CARS; window.__HILL = () => HILL; window.__TD = () => tripDest; window.__POL = () => police; window.__GAME = () => GAME;'
   + ' renderer.setAnimationLoop = function (cb) { clearInterval(this.__iv); this.__iv = cb ? setInterval(() => { const t = performance.now(); cb(t); window.__ticks = (window.__ticks || 0) + 1; }, 30) : 0; };'
   + ' window.__thin = (n) => { if (!renderer.__rr) { renderer.__rr = renderer.render.bind(renderer); renderer.__rn = 0; renderer.render = (s, c) => { if (++renderer.__rn % renderer.__every === 0) renderer.__rr(s, c); }; } renderer.__every = Math.max(1, n | 0); }; window.__thin(300);'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
@@ -372,6 +372,27 @@ console.log('   repaint', JSON.stringify(repaint), JSON.stringify(await A.evalua
 check(seenPaint, `B repaints the car while in the world (${repaint.old} → ${repaint.p}): A sees B’s car in the new colour`);
 await B.evaluate((o) => { window.__CARS()[window.__D().cur].state.paint = o; }, repaint.old);
 await A.evaluate(() => window.__thin(300));
+// Nick 2026-10-11「別人被警察抓我看不到」：B 被警察追 → A 看到 B 的名字旁邊兩顆星、追 B 的警車（紅藍燈）；B 被抓 → A 跳「🚓 阿明快車手被警察抓走了！」、名單「在拘留室 10:00」
+await B.evaluate(() => { const t = window.__D().drv.telemetry(); window.__POL().crime('hit', { x: t.x, z: t.z }); });
+const chased = await waitFor(A, () => { const i = window.beauGame.net.info, q = i.peers[0]; return q && q.w === 2 && q.tagW === 2 && i.pol >= 1; }, null, 120000);
+const ch7 = await A.evaluate(() => { const i = window.beauGame.net.info; return { pol: i.pol, peer: i.peers[0] }; });
+const bPol = await B.evaluate(() => window.__POL().telemetry().cars.map((c) => [c.x, c.z]));
+console.log('   chased', chased, JSON.stringify(ch7), JSON.stringify(bPol), JSON.stringify(getAt('world/p/u2')));
+check(chased, `B is wanted (2★): A sees ★★ next to B’s name and ${ch7.pol} police car(s) chasing B`);
+await shot(A, `${prefix}-7-chased.png`);
+await B.evaluate(() => window.__POL().surrender());
+const jail7 = await waitFor(B, () => window.__POL().state === 'jail', null, 30000);
+const toast7 = await waitFor(A, () => /🚓 阿明快車手被警察抓走了！/.test(document.querySelector('#stage .dv-toast')?.textContent || ''), null, 15000);
+const list7 = await waitFor(A, () => /^在拘留室 (10:00|9:[0-5]0)$/.test(window.__beauWorld.w.mem.find((m) => m.uid === 'u2')?.w || ''), null, 15000);
+const gone7 = await waitFor(A, () => { const i = window.beauGame.net.info; return i.pol === 0 && i.peers[0].tagW === 0; }, null, 15000);
+console.log('   jailed', jail7, toast7, list7, gone7, getAt('world/m/u2/w'));
+check(jail7 && toast7 && gone7, 'B is caught: A gets 「🚓 阿明快車手被警察抓走了！」, the stars and police cars go away');
+check(list7, `A’s list says where B is: 「${getAt('world/m/u2/w')}」`);
+const paid7 = await B.evaluate(() => { window.__GAME().money = Math.max(window.__GAME().money, 10); return window.__POL().payFine(); }); // 罰款 2★＝4 萬
+console.log('   paid', paid7);
+const out7 = await waitFor(B, () => window.__POL().state === 'free' && window.__D().walker && window.__D().walker.mode === 'walk', null, 30000);
+console.log('   out', out7, JSON.stringify(await B.evaluate(() => { const D = window.__D(), w = D.walker; return { st: window.__POL().state, mode: w && w.mode, indoor: !!D.indoor, paused: w && w.telemetry().paused, jl: window.__POL().telemetry().jail }; })));
+check(out7, 'B paid the fine and is out again');
 
 // ---- 8 封鎖、關掉邀請、沒回答 ----
 await toWorld(A);
