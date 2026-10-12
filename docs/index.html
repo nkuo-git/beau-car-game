@@ -33,7 +33,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="./game.css?v=11">
+<link rel="stylesheet" href="./game.css?v=12">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
 </head>
 <body>
@@ -182,6 +182,17 @@
       <button type="button" class="imp-yes cl-btn" id="clUseCloud">用雲端的</button>
       <button type="button" class="imp-no cl-btn" id="clUseLocal">用這支手機的<small>雲端的會被蓋掉</small></button>
     </div>
+    <!-- 一個帳號只能一支手機（Nick 2026-10-11；草稿 HY57ifTtvknBBRDBoNJk6k 第 4 張） -->
+    <div class="cl-sec" id="clDev" hidden>
+      <p class="cl-note">這個 Google 帳號已經在另一支手機登入了。一個帳號只能在一支手機玩。</p>
+      <button type="button" class="imp-yes cl-btn" id="clKick">把那支手機登出<small>那支的進度還在，只是不會存到雲端</small></button>
+      <button type="button" class="imp-no cl-btn" id="clNoLogin">不要在這支登入</button>
+    </div>
+    <div class="cl-sec" id="clKicked" hidden>
+      <p class="cl-note">你的帳號在另一支手機登入了，所以這支登出了。這支手機上的進度還在。</p>
+      <button type="button" class="imp-yes cl-btn" id="clKickOk">知道了</button>
+      <button type="button" class="imp-no cl-btn" id="clRelogin">再登入這支<small>會把另一支登出</small></button>
+    </div>
   </div>
 </div>
 
@@ -207,7 +218,7 @@
       <button type="button" class="imp-yes cl-btn" id="nwWorldBtn">進入世界</button>
       <button type="button" class="imp-no cl-btn" id="nwBoardBtn">🏆 排行榜</button>
       <button type="button" class="imp-no cl-btn" id="nwVisitBtn">🚗 參觀別人的車庫</button>
-      <p class="cl-note" id="nwMenuNote">只看得到名字，不能打字聊天（只有 5 個表情）。同時最多 16 個人。</p>
+      <p class="cl-note" id="nwMenuNote">只看得到名字，不能打字聊天（只有 5 個表情）。同時最多 6 個人。</p>
       <div class="nw-me"><span>你的名字：<b id="nwMyName"></b></span><button type="button" class="nw-link" id="nwRename">改名字</button></div>
     </div>
     <div class="cl-sec" id="nwWorld" hidden>
@@ -252,6 +263,6 @@
   </div>
 </div>
 
-<script type="module" src="./game.js?v=11"></script>
+<script type="module" src="./game.js?v=12"></script>
 </body>
 </html>

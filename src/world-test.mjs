@@ -362,6 +362,7 @@ const greens = await Promise.all([A, B].map((p) => p.waitForFunction(() => { con
 check(greens.every((g) => g.d >= 0 && g.d <= g.gap + 50), `green light on the first frame after the agreed time on both phones (${greens.map((g) => g.d).join(' / ')} ms)`);
 await A.waitForFunction(() => window.__R()?.me.x > 120, null, { timeout: 60000, polling: 100 });
 const mid = await A.evaluate(() => { const r = window.__R(), o = r.nOpp[0]; return { me: r.me.x, opp: o.x, vis: !!o.obj && o.obj.car.visible, z: o.obj?.car.position.z }; });
+console.log('   drag mid: B own x', await B.evaluate(() => { const r = window.__R(); return r && [r.me.x.toFixed(1), r.phase, r.me.go != null]; }), 'A sees', mid.opp.toFixed(1));
 check(mid.vis && mid.opp > 50 && mid.z < 0, `B’s car runs in the other lane on A’s screen (B at ${mid.opp.toFixed(0)} m, A at ${mid.me.toFixed(0)} m)`);
 const res7 = await Promise.all([A, B].map((p) => waitFor(p, () => { const r = document.querySelector('.nt-res'); return r && !r.hidden && (r.innerText.match(/\d+\.\d\d 秒/g) || []).length === 2; }, null, 90000).then(async (ok) => ({ ok, txt: await p.evaluate(() => document.querySelector('.nt-res').innerText.replace(/\s+/g, ' ')) }))));
 const rows = (t) => (t.match(/\d (大便龍車神|阿明快車手)(（你）)? (\d+\.\d\d) 秒/g) || []).map((s) => s.replace('（你）', ''));
