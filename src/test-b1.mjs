@@ -300,7 +300,7 @@ await p.addInitScript(() => {
     const D = window.__D(), G = D.GAR, V = D.VIL;
     const cars = W().cars.map((c) => { const hc = Math.cos(c.heading), hs = Math.sin(c.heading), cx = c.cx || 0, cz = c.cz || 0; return { t: 'box', x: c.x + cx * hc + cz * hs, z: c.z - cx * hs + cz * hc, hx: c.hx, hz: c.hz, rot: c.heading, h: 1.4 }; });
     const fr = V.buildings.filter((b) => b.floors >= 2 && (b.kind === 'house' || b.kind === 'shop')).map((b) => ({ t: 'box', x: b.x + Math.sin(b.rot) * (b.hz + 0.56), z: b.z + Math.cos(b.rot) * (b.hz + 0.56), hx: b.hx, hz: 0.56, rot: b.rot, y0: 2.7, h: b.h }));
-    return [...V.colliders, ...G.colliders(G.door.t >= 0.55, true), ...cars, ...fr];
+    return [...V.colliders.filter((c) => c.off !== true), ...G.colliders(G.door.t >= 0.55, true), ...cars, ...fr]; // off：車庫街你那間的外殼盒子（裡面是 GAR）
   };
   H.inside = (cols, x, y, z, m = 0) => { // 點在不在碰撞物裡面（xz 往外 m、高度 y0…h）
     for (const c of cols) {
@@ -619,19 +619,12 @@ check(!clash && !clashDoor, `on foot at the door (big 「開鐵捲門」): nothi
 await drawAndShot('6-door-on-foot');
 const dop = await p.evaluate(() => { const D = window.__D(), H = window.__H, pressed = H.press(); H.step(10); const m = D.GAR.door.moving; H.step(160); return { pressed, m, t: D.GAR.door.t, act: H.actText() }; });
 check(dop.pressed === '開鐵捲門' && dop.m && dop.t === 1 && !/鐵捲門/.test(dop.act || ''), `the roller door rolls up from the walking button; no door button once it is up (no 關鐵捲門 by default) (${JSON.stringify(dop)})`);
-// Nick 2026-10-11「每個人要從自己的車庫出來」：走出鐵捲門＝到車庫街你那間（沒連線＝1 號）門口；門口有「進車庫」
-const wo = await p.evaluate(() => {
-  const D = window.__D(), H = window.__H, W = D.walker, HM = window.__HOME(), r = H.walkLocal([[4, -1.5]]), a = D.VIL.places.garage.lot.heading; let n = 0;
-  for (; n < 240 && HM.in; n++) { const t = W.telemetry(); W.setInput({ x: -Math.sin(a - t.camYaw) * 0.8, y: Math.cos(a - t.camYaw) * 0.8 }); H.step(1); }
-  W.setInput(null); H.step(3);
-  const t = W.telemetry(), q = D.VIL.places.garst.slots[0];
-  return { ok: r.ok, out: !HM.in, slot: HM.slot, d: +Math.hypot(t.x - q.door.x, t.z - q.door.z).toFixed(2), s: +(n / 60).toFixed(2), act: H.actText(), gar: D.GAR.group.visible, grass: !!D.TR.scene.getObjectByName('home-grass')?.visible, door: D.GAR.door.t };
-});
-console.log('  walked out:', JSON.stringify(wo));
-check(wo.ok && wo.out && wo.slot === 0 && wo.d < 1 && wo.act === '進車庫' && !wo.gar && wo.grass && wo.door === 0, `walked out through the open roller door (${wo.s} s) → standing at your garage on the garage street (#1 offline, ${wo.d} m from its door, 「${wo.act}」); the marble garage is hidden (grass where it was), its door shut`);
+// Nick 2026-10-13「順著開出車庫」：你家就在車庫街你那間（沒連線＝1 號）：走出鐵捲門就在車庫街的路上
+const wo = await p.evaluate(() => { const D = window.__D(), H = window.__H, r = H.walkLocal([[9, -1.5], [17, -1]]), t = window.__D().walker.telemetry(), q = D.VIL.places.garst.slots[0].lot; return { ok: r.ok, local: H.gl(t.x, t.z), slot: window.__HOME().slot, lot: Math.hypot(D.VIL.places.garage.lot.x - q.x, D.VIL.places.garage.lot.z - q.z), z: +t.z.toFixed(1) }; });
+check(wo.ok && wo.local.x > 15 && wo.slot === 0 && wo.lot < 1e-6 && Math.abs(wo.z + 72) < 4, `walked out of the garage through the open door straight onto the garage street (#1 offline; local x ${wo.local.x.toFixed(1)}, z ${wo.z})`);
 await drawAndShot('7-walked-out');
-const far = await p.evaluate(() => { const D = window.__D(), H = window.__H, q = D.VIL.places.garst.slots[0], r = H.walkPath([[q.door.x, -72], [-345, -72], [-300, -72.5], [-262, -72.5]], { m: 1, run: true }); H.step(200); return { ok: r.ok, door: D.GAR.door.t, in: window.__HOME().in }; });
-check(far.ok && far.door === 0 && !far.in, `walked away down the street to the village road: the garage stays shut and hidden (door ${far.door})`);
+const far = await p.evaluate(() => { const D = window.__D(), H = window.__H, r = H.walkPath([[-345, -72], [-300, -72.5], [-262, -72.5]], { m: 1, run: true }); H.step(200); return { ok: r.ok, door: D.GAR.door.t }; });
+check(far.ok && far.door === 0, `walked away (> 30 m): the door closed by itself (GC8 is not under it) — door ${far.door}`);
 const wn = await p.evaluate(() => {
   const N = window.__N(), D = window.__D(), H = window.__H, W = D.walker, t0 = W.telemetry(); H.step(30);
   const q = N.peds.people.filter((o) => !o.gone && o.mode !== 'lie' && o.mode !== 'fall').sort((a, b) => Math.hypot(a.x - t0.x, a.z - t0.z) - Math.hypot(b.x - t0.x, b.z - t0.z))[0];
@@ -750,15 +743,8 @@ const shw = await p.evaluate(() => {
   return { inZ: +a.z.toFixed(2), fade: fa, glassZ: +g.z.toFixed(2) };
 });
 check(shw.inZ < -28 && !shw.fade && shw.glassZ > -26 + 0.2, `the dealer's showroom: walked in through the open auto door (to z ${shw.inZ}; no fade, it is part of the village), the glass next to it stops you (z ${shw.glassZ})`);
-const back = await p.evaluate(() => {
-  const D = window.__D(), H = window.__H, q = D.VIL.places.garst.slots[0], r = H.walkPath([[-290, -72.5], [-345, -72], [q.door.x, -72], [q.door.x, q.door.z]], { m: 1, run: true }); const act = H.actText(); const pressed = H.press(); H.step(20);
-  const t = D.walker.telemetry(), sp = H.gw(-4.6, -7.7), inn = { in: window.__HOME().in, at: +Math.hypot(t.x - sp.x, t.z - sp.z).toFixed(2), gar: D.GAR.group.visible, door: D.GAR.door.t };
-  const r2 = H.walkLocal([[3.4, -1.7]]), act2 = H.actText(), pressed2 = H.press(); H.step(170);
-  return { ok: r.ok && r2.ok, act, pressed, inn, act2, pressed2, door: D.GAR.door.t };
-});
-console.log('  walked back:', JSON.stringify(back));
-check(back.ok && back.act === '進車庫' && back.inn.in && back.inn.at < 0.05 && back.inn.gar && back.inn.door === 0, `walked back to your garage on the street: 「${back.act}」 → inside the marble garage again (door shut)`);
-check(back.act2 === '開鐵捲門' && back.door === 1, `「${back.act2}」 from inside opens the door again (door ${back.door})`);
+const back = await p.evaluate(() => { const D = window.__D(), H = window.__H, a = H.gw(8, 0.5), r = H.walkPath([[-290, -72.5], [-345, -72], [a.x, -72], [a.x, a.z]], { m: 1, run: true }); const act = H.actText(); const pressed = H.press(); H.step(170); return { ok: r.ok, act, pressed, door: D.GAR.door.t }; });
+check(back.ok && back.act === '開鐵捲門' && back.door === 1, `walked back: 「${back.act}」 outside opens the door again (door ${back.door})`);
 // 走回 GC8 上車：同一台接著開（walk.js 接回開車；不是重新做一個）
 const again = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, r = H.walkLocal([[4, -2.2], [-0.6, -2.3]]), act = H.actText(), pressed = H.press(), b = H.board(); H.step(30);
@@ -945,11 +931,11 @@ check(await p.evaluate(() => window.__N().g.visible === true), 'back in the vill
 
 // ---- 7 開回家：開鐵捲門 → 開進去 → 開上 4 號升降機（跟地板平的上層）→ 下車（自己開正、掛到平台上）→ 走去開 YARIS（輕量車換成完整的車）→ 直接回車庫（停的地方都記著）----
 await p.evaluate(() => { document.querySelector('#dests button[data-d="garage"]').click(); });
-r = await leg('garage', "(() => { const D = window.__D(), t = D.drv.telemetry(); return window.__pp.inBox(D.VIL.places.garage.inside, t.x, t.z) && Math.abs(t.v) < 0.3; })()", { act: ['開鐵捲門', '進車庫'] }, 250); // 車庫街的家：回車庫＝開到車庫街你那間門口、按「進車庫」
-check(r.arrived && r.acts.includes('進車庫'), `came home: drove to your garage on the garage street and pressed 進車庫 → inside the marble garage (pressed ${r.acts.join(',') || '-'})`);
+r = await leg('garage', "(() => { const D = window.__D(), t = D.drv.telemetry(); return window.__pp.inBox(D.VIL.places.garage.inside, t.x, t.z) && Math.abs(t.v) < 0.3; })()", { act: ['開鐵捲門'] }, 250); // 你家在車庫街：開到門前、開鐵捲門、開進去
+check(r.arrived && r.acts.includes('開鐵捲門'), 'came home: drove down the garage street, opened the roller door from the car and drove into the garage');
 const park = await p.evaluate(() => { const D = window.__D(), H = window.__H; D.drv.setInput(null); window.__dstep(40); const t = D.drv.telemetry(), q = H.gl(t.x, t.z); return { act: H.actText(), act2: H.act2(), v: +t.v.toFixed(3), local: [+q.x.toFixed(2), +q.z.toFixed(2)], paused: t.paused }; });
 console.log('7', el(), 'home:', JSON.stringify(park));
-check(park.act2 === '下車' && park.act === '開鐵捲門' && !park.paused && Math.abs(park.v) < 1 && Math.hypot(...park.local) < 0.01, `inside the garage in the middle (${park.local}), door shut: 開鐵捲門 + 下車 (no 停好熄火, no turntable spin)`);
+check(park.act2 === '下車' && park.act == null && !park.paused && Math.abs(park.v) < 1, 'stopped inside the garage: only 下車 (no 停好熄火, no turntable spin)');
 await drawAndShot('15-home-parked');
 const hout = await p.evaluate(() => {
   const D = window.__D(), H = window.__H; D.drv.teleport(H.gw(-8.9, 9.45, 0.08)); window.__dstep(20); // 開到 4 號升降機前面（差一點點、歪一點點）

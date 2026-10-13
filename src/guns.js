@@ -806,7 +806,7 @@ function rayGrid(list) {
     let tc = 0;
     for (let it = 0; it < 256 && tc <= best; it++) {
       const a = grid.get(key(gx, gz));
-      if (a) for (let i = 0; i < a.length; i++) { const q = a[i]; if (q._s === stamp) continue; q._s = stamp; const t = hitShape(q, ox, oy, oz, dx, dy, dz, best, out); if (t < best) best = t; }
+      if (a) for (let i = 0; i < a.length; i++) { const q = a[i]; if (q._s === stamp) continue; q._s = stamp; if (q.src.off === true) continue; const t = hitShape(q, ox, oy, oz, dx, dy, dz, best, out); if (t < best) best = t; }
       if (tx < tz) { tc = tx; tx += tdx; gx += sx; } else { tc = tz; tz += tdz; gz += sz; }
     }
     return best;

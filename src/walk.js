@@ -194,7 +194,7 @@ function colGrid() {
 // 圓（角色，圓心 px, pz、半徑 r）碰到 c：推出去的量放在 PUSH；沒碰到回傳 false
 const PUSH = [0, 0];
 function pushOut(px, pz, r, c) {
-  if (c.src && c.src.crushed === true) return false; // 第 7 批（輾扁）：扁掉的東西（垃圾桶、板凳⋯）走過去、鏡頭都不擋
+  if (c.src && (c.src.crushed === true || c.src.off === true)) return false; // 第 17 批：off＝暫時不算（車庫街你那間）；第 7 批（輾扁）：扁掉的東西（垃圾桶、板凳⋯）走過去、鏡頭都不擋
   if (c.t === 'box') {
     const dx = px - c.x, dz = pz - c.z, lu = dx * c.u0 + dz * c.u1, lw = dx * c.w0 + dz * c.w1;
     const eu = lu - clamp(lu, -c.hx, c.hx), ew = lw - clamp(lw, -c.hz, c.hz), d2 = eu * eu + ew * ew;
@@ -212,6 +212,7 @@ function pushOut(px, pz, r, c) {
 }
 // 一條線（3D：從 (ax, ay, az) 走 (dx, dy, dz)）第一次碰到 c（xz 往外多 m、高度 y0−m … h+m）是在哪裡：0–1；沒碰到（或比 best 遠）回傳 best
 function segHit(c, ax, ay, az, dx, dy, dz, m, best) {
+  if (c.src && (c.src.crushed === true || c.src.off === true)) return best; // 第 17 批：off＝暫時不算（車庫街你那間的外殼盒子）；扁掉的也不擋
   let t0 = 0, t1 = best;
   const ox = ax - c.x, oz = az - c.z;
   if (c.t === 'box') {

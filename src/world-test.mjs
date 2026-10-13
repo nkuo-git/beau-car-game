@@ -233,22 +233,24 @@ await shot(B, `${prefix}-2-list.png`);
 for (const p of [A, B]) { await closeDlg(p); await click(p, '#driveOut'); }
 const outOK = await Promise.all([A, B].map((p) => waitFor(p, () => window.__D().trip && window.__D().on && window.__D().walker, null, 240000)));
 check(outOK[0] && outOK[1], 'both went out on their own (no host needed)');
-// Nick 2026-10-11「每個人要從自己的車庫出來」：A 是世界的 1 號、B 是 2 號＝車庫街 1、2 號是他們家；在自己的大理石車庫裡面朋友看不到（名單「在車庫」）
-const home3 = await Promise.all([A, B].map((p) => p.evaluate(() => ({ slot: window.__HOME().slot, in: window.__HOME().in, g: window.__D().VIL.places.garage.pos }))));
-await A.waitForTimeout(1500);
+// Nick 2026-10-13「所有人都在車庫街有個固定位置 不管有沒有連線」：A 是世界的 1 號、B 是 2 號＝你家（大理石車庫）就蓋在車庫街 1、2 號；號碼記在存檔；在自己的車庫裡面朋友看不到（名單「在車庫」）
+const home3 = await Promise.all([A, B].map((p) => p.evaluate(() => { const V = window.__D().VIL, HM = window.__HOME(), L = V.places.garage.lot, q = V.places.garst.slots[HM.slot];
+  return { slot: HM.slot, in: HM.in, home: window.__GAME().home, saved: JSON.parse(localStorage.getItem('carid.tune')).home, lotOK: !!q && Math.hypot(L.x - q.lot.x, L.z - q.lot.z) < 0.01 && L.heading === q.lot.heading }; })));
 const hidden3 = await A.evaluate(() => { const q = window.beauGame.net.info.peers[0]; return !!q && !q.vis; });
 console.log('   homes', JSON.stringify(home3), hidden3, getAt('world/m/u2/w'));
-check(home3[0].slot === 0 && home3[1].slot === 1 && home3[0].in && home3[1].in && hidden3 && getAt('world/m/u2/w') === '在車庫', `each starts inside their own garage = garage street #1 (A) and #2 (B); A can’t see B while B is inside (B: 「${getAt('world/m/u2/w')}」)`);
+check(home3[0].slot === 0 && home3[1].slot === 1 && home3[0].in && home3[1].in && home3[0].lotOK && home3[1].lotOK && hidden3 && getAt('world/m/u2/w') === '在車庫', `each starts inside their own garage, built on garage street #1 (A) and #2 (B); A can’t see B while B is inside (B: 「${getAt('world/m/u2/w')}」)`);
+check(home3[0].home === 0 && home3[0].saved === 0 && home3[1].home === 1 && home3[1].saved === 1, 'the world number is kept as your home in the save (A 1, B 2)');
 const walked3 = []; // 站在鐵捲門裡面、往外走（一步一步走：走出去就停）
 for (const p of [A, B]) walked3.push(await p.evaluate(() => { const D = window.__D(), G = D.GAR, W = D.walker, HM = window.__HOME(); G.door.open(0.1); for (let i = 0; i < 20; i++) window.__dstep(1);
   W.teleport(G.toWorld({ x: G.zones.door.x - 2, z: 0, heading: 0 })); window.__dstep(2); let n = 0;
-  for (; n < 600 && HM.in; n++) { const t = W.telemetry(); const a = D.VIL.places.garage.lot.heading; W.setInput({ x: -Math.sin(a - t.camYaw) * 0.8, y: Math.cos(a - t.camYaw) * 0.8 }); window.__dstep(1); }
+  const dd = () => { const t = W.telemetry(), d = D.VIL.places.garage.door; return Math.hypot(t.x - d.x, t.z - d.z); };
+  for (; n < 600 && (HM.in || dd() < 2.5); n++) { const t = W.telemetry(); const a = D.VIL.places.garage.lot.heading; W.setInput({ x: -Math.sin(a - t.camYaw) * 0.8, y: Math.cos(a - t.camYaw) * 0.8 }); window.__dstep(1); } // 走出門外 2.5 公尺
   W.setInput(null); window.__dstep(3); return !HM.in; }));
-const at3 = await Promise.all([A, B].map((p) => p.evaluate(() => { const t = window.__D().walker.telemetry(), d = window.__HOME().door; return +Math.hypot(t.x - d.x, t.z - d.z).toFixed(1); })));
+const at3 = await Promise.all([A, B].map((p) => p.evaluate(() => { const t = window.__D().walker.telemetry(), d = window.__D().VIL.places.garage.door; return +Math.hypot(t.x - d.x, t.z - d.z).toFixed(1); })));
 console.log('   out the door', JSON.stringify(walked3), JSON.stringify(at3));
-const act3 = await A.evaluate(() => { window.__dstep(2); const W = window.__D().walker, t = W.telemetry(), HM = window.__HOME(); return { act: W.action, mode: t.mode, paused: t.paused, near: t.near, speed: +t.speed.toFixed(2), in: HM.in, d: +Math.hypot(t.x - HM.door.x, t.z - HM.door.z).toFixed(1) }; });
-check(act3.act === '進車庫', `at your own garage door: 「${act3.act}」 (${JSON.stringify(act3)})`);
-check(walked3[0] && walked3[1] && at3[0] < 3 && at3[1] < 3, `walked out of the roller door → standing in front of their own garage on the garage street (${at3} m from the door)`);
+const act3 = await A.evaluate(() => { window.__dstep(2); const W = window.__D().walker, t = W.telemetry(), HM = window.__HOME(), d = window.__D().VIL.places.garage.door; return { act: W.action, door: window.__D().GAR.door.t, in: HM.in, d: +Math.hypot(t.x - d.x, t.z - d.z).toFixed(1) }; });
+check(act3.act == null && act3.door === 1 && !act3.in, `just outside your open roller door: no 「進車庫」 any more, nothing to press (${JSON.stringify(act3)})`);
+check(walked3[0] && walked3[1] && at3[0] < 4 && at3[1] < 4, `walked straight out of the roller door → standing in front of their own garage on the garage street (${at3} m from the door)`);
 const seeB = await waitFor(A, () => { const i = window.beauGame.net.info; return i.peers[0] && i.peers[0].vis && i.peers[0].walk && i.marks === 1; }, null, 60000);
 const seeA = await waitFor(B, () => { const i = window.beauGame.net.info; return i.peers[0] && i.peers[0].vis && i.peers[0].walk; }, null, 60000);
 console.log('3', el(), seeB, seeA, JSON.stringify(await info(A)));
@@ -258,7 +260,7 @@ check(/👥 2 人在線上/.test(hud3 || ''), `game box: ${hud3}`);
 await waitFor(A, () => true, null, 3500);
 check(getAt('world/m/u2/w') && getAt('world/m/u2/w') !== '在車庫', `the list shows where B is now (${getAt('world/m/u2/w')})`);
 const w0 = await A.evaluate(() => ({ ...window.__NET().P.get('u2').mk }));
-await B.evaluate(() => window.__D().walker.setInput({ y: -1 })); await B.waitForTimeout(3000); await B.evaluate(() => window.__D().walker.setInput(null));
+await B.evaluate(() => window.__D().walker.setInput({ y: 1 })); await B.waitForTimeout(3000); // 往外走（後面是自己的車庫，門開著） await B.evaluate(() => window.__D().walker.setInput(null));
 await A.waitForTimeout(800);
 const w1 = await A.evaluate(() => ({ ...window.__NET().P.get('u2').mk }));
 check(Math.hypot(w1.x - w0.x, w1.z - w0.z) > 1, `B walked → A sees B move (${Math.hypot(w1.x - w0.x, w1.z - w0.z).toFixed(1)} m)`);

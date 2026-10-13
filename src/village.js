@@ -764,7 +764,7 @@ function hwyAt(s) { // 中線上距離 s（從路口往北算）的 { x, z, th }
 const NODES = {
   T: [-7, 0], E0: [-60, 0], E1: [-112, 0], SHX: [-136, 0], SH: [-160, 0], C: [-250, 0], X: [-300, 0], W: [-345, 0], DEN: [-410, 0], DEX: [-497, 0], HJ: [-518, 0],
   HO: [HW.x + HW.mid, 0], HI: [HW.x - HW.mid, 0], // 快速道路：往北（外圈）、往南（內圈）那一邊的路口
-  G: [-300, -72], GW: [-345, -72], GST: [-410, -72], GD: [-300, -92.5], GAR: [-300, -97.5], SHB: [-160, -35], DEB: [-484, -17],
+  G: [-300, -72], GW: [-345, -72], GST: [-490, -72], GD: [-300, -92.5], GAR: [-300, -97.5], SHB: [-160, -35], DEB: [-484, -17],
 };
 // 第 9 批（b9-wide）：Nick 2026-10-09「路變大」→ 村子的路都寬 1.5 倍（中線不動）：大路 9 → 13.5、村子的路 8 → 12、7 → 10.5、水泥農路 6 → 9；
 //   車道（drive：改車廠、車店、車庫、警察局、槍店的進出口）、快速道路（一線 3.75 公尺本來就夠寬）、賽道不變
@@ -793,13 +793,15 @@ const ROADS = [
   { a: 'DEB', b: 'DEX', kind: 'drive', w: 7, oneway: true, pts: [[-484, -17], [-497, -17], [-497, 0]], round: 7 }, // 西邊出去
   { a: 'C', b: 'E1', kind: 'farm', w: 9, pts: [[-250, 0], [-250, 58], [-112, 58], [-112, 0]], round: 13 },
 ];
-const DEST_NODE = { garage: 'GAR', shop: 'SHB', track: 'T', dealer: 'DEB', highway: 'HO' };
+const DEST_NODE = { garage: 'GST', shop: 'SHB', track: 'T', dealer: 'DEB', highway: 'HO' };
 // ==== 第 3 批：警察局（大路西段南邊：W 路口往南開進前院，變成十字路口）、槍店（改車廠對面：SH 路口往南斜斜開進店門口）====
 NODES.POL = [-345, 11]; NODES.GSP = [-163, 9.5];
 ROADS.push({ a: 'W', b: 'POL', kind: 'drive', w: 7, pts: [[-345, 0], [-345, 11]] }, { a: 'SH', b: 'GSP', kind: 'drive', w: 6, pts: [[-160, 0], [-163, 9.5]] });
 DEST_NODE.police = 'POL'; DEST_NODE.gunshop = 'GSP';
 // 第 16 批：車庫街（GW 路口往西的死巷）
-ROADS.push({ a: 'GW', b: 'GST', kind: 'street', w: 10.5, pts: [[-345, -72], [-410, -72]] });
+// 第 17 批：6 間大車庫的 lot（車庫模組的原點＝裡面停車位的車子中心；heading：本地 +x＝門外）：北排門朝南、南排門朝北；外牆門面 z −82（北）／−62（南），門前 4.75 公尺到路邊（兩排門對門 20 公尺：大車也轉得出來）
+const GST_LOTS = [[-370, true], [-370, false], [-404, true], [-404, false], [-438, true], [-472, true]].map(([x, north]) => ({ x, z: north ? -87.3 : -56.7, heading: north ? -Math.PI / 2 : Math.PI / 2 }));
+ROADS.push({ a: 'GW', b: 'GST', kind: 'street', w: 10.5, pts: [[-345, -72], [-490, -72]] }); // 第 17 批：車庫變大，路往西長到 −490
 DEST_NODE.garst = 'GST';
 // ==== 第 3 批 end ====
 const HWK = new Set(['hwyO', 'hwyI']); // 快速道路的兩條（一圈）：路線圖用
@@ -1054,7 +1056,13 @@ function buildVillage(opts = {}) {
         for (const [x, z] of [[a, d], [b, d], [b, c], [a, d], [b, c], [a, c]]) { P.push(x, 0, z); N.push(0, 1, 0); UV.push(x / 6, -z / 6); }
       }
     };
-    rect(-1450, -880, -313, 880); rect(-287, -880, -62, 880); rect(-313, -880, -287, -110.5); rect(-313, -92.2, -287, 880); // 你家（車庫 x −313…−287、z −110.5…−92.2）底下挖空：升降機的坑不會被草蓋住
+    // 第 17 批：車庫街 6 間（本地 x −13…5.3、z ±13）底下都挖空（你家搬到哪一間，升降機的坑都不會被草蓋住；別人的有外殼蓋著看不到）；原本那間（x −313…−287）不挖了
+    const holes = GST_LOTS.map((L) => { const n = L.heading < 0; return [L.x - 13, n ? L.z - 13 : L.z - 5.3, L.x + 13, n ? L.z + 5.3 : L.z + 13]; });
+    const xs = [...new Set([-1450, -62, ...holes.flatMap((h) => [h[0], h[2]])])].sort((a, b) => a - b);
+    for (let i = 0; i + 1 < xs.length; i++) { // 一條一條（x）：中間被挖掉的 z 跳過
+      const xa = xs[i], xb = xs[i + 1], cut = holes.filter((h) => h[0] <= xa && h[2] >= xb).map((h) => [h[1], h[3]]).sort((a, b) => a[0] - b[0]);
+      let z = -880; for (const [z0, z1] of cut) { if (z0 > z) rect(xa, z, xb, z0); z = Math.max(z, z1); } rect(xa, z, xb, 880);
+    }
     rect(-62, -1150, 1300, -450); rect(-62, 450, 1300, 1150); // 快速道路一圈 x −1042…−518、z ±487（原本 −1500…、±1150）
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); g.computeBoundingSphere();
     var ground = new THREE.Mesh(g, mats.ground); ground.name = 'ground'; ground.matrixAutoUpdate = false;
@@ -1328,31 +1336,40 @@ function buildVillage(opts = {}) {
       box('main', T, [-13.1, 5.5, -13.1, 5.35, 5.8, 13.1], C('#dcdcd6'), { _: U.conc, ny: U.conc });
       for (const [x, z] of [[-8, -8], [-8, 8], [0, -8], [0, 8]]) ceil('glow', T, x - 1, z - 0.2, x + 1, z + 0.2, 5.48, dotUV(GU.cool), [1.2, 1.2, 1.2]);
     }
-    buildings.push({ kind: 'garage', name: '你的車庫', x: -300, z: -101.35, hx: 9.15, hz: 16, rot: LOT.heading, h: 6, door: { x: -300, z: -91.6, ry: 0 } }); // 車庫模組的地（本地 x −13…5.3、z ±16；第 11 批：本來 ±13）：以後走進去、小地圖用
+    // 第 17 批：車庫搬到車庫街（這裡變草地：前庭、花台、燈柱留著）
   }
 
   // ==== 第 16 批：車庫街（Nick 2026-10-11 大家的世界「各人有自己的車庫 所以路上會有很多個車庫屬於不同人」；草稿 https://claude.ai/artifact/QDwK28dEsEkumkvR2AiP9Y 第 5 張）====
-  // 你家車庫西邊：GW 路口（村子的路轉角）往西一條死巷 x −345…−410，兩邊各 3 間小車庫（Nick 2026-10-11「車庫改成六間就好」；本來 12 間）（白牆、關著的鐵捲門、門上一塊深色名牌）
-  // 名牌上的名字是連線的時候 net.src.js 畫的（V.places.garst.slots[i].sign）；沒連線就是空白的牌子。原本的田、竹林讓位（亂數照樣用掉，別的地方不變）
+  // 第 17 批（Nick 2026-10-13「開出車庫 他是突然閃跳到街上 可以像之前一樣 順著開出車庫」「所有人都在車庫街有個固定位置」；草稿 https://claude.ai/artifact/QHscDepQgHfWxNHL8GGNAJ 第 2 版）：
+  //   6 間都跟你的大理石車庫一樣大（外牆 本地 x −13…5.3、z ±16.3）：你那間＝真的大理石車庫（town.src.js 把 room.js 那棟搬到 lot），別人的＝同一個外殼（門關著、名牌）
+  //   GW 路口往西一條死巷 x −345…−490（路中間 z −72，門前 4.75 公尺的水泥地）：北排 4 間（門朝南）、南排 2 間（門朝北；再往西是車店）；號碼：北、南輪流，從路口那邊開始
+  //   這裡只有資料、門前的水泥地、地底下挖空（升降機的坑）；外殼、碰撞是 town.src.js 給的（你那間要開門、換號碼會換）
+  //   名牌在門上面的黑大理石橫帶（net.src.js 畫字）
   const GST_SLOTS = [];
-  {
-    const wallC = C('#f2f0ea'), trimC = C('#d9d8d2'), doorC = C('#a9afb6'), signC = C('#1d2026'), postC = C('#8e9093'), apronC = C('#d2d2cd');
-    for (let i = 0; i < 3; i++) for (const north of [true, false]) {
-      const x = -362 - 16 * i, z = north ? -86 : -58, ry = north ? -Math.PI / 2 : Math.PI / 2, T = frame(x, 0, z, ry); // 本地 +x＝門朝外（北排朝南、南排朝北），本地 z＝寬
-      B.at(x, z);
-      box('main', T, [-6, 0, -7, 5.9, 5, 7], wallC, { _: U.conc });                                   // 牆
-      box('main', T, [-6.2, 5, -7.2, 6.1, 5.35, 7.2], trimC, { _: U.conc, ny: U.conc });              // 屋頂的邊
-      box('main', T, [5.9, 0.03, -4, 5.98, 3.9, 4], doorC, { _: U.corr, nx: false });                 // 鐵捲門（關著）
-      for (const zz of [-4.35, 4]) box('main', T, [5.9, 0, zz, 6.08, 4.1, zz + 0.35], postC);          // 門框
-      box('main', T, [5.9, 3.9, -4.35, 6.08, 4.1, 4.35], postC);
-      box('main', T, [5.9, 4.2, -3.3, 6.02, 4.92, 3.3], signC, { nx: false });                        // 名牌（字是 net.src.js 貼上去的）
-      addPave(x, north ? -78.6 : -65.4, 7, 1.4, 0, apronC);                                           // 門前的水泥地
-      addBox(x, z, 7, 6, 0, 5.35);
-      buildings.push({ kind: 'garst', name: '車庫街', x, z, hx: 7, hz: 6, rot: 0, h: 5.35 });
-      const sp = T.p(6.03, 4.56, 0), dp = T.p(8, 0, 0); // dp：門前 2 公尺（net.src.js 走到這裡 6 公尺內跳「看他的車庫」）
-      GST_SLOTS.push({ x, z, ry, sign: { x: sp[0], y: sp[1], z: sp[2], ry, w: 6.4, h: 0.62 }, door: { x: dp[0], z: dp[2] } });
-    }
+  for (const L of GST_LOTS) {
+    const ry = L.heading, lot = { ...L }, x = L.x;
+    const c = Math.cos(ry), s = Math.sin(ry), w = (lx, lz = 0) => [lot.x + lx * c + lz * s, lot.z - lx * s + lz * c];
+    const ctr = w(-3.85), dp = w(7.3), sp = w(5.36), ap = w(7.65);
+    B.at(ap[0], ap[1]); addPave(ap[0], ap[1], 6, 2.4, 0, C('#d2d2cd'));                    // 門前的水泥地（到路邊）
+    addPave(ctr[0], ctr[1], 16.3, 9.15, 0, null, 0, false);                                    // 車庫裡面：算水泥地，不畫
+    buildings.push({ kind: 'garage', name: '車庫街', x: ctr[0], z: ctr[1], hx: 9.15, hz: 16.3, rot: ry, h: 7.2, slot: GST_SLOTS.length });
+    const col = { t: 'box', x: ctr[0], z: ctr[1], hx: 9.15, hz: 16.3, rot: ry, h: 7.2, noCrush: true, off: false }; colliders.push(col); // 外牆整間一個盒子；你那間 off（town.src.js：裡面是真的大理石車庫，碰撞是 GAR 的） // 沒有 door：走進房子、居民、車流都不理它
+    GST_SLOTS.push({ x, z: ctr[1], ry, lot, col, sign: { x: sp[0], y: 6.075, z: sp[1], ry, w: 6.4, h: 0.62 }, door: { x: dp[0], z: dp[1] } }); // door：門前 2 公尺（net.src.js 走到這裡 6 公尺內跳「看他的車庫」）
   }
+  // 你家＝第 n 間：places.garage 的每一塊都照那間的 lot 算（本地 x 往門外、z＝車頭朝門時車子的右邊）
+  const homeAt = (n, P = {}) => {
+    const q = GST_SLOTS[n] || GST_SLOTS[0], L = q.lot, c = Math.cos(L.heading), s = Math.sin(L.heading), w = (lx) => [L.x + lx * c, L.z - lx * s];
+    const box = (lx, hx, hz) => { const p = w(lx); return { x: p[0], z: p[1], hx, hz, rot: L.heading }; };
+    const dr = w(5);
+    return Object.assign(P, {
+      name: '你的車庫', slot: n, pos: [q.door.x, q.door.z], lot: { ...L }, spawn: { ...L },
+      door: { x: dr[0], z: dr[1], heading: L.heading },  // 鐵捲門中間（本地 x 5），朝外
+      apron: box(9.15, 3.85, 7),                           // 門前（本地 x 5.3…13）：停在這裡 HUD 給「開鐵捲門」
+      inside: box(-3.85, 8.85, 15.7),                      // 車庫裡面（本地 x −12.7…5、z ±15.7）
+      zone: box(0, 13, 15.7), yard: box(0, 13, 15.7),      // apron＋inside
+      via: 'garst', end: [L.x, L.z],                       // 回車庫：開到車庫街你那間門前，直直開進去（停在中間）
+    });
+  };
 
   // ---- 阿輝改車廠：鐵皮工廠。前門開進去（中間的改車區），後門出去，從後院、東邊的小路回大路；裡面舉升機、工具牆、輪胎架、零件架、辦公室、日光燈 ----
   {
@@ -1566,14 +1583,14 @@ function buildVillage(opts = {}) {
     { for (let i = 0; i < 12; i++) rnd(); const r2 = rng(7171); paddyArea(-194, 9, -172, 52, 1, 2, r2); paddyArea(-152, 9, -118, 52, 2, 2, r2); paddyArea(-172, 30, -152, 52, 1, 1, r2); } // 第 3 批：中間空出來給槍店（亂數照樣用掉 12 個，後面的田不變）
     paddyArea(-244, 22, -196, 52, 2, 1, rnd);
     paddyArea(-244, 64, -118, 88, 5, 1, rnd);     // 農路南邊
-    { B = new Builder(200); paddyArea(-386, -92, -352, -8, 2, 3, rnd); paddies.pop(); B = VB; paddyArea(-386, -46, -352, -8, 2, 1, rng(16016)); } // 村子西邊（大路北側）；第 16 批：北邊讓給車庫街（亂數照樣用掉）
+    { B = new Builder(200); paddyArea(-386, -92, -352, -8, 2, 3, rnd); paddies.pop(); B = VB; paddyArea(-386, -42, -352, -8, 2, 1, rng(16016)); } // 村子西邊（大路北側）；第 16 批：北邊讓給車庫街（亂數照樣用掉）；第 17 批：南排車庫變大，再讓 4 公尺
     for (let i = 0; i < 4; i++) rnd();            // 第 3 批：西邊（大路南側）的田改成警察局（亂數照樣用掉，後面的田不變）
     paddyArea(-296, 64, -250, 88, 2, 1, rnd);
     paddyArea(-386, 34, -352, 88, 2, 2, rnd);
     { B = new Builder(200); paddyArea(-282, -108, -232, -92, 2, 1, rnd); paddies.pop(); B = VB; const r3 = rng(14014); paddyArea(-282, -108, -259, -92, 1, 1, r3); paddyArea(-240, -108, -232, -92, 1, 1, r3); } // 車庫東北邊 // 第 14 批：中間讓出上山的路（亂數照樣用掉）
     { B = new Builder(200); paddyArea(-386, -110, -344, -94, 2, 1, rnd); paddies.pop(); B = VB; } // 第 16 批：車庫街北邊那排車庫蓋在這裡（亂數照樣用掉）
     paddyArea(-176, -106, -130, -76, 2, 1, rnd);  // 改車廠後院北邊
-    { B = new Builder(200); paddyArea(-512, -108, -398, -56, 5, 2, rnd); paddies.pop(); B = VB; paddyArea(-512, -108, -414, -56, 4, 2, rng(16017)); } // 車店後面；第 16 批：東邊讓給車庫街的路尾
+    { B = new Builder(200); paddyArea(-512, -108, -398, -56, 5, 2, rnd); paddies.pop(); B = VB; paddyArea(-512, -108, -494, -56, 1, 2, rng(16017)); } // 車店後面；第 16 批：東邊讓給車庫街的路尾；第 17 批：車庫變大，只剩最西邊一條
     paddyArea(-512, 24, -395, 88, 4, 2, rnd);     // 往快速道路那段的南邊
   }
 
@@ -1591,7 +1608,7 @@ function buildVillage(opts = {}) {
     for (let x = -505; x <= -66; x += 6 + rnd() * 3) { const g4 = x > -121 && x < -103; if (g4) B = new Builder(200); tree(x, 91 + rnd() * 2, 1.2 + rnd() * 0.4, rnd, !g4); B = VB; } // 南邊一排樹 // ==== 第 4 批：往越野車場的水泥路穿過去的那兩棵不種（亂數照樣用掉）====
     // 第 2 批（路上的車）：農路邊的兩棵原本種在路面上（(-248.5, 30) 在往北的車道正中間、(-244, 60) 樹幹壓到轉角的路邊）→ 移到路邊的草地上（離路 2 公尺以上、不在稻田裡；亂數照樣用）
     for (const [x, z] of [[-352, -8], [-351, 12], [-255.5, 27], [-228, 30], [-192, -20], [-196, 40], [-245, 64.5], [-192, -48], [-186, -62], [-194, -80]]) tree(x, z, 1 + rnd() * 0.3, rnd);
-    for (const [x, z] of [[-396, -12], [-396, -30], [-395, -46], [-418, -52], [-426, -46], [-424, -34], [-406, 14], [-398, 18], [-476, 14], [-488, 16], [-500, 12], [-510, 18], [-509, -40], [-510, -22]]) tree(x, z, 1 + rnd() * 0.35, rnd); // 車店、往快速道路那段的空地
+    for (const [x, z] of [[-396, -12], [-396, -30], [-395, -41], [-424, -52], [-426, -46], [-424, -34], [-406, 14], [-398, 18], [-476, 14], [-488, 16], [-500, 12], [-510, 18], [-509, -40], [-510, -22]]) tree(x, z, 1 + rnd() * 0.35, rnd); // 車店、往快速道路那段的空地
   }
 
   // ---- 電線桿（每條路一排）、路口反光鏡 ----
@@ -1902,14 +1919,7 @@ function buildVillage(opts = {}) {
   // ---- 地方：你的車庫、改車廠、車店、賽道、快速道路 ----
   const R2 = Math.PI / 2;
   const places = {
-    garage: { // 車庫模組（白色大理石、鐵捲門）放在 lot；這裡只有門前的水泥地、花台、往南的路
-      name: '你的車庫', pos: [LOT.x, LOT.z], lot: { ...LOT }, spawn: { ...LOT },
-      door: { x: -300, z: -92.5, heading: -R2 },                                // 鐵捲門中間（本地 x = +5），朝外（南）
-      apron: { x: -300, z: -83.85, hx: 8.35, hz: 7, rot: -R2 },                 // 門前（本地 x 5.3…22、z ±7）：停在這裡 HUD 給「開鐵捲門」
-      inside: { x: -300, z: -101.35, hx: 8.85, hz: 15.7, rot: -R2 },            // 車庫裡面（本地 x −12.7…5、z ±15.7；第 11 批：本來 ±12.7）
-      zone: { x: -300, z: -92.85, hx: 17.35, hz: 15.7, rot: -R2 },              // apron＋inside
-      yard: { x: -300, z: -92.85, hx: 17.35, hz: 15.7, rot: -R2 },              // 同 zone（車庫街的家：town.src.js 把 zone 換到車庫街你那間門口；這塊輾不到的地方照舊）
-    },
+    garage: homeAt(0), // 第 17 批：你家＝車庫街你那間（town.src.js 換號碼就叫 V.homeAt(n, places.garage)）；車庫模組（白色大理石、鐵捲門）放在 lot
     shop: { // 阿輝改車廠：前門（南）開進改車區、後門（北）出去
       name: '阿輝改車廠', pos: [-160, -35],
       bay: { x: -160, z: -35, hx: 2.5, hz: 6.5, rot: 0 },                        // 改車區的地板（中間那格，黃線裡面）：停在這裡打開改車廠
@@ -1943,7 +1953,7 @@ function buildVillage(opts = {}) {
   for (const c of PS.colliders) colliders.push(c);
   for (const p of PS.pave) addPave(p.x, p.z, p.hx, p.hz, p.rot || 0, C(p.col), p.y ?? 0.02);
   places.police = PS.place; buildings.push(PS.building);
-  places.garst = { name: '車庫街', pos: [-380, -72], slots: GST_SLOTS }; // 第 16 批：車庫街（6 格：北排、南排輪流，從路口那邊開始）
+  places.garst = { name: '車庫街', pos: [-420, -72], slots: GST_SLOTS }; // 第 16 批：車庫街（6 格：北排、南排輪流，從路口那邊開始）
   const ST = buildStreet({ buildings, roads, places, colliders, paved, nodes: NODES, poles: stPoles, houses: stHouses, rows: stRows }, { renderer: opts.renderer });
   for (const c of ST.colliders) colliders.push(c);
   for (const p of ST.pave) addPave(p.x, p.z, p.hx, p.hz, p.rot || 0, C(p.col), p.y ?? 0.02);
@@ -1984,7 +1994,7 @@ function buildVillage(opts = {}) {
   group.updateMatrixWorld(true);
   const gTris = ground.geometry.attributes.position.count / 3;
   return {
-    group, places, colliders, surfaceAt, route,
+    group, places, colliders, surfaceAt, route, homeAt, // 第 17 批：homeAt(n, places.garage)＝搬到車庫街第 n 間
     roads: roads.filter((r) => !HWK.has(r.kind) && r.kind !== 'link').map((r) => ({ pts: r.pts, w: Array.isArray(r.w) ? Math.max(...r.w) : r.w, kind: r.kind }))
       .concat([{ pts: hc.map((p) => [p.x, p.z]), w: HW.half * 2, kind: 'highway' }]),
     bounds: { x0: -1090, x1: 12, z0: -530, z1: 530 }, areas: { paddy: paddies, pave: paved }, buildings,

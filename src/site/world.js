@@ -55,7 +55,9 @@
       const s = (await r.get('world/s')) || {}, m = (await r.get('world/m')) || {};
       let slot = -1;
       for (let i = 0; i < MAX; i++) if (s[i] === me) slot = i;
-      for (let i = 0; i < MAX && slot < 0; i++) if (!s[i] || !m[s[i]]) slot = i; // 空的，或是人已經不在了（斷線沒收好）
+      const free = (i) => !s[i] || !m[s[i]]; // 空的，或是人已經不在了（斷線沒收好）
+      const pref = G()?.net?.home?.(); if (slot < 0 && Number.isInteger(pref) && pref >= 0 && pref < MAX && free(pref)) slot = pref; // 你固定的那間（車庫街；有人在用就先住別間）
+      for (let i = 0; i < MAX && slot < 0; i++) if (free(i)) slot = i;
       if (slot < 0) return -1;
       try { await r.update('world', { [`s/${slot}`]: me, [`m/${me}`]: memberData(slot) }); return slot; } catch (e) { console.warn('位子被拿走了，換一個', e); }
     }

@@ -433,7 +433,7 @@ function createDrive(o) {
       let cx = st.x + f[0] * CX, cz = st.z + f[1] * CX, moved = false;
       const list = cw.near(cx - 3, cz - 3, cx + 3, cz + 3).slice();
       for (const c of list) {
-        if (c.crushed === true || c.src.crushed === true) continue; // 第 7 批（輾扁）：已經扁掉的東西誰都開得過去（不擋了）；第 9 批：看原來那個（會長回來）
+        if (c.crushed === true || c.src.crushed === true || c.src.off === true) continue; // 第 17 批：off＝暫時不算（車庫街你那間的外殼盒子：裡面是真的車庫）；第 7 批（輾扁）：已經扁掉的東西誰都開得過去（不擋了）；第 9 批：看原來那個（會長回來）
         const p = c.t === 'box' ? hitBox(cx, cz, f, r, c) : hitCircle(cx, cz, f, r, c);
         if (!p) continue;
         if (CRU && CRU.can(c)) { if (CRU.hit(c, Math.abs(st.v)) === false) c.crushed = true; continue; } // 第 7 批：怪獸卡車輾過去（不擋、不彈開、不算撞到；車子照 crush.js 的墊子爬上去）
@@ -448,7 +448,7 @@ function createDrive(o) {
   }
   // 鏡頭到車子中間有沒有被房子擋住：回傳 0–1（1＝沒擋到）
   const tall = (c) => (c.h ?? 9) >= 2.4 && (c.t === 'box' || c.r >= 0.6);
-  const camBlock = (c) => c.crushed !== true && c.src.crushed !== true && (c.police === true || tall(c)); // 第 9 批：壓扁的房子不擋鏡頭 // 第 3 批（b3-int）：緊跟在後面的警車也擋鏡頭（拉近到它前面，不要從它的警示燈上面看）
+  const camBlock = (c) => c.crushed !== true && c.src.crushed !== true && c.src.off !== true && (c.police === true || tall(c)); // 第 9 批：壓扁的房子不擋鏡頭 // 第 3 批（b3-int）：緊跟在後面的警車也擋鏡頭（拉近到它前面，不要從它的警示燈上面看）
   function rayHit(x0, z0, x1, z1) {
     let best = 1; const dx = x1 - x0, dz = z1 - z0;
     for (const c of cw.near(Math.min(x0, x1) - 1, Math.min(z0, z1) - 1, Math.max(x0, x1) + 1, Math.max(z0, z1) + 1, camBlock)) {

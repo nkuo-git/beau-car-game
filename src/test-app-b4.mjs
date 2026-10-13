@@ -146,7 +146,7 @@ await p.addInitScript(() => {
   };
   // 從停著的車旁邊過去（pass）：路線往 side 那邊（1 右、−1 左）多移 off 公尺，車身那一側的邊往前 len 公尺有沒有撞到村子的東西（房子、圍籬、電線桿、樹）
   const sideFree = (V, pts, o, hw, side, len = 16) => {
-    const cols = V.colliders || [];
+    const cols = (V.colliders || []).filter((c) => c.off !== true);
     for (let s = 0; s <= len; s += 1) {
       const a = along(pts, s), b = along(pts, s + 1); let dx = b[0] - a[0], dz = b[1] - a[1]; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
       for (const e of [o + side * hw, o + side * (hw - 0.6)]) {
@@ -380,7 +380,7 @@ await p.addInitScript(() => {
     const D = window.__D(), G = D.GAR, V = D.VIL;
     const cars = W().cars.map((c) => { const hc = Math.cos(c.heading), hs = Math.sin(c.heading), cx = c.cx || 0, cz = c.cz || 0; return { t: 'box', x: c.x + cx * hc + cz * hs, z: c.z - cx * hs + cz * hc, hx: c.hx, hz: c.hz, rot: c.heading, h: 1.4 }; });
     const fr = V.buildings.filter((b) => b.floors >= 2 && (b.kind === 'house' || b.kind === 'shop')).map((b) => ({ t: 'box', x: b.x + Math.sin(b.rot) * (b.hz + 0.56), z: b.z + Math.cos(b.rot) * (b.hz + 0.56), hx: b.hx, hz: 0.56, rot: b.rot, y0: 2.7, h: b.h }));
-    return [...V.colliders, ...G.colliders(G.door.t >= 0.55, true), ...cars, ...fr];
+    return [...V.colliders.filter((c) => c.off !== true), ...G.colliders(G.door.t >= 0.55, true), ...cars, ...fr]; // off：車庫街你那間的外殼盒子（裡面是 GAR）
   };
   H.inside = (cols, x, y, z, m = 0) => { // 點在不在碰撞物裡面（xz 往外 m、高度 y0…h）
     for (const c of cols) {
@@ -682,12 +682,12 @@ check(await p.evaluate(() => !window.__D().tripS?.dmg), 'the monster truck drive
 
 // ---- 9 開回家：開鐵捲門 → 開進去 → 下車（升降機上不停：沒有輕量車）→ 走去開 GC8（怪獸卡車照停著）→ 走回去開怪獸卡車 → 直接回車庫 ----
 await p.evaluate(() => document.querySelector('#dests button[data-d="garage"]').click());
-r = await leg('garage', "(() => { const D = window.__D(), t = D.drv.telemetry(); return window.__pp.inBox(D.VIL.places.garage.inside, t.x, t.z) && Math.abs(t.v) < 0.3; })()", { act: ['開鐵捲門', '進車庫'], prop: true }, 300); // 車庫街的家：回車庫＝開到車庫街你那間門口、按「進車庫」
-check(r.arrived && r.acts.includes('進車庫'), `the monster truck came home: drove to your garage on the garage street and pressed 進車庫 → inside the marble garage (${r.t.toFixed(0)} s sim)`);
+r = await leg('garage', "(() => { const D = window.__D(), t = D.drv.telemetry(); return window.__pp.inBox(D.VIL.places.garage.inside, t.x, t.z) && Math.abs(t.v) < 0.3; })()", { act: ['開鐵捲門'], prop: true }, 300); // 你家在車庫街：開到門前、開鐵捲門、開進去
+check(r.arrived && r.acts.includes('開鐵捲門'), `the monster truck came home: drove down the garage street, opened the roller door from the truck and drove into the garage (${r.t.toFixed(0)} s sim)`);
 summary.push(`monster shop → home: ${r.arrived ? 'arrived' : 'NOT'} · max ${r.max.toFixed(0)} km/h · bumps ${r.bumps} · ${r.ms.toFixed(2)} ms/step`);
 const pk = await p.evaluate(() => { const D = window.__D(), H = window.__H; D.drv.setInput(null); window.__dstep(40); const t = D.drv.telemetry(), q = H.gl(t.x, t.z); return { act: H.actText(), act2: H.act2(), v: +t.v.toFixed(3), local: [+q.x.toFixed(2), +q.z.toFixed(2)], paused: t.paused }; });
 console.log('9', el(), 'home:', JSON.stringify(pk));
-check(pk.act2 === '下車' && pk.act === '開鐵捲門' && !pk.paused && Math.abs(pk.v) < 1 && Math.hypot(...pk.local) < 0.01, `inside the garage in the middle (${pk.local}), door shut: 開鐵捲門 + 下車 (no 停好熄火)`);
+check(pk.act2 === '下車' && pk.act == null && !pk.paused && Math.abs(pk.v) < 1, 'stopped inside the garage: only 下車 (no 停好熄火)');
 await drawAndShot('9-home-inside');
 // 開到 3 號升降機（跟地板平的空平台）上下車：不停上去（沒有輕量車），車子就停在那裡、平台照樣空的；再上車開到中間停好
 const dk9 = await p.evaluate(() => {
@@ -788,16 +788,13 @@ await p.evaluate(() => { const H = window.__H; H.ow = (x, z, h = 0) => { const O
 const bw = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, G = D.GAR, O = H.OD; const r0 = H.walkLocal([[-2.6, -2.6], [3.0, -2.4], [3.6, -0.8]]); const a0 = H.actText(), p0 = H.press(); // r0：從休息區前面繞過中間的 GC8 到鐵捲門裡面
   let n = 0; for (; n < 900 && G.door.t < 0.98; n++) H.step(1); const gd = G.door.t; // 走遠了車庫的門會自己關（遙控器）：開好的時候先記下來
-  // Nick 2026-10-11「每個人要從自己的車庫出來」：走出鐵捲門＝到車庫街你那間（沒連線＝1 號）門口
-  const HM = window.__HOME(), W = D.walker, a = D.VIL.places.garage.lot.heading; H.walkLocal([[4, -1.5]]); let m = 0;
-  for (; m < 240 && HM.in; m++) { const t = W.telemetry(); W.setInput({ x: -Math.sin(a - t.camYaw) * 0.8, y: Math.cos(a - t.camYaw) * 0.8 }); H.step(1); }
-  W.setInput(null); H.step(3); const q = D.VIL.places.garst.slots[0], t1 = W.telemetry(), r1 = { ok: !HM.in && Math.hypot(t1.x - q.door.x, t1.z - q.door.z) < 1 };
-  const r2 = H.walkPath([[q.door.x, -73.5], [-345, -73.5], [-334, -74.5], ...H.oww([[O.X1 + 2.6, O.ZC], [O.X1 + 1.6, O.ZC]])]); // 走到車庫街的路上、往東走到越野車車庫門口
+  const r1 = H.walkLocal([[8, 0.2], [16, -1.6]]); // 走出鐵捲門：就在車庫街的路上（第 17 批：你家在車庫街）
+  const r2 = H.walkPath([[-345, -73.5], [-334, -74.5], ...H.oww([[O.X1 + 2.6, O.ZC], [O.X1 + 1.6, O.ZC]])]); // 往東走到越野車車庫門口
   return { r0: r0.ok, a0, p0, door: +gd.toFixed(2), s: +(n / 60).toFixed(1), r1: r1.ok, r2: r2.ok, at: r2.at, act: H.actText(), ob: +D.OB.door.t.toFixed(2) };
 });
 console.log('  walk out:', JSON.stringify(bw));
 check(bw.r0 && bw.a0 === '開鐵捲門' && bw.p0 === '開鐵捲門' && bw.door >= 0.98 && bw.r1 && bw.r2 && bw.ob === 0 && bw.act === '開鐵捲門',
-  `on foot: opened the garage roller door from inside (${bw.s} s), walked out (→ your garage on the garage street) and along the road to the annex door, which is closed: 「開鐵捲門」`);
+  `on foot: opened the garage roller door from inside (${bw.s} s), walked out onto the garage street and along the road to the annex door, which is closed: 「開鐵捲門」`);
 // 退到路上、鏡頭朝門：整棟（鐵捲門、門上的「越野車專用」招牌）拍得到
 await p.evaluate(() => { const H = window.__H, W = window.__D().walker, O = H.OD, q = H.ow(O.X1 + 9, O.ZC + 2, Math.PI + 0.25); W.teleport(q); W.setCamera({ yaw: q.heading }); H.step(40); });
 await drawAndShot('14-orbay-outside');
@@ -906,14 +903,14 @@ await drawAndShot('19-monster-parked');
 const ob6a = await p.evaluate(() => { const H = window.__H, O = H.OD; const r = H.walkPath(H.oww([[O.B0X, O.B0Z + 4.35]])); // 退到格子口再按「上車」（才走得到車門）
   const act = H.actText(), pressed = H.press(), b = H.board(); H.step(30); return { ok: r.ok, act, pressed, modes: b.modes, cur: window.__D().cur }; });
 const ob6 = await p.evaluate(() => { const D = window.__D(), OB = D.OB, d = D.drv, H = window.__H, B = H.obBot();
-  const S = H.gw(14, -5); // 以前的大車位（鐵捲門前面的水泥地）：停回同一個地方，下一段去阿財車行就跟以前一樣
-  const s1 = B.out() + B.goW(-312, -72.5, 25) + B.goW(-300.5, -76, 20) + B.goW(S.x, S.z, 25);
+  const S = H.gw(14, -5); // 你家鐵捲門前面（車庫街的路上）：停在這裡，下一段去阿財車行
+  const s1 = B.out() + B.goW(-345, -72.5, 25) + B.goW(S.x + 6, -72.5, 20) + B.goW(S.x, S.z, 25); // 第 17 批：你家在車庫街：往西開到你家門前
   d.setInput(null); window.__dstep(240); const t = d.telemetry(); // 放開油門滑到停（不按煞車：停著按住會換倒車）
-  return { log: B.log, s: +s1.toFixed(1), x: +t.x.toFixed(1), z: +t.z.toFixed(1), inside: OB.inside(t.x, t.z) };
+  return { log: B.log, s: +s1.toFixed(1), x: +t.x.toFixed(1), z: +t.z.toFixed(1), inside: OB.inside(t.x, t.z), d: +Math.hypot(t.x - S.x, t.z - S.z).toFixed(1) };
 });
-console.log('  back in the truck, out to the front yard:', JSON.stringify(ob6a), JSON.stringify(ob6));
-check(ob6a.ok && ob6a.act === '上車 · 怪獸卡車' && ob6a.modes.join('>') === 'in>seat>off' && ob6a.cur === 'monster' && !ob6.inside && ob6.x > -306 && ob6.z < -78,
-  `got back into the truck in its bay, drove it out of the annex onto the road and east into the front yard (${ob6.s} s sim)`);
+console.log('  back in the truck, out to your garage door:', JSON.stringify(ob6a), JSON.stringify(ob6));
+check(ob6a.ok && ob6a.act === '上車 · 怪獸卡車' && ob6a.modes.join('>') === 'in>seat>off' && ob6a.cur === 'monster' && !ob6.inside && ob6.d < 3,
+  `got back into the truck in its bay, drove it out of the annex onto the road and west to your garage door on the garage street (${ob6.d} m off, ${ob6.s} s sim)`);
 
 // ---- 13 開怪獸卡車去阿財車行買一台（錢給夠）：車行把怪獸卡車送回越野車車庫自己的格子（不是升降機、沒有名牌）----
 const dealerBay = await p.evaluate(() => window.__D().VIL.places.dealer.bay);

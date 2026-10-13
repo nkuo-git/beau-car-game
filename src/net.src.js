@@ -304,8 +304,8 @@ function netHudTick(dt) {
   }
 }
 
-// ---- 車庫街（village.js 第 16 批）：6 間車庫的名牌（一張貼圖 6 格＝1 個 draw call）：每個人在自己世界號碼那間（你寫「名字（你）」），沒有人就「空的」----
-// 走到（或開到）別人那間門口 6 公尺內：「🚗 看小明的車庫」（回車庫頁參觀，網站那邊做）；自己那間是 town.src.js 的「進車庫」
+// ---- 車庫街（village.js 第 16、17 批）：6 間車庫的名牌（門上面的黑大理石橫帶；一張貼圖 6 格＝1 個 draw call）：每個人在自己世界號碼那間（你那間不畫：大理石車庫自己的招牌），沒有人就「空的」----
+// 走到（或開到）別人那間門口 6 公尺內：「🚗 看小明的車庫」（回車庫頁參觀，網站那邊做）；自己那間：開鐵捲門開進去
 const NET_GST = { mesh: null, cv: null, tex: null, sig: null, at: -1, own: [] };
 const NET_GST_W = 512, NET_GST_H = 50;
 function netGstBuild() {
@@ -319,7 +319,7 @@ function netGstBuild() {
   });
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); geo.setIndex(I); geo.computeBoundingSphere();
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
-  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, transparent: true, polygonOffset: true, polygonOffsetFactor: -2 })); // 第 17 批：你那間不畫（大理石車庫自己有招牌）：那一格是透明的
   mesh.name = 'garst-signs'; mesh.matrixAutoUpdate = false;
   TR.scene.add(mesh);
   Object.assign(NET_GST, { mesh, cv, tex, sig: null });
@@ -337,6 +337,7 @@ function netGstPaint() {
   g.clearRect(0, 0, W, H * SL.length);
   for (let i = 0; i < SL.length; i++) {
     const o = own[i], y = i * H;
+    if (o && o.me) continue; // 你家：大理石車庫自己的招牌（大便龍的車庫）
     g.fillStyle = '#1d2026'; g.fillRect(0, y, W, H);
     g.font = `800 ${o ? 34 : 28}px "Noto Sans TC", "PingFang TC", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
     if (o) { if (!o.me) { g.fillStyle = o.col || '#4a8cff'; g.beginPath(); g.arc(28, y + H / 2, 9, 0, Math.PI * 2); g.fill(); } g.fillStyle = o.me ? '#FF8A3D' : '#F3F3F1'; g.fillText(o.me ? `${o.n}（你）` : `${o.n}的車庫`, W / 2, y + H / 2 + 1, W - 80); }
@@ -351,7 +352,7 @@ function netGstTick(me, out) {
   let at = -1;
   if (out && me && Math.abs(me.v ?? me.speed ?? 0) < 4) {
     const SL = VIL.places.garst.slots;
-    for (let i = 0; i < SL.length && i < NET_GST.own.length; i++) { const d = SL[i].door; if (NET_GST.own[i] && !NET_GST.own[i].me && (d.x - me.x) * (d.x - me.x) + (d.z - me.z) * (d.z - me.z) < 36) { at = i; break; } } // 自己那間：town.src.js 的「進車庫」
+    for (let i = 0; i < SL.length && i < NET_GST.own.length; i++) { const d = SL[i].door; if (NET_GST.own[i] && !NET_GST.own[i].me && (d.x - me.x) * (d.x - me.x) + (d.z - me.z) * (d.z - me.z) < 36) { at = i; break; } } // 自己那間：開鐵捲門開進去
   }
   if (at === NET_GST.at) return;
   NET_GST.at = at;
@@ -777,12 +778,16 @@ body.visiting .stage{aspect-ratio:auto;height:min(78vh,640px);max-height:none}`;
   return { setLikes(n, liked) { V.likes = Math.max(0, n | 0); V.liked = !!liked; paint(); }, close: () => V.close(true), get open() { return NV === V; }, get car() { return cars[V.i].k; } };
 }
 
+// 第 17 批（Nick 2026-10-13「所有人都在車庫街有個固定位置 不管有沒有連線」）：第一次進入世界拿到的號碼就是你家，記在存檔（沒連線也住那間）
+function netHomeKeep() { if (NET.slot >= 0 && NET.slot < 6 && !Number.isInteger(GAME.home)) { GAME.home = NET.slot; save(true); } }
+
 // ---- 網站叫的 ----
 Object.assign(window.beauGame, {
   net: {
     join(o) {
       if (!o || !o.code || !o.me) return;
       NET.on = true; NET.doneSeq = 0; NET.slot = Number.isInteger(o.slot) ? o.slot : -1; NET.code = String(o.code); NET.me = String(o.me); NET.host = String(o.host || ''); NET.myName = String(o.name || '').slice(0, 12);
+      netHomeKeep();
       netHud();
     },
     leave() {
@@ -794,7 +799,8 @@ Object.assign(window.beauGame, {
       if (NET.hud) { NET.hud.root.hidden = true; NET.hud.rc.hidden = true; NET.hud.res.hidden = true; NET.hud.quit.hidden = true; }
     },
     host(uid) { NET.host = String(uid || ''); },
-    slot(n) { NET.slot = Number.isInteger(n) ? n : -1; }, // 世界的號碼（斷線再進來可能換）：車庫街你那間
+    slot(n) { NET.slot = Number.isInteger(n) ? n : -1; netHomeKeep(); }, // 世界的號碼（斷線再進來可能換）：車庫街你那間
+    home: () => (Number.isInteger(GAME.home) ? GAME.home : null), // 第 17 批：你固定的那間（網站拿位子的時候先試這個號碼）
     members(list) {
       if (!NET.on || !Array.isArray(list)) return;
       const keep = new Set();

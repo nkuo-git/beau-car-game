@@ -295,7 +295,7 @@ await p.addInitScript(() => {
     const D = window.__D(), G = D.GAR, V = D.VIL;
     const cars = W().cars.map((c) => { const hc = Math.cos(c.heading), hs = Math.sin(c.heading), cx = c.cx || 0, cz = c.cz || 0; return { t: 'box', x: c.x + cx * hc + cz * hs, z: c.z - cx * hs + cz * hc, hx: c.hx, hz: c.hz, rot: c.heading, h: 1.4 }; });
     const fr = V.buildings.filter((b) => b.floors >= 2 && (b.kind === 'house' || b.kind === 'shop')).map((b) => ({ t: 'box', x: b.x + Math.sin(b.rot) * (b.hz + 0.56), z: b.z + Math.cos(b.rot) * (b.hz + 0.56), hx: b.hx, hz: 0.56, rot: b.rot, y0: 2.7, h: b.h }));
-    return [...V.colliders, ...G.colliders(G.door.t >= 0.55, true), ...cars, ...fr];
+    return [...V.colliders.filter((c) => c.off !== true), ...G.colliders(G.door.t >= 0.55, true), ...cars, ...fr]; // off：車庫街你那間的外殼盒子（裡面是 GAR）
   };
   H.inside = (cols, x, y, z, m = 0) => { // 點在不在碰撞物裡面（xz 往外 m、高度 y0…h）
     for (const c of cols) {
@@ -359,6 +359,9 @@ await p.addInitScript(() => {
   // 從 (x, z) 往 q 開槍：q 後面 60 公尺內、子彈那一線 1.5 公尺內沒有別人（穿過小孩的子彈不會剛好打到後面的大人）
   X.lineClear = (x, z, q) => { const dx = q.x - x, dz = q.z - z, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L;
     for (const o of P3().NPC.peds.people) { if (o === q || o.gone || o.active === false) continue; const px = o.x - x, pz = o.z - z, t = px * ux + pz * uz; if (t > 0 && t < L + 60 && Math.abs(px * uz - pz * ux) < 1.5) return false; }
+    // 路上的車也不行（穿過小孩的子彈打到後面的車也算「開槍打人」）
+    const R = (L + 60) / 2, cs = P3().NPC.traffic.colliders(x + ux * R, z + uz * R, R + 4) || [];
+    for (const c of cs) { const px = c.x - x, pz = c.z - z, t = px * ux + pz * uz; if (t > 0 && t < L + 60 && Math.abs(px * uz - pz * ux) < 1.5 + Math.max(c.hx || 1, c.hz || 1)) return false; }
     return true; };
   X.farFromPolice = (q) => { const D = P3().police._dbg, st = D.station.spawn || window.__D().VIL.places.police?.spawn; return !st || (Math.hypot(q.x - st.x, q.z - st.z) > 60 && D.tall.blocked(st.x, st.z, q.x, q.z, 0)); };
   // 離 (x, z) 最近的人（age：'adult' | 'kid'；站著、走著的）
@@ -580,17 +583,19 @@ const hidT = s4h.lost.s + s4h.heat0;
 check(s4h.lost.wanted === 0 && s4h.lost.state === 'free' && s4h.lost.escapes === 1 && hidT > 24 && hidT < 26.5 && s4h.lost.said.some((x) => /甩掉警察了/.test(x)), `hiding in the house ${hidT.toFixed(1)} s (25 s rule) cleared the star (「甩掉警察了！」)`);
 check(s4h.out === 'out', 'walked back out of the house');
 const s4b = await ev(() => {
-  const X = window.__X, D = window.__D(), H = window.__H, w = D.walker, P3 = window.__P3(), pol = P3.police, G = D.GAR, HM = window.__HOME();
-  // Nick 2026-10-11「每個人要從自己的車庫出來」：你家＝車庫街你那間（沒連線＝1 號）；在門口揍人 → 馬上「進車庫」（進去鐵捲門是關著的）
-  const a = { door0: G.door.t, in0: HM.in };
-  w.teleport(HM.walk); X.step(30);
+  const X = window.__X, D = window.__D(), H = window.__H, w = D.walker, P3 = window.__P3(), pol = P3.police, G = D.GAR;
+  // 先走到鐵捲門前面：門關著就按「開鐵捲門」（等一下要馬上躲進去）
+  const a = { door0: G.door.t };
+  w.teleport(H.gw(7.5, 0, Math.PI)); X.step(20);
+  if (G.door.t === 0) { a.open = H.press(); for (let i = 0; i < 200 && G.door.t < 1; i++) X.step(1); }
+  w.teleport(H.gw(16, 4, 0)); X.step(30);
   const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300, X.farFromPolice); if (!ad) return { err: 'no adult' };
   X.faceTo(ad); X.punchBtn(); X.step(2);
   a.wanted = pol.wanted; a.adD = +Math.hypot(ad.x - t.x, ad.z - t.z).toFixed(1);
-  w.teleport(HM.walk); X.step(5);
-  a.enter = H.actText(); a.pressE = H.press(); X.step(2); a.in = HM.in; a.doorIn = G.door.t; a.wanted2 = pol.wanted;
-  // 先把鐵捲門打開（星星還在：門開著警察找得到你）→ 站在門裡面「關鐵捲門」
-  w.teleport(H.gw(3.4, -1.7, 0)); X.step(3); a.open = H.press(); for (let i = 0; i < 200 && G.door.t < 1; i++) X.step(1);
+  // 馬上跑回車庫裡面（揍的那個人在 30 公尺外的話門已經自己關了（doorStep）：先在門口再開一次）
+  for (let i = 0; i < 300 && G.door.moving; i++) X.step(1); // 正在自己關：等它關好
+  if (G.door.t < 1) { w.teleport(H.gw(7.5, 0, Math.PI)); X.step(5); a.open2 = H.press(); for (let i = 0; i < 200 && G.door.t < 1; i++) X.step(1); }
+  w.teleport(H.gw(5, 0.5, Math.PI)); X.step(5);
   a.walk = H.walkLocal([[2.5, 0.5]]); X.step(5);
   a.act = H.actText(); a.press = H.press(); let n = 0; for (; n < 300 && pol.wanted > 0; n++) X.step(1);
   a.after = { s: +(n / 60).toFixed(1), door: G.door.t, wanted: pol.wanted, state: pol.state, said: X.toasts.slice(-2), safe: pol.telemetry().player.safe };
@@ -599,8 +604,7 @@ const s4b = await ev(() => {
   return a;
 });
 console.log('  garage:', JSON.stringify(s4b));
-check(s4b.wanted === 1 && s4b.enter === '進車庫' && s4b.pressE === '進車庫' && s4b.in && s4b.doorIn === 0 && s4b.wanted2 === 1, 'wanted, at your garage on the garage street: 「進車庫」 → inside the marble garage, roller door shut');
-check(s4b.open === '開鐵捲門' && s4b.act === '關鐵捲門' && s4b.press === '關鐵捲門', 'still wanted, opened the door and walked back inside: 「關鐵捲門」');
+check(s4b.wanted === 1 && s4b.act === '關鐵捲門' && s4b.press === '關鐵捲門', 'wanted, walking inside your garage with the door open: 「關鐵捲門」');
 check(s4b.after && s4b.after.wanted === 0 && s4b.after.door === 0 && s4b.after.said.some((x) => /躲回車庫/.test(x)), `closed the garage door: stars cleared in ${s4b.after?.s} s (「躲回車庫了，警察找不到你！」)`);
 check(s4b.reopen === '開鐵捲門', 'afterwards the door button is the normal 「開鐵捲門」 again');
 await ev(() => { const pol = window.__P3().police; if (pol.state !== 'free') pol.clear(); }); // 沒過的話：下一段從乾淨的開始
@@ -687,9 +691,11 @@ const s6a = await ev(() => {
   if (!kid) return { ...a, err: 'no kid' };
   X.faceTo(kid, 5, (x, z) => X.lineClear(x, z, kid)); X.step(5); g.setAim(true); X.step(20);
   const k0 = g.telemetry().knocks, c0 = pol.telemetry().crimes.length, m0 = kid.mode; let shots = 0;
-  for (let i = 0; i < 3; i++) { X.aimAt(kid.x, 0.7, kid.z, 8); shots += X.fire(); }
+  const hits = []; for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 240; j++) { const p = w.telemetry(); if (X.lineClear(p.x, p.z, kid)) break; X.step(1); } // 路上的車開過去才開槍（子彈穿過小孩，不要打到後面剛好開過的車）
+    X.aimAt(kid.x, 0.7, kid.z, 8); shots += X.fire(); hits.push(g.telemetry().last?.kind); }
   X.step(10); g.setAim(false); X.step(10);
-  a.kid = { m0, m1: kid.mode, y: +kid.y.toFixed(2), shots, knocks: g.telemetry().knocks - k0, crimes: pol.telemetry().crimes.slice(c0).map((c) => c.type).join(), wanted: pol.wanted, aimKind: g.telemetry().aimKind };
+  a.kid = { m0, m1: kid.mode, y: +kid.y.toFixed(2), shots, knocks: g.telemetry().knocks - k0, crimes: pol.telemetry().crimes.slice(c0).map((c) => c.type).join(), wanted: pol.wanted, aimKind: g.telemetry().aimKind, hits, at: [+w.telemetry().x.toFixed(1), +w.telemetry().z.toFixed(1)] };
   return a;
 });
 console.log('6', el(), JSON.stringify(s6a));
@@ -728,11 +734,18 @@ const s6c = await ev(() => {
   // 先甩開附近的警察（測試：直接清掉，重新來）
   pol.clear(); X.step(2);
   const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300); if (!ad) return { err: 'no adult' };
-  X.faceTo(ad, 6); X.step(5); g.setAim(true); X.step(20);
+  // 站的地方要打得到他（中間沒有柱子、牆；不要剛好站在一排柱子那一線上）
+  let seen = false;
+  for (let i = 0; i < 16 && !seen; i++) {
+    const ang = (i * Math.PI) / 8, x = ad.x + Math.cos(ang) * 6, z = ad.z - Math.sin(ang) * 6;
+    w.teleport({ x, z, heading: ang + Math.PI }); X.step(1); const t1 = w.telemetry(); if (Math.hypot(t1.x - x, t1.z - z) > 0.12) continue;
+    const dx = ad.x - x, dy = 1.1 - 1.36, dz = ad.z - z, L = Math.hypot(dx, dy, dz); seen = g.probe(x, 1.36, z, dx / L, dy / L, dz / L, { maxT: 20 }).ref === ad; // 子彈從胸口打出去：第一個打到的就是他
+  }
+  X.step(5); g.setAim(true); X.step(20);
   const k0 = g.telemetry().knocks, c0 = pol.telemetry().crimes.length; let shots = 0;
-  for (let i = 0; i < 4 && !['fall', 'lie', 'getup'].includes(ad.mode); i++) { X.aimAt(ad.x, 1.1, ad.z, 8); shots += X.fire(); }
+  const hits = []; for (let i = 0; i < 4 && !['fall', 'lie', 'getup'].includes(ad.mode); i++) { X.aimAt(ad.x, 1.1, ad.z, 8); shots += X.fire(); hits.push(g.telemetry().last); }
   X.step(3);
-  const a = { shots, m1: ad.mode, age: ad.age, knocks: g.telemetry().knocks - k0, crimes: pol.telemetry().crimes.slice(c0).map((c) => c.type).join(), wanted: pol.wanted, state: pol.state, said: X.toasts.slice(-2), mag: g.telemetry().mag };
+  const t2 = w.telemetry(), a = { at: [+t2.x.toFixed(1), +t2.z.toFixed(1)], ad: [+ad.x.toFixed(1), +ad.z.toFixed(1)], seen, hits, shots, m1: ad.mode, age: ad.age, knocks: g.telemetry().knocks - k0, crimes: pol.telemetry().crimes.slice(c0).map((c) => c.type).join(), wanted: pol.wanted, state: pol.state, said: X.toasts.slice(-2), mag: g.telemetry().mag };
   g.setAim(false); X.step(5);
   return a;
 });

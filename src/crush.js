@@ -68,7 +68,7 @@ function small(c) {
   if (c.t === 'circle') return (c.r <= 0.62 && h <= 1.6) || (c.r <= 0.1 && h <= 3.0);
   return h <= 1.35 && c.hx <= 1.7 && c.hz <= 1.7;
 }
-const gone = (c) => c.crushed === true || (!!c.src && c.src.crushed === true);
+const gone = (c) => c.crushed === true || c.off === true || (!!c.src && (c.src.crushed === true || c.src.off === true)); // 第 17 批：off＝暫時不算（車庫街你那間）
 // 第 9 批：any＝越野車（什麼都輾）；protect(x, z)＝不能輾的地方
 function canAny(c, any, protect) {
   if (!c || gone(c) || c.npc || c.person || c.noCrush || (c.src && c.src.noCrush)) return false;

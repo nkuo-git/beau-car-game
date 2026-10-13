@@ -287,7 +287,7 @@ check(bd2.mode === 'off' && bd2.cur === 'monster' && bd2.drv, `walked to the mon
 check(await p.evaluate(() => !!window.__D().drv.telemetry().rideOn && window.__D().drv.carInfo.halfW === 1.905), 'the monster truck drives with the terrain ride on (half width 1.905)');
 await p.evaluate(() => { const D = window.__D(), H = window.__H; D.drv.teleport(D.VIL.places.garage.spawn); H.step(20); window.__pol()?.clear(); });
 let tgt2 = null;
-for (let i = 0; i < 20 && !tgt2; i++) { await p.evaluate(() => window.__H.step(90)); tgt2 = await p.evaluate(() => window.__H.pickTraffic(90, 'car', 48)); } // 輾完要再開 25 公尺以上：前面 48 公尺不能有輾不到的地方或房子
+for (let i = 0; i < 20 && !tgt2; i++) { await p.evaluate(() => window.__H.step(90)); tgt2 = await p.evaluate(() => window.__H.pickTraffic(90, 'car', 68)); } // 輾完要再開 25 公尺以上：撞上去、壓過去差不多 40 公尺，前面 68 公尺不能有輾不到的地方或房子（第 17 批：原本車庫那裡變草地，往北開到底是村子北邊的山腳）
 console.log('  traffic target:', JSON.stringify(tgt2));
 check(!!tgt2, 'found a traffic car for the monster truck');
 const crush2 = await p.evaluate((q) => {

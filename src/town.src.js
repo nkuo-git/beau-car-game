@@ -220,9 +220,9 @@ function arrangeCars() {
   }
   if (inTown) { // 停著的車：開過去會撞到、走過去會擋到（升降機上的只有跟地板平的那層擋：頭上的、坑裡的不擋）
     const cols = [], padCols = [];
-    for (const [k, w] of at) { const L = LODS[k]; if (L?.lod && w[3] && (HOME.in || w[0] !== GAR.interior)) (GAME.owned.has(k) ? cols : padCols).push(carBox(L, w[3])); } // 車庫街的家：不在家裡，家裡的車不擋
-    for (let id = 0; id < 12; id++) { const k = DECK[id]; if (HOME.in && k && k !== tripFull && LODS[k]?.lod && deckUp(id)) cols.push(carBox(LODS[k], deckPose(id))); }
-    for (const k in PFULL) { const p = tripPose[k]; if (p && k !== tripFull && (HOME.in || !garIn(p))) cols.push(carBox(PFULL[k].box, p)); } // 第 4 批：停著的完整的車（大車換開別台）
+    for (const [k, w] of at) { const L = LODS[k]; if (L?.lod && w[3]) (GAME.owned.has(k) ? cols : padCols).push(carBox(L, w[3])); }
+    for (let id = 0; id < 12; id++) { const k = DECK[id]; if (k && k !== tripFull && LODS[k]?.lod && deckUp(id)) cols.push(carBox(LODS[k], deckPose(id))); }
+    for (const k in PFULL) { const p = tripPose[k]; if (p && k !== tripFull) cols.push(carBox(PFULL[k].box, p)); } // 第 4 批：停著的完整的車（大車換開別台）
     if (drv) { drv.removeColliders('parked'); drv.addColliders([...cols, ...padCols], 'parked'); }
     if (walker) { walker.removeColliders('pads'); walker.addColliders(padCols, 'pads'); walker.setCars(walkCars()); } // 你的車：走路那邊自己加碰撞（setCars）
   }
@@ -236,7 +236,6 @@ function walkCars() {
   if (!tripPose || !DECK) return list;
   for (const k of GAME.owned) {
     const p = tripPose[k]; if (!p) continue;
-    if (!HOME.in && garIn(p)) continue; // 車庫街的家：在家裡的車，人在外面上不了
     if (p.deck != null && !deckUp(p.deck)) continue; // 升起來在頭上、降下去在坑裡、在動：走不到
     const name = CARS[k].btn[0];
     if (k === tripFull) { if (!drv && tripS && tripBox) list.push({ key: k, name, x: p.x, z: p.z, heading: p.heading, ...tripBox, h: carH(k), object: tripS.car }); continue; } // 出門停在中間、停上升降機（還沒開、沒在開）
@@ -278,6 +277,7 @@ async function enterDrive() {
       GAR = buildRoom(renderer, { quality: 'low', exterior: true }); // 村子裡看得到外牆、屋頂、招牌；地板不反射（省）
       GAR.group.position.set(L.x, 0, L.z); GAR.group.rotation.y = L.heading; TR.scene.add(GAR.group);
       GAR.onLift = onLift; // 升降機開始動、停好：馬達聲、碰撞、走得到的車
+      TR.scene.onBeforeRender = garHideFull; TR.scene.onAfterRender = garShowFull; // 第 17 批：門關著從外面看，車庫裡停的完整的車不畫
       OB = buildOrbay(VIL, { renderer }); // 第 6 批：越野車車庫（車庫西邊那棟：牆、停車格、鐵捲門的碰撞都加進 VIL 了）
       $('dealerName').textContent = dealerName();
       if (!meChar) meChar = buildCharacter(meLook());
@@ -332,7 +332,7 @@ function startDrive() {
   townFog(true);
   for (const k of Object.keys(snooze)) delete snooze[k];
   for (const k of Object.keys(bayLock)) delete bayLock[k];
-  GAR.door.t = 0; GAR.setTrophies(trophyCount()); HOME.slot = -1; homePlace(); // 車庫街的家：你那間（下面 homeSet：從大理石車庫裡面出發）
+  GAR.door.t = 0; GAR.setTrophies(trophyCount()); homePlace(); // 第 17 批：你家（大理石車庫）搬到車庫街你那間（下面的停車位置都照新的 lot 算）
   if (OB) { OB.door.t = 0; obDoor.drv = null; obDoor.walk = null; } // 第 6 批：越野車車庫的鐵捲門關著
   home = { open: null, hw: false, slow: false }; hurtSaid = false;
   if (!walker) makeWalker();
@@ -345,7 +345,6 @@ function startDrive() {
   tripPose = { [cur]: { ...VIL.places.garage.spawn } };
   for (let id = 0; id < 12; id++) if (DECK[id]) tripPose[DECK[id]] = deckPose(id);
   for (const k of GAME.owned) if (k !== cur && !liftOK(k)) { const p = baySpot(k); if (p) tripPose[k] = p; } // 第 6 批：越野車停越野車車庫自己的格子（輕量車）
-  homeSet(true, true);
   stopLiftSnd(); for (const lf of GAR.lifts) snapLift(GAR, lf, DECK[slotId(lf.id, 0)] ? 0 : 1);
   if (GAR.dk) for (let id = 0; id < 12; id++) GAR.dk[id] = null; // 上一趟掛的東西可能被車庫頁拿走了（Object3D 只有一個 parent）：全部重掛
   parkFull();
@@ -603,7 +602,7 @@ function onGetIn(car) {
     const pose = offDeck(car.key) || tripPose[car.key];
     makeDrv(pose);
     const p = garLocal(pose.x, pose.z);
-    if (HOME.in && GAR.door.t === 0 && inBox(GAR.zones.inside, p.x, p.z)) drv.toast('按「開鐵捲門」，開出去！', 2600);
+    if (GAR.door.t === 0 && inBox(GAR.zones.inside, p.x, p.z)) drv.toast('按「開鐵捲門」，開出去！', 2600);
     return;
   }
   if (GAME.owned.has(car.key)) switchCar(car.key); else walker.resume();
@@ -835,7 +834,7 @@ function onLift(lf, what) {
 function liftChanged() {
   if (!trip || !tripPose || !GAR) return;
   if (home) home.open = null; // 開車的 'garage' 碰撞下一格重給（升起來＝四根柱子、在動＝整個坑、降下去＝沒有）
-  if (walker) { walker.setGarage(HOME.in ? GAR : null); walker.removeColliders('garcam'); if (HOME.in) walker.addColliders(garCamCols(), 'garcam'); obDoor.walk = null; } // 只擋鏡頭的（小房子的屋頂、頭上的平台）只給走路的
+  if (walker) { walker.setGarage(GAR); walker.removeColliders('garcam'); walker.addColliders(garCamCols(), 'garcam'); obDoor.walk = null; } // 只擋鏡頭的（小房子的屋頂、頭上的平台）只給走路的
   arrangeCars(); // 停著的車的碰撞（跟地板平的才擋）、走路可以上的車
 }
 // 只擋鏡頭的盒子（世界座標；drive.js 不看 y0，不要給開車的）：room.js 的（小房子的屋頂、升起來或在動的上層平台）＋小房子門洞上面那塊牆
@@ -876,18 +875,17 @@ function endSleep() { sleep = null; if (fadeEl) fadeEl.style.display = 'none'; }
 function homeWalk() {
   const t = walker.telemetry(), q = garLocal(t.x, t.z), Z = GAR.zones;
   let act = null;
-  if (HOME.in && inBox(Z.inside, q.x, q.z)) {
+  if (inBox(Z.inside, q.x, q.z)) {
     for (let i = 0; i < 6 && !act; i++) if (inBox(Z.lifts[i], q.x, q.z)) act = liftAct(i);
     if (!act && inBox(Z.bedSide, q.x, q.z)) act = SLEEP_ACT;
     if (!act && inBox(DRESS_ZONE, q.x, q.z)) act = DRESS_ACT;
   }
-  if (!act && !t.near) act = homeDoorAct(t); // 車庫街：走到你那間門口「進車庫」
   if (!act && !t.near) act = orbayAct(t); // 第 6 批：站在越野車車庫門口（旁邊沒有車可以上）：「開鐵捲門」
   if (!act) act = hideAct(t.x, t.z, 0.3); // 第 3 批（b3-int）：通緝中躲回車庫：「關鐵捲門」
   walker.setAction(act);
-  const c = OB && OB.inside(t.x, t.z, -0.35) ? OB.size.ceil - 0.25 : HOME.in ? GAR.ceilingAt(q.x, q.z) : Infinity; // 第 6 批：在越野車車庫裡面，鏡頭不要穿過天花板
+  const c = OB && OB.inside(t.x, t.z, -0.35) ? OB.size.ceil - 0.25 : GAR.ceilingAt(q.x, q.z); // 第 6 批：在越野車車庫裡面，鏡頭不要穿過天花板
   if (c !== gcam.maxY) { gcam.maxY = c; walker.setCamera({ maxY: isFinite(c) ? c : null }); }
-  const inHouse = HOME.in && inBox(Z.house, q.x, q.z, -0.05);
+  const inHouse = inBox(Z.house, q.x, q.z, -0.05);
   if (CABIN_EYE && inHouse !== gcam.house) {
     gcam.house = inHouse;
     if (inHouse && walker.cameraMode === 'follow') { gcam.auto = true; walker.setCamera({ mode: 'eye' }); }
@@ -897,7 +895,6 @@ function homeWalk() {
 
 // ---- 你家：鐵捲門（碰撞跟著門開關）、HUD 的大按鈕（開鐵捲門）、走遠了門自己關 ----
 function homeAct(t) {
-  if (!HOME.in) return null;
   const p = garLocal(t.x, t.z), Z = GAR.zones, D = Z.door.x; // 門在 x = D
   const inside = inBox(Z.inside, p.x, p.z), front = p.x > D && p.x < D + 16 && Math.abs(p.z) < 9; // 門前面那塊
   if ((inside || front) && GAR.door.t === 0 && !GAR.door.moving) return OPEN_ACT;
@@ -909,8 +906,8 @@ function openDoor() {
 }
 // 每一格（走路的時候也要）：開車的碰撞跟著門、升降機（開到 0.9 才不擋車；走路的 walk.js 自己跟）；人或車離門 30 公尺以上、門下面沒有停車 → 遙控器關門
 function doorStep() {
-  const open = GAR.door.t >= 0.9, want = HOME.in ? open : 'off'; // 車庫街的家：不在你家裡面＝車庫整棟不在（沒有碰撞）
-  if (drv && want !== home.open) { drv.removeColliders('garage'); if (HOME.in) drv.addColliders(garCols(open), 'garage'); home.open = want; }
+  const open = GAR.door.t >= 0.9;
+  if (drv && open !== home.open) { drv.removeColliders('garage'); drv.addColliders(garCols(open), 'garage'); home.open = open; }
   if (GAR.door.t !== 1 || GAR.door.moving || !tripPose) return;
   const onFoot = !!walker && walker.mode !== 'off', t = onFoot ? walker.telemetry() : drv ? drv.telemetry() : null; if (!t) return; // 換車中（載入）先不管
   const D = GAR.zones.door.x, p = garLocal(t.x, t.z); if (Math.hypot(p.x - D, p.z) <= 30) return;
@@ -921,97 +918,91 @@ function doorStep() {
   GAR.door.close(calm ? 1 : 1.8);
 }
 
-// ==== 車庫街的家（Nick 2026-10-11「每個人要從自己的車庫出來」「應該不用一開始那個統一的車庫」；草稿 https://claude.ai/artifact/HY57ifTtvknBBRDBoNJk6k 第 1 張，Nick 說 Ok）====
-// 你家（大理石車庫 GAR）還在原本的地方，可是外面看不到：外殼不畫、你不在裡面整棟都不畫（地上補一塊草地）、碰撞只有你在裡面才有
-//   從鐵捲門出去（車子的中心、人過了門）→ 到車庫街你那間門口（車：在門前的路上、車頭朝路口；人：門前 2 公尺）
-//   開（走）到你那間門口、停下來：「進車庫」→ 回到大理石車庫裡面（車停中間、車頭朝門；鐵捲門關著，按「開鐵捲門」再出去）
-//   你那間＝homeSlot()：在大家的世界裡＝世界的號碼（1–6），沒連線＝1 號；places.garage（回車庫、小地圖的「家」）也指那裡
-//   被搬走了（比賽完、去這裡、測試的 teleport）就當作出來了；被搬進車庫裡面（重新出門）就當作在家
-const HOME = { in: false, lx: 1e9, lz: 1e9, slot: -1, patch: null, hedge: null, out: null, walk: null, door: null, colD: null, colW: null };
-// 不在家的時候：原本那棟的地方一圈矮樹籬（看得到、擋得住：不會走進看不到的車庫、上看不到的車）；外牆 x −316…−284、z −110.5…−92.15
-const HEDGE = [[-300, -91.85, 16.8, 0.35], [-300, -110.85, 16.8, 0.35], [-316.45, -101.35, 0.35, 9.15], [-283.55, -101.35, 0.35, 9.15]].map(([x, z, hx, hz]) => ({ t: 'box', x, z, hx, hz, rot: 0, h: 1.1, noCrush: true }));
-const HOME_ACT = { label: '進車庫', icon: 'door', onClick: () => homeEnter() };
+// ==== 車庫街的家 ====
+// 第 16 批（內容 12，Nick 2026-10-11「每個人要從自己的車庫出來」）：本來是走出鐵捲門就跳到車庫街
+// 第 17 批（Nick 2026-10-13「開出車庫 他是突然閃跳到街上 可以像之前一樣 順著開出車庫 而且不同人開出來的位置也不同」「所有人都在車庫街有個固定位置 不管有沒有連線」；
+//   草稿 https://claude.ai/artifact/QHscDepQgHfWxNHL8GGNAJ 第 2 版，Nick 說「可以做了」）：
+//   你家（大理石車庫 GAR）整棟蓋在車庫街你那間（VIL.places.garage.lot）：開鐵捲門直接開出去、開回來按「開鐵捲門」開進去（跟以前一樣）
+//   你那間＝homeSlot()：在大家的世界裡＝世界的號碼；沒連線＝存檔的 GAME.home（第一次進入世界拿到的號碼，net.src.js；還沒進過＝1 號）
+//   換號碼（出門的時候進入世界、拿到別間）：整棟搬過去，裡面的車、在裡面的人一起搬；外面的不動
+//   別人那 5 間：同一個外殼（GAR.exterior 的牆、燈、關著的門；名牌是 net.src.js 畫的），InstancedMesh 3 個 draw call；碰撞是 village.js 的盒子（VIL.colliders，每間一個；你那間 off＝不算，裡面是 GAR 自己的碰撞）
+//   HOME.in：人（車）在你家裡面（net.src.js：朋友看不到，名單寫「在車庫」）
+const HOME = { in: false, slot: -1, ext: null };
+function homeSlot() { const SL = VIL?.places?.garst?.slots, n = NET.on && NET.slot >= 0 ? NET.slot : Number.isInteger(GAME.home) ? GAME.home : 0; return SL && n >= 0 && n < SL.length ? n : 0; }
 const garIn = (p) => { const q = garLocal(p.x, p.z); return inBox(GAR.zones.inside, q.x, q.z); };
-function homeSlot() { const n = NET.on ? NET.slot : 0, SL = VIL?.places?.garst?.slots; return SL && n >= 0 && n < SL.length ? n : 0; }
-function homePlace() { // 你那間（換號碼才重算）：出來的位置、門口、places.garage
-  const n = homeSlot(); if (n === HOME.slot || !VIL?.places?.garst) return;
-  HOME.slot = n;
-  const q = VIL.places.garst.slots[n], north = q.z < -72, P = VIL.places.garage;
-  HOME.door = q.door;
-  HOME.out = { x: q.x, z: north ? -74.6 : -69.4, heading: 0 }; // 門前的路上（路中間 z −72）、車頭朝東（路口）
-  HOME.walk = { x: q.door.x, z: q.door.z, heading: q.ry }; // 門前 2 公尺，面朝外
-  P.pos = [q.door.x, q.door.z]; P.zone = { x: q.x, z: north ? -76 : -68, hx: 7, hz: 4, rot: 0 }; P.via = 'garst'; P.end = [q.x, north ? -75.4 : -68.6]; // 回車庫：開到車庫街、停在你那間門口的路上（車頭不要頂到門）
+// 你那間（換號碼才做）：places.garage 換成那間、整棟搬過去、別人那幾間的外殼和碰撞重排
+function homePlace() {
+  if (!GAR || !VIL?.places?.garst || !VIL.homeAt) return;
+  const n = homeSlot(); if (n === HOME.slot) return;
+  const P = VIL.places.garage, L0 = { ...P.lot };
+  HOME.slot = n; VIL.homeAt(n, P);
+  const L = P.lot;
+  GAR.group.position.set(L.x, 0, L.z); GAR.group.rotation.y = L.heading; GAR.group.updateMatrixWorld(true);
+  homeExt();
+  if (trip && tripPose) homeMove(L0);
   if (drv && tripDest === 'garage') drv.setDestination('garage'); else if (walker && tripDest === 'garage') walker.setDestination('garage');
 }
-// 地上原本挖空給升降機的坑（village.js 的草地 x −313…−287、z −110.5…−92.2）：不在家的時候補一塊一樣的草地
-function homePatch() {
-  if (HOME.patch) return HOME.patch;
-  const x0 = -313, x1 = -287, z0 = -110.5, z1 = -92.2, P = [x0, 0, z1, x1, 0, z1, x1, 0, z0, x0, 0, z1, x1, 0, z0, x0, 0, z0], N = [], UV = [];
-  for (let i = 0; i < P.length; i += 3) { N.push(0, 1, 0); UV.push(P[i] / 6, -P[i + 2] / 6); } // 跟村子的草地一樣的貼圖座標
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); g.computeBoundingSphere();
-  const gr = VIL.group.getObjectByName('ground'), m = new THREE.Mesh(g, gr ? gr.material : new THREE.MeshLambertMaterial({ color: 0x5e9a44 }));
-  m.name = 'home-grass'; m.matrixAutoUpdate = false; TR.scene.add(m);
-  const hg = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0x4f8a3c }), HEDGE.length), M = new THREE.Matrix4(); // 樹籬：1 個 draw call
-  HEDGE.forEach((b, i) => hg.setMatrixAt(i, M.makeScale(b.hx * 2, b.h, b.hz * 2).setPosition(b.x, b.h / 2, b.z)));
-  hg.name = 'home-hedge'; hg.computeBoundingSphere(); TR.scene.add(hg); HOME.hedge = hg;
-  return (HOME.patch = m);
+// 別人那幾間：GAR.exterior 的外殼（牆、燈）＋關著的門（門片合成一個網格），6 個位置，你那間縮成 0
+function homeExt() {
+  const SL = VIL.places.garst.slots;
+  if (!HOME.ext) {
+    const get = (n) => GAR.exterior.getObjectByName(n), shell = get('roomExtShell'), lights = get('roomExtLights'), slats = get('roomDoorOut');
+    const parts = [];
+    if (shell) parts.push(new THREE.InstancedMesh(shell.geometry, shell.material, SL.length));
+    if (lights) parts.push(new THREE.InstancedMesh(lights.geometry, lights.material, SL.length));
+    if (slats) parts.push(new THREE.InstancedMesh(bakeSlats(slats), slats.material, SL.length));
+    parts.forEach((m, i) => { m.name = 'garst-ext-' + i; m.matrixAutoUpdate = false; TR.scene.add(m); });
+    HOME.ext = parts;
+  }
+  const M = new THREE.Matrix4(), Z = new THREE.Matrix4().makeScale(0, 0, 0);
+  SL.forEach((q, i) => {
+    const L = q.lot, me = i === HOME.slot;
+    if (q.col) q.col.off = me; // 開車、走路、子彈、輾扁都看 off（外牆整間的盒子：你那間不擋，用 GAR 的牆、門）
+    if (me) { for (const m of HOME.ext) m.setMatrixAt(i, Z); return; }
+    M.makeRotationY(L.heading).setPosition(L.x, 0, L.z); for (const m of HOME.ext) m.setMatrixAt(i, M);
+  });
+  for (const m of HOME.ext) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
 }
-// 在家（true）／不在（false）：整棟畫不畫、碰撞、走路的門、停在家裡的車
-function homeSet(on, force) {
-  if (HOME.in === on && !force) return;
-  HOME.in = on;
-  GAR.group.visible = on; homePatch().visible = !on; HOME.hedge.visible = !on;
-  if (home) home.open = null; // 開車的碰撞下一格照這個重給（doorStep）
-  if (walker) { walker.setGarage(on ? GAR : null); walker.removeColliders('garcam'); if (on) walker.addColliders(garCamCols(), 'garcam'); if (!on && gcam.maxY !== Infinity) { gcam.maxY = Infinity; walker.setCamera({ maxY: null }); } }
-  const p = tripPose && tripPose[tripFull], hid = !on && !!p && garIn(p); // 停在家裡的（完整的）那台：人在外面就不畫
-  if (tripS?.car && tripS.car.parent === TR.scene && !drv) tripS.car.visible = !hid;
-  if (parkShadow && parkShadow.parent && !drv) parkShadow.visible = !hid && !!p;
-  for (const k in PFULL) { const q = tripPose[k]; if (q) PFULL[k].S.car.visible = on || !garIn(q); }
-  if (tripPose) arrangeCars();
+// 關著的鐵捲門（room.js 的門片 InstancedMesh，每片的位置、顏色）合成一個網格
+function bakeSlats(im) {
+  const g = im.geometry, n = im.count, M = new THREE.Matrix4(), C = new THREE.Color(), names = Object.keys(g.attributes), out = {}, idx = [];
+  const nv = g.attributes.position.count, gi = g.index ? g.index.array : null;
+  for (const k of names) out[k] = [];
+  for (let i = 0; i < n; i++) {
+    im.getMatrixAt(i, M); if (im.instanceColor) im.getColorAt(i, C); else C.setRGB(1, 1, 1);
+    const pg = g.clone().applyMatrix4(M);
+    for (const k of names) { const a = pg.attributes[k]; for (let j = 0; j < a.count * a.itemSize; j++) out[k].push(k === 'color' ? a.array[j] * [C.r, C.g, C.b][j % 3] : a.array[j]); }
+    if (gi) for (const v of gi) idx.push(v + i * nv); else for (let v = 0; v < nv; v++) idx.push(v + i * nv);
+    pg.dispose();
+  }
+  const b = new THREE.BufferGeometry();
+  for (const k of names) b.setAttribute(k, new THREE.Float32BufferAttribute(out[k], g.attributes[k].itemSize));
+  b.setIndex(idx); b.computeBoundingSphere();
+  return b;
 }
-// 每一格（driveStep 最前面）
+// 換號碼的時候已經出門了：車庫裡面的（舊的 lot 的本地座標）搬到新的 lot；升降機上的照新的算
+function homeMove(L0) {
+  const c0 = Math.cos(L0.heading), s0 = Math.sin(L0.heading);
+  const old = (x, z) => { const dx = x - L0.x, dz = z - L0.z; return { x: dx * c0 - dz * s0, z: dx * s0 + dz * c0 }; };
+  const moved = (p) => { const q = old(p.x, p.z); if (!inBox(GAR.zones.inside, q.x, q.z, 1)) return null; const w = garWorld({ x: q.x, z: q.z, heading: (p.heading || 0) - L0.heading }); return { x: w.x, z: w.z, heading: w.heading }; };
+  for (const k of Object.keys(tripPose)) {
+    const p = tripPose[k]; if (!p) continue;
+    if (p.deck != null) { tripPose[k] = deckPose(p.deck); continue; }
+    const w = moved(p); if (w) tripPose[k] = w;
+  }
+  const onFoot = !!walker && walker.mode !== 'off', t = onFoot ? walker.telemetry() : drv ? drv.telemetry() : null, me = t && moved(t);
+  if (me) { if (onFoot) walker.teleport(me, { keepCamera: false }); else { drv.teleport(me); if (tripPose[cur] && tripPose[cur].deck == null) tripPose[cur] = { ...me }; } }
+  if (tripS?.car && tripS.car.parent === TR.scene && tripFull && tripPose[tripFull] && (!drv || cur !== tripFull)) { const p = tripPose[tripFull]; tripS.car.position.set(p.x, 0, p.z); tripS.car.rotation.set(0, p.heading, 0); tripS.car.updateMatrixWorld(true); if (parkShadow?.parent && tripBox) { const c = Math.cos(p.heading), s = Math.sin(p.heading); parkShadow.position.set(p.x + tripBox.cx * c, 0.006, p.z - tripBox.cx * s); parkShadow.rotation.set(-Math.PI / 2, 0, p.heading); } }
+  for (const k in PFULL) { const p = tripPose[k]; if (p && k !== cur) { const o = PFULL[k].S.car; o.position.set(p.x, 0, p.z); o.rotation.set(0, p.heading, 0); o.updateMatrixWorld(true); } }
+  CRUSH_SAFE = null;
+  liftChanged(); // 開車、走路的碰撞（車庫、升降機、停著的車）跟著新的位置重給
+}
+// 每一格（driveStep 最前面）：換號碼、你在不在家裡面
 function homeTick() {
   if (!GAR || !tripPose || !VIL) return;
   homePlace();
-  const wd = !HOME.in && drv ? drv : null, ww = !HOME.in && walker ? walker : null; // 樹籬的碰撞（開車的換一台也要給）
-  if (HOME.colD !== wd) { HOME.colD?.removeColliders('homehedge'); wd?.addColliders(HEDGE, 'homehedge'); HOME.colD = wd; }
-  if (HOME.colW !== ww) { HOME.colW?.removeColliders('homehedge'); ww?.addColliders(HEDGE, 'homehedge'); HOME.colW = ww; }
-  const onFoot = !!walker && walker.mode !== 'off', t = onFoot ? walker.telemetry() : drv ? drv.telemetry() : null; if (!t) return;
-  const jump = Math.hypot(t.x - HOME.lx, t.z - HOME.lz) > 4; HOME.lx = t.x; HOME.lz = t.z;
-  if (sleep || doorFade || indoor || boarding) return;
-  const q = garLocal(t.x, t.z), D = GAR.zones.door.x, atDoor = q.x > D - 1.5 && q.x < D + 9 && Math.abs(q.z) < 7;
-  if (HOME.in) {
-    if (!jump && q.x > D + 0.3 && atDoor && !t.paused && (onFoot ? walker.mode === 'walk' : !t.auto)) homeOut(onFoot);
-    else if (!atDoor && !inBox(GAR.zones.inside, q.x, q.z, 1)) homeSet(false); // 被搬走了
-  } else if (jump && inBox(GAR.zones.inside, q.x, q.z)) homeSet(true); // 被搬進來了
-}
-function homeOut(onFoot) {
-  homeSet(false); GAR.door.t = 0;
-  const msg = `車庫街 ${HOME.slot + 1} 號：你家`;
-  if (onFoot) { walker.teleport(HOME.walk); walker.toast(msg, 2200); }
-  else { drv.teleport(HOME.out); tripPose[cur] = { ...HOME.out }; drv.toast(msg, 2200); }
-  HOME.lx = onFoot ? HOME.walk.x : HOME.out.x; HOME.lz = onFoot ? HOME.walk.z : HOME.out.z;
-  arrangeCars();
-}
-// 開（走）到你那間門口、慢下來：「進車庫」
-function homeDoorAct(t) {
-  if (HOME.in || !HOME.door || jailed()) return null;
-  const v = t.v == null ? 0 : Math.abs(t.v), dx = t.x - HOME.door.x, dz = t.z - HOME.door.z; // 開車要慢下來；走路、跑步都可以
-  return v < 4 && dx * dx + dz * dz < 49 ? HOME_ACT : null;
-}
-function homeEnter() {
-  if (HOME.in || !GAR || !tripPose) return;
-  const onFoot = !!walker && walker.mode === 'walk';
-  if (!onFoot && (!drv || walker?.mode !== 'off')) return;
-  homeSet(true);
-  if (onFoot) { const p = garWorld(SPAWN); walker.teleport(p); walker.setAction(null); walker.toast('回到你的車庫了', 2000); HOME.lx = p.x; HOME.lz = p.z; }
-  else {
-    const busy = (x) => Object.entries(tripPose).some(([k, p]) => { if (k === cur || p.deck != null || !garIn(p)) return false; const q = garLocal(p.x, p.z); return Math.hypot(q.x - x, q.z) < 4.5; });
-    const p = garWorld({ x: busy(0) ? -5.6 : 0, z: 0, heading: 0 }); // 中間（車頭朝門）；中間停了別台就往裡面一點
-    drv.teleport(p); tripPose[cur] = { x: p.x, z: p.z, heading: p.heading }; drv.setAction(null); drv.toast('回到你的車庫了', 2000); HOME.lx = p.x; HOME.lz = p.z;
-  }
-  GAR.door.t = 0; home.open = null;
-  arrangeCars();
+  const onFoot = !!walker && walker.mode !== 'off', t = onFoot ? walker.telemetry() : drv ? drv.telemetry() : null;
+  HOME.in = !!t && !indoor && garIn(t);
 }
 
 // ---- 第 6 批：越野車車庫（orbay.js，車庫西邊那棟）：門口的大按鈕、停進黃線的格子、碰撞跟著門 ----
@@ -1500,7 +1491,7 @@ function npcCarHit(car) { if (!NPC) return; NPC.carHits++; NPC.peds.scare(car.x,
 // 自己車庫裡面的東西不輾（工具車、輪胎、鐵捲門⋯都是自己的；garLocal 的不配置記憶體版本）
 function inGarage(x, z) {
   if (OB && OB.inside(x, z)) return true; // 越野車車庫裡面（輪擋、工具⋯也是自己的）
-  if (!GAR || !HOME.in) return false;
+  if (!GAR) return false;
   const L = VIL.places.garage.lot, c = Math.cos(L.heading), s = Math.sin(L.heading), dx = x - L.x, dz = z - L.z;
   return inBox(GAR.zones.inside, dx * c - dz * s, dx * s + dz * c);
 }
@@ -1512,7 +1503,7 @@ function crushSafe(x, z) {
   if (!CRUSH_SAFE) {
     const S = (CRUSH_SAFE = []), P = VIL.places;
     const add = (o, m = 1.5) => { if (!o || !isFinite(o.x)) return; const c = Math.abs(Math.cos(o.rot || 0)), s = Math.abs(Math.sin(o.rot || 0)), ex = c * o.hx + s * o.hz + m, ez = s * o.hx + c * o.hz + m; S.push([o.x - ex, o.z - ez, o.x + ex, o.z + ez]); };
-    for (const k of ['garage', 'orbay', 'shop', 'dealer', 'odealer']) { add(k === 'garage' ? P[k]?.yard : P[k]?.zone); add(P[k]?.inside); } // garage.zone 跟著車庫街你那間換：用原本那塊（yard）
+    for (const k of ['orbay', 'shop', 'dealer', 'odealer']) { add(P[k]?.zone); add(P[k]?.inside); } // 你的車庫：車庫街 6 間都是 kind 'garage'（下面 buildings）
     add(P.gunshop?.building); add(P.police?.building);
     if (P.police?.lot) { const L = P.police.lot; S.push([L.x0 - 1, L.z0 - 1, L.x1 + 1, L.z1 + 1]); }
     if (P.odealer?.pos) { const [x0, z0] = P.odealer.pos; S.push([x0 - 21, z0 - 10, x0 + 21, z0 + 10]); } // 越野車行的鐵皮車棚（offroad.js：x ±18、z 78…94）
@@ -1596,7 +1587,7 @@ function polPlayer(o) {
   o.x = t.x; o.z = t.z; o.heading = t.heading; o.v = driving ? t.v : t.speed;
   o.mode = !DRIVE.on || sleep || gsDesk || boarding || document.body.classList.contains('shopping') || (!driving && walker.mode === 'off') ? 'off' : driving ? 'drive' : 'walk';
   if (driving) { const ci = drv.carInfo; PL_CAR.hx = ci.len / 2; PL_CAR.hz = ci.halfW; PL_CAR.cx = (ci.nose + ci.tail) / 2; o.car = PL_CAR; }
-  if (GAR && HOME.in && !indoor) { const q = garLocal(t.x, t.z); o.safe = inBox(GAR.zones.inside, q.x, q.z) && GAR.door.t === 0 && !GAR.door.moving; }
+  if (GAR && !indoor) { const q = garLocal(t.x, t.z); o.safe = inBox(GAR.zones.inside, q.x, q.z) && GAR.door.t === 0 && !GAR.door.moving; }
   return o;
 }
 function onCaught() {
@@ -1756,7 +1747,7 @@ function gsRangeEnd(res) {
 function closeDoor() { if (GAR && GAR.door.t === 1 && !GAR.door.moving) GAR.door.close(calm ? 1 : 1.8); }
 // 通緝中、人或車在自己車庫裡面（不在門下面）、門開著：給「關鐵捲門」（關好了＝躲起來，星星清掉）
 function hideAct(x, z, hl) {
-  if (!police || police.state !== 'wanted' || !GAR || !HOME.in || GAR.door.t !== 1 || GAR.door.moving) return null;
+  if (!police || police.state !== 'wanted' || !GAR || GAR.door.t !== 1 || GAR.door.moving) return null;
   const q = garLocal(x, z), D = GAR.zones.door.x;
   return inBox(GAR.zones.inside, q.x, q.z) && q.x + hl < D - 0.3 ? CLOSE_ACT : null;
 }
@@ -1783,7 +1774,7 @@ function townReset() { police?.clear(); gunner?.holster(); gunner?.refresh(); }
 function driveStep(dt) {
   GAR.update(dt); // 門、升降機在動（開、關、升、降）每一格都要跟著（停好的時候 onLift 換碰撞）
   OB?.update(dt); // 第 6 批：越野車車庫的鐵捲門
-  homeTick(); doorStep(); orbayStep(); // 車庫街的家：從鐵捲門出去＝到車庫街你那間門口
+  homeTick(); doorStep(); orbayStep(); // 第 17 批：換號碼就把你家搬過去；別人那幾間的外殼、碰撞
   if (drv) {
     drv.update(dt); // 開進賽道、快速道路的事（arrive）在這裡面叫
     if (drv && DRIVE.on) orRace?.update(dt); // 第 4 批：越野賽（drive.update 之後）
@@ -1795,7 +1786,7 @@ function driveStep(dt) {
       foldStep(dt, t.v); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {
-        drv.setAction(homeAct(t) || homeDoorAct(t) || orbayAct(t) || bayAct(t)); // HUD 的大按鈕：開鐵捲門（車庫、越野車車庫）、停在這裡改車／看車
+        drv.setAction(homeAct(t) || orbayAct(t) || bayAct(t)); // HUD 的大按鈕：開鐵捲門（車庫、越野車車庫）、停在這裡改車／看車
         const t2 = drv.telemetry(); // 停進改車區（parkAt）、開正停上升降機的時候就不能下車
         drv.setAction2(!t2.paused && !t2.auto && Math.abs(t2.v) < 1 ? OUT_ACT : null); // 停住了：右邊多一顆「下車」
         if (!drv.telemetry().paused) trackStep(t);
@@ -1896,7 +1887,18 @@ function driveFrame(now) {
     if (camGo.t >= camGo.T) camGo = null;
   }
   if (indoor) { renderer.render(indoor.scene, dcam); return; } // 在房子裡面：只畫房子裡面（自己的燈；村子的地面跟地板重疊，不畫）
-  if (HOME.in) { GAR.cull(dcam); GAR.exterior.visible = false; } // 門關著、鏡頭在外面就不畫裡面；外殼永遠不畫（車庫街的家：外面看不到這棟）
+  GAR.cull(dcam); // 門關著、鏡頭在外面就不畫裡面；鏡頭在裡面不畫外殼
   OB?.cull(dcam); // 第 6 批：鏡頭跑到越野車車庫的屋頂上面就不畫屋頂（才看得到裡面的車）
   renderer.render(TR.scene, dcam);
+}
+// 第 17 批：你家在車庫街的路邊（從路上常常看得到）：門關著、鏡頭在外面，停在裡面的完整的車（不在 GAR.interior 裡）這一格也不畫（輕量車本來就掛在 interior）
+//   TR.scene.onBeforeRender／onAfterRender（startDrive 掛上）：畫之前藏、畫完馬上放回來（別的程式看到的 visible 都不變）
+const GAR_HID = [];
+function garShowFull() { for (let i = 0; i < GAR_HID.length; i++) GAR_HID[i].visible = true; GAR_HID.length = 0; }
+function garHideFull() {
+  garShowFull();
+  if (!trip || !GAR || GAR.interior.visible || !tripPose) return;
+  const hide = (o, p) => { if (o && o.visible && p && p.deck == null && garIn(p)) { o.visible = false; GAR_HID.push(o); } };
+  if (tripS?.car && tripFull && (!drv || cur !== tripFull)) { hide(tripS.car, tripPose[tripFull]); if (GAR_HID.length) hide(parkShadow, tripPose[tripFull]); }
+  for (const k in PFULL) if (!drv || k !== cur) hide(PFULL[k].S.car, tripPose[k]);
 }
