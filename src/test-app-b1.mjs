@@ -525,6 +525,15 @@ const inCar = await p.evaluate(() => { const D = window.__D(), H = window.__H, t
 console.log('  上車:', JSON.stringify(bd), JSON.stringify(inCar));
 check(bd.pressed === '上車 · GC8' && bd.modes.join('>') === 'in>seat>off' && inCar.drv && !inCar.paused && inCar.at < 0.01 && inCar.hidden && !inCar.wk && inCar.dv && inCar.voice && inCar.cur === 'gc8' && !inCar.shadow && inCar.dshadow, '上車: walks to the door, sits, character hidden, GC8 drives from where it was parked (engine on, drive HUD, one shadow)');
 check(inCar.act === '開鐵捲門' && inCar.act2 === '下車', `in the car with the door closed BOTH buttons show: big 「${inCar.act}」 and the separate 「${inCar.act2}」`);
+// Nick 2026-10-14「第一人稱方向盤要轉」：駕駛座的方向盤跟著 steer 轉（右轉＝從駕駛看順時針，打到底 90 度）；轉向柱不轉
+const swh = await p.evaluate(() => { const D = window.__D(), c = D.tripS?.cabin, g = c?.getObjectByName('cabin-wheel'), H = window.__H; if (!g) return { g: false };
+  const ang = () => { const q = g.quaternion, a = 2 * Math.acos(Math.min(1, Math.abs(q.w))) * 180 / Math.PI, n = Math.hypot(q.x, q.y, q.z); return n < 1e-6 ? 0 : +(a * Math.sign(q.x / n * Math.sign(q.w))).toFixed(1); }; // 轉軸大約往後（−x）：右轉 x 分量 > 0
+  const out = { g: true, kids: g.children.length, a0: ang() };
+  D.drv.setInput({ throttle: 0, brake: 0, steer: 1 }); H.step(60); out.R = ang(); out.tR = +D.drv.telemetry().steer.toFixed(2);
+  D.drv.setInput({ throttle: 0, brake: 0, steer: -1 }); H.step(60); out.L = ang();
+  D.drv.setInput(null); H.step(60); out.back = ang(); out.col = !!c.getObjectByName('cabin-trim'); return out; });
+console.log('  steering wheel:', JSON.stringify(swh));
+check(swh.g && swh.kids >= 1 && swh.a0 === 0 && swh.tR === 1 && Math.abs(swh.R - 90) < 1 && Math.abs(swh.L + 90) < 1 && swh.back === 0 && swh.col, `first person: the steering wheel turns with the steering (right +${swh.R}°, left ${swh.L}°, back to ${swh.back}°)`);
 fi = await fsInfo(); clash = await hudClash();
 console.log('  fullscreen (in the car):', JSON.stringify(fi), '| clash:', clash || '-');
 check(fullView(fi) && !fi.walking && !clash, `in the car: still fullscreen; 開鐵捲門, 下車, steering, pedals, map and the page buttons all on screen, none overlapping (${clash || 'ok'})`);
@@ -652,7 +661,7 @@ const hdoor = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, W = D.walker, X = window.__IN(), t0 = W.telemetry(), cols = H.cols(), R = W.character.radius;
   const out = (d) => { const nx = -Math.sin(d.ry), nz = -Math.cos(d.ry); return { x: d.ax - nx * 2, z: d.az - nz * 2 }; };
   const all = W.doors.map((d) => d.ref).filter(Boolean), open = all.filter((b) => X.interiorFor(b)).length, shut = all.filter((b) => !X.interiorFor(b)).map((b) => b.kind).sort().join(',');
-  const ds = W.doors.filter((d) => d.ref?.kind === 'house' && d.ref.floors >= 2 && /* 第 10 批：房子最多 2 層 */  X.interiorFor(d.ref) && !H.inside(cols, out(d).x, 1, out(d).z, R + 0.1)).sort((a, b) => Math.hypot(a.ax - t0.x, a.az - t0.z) - Math.hypot(b.ax - t0.x, b.az - t0.z));
+  const ds = W.doors.filter((d) => d.ref?.kind === 'house' && d.ref.floors >= 1 && /* 第 10 批：房子最多 2 層；第 18 批：1 層 */  X.interiorFor(d.ref) && !H.inside(cols, out(d).x, 1, out(d).z, R + 0.1)).sort((a, b) => Math.hypot(a.ax - t0.x, a.az - t0.z) - Math.hypot(b.ax - t0.x, b.az - t0.z));
   const d = ds[0]; if (!d) return { n: 0 };
   window.__hb = d.ref; window.__hback = { x: t0.x, z: t0.z, heading: t0.heading };
   const dist0 = W.cameraDist, r = H.toDoor(d), info = X.interiorFor(d.ref);
@@ -663,7 +672,7 @@ const hin = await p.evaluate(() => { const H = window.__H, X = window.__IN(), I 
 console.log('  into a house:', JSON.stringify(hdoor), 'fade frames', hw0 * 2, '→', JSON.stringify(hin));
 check(hdoor.n > 0 && hdoor.fade && hin.in && hin.name === hdoor.name && hin.floors === hdoor.floors && hin.mode === 'walk' && !hin.paused && hin.hud && hin.at < 0.05 && hin.mine && hin.doors && !hin.fadeShown && hin.toast === hin.name && hin.mov === 0 && hin.meFar,
   `walked into a house door (pushed ${hdoor.s} s): screen goes black → inside 「${hin.name}」 (${hin.floors} floors) just inside the door, walking HUD back, its own scene (you + the house: ${hin.kids} objects), its exits are the doors now, the traffic and people outside don't count here; built in ${hin.info?.ms} ms`);
-check(hdoor.open >= 100 && hdoor.shut === 'gunshop,police' && !hdoor.dealer && hdoor.warm && hdoor.warm.compile >= 0, `every village door opens into a house/shop/store/temple/farmhouse (${hdoor.open} of ${hdoor.doors}; still shut: ${hdoor.shut}; the dealer's auto door is open, not a door); warmed up on the loading screen (${JSON.stringify(hdoor.warm)} ms)`);
+check(hdoor.open >= 80 && hdoor.open === hdoor.doors - 2 && hdoor.shut === 'gunshop,police' && !hdoor.dealer && hdoor.warm && hdoor.warm.compile >= 0, `every village door opens into a house/shop/store/temple/farmhouse (${hdoor.open} of ${hdoor.doors}; still shut: ${hdoor.shut}; the dealer's auto door is open, not a door); warmed up on the loading screen (${JSON.stringify(hdoor.warm)} ms)`);
 await drawAndShot('6b-house-inside');
 const hr0 = await p.evaluate(() => window.__rinfo());
 check(hr0.calls < 40, `inside only the house and you are drawn (${hr0.calls} draw calls, ${hr0.tris} triangles; the village is ~150)`);
@@ -692,17 +701,19 @@ const hwalk = await p.evaluate(() => {
   return { frames, rooms: I.rooms.map((q) => q.name).join(','), bad, camTop: +camTop.toFixed(2), ceiling: I.camera.ceiling, dmax: +dmax.toFixed(2), maxDist: I.camera.maxDist };
 });
 check(!hwalk.bad.length && hwalk.dmax <= hwalk.maxDist + 0.01, `random walking in every room downstairs (${hwalk.rooms}; ${hwalk.frames} frames, random camera): never inside a wall or furniture, camera never in a wall, above the ceiling (highest ${hwalk.camTop} m, ceiling ${hwalk.ceiling}) or outside the house, camera at most ${hwalk.dmax} m away (room fits ${hwalk.maxDist})${hwalk.bad.length ? ' — ' + hwalk.bad.join(' | ') : ''}`);
-// 樓梯口：上樓（黑掉 → 2F 的樓梯口）、再下樓
-const hup = await p.evaluate(() => { const I = window.__IN().indoor.I, e = I.exits.find((x) => x.to === 1); window.__he = e; return e ? window.__H.toExit(e) : { none: true }; });
-const hw1 = await doorDone();
-const h2f = await p.evaluate(() => { const H = window.__H, I = window.__IN().indoor?.I, e = window.__he, q = H.inInfo(); return { ...q, at: I && e ? +Math.hypot(q.x - e.spawn.x, q.z - e.spawn.z).toFixed(3) : null, cols: I ? I.colliders === I.floors[1]?.colliders : false }; });
-console.log('  upstairs:', JSON.stringify(hup), 'fade frames', hw1 * 2, '→', JSON.stringify(h2f));
-check(hup.fade && h2f.in && h2f.floor === 1 && h2f.at < 0.05 && h2f.cols && h2f.doors && h2f.mode === 'walk' && /^2F/.test(h2f.toast), `walked into the stairs: black fade → upstairs 「${h2f.toast}」 at the top of the stairs (2F's walls, furniture and exits now)`);
-await drawAndShot('6c-house-2f');
-const hdn = await p.evaluate(() => { const I = window.__IN().indoor.I, e = I.exits.find((x) => x.to === 0); window.__he = e; return e ? window.__H.toExit(e) : { none: true }; });
-await doorDone();
-const h1f = await p.evaluate(() => { const H = window.__H, I = window.__IN().indoor?.I, e = window.__he, q = H.inInfo(); return { ...q, at: I && e ? +Math.hypot(q.x - e.spawn.x, q.z - e.spawn.z).toFixed(3) : null }; });
-check(hdn.fade && h1f.in && h1f.floor === 0 && h1f.at < 0.05 && h1f.doors && /^1F/.test(h1f.toast), `and back down the stairs to 1F (「${h1f.toast}」)`);
+// 第 18 批（Nick 2026-10-14「對 把房子變矮」）：透天厝只剩 1 層：沒有樓梯（出口只有大門），名字寫一樓
+const h1 = await p.evaluate(() => { const I = window.__IN().indoor.I, V = window.__D().VIL, hs = V.buildings.filter((b) => b.kind === 'house' || (b.kind === 'shop' && b.front));
+  return { floors: I.floors.length, exits: I.exits.map((e) => e.to), name: I.name, maxFl: Math.max(...hs.map((b) => b.floors)), maxH: Math.max(...hs.map((b) => b.h)), n: hs.length }; });
+console.log('  one floor:', JSON.stringify(h1));
+check(h1.floors === 1 && h1.exits.length && h1.exits.every((t) => t === 'outside') && /一樓/.test(h1.name) && h1.maxFl === 1 && h1.maxH <= 3.31, `houses are one floor now: inside 「${h1.name}」 there are no stairs (exits: ${h1.exits}); every village house/shop row is 1 floor (${h1.n} buildings, highest ${h1.maxH} m)`);
+// 第 18 批（Nick 2026-10-14「把一些房子弄掉然後在那邊弄一個平面大停車場」）：x −339.75…−305.25、z −66.75…−6.75 整塊是路面，沒有房子；裡面只有 5 支路燈擋路
+//   （四邊 1 公尺內是路邊本來就有的電線桿、路牌、紅綠燈：以前站在騎樓前面，不算）
+const pk = await p.evaluate(() => { const V = window.__D().VIL, P = V.parking; if (!P) return null; const inP = (x, z, m = 0) => Math.abs(x - P.x) < P.hx - m && Math.abs(z - P.z) < P.hz - m;
+  let grass = 0, n = 0; for (let x = P.x - P.hx + 0.5; x < P.x + P.hx; x += 1.5) for (let z = P.z - P.hz + 0.5; z < P.z + P.hz; z += 1.5) { n++; if (V.surfaceAt(x, z) === 1 || V.surfaceAt(x, z) === 2) grass++; }
+  const cols = V.colliders.filter((c) => c.off !== true && inP(c.x, c.z, 1)), lamps = cols.filter((c) => c.t === 'circle' && c.h > 6);
+  return { ...P, grass, n, cols: cols.length, lamps: lamps.length, other: cols.filter((c) => !lamps.includes(c)).map((c) => `${c.t}@${c.x.toFixed(1)},${c.z.toFixed(1)}`), houses: V.buildings.filter((b) => inP(b.x, b.z)).length }; });
+console.log('  parking lot:', JSON.stringify(pk));
+check(pk && pk.stalls === 72 && pk.hx * 2 > 34 && pk.hz * 2 >= 60 && pk.grass === 0 && pk.houses === 0 && pk.lamps === 5 && pk.cols === 5, `big flat parking lot (${pk && (pk.hx * 2).toFixed(1)} × ${pk && pk.hz * 2} m, ${pk?.stalls} stalls): all paved (${pk?.n} points, ${pk?.grass} grass), no houses, only its ${pk?.lamps} lamps in the way ${pk?.other?.length ? JSON.stringify(pk.other) : ''}`);
 // 走出大門：回到外面門口（面朝外），村子的碰撞、門回來，你搬回村子的場景
 const hex = await p.evaluate(() => { const I = window.__IN().indoor.I, e = I.exits.find((x) => x.to === 'outside'); return e ? window.__H.toExit(e) : { none: true }; });
 await doorDone();

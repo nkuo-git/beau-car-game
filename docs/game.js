@@ -1616,6 +1616,7 @@ function carGeos(gltfScene) {
 //     後座＋置物板／中置引擎的隔板、Supra 的防滾籠、灰色車頂內襯（Supra、R34、GC8）
 // buildCabin(key, spec, mats) → THREE.Group（name 'cabin'），加在 S.body 底下、拿掉 'interior'（車身座標：x 往前、y 往上、z 往右）
 //   cabin.userData.setGauges(轉速比例 0～1（1＝紅線）, 時速 km/h)：轉速表、時速表指針（數位儀表換數字）
+//   cabin.userData.setSteer(steer −1 左～1 右)：方向盤跟著轉（輪圈、輻條、中間、撥片；轉向柱不轉）
 //   cabin.userData.view＝CABIN_VIEW[key]；mats 沒用到（留著以後用）
 // CABIN_VIEW[key]＝{ eye, look, fov }：駕駛的眼睛、預設往前看的點（車身座標）、建議視角（度）；cabinCamera(camera, S.body, key, yaw, pitch) 幫你擺相機
 // 輕：全部併成 5～6 個 mesh（車內頂點色、亮面頂點色、金屬頂點色、儀表貼圖、指針、數位時速），每台 8 千～1 萬 2 千個三角形
@@ -1638,6 +1639,7 @@ const CABIN3D = (() => {
   const X0 = -1.9, NX = 32, Y0 = 0.2, NY = 12, NZ = 11;
   const cl = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
   const ss = (a, b, x) => { const t = cl((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const WHEEL_DEG = 90; // 方向盤打到底轉幾度（真的車大約 450；遊戲裡按一下就打到底，轉 90 度紅條剛好在旁邊看得到，左右也分得出來）
   const D2R = Math.PI / 180, V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 
   // ---- 儀表（u、v：在儀表面上的位置，公尺，右、上為正；r：半徑）----
@@ -2015,8 +2017,9 @@ const CABIN3D = (() => {
     const C = st.c, sd = Math.sign(spec.interior?.wheelZ ?? (st.lhd ? -1 : 1)) || -1, zd = sd * st.zD;
     const [xE, yE] = st.eye, xH = xE + 0.16, yH = yE - 0.64, yF = Math.max(F.bot + (st.floor ?? 0.065), 0.2);
     const eye = V3(xE, yE, zd), xfw = Math.min((spec.wheels?.xf ?? 1.25) - 0.43, F.fa[0] - 0.04); // 腳踏板前面的防火牆
-    const bag = { trim: [], gloss: [], metal: [], face: [] };
-    const put = (m, g) => (bag[m].push(g), g);
+    const bag = { trim: [], gloss: [], metal: [], face: [] }, wbag = { trim: [], gloss: [], metal: [], face: [] }; // wbag：會轉的方向盤（自己一組，setSteer 轉它）
+    let tgt = bag; const put = (m, g) => (tgt[m].push(g), g);
+    let whl = null; // 方向盤中心、轉軸（往駕駛）
     const D = st.dash, topS = (x, z) => { for (let q = Math.abs(z); q >= 0; q -= 0.1) { const t = F.top(x, q); if (t > 0.3) return t; } return 2; };
     // 儀表板：每個 z 一個斷面（前擋黑邊底下 → 上面 → 後緣圓角 → 面板 → 下緣 → 底下），兩端貼著車門
     const xr0 = (z) => D.xr - (D.wrap || 0) * (Math.abs(z) / 0.75) ** 2 - (D.bulge || 0) * Math.exp(-((z / 0.2) ** 2));
@@ -2074,6 +2077,7 @@ const CABIN3D = (() => {
       const Wc = st.wheel, c = Wc.col * D2R, N = V3(-Math.cos(c), Math.sin(c), 0), V = V3(Math.sin(c), Math.cos(c), 0), U = V3(0, 0, 1);
       const Cw = V3(xE + Wc.reach, yE - Wc.drop, zd), r = Wc.r, dish = 0.035;
       const P = (u, v, n = 0) => Cw.clone().addScaledVector(U, u).addScaledVector(V, v).addScaledVector(N, n);
+      whl = { c: P(0, 0, -dish), n: N.clone() }; tgt = wbag; // 輪圈、輻條、中間、撥片都會轉；轉向柱、柱套不轉
       let ring = [];
       for (let k = 0; k < 96; k++) { const a = (k / 96) * 2 * Math.PI; ring.push([r * Math.sin(a), cl(r * Math.cos(a), -r * (Wc.fb ?? 2), r * (Wc.ft ?? 2)), a]); }
       for (let it = 0; it < 4; it++) ring = ring.map((p, i) => { const a = ring[(i + 95) % 96], b = ring[(i + 1) % 96]; return [(a[0] + 2 * p[0] + b[0]) / 4, (a[1] + 2 * p[1] + b[1]) / 4, p[2]]; });
@@ -2084,7 +2088,7 @@ const CABIN3D = (() => {
         put('gloss', tint(tube(upS.map(([u, v]) => P(u, v)), rt, 40, 8), C.rimTop));
         put('trim', tint(tube([upS[upS.length - 1], ...lo, upS[0]].map(([u, v]) => P(u, v)), rt, 64, 8), C.rim));
       } else put('trim', tint(tube(ring.map(([u, v]) => P(u, v)), rt, 96, 8, true), C.rim));
-      if (C.marker) put('trim', tint(tube([-5, 0, 5].map((a) => P(r * Math.sin(a * D2R), r * Math.cos(a * D2R))), rt + 0.0012, 6, 8), C.marker));
+      put('trim', tint(tube([-6, 0, 6].map((a) => P(r * Math.sin(a * D2R), r * Math.cos(a * D2R))), rt + 0.0012, 6, 8), C.marker ?? 0xd01818)); // 正中間的紅條：每台都有，方向盤轉了看得出來（輻條常常在畫面下面）
       // 輻條：從中間往外、往前凹（dish）
       const sw = Wc.sw ?? 0.05;
       for (const a0 of Wc.spokes) {
@@ -2099,12 +2103,15 @@ const CABIN3D = (() => {
       const hub = Wc.hub === 'round' ? cyl(0.048, 0.044, 0.03, 24).rotateX(Math.PI / 2) : rbox(0.15, 0.105, 0.045, 0.035, 4);
       put('trim', tint(hub.applyMatrix4(basis(P(0, -0.005, -dish), U, V, N)), C.hub));
       if (Wc.hub === 'round') put('gloss', tint(cyl(0.03, 0.03, 0.004, 20).rotateX(Math.PI / 2).applyMatrix4(basis(P(0, 0, -dish + 0.017), U, V, N)), 0x2e3034));
+      tgt = bag;
       put('trim', tint(cyl(0.032, 0.032, 0.34, 12).rotateX(Math.PI / 2).applyMatrix4(basis(P(0, 0, -dish - 0.2), U, V, N)), 0x0e0e10));
       put('trim', tint(rbox(0.11, 0.1, 0.2, 0.035).applyMatrix4(basis(P(0, -0.01, -dish - 0.16), U, V, N)), C.dash));
+      tgt = wbag;
       if (Wc.paddles) for (const s of [-1, 1]) put('metal', tint(rbox(0.04, 0.12, 0.006, 0.015).applyMatrix4(basis(P(s * (r - 0.02), 0.01, -dish - 0.012), U, V, N)), C.metal));
       if (Wc.start) put('trim', tint(cyl(0.013, 0.013, 0.012, 16).rotateX(Math.PI / 2).applyMatrix4(basis(P(-0.075, -0.07, -dish + 0.018), U, V, N)), 0xd0141c));
       if (Wc.screens) for (const s of [-1, 1]) put('face', quadUV(P(s * 0.1, 0.005, -dish * 0.45 + 0.012), U, V, 0.06, 0.035, uvOf(REG.spoke)));
       // 指針（數位的轉速表也用），Jesko 的儀表跟著方向盤
+      tgt = bag;
     }
 
     // ---- 中控面板（出風口、音響、空調）＋中央扶手台 ----
@@ -2362,6 +2369,20 @@ const CABIN3D = (() => {
       if (!bag[k].length) continue;
       const m = new THREE.Mesh(merge(bag[k], k === 'face' ? 'uv' : 'color', k === 'face' ? null : ao), mat[k]); m.name = 'cabin-' + k; cab.add(m);
     }
+    // 方向盤：一個 group 放在中心、繞轉軸轉（裡面的 mesh 先搬回中心）；暗角照原本的位置算
+    let wg = null;
+    if (whl) {
+      wg = new THREE.Group(); wg.name = 'cabin-wheel'; wg.position.copy(whl.c); cab.add(wg);
+      for (const k of ['trim', 'gloss', 'metal', 'face']) {
+        if (!wbag[k].length) continue;
+        const g = merge(wbag[k], k === 'face' ? 'uv' : 'color', k === 'face' ? null : ao).translate(-whl.c.x, -whl.c.y, -whl.c.z);
+        const m = new THREE.Mesh(g, mat[k]); m.name = 'cabin-wheel-' + k; wg.add(m);
+      }
+    }
+    let ls = 0;
+    const setSteer = (s = 0) => { // s：−1 左～1 右（drive 的 steer）；打到底轉 WHEEL_DEG 度（從駕駛看：右轉＝順時針）
+      if (!wg || s === ls) return; ls = s; wg.quaternion.setFromAxisAngle(whl.n, -s * WHEEL_DEG * D2R);
+    };
     // 指針：一個 mesh，每根 4 個點，setGauges 時重算位置
     const npos = new Float32Array(needles.length * 12), nidx = [];
     needles.forEach((n, i) => nidx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3));
@@ -2388,7 +2409,7 @@ const CABIN3D = (() => {
       if (digits) digits.userData.set(kmh);
     };
     setGauges(0, 0);
-    Object.assign(cab.userData, { setGauges, view: VIEW[key], mats: mat });
+    Object.assign(cab.userData, { setGauges, setSteer, view: VIEW[key], mats: mat });
     void mats;
     return cab;
   }
@@ -6418,7 +6439,7 @@ function buildStreet(W, opts = {}) {
       addCircle(x, z, 0.2, hh); shade.blob(x + SHOFF[0] * hh, z + SHOFF[1] * hh, 1.6, 0.3);
     };
     for (const h of houses) if (hxz(h.x, h.z, 300) < 0.12) { const T = frame(h.x, 0, h.z, h.ry), p = T.p((hxz(h.x, h.z, 301) - 0.5) * h.w, 0, -h.D - 2.2); for (let i = 0; i < 1 + ((hxz(h.x, h.z, 302) * 3) | 0); i++) banana(p[0] + (r() - 0.5) * 2.5, p[2] + (r() - 0.5) * 2.5); }
-    for (const [x, z] of [[-322, -30], [-318, -39], [-283, -38], [-386.5, 27], [-352.5, 29.5], [-150, 22], [-172.5, 24]]) banana(x, z);
+    for (const [x, z] of [[-283, -38], [-386.5, 27], [-352.5, 29.5], [-150, 22], [-172.5, 24]]) banana(x, z); // 第 18 批：(-322, -30)、(-318, -39) 兩棵在大停車場裡，拿掉
   }
 
   // ==================== 電線：電線桿到每一家（接戶線）、電線桿之間多幾條電信線、過馬路的線 ====================
@@ -7111,6 +7132,7 @@ return { buildPoliceStation, buildPoliceInterior, makePoliceCar, POLICE_LOOK, PO
 //       garage 開到車庫門口再進去停車位；shop 開到改車區；dealer 開到買車區；highway 開到路口（上外側車道）
 //   V.surfaceAt(x, z) → 0 大路（賽道、往賽道的路、往快速道路的路）、3 村子的小路、水泥地、4 快速道路、1 草地、2 稻田
 //   V.areas：{ paddy: [長方形], pave: [長方形] }（小地圖畫稻田用）
+//   V.parking：第 18 批的大停車場 { name, x, z, hx, hz, stalls（幾格）, lamps }（長方形、rot 0；整塊算路面）
 //   V.buildings：[{ kind: house | shop | temple | store | farmhouse | dealer | garage, name?, sign?, front?, up?, x, z, hx, hz, rot, h, floors?, door: { x, z, ry } }]
 //       透天厝一排的店：name＝橫招牌（阿嬤雜貨店、好吃牛肉麵、阿國機車行）；sign＝直立招牌的字（理髮、冰店、早餐、藥局、檳榔⋯：一樓做生意）；front＝一樓正面 shop | shutter | door；up＝二樓以上每層正面（'b' 陽台 | 'w' 鐵窗）
 //       房子的外框（長方形，跟碰撞一樣）；door＝大門外面一點、ry＝房子正面朝的方向（以後走進去、放居民用）
@@ -7158,7 +7180,7 @@ const C = (hex) => { let v = CC.get(hex); if (!v) { const c = new THREE.Color(he
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
 const pick = (r, list) => list[(r() * list.length) | 0];
-const HOUSE_MAX_FL = 2; // 第 10 批（Nick 2026-10-09「所有房子變矮」）：透天厝最多 2 層
+const HOUSE_MAX_FL = 1; // 第 10 批（Nick 2026-10-09「所有房子變矮」）：透天厝最多 2 層；第 18 批（Nick 2026-10-14「對 把房子變矮」）：1 層
 // 本地座標框：原點 (x, y, z)、繞 y 轉 ry（跟 three.js rotation.y 一樣：本地 +x → (cos, 0, −sin)）
 function frame(x, y, z, ry = 0, s = 1) {
   const c = Math.cos(ry) * s, n = Math.sin(ry) * s;
@@ -8358,13 +8380,10 @@ function buildVillage(opts = {}) {
   // ---- 村子中間那塊：四邊都是透天厝；中間一條往北的路（車庫門口直直出來到大路）----
   // 第 9 批（路變大）：每一排往後退（路寬多出來的一半：大路 2.25、12 公尺的路 2、10.5 公尺的路 1.75 公尺），騎樓前的水泥地一樣寬
   row(-269.75, -7.5, -293.75, -7.5, 0, 1, 101, { shops: [null, 0, null, null, 1], gaps: false }); // 大路西段北側（面向南）：新路東邊
-  row(-306.25, -7.5, -325.25, -7.5, 0, 1, 112, { shops: [null, 2], gaps: false });              // 新路西邊
+  // 第 18 批（Nick 2026-10-14「把一些房子弄掉然後在那邊弄一個平面大停車場」）：x −345…−300 那一塊的 4 排（亂數 112、113、115、104）、菜園、小塊稻田拿掉 → 大停車場（下面 PARK）
   row(-269.75, -65.25, -293.75, -65.25, 0, -1, 102, { gaps: false });                                 // 北邊的路南側（面向北）
-  row(-306.25, -65.25, -325.25, -65.25, 0, -1, 113, { gaps: false });
   row(-293.25, -52, -293.25, -21, -1, 0, 114, { D: 11, apron: 1.0, vsigns: [null, 2], gaps: false }); // 車庫那條路（x −300）東側（面向西）
-  row(-306.75, -37, -306.75, -52, 1, 0, 115, { D: 11, apron: 1.0, gaps: false });                 // 西側（面向東）
   row(-256.75, -15, -256.75, -65, 1, 0, 103, { shops: [2, null, null, null, 0], vsigns: [null, 3, null, 5], gaps: false }); // 廟口街西側（面向東）；路口那塊空著（樹）
-  row(-338.25, -65, -338.25, -8, -1, 0, 104, { gaps: false });                                    // 西邊的路東側（面向西）
   tree(-264.5, -11, 1.05, rng(31)); tree(-242.5, 14.5, 1.1, rng(32)); // 廟口路口的兩個角
   // 外圍
   row(-243.25, -22, -243.25, -66, -1, 0, 105, { shops: [null, null, 1], vsigns: [4, null, null, 7], gaps: true }); // 廟口街東側（面向西）
@@ -8376,9 +8395,26 @@ function buildVillage(opts = {}) {
   { // 中間的院子：菜園、幾棵樹、一小塊田
     const rnd = rng(111);
     for (const [x, z] of [[-282, -44], [-276, -28], [-272, -48]]) tree(x, z, 1.1 + rnd() * 0.3, rnd, false);
-    addPave(-321.5, -45, 4.5, 6, 0, C('#8a7556')); // 菜園（土）
-    for (let i = 0; i < 4; i++) { const z = -49.5 + i * 3; B.at(-321.5, z); box('main', frame(-321.5, 0, z), [-3.8, 0, -0.7, 3.8, 0.28, 0.7], C('#6b5a40')); for (let k = 0; k < 7; k++) blob('main', -325 + k * 1.1, 0.42, z, 0.42, 0.26, 0.42, mul(C('#6aa84f'), 0.85 + rnd() * 0.3), 0.3, 0, i * 10 + k); }
-    paddyArea(-327, -35, -306, -21, 3, 1, rnd);
+  }
+  let PARK = null;
+  // ---- 第 18 批：大停車場（x −339.75…−305.25、z −66.75…−6.75：四邊貼著路，從哪一邊都開得進去）----
+  // 平平的柏油（算路面）；4 排停車格（每格 2.5 × 5 公尺，中間兩排背對背），中間一條橫的走道；路燈（細的柱子，有碰撞）
+  {
+    const X0 = -339.75, X1 = -305.25, Z0 = -66.75, Z1 = -6.75;
+    addPave((X0 + X1) / 2, (Z0 + Z1) / 2, (X1 - X0) / 2, (Z1 - Z0) / 2, 0, C('#6c6d71'), 0.022);
+    const rows = [X0 + 0.6, X0 + 12.1, X0 + 17.1, X0 + 28.6], segs = [[Z0 + 3, 9], [Z1 - 3 - 22.5, 9]]; // 每排的西邊 x；兩段，每段 9 格
+    let n = 0;
+    for (const x of rows) for (const [z0, k] of segs) {
+      for (let i = 0; i <= k; i++) flat('decal', x + 2.5, z0 + i * 2.5, 1, 0, 5, 0.12, 0.05, DU.start); // 格子的橫線
+      n += k;
+    }
+    for (const x of [X0 + 0.6 + 5, X0 + 12.1, X0 + 22.1, X0 + 28.6]) for (const [z0] of segs) flat('decal', x, z0 + 11.25, 0, 1, 22.5, 0.12, 0.05, DU.start); // 靠走道那邊不畫；後面（靠牆、背對背）畫一條
+    flat('decal', X0 + 17.1, (Z0 + Z1) / 2, 0, 1, Z1 - Z0 - 6, 0.12, 0.05, DU.start); // 中間兩排背對背的分隔線
+    const lamp = (x, z) => { B.at(x, z); const t = frame(x, 0, z); cyl('main', t, 0, 0, 0, 0.35, 0.22, 0.2, 8, C('#c9ccd0'), null, true); cyl('main', t, 0, 0, 0.35, 6.6, 0.09, 0.07, 6, C('#5b6066'), null, false);
+      box('main', t, [-0.7, 6.55, -0.12, 0.7, 6.75, 0.12], C('#5b6066')); for (const s of [-1, 1]) box('glow', t, [s * 0.75 - 0.32, 6.42, -0.16, s * 0.75 + 0.32, 6.56, 0.16], [1.5, 1.5, 1.5], { _: dotUV(GU.warm) }); addCircle(x, z, 0.24, 6.8); };
+    for (const z of [Z0 + 1.5, (Z0 + Z1) / 2, Z1 - 1.5]) lamp(X0 + 17.1, z); // 中間那條線上（頭尾在格子外面、中間在橫的走道）
+    for (const x of [X0 + 2.2, X1 - 2.2]) lamp(x, (Z0 + Z1) / 2);
+    PARK = { name: '大停車場', x: (X0 + X1) / 2, z: (Z0 + Z1) / 2, hx: (X1 - X0) / 2, hz: (Z1 - Z0) / 2, stalls: n, lamps: 5 }; // V.parking（測試、以後用）
   }
 
   // ---- 你的車庫：這裡只有空地（白色大理石、鐵捲門的車庫是另外的模組，放在 places.garage.lot）；前面水泥地、兩邊花台，門口直直往南一條路到大路 ----
@@ -9067,6 +9103,7 @@ function buildVillage(opts = {}) {
   const gTris = ground.geometry.attributes.position.count / 3;
   return {
     group, places, colliders, surfaceAt, route, homeAt, // 第 17 批：homeAt(n, places.garage)＝搬到車庫街第 n 間
+    parking: PARK, // 第 18 批：大停車場 { name, x, z, hx, hz, stalls, lamps }
     roads: roads.filter((r) => !HWK.has(r.kind) && r.kind !== 'link').map((r) => ({ pts: r.pts, w: Array.isArray(r.w) ? Math.max(...r.w) : r.w, kind: r.kind }))
       .concat([{ pts: hc.map((p) => [p.x, p.z]), w: HW.half * 2, kind: 'highway' }]),
     bounds: { x0: -1090, x1: 12, z0: -530, z1: 530 }, areas: { paddy: paddies, pave: paved }, buildings,
@@ -15398,7 +15435,7 @@ function buildNeihu(V, opt = {}) {
   const resSt = new Set([0, 1, 2, 3, 7, 8]);
   let nb = 0, nArc = 0, nShed = 0, vSigns = [];
   const LISHAN = N.lm && N.lm.lishan ? N.lm.lishan.p : null; // 麗山國中校地裡的房子：白磁磚＋紅磚飾帶的牆（格子 24，照參考照片）
-  const NH_MAX_FL = 2; // 第 10 批：內湖一般的房子最多幾層（地標不變）
+  const NH_MAX_FL = 1; // 第 10 批：內湖一般的房子最多幾層（地標不變）；第 18 批（Nick 2026-10-14「對 把房子變矮」）：1 層
   const GB = 1e6; // 第 9 批：房子的編號（碰撞物的 g；村子的房子沒有 g）
   N.bld.forEach((b, bi) => {
     if (b.lm) return; // 地標的房子（西湖圖書館、湖光教會）：下面自己做
@@ -28479,7 +28516,9 @@ function createPedestrians(o = {}) {
       const lon = dx * ch - dz * sh, lat = dx * sh + dz * ch; // 車頭方向 (cos, −sin)、右邊 (sin, cos)
       const ex = Math.max(0, Math.abs(lon) - hx), ez = Math.max(0, Math.abs(lat) - hz);
       if (ex * ex + ez * ez < p.r * p.r && p.y < 0.6) { // 撞到了
-        if (av > 2.2 && p.hitCool <= 0 && !c.ai && p.age !== 'kid') { // 玩家（或以後的警車）撞到：飛出去；路上的 AI 車只會輕輕推開；第 3 批（b3-int）：小孩永遠撞不到（只被推開）
+        if (c.crush === true && p.dive) { // 第 18 批：已經撲開（躺著、爬起來）的人被越野車慢慢靠過來：推到旁邊（不會再被撞倒、不報警，永遠不會被輾）
+          const s = lat >= 0 ? 1 : -1, m = hz + p.r + 0.02 - Math.abs(lat); p.x += sh * s * m; p.z += ch * s * m; pushOut(p, false);
+        } else if (av > 2.2 && p.hitCool <= 0 && !c.ai && p.age !== 'kid') { // 玩家（或以後的警車）撞到：飛出去；路上的 AI 車只會輕輕推開；第 3 批（b3-int）：小孩永遠撞不到（只被推開）
           const s = v >= 0 ? 1 : -1, side = lat >= 0 ? 1 : -1, k = 0.35 * clamp(Math.abs(lat) / hz, 0.2, 1);
           const kx = ch * s + sh * side * k, kz = -sh * s + ch * side * k;
           knock(p, kx, kz, av, c); if (o.onHit) o.onHit(p, av, c);
@@ -35488,7 +35527,7 @@ function parkFull() {
   const Sx = tripS, p = tripPose[cur];
   TR.scene.add(Sx.car); Sx.car.visible = true; Sx.body.position.y = +CARS[cur].state.height;
   Sx.car.position.set(p.x, 0, p.z); Sx.car.rotation.set(0, p.heading, 0); Sx.car.updateMatrixWorld(true);
-  Sx.cabin?.userData.setGauges(0, 0);
+  Sx.cabin?.userData.setGauges(0, 0); Sx.cabin?.userData.setSteer?.(0);
   tripFull = cur; tripBox = fullBox(Sx);
   if (!parkShadow) { parkShadow = sh.clone(); parkShadow.name = 'park-shadow'; }
   const c = Math.cos(p.heading), s = Math.sin(p.heading);
@@ -35521,7 +35560,7 @@ function keepRecent(k) {
 function stowFull(Sx) {
   if (!Sx) return;
   scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.rotation.set(0, 0, 0); Sx.car.visible = false;
-  Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0);
+  Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0); Sx.cabin?.userData.setSteer?.(0);
 }
 // 開車的（drive.js）：上車、改車廠開走（裝了零件馬力變了）、車店換新車、比完賽都重新做一個
 function makeDrv(pose) {
@@ -35693,7 +35732,7 @@ function outAt(spot) {
   if (!car) return;
   tripPose[cur] = { x: car.x, z: car.z, heading: car.heading };
   dvoice?.dispose(); dvoice = null; // 熄火（上車再發動）
-  tripS?.cabin?.userData.setGauges(0, 0);
+  tripS?.cabin?.userData.setGauges(0, 0); tripS?.cabin?.userData.setSteer?.(0);
   if (spot?.deck != null && liftOK(cur) && !DECK[spot.deck] && deckUp(spot.deck)) { // 停上升降機：車子掛到平台上；開車的收掉（上車再做一個：車子要從平台拿下來）
     drv.dispose(); drv = null; home.open = null; obDoor.drv = null;
     DECK[spot.deck] = cur; DREV[spot.deck] = spot.rev ? 1 : 0; tripPose[cur] = deckPose(spot.deck);
@@ -36508,7 +36547,7 @@ function leaveDrive() {
   Sx?.dmg?.clearDebris(); // 掉在村子裡的零件、煙、嘶嘶聲收掉（車子還是凹的，改車廠修好才會好）
   if (Sx && Object.values(built).includes(Sx)) {
     scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.rotation.set(0, 0, 0); Sx.car.visible = Sx === S;
-    Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0);
+    Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0); Sx.cabin?.userData.setSteer?.(0);
   }
   controls.enabled = true; controls.update();
   showCar(cur); // 在車店買了新車、走去開了別台：車庫頁換成那台（名字、選項），其他的車停回升降機（onCars → normPark 整理好再存）
@@ -36906,7 +36945,7 @@ function driveStep(dt) {
     if (drv && DRIVE.on) {
       const t = drv.telemetry();
       dvoice?.set({ rpm: t.rpm, throttle: t.load, speed: Math.abs(t.v) });
-      tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); // 駕駛座視角看得到轉速表、速度表
+      tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); tripS?.cabin?.userData.setSteer?.(t.steer); // 駕駛座視角看得到轉速表、速度表、方向盤跟著轉
       foldStep(dt, t.v); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {
@@ -38274,7 +38313,7 @@ function keepOutOfBays() {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 13; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 14; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
