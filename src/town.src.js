@@ -263,7 +263,7 @@ async function enterDrive() {
   if (!S) { gtoast('車子還在開進車庫，等一下'); return; }
   if (!GAME.owned.has(cur)) return;
   stopRev(); getOut(); engineAudio.resume(); // 在點擊裡、await 之前；坐在車裡（車庫頁的「車內」）就先下車
-  trip = true; controls.enabled = false;
+  trip = true; HOME.in = true; controls.enabled = false; // 第 17 批：出門一定是從車庫裡面開始（載入中名單也寫「在車庫」，不會先跳「在路上」）
   document.body.classList.add('driving'); // 車庫的東西先收起來（換車、選項），畫面變高
   if (!VIL) {
     enterDrive.busy = true;

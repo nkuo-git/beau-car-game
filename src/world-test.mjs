@@ -257,13 +257,16 @@ console.log('3', el(), seeB, seeA, JSON.stringify(await info(A)));
 check(seeB && seeA, 'each sees the other walking (character + name tag) and a minimap dot');
 const hud3 = await A.evaluate(() => { const r = document.querySelector('.nt'); return r && !r.hidden ? r.innerText.replace(/\s+/g, ' ') : null; });
 check(/👥 2 人在線上/.test(hud3 || ''), `game box: ${hud3}`);
-await waitFor(A, () => true, null, 3500);
-check(getAt('world/m/u2/w') && getAt('world/m/u2/w') !== '在車庫', `the list shows where B is now (${getAt('world/m/u2/w')})`);
+for (let i = 0; i < 40 && getAt('world/m/u2/w') === '在車庫'; i++) await A.waitForTimeout(200); // 名單 1 秒看一次、最快 2.5 秒寫一次：最多等 8 秒（以前 waitFor(() => true) 馬上就回來，沒有真的等）
+const bw3 = await B.evaluate(() => ({ place: window.beauGame.net.place(), in: window.__HOME().in, trip: !!window.__D().trip }));
+check(getAt('world/m/u2/w') && getAt('world/m/u2/w') !== '在車庫', `the list shows where B is now (${getAt('world/m/u2/w')}; B says ${JSON.stringify(bw3)})`);
 const w0 = await A.evaluate(() => ({ ...window.__NET().P.get('u2').mk }));
+const bt0 = await B.evaluate(() => { const t = window.__D().walker.telemetry(); return { x: t.x, z: t.z, yaw: t.camYaw }; });
 await B.evaluate(() => window.__D().walker.setInput({ y: 1 })); await B.waitForTimeout(3000); // 往外走（後面是自己的車庫，門開著） await B.evaluate(() => window.__D().walker.setInput(null));
 await A.waitForTimeout(800);
 const w1 = await A.evaluate(() => ({ ...window.__NET().P.get('u2').mk }));
-check(Math.hypot(w1.x - w0.x, w1.z - w0.z) > 1, `B walked → A sees B move (${Math.hypot(w1.x - w0.x, w1.z - w0.z).toFixed(1)} m)`);
+const bt1 = await B.evaluate(() => { const t = window.__D().walker.telemetry(); return { x: t.x, z: t.z, yaw: t.camYaw }; });
+check(Math.hypot(w1.x - w0.x, w1.z - w0.z) > 1, `B walked → A sees B move (${Math.hypot(w1.x - w0.x, w1.z - w0.z).toFixed(1)} m; B itself ${JSON.stringify(bt0)} → ${JSON.stringify(bt1)}; A saw ${JSON.stringify(w0)} → ${JSON.stringify(w1)})`);
 // 去找他：點遊戲裡的「👥 2 人在線上」→ 線上的人 → 去找他
 await click(A, '.nt-room');
 await waitFor(A, () => !document.getElementById('nwWorld').hidden, null, 5000);
