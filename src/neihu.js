@@ -349,7 +349,7 @@ function buildNeihu(V, opt = {}) {
   const resSt = new Set([0, 1, 2, 3, 7, 8]);
   let nb = 0, nArc = 0, nShed = 0, vSigns = [];
   const LISHAN = N.lm && N.lm.lishan ? N.lm.lishan.p : null; // 麗山國中校地裡的房子：白磁磚＋紅磚飾帶的牆（格子 24，照參考照片）
-  const NH_MAX_FL = 2; // 第 10 批：內湖一般的房子最多幾層（地標不變）
+  const NH_MAX_FL = 1; // 第 10 批：內湖一般的房子最多幾層（地標不變）；第 18 批（Nick 2026-10-14「對 把房子變矮」）：1 層
   const GB = 1e6; // 第 9 批：房子的編號（碰撞物的 g；村子的房子沒有 g）
   N.bld.forEach((b, bi) => {
     if (b.lm) return; // 地標的房子（西湖圖書館、湖光教會）：下面自己做

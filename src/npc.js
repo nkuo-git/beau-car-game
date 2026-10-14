@@ -1941,7 +1941,9 @@ function createPedestrians(o = {}) {
       const lon = dx * ch - dz * sh, lat = dx * sh + dz * ch; // 車頭方向 (cos, −sin)、右邊 (sin, cos)
       const ex = Math.max(0, Math.abs(lon) - hx), ez = Math.max(0, Math.abs(lat) - hz);
       if (ex * ex + ez * ez < p.r * p.r && p.y < 0.6) { // 撞到了
-        if (av > 2.2 && p.hitCool <= 0 && !c.ai && p.age !== 'kid') { // 玩家（或以後的警車）撞到：飛出去；路上的 AI 車只會輕輕推開；第 3 批（b3-int）：小孩永遠撞不到（只被推開）
+        if (c.crush === true && p.dive) { // 第 18 批：已經撲開（躺著、爬起來）的人被越野車慢慢靠過來：推到旁邊（不會再被撞倒、不報警，永遠不會被輾）
+          const s = lat >= 0 ? 1 : -1, m = hz + p.r + 0.02 - Math.abs(lat); p.x += sh * s * m; p.z += ch * s * m; pushOut(p, false);
+        } else if (av > 2.2 && p.hitCool <= 0 && !c.ai && p.age !== 'kid') { // 玩家（或以後的警車）撞到：飛出去；路上的 AI 車只會輕輕推開；第 3 批（b3-int）：小孩永遠撞不到（只被推開）
           const s = v >= 0 ? 1 : -1, side = lat >= 0 ? 1 : -1, k = 0.35 * clamp(Math.abs(lat) / hz, 0.2, 1);
           const kx = ch * s + sh * side * k, kz = -sh * s + ch * side * k;
           knock(p, kx, kz, av, c); if (o.onHit) o.onHit(p, av, c);

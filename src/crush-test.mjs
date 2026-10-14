@@ -261,7 +261,7 @@ await p.evaluate(() => {
 });
 const gcHouse = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, C = window.__C();
-  const q = H.pickBig(-262, -40, (c) => c.t === 'box' && (c.h ?? 9) >= 5 && c.hx >= 2.5 && c.hz >= 2.5 && c.hx < 10 && c.hz < 10 && c.g == null, 260, false); if (q.none) return null;
+  const q = H.pickBig(-262, -40, (c) => c.t === 'box' && Math.abs((c.h ?? 0) - 3.3) < 0.01 && c.hx >= 2.0 && c.hz >= 2.0 && c.hx < 10 && c.hz < 10 && c.g == null /* 第 18 批：透天厝只剩 1 層（3.3 公尺）；以前找 5 公尺以上 */, 260, false); if (q.none) return null;
   const c = q.c; delete q.c; const big0 = C.stats.big;
   const r = H.ram(q, 0.5, 4);
   return { q, r, big: C.stats.big - big0, crushed: !!c.crushed, can: C.can(c) };
@@ -298,8 +298,11 @@ const crush2 = await p.evaluate((q) => {
   const r = H.drive({ throttle: 0.45, brake: 0, steer: 0 }, 6, 'window.__C().stats.cars > 0');
   const mid = { car: H.carState(q.id), hurt: H.hurt(), y: D.drv.telemetry().y };
   const r2 = H.drive({ throttle: 0.45, brake: 0, steer: 0 }, 2.5, null); // 開上去、壓過去
-  return { r, r2, mid, car: H.carState(q.id), cst: H.cst(), hurt: H.hurt(), pol: H.pol(), knocks0: n0, tele: D.drv.telemetry() };
+  const crimes = window.__pol()?.telemetry().crimes.map((c) => `${c.type}@${c.x},${c.z}`);
+  const downs = window.__N().peds.people.filter((p) => !p.gone && (p.mode === 'fall' || p.mode === 'lie' || p.mode === 'getup' || p.dive)).map((p) => `${p.id}:${p.age}:${p.mode}${p.dive ? ':dive' : ''}@${p.x.toFixed(1)},${p.z.toFixed(1)}`);
+  return { r, r2, mid, car: H.carState(q.id), cst: H.cst(), hurt: H.hurt(), pol: H.pol(), knocks0: n0, tele: D.drv.telemetry(), downs, crimes };
 }, tgt2);
+console.log('  people down after the crush:', JSON.stringify(crush2.downs), 'crimes', JSON.stringify(crush2.crimes));
 console.log('  monster truck crushes a traffic car:', JSON.stringify({ r: crush2.r, r2: crush2.r2, car: crush2.car, cst: crush2.cst, hurt: crush2.hurt, pol: crush2.pol }));
 check(crush2.cst.cars === 1 && crush2.car.crushed && crush2.car.wreck, 'the monster truck crushed the traffic car (taken out of the traffic flow)');
 check(crush2.car.scaleY <= 0.45 && crush2.car.glass === false, `the car body is squashed flat and the glass is broken (body scale y ${crush2.car.scaleY})`);
@@ -409,18 +412,19 @@ await drawAndShot('7-park-after');
 
 console.log('6', el(), 'off-road truck crushes anything');
 // 6a 房子（村子裡的透天厝）
-const hs = await p.evaluate(() => { const D = window.__D(), H = window.__H; window.__pol()?.clear(); D.drv.teleport({ x: -262, z: 0, heading: 0 }); H.step(20); const r = H.pickBig(-262, -40, (c) => c.t === 'box' && (c.h ?? 9) >= 5 && c.hx >= 2.5 && c.hz >= 2.5 && c.hx < 10 && c.hz < 10 && c.g == null, 260, false); delete r.c; return r; }); // 第 10 批：房子撞不倒了（不看 can）
+const hs = await p.evaluate(() => { const D = window.__D(), H = window.__H; window.__pol()?.clear(); D.drv.teleport({ x: -262, z: 0, heading: 0 }); H.step(20); const r = H.pickBig(-262, -40, (c) => c.t === 'box' && Math.abs((c.h ?? 0) - 3.3) < 0.01 && c.hx >= 2.0 && c.hz >= 2.0 && c.hx < 10 && c.hz < 10 && c.g == null /* 第 18 批：透天厝只剩 1 層（3.3 公尺）；以前找 5 公尺以上 */, 260, false); delete r.c; return r; }); // 第 10 批：房子撞不倒了（不看 can）
 console.log('  house target:', JSON.stringify(hs));
 const house = !hs.none ? await p.evaluate((q) => {
   const D = window.__D(), H = window.__H, C = window.__C();
   const c = D.VIL.colliders.find((k) => k.t === 'box' && k.x === q.x && k.z === q.z && !k.crushed);
   const b = D.VIL.buildings.find((k) => Math.abs(k.x - c.x) < Math.max(c.hx, c.hz) && Math.abs(k.z - c.z) < Math.max(c.hx, c.hz)) || null;
   const big0 = C.stats.big, n0 = window.__N().peds.stats.knocks;
+  window.__pol()?.clear(); // 第 18 批：瞬間移動到 (-262, 0) 的時候剛好壓到路過的車（車流），那顆星不是撞房子的：撞之前再清一次
   const r = H.ram({ ...q }, 0.55, 5);
   H.step(60);
   const j = C.big.find((k) => k.grp.includes(c));
   return { r, crushed: !!c.crushed, big: C.stats.big - big0, info: j ? H.bigInfo()[C.big.indexOf(j)] : null, maxY: j ? H.segMaxY(j) : null, door: b ? !!b.crushed : null, bname: b ? b.kind : null,
-    can: C.can(c), pol: H.pol(), tele: D.drv.telemetry(), past: j ? +(((D.drv.telemetry().x - c.x) * Math.cos(q.a) - (D.drv.telemetry().z - c.z) * Math.sin(q.a))).toFixed(1) : null, knocks: window.__N().peds.stats.knocks - n0, ms: +C.stats.bigMs.toFixed(2) };
+    can: C.can(c), pol: H.pol(), tele: D.drv.telemetry(), past: j ? +(((D.drv.telemetry().x - c.x) * Math.cos(q.a) - (D.drv.telemetry().z - c.z) * Math.sin(q.a))).toFixed(1) : null, knocks: window.__N().peds.stats.knocks - n0, ms: +C.stats.bigMs.toFixed(2), crimes: window.__pol()?.telemetry().crimes.map((k) => k.type) };
 }, hs) : null;
 console.log('  monster truck into a house:', JSON.stringify(house));
 // 第 10 批（Nick 2026-10-09「所有房子變矮越野車撞不倒」）：房子越野車也撞不倒：只是撞到，不會扁、不算犯罪

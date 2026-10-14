@@ -36,6 +36,7 @@
 //       garage 開到車庫門口再進去停車位；shop 開到改車區；dealer 開到買車區；highway 開到路口（上外側車道）
 //   V.surfaceAt(x, z) → 0 大路（賽道、往賽道的路、往快速道路的路）、3 村子的小路、水泥地、4 快速道路、1 草地、2 稻田
 //   V.areas：{ paddy: [長方形], pave: [長方形] }（小地圖畫稻田用）
+//   V.parking：第 18 批的大停車場 { name, x, z, hx, hz, stalls（幾格）, lamps }（長方形、rot 0；整塊算路面）
 //   V.buildings：[{ kind: house | shop | temple | store | farmhouse | dealer | garage, name?, sign?, front?, up?, x, z, hx, hz, rot, h, floors?, door: { x, z, ry } }]
 //       透天厝一排的店：name＝橫招牌（阿嬤雜貨店、好吃牛肉麵、阿國機車行）；sign＝直立招牌的字（理髮、冰店、早餐、藥局、檳榔⋯：一樓做生意）；front＝一樓正面 shop | shutter | door；up＝二樓以上每層正面（'b' 陽台 | 'w' 鐵窗）
 //       房子的外框（長方形，跟碰撞一樣）；door＝大門外面一點、ry＝房子正面朝的方向（以後走進去、放居民用）
@@ -86,7 +87,7 @@ const C = (hex) => { let v = CC.get(hex); if (!v) { const c = new THREE.Color(he
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
 const pick = (r, list) => list[(r() * list.length) | 0];
-const HOUSE_MAX_FL = 2; // 第 10 批（Nick 2026-10-09「所有房子變矮」）：透天厝最多 2 層
+const HOUSE_MAX_FL = 1; // 第 10 批（Nick 2026-10-09「所有房子變矮」）：透天厝最多 2 層；第 18 批（Nick 2026-10-14「對 把房子變矮」）：1 層
 // 本地座標框：原點 (x, y, z)、繞 y 轉 ry（跟 three.js rotation.y 一樣：本地 +x → (cos, 0, −sin)）
 function frame(x, y, z, ry = 0, s = 1) {
   const c = Math.cos(ry) * s, n = Math.sin(ry) * s;
@@ -1286,13 +1287,10 @@ function buildVillage(opts = {}) {
   // ---- 村子中間那塊：四邊都是透天厝；中間一條往北的路（車庫門口直直出來到大路）----
   // 第 9 批（路變大）：每一排往後退（路寬多出來的一半：大路 2.25、12 公尺的路 2、10.5 公尺的路 1.75 公尺），騎樓前的水泥地一樣寬
   row(-269.75, -7.5, -293.75, -7.5, 0, 1, 101, { shops: [null, 0, null, null, 1], gaps: false }); // 大路西段北側（面向南）：新路東邊
-  row(-306.25, -7.5, -325.25, -7.5, 0, 1, 112, { shops: [null, 2], gaps: false });              // 新路西邊
+  // 第 18 批（Nick 2026-10-14「把一些房子弄掉然後在那邊弄一個平面大停車場」）：x −345…−300 那一塊的 4 排（亂數 112、113、115、104）、菜園、小塊稻田拿掉 → 大停車場（下面 PARK）
   row(-269.75, -65.25, -293.75, -65.25, 0, -1, 102, { gaps: false });                                 // 北邊的路南側（面向北）
-  row(-306.25, -65.25, -325.25, -65.25, 0, -1, 113, { gaps: false });
   row(-293.25, -52, -293.25, -21, -1, 0, 114, { D: 11, apron: 1.0, vsigns: [null, 2], gaps: false }); // 車庫那條路（x −300）東側（面向西）
-  row(-306.75, -37, -306.75, -52, 1, 0, 115, { D: 11, apron: 1.0, gaps: false });                 // 西側（面向東）
   row(-256.75, -15, -256.75, -65, 1, 0, 103, { shops: [2, null, null, null, 0], vsigns: [null, 3, null, 5], gaps: false }); // 廟口街西側（面向東）；路口那塊空著（樹）
-  row(-338.25, -65, -338.25, -8, -1, 0, 104, { gaps: false });                                    // 西邊的路東側（面向西）
   tree(-264.5, -11, 1.05, rng(31)); tree(-242.5, 14.5, 1.1, rng(32)); // 廟口路口的兩個角
   // 外圍
   row(-243.25, -22, -243.25, -66, -1, 0, 105, { shops: [null, null, 1], vsigns: [4, null, null, 7], gaps: true }); // 廟口街東側（面向西）
@@ -1304,9 +1302,26 @@ function buildVillage(opts = {}) {
   { // 中間的院子：菜園、幾棵樹、一小塊田
     const rnd = rng(111);
     for (const [x, z] of [[-282, -44], [-276, -28], [-272, -48]]) tree(x, z, 1.1 + rnd() * 0.3, rnd, false);
-    addPave(-321.5, -45, 4.5, 6, 0, C('#8a7556')); // 菜園（土）
-    for (let i = 0; i < 4; i++) { const z = -49.5 + i * 3; B.at(-321.5, z); box('main', frame(-321.5, 0, z), [-3.8, 0, -0.7, 3.8, 0.28, 0.7], C('#6b5a40')); for (let k = 0; k < 7; k++) blob('main', -325 + k * 1.1, 0.42, z, 0.42, 0.26, 0.42, mul(C('#6aa84f'), 0.85 + rnd() * 0.3), 0.3, 0, i * 10 + k); }
-    paddyArea(-327, -35, -306, -21, 3, 1, rnd);
+  }
+  let PARK = null;
+  // ---- 第 18 批：大停車場（x −339.75…−305.25、z −66.75…−6.75：四邊貼著路，從哪一邊都開得進去）----
+  // 平平的柏油（算路面）；4 排停車格（每格 2.5 × 5 公尺，中間兩排背對背），中間一條橫的走道；路燈（細的柱子，有碰撞）
+  {
+    const X0 = -339.75, X1 = -305.25, Z0 = -66.75, Z1 = -6.75;
+    addPave((X0 + X1) / 2, (Z0 + Z1) / 2, (X1 - X0) / 2, (Z1 - Z0) / 2, 0, C('#6c6d71'), 0.022);
+    const rows = [X0 + 0.6, X0 + 12.1, X0 + 17.1, X0 + 28.6], segs = [[Z0 + 3, 9], [Z1 - 3 - 22.5, 9]]; // 每排的西邊 x；兩段，每段 9 格
+    let n = 0;
+    for (const x of rows) for (const [z0, k] of segs) {
+      for (let i = 0; i <= k; i++) flat('decal', x + 2.5, z0 + i * 2.5, 1, 0, 5, 0.12, 0.05, DU.start); // 格子的橫線
+      n += k;
+    }
+    for (const x of [X0 + 0.6 + 5, X0 + 12.1, X0 + 22.1, X0 + 28.6]) for (const [z0] of segs) flat('decal', x, z0 + 11.25, 0, 1, 22.5, 0.12, 0.05, DU.start); // 靠走道那邊不畫；後面（靠牆、背對背）畫一條
+    flat('decal', X0 + 17.1, (Z0 + Z1) / 2, 0, 1, Z1 - Z0 - 6, 0.12, 0.05, DU.start); // 中間兩排背對背的分隔線
+    const lamp = (x, z) => { B.at(x, z); const t = frame(x, 0, z); cyl('main', t, 0, 0, 0, 0.35, 0.22, 0.2, 8, C('#c9ccd0'), null, true); cyl('main', t, 0, 0, 0.35, 6.6, 0.09, 0.07, 6, C('#5b6066'), null, false);
+      box('main', t, [-0.7, 6.55, -0.12, 0.7, 6.75, 0.12], C('#5b6066')); for (const s of [-1, 1]) box('glow', t, [s * 0.75 - 0.32, 6.42, -0.16, s * 0.75 + 0.32, 6.56, 0.16], [1.5, 1.5, 1.5], { _: dotUV(GU.warm) }); addCircle(x, z, 0.24, 6.8); };
+    for (const z of [Z0 + 1.5, (Z0 + Z1) / 2, Z1 - 1.5]) lamp(X0 + 17.1, z); // 中間那條線上（頭尾在格子外面、中間在橫的走道）
+    for (const x of [X0 + 2.2, X1 - 2.2]) lamp(x, (Z0 + Z1) / 2);
+    PARK = { name: '大停車場', x: (X0 + X1) / 2, z: (Z0 + Z1) / 2, hx: (X1 - X0) / 2, hz: (Z1 - Z0) / 2, stalls: n, lamps: 5 }; // V.parking（測試、以後用）
   }
 
   // ---- 你的車庫：這裡只有空地（白色大理石、鐵捲門的車庫是另外的模組，放在 places.garage.lot）；前面水泥地、兩邊花台，門口直直往南一條路到大路 ----
@@ -1995,6 +2010,7 @@ function buildVillage(opts = {}) {
   const gTris = ground.geometry.attributes.position.count / 3;
   return {
     group, places, colliders, surfaceAt, route, homeAt, // 第 17 批：homeAt(n, places.garage)＝搬到車庫街第 n 間
+    parking: PARK, // 第 18 批：大停車場 { name, x, z, hx, hz, stalls, lamps }
     roads: roads.filter((r) => !HWK.has(r.kind) && r.kind !== 'link').map((r) => ({ pts: r.pts, w: Array.isArray(r.w) ? Math.max(...r.w) : r.w, kind: r.kind }))
       .concat([{ pts: hc.map((p) => [p.x, p.z]), w: HW.half * 2, kind: 'highway' }]),
     bounds: { x0: -1090, x1: 12, z0: -530, z1: 530 }, areas: { paddy: paddies, pave: paved }, buildings,

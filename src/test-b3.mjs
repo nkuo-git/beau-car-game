@@ -370,6 +370,14 @@ await p.addInitScript(() => {
     for (const q of P3().NPC.peds.people) { if ((ok && !ok(q)) || q.gone || q.active === false || (age === 'adult' ? q.age === 'kid' : q.age !== age) || !['walk', 'idle', 'stand', 'talk', 'wait'].includes(q.mode) || q.y > 0.1) continue; const d = Math.hypot(q.x - x, q.z - z); if (d < bd) { bd = d; best = q; } }
     return best;
   };
+  // 第 18 批：村子少了 21 棟房子，路上的人重新排過：有時候附近唯一的小孩坐在板凳上（坐 20～100 秒）→ 讓他的「坐著」時間到（照遊戲自己的 standup 站起來、走開），等他走起來
+  X.kid = (x, z, maxD = 200) => {
+    const k = X.person(x, z, 'kid', maxD); if (k) return k;
+    const s = P3().NPC.peds.people.filter((q) => q.age === 'kid' && q.mode === 'sit' && !q.gone && q.active !== false).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+    if (!s) return null; s.timer = 0;
+    for (let i = 0; i < 600; i++) { X.step(1); const q = X.person(x, z, 'kid', maxD); if (q) return q; }
+    return null;
+  };
   X.pol = () => { const t = P3().police.telemetry(); return { wanted: t.wanted, state: t.state, seen: t.seen, everSeen: t.everSeen, heat: t.heat, cars: t.cars.map((c) => `${c.id}:${c.mode}:${c.d}:${c.officer}`).join(' '), crimes: t.crimes.map((c) => c.type).join(','), arrests: t.arrests, escapes: t.escapes, jail: t.jail, player: t.player }; };
   X.toast = () => { for (const sel of ['#stage .pw-toast', '#stage .wk-toast', '#stage .dv-toast']) { const e = document.querySelector(sel); if (e && e.classList.contains('show') && !e.closest('[hidden]') && e.textContent) return e.textContent; } return ''; };
   X.toasts = []; // 說過的話（setTimeout 是真的時間：測試一格一格走，提示一下子就被下一句蓋掉）
@@ -411,7 +419,7 @@ const s2 = await ev(() => {
   const X = window.__X, D = window.__D(), w = D.walker, P3 = window.__P3();
   w.teleport(window.__H.gw(14, 2, 0)); X.step(30); // 先走出車庫（門口外面）：附近才有人
   D.GAR.door.open(0.1); X.step(30);
-  const t = w.telemetry(), kid = X.person(t.x, t.z, 'kid'), out = { kid: null };
+  const t = w.telemetry(), kid = X.kid(t.x, t.z), out = { kid: null };
   if (kid) { X.faceTo(kid); const m0 = kid.mode, btn = X.punchBtn(); X.step(2); out.kid = { btn, m0, m1: kid.mode, wanted: P3.police.wanted, crimes: P3.police.telemetry().crimes.length, age: kid.age }; X.step(40); }
   const ad = X.person(t.x, t.z, 'adult');
   if (!ad) return out;
@@ -489,9 +497,9 @@ const s3b = await ev(() => {
   d.teleport({ x: A[0], z: A[1], heading: hd }); X.step(5);
   const drive = (kmh) => { for (let i = 0; i < 400 && d.telemetry().kmh < kmh; i++) { d.setInput({ throttle: 1, brake: 0, steer: 0 }); X.step(1); } d.setInput({ throttle: 0.25, brake: 0, steer: 0 }); };
   const ahead = (q, m) => { const t = d.telemetry(), ci = d.carInfo; q.x = t.x + Math.cos(t.heading) * (ci.nose + m); q.z = t.z - Math.sin(t.heading) * (ci.nose + m); q.mode = q.mode === 'sit' ? 'walk' : q.mode; };
+  const kid = X.person(A[0], A[1], 'kid', 400) || X.kid(A[0], A[1], 3000), out = {}; // 附近沒有小孩（這段路人少）：遠一點的也行（等一下放到車前面）；第 18 批：先找（X.kid 可能要等小孩站起來：車還停著）
   const h0 = N.hits, w0 = window.__P3().police.wanted;
   drive(28);
-  const kid = X.person(A[0], A[1], 'kid', 400) || X.person(A[0], A[1], 'kid', 3000), out = {}; // 附近沒有小孩（這段路人少）：遠一點的也行（等一下放到車前面）
   if (kid) { ahead(kid, 1.6); const m0 = kid.mode; for (let i = 0; i < 40; i++) X.step(1); out.kid = { m0, m1: kid.mode, hits: N.hits - h0, wanted: window.__P3().police.wanted - w0, y: +kid.y.toFixed(2), kmh: d.telemetry().kmh }; }
   for (let i = 0; i < 30; i++) X.step(1);
   drive(28);
@@ -687,7 +695,7 @@ const s6a = await ev(() => {
   if (!a.drawn) g.draw('pistol');
   X.step(30);
   // 小孩：5 公尺，瞄準肚子（往下打：沒打到就打在後面的地上）
-  const t = w.telemetry(), kid = X.person(t.x, t.z, 'kid', 300);
+  const t = w.telemetry(), kid = X.kid(t.x, t.z, 300);
   if (!kid) return { ...a, err: 'no kid' };
   X.faceTo(kid, 5, (x, z) => X.lineClear(x, z, kid)); X.step(5); g.setAim(true); X.step(20);
   const k0 = g.telemetry().knocks, c0 = pol.telemetry().crimes.length, m0 = kid.mode; let shots = 0;
@@ -711,15 +719,16 @@ const s6b = await ev(() => {
     for (const f of DBG.offs) if (f.on) { st.add(f.pose.state); if (f.st === 'out' && Math.hypot(f.x - w.telemetry().x, f.z - w.telemetry().z) < 14) cop = f; }
   }
   a.wait = +(n / 60).toFixed(1); a.state = pol.state; if (!cop) return { ...a, err: 'no officer came', poses: [...st].join() };
-  const k0 = g.telemetry().knocks, c0 = pol.telemetry().crimes.length; let shots = 0, down = false;
+  const k0 = g.telemetry().knocks, c0 = pol.telemetry().crimes.length, hits = []; let shots = 0, down = false;
   g.setAim(true); X.step(10);
   for (let i = 0; i < 8 && !down && pol.state === 'wanted'; i++) {
-    X.aimAt(cop.x, 1.1, cop.z, 6); shots += X.fire(); for (const f of DBG.offs) if (f.on) st.add(f.pose.state);
+    for (let j = 0; j < 240; j++) { const p = w.telemetry(), dx = cop.x - p.x, dy = 1.1 - 1.36, dz = cop.z - p.z, L = Math.hypot(dx, dy, dz), h = g.probe(p.x, 1.36, p.z, dx / L, dy / L, dz / L, { maxT: L + 1 }); if (!h || h.kind !== 'world') break; X.step(1); } // 第 18 批：他從牆角後面跑過來：牆不擋了才開槍（不然打到牆＝在警察旁邊開槍，多 1★）
+    X.aimAt(cop.x, 1.1, cop.z, 6); shots += X.fire(); { const p = w.telemetry(), L = g.telemetry().last; hits.push([L?.kind, +Math.hypot(cop.x - p.x, cop.z - p.z).toFixed(1), L && L.x != null ? [+L.x.toFixed(1), +L.z.toFixed(1)] : null]); } for (const f of DBG.offs) if (f.on) st.add(f.pose.state);
     if (cop.st === 'down' || cop.pose.state === 'fall') down = true;
     if (g.telemetry().mag === 0) { g.reload(); X.step(90); }
   }
   g.setAim(false);
-  a.cop = { shots, down, st: cop.st, pose: cop.pose.state, crimes: pol.telemetry().crimes.slice(c0).map((c) => c.type).join(), wanted: pol.wanted, knocks: g.telemetry().knocks - k0 };
+  a.cop = { shots, hits, at: [+w.telemetry().x.toFixed(1), +w.telemetry().z.toFixed(1)], down, st: cop.st, pose: cop.pose.state, crimes: pol.telemetry().crimes.slice(c0).map((c) => c.type).join(), wanted: pol.wanted, knocks: g.telemetry().knocks - k0 };
   let up = false; for (let i = 0; i < 8 * 60 && !up; i++) { X.step(1); for (const f of DBG.offs) if (f.on) st.add(f.pose.state); if (cop.st === 'out' && cop.pose.state !== 'fall' && cop.pose.state !== 'getup') up = true; }
   a.up = up; a.poses = [...st].join(); a.state2 = pol.state;
   return a;
