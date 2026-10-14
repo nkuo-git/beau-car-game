@@ -364,7 +364,7 @@ function parkFull() {
   const Sx = tripS, p = tripPose[cur];
   TR.scene.add(Sx.car); Sx.car.visible = true; Sx.body.position.y = +CARS[cur].state.height;
   Sx.car.position.set(p.x, 0, p.z); Sx.car.rotation.set(0, p.heading, 0); Sx.car.updateMatrixWorld(true);
-  Sx.cabin?.userData.setGauges(0, 0);
+  Sx.cabin?.userData.setGauges(0, 0); Sx.cabin?.userData.setSteer?.(0);
   tripFull = cur; tripBox = fullBox(Sx);
   if (!parkShadow) { parkShadow = sh.clone(); parkShadow.name = 'park-shadow'; }
   const c = Math.cos(p.heading), s = Math.sin(p.heading);
@@ -397,7 +397,7 @@ function keepRecent(k) {
 function stowFull(Sx) {
   if (!Sx) return;
   scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.rotation.set(0, 0, 0); Sx.car.visible = false;
-  Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0);
+  Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0); Sx.cabin?.userData.setSteer?.(0);
 }
 // 開車的（drive.js）：上車、改車廠開走（裝了零件馬力變了）、車店換新車、比完賽都重新做一個
 function makeDrv(pose) {
@@ -569,7 +569,7 @@ function outAt(spot) {
   if (!car) return;
   tripPose[cur] = { x: car.x, z: car.z, heading: car.heading };
   dvoice?.dispose(); dvoice = null; // 熄火（上車再發動）
-  tripS?.cabin?.userData.setGauges(0, 0);
+  tripS?.cabin?.userData.setGauges(0, 0); tripS?.cabin?.userData.setSteer?.(0);
   if (spot?.deck != null && liftOK(cur) && !DECK[spot.deck] && deckUp(spot.deck)) { // 停上升降機：車子掛到平台上；開車的收掉（上車再做一個：車子要從平台拿下來）
     drv.dispose(); drv = null; home.open = null; obDoor.drv = null;
     DECK[spot.deck] = cur; DREV[spot.deck] = spot.rev ? 1 : 0; tripPose[cur] = deckPose(spot.deck);
@@ -1384,7 +1384,7 @@ function leaveDrive() {
   Sx?.dmg?.clearDebris(); // 掉在村子裡的零件、煙、嘶嘶聲收掉（車子還是凹的，改車廠修好才會好）
   if (Sx && Object.values(built).includes(Sx)) {
     scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.rotation.set(0, 0, 0); Sx.car.visible = Sx === S;
-    Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0);
+    Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0); Sx.cabin?.userData.setSteer?.(0);
   }
   controls.enabled = true; controls.update();
   showCar(cur); // 在車店買了新車、走去開了別台：車庫頁換成那台（名字、選項），其他的車停回升降機（onCars → normPark 整理好再存）
@@ -1782,7 +1782,7 @@ function driveStep(dt) {
     if (drv && DRIVE.on) {
       const t = drv.telemetry();
       dvoice?.set({ rpm: t.rpm, throttle: t.load, speed: Math.abs(t.v) });
-      tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); // 駕駛座視角看得到轉速表、速度表
+      tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); tripS?.cabin?.userData.setSteer?.(t.steer); // 駕駛座視角看得到轉速表、速度表、方向盤跟著轉
       foldStep(dt, t.v); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {

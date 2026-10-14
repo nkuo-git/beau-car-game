@@ -520,6 +520,15 @@ const inCar = await p.evaluate(() => { const D = window.__D(), H = window.__H, t
 console.log('  上車:', JSON.stringify(bd), JSON.stringify(inCar));
 check(bd.pressed === '上車 · GC8' && bd.modes.join('>') === 'in>seat>off' && inCar.drv && !inCar.paused && inCar.at < 0.01 && inCar.hidden && !inCar.wk && inCar.dv && inCar.voice && inCar.cur === 'gc8' && !inCar.shadow && inCar.dshadow, '上車: walks to the door, sits, character hidden, GC8 drives from where it was parked (engine on, drive HUD, one shadow)');
 check(inCar.act === '開鐵捲門' && inCar.act2 === '下車', `in the car with the door closed BOTH buttons show: big 「${inCar.act}」 and the separate 「${inCar.act2}」`);
+// Nick 2026-10-14「第一人稱方向盤要轉」：駕駛座的方向盤跟著 steer 轉（右轉＝從駕駛看順時針，打到底 90 度）；轉向柱不轉
+const swh = await p.evaluate(() => { const D = window.__D(), c = D.tripS?.cabin, g = c?.getObjectByName('cabin-wheel'), H = window.__H; if (!g) return { g: false };
+  const ang = () => { const q = g.quaternion, a = 2 * Math.acos(Math.min(1, Math.abs(q.w))) * 180 / Math.PI, n = Math.hypot(q.x, q.y, q.z); return n < 1e-6 ? 0 : +(a * Math.sign(q.x / n * Math.sign(q.w))).toFixed(1); }; // 轉軸大約往後（−x）：右轉 x 分量 > 0
+  const out = { g: true, kids: g.children.length, a0: ang() };
+  D.drv.setInput({ throttle: 0, brake: 0, steer: 1 }); H.step(60); out.R = ang(); out.tR = +D.drv.telemetry().steer.toFixed(2);
+  D.drv.setInput({ throttle: 0, brake: 0, steer: -1 }); H.step(60); out.L = ang();
+  D.drv.setInput(null); H.step(60); out.back = ang(); out.col = !!c.getObjectByName('cabin-trim'); return out; });
+console.log('  steering wheel:', JSON.stringify(swh));
+check(swh.g && swh.kids >= 1 && swh.a0 === 0 && swh.tR === 1 && Math.abs(swh.R - 90) < 1 && Math.abs(swh.L + 90) < 1 && swh.back === 0 && swh.col, `first person: the steering wheel turns with the steering (right +${swh.R}°, left ${swh.L}°, back to ${swh.back}°)`);
 fi = await fsInfo(); clash = await hudClash();
 console.log('  fullscreen (in the car):', JSON.stringify(fi), '| clash:', clash || '-');
 check(fullView(fi) && !fi.walking && !clash, `in the car: still fullscreen; 開鐵捲門, 下車, steering, pedals, map and the page buttons all on screen, none overlapping (${clash || 'ok'})`);

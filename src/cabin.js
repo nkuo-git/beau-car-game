@@ -4,6 +4,7 @@
 //     後座＋置物板／中置引擎的隔板、Supra 的防滾籠、灰色車頂內襯（Supra、R34、GC8）
 // buildCabin(key, spec, mats) → THREE.Group（name 'cabin'），加在 S.body 底下、拿掉 'interior'（車身座標：x 往前、y 往上、z 往右）
 //   cabin.userData.setGauges(轉速比例 0～1（1＝紅線）, 時速 km/h)：轉速表、時速表指針（數位儀表換數字）
+//   cabin.userData.setSteer(steer −1 左～1 右)：方向盤跟著轉（輪圈、輻條、中間、撥片；轉向柱不轉）
 //   cabin.userData.view＝CABIN_VIEW[key]；mats 沒用到（留著以後用）
 // CABIN_VIEW[key]＝{ eye, look, fov }：駕駛的眼睛、預設往前看的點（車身座標）、建議視角（度）；cabinCamera(camera, S.body, key, yaw, pitch) 幫你擺相機
 // 輕：全部併成 5～6 個 mesh（車內頂點色、亮面頂點色、金屬頂點色、儀表貼圖、指針、數位時速），每台 8 千～1 萬 2 千個三角形
@@ -27,6 +28,7 @@ export const CABIN3D = (() => {
   const X0 = -1.9, NX = 32, Y0 = 0.2, NY = 12, NZ = 11;
   const cl = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
   const ss = (a, b, x) => { const t = cl((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const WHEEL_DEG = 90; // 方向盤打到底轉幾度（真的車大約 450；遊戲裡按一下就打到底，轉 90 度紅條剛好在旁邊看得到，左右也分得出來）
   const D2R = Math.PI / 180, V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 
   // ---- 儀表（u、v：在儀表面上的位置，公尺，右、上為正；r：半徑）----
@@ -404,8 +406,9 @@ export const CABIN3D = (() => {
     const C = st.c, sd = Math.sign(spec.interior?.wheelZ ?? (st.lhd ? -1 : 1)) || -1, zd = sd * st.zD;
     const [xE, yE] = st.eye, xH = xE + 0.16, yH = yE - 0.64, yF = Math.max(F.bot + (st.floor ?? 0.065), 0.2);
     const eye = V3(xE, yE, zd), xfw = Math.min((spec.wheels?.xf ?? 1.25) - 0.43, F.fa[0] - 0.04); // 腳踏板前面的防火牆
-    const bag = { trim: [], gloss: [], metal: [], face: [] };
-    const put = (m, g) => (bag[m].push(g), g);
+    const bag = { trim: [], gloss: [], metal: [], face: [] }, wbag = { trim: [], gloss: [], metal: [], face: [] }; // wbag：會轉的方向盤（自己一組，setSteer 轉它）
+    let tgt = bag; const put = (m, g) => (tgt[m].push(g), g);
+    let whl = null; // 方向盤中心、轉軸（往駕駛）
     const D = st.dash, topS = (x, z) => { for (let q = Math.abs(z); q >= 0; q -= 0.1) { const t = F.top(x, q); if (t > 0.3) return t; } return 2; };
     // 儀表板：每個 z 一個斷面（前擋黑邊底下 → 上面 → 後緣圓角 → 面板 → 下緣 → 底下），兩端貼著車門
     const xr0 = (z) => D.xr - (D.wrap || 0) * (Math.abs(z) / 0.75) ** 2 - (D.bulge || 0) * Math.exp(-((z / 0.2) ** 2));
@@ -463,6 +466,7 @@ export const CABIN3D = (() => {
       const Wc = st.wheel, c = Wc.col * D2R, N = V3(-Math.cos(c), Math.sin(c), 0), V = V3(Math.sin(c), Math.cos(c), 0), U = V3(0, 0, 1);
       const Cw = V3(xE + Wc.reach, yE - Wc.drop, zd), r = Wc.r, dish = 0.035;
       const P = (u, v, n = 0) => Cw.clone().addScaledVector(U, u).addScaledVector(V, v).addScaledVector(N, n);
+      whl = { c: P(0, 0, -dish), n: N.clone() }; tgt = wbag; // 輪圈、輻條、中間、撥片都會轉；轉向柱、柱套不轉
       let ring = [];
       for (let k = 0; k < 96; k++) { const a = (k / 96) * 2 * Math.PI; ring.push([r * Math.sin(a), cl(r * Math.cos(a), -r * (Wc.fb ?? 2), r * (Wc.ft ?? 2)), a]); }
       for (let it = 0; it < 4; it++) ring = ring.map((p, i) => { const a = ring[(i + 95) % 96], b = ring[(i + 1) % 96]; return [(a[0] + 2 * p[0] + b[0]) / 4, (a[1] + 2 * p[1] + b[1]) / 4, p[2]]; });
@@ -473,7 +477,7 @@ export const CABIN3D = (() => {
         put('gloss', tint(tube(upS.map(([u, v]) => P(u, v)), rt, 40, 8), C.rimTop));
         put('trim', tint(tube([upS[upS.length - 1], ...lo, upS[0]].map(([u, v]) => P(u, v)), rt, 64, 8), C.rim));
       } else put('trim', tint(tube(ring.map(([u, v]) => P(u, v)), rt, 96, 8, true), C.rim));
-      if (C.marker) put('trim', tint(tube([-5, 0, 5].map((a) => P(r * Math.sin(a * D2R), r * Math.cos(a * D2R))), rt + 0.0012, 6, 8), C.marker));
+      put('trim', tint(tube([-6, 0, 6].map((a) => P(r * Math.sin(a * D2R), r * Math.cos(a * D2R))), rt + 0.0012, 6, 8), C.marker ?? 0xd01818)); // 正中間的紅條：每台都有，方向盤轉了看得出來（輻條常常在畫面下面）
       // 輻條：從中間往外、往前凹（dish）
       const sw = Wc.sw ?? 0.05;
       for (const a0 of Wc.spokes) {
@@ -488,12 +492,15 @@ export const CABIN3D = (() => {
       const hub = Wc.hub === 'round' ? cyl(0.048, 0.044, 0.03, 24).rotateX(Math.PI / 2) : rbox(0.15, 0.105, 0.045, 0.035, 4);
       put('trim', tint(hub.applyMatrix4(basis(P(0, -0.005, -dish), U, V, N)), C.hub));
       if (Wc.hub === 'round') put('gloss', tint(cyl(0.03, 0.03, 0.004, 20).rotateX(Math.PI / 2).applyMatrix4(basis(P(0, 0, -dish + 0.017), U, V, N)), 0x2e3034));
+      tgt = bag;
       put('trim', tint(cyl(0.032, 0.032, 0.34, 12).rotateX(Math.PI / 2).applyMatrix4(basis(P(0, 0, -dish - 0.2), U, V, N)), 0x0e0e10));
       put('trim', tint(rbox(0.11, 0.1, 0.2, 0.035).applyMatrix4(basis(P(0, -0.01, -dish - 0.16), U, V, N)), C.dash));
+      tgt = wbag;
       if (Wc.paddles) for (const s of [-1, 1]) put('metal', tint(rbox(0.04, 0.12, 0.006, 0.015).applyMatrix4(basis(P(s * (r - 0.02), 0.01, -dish - 0.012), U, V, N)), C.metal));
       if (Wc.start) put('trim', tint(cyl(0.013, 0.013, 0.012, 16).rotateX(Math.PI / 2).applyMatrix4(basis(P(-0.075, -0.07, -dish + 0.018), U, V, N)), 0xd0141c));
       if (Wc.screens) for (const s of [-1, 1]) put('face', quadUV(P(s * 0.1, 0.005, -dish * 0.45 + 0.012), U, V, 0.06, 0.035, uvOf(REG.spoke)));
       // 指針（數位的轉速表也用），Jesko 的儀表跟著方向盤
+      tgt = bag;
     }
 
     // ---- 中控面板（出風口、音響、空調）＋中央扶手台 ----
@@ -751,6 +758,20 @@ export const CABIN3D = (() => {
       if (!bag[k].length) continue;
       const m = new THREE.Mesh(merge(bag[k], k === 'face' ? 'uv' : 'color', k === 'face' ? null : ao), mat[k]); m.name = 'cabin-' + k; cab.add(m);
     }
+    // 方向盤：一個 group 放在中心、繞轉軸轉（裡面的 mesh 先搬回中心）；暗角照原本的位置算
+    let wg = null;
+    if (whl) {
+      wg = new THREE.Group(); wg.name = 'cabin-wheel'; wg.position.copy(whl.c); cab.add(wg);
+      for (const k of ['trim', 'gloss', 'metal', 'face']) {
+        if (!wbag[k].length) continue;
+        const g = merge(wbag[k], k === 'face' ? 'uv' : 'color', k === 'face' ? null : ao).translate(-whl.c.x, -whl.c.y, -whl.c.z);
+        const m = new THREE.Mesh(g, mat[k]); m.name = 'cabin-wheel-' + k; wg.add(m);
+      }
+    }
+    let ls = 0;
+    const setSteer = (s = 0) => { // s：−1 左～1 右（drive 的 steer）；打到底轉 WHEEL_DEG 度（從駕駛看：右轉＝順時針）
+      if (!wg || s === ls) return; ls = s; wg.quaternion.setFromAxisAngle(whl.n, -s * WHEEL_DEG * D2R);
+    };
     // 指針：一個 mesh，每根 4 個點，setGauges 時重算位置
     const npos = new Float32Array(needles.length * 12), nidx = [];
     needles.forEach((n, i) => nidx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3));
@@ -777,7 +798,7 @@ export const CABIN3D = (() => {
       if (digits) digits.userData.set(kmh);
     };
     setGauges(0, 0);
-    Object.assign(cab.userData, { setGauges, view: VIEW[key], mats: mat });
+    Object.assign(cab.userData, { setGauges, setSteer, view: VIEW[key], mats: mat });
     void mats;
     return cab;
   }
