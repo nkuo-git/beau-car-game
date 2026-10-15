@@ -33,7 +33,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="./game.css?v=14">
+<link rel="stylesheet" href="./game.css?v=15">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
 </head>
 <body>
@@ -225,6 +225,11 @@
       <ul class="nw-who nw-ppl nw-scroll" id="nwPpl"></ul>
       <p class="cl-err" id="nwWorldErr" hidden></p>
       <p class="cl-note" id="nwWorldMsg" hidden></p>
+      <div class="nw-key" id="nwKey">
+        <div class="nw-key-top"><span>🔑 我的車鑰匙密碼</span><b id="nwKeyCode">····</b><button type="button" class="nw-tog" id="nwKeyEdit">改密碼</button></div>
+        <div class="nw-key-form" id="nwKeyForm" hidden><input class="nw-field" id="nwKeyIn" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="4 個數字" aria-label="新的密碼（4 個數字）"><button type="button" class="imp-yes cl-btn" id="nwKeyOk">好</button></div>
+        <p class="cl-note" id="nwKeyNote">只有你看得到。要借車給朋友，就跟他說這 4 個數字。你下車以後，他走到你的車旁邊打密碼就能開。</p>
+      </div>
       <div class="nw-me"><span>別人找我比賽</span><button type="button" class="nw-tog" id="nwInvTog" aria-pressed="true">開</button></div>
       <details class="nw-blk" id="nwBlk" hidden><summary id="nwBlkSum">封鎖的人</summary><ul class="nw-who" id="nwBlkList"></ul></details>
       <p class="cl-note">🏁 找他比賽　🚗 看他的車庫　🚫 封鎖（他看不到你，你也看不到他）</p>
@@ -263,6 +268,6 @@
   </div>
 </div>
 
-<script type="module" src="./game.js?v=14"></script>
+<script type="module" src="./game.js?v=15"></script>
 </body>
 </html>
