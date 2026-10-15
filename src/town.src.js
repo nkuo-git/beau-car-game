@@ -56,6 +56,7 @@ let doorFade = null; // 門口的淡出淡入：{ t, T, phase（0 黑掉、1 黑
 const gcam = { maxY: Infinity, house: false, auto: false }; // 走路的鏡頭：頭上多高有東西（ceilingAt）；在小房子裡（自動換第一人稱）
 let panelCam = 'chase', camGo = null; // 進改車廠、車店前的視角；鏡頭慢慢移過去（看車店的車）
 const camAt = new THREE.Vector3(); // 鏡頭現在看的點（camGo 從這裡移）
+let BORROW_K = null, LENT_K = null; // 第 19 批（借車，net.src.js）：正在開借來的哪台；借給朋友的是哪台（藏起來、不能上）
 const snooze = {}; // 剛比完：離開起跑區 30 公尺以前開回去不會又去比賽
 const bayLock = {}; // 改車區、買車區：開走以後要先開出去，下次停進來才會再打開
 const liftSnd = {}; // 升降機的馬達聲（sound.js 的 lift）：第幾台 → 聲音
@@ -188,7 +189,7 @@ function arrangeCars() {
   if (inTown) {
     want = DECK.slice(); rev = DREV; // 完整模型那台（停上升降機的）也在裡面：掛的是 tripS.car
     for (const k of GAME.owned) {
-      const p = tripPose[k]; if (!p || k === tripFull || p.deck != null) continue; // 完整模型那台（開的、下車停著的）不用輕量車
+      const p = tripPose[k]; if (!p || k === tripFull || p.deck != null || k === LENT_K) continue; // 完整模型那台（開的、下車停著的）不用輕量車；第 19 批：借給朋友的那台不畫
       if (PFULL[k]) { pfullShow(k); continue; } // 第 4 批：大車換開別台：完整的車停在原地
       const [g, q] = parkedAt(p); at.set(k, [g, q, true, p]);
     }
@@ -235,7 +236,7 @@ function walkCars() {
   const list = [];
   if (!tripPose || !DECK) return list;
   for (const k of GAME.owned) {
-    const p = tripPose[k]; if (!p) continue;
+    const p = tripPose[k]; if (!p || k === LENT_K) continue; // 第 19 批：借給朋友了
     if (p.deck != null && !deckUp(p.deck)) continue; // 升起來在頭上、降下去在坑裡、在動：走不到
     const name = CARS[k].btn[0];
     if (k === tripFull) { if (!drv && tripS && tripBox) list.push({ key: k, name, x: p.x, z: p.z, heading: p.heading, ...tripBox, h: carH(k), object: tripS.car }); continue; } // 出門停在中間、停上升降機（還沒開、沒在開）
@@ -558,7 +559,7 @@ function parkSpot(t) {
 function leaveCar() {
   if (!drv || !walker || !DRIVE.on || !tripPose || jailed()) return; // 第 3 批：被抓到了不能下車
   const t = drv.telemetry(); if (t.paused || t.auto) return;
-  const spot = Math.abs(t.v) < 1 ? parkSpot(t) : null;
+  const spot = Math.abs(t.v) < 1 && !BORROW_K ? parkSpot(t) : null; // 第 19 批：借來的車不停進你的升降機、車位
   if (spot && (Math.hypot(spot.x - t.x, spot.z - t.z) > 0.02 || Math.abs(wrapPi(spot.heading - t.heading)) > 0.01)) { // 開正（0.6–1 秒）再下車
     const d = drv; drv.parkAt(spot, () => { if (drv === d && DRIVE.on && trip) outAt(spot); }); return;
   }
@@ -594,6 +595,7 @@ function offDeck(k) {
 function onGetIn(car) {
   if (!trip || !DRIVE.on || !tripPose) return;
   gunner?.holster(); // 第 3 批（b3-int）：上車把槍收起來（開車不能用槍）
+  if (car.borrow) { netBorrowBoard(car); return; } // 第 19 批：打對密碼，坐進朋友的車
   if (car.drive) { // 剛下來那台：walk.js 已經 drv.resume() 了，引擎再發動
     dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
     arrangeCars(); return;
@@ -1056,6 +1058,7 @@ function bayAct(t) {
     const P = VIL.places[name]; if (!P?.bay) continue;
     if (bayLock[name]) { if (!inBox(P.bay, t.x, t.z, 2)) bayLock[name] = false; continue; }
     if (!inBox(P.bay, t.x, t.z)) continue;
+    if (BORROW_K) { bayLock[name] = true; drv.toast('借來的車不能改裝，也不能在這裡買車', 2400); continue; } // 第 19 批
     const go = name === 'shop' ? intoShop : () => intoDealer(name);
     if (Math.abs(t.v) < 1.2) { go(); return null; }
     return { label: name === 'shop' ? '停在這裡改車' : '停在這裡看車', icon: 'hand', onClick: go };
@@ -1226,6 +1229,7 @@ $('dealerGo').addEventListener('click', () => { if (!dealerEl.hidden && !buying)
 // ---- 賽道：開進起跑區（慢一點）自己停到起跑線，交給比賽（race.src.js）；比完開回村子 ----
 function trackStep(t) {
   if (snooze.track || t.auto || !inBox(VIL.places.track.zone, t.x, t.z)) { home.slow = false; return; }
+  if (BORROW_K) { snooze.track = true; drv.toast('借來的車不能比直線加速', 2400); return; } // 第 19 批
   if (Math.abs(t.v) > 22) { if (!home.slow) { home.slow = true; drv.toast('開慢一點，才停得進起跑線'); } return; }
   drv.toast('直線加速：自己停到起跑線'); snooze.track = true;
   drv.parkAt(VIL.places.track.start, toRace);
@@ -1356,6 +1360,7 @@ function goHome() {
 // 停在升降機上的記進存檔（下一趟還在）；最後開的那台（cur）到中間的轉盤（它停的格子給原本停中間那台）；停在外面的回到空的格子（normPark）
 function leaveDrive() {
   if (!trip) return;
+  netBorrowEnd('home'); netLendHome(); // 第 19 批：開借來的車回車庫頁＝還車；借給朋友的拿回來
   const P = tripPose && DECK ? { mid: midCar(), decks: DECK.slice(), rev: DREV.slice() } : null;
   trip = false; DRIVE.on = false; boarding = null;
   panelClose(); driveBar.hidden = true;

@@ -61,7 +61,7 @@ function netSprite(map, w, h, cy) {
 function netPeer(uid) {
   let P = NET.P.get(uid);
   if (!P) {
-    P = { uid, n: '', car: '', l: null, ch: null, col: NET_COL[0], buf: [], cur: { t: 0, x: 0, z: 0, h: 0, v: 0, o: 0, k: '', rp: null, rs: 0, w: 0, jl: 0 }, last: 0, tagW: 0, jlSeen: 0,
+    P = { uid, n: '', car: '', l: null, ch: null, col: NET_COL[0], buf: [], cur: { t: 0, x: 0, z: 0, h: 0, v: 0, o: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pk: null }, last: 0, pkOn: false, tagW: 0, jlSeen: 0,
       obj: null, objK: '', job: 0, chr: null, chrK: '', tag: null, bub: null, bubT: 0, roll: 0, px: null, pz: null, mk: { x: 0, z: 0, fill: NET_COL[0], ring: '#ffffff', r: 6, label: '', name: '', on: false },
       box: { t: 'box', x: 0, z: 0, hx: 2.2, hz: 0.9, rot: 0, h: 1.4, vx: 0, vz: 0, m: 1, dvx: 0, dvz: 0 }, vis: false };
     NET.P.set(uid, P); NET.marks.push(P.mk);
@@ -146,31 +146,37 @@ function netStep(dt) {
     const tw = fresh && (c.o === 1 || c.o === 2) ? c.w : 0; if (tw !== P.tagW) { P.tagW = tw; if (P.n) netTag(P); } // 名字旁邊的星星
     const near = !!s && (!me || (s.x - mx) * (s.x - mx) + (s.z - mz) * (s.z - mz) < NET_FAR * NET_FAR); // 遠的：只有地圖上的點
     const car = near && c.o === 1, walkin = near && c.o === 2;
-    if (car) netCar(P, c.k);
+    // 第 19 批：他下車停著的車（走路的時候）：畫在停的地方、會擋；借給你了（你在開、在載入）就不畫這台
+    const pk = show && fresh && !race && c.o === 2 && c.pk && !(BOR.on && BOR.on.uid === P.uid) && !(BOR.loading && BOR.loading.uid === P.uid) ? c.pk : null;
+    const pkOn = !!pk && (!me || (pk[1] - mx) * (pk[1] - mx) + (pk[2] - mz) * (pk[2] - mz) < NET_FAR * NET_FAR);
+    if (car) netCar(P, c.k); else if (pkOn) netCar(P, pk[0]);
     if (walkin) netChr(P);
-    const O = car ? P.obj : null, C = walkin ? P.chr : null;
+    const O = car || pkOn ? P.obj : null, C = walkin ? P.chr : null;
+    P.pkOn = pkOn && !!O;
     if (P.obj) { P.obj.car.visible = !!O; P.obj.sh.visible = !!O; }
     if (P.chr) P.chr.group.visible = !!C;
     P.mk.on = !!s; P.vis = !!(O || C);
     if (s) { P.mk.x = s.x; P.mk.z = s.z; if (NET.goal === P.uid && VIL.places.friend) { VIL.places.friend.pos[0] = s.x; VIL.places.friend.pos[1] = s.z; } }
     if (O) {
-      const fx = Math.cos(s.h) * 1.3, fz = -Math.sin(s.h) * 1.3, y = netH(s.x, s.z);
-      O.car.position.set(s.x, y, s.z); O.car.rotation.set(0, s.h, Math.atan2(netH(s.x + fx, s.z + fz) - netH(s.x - fx, s.z - fz), 2.6));
-      if (P.px != null) { P.roll += Math.hypot(s.x - P.px, s.z - P.pz) * (s.v < 0 ? -1 : 1); O.lod.setRoll(P.roll); }
-      O.sh.matrix.makeRotationY(s.h).scale(V_NET.set(O.nose - O.tail + 0.6, 1, O.hw * 2 + 0.4)).setPosition(s.x + Math.cos(s.h) * O.cx, y + 0.05, s.z - Math.sin(s.h) * O.cx); O.sh.matrixWorldNeedsUpdate = true;
-      if (P.tag) P.tag.position.set(s.x, y + O.top + 0.35, s.z);
-      if (c.w) netPolPlace(P, s, dt);
+      const ox = car ? s.x : pk[1], oz = car ? s.z : pk[2], oh = car ? s.h : pk[3], ov = car ? s.v : 0; // 開的車：內插的位置；停著的：停的位置
+      const fx = Math.cos(oh) * 1.3, fz = -Math.sin(oh) * 1.3, y = netH(ox, oz);
+      O.car.position.set(ox, y, oz); O.car.rotation.set(0, oh, Math.atan2(netH(ox + fx, oz + fz) - netH(ox - fx, oz - fz), 2.6));
+      if (car && P.px != null) { P.roll += Math.hypot(s.x - P.px, s.z - P.pz) * (s.v < 0 ? -1 : 1); O.lod.setRoll(P.roll); }
+      O.sh.matrix.makeRotationY(oh).scale(V_NET.set(O.nose - O.tail + 0.6, 1, O.hw * 2 + 0.4)).setPosition(ox + Math.cos(oh) * O.cx, y + 0.05, oz - Math.sin(oh) * O.cx); O.sh.matrixWorldNeedsUpdate = true;
+      if (P.tag && car) P.tag.position.set(ox, y + O.top + 0.35, oz);
+      if (car && c.w) netPolPlace(P, s, dt);
       if (!race && (drv || walker)) { // 平常會擋（撞到照兩台車的速度算；朋友那邊自己算自己的）；比賽中穿過去
-        const k = P.box; k.x = s.x + Math.cos(s.h) * O.cx; k.z = s.z - Math.sin(s.h) * O.cx; k.hx = (O.nose - O.tail) / 2; k.hz = O.hw; k.rot = s.h;
-        k.vx = Math.cos(s.h) * s.v; k.vz = -Math.sin(s.h) * s.v; k.dvx = k.dvz = 0; NET.cols.push(k);
+        const k = P.box; k.x = ox + Math.cos(oh) * O.cx; k.z = oz - Math.sin(oh) * O.cx; k.hx = (O.nose - O.tail) / 2; k.hz = O.hw; k.rot = oh;
+        k.vx = Math.cos(oh) * ov; k.vz = -Math.sin(oh) * ov; k.dvx = k.dvz = 0; NET.cols.push(k);
       }
-    } else if (C) {
+    }
+    if (C) {
       const y = netH(s.x, s.z);
       C.group.position.set(s.x, y, s.z); C.group.rotation.y = s.h;
       C.update(dt, { speed: Math.abs(s.v) });
       if (P.tag) P.tag.position.set(s.x, y + C.height + 0.45, s.z);
     }
-    P.px = O ? s.x : null; P.pz = O ? s.z : null;
+    P.px = O && car ? s.x : null; P.pz = O && car ? s.z : null;
     if (P.vis) for (const sp of [P.tag, P.bub]) if (sp && !sp.parent) TR.scene.add(sp);
     if (P.tag) P.tag.visible = P.vis;
     if (P.bub) { P.bubT -= dt; P.bub.visible = P.vis && P.bubT > 0; if (P.bub.visible) P.bub.position.copy(P.tag.position); }
@@ -178,6 +184,7 @@ function netStep(dt) {
   for (let i = NET_POL.n; i < NET_POL.cars.length; i++) NET_POL.cars[i].group.visible = false;
   netGoalTick(me);
   netGstTick(me, show && !race);
+  borTick(me, show, race); // 第 19 批：借車
   if (drv) {
     if (NET.setD !== drv) { NET.setD = drv; drv.setMarkers(NET.marks, 'net'); }
     drv.removeColliders('net'); if (NET.cols.length) drv.addColliders(NET.cols, 'net');
@@ -675,14 +682,288 @@ function netDragDrop(Rc) { // exitRace：朋友的車收掉
   const R = Rc.net; if (R && NET.race === R && R.myT == null) netQuit('back');
 }
 
+// ==== 第 19 批：借朋友的車（Nick 2026-10-15「可以借別人的車來開 每個人自己手機上會有一個密碼 別人要借你就跟他說密碼。密碼可以自己改。打完密碼就可以上車」；
+//      草稿 https://claude.ai/artifact/5yJe6e2HjwjbPemrTACohF，Nick 說好）====
+// 車主：下車以後車停在原地（netState 送 pk＝[車, x, z, h]，朋友那邊畫出來、會擋）；密碼 GAME.key（4 個數字，第一次要的時候自己給一組；網站「👥 連線」裡看、改；只有自己看得到）
+// 借的人：走到朋友停著的車旁邊 →「🔑 借車 · 小明的 GT-R」→ 數字鍵盤打 4 個數字 → 網站送給車主的手機，車主那邊對密碼（錯 3 次要等 30 秒）
+//   → 對了：車主那邊把車藏起來，回車子的樣子、零件、輪胎、停的位置 → 走去車門坐進去（walk.js getIn）→ 開的是朋友的車（他的顏色、零件）
+//   存檔還是你自己的（saveFix）；不能改裝、不能在車行買車、不能比直線加速、不能找人比賽（town.src.js 看 BORROW_K、網站看 borrowing()）
+//   下車＝還車（停在你下車的地方）；車主按「拿回來」、車主離開世界、你回車庫頁：也還（你在開的話，人站到車子旁邊）
+// 車主那邊：借出去的那台藏起來、不能上（LENT_K）；上面一條「🔑 阿龍在開你的 GT-R  拿回來」；還回來＝停在他下車的地方（輕量車，上車照常換成完整的）
+// 網站（site/world.js）送：borrow/q（密碼）→ borrow/a（回答、拿回來）→ borrow/r（還車：停在哪裡）
+const BOR = { near: null, pad: null, want: null, on: null, lent: null, loading: null, ui: null, nearSig: '', locks: {} }; // loading：坐進去了、車子載入中（want 那一筆）
+const BOR_TRY = 3; // 錯幾次要等（車主那邊算；這邊只是顯示）
+const borCarName = (k) => (CARS[k] ? CARS[k].btn[0] : String(k || '').toUpperCase());
+function borKey() { // 我的密碼（沒有就給一組）
+  if (!/^[0-9]{4}$/.test(GAME.key || '')) { GAME.key = String(Math.floor(Math.random() * 10000)).padStart(4, '0'); save(true); }
+  return GAME.key;
+}
+function borUi() {
+  if (BOR.ui) return BOR.ui;
+  netHud();
+  const st = document.createElement('style');
+  st.textContent = `.nt-key{position:absolute;z-index:6;left:50%;bottom:calc(var(--fs-b,0px) + 200px);transform:translateX(-50%);max-width:calc(100% - 20px);padding:11px 18px;border:2px solid #ffcc33;border-radius:999px;background:rgba(20,21,24,0.92);color:#F2F3F5;font:800 15px "Noto Sans TC",sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;touch-action:manipulation}
+.nt-key[hidden],body:not(.driving) .nt-key,body.bigmap .nt-key{display:none}
+.nt-pad{position:absolute;inset:0;z-index:11;display:grid;place-items:center;background:rgba(8,10,14,0.6);font-family:"Noto Sans TC",sans-serif}
+.nt-pad[hidden]{display:none}
+.nt-pad>div{width:min(290px,calc(100% - 28px));box-sizing:border-box;padding:14px;border-radius:18px;background:rgba(20,21,24,0.96);border:2px solid #ffcc33;color:#F2F3F5;display:flex;flex-direction:column;gap:10px;text-align:center}
+.nt-pad b{font-size:16px}
+.nt-dots{display:flex;justify-content:center;gap:14px}
+.nt-dots i{width:15px;height:15px;border-radius:50%;border:2px solid #ffcc33;box-sizing:border-box}
+.nt-dots i.on{background:#ffcc33}
+.nt-pad.bad .nt-dots{animation:ntShake .35s}
+@keyframes ntShake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.nt-pad p{margin:0;min-height:19px;font-size:13px;color:#C6CAD1}
+.nt-pad p.err{color:#ff8a7a}
+.nt-keys{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.nt-keys button{min-height:46px;border:0;border-radius:12px;background:#2a2d33;color:#F2F3F5;font:800 20px/1 "Barlow Condensed","Arial Narrow",sans-serif;cursor:pointer;touch-action:manipulation;font-variant-numeric:tabular-nums}
+.nt-keys button.sm{font:700 14px "Noto Sans TC",sans-serif}
+.nt-keys button:disabled{opacity:.4}
+.nt-bor{position:absolute;z-index:7;left:50%;top:calc(var(--fs-t,0px) + 112px);transform:translateX(-50%);max-width:calc(100% - 20px);display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;border-radius:999px;background:rgba(20,21,24,0.9);border:2px solid #ffcc33;color:#F2F3F5;font:700 14px "Noto Sans TC",sans-serif;pointer-events:auto}
+.nt-bor[hidden],body:not(.driving) .nt-bor,body.bigmap .nt-bor,body.shopping .nt-bor{display:none}
+.nt-bor span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nt-bor button{flex:none;min-height:34px;padding:0 14px;border:0;border-radius:999px;background:#ffcc33;color:#1a1405;font:800 14px "Noto Sans TC",sans-serif;cursor:pointer;touch-action:manipulation}`;
+  document.head.appendChild(st);
+  const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const near = mk('button', 'nt-key'); near.type = 'button'; near.hidden = true; near.addEventListener('click', () => { if (BOR.near) borPadOpen(BOR.near); });
+  const pad = mk('div', 'nt-pad'), box = mk('div'), title = mk('b'), dots = mk('div', 'nt-dots'), msg = mk('p'), keys = mk('div', 'nt-keys');
+  for (let i = 0; i < 4; i++) dots.append(mk('i'));
+  const btns = [];
+  for (const d of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '取消', '0', '⌫']) {
+    const b = mk('button', d.length > 1 ? 'sm' : null, d); b.type = 'button'; if (d === '⌫') b.setAttribute('aria-label', '刪掉一個');
+    b.addEventListener('click', () => borPadKey(d)); keys.append(b); btns.push(b);
+  }
+  box.append(title, dots, msg, keys); pad.append(box); pad.hidden = true;
+  const bar = mk('div', 'nt-bor'), barT = mk('span'), barB = mk('button'); barB.type = 'button'; bar.append(barT, barB); bar.hidden = true;
+  barB.addEventListener('click', () => { if (BOR.on) leaveCar(); else if (BOR.lent) netEv('takeback', { uid: BOR.lent.uid }); });
+  stage.append(near, pad, bar);
+  return (BOR.ui = { near, pad, title, dots, msg, btns, bar, barT, barB });
+}
+// ---- 借的人：數字鍵盤 ----
+function borPadOpen(P) {
+  const U = borUi(), k = P.cur.pk && P.cur.pk[0];
+  if (!k || BOR.on || BOR.want) return;
+  BOR.pad = { uid: P.uid, n: P.n, k, code: '', state: 'type', lockT: BOR.locks[P.uid] > performance.now() ? BOR.locks[P.uid] : 0, sentT: 0 }; // 錯太多次：關掉再打開還是鎖著
+  U.title.textContent = `輸入${P.n}的密碼`;
+  borPadMsg('', false); borPadPaint(); U.pad.hidden = false;
+}
+function borPadClose() { BOR.pad = null; if (BOR.ui) BOR.ui.pad.hidden = true; }
+function borPadMsg(t, err) { const U = borUi(); U.msg.textContent = t; U.msg.classList.toggle('err', !!err); }
+function borPadPaint() {
+  const U = borUi(), D = BOR.pad; if (!D) return;
+  [...U.dots.children].forEach((e, i) => e.classList.toggle('on', i < D.code.length));
+  const lock = D.state === 'wait' || D.lockT > performance.now();
+  U.btns.forEach((b) => { b.disabled = lock && b.textContent !== '取消'; });
+}
+function borPadKey(d) {
+  const D = BOR.pad; if (!D) return;
+  if (d === '取消') { borPadClose(); return; }
+  if (D.state === 'wait' || D.lockT > performance.now()) return;
+  if (d === '⌫') D.code = D.code.slice(0, -1);
+  else if (D.code.length < 4) D.code += d;
+  borUi().pad.classList.remove('bad');
+  borPadPaint();
+  if (D.code.length === 4) { D.state = 'wait'; D.sentT = performance.now(); borPadMsg('確認中⋯', false); borPadPaint(); netEv('borrow', { uid: D.uid, code: D.code }); }
+}
+function borPadTick() { // 送出去 10 秒沒回答；鎖住的時間到了
+  const D = BOR.pad; if (!D) return;
+  const now = performance.now();
+  if (D.state === 'wait' && now - D.sentT > 10000) { D.state = 'type'; D.code = ''; borPadMsg(`${D.n}沒有回答，等一下再試。`, true); borPadPaint(); }
+  if (D.lockT && D.lockT <= now) { D.lockT = 0; borPadMsg('可以再試了。', false); borPadPaint(); }
+  else if (D.lockT) { const s = Math.ceil((D.lockT - now) / 1000), t = `錯太多次了，等 ${s} 秒再試。`; if (borUi().msg.textContent !== t) borPadMsg(t, true); }
+}
+// 網站回答（borrow/a）：{ uid, ok：1 好｜0 密碼不對｜−2 現在不能借｜−3 要等｜−8 他離開了｜−9 拿回來, k, l, pt, ty, x, z, h, left, wait }
+function borAnswer(a) {
+  if (!a || !a.uid) return;
+  if (a.ok === -9 || a.ok === -8) { if (BOR.on && BOR.on.uid === a.uid) netBorrowEnd(a.ok === -9 ? 'back' : 'gone'); else if (BOR.loading && BOR.loading.uid === a.uid) BOR.loading.cancel = true; else if (BOR.want && BOR.want.uid === a.uid) { BOR.want = null; if (walker && trip) walker.setCars(walkCars()); netToast(`${a.ok === -9 ? '他把車拿回去了' : '他離開了'}`); } if (BOR.pad && BOR.pad.uid === a.uid) borPadClose(); return; }
+  const D = BOR.pad;
+  if (a.ok === 1) {
+    const pose = { x: +a.x, z: +a.z, heading: +a.h }, k = typeof a.k === 'string' ? a.k : '';
+    const ret = () => netEv('return', { uid: a.uid, x: pose.x, z: pose.z, h: pose.heading });
+    if (!D || D.uid !== a.uid || D.state !== 'wait' || !CARS[k] || ![pose.x, pose.z, pose.heading].every(Number.isFinite)) { ret(); return; } // 取消了、資料不對：車子馬上還他
+    borPadClose();
+    const P = NET.P.get(a.uid), O = P && P.obj, me = walker && walker.mode === 'walk' ? walker.telemetry() : null;
+    if (!O || !me || Math.hypot(me.x - pose.x, me.z - pose.z) > 9) { ret(); netToast('走到車子旁邊再試一次'); return; }
+    const pt = Array.isArray(a.pt) ? a.pt.filter((x) => PERF[k].parts.some((p) => p[0] === x)) : [];
+    const ty = a.ty && typeof a.ty === 'object' ? { own: (Array.isArray(a.ty.own) ? a.ty.own : []).filter((n) => n === 1 || n === 2), use: [0, 1, 2].includes(a.ty.use) ? a.ty.use : 0 } : { own: [], use: 0 };
+    if (ty.use && !ty.own.includes(ty.use)) ty.use = 0;
+    const entry = { key: k, name: `${P.n}的 ${borCarName(k)}`, x: pose.x, z: pose.z, heading: pose.heading, hx: (O.nose - O.tail) / 2, hz: O.hw, cx: O.cx, cz: 0, h: O.top, object: O.car, borrow: true, solid: false };
+    BOR.want = { uid: a.uid, n: P.n, k, l: a.l && typeof a.l === 'object' ? a.l : null, pt, ty, pose, entry, t: performance.now() };
+    walker.setCars([...walkCars(), entry]);
+    if (!walker.getIn(entry)) { borWantOff(); netToast('上不了車，再試一次'); }
+    return;
+  }
+  if (!D || D.uid !== a.uid || D.state !== 'wait') return;
+  D.state = 'type'; D.code = '';
+  if (a.ok === 0) { const left = Math.max(0, a.left | 0); borPadMsg(left ? `密碼不對（還可以試 ${left} 次）` : '密碼不對', true); const U = borUi(); U.pad.classList.remove('bad'); void U.pad.offsetWidth; U.pad.classList.add('bad'); }
+  else if (a.ok === -3) { D.lockT = BOR.locks[D.uid] = performance.now() + Math.max(1, Math.min(60, +a.wait || 30)) * 1000; }
+  else borPadMsg(`${D.n}的車現在不能借（他上車了，或借給別人了）`, true);
+  borPadPaint();
+}
+function borWantOff() { // 走去車門走到一半取消了（推搖桿）、不能上：車子還他
+  const W = BOR.want; if (!W) return;
+  BOR.want = null;
+  netEv('return', { uid: W.uid, x: W.pose.x, z: W.pose.z, h: W.pose.heading });
+  if (walker && trip) walker.setCars(walkCars());
+}
+// 你原本那台（剛下來的）：跟 switchCar 一樣停好（大車用完整的停在原地，別台換輕量車、走過去還能上）
+function borParkMine() {
+  const old = tripS, keep = old && !liftOK(cur) && tripPose[cur] ? { p: old.car.position.clone(), r: old.car.rotation.clone() } : null;
+  if (drv) { drv.dispose(); drv = null; }
+  dvoice?.dispose(); dvoice = null;
+  old?.dmg?.clearDebris();
+  if (keep) { old.car.position.copy(keep.p); old.car.rotation.copy(keep.r); old.car.updateMatrixWorld(true); PFULL[cur] = { S: old, box: tripBox || fullBox(old) }; }
+  else stowFull(old);
+  if (parkShadow) parkShadow.visible = false;
+  tripFull = null; tripBox = null; arrangeCars(); // tripS 留著（跟 switchCar 一樣）：比賽的 netSeat、回車庫頁都用它
+}
+// 坐進去了（town.src.js onGetIn）：完整的車（朋友的樣子）載好 → 你原本那台停好（跟 switchCar 一樣）→ 開
+async function netBorrowBoard(e) {
+  const W = BOR.want;
+  if (!W || W.entry !== e) { borParkMine(); walker.resume(); return; } // 走到一半車主拿回去了
+  BOR.want = null; BOR.loading = W;
+  const k = W.k, look = netLook(k, W.l), pcur = cur, ppose = tripPose[k] || null;
+  borParkMine();
+  const myS = tripS;
+  gtoast(`${W.n}的 ${borCarName(k)} 發動中⋯`, 2600);
+  let car = null; try { car = await loadCar(k, look); } catch (er) { console.error(er); }
+  BOR.loading = null;
+  if (!car || !trip || !DRIVE.on || !tripPose || !NET.P.get(W.uid) || W.cancel) {
+    if (car) disposeCar(car);
+    if (trip && DRIVE.on && walker) { walker.resume(); walker.toast(W.cancel ? `${W.n}把車拿回去了` : '車子發動不了', 2200); }
+    if (!W.cancel) netEv('return', { uid: W.uid, x: W.pose.x, z: W.pose.z, h: W.pose.heading });
+    return;
+  }
+  const prev = { cur: pcur, S: myS, pose: ppose, state: { ...CARS[k].state }, parts: GAME.parts[k], tyres: GAME.tyres[k], dmg: GAME.dmg[k], has: { parts: k in GAME.parts, tyres: k in GAME.tyres, dmg: k in GAME.dmg }, pf: null };
+  if (PFULL[k]) { prev.pf = PFULL[k]; prev.pf.S.car.visible = false; prev.pf.sd?.removeFromParent(); delete PFULL[k]; } // 你自己也有一台一樣的（大車停在外面）：先藏起來
+  CARS[k].state = { ...look }; GAME.parts[k] = W.pt.slice(); GAME.tyres[k] = { own: W.ty.own.slice(), use: W.ty.use }; delete GAME.dmg[k];
+  BOR.on = { uid: W.uid, n: W.n, k, car, prev, pose0: { ...W.pose } };
+  BORROW_K = k; saveFix = borSaveFix;
+  cur = k; tripS = car; tripPose[k] = { ...W.pose }; tripBox = fullBox(car);
+  makeDrv(W.pose);
+  drv.toast(`開${W.n}的 ${borCarName(k)}：下車就還給他`, 2800);
+}
+function borSaveFix(d) { // 存檔：借來的車不要存（現在開的、外觀、零件、輪胎都換回你自己的）
+  const B = BOR.on; if (!B) return;
+  const p = B.prev, k = B.k;
+  d.cur = p.cur;
+  d.cars = { ...d.cars, [k]: p.state };
+  d.parts = { ...d.parts }; if (p.has.parts) d.parts[k] = p.parts; else delete d.parts[k];
+  d.tyres = { ...d.tyres }; if (p.has.tyres) d.tyres[k] = p.tyres; else delete d.tyres[k];
+  d.dmg = { ...d.dmg }; if (p.has.dmg) d.dmg[k] = p.dmg; else delete d.dmg[k];
+  if (d.park && d.park.mid === k && !GAME.owned.has(k)) d.park = { ...d.park, mid: p.cur };
+}
+// 還車（why：out 下車｜back 車主拿回來｜gone 車主離開了｜home 回車庫頁｜leave 你離開世界）：車子停的位置送給車主，換回你自己的
+function netBorrowEnd(why) {
+  const B = BOR.on; if (!B) { if (BOR.want && why !== 'out') borWantOff(); return; }
+  BOR.on = null; BORROW_K = null; saveFix = null;
+  const k = B.k, p = B.prev, driving = !!drv && cur === k && !!walker && walker.mode === 'off';
+  let pose = tripPose[k] ? { x: tripPose[k].x, z: tripPose[k].z, heading: tripPose[k].heading } : null;
+  if (drv && cur === k) { const t = drv.telemetry(); pose = { x: t.x, z: t.z, heading: t.heading }; }
+  if (pose && (HOME.in || inBox(GAR.zones.inside, garLocal(pose.x, pose.z).x, garLocal(pose.x, pose.z).z, 1))) pose = { ...B.pose0 }; // 開進你自己的車庫裡：還到他原本停的地方（他進不去你的車庫）
+  dvoice?.dispose(); dvoice = null;
+  if (drv && cur === k) { drv.dispose(); drv = null; }
+  disposeCar(B.car);
+  CARS[k].state = p.state;
+  if (p.has.parts) GAME.parts[k] = p.parts; else delete GAME.parts[k];
+  if (p.has.tyres) GAME.tyres[k] = p.tyres; else delete GAME.tyres[k];
+  if (p.has.dmg) GAME.dmg[k] = p.dmg; else delete GAME.dmg[k];
+  cur = p.cur; tripS = p.S || null; tripFull = null; tripBox = null; // 你自己那台（收著；走過去上車照常）
+  if (tripPose) { if (p.pose) tripPose[k] = p.pose; else delete tripPose[k]; }
+  if (p.pf) { PFULL[k] = p.pf; p.pf.S.car.visible = true; }
+  if (why !== 'home' && trip && walker) {
+    if (driving && pose) { // 還在開（車主拿回來、他離開了）：人站到車子左邊（駕駛座那邊）
+      const ci = PERF[k]?.halfW || 1, c = Math.cos(pose.heading), s = Math.sin(pose.heading), side = ci + 0.9;
+      walker.teleport({ x: pose.x - s * side, z: pose.z - c * side, heading: pose.heading - Math.PI / 2 }, { keepCamera: false });
+      walker.resume({ blend: 0.4 });
+    }
+    walker.setCars([], { keepParked: false });
+    arrangeCars();
+  }
+  borUi().bar.hidden = true;
+  if (pose && why !== 'back' && why !== 'gone') netEv('return', { uid: B.uid, x: pose.x, z: pose.z, h: pose.heading });
+  if (why === 'out') netToast(`還給${B.n}了`);
+  else if (why === 'back') netToast(`${B.n}把車拿回去了`);
+  else if (why === 'gone') netToast(`${B.n}離開了，車還給他了`);
+  save();
+}
+// ---- 車主 ----
+function borParked() { // 我下車停著的那台（朋友看得到、借得到）：剛下來（開車的暫停著）或朋友還回來的（輕量車）；不在車庫裡面、沒借出去 → { x, z, heading }
+  if (BOR.on || LENT_K || !walker || walker.mode === 'off' || walker.mode === 'seat' || walker.mode === 'in' || HOME.in || !tripPose) return null;
+  let t = null;
+  if (drv) { if (tripFull !== cur || !tripS) return null; const d = drv.telemetry(); if (!d.paused) return null; t = { x: d.x, z: d.z, heading: d.heading }; }
+  else { const p = tripPose[cur]; if (!p || p.deck != null || tripFull === cur || PFULL[cur] || !GAME.owned.has(cur)) return null; t = p; } // 還回來停著（輕量車）
+  const q = garLocal(t.x, t.z); if (inBox(GAR.zones.inside, q.x, q.z, 1)) return null;
+  return t;
+}
+function borLendInfo() { // 網站問：可以借嗎（可以＝車子的樣子、零件、停在哪裡）
+  const t = borParked(); if (!t) return null;
+  return { k: cur, l: { ...CARS[cur].state }, pt: partsOf(cur).slice(), ty: { own: tyresOf(cur).own.slice(), use: tyresOf(cur).use }, x: Math.round(t.x * 100) / 100, z: Math.round(t.z * 100) / 100, h: Math.round(t.heading * 1000) / 1000 };
+}
+function borLend(uid, n) { // 借出去了：開車的收掉、車子藏起來（不能上）
+  const t = borParked(); if (!t) return false;
+  const k = cur;
+  if (drv) { drv.dispose(); drv = null; dvoice?.dispose(); dvoice = null; stowFull(tripS); tripS = null; tripFull = null; tripBox = null; } // 剛下來那台：開車的收掉
+  if (parkShadow) parkShadow.visible = false;
+  tripPose[k] = { x: t.x, z: t.z, heading: t.heading };
+  BOR.lent = { uid, n: String(n || '朋友').slice(0, 12), k }; LENT_K = k;
+  walker.setCars([], { keepParked: false }); arrangeCars();
+  const U = borUi(); U.barT.textContent = `🔑 ${BOR.lent.n}在開你的 ${borCarName(k)}`; U.barB.textContent = '拿回來'; U.bar.hidden = false;
+  netToast(`🔑 ${BOR.lent.n}借走你的 ${borCarName(k)} 了`);
+  return true;
+}
+function borUnlend(pose) { // 還回來了（停在他下車的地方；沒有位置＝原本停的地方）
+  const L = BOR.lent; if (!L) return;
+  BOR.lent = null; LENT_K = null;
+  if (BOR.ui) BOR.ui.bar.hidden = true;
+  if (!trip || !tripPose) return;
+  if (pose && [pose.x, pose.z, pose.heading].every(Number.isFinite)) tripPose[L.k] = { x: pose.x, z: pose.z, heading: pose.heading };
+  arrangeCars();
+  netToast(`${L.n}把 ${borCarName(L.k)} 還給你了`);
+}
+function netLendHome() { if (BOR.lent) { netEv('takeback', { uid: BOR.lent.uid }); BOR.lent = null; LENT_K = null; if (BOR.ui) BOR.ui.bar.hidden = true; } } // 回車庫頁：借出去的拿回來
+// 每一格（netStep）：旁邊有朋友停著的車＝「🔑 借車」；開借來的車＝上面那一條；下車了＝還車
+function borTick(me, show, race) {
+  const U = borUi();
+  borPadTick();
+  if (BOR.on && trip && DRIVE.on && (!drv || cur !== BOR.on.k || (walker && walker.mode !== 'off' && walker.mode !== 'out'))) netBorrowEnd('out'); // 下車（走出來以後）＝還車
+  if (BOR.want && walker && walker.mode === 'walk' && performance.now() - BOR.want.t > 600) borWantOff(); // 走去車門的時候推搖桿取消了
+  if (BOR.on) { const t = `🔑 借來的車 · ${BOR.on.n}的 ${borCarName(BOR.on.k)}`; if (U.barT.textContent !== t) { U.barT.textContent = t; U.barB.textContent = '還車'; } U.bar.hidden = false; }
+  let best = null;
+  if (show && !race && !BOR.on && !BOR.want && !BOR.pad && me && walker && walker.mode === 'walk') {
+    let bd = 2.4;
+    for (const P of NET.P.values()) {
+      const c = P.cur, O = P.obj; if (c.o !== 2 || !c.pk || !O || !O.car.visible) continue;
+      const h = c.pk[3], cs = Math.cos(h), sn = Math.sin(h), bx = c.pk[1] + cs * O.cx, bz = c.pk[2] - sn * O.cx, dx = me.x - bx, dz = me.z - bz;
+      const eu = Math.abs(dx * cs - dz * sn) - (O.nose - O.tail) / 2, ew = Math.abs(dx * sn + dz * cs) - O.hw, d = Math.hypot(Math.max(0, eu), Math.max(0, ew));
+      if (d < bd) { bd = d; best = P; }
+    }
+  }
+  BOR.near = best;
+  const sig = best ? `${best.uid}:${best.cur.pk[0]}:${best.n}` : '';
+  if (sig !== BOR.nearSig) { BOR.nearSig = sig; U.near.hidden = !best; if (best) U.near.textContent = `🔑 借車 · ${best.n}的 ${borCarName(best.cur.pk[0])}`; }
+}
+function borOff() { // 離開世界：借來的還、借出去的拿回來（網站那邊自己送）
+  if (BOR.on) netBorrowEnd('leave');
+  if (BOR.want) borWantOff();
+  if (BOR.loading) BOR.loading.cancel = true;
+  borPadClose();
+  if (BOR.lent) borUnlend(null);
+  BOR.near = null; BOR.nearSig = '';
+  if (BOR.ui) { BOR.ui.near.hidden = true; BOR.ui.bar.hidden = true; }
+}
+
 // ---- 自己的（送給朋友）----
-const NET_ME = { o: 0, x: 0, z: 0, h: 0, v: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pc: [0, 0, 0, 0, 0, 0, 0, 0, 0], pn: 0 }; // w、jl、pc／pn：被警察追（幾顆星、被抓了、追你的警車）
+const NET_ME = { o: 0, x: 0, z: 0, h: 0, v: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pc: [0, 0, 0, 0, 0, 0, 0, 0, 0], pn: 0, pk: null }; // w、jl、pc／pn：被警察追（幾顆星、被抓了、追你的警車）；pk：第 19 批，下車停著的車 [車, x, z, h]
 function netState() {
   const s = NET_ME, R = NET.race;
-  s.k = cur; s.rp = null; s.rs = 0; s.o = 0; s.x = s.z = s.h = s.v = 0; s.w = 0; s.pn = 0; s.jl = jailed() ? 1 : 0;
+  s.k = cur; s.rp = null; s.rs = 0; s.o = 0; s.x = s.z = s.h = s.v = 0; s.w = 0; s.pn = 0; s.pk = null; s.jl = jailed() ? 1 : 0;
   if (RACE.on && race) { s.o = 3; s.x = race.me.x; s.v = race.me.v; if (race.net) { s.rp = Math.round(race.me.x * 10) / 10; s.rs = race.net.seq; } return s; }
   if (!netWorld() || HOME.in) return s; // 在自己車庫裡面：朋友看不到（名單寫「在車庫」）
-  if (walker && walker.mode !== 'off' && walker.mode !== 'seat') { const t = walker.telemetry(); s.o = 2; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed; }
+  if (walker && walker.mode !== 'off' && walker.mode !== 'seat') {
+    const t = walker.telemetry(); s.o = 2; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed;
+    const p = borParked(); if (p) s.pk = [cur, Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100, Math.round(p.heading * 1000) / 1000]; // 第 19 批：下車停著的車（朋友看得到、借得到）
+  }
   else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; }
   if (R && R.ci && ciRace === R.ci) { s.rp = Math.round(R.ci.me.p * 10) / 10; s.rs = R.seq; }
   if (s.o && police && police.state === 'wanted' && police.enabled) { // 通緝中：幾顆星、200 公尺內追你的警車
@@ -791,6 +1072,7 @@ Object.assign(window.beauGame, {
       netHud();
     },
     leave() {
+      borOff(); // 第 19 批：借來的還、借出去的拿回來
       netRaceEnd(); netUninvite(); if (NET.goal) { NET.goal = null; if (tripDest === 'friend') setDest(null); }
       NET.on = false; NET.code = ''; NET.mem = []; NET.slot = -1; netGstOff();
       for (const P of [...NET.P.values()]) netDropPeer(P);
@@ -823,6 +1105,7 @@ Object.assign(window.beauGame, {
       if (!P.last) P.jlSeen = s.jl ? 1 : 0; // 進世界的時候他已經被關了：不用跳「被抓走了」
       b.push(e); if (b.length > 16) b.shift();
       const c = P.cur; c.t = s.t; c.x = e.x; c.z = e.z; c.h = e.h; c.v = e.v; c.o = s.o | 0; c.k = typeof s.k === 'string' ? s.k : ''; c.rp = e.rp; c.rs = s.rs | 0; c.w = Math.max(0, Math.min(3, s.w | 0)); c.jl = s.jl ? 1 : 0;
+      const pk = s.pk; c.pk = Array.isArray(pk) && pk.length === 4 && typeof pk[0] === 'string' && CARS[pk[0]] && [pk[1], pk[2], pk[3]].every(Number.isFinite) ? pk : null; // 第 19 批：他停著的車
       P.last = netNow();
       if (c.o !== 1 && c.o !== 2) b.length = 0; // 不在外面：下次出來不要從舊的位置滑過去
     },
@@ -838,9 +1121,18 @@ Object.assign(window.beauGame, {
     say: netSay, // 遊戲右邊那一塊寫一句話（「對方已經取消了」）
     uninvite: netUninvite,
     goTo: netGoTo,
+    // 第 19 批：借車。key() → 我的密碼（4 個數字；沒有就給一組）；setKey(c) → true／false
+    key: borKey,
+    setKey(c) { c = String(c ?? ''); if (!/^[0-9]{4}$/.test(c)) return false; GAME.key = c; save(true); return true; },
+    borrowAns: borAnswer, // 車主的回答 { uid（車主）, ok, k, l, pt, ty, x, z, h, left, wait }
+    lendCheck: borLendInfo, // 可以借嗎 → { k, l, pt, ty, x, z, h } | null
+    lend: borLend, // (uid, 名字) → true／false：借出去了
+    unlend(p) { borUnlend(p && [p.x, p.z, p.h].every(Number.isFinite) ? { x: p.x, z: p.z, heading: p.h } : null); }, // 還回來了（停在哪裡；null＝原本停的地方）
+    borrowing: () => !!(BOR.on || BOR.want || BOR.loading),
+    lent: () => (BOR.lent ? { uid: BOR.lent.uid, k: BOR.lent.k } : null),
     place: netPlace,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
-    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at }; },
+    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, park: !!P.pkOn, car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '', bar: BOR.ui && !BOR.ui.bar.hidden ? BOR.ui.barT.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at }; },
   },
   visit: netVisit,
 });

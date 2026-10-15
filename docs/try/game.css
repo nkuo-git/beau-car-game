@@ -823,6 +823,13 @@ body.racing .updatebar, body.driving .updatebar, body.fs .updatebar { display: n
 .nw-ppl .nm b, .nw-ppl .nm small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nw-ppl button { min-width: 34px; padding: 0 7px; }
 .nw-ppl button.go { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.nw-key { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 2px solid #ffcc33; border-radius: 12px; background: var(--surface-2); }
+.nw-key-top { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-soft); }
+.nw-key-top span { flex: 1; min-width: 0; }
+.nw-key-top b { color: var(--ink); font: 800 22px/1 "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 5px; font-variant-numeric: tabular-nums; }
+.nw-key-form { display: flex; gap: 8px; }
+.nw-key-form .nw-field { flex: 1; min-width: 0; letter-spacing: 4px; }
+.nw-key .cl-note, .nw-key .cl-err { margin: 0; }
 .nw-tog { min-width: 52px; min-height: 30px; border: 0; border-radius: 999px; background: var(--surface-2); color: var(--ink-soft); font: 700 13px "Noto Sans TC", system-ui, sans-serif; cursor: pointer; }
 .nw-tog[aria-pressed="true"] { background: var(--ok, #3ddc84); color: #06210f; }
 .nw-blk summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--ink-soft); padding: 4px 0; }

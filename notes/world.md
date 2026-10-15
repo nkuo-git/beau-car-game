@@ -22,6 +22,9 @@ world/p/{uid}     {t, x, z, h, v, o, k, rp, rs, w, pc, jl}   8/s moving, heartbe
 world/e/{uid}     {e, t}
 world/bl/{uid}/{other}   other's name                  (block)
 world/ch/{to}/{from}     {kind, t, id}                 (invite)
+borrow/q/{owner}/{from}  {c, t, id}                    (borrow: the code typed; only the owner reads it)
+borrow/a/{from}/{owner}  {id, ok, t, k, l, pt, ty, x, z, h, left, wait}   (owner's answer / 拿回來 ok −9)
+borrow/r/{owner}/{from}  {id, x, z, h, t}              (returned: where it is parked)
 matches/{id}      {a, b, kind, at, ok(0/1/-1 no/-2 busy), seq, go}, r/{seq}/{uid}: {t}
 garages/{uid}, likes/{uid}/{from}                      (unchanged)
 ```
@@ -128,6 +131,107 @@ A parent has to paste them: Firebase console → Realtime Database → 規則 �
         }
       }
     },
+    "borrow": {
+      "q": {
+        "$to": {
+          ".read": "auth != null && auth.uid === $to",
+          ".write": "auth != null && auth.uid === $to && !newData.exists()",
+          "$from": {
+            ".write": "auth != null && ((auth.uid === $to && !newData.exists()) || (auth.uid === $from && $from !== $to && (!newData.exists() || (root.child('world/m/' + $to).exists() && root.child('world/m/' + $from).exists() && !root.child('world/bl/' + $to + '/' + $from).exists() && !root.child('world/bl/' + $from + '/' + $to).exists()))))",
+            ".validate": "newData.hasChildren(['c', 't', 'id'])",
+            "c": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}$/)"
+            },
+            "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "id": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      },
+      "a": {
+        "$to": {
+          ".read": "auth != null && auth.uid === $to",
+          ".write": "auth != null && auth.uid === $to && !newData.exists()",
+          "$from": {
+            ".write": "auth != null && ((auth.uid === $to && !newData.exists()) || (auth.uid === $from && $from !== $to && (!newData.exists() || root.child('world/m/' + $from).exists())))",
+            ".validate": "newData.hasChildren(['id', 'ok', 't'])",
+            "id": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "ok": {
+              ".validate": "newData.isNumber()"
+            },
+            "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "k": {
+              ".validate": "newData.isString() && newData.val().length <= 12"
+            },
+            "l": {
+              ".validate": "newData.hasChildren()"
+            },
+            "pt": {
+              ".validate": "newData.hasChildren()"
+            },
+            "ty": {
+              ".validate": "newData.hasChildren()"
+            },
+            "x": {
+              ".validate": "newData.isNumber()"
+            },
+            "z": {
+              ".validate": "newData.isNumber()"
+            },
+            "h": {
+              ".validate": "newData.isNumber()"
+            },
+            "left": {
+              ".validate": "newData.isNumber()"
+            },
+            "wait": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      },
+      "r": {
+        "$to": {
+          ".read": "auth != null && auth.uid === $to",
+          ".write": "auth != null && auth.uid === $to && !newData.exists()",
+          "$from": {
+            ".write": "auth != null && ((auth.uid === $to && !newData.exists()) || (auth.uid === $from && $from !== $to))",
+            ".validate": "newData.hasChildren(['id', 'x', 'z', 'h', 't'])",
+            "id": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "x": {
+              ".validate": "newData.isNumber()"
+            },
+            "z": {
+              ".validate": "newData.isNumber()"
+            },
+            "h": {
+              ".validate": "newData.isNumber()"
+            },
+            "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      }
+    },
     "garages": {
       "$uid": {
         ".read": "auth != null",
@@ -226,3 +330,14 @@ A parent has to paste them: Firebase console → Realtime Database → 規則 �
 - `world/p` carries extra fields while wanted: `w` (stars 1–3), `pc` ([x, z, h] × up to 3 police cars within 200 m, from police-ai `npcCars`), `jl` 1 while caught/jailed. Rules only validate x/z/h/t, so no rules change.
 - Receivers: ★ after the name on the tag (tag texture redrawn when the count changes), up to 4 police cars total (police.js `makePoliceCar`, 2 draw calls each, lights flashing, visual only — no collision), interpolated with the same buffer as the friend's car.
 - jl 0→1 → toast 「🚓 X被警察抓走了！」 (not when you join while they are already jailed). `place()` says 「在拘留室 m:ss」 in 10-second steps (police-ai `jailLeft`), so the list counts down without writing every second.
+
+## Borrowing a friend's car (第 19 批, 2026-10-15, mock https://claude.ai/artifact/5yJe6e2HjwjbPemrTACohF, Nick 「好」)
+Nick: 「可以借別人的車來開 每個人自己手機上會有一個密碼 別人要借你就跟他說密碼。密碼可以自己改。打完密碼就可以上車」.
+- Key code: `GAME.key` (4 digits, in the save as `key`; made the first time `net.key()` is asked). Shown only on your own phone: 👥 連線 → 線上的人 → 「🔑 我的車鑰匙密碼」 + 改密碼 (digits only).
+- Parked car: when you get out (drv paused, or a car a friend gave back = LOD at `tripPose[cur]`), `netState` sends `pk = [car, x, z, h]`; friends draw your LOD car there (it blocks like a driving one). `borParked()` decides; not inside your garage, not while lent.
+- Borrowing (net.src.js `BOR`): walk next to a friend's parked car → 「🔑 借車 · X的 GT-R」 → number pad → event `borrow` → world.js writes `borrow/q`. The OWNER's phone compares the code (the real code never leaves the phone), counts wrong tries per borrower (3 → locked 30 s, ok −3), checks `lendCheck()`, then `lend()` hides its car (`LENT_K`) and answers ok 1 with look/parts/tyres/pose.
+- The borrower walks to the door (walk.js getIn with a `borrow` entry); `netBorrowBoard` parks their own car like `switchCar`, loads the friend's car with the friend's look, temporarily swaps `cur`, `CARS[k].state`, `GAME.parts/tyres/dmg[k]` and sets `saveFix` so the save keeps the borrower's own things. Blocked while borrowing: shop/dealers (`bayAct`), the 400 m strip (`trackStep`), lifts/bays when getting out, world race invites/challenges (also blocked while your car is lent).
+- Return: getting out (watchdog in `borTick`), 「還車」, leaving the world, going back to the garage page → event `return` → `borrow/r` with the pose (inside your own garage → the original pose). 拿回來 (owner) → ok −9 → the borrower is put on the street next to the car; owner leaves → −8. Owner's side: borrower gone → car stays at the borrower's last driving pose.
+- Rules: new top-level `borrow` (q/a/r: `.read` only by `$to`, writes only by `$from`; q needs both in the world and no block). A parent must paste them again.
+- world-test 8b covers it (two fake phones).
+
