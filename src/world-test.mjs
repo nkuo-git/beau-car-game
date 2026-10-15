@@ -467,12 +467,13 @@ const bor = (p) => p.evaluate(() => window.beauGame.net.info.bor);
 const pad = (p, code) => p.evaluate((c) => { for (const d of c) [...document.querySelectorAll('.nt-keys button')].find((b) => b.textContent === d).click(); }, code);
 const padMsg = (p) => p.evaluate(() => document.querySelector('.nt-pad p')?.textContent || '');
 const keyBtn = (p) => p.evaluate(() => { const b = document.querySelector('.nt-key'); return b && !b.hidden && getComputedStyle(b).display !== 'none' ? b.textContent : ''; });
+for (const p of [A, B]) await p.evaluate(() => window.__D().walker.setInput(null)); // 3 那段 B 一直按著往前走（setInput(null) 在註解裡）
 const k8 = await A.evaluate(() => window.__D().cur);
 const paint8 = await A.evaluate(() => { const C = window.__CARS()[window.__D().cur], old = C.state.paint, p = C.paints.map((x) => x[0]).filter((x) => x !== old).pop(); C.state.paint = p; return { old, p }; }); // A 的車換一個顏色（借的人開的要是這個顏色）
 const bOwn = await B.evaluate(() => { const D = window.__D(); return { cur: D.cur, paint: window.__CARS()[D.cur].state.paint, gc8: window.__CARS().gc8.state.paint, parts: JSON.stringify(window.__GAME().parts), saved: JSON.parse(localStorage.getItem('carid.tune')) }; });
 const keyA0 = await keyOf(A);
 check(/^[0-9]{4}$/.test(keyA0) && JSON.parse(await A.evaluate(() => localStorage.getItem('carid.tune'))).key === keyA0, `A has a 4-digit key code (made the first time, kept in the save)`);
-const outA = await A.evaluate(() => { const D = window.__D(); D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); for (let i = 0; i < 200 && Math.abs(D.drv.telemetry().v) > 0.3; i++) window.__dstep(1); D.drv.setInput(null); window.__TOWN().leaveCar(); for (let i = 0; i < 150 && D.walker.mode !== 'walk'; i++) window.__dstep(1); return D.walker.mode; });
+const outA = await A.evaluate(() => { const D = window.__D(), P = D.VIL.parking; D.drv.teleport({ x: P.x - 8.5, z: P.z, heading: 0 }); /* 大停車場中間的走道（四周空的，車門兩邊都走得到） */ D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); for (let i = 0; i < 200 && Math.abs(D.drv.telemetry().v) > 0.3; i++) window.__dstep(1); D.drv.setInput(null); window.__TOWN().leaveCar(); for (let i = 0; i < 150 && D.walker.mode !== 'walk'; i++) window.__dstep(1); return D.walker.mode; });
 await A.waitForTimeout(1500);
 const pk8 = getAt('world/p/u1/pk');
 console.log('8b', el(), outA, JSON.stringify(pk8), JSON.stringify(paint8));
@@ -509,9 +510,14 @@ await shot(A, `${prefix}-8b-key.png`);
 await closeDlg(A);
 // 鎖 30 秒：到了才能再試
 await B.waitForTimeout(31000);
+const diag = async () => JSON.stringify({ A: await A.evaluate(() => { const D = window.__D(), T = window.__TOWN(), t = D.drv && D.drv.telemetry(); return { mode: D.walker.mode, drv: !!D.drv, paused: t && t.paused, tf: T.tripFull, cur: D.cur, S: !!T.tripS, pk: window.beauGame.net.state().pk, home: window.__HOME().in, w: t && [t.x, t.z] }; }), B: await B.evaluate(() => { const D = window.__D(), t = D.walker.telemetry(); return { mode: D.walker.mode, x: t.x, z: t.z, bor: window.beauGame.net.info.bor, peer: window.beauGame.net.info.peers.find((q) => q.uid === 'u1') }; }), db: getAt('world/p/u1') });
+await B.evaluate((pk) => { const W = window.__D().walker, h = pk[3]; W.teleport({ x: pk[1] + Math.sin(h) * 2.3, z: pk[2] + Math.cos(h) * 2.3, heading: h }); }, getAt('world/p/u1/pk'));
+const near8b = await waitFor(B, () => window.beauGame.net.info.bor.near === 'u1', null, 15000);
+if (!near8b) console.log('   near lost', await diag());
 await click(B, '.nt-key');
 await pad(B, '4821');
 const on8 = await waitFor(B, () => { const b = window.beauGame.net.info.bor; return b.on && b.on.uid === 'u1' && window.__D().drv && window.__D().walker.mode === 'off'; }, null, 120000);
+if (!on8) console.log('   borrow failed', await diag(), JSON.stringify(getAt('borrow')));
 const b8 = await B.evaluate(() => { const D = window.__D(); window.beauGame.net.setKey(window.beauGame.net.key()); /* 存一次檔 */ return { cur: D.cur, paint: window.__CARS()[D.cur].state.paint, bar: window.beauGame.net.info.bor.bar, btn: document.querySelector('.nt-bor button').textContent, saved: JSON.parse(localStorage.getItem('carid.tune')) }; });
 const a8 = await waitFor(A, () => { const b = window.beauGame.net.info.bor; return b.lent && b.lent.uid === 'u2'; }, null, 10000) && await A.evaluate(() => ({ LENT: window.__TOWN().LENT_K, bar: window.beauGame.net.info.bor.bar, btn: document.querySelector('.nt-bor button').textContent, pk: window.beauGame.net.state().pk }));
 console.log('   borrowed', on8, JSON.stringify({ ...b8, saved: undefined }), JSON.stringify(a8));
@@ -536,10 +542,12 @@ check(!bb8.on && !bb8.BK && bb8.mode === 'walk' && bb8.cur === bOwn.cur && bb8.g
 const again8 = await waitFor(B, () => { const q = window.beauGame.net.info.peers.find((x) => x.uid === 'u1'); return q && q.park; }, null, 15000);
 check(again8, 'B sees A’s car parked at the new place');
 // 再借一次，A 按「拿回來」
-await B.evaluate((pk) => { const W = window.__D().walker, h = pk.h; W.teleport({ x: pk.x + Math.sin(h) * 2.3, z: pk.z + Math.cos(h) * 2.3, heading: h }); }, drove);
+// B 還站在剛剛下車的地方（車門旁邊；另一邊可能靠著牆）
 await waitFor(B, () => window.beauGame.net.info.bor.near === 'u1', null, 15000);
 await click(B, '.nt-key'); await pad(B, '4821');
-await waitFor(B, () => window.beauGame.net.info.bor.on && window.__D().drv && window.__D().walker.mode === 'off', null, 120000);
+const on8c = await waitFor(B, () => window.beauGame.net.info.bor.on && window.__D().drv && window.__D().walker.mode === 'off', null, 120000);
+if (!on8c) console.log('   2nd borrow failed', await diag(), JSON.stringify(await A.evaluate(() => window.beauGame.net.info.bor)), JSON.stringify(getAt('borrow')));
+check(on8c, 'borrowing again works (the car A got back is lendable too)');
 await B.evaluate(() => { const D = window.__D(); D.drv.setInput({ throttle: 0.5, brake: 0, steer: 0 }); for (let i = 0; i < 90; i++) window.__dstep(1); D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); for (let i = 0; i < 300 && Math.abs(D.drv.telemetry().v) > 0.3; i++) window.__dstep(1); });
 await A.waitForTimeout(1500);
 const bPos = await B.evaluate(() => { const t = window.__D().drv.telemetry(); return { x: t.x, z: t.z }; });
