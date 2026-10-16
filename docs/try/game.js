@@ -38155,7 +38155,7 @@ function borPadTick() { // 送出去 10 秒沒回答；鎖住的時間到了
   if (D.lockT && D.lockT <= now) { D.lockT = 0; borPadMsg('可以再試了。', false); borPadPaint(); }
   else if (D.lockT) { const s = Math.ceil((D.lockT - now) / 1000), t = `錯太多次了，等 ${s} 秒再試。`; if (borUi().msg.textContent !== t) borPadMsg(t, true); }
 }
-// 網站回答（borrow/a）：{ uid, ok：1 好｜0 密碼不對｜−2 現在不能借｜−3 要等｜−8 他離開了｜−9 拿回來, k, l, pt, ty, x, z, h, left, wait }
+// 網站回答（borrow/a）：{ uid, ok：1 好｜0 密碼不對｜−2 現在不能借｜−3 要等｜−4 送不出去（規則還沒貼）｜−8 他離開了｜−9 拿回來, k, l, pt, ty, x, z, h, left, wait }
 function borAnswer(a) {
   if (!a || !a.uid) return;
   if (a.ok === -9 || a.ok === -8) { if (BOR.on && BOR.on.uid === a.uid) netBorrowEnd(a.ok === -9 ? 'back' : 'gone'); else if (BOR.loading && BOR.loading.uid === a.uid) BOR.loading.cancel = true; else if (BOR.want && BOR.want.uid === a.uid) { BOR.want = null; if (walker && trip) walker.setCars(walkCars()); netToast(`${a.ok === -9 ? '他把車拿回去了' : '他離開了'}`); } if (BOR.pad && BOR.pad.uid === a.uid) borPadClose(); return; }
@@ -38180,7 +38180,8 @@ function borAnswer(a) {
   D.state = 'type'; D.code = '';
   if (a.ok === 0) { const left = Math.max(0, a.left | 0); borPadMsg(left ? `密碼不對（還可以試 ${left} 次）` : '密碼不對', true); const U = borUi(); U.pad.classList.remove('bad'); void U.pad.offsetWidth; U.pad.classList.add('bad'); }
   else if (a.ok === -3) { D.lockT = BOR.locks[D.uid] = performance.now() + Math.max(1, Math.min(60, +a.wait || 30)) * 1000; }
-  else borPadMsg(`${D.n}的車現在不能借（他上車了，或借給別人了）`, true);
+  else if (a.ok === -4) borPadMsg('借車還沒打開：要請爸媽把新的規則貼到 Firebase', true);
+  else borPadMsg(`${D.n}的車現在不能借（他坐回車上了，或回車庫了）`, true);
   borPadPaint();
 }
 function borWantOff() { // 走去車門走到一半取消了（推搖桿）、不能上：車子還他
@@ -38614,7 +38615,7 @@ function keepOutOfBays() {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 15; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 16; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = true; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -39686,7 +39687,7 @@ function keepOutOfBays() {
     if (!m || hid(owner) || owner === W.me || !/^[0-9]{4}$/.test(code)) { G()?.net?.borrowAns({ uid: owner, ok: -2 }); return; }
     const id = `${W.me.slice(0, 10)}-${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_-]/g, '');
     W.bq = { owner, id };
-    rt.set(`borrow/q/${owner}/${W.me}`, { c: code, t: rt.now(), id }).catch((e) => { console.warn('借車', e); if (W && W.bq && W.bq.id === id) { W.bq = null; G()?.net?.borrowAns({ uid: owner, ok: -2 }); } });
+    rt.set(`borrow/q/${owner}/${W.me}`, { c: code, t: rt.now(), id }).catch((e) => { console.warn('借車', e); if (W && W.bq && W.bq.id === id) { W.bq = null; G()?.net?.borrowAns({ uid: owner, ok: -4 }); } }); // 寫不進去＝資料庫的規則還沒有 borrow（爸媽還沒貼新的規則）
   }
   function borrowAnswered(all) { // 我：車主的回答
     if (!W || !all) return;

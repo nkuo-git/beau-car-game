@@ -404,7 +404,7 @@
     if (!m || hid(owner) || owner === W.me || !/^[0-9]{4}$/.test(code)) { G()?.net?.borrowAns({ uid: owner, ok: -2 }); return; }
     const id = `${W.me.slice(0, 10)}-${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_-]/g, '');
     W.bq = { owner, id };
-    rt.set(`borrow/q/${owner}/${W.me}`, { c: code, t: rt.now(), id }).catch((e) => { console.warn('借車', e); if (W && W.bq && W.bq.id === id) { W.bq = null; G()?.net?.borrowAns({ uid: owner, ok: -2 }); } });
+    rt.set(`borrow/q/${owner}/${W.me}`, { c: code, t: rt.now(), id }).catch((e) => { console.warn('借車', e); if (W && W.bq && W.bq.id === id) { W.bq = null; G()?.net?.borrowAns({ uid: owner, ok: -4 }); } }); // 寫不進去＝資料庫的規則還沒有 borrow（爸媽還沒貼新的規則）
   }
   function borrowAnswered(all) { // 我：車主的回答
     if (!W || !all) return;

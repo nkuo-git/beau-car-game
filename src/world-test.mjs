@@ -53,6 +53,7 @@ const T0 = Date.now(), el = () => `${((Date.now() - T0) / 1000).toFixed(0)}s`;
 
 // ---- 假的即時資料庫 ----
 const DB = {};
+let NO_BORROW_RULES = false; // 8b：假裝爸媽還沒貼借車的規則
 const clone = (v) => (v == null ? null : JSON.parse(JSON.stringify(v)));
 const segs = (p) => String(p).split('/').filter(Boolean);
 function getAt(p, root = DB) { let o = root; for (const k of segs(p)) { if (o == null || typeof o !== 'object') return null; o = o[k]; } return o === undefined ? null : clone(o); }
@@ -85,6 +86,7 @@ function allowed(uid, p, v, after) { // 規則的重點（notes/world.md）
     }
     return false;
   }
+  if (s[0] === 'borrow' && NO_BORROW_RULES) return false; // 規則還沒貼（真的資料庫沒有 borrow 那段＝全部擋掉）
   if (s[0] === 'borrow') { // 第 19 批：寫的人一定是 $from、讀的人是 $to（q：借的人→車主、a：車主→借的人、r：借的人→車主）
     const k = s[1], to = s[2], from = s[3];
     if (!['q', 'a', 'r'].includes(k) || !to) return false;
@@ -486,6 +488,10 @@ await shot(B, `${prefix}-8b-parked.png`);
 await click(B, '.nt-key');
 check(await B.evaluate(() => !document.querySelector('.nt-pad').hidden && document.querySelector('.nt-pad b').textContent === '輸入大便龍車神的密碼'), 'the number pad opens: 「輸入大便龍車神的密碼」');
 const wrong = (keyA0 === '0000' ? '1111' : '0000');
+NO_BORROW_RULES = true; await pad(B, wrong); // 爸媽還沒貼新的規則：送不出去
+await waitFor(B, () => /規則/.test(document.querySelector('.nt-pad p').textContent), null, 10000);
+const noRule8 = await padMsg(B); NO_BORROW_RULES = false;
+check(noRule8 === '借車還沒打開：要請爸媽把新的規則貼到 Firebase' && getAt('borrow/q/u1') == null, `rules not pasted yet → 「${noRule8}」 (not “someone borrowed it”)`);
 await pad(B, wrong);
 await waitFor(B, () => /密碼不對/.test(document.querySelector('.nt-pad p').textContent), null, 10000);
 check((await padMsg(B)) === '密碼不對（還可以試 2 次）' && getAt('borrow/q/u1') == null, `wrong code → 「${await padMsg(B)}」 (A’s phone checked it; the request is gone)`);
