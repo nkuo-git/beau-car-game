@@ -19,11 +19,11 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__money = (n) => { GAME.money = n; save(true); renderWallet(); renderOptions(); refreshCarBtns(); };'
   + ' window.__HOME = () => HOME;'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, home, bayLock, snooze, TR, LODS, camGo, cur, built, walker, tripPose, tripFull, boarding,'
-  + '   DECK, DREV, sleep, gcam, liftSnd, deliver, offDeck, runLift, midCar, normPark, CABIN_EYE });'
+  + '   TWR, EL, PW, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE });'
   + ' window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
   + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR });'
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
-  + ' window.__look = () => LOOKP; window.__cam = () => ({ camCap, maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
+  + ' window.__look = () => LOOKP; window.__cam = () => ({ maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };'
   + ' window.__P3 = () => ({ ciRace, ciMenuEl, polRace, police, gunner, PI, PSC, GS, GSC, gsDesk, indoor, impounded, townWorld, townTargets, shopWorld, jailed: jailed(), hideAct, polPlayer, gunParked, CLOSE_ACT, PUNCH_BTN, NPC });';
@@ -417,7 +417,7 @@ if (UNTIL <= 1) await finish();
 // ---- 2 走路揍人：小孩揍不到；大人倒下去 → 1★ → 警車從警察局開出來（警笛、燈、小地圖）→ 下車用跑的追 → 被抓 → 拘留室 → 繳罰款出來 ----
 const s2 = await ev(() => {
   const X = window.__X, D = window.__D(), w = D.walker, P3 = window.__P3();
-  w.teleport(window.__H.gw(14, 2, 0)); X.step(30); // 先走出車庫（門口外面）：附近才有人
+  w.teleport(window.__H.gw(21, 2, 0)); X.step(30); // 先走出車庫（門口外面）：附近才有人
   D.GAR.door.open(0.1); X.step(30);
   const t = w.telemetry(), kid = X.kid(t.x, t.z), out = { kid: null };
   if (kid) { X.faceTo(kid); const m0 = kid.mode, btn = X.punchBtn(); X.step(2); out.kid = { btn, m0, m1: kid.mode, wanted: P3.police.wanted, crimes: P3.police.telemetry().crimes.length, age: kid.age }; X.step(40); }
@@ -562,7 +562,7 @@ async function settleFade() {
 const s4a = await ev(() => {
   const X = window.__X, D = window.__D(), H = window.__H, w = D.walker, P3 = window.__P3(), pol = P3.police;
   // 離警察局遠一點（你家門口外面）揍一個大人
-  w.teleport(H.gw(16, 4, 0)); X.step(60);
+  w.teleport(H.gw(23, 4, 0)); X.step(60);
   const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300, X.farFromPolice); if (!ad) return { err: 'no adult' };
   X.faceTo(ad); X.punchBtn(); X.step(2);
   const a = { wanted: pol.wanted };
@@ -594,21 +594,21 @@ const s4b = await ev(() => {
   const X = window.__X, D = window.__D(), H = window.__H, w = D.walker, P3 = window.__P3(), pol = P3.police, G = D.GAR;
   // 先走到鐵捲門前面：門關著就按「開鐵捲門」（等一下要馬上躲進去）
   const a = { door0: G.door.t };
-  w.teleport(H.gw(7.5, 0, Math.PI)); X.step(20);
+  w.teleport(H.gw(14.8, 0, Math.PI)); X.step(20);
   if (G.door.t === 0) { a.open = H.press(); for (let i = 0; i < 200 && G.door.t < 1; i++) X.step(1); }
-  w.teleport(H.gw(16, 4, 0)); X.step(30);
+  w.teleport(H.gw(23, 4, 0)); X.step(30);
   const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300, X.farFromPolice); if (!ad) return { err: 'no adult' };
   X.faceTo(ad); X.punchBtn(); X.step(2);
   a.wanted = pol.wanted; a.adD = +Math.hypot(ad.x - t.x, ad.z - t.z).toFixed(1);
   // 馬上跑回車庫裡面（揍的那個人在 30 公尺外的話門已經自己關了（doorStep）：先在門口再開一次）
   for (let i = 0; i < 300 && G.door.moving; i++) X.step(1); // 正在自己關：等它關好
-  if (G.door.t < 1) { w.teleport(H.gw(7.5, 0, Math.PI)); X.step(5); a.open2 = H.press(); for (let i = 0; i < 200 && G.door.t < 1; i++) X.step(1); }
-  w.teleport(H.gw(5, 0.5, Math.PI)); X.step(5);
-  a.walk = H.walkLocal([[2.5, 0.5]]); X.step(5);
+  if (G.door.t < 1) { w.teleport(H.gw(14.8, 0, Math.PI)); X.step(5); a.open2 = H.press(); for (let i = 0; i < 200 && G.door.t < 1; i++) X.step(1); }
+  w.teleport(H.gw(12.2, 0.5, Math.PI)); X.step(5);
+  a.walk = H.walkLocal([[9.6, 0.5]]); X.step(5);
   a.act = H.actText(); a.press = H.press(); let n = 0; for (; n < 300 && pol.wanted > 0; n++) X.step(1);
   a.after = { s: +(n / 60).toFixed(1), door: G.door.t, wanted: pol.wanted, state: pol.state, said: X.toasts.slice(-2), safe: pol.telemetry().player.safe };
   // 再開門走出去（星星沒了，門口照樣是「開鐵捲門」）
-  w.teleport(H.gw(3, 0, 0)); X.step(10); a.reopen = H.actText();
+  w.teleport(H.gw(10, 0, 0)); X.step(10); a.reopen = H.actText();
   return a;
 });
 console.log('  garage:', JSON.stringify(s4b));

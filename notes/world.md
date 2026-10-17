@@ -326,6 +326,9 @@ A parent has to paste them: Firebase console → Realtime Database → 規則 �
 - `HOME.in` (inside GAR's box) still means "in the garage" for net: friends don't see you, list says 在車庫.
 - Known: friends' garage doors never open, so a friend leaving home appears through the closed door (same as content 12).
 
+## Homes spread over the map, round glass tower (第 21 批, content 16, 2026-10-17) — replaces v2's garage-street lots
+- The 6 homes are now at 6 places on the map (village.js `HOME_SITES`; `places.garst.slots` keeps its name), the garage street keeps only home #1, and every home is the round glass tower (tower.js). The marble garage and its lifts are gone. Details: `notes/tower.md`.
+
 ## Seeing friends chased / arrested (same mock #2)
 - `world/p` carries extra fields while wanted: `w` (stars 1–3), `pc` ([x, z, h] × up to 3 police cars within 200 m, from police-ai `npcCars`), `jl` 1 while caught/jailed. Rules only validate x/z/h/t, so no rules change.
 - Receivers: ★ after the name on the tag (tag texture redrawn when the count changes), up to 4 police cars total (police.js `makePoliceCar`, 2 draw calls each, lights flashing, visual only — no collision), interpolated with the same buffer as the friend's car.

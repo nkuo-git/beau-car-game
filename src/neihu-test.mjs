@@ -19,12 +19,12 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
   + ' window.__money = (n) => { GAME.money = n; save(true); renderWallet(); renderOptions(); refreshCarBtns(); };'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, home, bayLock, snooze, TR, LODS, camGo, cur, built, walker, tripPose, tripFull, boarding,'
-  + '   DECK, DREV, sleep, gcam, liftSnd, deliver, offDeck, runLift, midCar, normPark, CABIN_EYE });'
+  + '   TWR, EL, PW, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE });'
   + ' window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
   + ' window.__pol = () => (typeof police !== "undefined" ? police : null);' // 第 3 批（b3-int）：警察（開車的機器人不小心撞到人：星星清掉，見 leg）
   + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR });'
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
-  + ' window.__look = () => LOOKP; window.__cam = () => ({ camCap, maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
+  + ' window.__look = () => LOOKP; window.__cam = () => ({ maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__O = () => ({ orRace, oDisp, oLoading, dealerAt, trophies: trophyCount(), bigCam, lvl: orLevel(), PFULL });' // 第 4 批：越野賽、越野車行展示台、鏡頭、停在村子裡的完整的車（沒有輕量車的）
   + ' window.__CI = () => ({ race: ciRace, menu: ciMenuEl, cars: ciCars, sel: ciSel, P: VIL?.circuit, prof: circuitProfile, car: circuitCar, PERF, hp: hpOf(cur) });' // 賽車場
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
@@ -417,12 +417,12 @@ const driveInfo = () => p.evaluate(() => {
     carParent: S.car.parent === D.TR?.scene ? 'town' : S.car.parent === window.__scene() ? 'garage' : String(S.car.parent?.type), voice: !!D.dvoice?.alive, action: D.drv?.action ?? null, action2: D.drv?.action2 ?? null,
     rideOn: t?.rideOn ?? null, rcls: t?.cls ?? null, brake: t && +t.brake.toFixed(3), walk: D.walker?.mode, toast: document.querySelector('#stage .dv-toast')?.textContent || '' };
 });
-const lodAt = () => p.evaluate(() => { // 升降機上的車掛在平台（room.interior 底下）上：也算在車庫裡
+const lodAt = () => p.evaluate(() => { // 圓塔格子裡的車掛在那一格（room.group 底下）上：也算在車庫裡
   const D = window.__D(), R = window.__room(), under = (o, g) => { for (let q = o; q; q = q.parent) if (q === g) return true; return false; };
-  return Object.fromEntries(Object.entries(D.LODS).map(([k, L]) => [k, !L.lod ? 'loading' : !L.lod.car.parent ? '-' : R && under(L.lod.car, R.interior) ? 'page' : D.GAR && under(L.lod.car, D.GAR.interior) ? 'town-garage' : L.lod.car.parent === D.VIL?.group ? 'dealer' : 'other']));
+  return Object.fromEntries(Object.entries(D.LODS).map(([k, L]) => [k, !L.lod ? 'loading' : !L.lod.car.parent ? '-' : R && under(L.lod.car, R.group) ? 'page' : D.GAR && under(L.lod.car, D.GAR.group) ? 'town-garage' : L.lod.car.parent === D.VIL?.group ? 'dealer' : 'other']));
 });
-// 升降機的平台上掛了什麼（room.js 的 lf.cars：Object3D＝車子、字串＝名牌、null＝空的）：沒有輕量車的車不可以變成空平台上的名牌
-const plates = (where) => p.evaluate((w) => { const D = window.__D(), R = w === 'page' ? window.__room() : D.GAR; return R.lifts.flatMap((lf) => lf.cars.map((c) => (c == null ? null : typeof c === 'string' ? 'plate:' + c : c.isObject3D ? 'car' : String(c)))).filter((c) => c && c !== 'car'); }, where);
+// 圓塔的格子（tower.js 的 R.cars：Object3D＝車子、true＝只有名字、車還沒掛上去）：沒有車的格子不可以只剩名字；怪獸卡車不可以在格子裡
+const plates = (where) => p.evaluate((w) => { const D = window.__D(), R = w === 'page' ? window.__room() : D.GAR; return R.cars.map((c, i) => (c == null ? null : !c.isObject3D ? 'plate:' + i : R.tk?.[i] === 'monster' ? 'monster:' + i : null)).filter(Boolean); }, where);
 const shotAt = async (name, pose, cam = 'chase', o = {}) => { // 車子放到 pose（世界），鏡頭照 cam 擺好（走幾格），截圖
   await p.evaluate(([pose, cam, o]) => { const D = window.__D(), d = D.drv; if (pose) d.teleport(pose); d.setCameraMode(cam === 'air' ? 'none' : cam); if (o.v) d.setInput({ throttle: 0, brake: 0, steer: 0 }); window.__dstep(o.steps ?? 40);
     if (cam === 'air') { const c = D.dcam; c.position.set(...o.at); c.lookAt(...o.look); c.updateMatrixWorld(true); } }, [pose, cam, o]);
@@ -479,7 +479,7 @@ check(I1.info.bigSigns > 60 && I1.bigRoads.length >= 10 && I1.bigRoads.includes(
 check(I1.box[2] - I1.box[0] > 1700 && I1.box[3] - I1.box[1] > 1300 && I1.mapBounds && I1.mapBounds.x1 < 1300, `whole export used: ${(I1.box[2] - I1.box[0]).toFixed(0)} × ${(I1.box[3] - I1.box[1]).toFixed(0)} m; minimap base layer keeps the old bounds`);
 
 // ==== 2 上 GC8、去內湖 ====
-const w2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker; W.teleport(H.gw(-4.6, -7.7, -1.05)); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); return { ok: r.ok, act: H.actText() }; });
+const w2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker; W.teleport(H.gw(-4.5, -4, -1.05)); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); return { ok: r.ok, act: H.actText() }; });
 const bd2 = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(); H.step(40); const D = window.__D(); return { pressed, modes: r.modes, drv: !!D.drv, act: H.actText() }; });
 console.log('2', el(), JSON.stringify(w2), JSON.stringify(bd2));
 check(w2.ok && bd2.drv && bd2.act === '開鐵捲門', 'walked to GC8 and got in');

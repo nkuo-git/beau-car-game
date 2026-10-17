@@ -409,5 +409,11 @@ body.bigmap #drivebar { display: none !important; }
 @media (max-height: 560px) { .elpanel { left: 50%; top: 8px; transform: translateX(-50%); } }
 body.fs #stage .elpanel { left: calc(var(--fs-l) + 10px); top: calc(var(--fs-t) + 128px); zoom: var(--hudz); }
 @media (max-height: 560px) { body.fs #stage .elpanel { left: 50%; top: calc(var(--fs-t) + 8px); } }
+/* 走路：左邊有「去哪裡」那一排 → 面板放右邊、圓按鈕那一排下面；開車打開「去哪裡」「⋯」的時候先收起來（關掉就回來） */
+body.walking #stage .elpanel { left: auto; right: 10px; top: 196px; }
+body.fs.walking #stage .elpanel { left: auto; right: calc(var(--fs-r) + 10px); top: calc(var(--fs-t) + 196px); }
+@media (min-height: 561px) { body.fs.wanted.walking #stage .elpanel { margin-top: 46px; } }
+@media (max-height: 560px) { body.walking #stage .elpanel { left: 50%; right: auto; top: 8px; } body.fs.walking #stage .elpanel { left: 50%; right: auto; top: calc(var(--fs-t) + 8px); } }
+body.fs.destsopen #stage .elpanel, body.fs.moreopen #stage .elpanel { display: none; }
 #stage.el-on .dv-toast, #stage.el-on .wk-toast { top: max(34%, 362px); }
 @media (max-height: 560px) { #stage.el-on .dv-toast, #stage.el-on .wk-toast { top: max(34%, 220px); } }
