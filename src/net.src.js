@@ -103,6 +103,7 @@ function netCar(P, k) {
     lod.car.rotation.order = 'YXZ'; lod.car.name = 'net-' + P.uid; lod.car.visible = false;
     if (!NET.shMat) { NET.shGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2); NET.shMat = new THREE.MeshBasicMaterial({ map: shadowTex(), transparent: true, depthWrite: false, opacity: 0.8 }); }
     const sh = new THREE.Mesh(NET.shGeo, NET.shMat); sh.renderOrder = 1; sh.visible = false; sh.matrixAutoUpdate = false;
+    lod.pop?.set(!!P.cur.pl, 0); // 跳燈：一出現就是他現在的樣子
     P.obj = { lod, car: lod.car, sh, nose: B.max.x, tail: B.min.x, hw: Math.max(B.max.z, -B.min.z), top: B.max.y, cx: (B.max.x + B.min.x) / 2 };
     TR.scene.add(lod.car, sh);
   }, (e) => console.warn('朋友的車沒載好', e));
@@ -164,6 +165,7 @@ function netStep(dt) {
       if (car && P.px != null) { P.roll += Math.hypot(s.x - P.px, s.z - P.pz) * (s.v < 0 ? -1 : 1); O.lod.setRoll(P.roll); }
       O.sh.matrix.makeRotationY(oh).scale(V_NET.set(O.nose - O.tail + 0.6, 1, O.hw * 2 + 0.4)).setPosition(ox + Math.cos(oh) * O.cx, y + 0.05, oz - Math.sin(oh) * O.cx); O.sh.matrixWorldNeedsUpdate = true;
       if (P.tag && car) P.tag.position.set(ox, y + O.top + 0.35, oz);
+      const pp = O.lod.pop; if (pp) { if (pp.on !== !!c.pl) pp.set(!!c.pl, calm ? 0.12 : 0.3); pp.step(dt); } // 跳燈：朋友開燈＝燈蓋立起來（開著的、停著的車都一樣）
       if (car && c.w) netPolPlace(P, s, dt);
       if (!race && (drv || walker)) { // 平常會擋（撞到照兩台車的速度算；朋友那邊自己算自己的）；比賽中穿過去
         const k = P.box; k.x = ox + Math.cos(oh) * O.cx; k.z = oz - Math.sin(oh) * O.cx; k.hx = (O.nose - O.tail) / 2; k.hz = O.hw; k.rot = oh;
@@ -956,9 +958,11 @@ function borOff() { // 離開世界：借來的還、借出去的拿回來（網
 
 // ---- 自己的（送給朋友）----
 const NET_ME = { o: 0, x: 0, z: 0, h: 0, v: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pc: [0, 0, 0, 0, 0, 0, 0, 0, 0], pn: 0, pk: null }; // w、jl、pc／pn：被警察追（幾顆星、被抓了、追你的警車）；pk：第 19 批，下車停著的車 [車, x, z, h]
+NET_ME.pl = 0; // 跳燈：開的（停著的）這台燈蓋立起來＝1（town.src.js popSend）
 function netState() {
   const s = NET_ME, R = NET.race;
   s.k = cur; s.rp = null; s.rs = 0; s.o = 0; s.x = s.z = s.h = s.v = 0; s.w = 0; s.pn = 0; s.pk = null; s.jl = jailed() ? 1 : 0;
+  s.pl = 0;
   if (RACE.on && race) { s.o = 3; s.x = race.me.x; s.v = race.me.v; if (race.net) { s.rp = Math.round(race.me.x * 10) / 10; s.rs = race.net.seq; } return s; }
   if (!netWorld() || HOME.in) return s; // 在自己車庫裡面：朋友看不到（名單寫「在車庫」）
   if (walker && walker.mode !== 'off' && walker.mode !== 'seat') {
@@ -966,6 +970,7 @@ function netState() {
     const p = borParked(); if (p) s.pk = [cur, Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100, Math.round(p.heading * 1000) / 1000]; // 第 19 批：下車停著的車（朋友看得到、借得到）
   }
   else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; }
+  if (s.o) s.pl = popSend(); // 跳燈
   if (R && R.ci && ciRace === R.ci) { s.rp = Math.round(R.ci.me.p * 10) / 10; s.rs = R.seq; }
   if (s.o && police && police.state === 'wanted' && police.enabled) { // 通緝中：幾顆星、200 公尺內追你的警車
     s.w = police.wanted; const nc = police.npcCars;
@@ -1106,6 +1111,7 @@ Object.assign(window.beauGame, {
       if (!P.last) P.jlSeen = s.jl ? 1 : 0; // 進世界的時候他已經被關了：不用跳「被抓走了」
       b.push(e); if (b.length > 16) b.shift();
       const c = P.cur; c.t = s.t; c.x = e.x; c.z = e.z; c.h = e.h; c.v = e.v; c.o = s.o | 0; c.k = typeof s.k === 'string' ? s.k : ''; c.rp = e.rp; c.rs = s.rs | 0; c.w = Math.max(0, Math.min(3, s.w | 0)); c.jl = s.jl ? 1 : 0;
+      c.pl = s.pl === 1 ? 1 : 0; // 跳燈
       const pk = s.pk; c.pk = Array.isArray(pk) && pk.length === 4 && typeof pk[0] === 'string' && CARS[pk[0]] && [pk[1], pk[2], pk[3]].every(Number.isFinite) ? pk : null; // 第 19 批：他停著的車
       P.last = netNow();
       if (c.o !== 1 && c.o !== 2) b.length = 0; // 不在外面：下次出來不要從舊的位置滑過去

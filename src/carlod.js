@@ -12,6 +12,7 @@
 //   lod.setLook({ paint: '#c8141e', finish: 'matte', rim: 'gold', wing: 'gt' });   // 只給要改的
 //   lod.setRoll(公尺)（輪框轉：開了多遠）、lod.dispose()（網格、輪框圖大家共用，放掉自己的那份）
 //   lod.setSquash(0–1)（第 7 批：被怪獸卡車輾扁，車頂壓下來、玻璃破掉；0＝原狀）
+//   lod.pop（跳燈：86、RX-7 才有，其他台 null）：popup.js 的 { set(on, 秒), step(dt), t }（朋友開燈：net.src.js）；燈蓋立起來多 1 個 draw call
 //   外觀（跟車庫 CARS[key].state 一樣的鍵）：paint、finish（stock|gloss|metal|matte|pearl）、rim（chrome|gunmetal|black|gold|white 或 #hex）、rimStyle（stock|five|six|multi|mesh|dish|fan）、
 //     caliper、tint（light|dark）、wing、kit、wide（on|off）、height、glow（none|#hex）、livery（只有 Jesko 的點綴色：red|green|none；其他台不畫拉花）；另外 lights（大燈尾燈亮）、brake（煞車燈）
 // 擺法跟 buildCar 的 car 一樣：車的中心在原點、車頭朝 +x、輪子踩在 y=0，軸距、輪距、輪子大小、車高照 spec（跟完整的車換來換去不會跳）
@@ -39,6 +40,7 @@ import { ALTIS_SPEC, ALTIS_GARAGE } from './altis-spec.js';
 import { AVENTADOR_SPEC, AVENTADOR_GARAGE } from './aventador-spec.js';
 import { AE86_SPEC, AE86_GARAGE } from './ae86-spec.js';
 import { CHIRON_SPEC, CHIRON_GARAGE } from './chiron-spec.js';
+import { POP_LAMPS, popLamps } from './popup.js'; // 跳燈（86、RX-7）
 
 export const { buildLodCar, LOD_CARS } = (() => {
   // spec、預設外觀用 switch 拿（只算到用到的那一個）：沒打包 Yaris 的版本（build-art.mjs 沒加 --yaris）拿 YARIS_SPEC 會丟 ReferenceError → 那台就不列在 LOD_CARS
@@ -569,8 +571,9 @@ export const { buildLodCar, LOD_CARS } = (() => {
       api.tris = [bodyMesh, glassMesh, wheelMesh, rimMesh].reduce((a, m) => a + (m.visible && m.geometry.index ? m.geometry.index.count / 3 : 0), 0) + (glow && glow.visible ? 2 : 0);
       return api;
     }
+    let pop = null; // 跳燈：setLook() 做好車身網格以後才做（燈座的軸、洞照車身量）
     const api = {
-      car, body, key, tris: 0, look: cur, meshes: { body: bodyMesh, glass: glassMesh, wheels: wheelMesh, rims: rimMesh },
+      car, body, key, tris: 0, look: cur, meshes: { body: bodyMesh, glass: glassMesh, wheels: wheelMesh, rims: rimMesh }, get pop() { return pop; },
       setLook,
       setRoll(dist) { rm.userData.u.uRoll.value = dist; }, // 開了多遠（公尺）：輪框轉 dist／半徑
       setSquash(t) { // 第 7 批（怪獸卡車輾過去）：車頂壓扁（車身整個往下壓、稍微往外擠、玻璃破掉）；0＝原狀
@@ -578,17 +581,19 @@ export const { buildLodCar, LOD_CARS } = (() => {
         body.scale.set(1 + 0.055 * k, 1 - 0.6 * k, 1 + 0.1 * k);
         glassMesh.visible = k <= 0.3; // 玻璃碎掉了（沒有車內：看進去是暗的車殼）
       },
-      get draws() { return (rimMesh.visible ? 4 : 3) + (glow && glow.visible ? 1 : 0); },
+      get draws() { return (rimMesh.visible ? 4 : 3) + (glow && glow.visible ? 1 : 0) + (pop && pop.mesh.visible ? 1 : 0); },
       dispose() {
         car.removeFromParent();
         if (geo) releaseGeo(d, geo); geo = null;
         if (wgeo) releaseWheel(wgeo); wgeo = null;
         if (rimMesh.geometry) rimMesh.geometry.dispose();
         if (glow) { glow.geometry.dispose(); glow.material.dispose(); }
+        if (pop) pop.dispose(); pop = null;
         bm.dispose(); gm.dispose(); rm.dispose(); // 輪框圖是大家共用的（不放掉：7 台 × 7 種樣式也才幾 MB）
       },
     };
     setLook();
+    if (POP_LAMPS[key]) { pop = popLamps(key, paintCol, bodyMesh.geometry); body.add(pop.mesh); } // 跳燈：燈蓋的顏色＝這台的車漆（同一個 Color）
     return api;
   }
   return { buildLodCar, LOD_CARS };

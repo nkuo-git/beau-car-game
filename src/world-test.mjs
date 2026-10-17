@@ -28,6 +28,7 @@ const hook = 'window.__R = () => race; window.__D = () => ({ on: DRIVE.on, drv, 
   + ' window.__NET = () => NET; window.__CARS = () => CARS; window.__HILL = () => HILL; window.__TD = () => tripDest; window.__POL = () => police; window.__GAME = () => GAME; window.__HOME = () => HOME; window.__TOWN = () => ({ leaveCar, tripPose, tripFull, tripS, LENT_K, BORROW_K });'
   + ' renderer.setAnimationLoop = function (cb) { clearInterval(this.__iv); this.__iv = cb ? setInterval(() => { const t = performance.now(); cb(t); window.__ticks = (window.__ticks || 0) + 1; }, 30) : 0; };'
   + ' window.__thin = (n) => { if (!renderer.__rr) { renderer.__rr = renderer.render.bind(renderer); renderer.__rn = 0; renderer.render = (s, c) => { if (++renderer.__rn % renderer.__every === 0) renderer.__rr(s, c); }; } renderer.__every = Math.max(1, n | 0); }; window.__thin(300);'
+  + ' window.__switch = (k) => { GAME.owned.add(k); if (!tripPose[k]) { const t = drv.telemetry(); tripPose[k] = { x: t.x + Math.sin(t.heading) * 6, z: t.z + Math.cos(t.heading) * 6, heading: t.heading }; } return switchCar(k); };'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
 let gameJs = null;
 const srv = http.createServer((req, res) => {
@@ -409,6 +410,24 @@ const seenPaint = await waitFor(A, (p) => window.beauGame.net.info.peers[0]?.pai
 console.log('   repaint', JSON.stringify(repaint), JSON.stringify(await A.evaluate(() => window.beauGame.net.info.peers[0])));
 check(seenPaint, `B repaints the car while in the world (${repaint.old} → ${repaint.p}): A sees B’s car in the new colour`);
 await B.evaluate((o) => { window.__CARS()[window.__D().cur].state.paint = o; }, repaint.old);
+// 跳燈（Nick 2026-10-17）：B 換開 R7、按「跳燈」→ world/p/u2 多送 pl: 1 → A 看到 B 的 R7（輕量車）燈蓋立起來；關掉 → 收回去；B 再換回 GC8
+const popB = async () => { for (let i = 0; i < 60; i++) { if (await B.evaluate(() => window.__D().cur === 'rx7' && !!window.__D().drv && !!document.querySelector('#stage .dv-pop:not([hidden])'))) return true; await B.waitForTimeout(250); } return false; };
+const popDb = async (want) => { for (let i = 0; i < 60; i++) { if ((getAt('world/p/u2/pl') || 0) === want) return true; await B.waitForTimeout(250); } return false; };
+await B.evaluate(() => { window.__switch('rx7'); });
+const pop0 = await popB();
+await B.evaluate(() => document.querySelector('#stage .dv-pop').click());
+const popOnB = await B.evaluate(() => document.querySelector('#stage .dv-pop').getAttribute('aria-pressed'));
+const popSent = await popDb(1);
+const popSeen = await waitFor(A, () => { const P = window.__NET().P.get('u2'), q = P?.obj?.lod?.pop; return P?.objK === 'rx7' && !!q && q.t === 1 && q.mesh.visible && q.glow === 1; }, null, 30000);
+const popA = await A.evaluate(() => { const P = window.__NET().P.get('u2'), q = P?.obj?.lod?.pop; return { k: P?.objK, cur: P?.cur.pl, t: q?.t, vis: q?.mesh.visible, draws: P?.obj?.lod.draws }; });
+await B.evaluate(() => document.querySelector('#stage .dv-pop').click());
+const popOff = await popDb(0);
+const popGone = await waitFor(A, () => { const q = window.__NET().P.get('u2')?.obj?.lod?.pop; return !!q && q.t === 0 && !q.mesh.visible; }, null, 30000);
+console.log('   跳燈', JSON.stringify({ pop0, popOnB, popSent, popSeen, popA, popOff, popGone, p: getAt('world/p/u2') }));
+check(pop0 && popOnB === 'true' && popSent && popSeen, `B drives an R7 and presses 跳燈: world/p/u2 has pl 1 and A sees the R7’s lids up and lamps lit (${JSON.stringify(popA)})`);
+check(popOff && popGone, 'B presses 跳燈 again: pl is gone and A sees the lids fold back down');
+await B.evaluate(() => { const T = window.__TOWN(); window.__GAME().owned.delete('rx7'); delete T.tripPose.rx7; window.__switch('gc8'); });
+check(await waitFor(B, () => window.__D().cur === 'gc8' && !!window.__D().drv && !!document.querySelector('#stage .dv-pop[hidden]'), null, 30000), 'B is back in the GC8 (no 跳燈 button)');
 await A.evaluate(() => window.__thin(300));
 // Nick 2026-10-11「別人被警察抓我看不到」：B 被警察追 → A 看到 B 的名字旁邊兩顆星、追 B 的警車（紅藍燈）；B 被抓 → A 跳「🚓 阿明快車手被警察抓走了！」、名單「在拘留室 10:00」
 await B.evaluate(() => { const t = window.__D().drv.telemetry(); window.__POL().crime('hit', { x: t.x, z: t.z }); });

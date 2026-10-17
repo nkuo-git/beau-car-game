@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mirrorR34, aeroKit } from './parts.js';
 import { AE86_LOOK } from './ae86-look.js';
+import { popLamps } from './popup.js';
 
 // 輪框：八根粗的直輻條（Watanabe 風格），輻條中間的洞是圓角的梯形，整片往內凹一點，外面一圈台階狀的輪唇
 export function AE86_wheel(rim, w, mats) {
@@ -78,6 +79,7 @@ export const AE86_SPEC = {
   interior: { dx: -0.02, cage: false, wheelZ: 0.36, dashX: 0.50, dashY: 0.86, bench: { x: -0.82, shelfX: -1.45, shelfY: 0.965 } },
   build(body, paint, mats) { // 套件：原廠（照片那台）、賽道（碳纖維前下巴＋風刀＋側裙刀片＋擴散器）
     body.add(AE86_tip(mats, -2.06, 0.30, -0.45));
+    body.add(popLamps('ae86', paint.color, body.getObjectByName('paint')?.geometry).mesh); // 跳燈（popup.js）：燈蓋收好的時候藏起來；開燈 body.getObjectByName('popup').userData.pop.set(true, 0.3)
     const aero = aeroKit(mats, AE86_AERO); aero.visible = false; body.add(aero);
     return (kit) => { aero.visible = kit === 'track'; };
   },
