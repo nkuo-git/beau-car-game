@@ -1,0 +1,97 @@
+// 3D Honda Civic Type R（FK8，2017–2021 五門掀背）車身 SDF，做法跟 gtr-body.mjs、yaris-body.mjs 一樣：
+// 側面、俯視、正面輪廓拉成柱體取交集＋修圓，加上車艙（掀背：車頂後段往下掉到尾門上的黑色橫條）、前後葉子板外擴、挖輪拱，最後切網格。
+// 引擎蓋進氣口、前保桿兩邊的大進氣口、後保桿兩邊的通風口、擴散器有挖凹；網子、燈、縫都是貼圖（civic-look.js）。
+// 座標（公尺）：x 往車頭（-2.2785 車尾、+2.2785 車頭）、y 往上、z 往車的右側。
+// 尺寸：長 4.557、寬 1.877、高 1.434、軸距 2.70、輪距前 1.600／後 1.595、245/30R20（輪胎半徑 0.3275）。
+// 形狀照四張 FK8 照片（civic3d/fit.mjs 從輪子、車牌反推相機，再把照片上的點投回車身量出來）。
+import { curve, sdf2d, look, smin, smax, rbox } from './body.mjs';
+
+export const CIVIC = { L: 4.557, W: 1.877, H: 1.434, xr: -1.41, xf: 1.29, R: 0.3275 };
+export const BOUNDS = [-2.40, 0.0, 2.40, 1.50, 0.99];
+const mirrorZ = (r) => [...r, ...r.slice(1, -1).reverse().map(([x, z, s]) => [x, -z, s])];
+
+// 下半身側面（中線）：車尾下 → 後保桿 → 尾門下段（車牌）→ 尾燈上緣的黑橫條 → 腰線 → 引擎蓋 → 車頭 → 下巴 → 底盤
+export const LOWER_SIDE = [
+  [-1.95, 0.24, 0], [-2.17, 0.27, 1], [-2.255, 0.36, 1], [-2.2785, 0.47, 1], [-2.27, 0.58, 1], [-2.235, 0.625, 1],
+  [-2.17, 0.66, 1], [-2.16, 0.80, 1], [-2.17, 0.93, 1], [-2.20, 0.995, 1], [-2.17, 1.03, 1], [-1.90, 1.04, 1],
+  [-1.20, 1.04, 1], [-0.40, 1.02, 1], [0.40, 1.00, 1], [0.85, 0.985, 1], [1.30, 0.925, 1], [1.75, 0.86, 1],
+  [2.05, 0.81, 1], [2.17, 0.775, 1], [2.235, 0.72, 1], [2.262, 0.60, 1], [2.2785, 0.42, 1], [2.27, 0.24, 1],
+  [2.24, 0.15, 1], [2.15, 0.125, 0], [1.80, 0.125, 0], [-1.70, 0.14, 0],
+];
+// 車艙側面：前擋 → 車頂 → 車頂擾流 → 後擋 → 尾門上的黑橫條，下面伸進車身
+export const CABIN_SIDE = [
+  [0.95, 0.90, 0], [0.82, 1.01, 1], [0.45, 1.19, 1], [0.12, 1.355, 1], [-0.12, 1.418, 1], [-0.45, 1.434, 1], [-0.85, 1.43, 1],
+  [-1.25, 1.415, 1], [-1.52, 1.395, 1], [-1.64, 1.385, 1], [-1.68, 1.36, 1], [-1.80, 1.28, 1], [-1.95, 1.17, 1], [-2.10, 1.06, 1],
+  [-2.14, 1.02, 0], [-2.14, 0.85, 0], [0.95, 0.85, 0],
+];
+// 俯視輪廓（車身本體，葉子板外擴另外加）
+export const PLAN = mirrorZ([
+  [2.2785, 0, 1], [2.272, 0.30, 1], [2.255, 0.50, 1], [2.225, 0.64, 1], [2.17, 0.75, 1], [2.08, 0.835, 1], [1.95, 0.88, 1],
+  [1.75, 0.896, 1], [1.30, 0.90, 1], [0.90, 0.898, 1], [0.40, 0.895, 1], [-0.20, 0.895, 1], [-0.80, 0.898, 1], [-1.30, 0.90, 1],
+  [-1.75, 0.895, 1], [-1.98, 0.875, 1], [-2.13, 0.82, 1], [-2.22, 0.72, 1], [-2.262, 0.55, 1], [-2.2785, 0, 1],
+]);
+// 車艙俯視（腰線高度），越高越往內收
+export const CABIN_PLAN = mirrorZ([
+  [0.95, 0, 1], [0.93, 0.42, 1], [0.86, 0.64, 1], [0.70, 0.76, 1], [0.40, 0.79, 1], [-0.20, 0.795, 1], [-0.80, 0.79, 1],
+  [-1.30, 0.77, 1], [-1.70, 0.73, 1], [-1.98, 0.66, 1], [-2.12, 0.55, 1], [-2.15, 0, 1],
+]);
+export const CABIN_Y0 = 1.0, TUMBLE = 0.40;
+// 下半身正面輪廓（z, y）
+export const FRONT = [
+  [0, 0.12, 0], [0.80, 0.12, 0], [0.89, 0.18, 1], [0.91, 0.32, 1], [0.912, 0.50, 1], [0.905, 0.66, 1], [0.885, 0.82, 1],
+  [0.85, 0.94, 1], [0.79, 1.02, 1], [0.70, 1.07, 0], [0, 1.08, 0],
+].concat([[-0.70, 1.07, 0], [-0.79, 1.02, 1], [-0.85, 0.94, 1], [-0.885, 0.82, 1], [-0.905, 0.66, 1], [-0.912, 0.50, 1], [-0.91, 0.32, 1], [-0.89, 0.18, 1], [-0.80, 0.12, 0]]);
+
+// 拱形（中線高 → 兩側低多少）
+const CROWN = [[-2.4, 0.05], [-1.9, 0.06], [-1.0, 0.07], [0.8, 0.07], [1.5, 0.07], [2.4, 0.08]];
+const CABIN_CROWN = 0.03;
+function lerpTable(t, x) {
+  if (x <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i++) if (x <= t[i][0]) { const a = t[i - 1], b = t[i], u = (x - a[0]) / (b[0] - a[0]), s = u * u * (3 - 2 * u); return a[1] + (b[1] - a[1]) * s; }
+  return t[t.length - 1][1];
+}
+const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const gau = (a, m, s) => Math.exp(-(((a - m) / s) ** 2));
+const box2 = (x, y, hx, hy, r) => { const qx = Math.abs(x) - hx + r, qy = Math.abs(y) - hy + r; return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r; };
+const ell = (x, y, z, e) => {
+  const dx = (x - e.x) / e.rx, dy = (y - e.y) / e.ry, dz = (z - e.z) / e.rz;
+  return (Math.sqrt(dx * dx + dy * dy + dz * dz) - 1) * Math.min(e.rx, e.ry, e.rz);
+};
+
+export const NOSE_X = 1.5;
+export function makeSDF(opt = {}) {
+  const res = 0.005;
+  const side = sdf2d(curve(LOWER_SIDE), -2.45, -0.05, 2.45, 1.25, res);
+  const cabS = sdf2d(curve(CABIN_SIDE), -2.3, 0.7, 1.1, 1.55, res);
+  const plan = sdf2d(curve(PLAN), -2.45, -1.1, 2.45, 1.1, res);
+  const cabP = sdf2d(curve(CABIN_PLAN), -2.3, -1.0, 1.1, 1.0, res);
+  const front = sdf2d(curve(FRONT), -1.1, -0.05, 1.1, 1.2, res);
+  const R1 = opt.R1 ?? 0.08, R2 = opt.R2 ?? 0.07, RC = opt.RC ?? 0.09, RU = opt.RU ?? 0.05;
+  const arch = { R: 0.385, zIn: 0.64 }, archR = { R: 0.385, zIn: 0.64 };
+  // 前後葉子板外擴（FK8 的輪拱往外鼓，最寬 1.877）
+  const fen = { x: CIVIC.xf - 0.02, y: 0.50, z: 0.56, rx: 0.66, ry: 0.36, rz: 0.37, k: 0.10 };
+  const hau = { x: CIVIC.xr + 0.02, y: 0.52, z: 0.56, rx: 0.70, ry: 0.38, rz: 0.37, k: 0.12 };
+  return function f(x, y, z) {
+    const az = Math.abs(z);
+    const zz = az / 0.9;
+    const cr = lerpTable(CROWN, x) * zz * zz;
+    const dS = look(side, x, y + cr);
+    const dP = look(plan, x, az);
+    const dF = look(front, az, y);
+    let d = smax(dS, dP, R1);
+    d = smax(d, dF, R2);
+    d = smin(d, smax(ell(x, y, az, fen), dS + 0.01, 0.06), fen.k);
+    d = smin(d, smax(smax(ell(x, y, az, hau), dS + 0.01, 0.06), -2.10 - x, 0.10), hau.k);
+    // 車艙
+    const zc = az / 0.78;
+    const cS = look(cabS, x, y + CABIN_CROWN * zc * zc);
+    const cP = look(cabP, x, az + Math.max(0, y - CABIN_Y0) * TUMBLE);
+    d = smin(d, smax(cS, cP, RC), RU);
+    // 輪拱：直接挖洞
+    for (const [xa, A] of [[CIVIC.xr, archR], [CIVIC.xf, arch]]) {
+      const dc = Math.hypot(x - xa, y - CIVIC.R) - A.R;
+      d = smax(d, -smax(dc, A.zIn - az, 0.03), 0.025);
+    }
+    return d;
+  };
+}
