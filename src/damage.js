@@ -49,7 +49,7 @@ import * as THREE from 'three';
 
 export const { createDamage, damageLod, DAMAGE } = (() => {
   const V_MIN = 2.6, MAX_HITS = 40, NG = 8, NL = 6, STEP = 2048;
-  const MID = { p918: 1, sp3: 1, jesko: 1 }; // 引擎在後面（中置）的車
+  const MID = { p918: 1, sp3: 1, jesko: 1, chiron: 1, aventador: 1, senna: 1, laferrari: 1, huayra: 1 }; // 引擎在後面（中置）的車
   const TAU = Math.PI * 2;
   const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
   const sst = (a, b, x) => { let t = (x - a) / (b - a); t = t < 0 ? 0 : t > 1 ? 1 : t; return t * t * (3 - 2 * t); };
