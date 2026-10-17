@@ -11,6 +11,8 @@ const CARS = {
   p918: { mod: './p918-body.mjs', xf: 1.3135, xr: -1.4165, RF: 0.347, RR: 0.364, trackF: 0.832, trackR: 0.806, wF: 0.265, wR: 0.325 },
   chiron: { mod: './chiron-body.mjs', xf: 1.37, xr: -1.341, RF: 0.3395, RR: 0.3555, trackF: 0.85, trackR: 0.83, wF: 0.285, wR: 0.355 },
   ae86: { mod: './ae86-body.mjs', xf: 1.3025, xr: -1.0975, RF: 0.289, RR: 0.289, trackF: 0.6775, trackR: 0.6725, wF: 0.185, wR: 0.185 },
+  aventador: { mod: './aventador-body.mjs', xf: 1.15, xr: -1.55, RF: 0.3305, RR: 0.3555, trackF: 0.86, trackR: 0.84, wF: 0.255, wR: 0.355 },
+  altis: { mod: './altis-body.mjs', xf: 1.385, xr: -1.315, RF: 0.316, RR: 0.316, trackF: 0.7655, trackR: 0.772, wF: 0.205, wR: 0.205 },
   rx7: { mod: './rx7-body.mjs', xf: 1.21, xr: -1.215, RF: 0.316, RR: 0.316, trackF: 0.73, trackR: 0.73, wF: 0.225, wR: 0.225 },
 };
 // 沒有 wide.json 就從現在的 wide.js 接著寫（只重算給的那幾台）

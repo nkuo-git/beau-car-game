@@ -15,6 +15,8 @@ const CARS = [
   ['rx7', 'body-rx7-q.glb', 'car-rx7.txt', ['rx7-look.js', 'rx7-spec.js']],
   ['chiron', 'body-chiron-q.glb', 'car-chiron.txt', ['chiron-look.js', 'chiron-spec.js']],
   ['ae86', 'body-ae86-q.glb', 'car-ae86.txt', ['ae86-look.js', 'ae86-spec.js']],
+  ['aventador', 'body-aventador-q.glb', 'car-aventador.txt', ['aventador-look.js', 'aventador-spec.js']],
+  ['altis', 'body-altis-q.glb', 'car-altis.txt', ['altis-look.js', 'altis-spec.js']],
   ['monster', 'body-monster-q.glb', 'car-monster.txt', ['monster-look.js', 'monster-spec.js']], // 第 4 批：越野車（越野車場的越野車行賣的）；輕量車 body-monster-lod.glb（monster-lod.mjs）
 ];
 const NOLOD = []; // 沒有輕量車的車（不停車位、不擺阿財車行）；怪獸卡車現在有了（body-monster-lod.glb）

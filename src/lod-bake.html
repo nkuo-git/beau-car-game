@@ -20,6 +20,8 @@ import { P918_SPEC, P918_GARAGE } from './p918-spec.js';
 import { SP3_SPEC, SP3_GARAGE } from './sp3-spec.js';
 import { JESKO_SPEC, JESKO_GARAGE } from './jesko-spec.js';
 import { RX7_SPEC, RX7_GARAGE } from './rx7-spec.js';
+import { ALTIS_SPEC, ALTIS_GARAGE } from './altis-spec.js';
+import { AVENTADOR_SPEC, AVENTADOR_GARAGE } from './aventador-spec.js';
 import { AE86_SPEC, AE86_GARAGE } from './ae86-spec.js';
 import { CHIRON_SPEC, CHIRON_GARAGE } from './chiron-spec.js';
 const KITS3 = [['stock'], ['bomex'], ['track']];
@@ -32,6 +34,8 @@ const CARS = {
   sp3: { spec: SP3_SPEC, glb: 'body-sp3-q.glb', ...SP3_GARAGE.opts },
   jesko: { spec: JESKO_SPEC, glb: 'body-jesko-q.glb', ...JESKO_GARAGE.opts },
   rx7: { spec: RX7_SPEC, glb: 'body-rx7-q.glb', ...RX7_GARAGE.opts },
+  altis: { spec: ALTIS_SPEC, glb: 'body-altis-q.glb', ...ALTIS_GARAGE.opts },
+  aventador: { spec: AVENTADOR_SPEC, glb: 'body-aventador-q.glb', ...AVENTADOR_GARAGE.opts },
   ae86: { spec: AE86_SPEC, glb: 'body-ae86-q.glb', ...AE86_GARAGE.opts },
   chiron: { spec: CHIRON_SPEC, glb: 'body-chiron-q.glb', ...CHIRON_GARAGE.opts },
 };
@@ -128,6 +132,7 @@ window.bake = async (key) => {
     const o = it.o, m = [].concat(o.material)[0], type = o.geometry.type;
     if (o.isInstancedMesh) return false; // 寬體的鉚釘（太小）
     if (o.name === 'p918-lid') return false; // 918 車蓋條紋＝拉花
+    if (o.name === 'altis-liv') return false; // 小黃後保桿的灰色貼片＝拉花
     if (roleOf(m, S) === 'custom' && (type === 'ShapeGeometry' || type === 'PlaneGeometry')) return false; // 小貼片（SP3 葉子板上的盾牌、國旗）
     return true;
   });
