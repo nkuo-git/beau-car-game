@@ -8,17 +8,18 @@ import { CIVIC_LOOK } from './civic-look.js';
 // 輪框：20 吋，五組 Y 形雙輻（每組兩根從輪轂分開到外緣），輻條往外緣微微往外凸；輪唇內側一圈紅線（只有原廠輪框有）
 function CIVIC_wheel(rim, w, mats) {
   const g = new THREE.Group();
-  const ro = rim - 0.012, rh = 0.072, zo = w / 2 - 0.026, zi = w / 2 - 0.07;
+  const ro = rim - 0.012, rh = 0.07, zo = w / 2 - 0.026, zi = w / 2 - 0.068, rs = 0.135; // rs：Y 分叉的地方
   const P = (r, ang, z, off) => [Math.cos(ang) * r - Math.sin(ang) * off, Math.sin(ang) * r + Math.cos(ang) * off, z];
+  const zs = zo - 0.008;
   for (let j = 0; j < 5; j++) {
     const a = (j * 2 * Math.PI) / 5 + Math.PI / 2;
-    g.add(new THREE.Mesh(slab([P(rh, a, zi, -0.016), P(0.13, a, zo - 0.012, -0.012), P(0.13, a, zo - 0.012, 0.012), P(rh, a, zi, 0.016)], 0.024), mats.chrome)); // Y 的根
+    g.add(new THREE.Mesh(slab([P(rh, a, zi, -0.026), P(rs + 0.01, a, zs, -0.022), P(rs + 0.01, a, zs, 0.022), P(rh, a, zi, 0.026)], 0.026), mats.chrome)); // Y 的根（粗）
     for (const s of [-1, 1]) {
-      const ai = a + s * 0.07, ao = a + s * 0.26; // 從 r 0.13 分成兩根，到外緣分開
-      g.add(new THREE.Mesh(slab([P(0.125, ai, zo - 0.012, -0.011), P(ro, ao, zo, -0.0085), P(ro, ao, zo, 0.0085), P(0.125, ai, zo - 0.012, 0.011)], 0.022), mats.chrome));
+      const ai = a + s * 0.085, ao = a + s * 0.25; // 分成兩根，到外緣分開
+      g.add(new THREE.Mesh(slab([P(rs - 0.01, ai, zs, -0.0135), P(ro, ao, zo, -0.0105), P(ro, ao, zo, 0.0105), P(rs - 0.01, ai, zs, 0.0135)], 0.024), mats.chrome));
     }
   }
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.094, 0.04, 40), mats.chrome);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.09, 0.04, 40), mats.chrome);
   hub.geometry.rotateX(Math.PI / 2); hub.position.z = zi + 0.006; g.add(hub);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(ro + 0.003, 0.006, 8, 96), mats.chrome);
   ring.position.z = zo + 0.004; g.add(ring);
@@ -28,25 +29,22 @@ function CIVIC_wheel(rim, w, mats) {
   return g;
 }
 CIVIC_wheel.capInset = 0.055;
-// 原廠大尾翼：尾燈上面、尾門兩邊的肩膀上各一片同色的大端板（往後收一點），上面一片亮黑的主翼
-// 位置從照片 2（側面）和照片 3（左後）兩張一起三角定位（civic3d/tri.mjs）：端板上緣 y 1.352，前上角 (-1.71, ±0.756)、
-// 後上角 (-2.18, ±0.638)，下緣 y 1.12 左右靠在尾燈上面的肩膀
+// 原廠大尾翼：尾燈上面、尾門兩邊各一片同色的直立端板（下面往後踢一個腳），上面一片亮黑的主翼
+// 位置從照片 2（側面）和照片 3（左後）兩張一起量的（civic3d/tri.mjs、bp.mjs）：端板在 z ±0.64，
+// 上緣前 (-1.93, 1.355) 後 (-2.18, 1.375)，下緣前 (-1.86, 1.15)、後腳尖 (-2.30, 1.14)
 function CIVIC_wing(paint, mats) {
   const g = new THREE.Group();
-  const K = (0.756 - 0.638) / (2.183 - 1.709), zAt = (x) => 0.756 + (x + 1.709) * K; // 端板（右邊）在 x 的 z
-  const ep = new THREE.Shape(); // 端板側面（x, y）：前上角尖尖的往前，上緣平，後緣往下，下緣往前收
-  ep.moveTo(-1.69, 1.362); ep.lineTo(-2.18, 1.372); ep.quadraticCurveTo(-2.215, 1.37, -2.215, 1.34); ep.lineTo(-2.205, 1.20);
-  ep.quadraticCurveTo(-2.20, 1.15, -2.15, 1.14); ep.lineTo(-1.95, 1.105); ep.lineTo(-1.84, 1.085); ep.quadraticCurveTo(-1.79, 1.09, -1.775, 1.14);
-  ep.closePath();
+  const zAt = () => 0.64;
+  const ep = new THREE.Shape(); // 端板側面（x, y）
+  ep.moveTo(-1.925, 1.358); ep.lineTo(-2.165, 1.378); ep.quadraticCurveTo(-2.19, 1.376, -2.19, 1.35); ep.lineTo(-2.188, 1.215);
+  ep.lineTo(-2.30, 1.148); ep.quadraticCurveTo(-2.305, 1.128, -2.28, 1.126); ep.lineTo(-2.10, 1.125); ep.lineTo(-1.87, 1.135);
+  ep.quadraticCurveTo(-1.845, 1.14, -1.85, 1.17); ep.closePath();
   for (const sz of [-1, 1]) {
-    const m = new THREE.Mesh(new THREE.ExtrudeGeometry(ep, { depth: 0.026, bevelEnabled: true, bevelThickness: 0.007, bevelSize: 0.007, bevelSegments: 2, curveSegments: 6 }), paint);
-    m.geometry.translate(0, 0, -0.013);
-    const f = new THREE.Vector3(1, 0, sz * K).normalize(), up = new THREE.Vector3(0, 1, 0), n = f.clone().cross(up);
-    m.matrixAutoUpdate = false; m.matrix.makeBasis(f, up, n).setPosition(0, 0, sz * zAt(0)); // 端板順著往後收的方向擺（x＝0 的地方在 zAt(0)）
-    g.add(m);
+    const m = new THREE.Mesh(new THREE.ExtrudeGeometry(ep, { depth: 0.024, bevelEnabled: true, bevelThickness: 0.007, bevelSize: 0.007, bevelSegments: 2, curveSegments: 6 }), paint);
+    m.geometry.translate(0, 0, sz * 0.64 - 0.012); g.add(m);
   }
   // 主翼：倒過來的機翼剖面，亮黑；弦長 0.24，在端板上段後半，前緣低一點；翼展跟著兩片端板（前面寬、後面窄）
-  const chord = 0.24, s = new THREE.Shape(), N = 18, top = [], bot = [];
+  const chord = 0.22, s = new THREE.Shape(), N = 18, top = [], bot = [];
   for (let i = 0; i <= N; i++) {
     const xc = (1 - Math.cos((Math.PI * i) / N)) / 2;
     const th = 0.12 * 5 * (0.2969 * Math.sqrt(xc) - 0.126 * xc - 0.3516 * xc * xc + 0.2843 * xc ** 3 - 0.1036 * xc ** 4);
@@ -56,7 +54,7 @@ function CIVIC_wing(paint, mats) {
   const PP = (p) => [(-p[0] + 0.5) * chord, p[1] * chord];
   s.moveTo(...PP(top[0])); for (const p of top.slice(1)) s.lineTo(...PP(p)); for (const p of bot.slice().reverse().slice(1)) s.lineTo(...PP(p));
   const bg = new THREE.ExtrudeGeometry(s, { depth: 1, bevelEnabled: false, curveSegments: 4 }); bg.translate(0, 0, -0.5);
-  const cx = -2.06, cy = 1.335, ang = -0.10, c = Math.cos(ang), sn = Math.sin(ang), pos = bg.attributes.position;
+  const cx = -2.06, cy = 1.352, ang = -0.10, c = Math.cos(ang), sn = Math.sin(ang), pos = bg.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const lx = pos.getX(i), ly = pos.getY(i), lz = pos.getZ(i), X = cx + lx * c - ly * sn;
     pos.setXYZ(i, X, cy + lx * sn + ly * c, lz * 2 * (zAt(X) - 0.012));
@@ -89,9 +87,9 @@ export const CIVIC_SPEC = {
   look: CIVIC_LOOK, paint: '#c8102e', metal: 0.08, seat: 0xb3121b,
   wheels: { xf: 1.29, xr: -1.41, R: 0.3275, rim: 0.254, trackF: 0.80, trackR: 0.7975, wF: 0.245, wR: 0.245, style: CIVIC_wheel },
   mirror: (paint, mats, s) => {
-    const g = new THREE.Group(), m = mirror(paint, mats, s); m.scale.setScalar(1.15); g.add(m);
+    const g = new THREE.Group(), m = mirror(paint, mats, s); m.scale.set(1.3, 1.45, 1.3); g.add(m);
     const arm = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.035, 0.10), mats.black); arm.position.set(0.03, -0.035, s * 0.05); g.add(arm); // 黑色底座
-    g.position.set(0.60, 1.03, s * 0.865);
+    g.position.set(0.63, 1.045, s * 0.855);
     return g;
   },
   wings: {

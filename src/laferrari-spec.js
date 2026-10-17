@@ -136,12 +136,12 @@ export const LAFERRARI_SPEC = {
   },
   kit: 'stock',
 };
-const LAFERRARI_D = -0.06; // 相機是用「軸距中點＝0」解的（laferrari3d/fit*.mjs）；車身座標的軸距中點在 x＝D
+// 四張照片的相機（車身座標；從輪子、車牌、車窗角反推，laferrari3d/fit*.mjs）
 export const LAFERRARI_CAMS = {
-  photo1: { a: 32.369, d: 8.509, h: 1.164, tx: 0.465 + LAFERRARI_D, ty: 0.56, fov: 12.661, rl: 0.658 },
+  photo1: { a: 32.369, d: 8.509, h: 1.164, tx: 0.405, ty: 0.56, fov: 12.661, rl: 0.658 },
   photo2: { a: 39.973, d: 3.167, h: 1.307, tx: 0.843, ty: 0.191, fov: 48.651, rl: -2.126 },
-  photo3: { a: -134.133, d: 10.277, h: 1.54, tx: -0.276 + LAFERRARI_D, ty: 0.548, fov: 10.854, rl: 1.083 },
-  photo4: { a: -144.9, d: 6.704, h: 1.535, tx: -0.577 + LAFERRARI_D, ty: 0.546, fov: 15.508, rl: -1.332 },
+  photo3: { a: -134.133, d: 10.277, h: 1.54, tx: -0.336, ty: 0.548, fov: 10.854, rl: 1.083 },
+  photo4: { a: -144.9, d: 6.704, h: 1.535, tx: -0.637, ty: 0.546, fov: 15.508, rl: -1.332 },
 };
 export const LAFERRARI_GARAGE = {
   name: 'LF 紅焰', sub: '紅色流線超跑 · 3D 試做版',

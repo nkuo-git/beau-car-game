@@ -59,7 +59,7 @@ export function lift(x, az) {
   let f = 0;
   if (x > 0.8) {
     const bw = tab(BW, x), zc = tab(ZC, x);
-    const ch = -tab(CH, x) * sstep(bw - 0.012, bw + 0.03, az) * (1 - sstep(zc - 0.24, zc - 0.03, az)); // 鳥嘴邊很利，旁邊是溝
+    const ch = -tab(CH, x) * sstep(bw - 0.02, bw + 0.04, az) * (1 - sstep(zc - 0.24, zc - 0.03, az)); // 鳥嘴邊很利，旁邊是溝
     const ff = tab(FF_LIFT, x) * sstep(zc - 0.26, zc - 0.01, az) * (1 - 0.7 * sstep(zc + 0.02, zc + 0.20, az)); // 葉子板稜線，外面往下掉
     f = ch + ff;
   } else f = tab(FF_LIFT, x) * sstep(0.48, 0.74, az) * (1 - sstep(0.90, 1.02, az) * 0.6);
@@ -90,7 +90,7 @@ export function makeSDF(opt = {}) {
   const cabP = sdf2d(curve(CABIN_PLAN), -2.3, -1.0, 1.2, 1.0, res);
   const R1 = 0.08, RC = 0.10, RU = 0.05;
   const L = LAFERRARI;
-  const arches = [{ x: L.xf, y: L.RF, R: 0.385, zIn: 0.64 }, { x: L.xr, y: L.RR, R: 0.42, zIn: 0.62 }];
+  const arches = [{ x: L.xf, y: L.RF, R: 0.375, zIn: 0.67 }, { x: L.xr, y: L.RR, R: 0.42, zIn: 0.62 }];
   return function f(x, y, z) {
     const az = Math.abs(z);
     const dS = look(side, x, y - lift(x, az));
@@ -104,7 +104,7 @@ export function makeSDF(opt = {}) {
     // 車頭：兩個大鼻孔（中間紅色 V 形柱子、下面紅色前翼板），往裡挖深
     if (x > 1.95) {
       const k = Math.min(1, Math.max(0, az - 0.05) / 0.5);
-      const yt = 0.395 + 0.05 * k, yb = 0.19 + 0.045 * k;          // 上緣、下緣（紅色前翼）都是往外升高
+      const yt = 0.395 + 0.03 * k, yb = 0.19 + 0.045 * k;          // 上緣、下緣（紅色前翼）都是往外升高
       const pw = 0.022 + Math.max(0, y - 0.19) * 0.24;                // 中間紅色柱子：下面細、上面寬（V 形）
       const g = Math.max(pw - az, az - 0.565, y - yt, yb - y);
       d = smax(d, -Math.max(g, 2.16 - x), 0.02);
