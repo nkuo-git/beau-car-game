@@ -278,6 +278,7 @@ const CARS = {
   // 2026-10-17 新的 10 台車（照 Wikimedia 照片做的；車名是自己編的，不能用真的牌子）
   rx7: { file: 'car-rx7.txt', size: SIZES.rx7, spec: RX7_SPEC, btn: ['R7', '轉子跑車 · 紅'], ...RX7_GARAGE },
   chiron: { file: 'car-chiron.txt', size: SIZES.chiron, spec: CHIRON_SPEC, btn: ['C16', '馬蹄超跑 · 藍'], ...CHIRON_GARAGE },
+  ae86: { file: 'car-ae86.txt', size: SIZES.ae86, spec: AE86_SPEC, btn: ['86', '豆腐車 · 黑白'], ...AE86_GARAGE },
   monster: { file: 'car-monster.txt', size: SIZES.monster, spec: MONSTER_SPEC, btn: ['怪獸卡車', '越野車 · 桃紅'], ...MONSTER_GARAGE }, // ==== 第 4 批：越野車（越野車場的越野車行才買得到）====
 };
 // 性能（約略照真車）：馬力、重量、四驅、紅線、極速、風阻；drive＝後驅的車起步時後輪壓到多少重量（引擎在中間的比較會起步）
@@ -321,6 +322,10 @@ const PERF = {
     ['filter', '賽車空濾', '吸氣更順', 10, 8], ['exhaust', '鈦合金排氣', '四根排氣管叫得更大聲', 30, 60], ['ecu', 'ECU 調校', '重寫點火和增壓', 60, 80],
     ['ic', '大水冷中冷', '四顆渦輪的空氣更冷', 40, 90], ['fuel', '大噴油嘴', '大馬力要很多油', 30, 100], ['cams', '賽車凸輪軸', '高轉更有力', 40, 150],
     ['forged', '鍛造內部', 'W16 撐得住更高增壓', 50, 300], ['turbo', '四顆大渦輪', '四顆渦輪都換大', 200, 500]] },
+  ae86: { price: 75, hp: 130, kg: 940, awd: 0, drive: 0.65, red: 7600, vmax: 190, cda: 0.7, eng: '4A-GE 1.6 直列四缸自然進氣', tyres: [2, 4], parts: [
+    ['intake', '高流量進氣', '空濾換成香菇頭', 6, 1], ['exhaust', '不鏽鋼排氣', '叫得更清脆', 8, 2], ['header', '4-2-1 頭段', '高轉更順', 10, 3],
+    ['ecu', 'ECU 調校', '重寫點火和噴油', 10, 3], ['itb', '四喉節氣門', '每一缸自己一個節氣門', 25, 8], ['cams', '高角度凸輪軸', '高轉更有力', 20, 10],
+    ['bore', '加大缸徑', '排氣量加到 1.8 升', 30, 18], ['sc', '機械增壓', '加一顆機械增壓器', 70, 30]] },
   // ==== 第 4 批：越野車：offroad＝越野車行賣的（泥巴、石頭、沙跑得動：terrain.js）；big＝大車（車庫頁鏡頭拉遠、不停車位）；halfW＝碰撞半寬（輪胎比車身寬）；gears＝自己的齒比 ====
   monster: { price: 100, hp: 1500, kg: 5400, awd: 1, red: 6800, vmax: 110, cda: 2.2, offroad: 1, big: 1, halfW: 1.905, gears: [2.1, 1.35, 1.0, 0.92, 0.88, 0.86], eng: '機械增壓 V8（燒甲醇）', tyres: [8, 15], parts: [
     ['intake', '大口徑進氣帽', '增壓器上面的進氣帽換大', 50, 6], ['ecu', '噴射電腦調校', '甲醇噴射重新調', 90, 12], ['exhaust', '直排頭段', '八根短管直排，聲音更兇', 70, 18],

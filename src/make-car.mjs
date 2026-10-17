@@ -32,6 +32,8 @@ function clipZ(m) { // 只留 z ≥ 0，切到的三角形切齊 z=0（中線上
 }
 const t0 = Date.now();
 const m = clipZ(mesh(M.makeSDF(), [x0, y0, -zm, x1, y1, zm], h));
+// 中線上的點往 −z 推 0.2 公釐：量化（gltf-transform quantize）會把它們挪動 0.1 公釐左右，挪到 +z 那邊鏡射後中間就有一條細縫（引擎蓋、車頂上的虛線）；推過去兩半就一定疊在一起
+for (let i = 2; i < m.positions.length; i += 3) if (m.positions[i] < 1e-6) m.positions[i] = -0.0002;
 console.log(`${key}: verts ${m.positions.length / 3}, tris ${m.indices.length / 3}, ${Date.now() - t0} ms`);
 const doc = new Document(), buf = doc.createBuffer(), scene = doc.createScene(), mat = doc.createMaterial('Paint');
 const acc = (type, arr) => doc.createAccessor().setType(type).setArray(arr).setBuffer(buf);

@@ -20,6 +20,7 @@ import { P918_SPEC, P918_GARAGE } from './p918-spec.js';
 import { SP3_SPEC, SP3_GARAGE } from './sp3-spec.js';
 import { JESKO_SPEC, JESKO_GARAGE } from './jesko-spec.js';
 import { RX7_SPEC, RX7_GARAGE } from './rx7-spec.js';
+import { AE86_SPEC, AE86_GARAGE } from './ae86-spec.js';
 import { CHIRON_SPEC, CHIRON_GARAGE } from './chiron-spec.js';
 const KITS3 = [['stock'], ['bomex'], ['track']];
 const CARS = {
@@ -31,6 +32,7 @@ const CARS = {
   sp3: { spec: SP3_SPEC, glb: 'body-sp3-q.glb', ...SP3_GARAGE.opts },
   jesko: { spec: JESKO_SPEC, glb: 'body-jesko-q.glb', ...JESKO_GARAGE.opts },
   rx7: { spec: RX7_SPEC, glb: 'body-rx7-q.glb', ...RX7_GARAGE.opts },
+  ae86: { spec: AE86_SPEC, glb: 'body-ae86-q.glb', ...AE86_GARAGE.opts },
   chiron: { spec: CHIRON_SPEC, glb: 'body-chiron-q.glb', ...CHIRON_GARAGE.opts },
 };
 for (const C of Object.values(CARS)) C.kits = (C.kit || C.kits).map((o) => o[0]), C.wingKeys = (C.wing || C.wings).map((o) => o[0]);
