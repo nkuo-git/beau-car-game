@@ -16,6 +16,8 @@ const CARS = {
   senna: { mod: './senna-body.mjs', xf: 1.092, xr: -1.578, RF: 0.327, RR: 0.3485, trackF: 0.84, trackR: 0.815, wF: 0.245, wR: 0.315 },
   huayra: { mod: './huayra-body.mjs', xf: 1.27, xr: -1.525, RF: 0.3305, RR: 0.3545, trackF: 0.84, trackR: 0.82, wF: 0.255, wR: 0.335 },
   laferrari: { mod: './laferrari-body.mjs', xf: 1.265, xr: -1.385, RF: 0.3208, RR: 0.3575, trackF: 0.83, trackR: 0.8, wF: 0.265, wR: 0.345 },
+  civic: { mod: './civic-body.mjs', xf: 1.29, xr: -1.41, RF: 0.3275, RR: 0.3275, trackF: 0.8, trackR: 0.7975, wF: 0.245, wR: 0.245 },
+  evo: { mod: './evo-body.mjs', xf: 1.3, xr: -1.325, RF: 0.3217, RR: 0.3217, trackF: 0.7575, trackR: 0.7575, wF: 0.235, wR: 0.235 },
   rx7: { mod: './rx7-body.mjs', xf: 1.21, xr: -1.215, RF: 0.316, RR: 0.316, trackF: 0.73, trackR: 0.73, wF: 0.225, wR: 0.225 },
 };
 // 沒有 wide.json 就從現在的 wide.js 接著寫（只重算給的那幾台）

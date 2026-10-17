@@ -26,6 +26,8 @@ const CARS = [
   ['senna', 'body-senna-q.glb', 'car-senna.txt', ['senna-look.js', 'senna-spec.js']],
   ['huayra', 'body-huayra-q.glb', 'car-huayra.txt', ['huayra-look.js', 'huayra-spec.js']],
   ['laferrari', 'body-laferrari-q.glb', 'car-laferrari.txt', ['laferrari-look.js', 'laferrari-spec.js']],
+  ['civic', 'body-civic-q.glb', 'car-civic.txt', ['civic-look.js', 'civic-spec.js']],
+  ['evo', 'body-evo-q.glb', 'car-evo.txt', ['evo-look.js', 'evo-spec.js']],
   ['monster', 'body-monster-q.glb', 'car-monster.txt', ['monster-look.js', 'monster-spec.js']], // 第 4 批：越野車（越野車場的越野車行賣的）；輕量車 body-monster-lod.glb（monster-lod.mjs）
 ];
 const NOLOD = []; // 沒有輕量車的車（不停車位、不擺阿財車行）；怪獸卡車現在有了（body-monster-lod.glb）

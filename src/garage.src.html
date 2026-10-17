@@ -284,6 +284,8 @@ const CARS = {
   senna: { file: 'car-senna.txt', size: SIZES.senna, spec: SENNA_SPEC, btn: ['SN8', '大尾翼 · 紅'], ...SENNA_GARAGE },
   huayra: { file: 'car-huayra.txt', size: SIZES.huayra, spec: HUAYRA_SPEC, btn: ['HY', '風神 · 藍'], ...HUAYRA_GARAGE },
   laferrari: { file: 'car-laferrari.txt', size: SIZES.laferrari, spec: LAFERRARI_SPEC, btn: ['LF', '紅色流線 · 紅'], ...LAFERRARI_GARAGE },
+  civic: { file: 'car-civic.txt', size: SIZES.civic, spec: CIVIC_SPEC, btn: ['FK', '大尾翼掀背 · 紅'], ...CIVIC_GARAGE },
+  evo: { file: 'car-evo.txt', size: SIZES.evo, spec: EVO_SPEC, btn: ['E9', '拉力房車 · 白'], ...EVO_GARAGE },
   monster: { file: 'car-monster.txt', size: SIZES.monster, spec: MONSTER_SPEC, btn: ['怪獸卡車', '越野車 · 桃紅'], ...MONSTER_GARAGE }, // ==== 第 4 批：越野車（越野車場的越野車行才買得到）====
 };
 // 性能（約略照真車）：馬力、重量、四驅、紅線、極速、風阻；drive＝後驅的車起步時後輪壓到多少重量（引擎在中間的比較會起步）
@@ -351,6 +353,14 @@ const PERF = {
     ['filter', '賽車空濾', '吸氣更順', 10, 5], ['exhaust', '鈦合金排氣', 'V12 叫得更大聲', 30, 30], ['ecu', 'ECU 調校', '重寫點火和汽門正時', 40, 40],
     ['battery', '大電池', '馬達可以出力更久', 40, 60], ['motor', '強化馬達', '起步更快', 50, 80], ['cams', '賽車凸輪軸', '高轉更有力', 35, 70],
     ['forged', '鍛造活塞', '撐得住雙渦輪', 30, 120], ['turbo', '雙渦輪套件', '自然進氣改成雙渦輪', 300, 400]] },
+  civic: { price: 115, hp: 320, kg: 1380, awd: 0, drive: 0.58, red: 7000, vmax: 272, cda: 0.68, eng: '2.0 渦輪直列四缸（前置前驅）', tyres: [3, 6], parts: [
+    ['intake', '高流量進氣', '空濾換成香菇頭', 8, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 20, 5], ['exhaust', '中置三出排氣', '中間三根叫得更兇', 15, 4],
+    ['ic', '前置大中冷', '進氣溫度降下來', 12, 5], ['fuel', '大噴油嘴', '大馬力要更多油', 10, 5], ['lsd', '強化限滑差速器', '前輪不會只有一邊空轉', 15, 10],
+    ['cams', '高角度凸輪軸', '高轉更有力', 20, 15], ['turbo', '大渦輪', '渦輪換大一號', 80, 40]] },
+  evo: { price: 100, hp: 280, kg: 1400, awd: 1, red: 7500, vmax: 250, cda: 0.68, eng: '4G63 2.0 渦輪直列四缸（四輪驅動）', tyres: [3, 6], parts: [
+    ['intake', '高流量進氣', '空濾換成香菇頭', 8, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 20, 5], ['exhaust', '不鏽鋼排氣', '叫得更兇', 12, 4],
+    ['ic', '前置大中冷', '進氣溫度降下來', 12, 6], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 6], ['cams', '高角度凸輪軸', '高轉更有力', 20, 12],
+    ['forged', '鍛造活塞連桿', '4G63 撐得住大增壓', 30, 25], ['turbo', '大渦輪', '渦輪換大一號', 80, 60]] },
   // ==== 第 4 批：越野車：offroad＝越野車行賣的（泥巴、石頭、沙跑得動：terrain.js）；big＝大車（車庫頁鏡頭拉遠、不停車位）；halfW＝碰撞半寬（輪胎比車身寬）；gears＝自己的齒比 ====
   monster: { price: 100, hp: 1500, kg: 5400, awd: 1, red: 6800, vmax: 110, cda: 2.2, offroad: 1, big: 1, halfW: 1.905, gears: [2.1, 1.35, 1.0, 0.92, 0.88, 0.86], eng: '機械增壓 V8（燒甲醇）', tyres: [8, 15], parts: [
     ['intake', '大口徑進氣帽', '增壓器上面的進氣帽換大', 50, 6], ['ecu', '噴射電腦調校', '甲醇噴射重新調', 90, 12], ['exhaust', '直排頭段', '八根短管直排，聲音更兇', 70, 18],
