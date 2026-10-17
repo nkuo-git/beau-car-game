@@ -497,7 +497,10 @@ const s3b = await ev(() => {
   d.teleport({ x: A[0], z: A[1], heading: hd }); X.step(5);
   const drive = (kmh) => { for (let i = 0; i < 400 && d.telemetry().kmh < kmh; i++) { d.setInput({ throttle: 1, brake: 0, steer: 0 }); X.step(1); } d.setInput({ throttle: 0.25, brake: 0, steer: 0 }); };
   const ahead = (q, m) => { const t = d.telemetry(), ci = d.carInfo; q.x = t.x + Math.cos(t.heading) * (ci.nose + m); q.z = t.z - Math.sin(t.heading) * (ci.nose + m); q.mode = q.mode === 'sit' ? 'walk' : q.mode; };
-  const kid = X.person(A[0], A[1], 'kid', 400) || X.kid(A[0], A[1], 3000), out = {}; // 附近沒有小孩（這段路人少）：遠一點的也行（等一下放到車前面）；第 18 批：先找（X.kid 可能要等小孩站起來：車還停著）
+  const kidsAt = () => N.peds.people.filter((q) => q.age === 'kid').map((q) => `${q.mode}:${q.gone ? 'gone' : q.active === false ? 'off' : 'on'}:${q.y.toFixed(2)}:${Math.hypot(q.x - A[0], q.z - A[1]).toFixed(0)}`).join(' ') || 'none', k0 = kidsAt();
+  let kid = X.person(A[0], A[1], 'kid', 400) || X.kid(A[0], A[1], 3000), waitKid = 0; const out = {};
+  for (; !kid && waitKid < 40; waitKid++) { X.step(30); kid = X.person(A[0], A[1], 'kid', 400); } // 第 21 批：瞬間移動過來，附近的人還沒生出來（一個小孩都沒有）：車停著等路上的人走過來
+  if (!kid) out.kids0 = k0, out.kids1 = kidsAt(); else if (waitKid) out.waitKid = +(waitKid / 2).toFixed(1); // 附近沒有小孩（這段路人少）：遠一點的也行（等一下放到車前面）；第 18 批：先找（X.kid 可能要等小孩站起來：車還停著）
   const h0 = N.hits, w0 = window.__P3().police.wanted;
   drive(28);
   if (!kid) out.kids = N.peds.people.filter((q) => q.age === 'kid').map((q) => `${q.mode}:${q.gone ? 'gone' : q.active === false ? 'off' : 'on'}:${q.y.toFixed(1)}:${Math.hypot(q.x - A[0], q.z - A[1]).toFixed(0)}`).join(' ') || 'none'; // 找不到小孩：記下來每個小孩在做什麼
@@ -564,9 +567,12 @@ const s4a = await ev(() => {
   const X = window.__X, D = window.__D(), H = window.__H, w = D.walker, P3 = window.__P3(), pol = P3.police;
   // 離警察局遠一點（你家門口外面）揍一個大人
   w.teleport(H.gw(23, 4, 0)); X.step(60);
-  const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300, X.farFromPolice); if (!ad) return { err: 'no adult' };
+  // 第 21 批：揍了以後警車從警察局開出來，3 秒內有時候就看到你（看揍的人在哪裡）：附近（300 公尺內）挑離警察局最遠的大人
+  const st = pol._dbg.station.spawn || D.VIL.places.police?.spawn, t = w.telemetry(), stD = (q) => (st ? Math.hypot(q.x - st.x, q.z - st.z) : 0);
+  let ad = null; for (const q of P3.NPC.peds.people) if (q.age !== 'kid' && !q.gone && q.active !== false && ['walk', 'idle', 'stand', 'talk', 'wait'].includes(q.mode) && q.y <= 0.1 && Math.hypot(q.x - t.x, q.z - t.z) < 300 && X.farFromPolice(q) && (!ad || stD(q) > stD(ad))) ad = q;
+  if (!ad) return { err: 'no adult' };
   X.faceTo(ad); X.punchBtn(); X.step(2);
-  const a = { wanted: pol.wanted };
+  const a = { wanted: pol.wanted, stD: st ? +Math.hypot(ad.x - st.x, ad.z - st.z).toFixed(0) : null };
   X.step(180); const t3 = pol.telemetry(); a.at3 = { heat: t3.heat, everSeen: t3.everSeen, seen: t3.seen, hunt: t3.hunt, cars: X.pol().cars };
   // 最近的透天厝（走得進去的）
   const me = w.telemetry(), X2 = window.__IN();
