@@ -124,10 +124,12 @@ await p.addInitScript(() => {
   H.pickTraffic = (r = 70, kind = 'car', clear = 0, farPol = 0) => { // farPol：離警察局這麼遠（輾了有星星，太近的話等一下 10 秒就被抓走了） // clear：輾完還開得下去：前面（車寬那麼寬）沒有輾不到的地方（town.src.js crushSafe：你家車庫、警察局⋯）、不上山，房子（撞不倒）要在 clear 公尺以後
     const D = window.__D(), N = window.__N(), t = D.drv.telemetry();
     const solid = D.VIL.colliders.filter((q) => q.t === 'box' && (q.h ?? 9) >= 2.6 && q.hx >= 1 && q.hz >= 1); // crush.js isBld
+    const long = D.VIL.colliders.filter((q) => q.t === 'box' && (q.hx > 14 || q.hz > 14) && !q.crushed); // crush.js LONG：長的圍牆輾不扁（第 21 批：家搬走了以後挑到往東開的車，一路衝進改車廠南邊的廢車場，撞上東邊 45 公尺長的圍牆）
     const inBox = (q, x, z) => { const dx = x - q.x, dz = z - q.z, c = Math.cos(q.rot || 0), s = Math.sin(q.rot || 0); return Math.abs(dx * c - dz * s) < q.hx && Math.abs(dx * s + dz * c) < q.hz; };
     const hAt = typeof D.VIL.heightAt === 'function' ? D.VIL.heightAt : () => 0;
-    const blocked = (c) => { // 往前開 130 公尺（5 秒）：輾不到的地方、上坡（山）＝不行；房子要在 clear 公尺以後才擋（停在那裡沒關係）
+    const blocked = (c) => { // 往前開 130 公尺（輾過去差不多 30 公尺＋再開 45 公尺＋踩煞車停下來）：輾不到的地方、長的圍牆、上坡（山）＝不行；房子要在 clear 公尺以後才擋（停在那裡沒關係）
       const fx = Math.cos(c.heading), fz = -Math.sin(c.heading);
+      for (let s = 0; s <= 130; s += 0.2) for (const l of [-1.9, 0, 1.9]) if (long.some((q) => inBox(q, c.x + fx * s - fz * l, c.z + fz * s + fx * l))) return true; // 圍牆很薄（0.2 公尺）：一步一步量細一點
       for (let s = 0; s <= 130; s += 1.5) for (const l of [-2.2, 0, 2.2]) {
         const x = c.x + fx * s - fz * l, z = c.z + fz * s + fx * l;
         if (solid.some((q) => inBox(q, x, z))) return s < clear;
@@ -311,27 +313,29 @@ check(crush2.hurt.down === 0 && crush2.hurt.knocks === crush2.knocks0 && !crush2
 check(crush2.pol.wanted === 1 && crush2.pol.types.includes('crush'), `a police star was given on the village streets (${crush2.pol.wanted}★, crimes ${crush2.pol.types.join(',')})`);
 check(Math.max(crush2.r.maxY, crush2.r2.maxY) > 0.25, `the truck climbed up onto the car (body height ${Math.max(crush2.r.maxY, crush2.r2.maxY)} m above the road, ${crush2.r2.y} m when it was back down)`);
 await drawAndShot('2-crushed-car');
-const on2 = await p.evaluate(() => { const H = window.__H; const r = H.drive({ throttle: 0.6, brake: 0, steer: 0 }, 5, null); return { r, cst: H.cst(), tele: window.__D().drv.telemetry() }; });
-console.log('  drives on:', JSON.stringify(on2.r));
+const on2 = await p.evaluate(() => { const H = window.__H, t0 = H.cst().types.length, s0 = window.__D().drv.telemetry(); window.__on0 = [s0.x, s0.z]; const r = H.drive({ throttle: 0.6, brake: 0, steer: 0 }, 5, 'Math.hypot(window.__D().drv.telemetry().x - window.__on0[0], window.__D().drv.telemetry().z - window.__on0[1]) > 45'), y5 = window.__D().drv.telemetry().y, stop = H.drive({ throttle: 0, brake: 1, steer: 0 }, 4, 'window.__D().drv.telemetry().kmh < 1'); return { r, y5, stop, cst: H.cst(), more: H.cst().types.slice(t0), tele: window.__D().drv.telemetry() }; });
+console.log('  drives on:', JSON.stringify(on2.r), 'crushed on the way:', JSON.stringify(on2.more), 'y before braking', +on2.y5.toFixed(2), 'stopped:', JSON.stringify(on2.stop));
 // 第 10 批：往南直直開 30 多公尺就是大路對面的透天厝：現在撞不倒、會停在那裡（以前輾過去再開 40 公尺）
-check(on2.r.maxKmh > 18 && on2.r.moved > 25 && Math.abs(on2.tele.y) < 0.3, `the truck drives on afterwards (${on2.r.moved} m further at up to ${on2.r.maxKmh} km/h, back down on the road; a house across the main road stops it now)`);
+// 第 21 批：家搬走了，路上的車換了地方：挑到往東開的車，5 秒開到 110 公里、120 多公尺，一路輾進改車廠南邊的廢車場、撞上長圍牆（輾不扁）：開 45 公尺就踩煞車停好，再看是不是回到地上
+check(on2.r.maxKmh > 18 && on2.r.moved > 25 && on2.stop.hit && Math.abs(on2.tele.y) < 0.3, `the truck drives on afterwards (${on2.r.moved} m further at up to ${on2.r.maxKmh} km/h), then brakes to a stop back down on the ground (y ${on2.tele.y.toFixed(2)})`);
 summary.push(`monster vs traffic car: squashed to ${crush2.car.scaleY}, ${crush2.cst.bails} people out, ${crush2.pol.wanted}★`);
 await drawAndShot('3-drives-on');
 
 // ================= 2b 第 13 批：輾路上騎的機車（騎士先跳車跑掉，只有機車扁）=================
 await p.evaluate(() => { const D = window.__D(); D.drv.teleport(D.VIL.places.garage.spawn); window.__H.step(20); window.__pol()?.clear(); });
 let tgtM = null;
-for (let i = 0; i < 30 && !tgtM; i++) { await p.evaluate(() => window.__H.step(90)); tgtM = await p.evaluate(() => window.__H.pickTraffic(90, 'scooter', 0, 80)); }
+for (let i = 0; i < 30 && !tgtM; i++) { await p.evaluate(() => window.__H.step(90)); tgtM = await p.evaluate(() => window.__H.pickTraffic(160, 'scooter', 0, 80)); } // 第 21 批：家（圓塔）在車庫街底：路上的車都在 70 公尺外才生出來（npc.js spawn），90 公尺內很少有機車：找遠一點的（怪獸卡車放到它後面）
 console.log('2b', el(), 'scooter target:', JSON.stringify(tgtM));
+if (!tgtM) console.log('  scooters now:', JSON.stringify(await p.evaluate(() => { const D = window.__D(), N = window.__N(), t = D.drv.telemetry(), P = D.VIL.places.police.pos; return { me: [+t.x.toFixed(1), +t.z.toFixed(1)], cars: N.traffic.cars.length, sc: N.traffic.cars.filter((c) => c.kind === 'scooter').map((c) => [+c.x.toFixed(0), +c.z.toFixed(0), +Math.hypot(c.x - t.x, c.z - t.z).toFixed(0), +Math.hypot(c.x - P[0], c.z - P[1]).toFixed(0)]) }; })));
 check(!!tgtM, 'found a scooter (with a rider) on the road');
 const crushM = tgtM ? await p.evaluate((q) => {
   const D = window.__D(), H = window.__H, C = window.__C();
   window.__pol()?.clear();
   const n0 = window.__N().peds.stats.knocks, c0 = C.stats.cars, b0 = C.stats.bails;
   D.drv.teleport({ x: q.bx, z: q.bz, heading: q.heading }); H.step(10);
-  const r = H.drive({ throttle: 0.45, brake: 0, steer: 0 }, 6, `window.__C().stats.cars > ${c0}`);
-  const r2 = H.drive({ throttle: 0.45, brake: 0, steer: 0 }, 2, null);
-  return { r, r2, car: H.carState(q.id), crushed: C.stats.cars - c0, bails: C.stats.bails - b0, hurt: H.hurt(), knocks0: n0, pol: H.pol() };
+  const r = H.drive({ throttle: 0.45, brake: 0, steer: 0 }, 6, `window.__C().stats.cars > ${c0}`), atHit = C.stats.cars - c0; // 輾到的那一下：只有這台機車
+  const r2 = H.drive({ throttle: 0.45, brake: 0, steer: 0 }, 2, null); // 再開 2 秒（第 21 批：這台機車在轉進小路，前面小路上還有車：也會被輾，所以只算輾到的那一下）
+  return { r, r2, car: H.carState(q.id), crushed: atHit, after: C.stats.cars - c0, bails: C.stats.bails - b0, hurt: H.hurt(), knocks0: n0, pol: H.pol() };
 }, tgtM) : null;
 console.log('  monster truck crushes a scooter:', JSON.stringify(crushM));
 check(!!crushM && crushM.crushed === 1 && crushM.car.crushed && crushM.car.wreck, 'the monster truck crushed the scooter (taken out of the traffic flow)');
@@ -418,13 +422,18 @@ const house = !hs.none ? await p.evaluate((q) => {
   const D = window.__D(), H = window.__H, C = window.__C();
   const c = D.VIL.colliders.find((k) => k.t === 'box' && k.x === q.x && k.z === q.z && !k.crushed);
   const b = D.VIL.buildings.find((k) => Math.abs(k.x - c.x) < Math.max(c.hx, c.hz) && Math.abs(k.z - c.z) < Math.max(c.hx, c.hz)) || null;
-  const big0 = C.stats.big, n0 = window.__N().peds.stats.knocks;
+  const big0 = C.stats.big, n0 = window.__N().peds.stats.knocks, ty0 = C.stats.types.length, tc0 = window.__N().traffic.stats.crushed;
+  // 第 21 批：開過去的路上剛好有路過的車（車流）被輾到，那顆星也不是撞房子的：等路上 15 公尺內沒有車，再讓附近的車停住（跟 pickTraffic 的 stun 一樣）
+  const d0 = q.e + 14, sx = q.x - Math.cos(q.a) * d0, sz = q.z + Math.sin(q.a) * d0, ux = (q.x - sx) / d0, uz = (q.z - sz) / d0;
+  const segD = (x, z) => { const t = Math.max(0, Math.min(d0, (x - sx) * ux + (z - sz) * uz)); return Math.hypot(x - (sx + ux * t), z - (sz + uz * t)); };
+  let waited = 0; for (; waited < 20 && window.__N().traffic.cars.some((k) => segD(k.x, k.z) < 15); waited++) H.step(60);
+  for (const k of window.__N().traffic.cars) k.stun = Math.max(k.stun || 0, 8);
   window.__pol()?.clear(); // 第 18 批：瞬間移動到 (-262, 0) 的時候剛好壓到路過的車（車流），那顆星不是撞房子的：撞之前再清一次
   const r = H.ram({ ...q }, 0.55, 5);
   H.step(60);
   const j = C.big.find((k) => k.grp.includes(c));
   return { r, crushed: !!c.crushed, big: C.stats.big - big0, info: j ? H.bigInfo()[C.big.indexOf(j)] : null, maxY: j ? H.segMaxY(j) : null, door: b ? !!b.crushed : null, bname: b ? b.kind : null,
-    can: C.can(c), pol: H.pol(), tele: D.drv.telemetry(), past: j ? +(((D.drv.telemetry().x - c.x) * Math.cos(q.a) - (D.drv.telemetry().z - c.z) * Math.sin(q.a))).toFixed(1) : null, knocks: window.__N().peds.stats.knocks - n0, ms: +C.stats.bigMs.toFixed(2), crimes: window.__pol()?.telemetry().crimes.map((k) => k.type) };
+    can: C.can(c), pol: H.pol(), tele: D.drv.telemetry(), past: j ? +(((D.drv.telemetry().x - c.x) * Math.cos(q.a) - (D.drv.telemetry().z - c.z) * Math.sin(q.a))).toFixed(1) : null, knocks: window.__N().peds.stats.knocks - n0, ms: +C.stats.bigMs.toFixed(2), crimes: window.__pol()?.telemetry().crimes.map((k) => `${k.type}@${k.x},${k.z}`), more: C.stats.types.slice(ty0), traffic: window.__N().traffic.stats.crushed - tc0, waited };
 }, hs) : null;
 console.log('  monster truck into a house:', JSON.stringify(house));
 // 第 10 批（Nick 2026-10-09「所有房子變矮越野車撞不倒」）：房子越野車也撞不倒：只是撞到，不會扁、不算犯罪
