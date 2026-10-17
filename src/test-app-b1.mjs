@@ -991,6 +991,12 @@ console.log('  walked onto the lift → 2F:', JSON.stringify(wb7));
 check(wb7.ok && wb7.who === 3 && wb7.panel.shown && wb7.panel.on === '3F' && !wb7.panel.row && wb7.pressed === '2F' && wb7.floor === 1 && wb7.mode === 'walk' && Math.abs(wb7.wy - 4.5) < 0.05 && wb7.cars.includes('yaris') && wb7.cars.includes('gc8') && !wb7.cars.includes('supra'),
   `walked back onto the lift: the panel comes up on foot too (no ◀ ▶); 2F takes you down to 2F, where YARIS and GC8 are parked (${wb7.s} s)`);
 await drawAndShot('19-walk-2f');
+// 第 21 批：走路站在電梯上、沒全螢幕（網站橫拿、電腦的畫面只有 426 寬）：面板出來，不壓到別的按鈕
+await p.evaluate(() => document.getElementById('fsBtn').click()); await p.waitForTimeout(300);
+const elW = await p.evaluate(() => ({ who: window.__D().elWho(), fs: document.body.classList.contains('fs'), shown: window.__H.elPanel().shown }));
+clash = await sizeSweep(false, ['.elpanel']);
+await p.evaluate(() => document.getElementById('fsBtn').click()); await p.waitForTimeout(300);
+check(elW.who === 3 && !elW.fs && elW.shown && !clash, `on foot on the lift with fullscreen off: the panel shows and covers no other button on any screen (${clash || 'ok'})`);
 // 走去 YARIS（2 樓 1 號：車頭朝外，駕駛座在 −z 那邊）→ 上車：完整的 YARIS；SUPRA 照樣停在 3 樓
 const toY = await p.evaluate(() => { const D = window.__D(), H = window.__H, y = D.TOWER_BAYS[0], r = H.walkLocal([[3.6, -2.2], [y.x, y.z - 2.0]]); return { ok: r.ok, act: H.actText(), at: r }; });
 check(toY.ok && toY.act === '上車 · YARIS', `walked over to YARIS in 2 樓 1 號: 「${toY.act}」 ${toY.ok ? '' : JSON.stringify(toY.at)}`);

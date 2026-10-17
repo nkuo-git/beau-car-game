@@ -678,7 +678,8 @@ function netDragTick(Rc, dt) { // raceFrame 一開始：出發時間換成比賽
   const R = Rc.net, wall = Date.now(); Rc.gapMs = wall - (Rc.wallAt || wall); Rc.wallAt = wall; // 這一格跟上一格差多久（測試看綠燈是不是 go 以後的第一格）
   netRaceTick(dt);
   if (R.go) R.goT = Rc.t + (R.go - netNow()) / 1000; // 每一格重算：手機卡卡的（一格超過 0.1 秒）比賽的時鐘會慢，綠燈還是照伺服器的時間亮
-  if (Rc.phase === 'intro' && R.goT != null && Rc.t > 1.6) { Rc.phase = 'stage'; Rc.stageT = Rc.t; toast('準備', 800); }
+  if (Rc.phase === 'intro' && R.goT != null && (Rc.t > 1.6 || R.goT - Rc.t < 0.5)) { Rc.phase = 'stage'; Rc.stageT = Rc.t; toast('準備', 800); }
+  // 手機很卡（一格超過 0.05 秒，比賽的時鐘比真的慢）：進場還沒播完、出發時間快到了 → 直接準備，綠燈還是準時亮
   if (Rc.phase === 'stage' && R.goT != null) Rc.greenAt = Math.max(Rc.stageT + 0.2, R.goT);
 }
 function netDragFrame(Rc) { // raceFrame（車子位置那一段之後）：朋友的車、跑完了沒
