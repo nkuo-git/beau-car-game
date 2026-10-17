@@ -14,7 +14,7 @@ export const HUAYRA_SPEC = {
   kit: 'stock',
 };
 export const HUAYRA_CAMS = {
-  photo1: { a: 11.729, d: 2.048, h: 1.616, tx: 1.664, ty: 0.575, fov: 46.672, rl: 4.699 },
-  photo2: { a: 167.374, d: 4.217, h: 1.593, tx: 0.256, ty: 0.218, fov: 42.926, rl: -1.114 },
+  photo1: { a: 10.094, d: 2.201, h: 1.571, tx: 1.675, ty: 0.61, fov: 44.373, rl: 4.43 },
+  photo2: { a: 167.91, d: 4.422, h: 1.688, tx: 0.117, ty: 0.26, fov: 40.515, rl: -0.593 },
   photo3: { a: 91.517, d: 11.038, h: 0.368, tx: 0.112, ty: 0.917, fov: 18.804, rl: -0.017 },
 };
