@@ -594,6 +594,10 @@ check(!off1.fs && !off1.html && off1.pos !== 'fixed' && off1.btn && off1.pressed
   'fullscreen button: back to the normal layout (drive bar under the stage), remembered as off' + (APP ? ', CaridApp.setFullscreen(false)' : ''));
 clash = await sizeSweep(false, ['#fsBtn']);
 check(!clash, `fullscreen off on other screens: the fullscreen button does not cover any other button (${clash || 'ok'})`);
+// 第 21 批：在電梯上（面板出來）沒全螢幕：網站的畫面很窄（橫拿 426 寬），面板不能壓到別的按鈕
+const elOff = await p.evaluate(() => { const e = document.querySelector('#stage .elpanel'); return !!e && !e.hidden; });
+clash = await sizeSweep(false, ['.elpanel']);
+check(elOff && !clash, `fullscreen off on other screens, on the lift: the elevator panel shows and does not cover any other button (${clash || 'ok'})`);
 await p.evaluate(() => document.getElementById('fsBtn').click()); await p.waitForTimeout(300);
 fi = await fsInfo();
 check(fullView(fi) && fi.pref === 'on' && (!APP || fi.calls === 'true,false,true'), 'fullscreen button again: fullscreen, remembered as on');

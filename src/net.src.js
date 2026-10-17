@@ -547,7 +547,7 @@ function netSeat(pose) {
   ciMenuClose(true); ciEnd(); orEnd(); hillStop(); police?.clear();
   if (walker.mode !== 'off') walker.pause({ hide: true });
   if (drv) { drv.resume(); if (drv.cameraMode) drv.setCameraMode(drv.cameraMode); }
-  else { offDeck(cur); makeDrv(pose); }
+  else { offTower(cur); makeDrv(pose); } // 停在圓塔格子裡的那台：先從格子拿下來（第 21 批）
   drv.setInput(null); drv.teleport(pose); drv.setDestination(null);
   if (!dvoice) dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
   arrangeCars();

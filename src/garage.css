@@ -415,5 +415,10 @@ body.fs.walking #stage .elpanel { left: auto; right: calc(var(--fs-r) + 10px); t
 @media (min-height: 561px) { body.fs.wanted.walking #stage .elpanel { margin-top: 46px; } }
 @media (max-height: 560px) { body.walking #stage .elpanel { left: 50%; right: auto; top: 8px; } body.fs.walking #stage .elpanel { left: 50%; right: auto; top: calc(var(--fs-t) + 8px); } }
 body.fs.destsopen #stage .elpanel, body.fs.moreopen #stage .elpanel { display: none; }
+/* 沒全螢幕又矮（手機橫拿）：網站的畫面只剩 426 寬，放中間會壓到「去改車廠」、開鐵捲門、全螢幕鈕 → 面板放右上角（小地圖那裡），在電梯上的時候小地圖、全螢幕、換視角先藏起來 */
+@media (max-height: 560px) {
+  body.driving:not(.fs):not(.walking) #stage .elpanel { left: auto; right: 10px; top: 8px; transform: none; zoom: 0.8; }
+  body.driving:not(.fs):not(.walking) #stage.el-on .dv-map, body.driving:not(.fs):not(.walking) #stage.el-on .fsbtn, body.driving:not(.fs):not(.walking) #stage.el-on .dv-cam { visibility: hidden; }
+}
 #stage.el-on .dv-toast, #stage.el-on .wk-toast { top: max(34%, 362px); }
 @media (max-height: 560px) { #stage.el-on .dv-toast, #stage.el-on .wk-toast { top: max(34%, 220px); } }
