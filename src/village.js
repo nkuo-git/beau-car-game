@@ -63,7 +63,7 @@ import { TOWER, towerFoot } from './tower.js'; // 第 21 批：你的家＝圓�
 
 // 打包（build-art.mjs、build-app.mjs）會拿掉 import、把 export 變成一般宣告、所有檔接在同一個 script 裡：
 // 這個檔全部包在一個函式裡，只露出下面三個名字，不會跟別的檔撞名（跟 cabin.js 的 CABIN 一樣）
-export const { buildVillage, stripColliders, villageFonts } = (() => {
+export const { buildVillage, stripColliders, villageFonts, HOME_SITES, homeFront } = (() => {
 const TAU = Math.PI * 2, FH = 3.3; // 透天厝一層樓高
 const SANS = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", "WenQuanYi Zen Hei", sans-serif';
 const COND = '"Barlow Condensed", "Arial Narrow", sans-serif';
@@ -804,7 +804,7 @@ DEST_NODE.police = 'POL'; DEST_NODE.gunshop = 'GSP';
 // 第 21 批（Nick 2026-10-17「每個車庫分散各處」，草稿 https://claude.ai/artifact/EaTT7dijRcjfStUoV1SU4x「可以」；「把原本正方形的車庫直接弄掉」）：
 //   6 個人的家＝6 座圓塔車庫（tower.js），分散在地圖上；號碼不變（世界的號碼 0–5＝第幾個地方）；車庫街只留 1 號
 //   { x, z（塔的中心＝電梯中間）, heading（本地 +x＝鐵捲門朝外）, name（地方）, apron（門外的水泥地多長：到路邊）, via（回家先照哪個目的地的路線開）}
-export const HOME_SITES = [
+const HOME_SITES = [
   { x: -370, z: -94.6, heading: -Math.PI / 2, name: '車庫街', apron: 4.75, via: 'garst' },       // 1：原本的地方（門朝南，門外 z −82，路 z −72）
   { x: -276.25, z: -436.25, heading: -Math.PI / 2, name: '山頂', apron: 8.7, via: 'mountain' },   // 2：山頂停車場北邊（mountain.js 把這塊整平、塔整座抬到山頂的高度）
   { x: 172, z: -124.8, heading: -Math.PI / 2, name: '賽車場門口', apron: 7.7, via: 'circuit' },  // 3：賽車場聯外道路（z −100）北邊
@@ -813,7 +813,7 @@ export const HOME_SITES = [
   { x: -607.3, z: 0, heading: 0, name: '快速道路', apron: 4.75, via: 'H6' },                    // 6：快速道路一圈裡面，路口正對面（內圈護欄開一個口，一條車道進來）
 ];
 const HOME_FOOT = HOME_SITES.map(towerFoot);
-export const homeFront = (n, d = 0) => { const L = HOME_SITES[n], r = TOWER.DX1 + d; return [L.x + r * Math.cos(L.heading), L.z - r * Math.sin(L.heading)]; }; // 第 n 號家門外 d 公尺（neihu.js：聯外道路的護欄在門口開一個口）
+const homeFront = (n, d = 0) => { const L = HOME_SITES[n], r = TOWER.DX1 + d; return [L.x + r * Math.cos(L.heading), L.z - r * Math.sin(L.heading)]; }; // 第 n 號家門外 d 公尺（neihu.js：聯外道路的護欄在門口開一個口）
 const nearHome = (x, z, m = 0) => HOME_FOOT.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + m);
 ROADS.push({ a: 'GW', b: 'GST', kind: 'street', w: 10.5, pts: [[-345, -72], [-392, -72]] }); // 車庫街：只剩 1 號（第 17 批到 −490）
 NODES.GST[0] = -392;
@@ -1039,7 +1039,7 @@ function buildVillage(opts = {}) {
   const walk = (r, from) => (r.a === from ? r.pts : r.pts.slice().reverse()); // 從節點 from 沿著路 r 走的點
   function route(x, z, dest) {
     const pl = places[dest]; // 車庫街的家（town.src.js）：places.garage.via＝先開到哪個節點、end＝最後停在哪（路線在最靠近那一點的地方切掉，接過去）
-    if (pl && pl.via && pl.end) return trimTo(route(x, z, pl.via), pl.end);
+    if (pl && pl.via && pl.end) return NODES[DEST_NODE[pl.via] || pl.via] ? trimTo(route(x, z, pl.via), pl.end) : { pts: [[x, z]], len: 0 }; // 第 21 批：via 不是村子的路（山頂、賽車場、內湖）：最外層 wrapHome 接
     const tgt = DEST_NODE[dest] || dest, nr = nearestRoad(x, z); if (!nr || !NODES[tgt]) return { pts: [[x, z]], len: 0 };
     const r = nr.r, start = r.oneway ? { [r.b]: r.len - nr.along } : { [r.a]: nr.along, [r.b]: r.len - nr.along }; // 單行道只能往前
     const { dist, prev } = dijkstra(start);
@@ -1050,6 +1050,19 @@ function buildVillage(opts = {}) {
     const pts = [[x, z], [nr.qx, nr.qz]].concat(mid).filter((p, i, a) => !i || Math.hypot(p[0] - a[i - 1][0], p[1] - a[i - 1][1]) > 0.05);
     for (const e of chain) pts.push(...walk(e.r, e.from).slice(1));
     return { pts, len: Math.hypot(x - nr.qx, z - nr.qz) + dist[tgt] };
+  }
+  // 第 21 批：回家的路線（places 有 via、end）放在最外層：照 via（山頂、賽車場、內湖⋯每個模組都包過的 V.route）開，到最靠近門口的地方切掉、接到門口
+  //   town.src.js 在所有模組 buildXxx 之後叫一次；busy：via 的路線裡面又問到回家（例如內湖的 route0(…,'garage')）就不再展開
+  function homeRouteWrap(V) {
+    const r0 = V.route; let busy = false;
+    V.route = (x, z, dest) => {
+      const pl = V.places[dest];
+      if (!pl || !pl.via || !pl.end || busy) return r0(x, z, dest);
+      busy = true; let r; try { r = V.route(x, z, pl.via); } catch { r = null; } finally { busy = false; }
+      r = r && r.pts && r.pts.length > 1 ? trimTo(r, pl.end) : { pts: [[x, z], pl.end.slice()] };
+      const pts = r.pts.concat((pl.tail || []).map((p) => p.slice()));
+      return { pts, len: plen(pts) };
+    };
   }
   function trimTo(r, end) {
     if (!r || r.pts.length < 2) return r;
@@ -1382,16 +1395,16 @@ function buildVillage(opts = {}) {
   });
   // 你家＝第 n 號：places.garage 的每一塊都照那座塔算（本地 x 往門外、z＝車頭朝門時車子的右邊）
   const homeAt = (n, P = {}) => {
-    const q = GST_SLOTS[n] || GST_SLOTS[0], L = q.lot, c = Math.cos(L.heading), s = Math.sin(L.heading), w = (lx) => [L.x + lx * c, L.z - lx * s];
+    const q = GST_SLOTS[n] || GST_SLOTS[0], L = { ...q.lot, apronL: HOME_SITES[q.n].apron }, c = Math.cos(L.heading), s = Math.sin(L.heading), w = (lx) => [L.x + lx * c, L.z - lx * s];
     const box = (lx, hx, hz) => { const p = w(lx); return { x: p[0], z: p[1], hx, hz, rot: L.heading }; };
     const dr = w((TOWER.DX0 + TOWER.DX1) / 2);
     return Object.assign(P, {
-      name: '你的車庫', slot: n, site: q.name, pos: [q.door.x, q.door.z], lot: { ...L }, spawn: { ...L }, y: q.y,
+      name: '你的車庫', slot: n, site: q.name, pos: [q.door.x, q.door.z], lot: { x: L.x, z: L.z, heading: L.heading }, spawn: { x: L.x, z: L.z, heading: L.heading }, y: q.y,
       door: { x: dr[0], z: dr[1], heading: L.heading },     // 鐵捲門中間，朝外
       apron: box(TOWER.DX1 + 3.85, 3.85, 7),                 // 門外 7.7 公尺：停在這裡 HUD 給「開鐵捲門」
       inside: box(0, TOWER.RW, TOWER.RW),                    // 塔（大概的方塊；圓的用 GAR.isInside）
       zone: box(4, TOWER.RW + 4, TOWER.RW + 0.3), yard: box(4, TOWER.RW + 4, TOWER.RW + 0.3), // 塔＋門外
-      via: q.via, end: [L.x, L.z],                           // 回家：照 via 的路線開到最靠近你家的地方，接到門口、直直開進去（停在電梯上）
+      via: q.via, end: w(TOWER.DX1 + L.apronL), tail: [w(TOWER.DX1 + 1)], // 回家：照 via 的路線開到最靠近門口的地方（wrapHome），接到門口
     });
   };
 
@@ -2021,7 +2034,7 @@ function buildVillage(opts = {}) {
   group.updateMatrixWorld(true);
   const gTris = ground.geometry.attributes.position.count / 3;
   return {
-    group, places, colliders, surfaceAt, route, homeAt, // 第 17 批：homeAt(n, places.garage)＝搬到車庫街第 n 間
+    group, places, colliders, surfaceAt, route, homeAt, wrapHome() { homeRouteWrap(this); }, homeSites: HOME_SITES, // 第 17 批：homeAt(n, places.garage)＝搬到車庫街第 n 間
     parking: PARK, // 第 18 批：大停車場 { name, x, z, hx, hz, stalls, lamps }
     roads: roads.filter((r) => !HWK.has(r.kind) && r.kind !== 'link').map((r) => ({ pts: r.pts, w: Array.isArray(r.w) ? Math.max(...r.w) : r.w, kind: r.kind }))
       .concat([{ pts: hc.map((p) => [p.x, p.z]), w: HW.half * 2, kind: 'highway' }]),
@@ -2032,5 +2045,5 @@ function buildVillage(opts = {}) {
     dispose() { ST.dispose(); PS.dispose(); /* 第 3 批 */ group.removeFromParent(); group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); for (const m of Object.values(mats)) m.dispose(); for (const t of texs) t.dispose(); },
   };
 }
-return { buildVillage, stripColliders, villageFonts };
+return { buildVillage, stripColliders, villageFonts, HOME_SITES, homeFront };
 })();
