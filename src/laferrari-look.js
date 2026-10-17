@@ -1,15 +1,115 @@
-// 3D 法拉利 LaFerrari 的表面細節（投影貼圖），做法跟 GT-R 一樣。（初版：空的）
-import { BOX, layers, poly, smooth, line, both, frit, canvas } from './masks.js';
+// 3D 法拉利 LaFerrari 的表面細節（投影貼圖），做法跟 GT-R 一樣。
+// 位置是照四張紅色 LaFerrari 照片量的：照片上的點從相機打光線到車身（laferrari3d/hit.mjs）。
+import { BOX, layers, poly, smooth, line, text, both, canvas } from './masks.js';
 
 export const LAFERRARI_LOOK = (() => {
-  function side() { return layers(BOX.side, [null, null, null, null]); }
-  function front() { return layers(BOX.front, [null, null, null, null]); }
-  function rear() { return layers(BOX.rear, [null, null, null, null]); }
-  function top() { return layers(BOX.top, [null, null, null, null]); }
-  function livery() { const { c, g } = canvas(BOX.side); g.clearRect(-3, -1, 6, 3); return c; }
+  const M = (pts) => pts.map(([u, y]) => [-u, y]); // 左右鏡射
+  const rrect = (g, x0, y0, x1, y1, r) => { g.beginPath(); g.roundRect(x0, y0, x1 - x0, y1 - y0, r); };
+
+  // ---- 側面（x, y）：水滴形車窗、黑色車頂邊和 A 柱、碳纖維側裙、後輪前的進氣口 ----
+  const DLO = [[0.43, 0.79], [0.41, 0.843], [0.344, 0.926], [0.24, 1.008], [0.05, 1.032], [-0.23, 1.036], [-0.47, 1.034],
+    [-0.44, 0.934], [-0.34, 0.862], [-0.20, 0.834], [0.0, 0.815], [0.20, 0.80]];
+  const CABIN = [[0.86, 0.73], [0.70, 0.80], [0.43, 0.79], [0.0, 0.815], [-0.34, 0.86], [-0.50, 0.95], [-0.75, 1.04], [-1.0, 0.94], [-1.0, 1.3], [0.9, 1.3]];
+  const INTAKE = [[-0.06, 0.615], [-0.30, 0.60], [-0.55, 0.585], [-0.80, 0.575], [-0.88, 0.53], [-0.86, 0.44], [-0.70, 0.43], [-0.50, 0.47], [-0.25, 0.54]];
+  function side() {
+    return layers(BOX.side, [
+      (g) => { smooth(g, DLO); g.fill(); },
+      (g) => { // 黑色
+        poly(g, CABIN); g.save(); g.clip();
+        g.fillRect(-1.2, 1.03, 2.4, 0.3); g.restore(); // 車頂（黑色）的側邊
+        g.lineJoin = 'round'; g.lineWidth = 0.02; smooth(g, DLO); g.stroke(); // 車窗黑邊
+        poly(g, [[0.43, 0.79], [0.70, 0.79], [0.80, 0.76], [0.74, 0.84], [0.62, 0.92], [0.40, 1.04], [0.30, 1.04], [0.38, 0.90]]); g.fill(); // A 柱
+        poly(g, [[0.93, 0.205], [0.93, 0.10], [-1.0, 0.10], [-1.0, 0.205], [-0.60, 0.215], [0.20, 0.20], [0.70, 0.195]]); g.fill(); // 碳纖維側裙
+        smooth(g, INTAKE); g.fill(); // 側面進氣口
+      },
+      (g) => { // 縫：車門
+        line(g, [[0.80, 0.78], [0.84, 0.62], [0.86, 0.42], [0.86, 0.24]], 0.005);
+        line(g, [[0.86, 0.24], [0.0, 0.225], [-0.30, 0.235]], 0.004);
+        line(g, [[-0.30, 0.235], [-0.12, 0.42], [-0.10, 0.60], [-0.30, 0.75], [-0.38, 0.86]], 0.005);
+      },
+      null,
+    ]);
+  }
+
+  // ---- 正面（u＝|z|，y）：葉子板前面細長的大燈、兩個大鼻孔（黑網）、角落的直進氣口、碳纖維下巴 ----
+  const HEAD = [[0.70, 0.541], [0.712, 0.509], [0.759, 0.512], [0.829, 0.528], [0.875, 0.581], [0.911, 0.647], [0.929, 0.698],
+    [0.918, 0.707], [0.851, 0.692], [0.826, 0.649], [0.803, 0.606], [0.737, 0.590], [0.703, 0.569]];
+  const NOSTRIL = [[0.071, 0.395], [0.30, 0.42], [0.565, 0.445], [0.565, 0.235], [0.30, 0.214], [0.022, 0.19]];
+  const SIDEIN = [[0.595, 0.47], [0.74, 0.47], [0.74, 0.205], [0.595, 0.205]];
+  function front() {
+    return layers(BOX.front, [
+      (g) => { for (const P of [HEAD, M(HEAD)]) { smooth(g, P); g.fill(); } }, // R：燈
+      (g) => { // G：黑色
+        for (const P of [NOSTRIL, M(NOSTRIL), SIDEIN, M(SIDEIN)]) { poly(g, P); g.fill(); }
+        g.fillRect(-1.1, -0.1, 2.2, 0.245); // 下巴
+        for (const s of [1, -1]) { poly(g, [[0.76 * s, 0.10], [1.05 * s, 0.10], [1.05 * s, 0.30], [0.90 * s, 0.27], [0.76 * s, 0.24]]); g.fill(); } // 角落碳纖維
+        g.lineWidth = 0.006; for (const P of [HEAD, M(HEAD)]) { smooth(g, P); g.stroke(); }
+      },
+      null,
+      (g) => { // A：燈裡面暗的部分（外緣留一條亮的 LED）、鼻孔的網
+        for (const s of [1, -1]) {
+          g.save(); smooth(g, HEAD.map(([u, y]) => [u * s, y])); g.clip();
+          g.fillStyle = '#fff'; poly(g, [[0.68 * s, 0.50], [0.86 * s, 0.53], [0.89 * s, 0.62], [0.84 * s, 0.68], [0.80 * s, 0.63], [0.70 * s, 0.60]].map(([u, y]) => [u, y])); g.fill();
+          g.fillStyle = '#000'; g.beginPath(); g.ellipse(0.76 * s, 0.548, 0.026, 0.02, 0, 0, Math.PI * 2); g.fill();
+          g.restore(); g.fillStyle = '#fff';
+        }
+        for (const P of [NOSTRIL, M(NOSTRIL), SIDEIN, M(SIDEIN)]) {
+          g.save(); poly(g, P); g.clip(); g.globalAlpha = 0.22;
+          for (let k = -1.4; k < 1.4; k += 0.02) { line(g, [[k, 0.1], [k + 0.4, 0.5]], 0.0022); line(g, [[k, 0.5], [k + 0.4, 0.1]], 0.0022); }
+          g.restore();
+        }
+      },
+    ]);
+  }
+
+  // ---- 後面（u＝z，y）：尾翼板下面兩片黑網、下面黑色保桿和擴散器（中間紅色柱子到霧燈為止）、紅色反光片 ----
+  function rear() {
+    return layers(BOX.rear, [
+      (g) => { for (const s of [1, -1]) { rrect(g, s > 0 ? 0.30 : -0.52, 0.425, s > 0 ? 0.52 : -0.30, 0.445, 0.008); g.fill(); } }, // 反光片
+      (g) => {
+        for (const s of [1, -1]) { rrect(g, s > 0 ? 0.07 : -0.70, 0.47, s > 0 ? 0.70 : -0.07, 0.765, 0.03); g.fill(); } // 黑網
+        poly(g, [[-0.69, 0.10], [0.69, 0.10], [0.71, 0.47], [0.07, 0.47], [0.07, 0.25], [-0.07, 0.25], [-0.07, 0.47], [-0.71, 0.47]]); g.fill(); // 保桿、擴散器（兩邊角落是紅色的直鰭）
+        line(g, [[-0.78, 0.79], [-0.40, 0.795], [0, 0.797], [0.40, 0.795], [0.78, 0.79]], 0.012); // 尾翼板後緣黑線
+      },
+      (g) => { rrect(g, -0.05, 0.255, 0.05, 0.31, 0.01); g.fill(); }, // 中間霧燈（倒車燈）
+      (g) => { for (let k = -0.6; k <= 0.6; k += 0.075) line(g, [[k, 0.49], [k, 0.75]], 0.003); },
+    ]);
+  }
+
+  // ---- 上面（x, z）：前擋（兩邊包過去）、黑色車頂、引擎蓋玻璃（兩邊黑色百葉）、引擎蓋前面出風口的底 ----
+  const WS = [[0.865, 0], [0.86, 0.30], [0.84, 0.55], [0.80, 0.685], [0.67, 0.66], [0.53, 0.60], [0.44, 0.52], [0.37, 0.36], [0.31, 0.18], [0.30, 0]];
+  const ROOF = [[0.30, 0], [0.31, 0.18], [0.37, 0.36], [0.44, 0.52], [0.30, 0.62], [0.0, 0.66], [-0.45, 0.64], [-0.70, 0.56], [-0.78, 0.47], [-0.80, 0]];
+  const ENG = [[-0.72, 0], [-0.72, 0.48], [-1.30, 0.37], [-1.95, 0.22], [-1.95, 0]];
+  function top() {
+    return layers(BOX.top, [
+      null,
+      (g) => {
+        smooth(g, both(ROOF)); g.fill();
+        g.lineWidth = 0.03; smooth(g, both(WS)); g.stroke();
+        poly(g, both(ENG)); g.fill(); // 引擎蓋玻璃（深色，看起來是黑的）
+        poly(g, [[1.76, -0.245], [2.08, -0.22], [2.08, 0.22], [1.76, 0.245]]); g.fill(); // 出風口裡面（黑）
+        g.fillStyle = '#000'; g.fillRect(1.945, -0.24, 0.03, 0.48); g.fillStyle = '#fff'; // 中間一片紅色的導流片
+      },
+      (g) => { line(g, [[0.90, 0.53], [1.40, 0.42], [1.90, 0.30], [2.20, 0.20]], 0.004); line(g, [[0.90, -0.53], [1.40, -0.42], [1.90, -0.30], [2.20, -0.20]], 0.004); },
+      (g) => { smooth(g, both(WS)); g.fill(); },
+    ]);
+  }
+
+  // ---- 拉花：白色號碼圓圈（19 號）＋沿著下面折線的白色細條；預設不要 ----
+  function livery(sd, style = 'num') {
+    const { c, g } = canvas(BOX.side);
+    g.clearRect(-3, -1, 6, 3);
+    if (style !== 'num') return c;
+    g.fillStyle = '#f4f5f6';
+    g.beginPath(); g.arc(0.38, 0.47, 0.15, 0, Math.PI * 2); g.fill();
+    poly(g, [[0.90, 0.265], [-1.0, 0.425], [-1.0, 0.455], [0.90, 0.295]]); g.fill();
+    g.fillStyle = '#111'; text(g, '19', 0.38, 0.465, 0.17, { mirror: sd < 0 });
+    return c;
+  }
   function frontLivery() { const { c, g } = canvas(BOX.front); g.clearRect(-2, -1, 4, 3); return c; }
+
   return {
     side, rear, top, fronts: { base: front }, livery, frontLivery, livDefault: 0, nose: () => 'base',
-    U: { uXr: -1.385, uXf: 1.265, uFx: [1.6, 1.7], uRx: [-2.05, -2.15], uWell: [0.3208, 0.38, 0.94], uWellR: [0.3575, 0.415, 0.94], uGlassY: 0.76 },
+    U: { uXr: -1.385, uXf: 1.265, uFx: [1.45, 1.52], uRx: [-1.98, -2.06], uWell: [0.3208, 0.40, 0.955], uWellR: [0.3575, 0.435, 0.97], uGlassY: 0.73 },
   };
 })();
