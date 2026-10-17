@@ -1,16 +1,165 @@
 // 3D McLaren Senna 的表面細節（投影貼圖），做法跟 gtr-look.js 一樣。
+// 位置是照照片量的：照片上的點從相機打光線到車身（camfit.hit，senna3d/hit.mjs），得到車身上的 (x, y, z)。
+// 沒有品牌標誌、車名字：車頭徽章、車尾的字、尾翼端板上的圖案都不畫（留車身顏色／黑色）；車牌也不畫。
+// 拉花「紅黑雙色」（duo，照片 1）：引擎蓋中間一條黑色寬帶（兩邊白、紅細線）、黑色車頂、車頂兩側。
+//   黑色寬帶和車頂在朝上的面，側面貼圖碰不到，所以另外畫一張「上面的拉花」（topLivery），senna-spec.js 的車漆補丁去讀它；
+//   側面拉花左上角畫一個記號，只有 duo 有，通用拉花（火焰、條紋⋯）沒有記號就不畫上面的那張。
 import { BOX, layers, poly, smooth, line, both, frit, canvas } from './masks.js';
 
 export const SENNA_LOOK = (() => {
-  const M = (pts) => pts.map(([u, y]) => [-u, y]);
-  function side() { return layers(BOX.side, [null, null, null, null]); }
-  function front() { return layers(BOX.front, [null, null, null, null]); }
-  function rear() { return layers(BOX.rear, [null, null, null, null]); }
-  function top() { return layers(BOX.top, [null, null, null, null]); }
-  function livery(sd, s) { const { c, g } = canvas(BOX.side); g.clearRect(-3, -1, 6, 3); return c; }
-  function frontLivery(s) { const { c, g } = canvas(BOX.front); g.clearRect(-2, -1, 4, 3); return c; }
+  const M = (pts) => pts.map(([u, y]) => [-u, y]); // 左右鏡射
+  const S2 = (pts, s) => pts.map(([u, y]) => [u * s, y]);
+  const DARK = '#16171a';
+
+  // ---- 側面（x, y）----
+  // 車門上半部的車窗：A 柱 → 車頂邊 → 後面往下 → 窗台（車門上緣）
+  const DLO = [[0.72, 0.738], [0.56, 0.89], [0.38, 1.062], [0.18, 1.118], [-0.08, 1.124], [-0.34, 1.10], [-0.57, 1.053], [-0.615, 0.96],
+    [-0.625, 0.84], [-0.35, 0.822], [0.0, 0.808], [0.35, 0.775], [0.60, 0.748]];
+  // B 柱後面的小三角窗
+  const QTR = [[-0.69, 0.845], [-0.69, 0.995], [-0.80, 0.975], [-0.97, 0.928], [-0.86, 0.855]];
+  // 車門下半部的玻璃（凹進去的那一塊，看起來黑黑的）
+  const LOWG = [[-0.27, 0.70], [0.10, 0.715], [0.40, 0.718], [0.57, 0.67], [0.61, 0.52], [0.57, 0.38], [0.45, 0.342], [0.0, 0.345], [-0.27, 0.355]];
+  // 後輪前面的側面大進氣口
+  const INTAKE = [[-0.34, 0.87], [-0.62, 0.885], [-0.82, 0.86], [-0.865, 0.76], [-0.865, 0.40], [-0.82, 0.315], [-0.55, 0.305], [-0.36, 0.315],
+    [-0.315, 0.42], [-0.315, 0.78]];
+  function side() {
+    return layers(BOX.side, [
+      (g) => { smooth(g, DLO); g.fill(); smooth(g, QTR); g.fill(); },
+      (g) => { // 黑色：窗框、B 柱、下半部玻璃、側面進氣口、碳纖維門檻、前輪後面的碳纖維
+        g.lineJoin = 'round'; g.lineWidth = 0.022; smooth(g, DLO); g.stroke(); g.lineWidth = 0.016; smooth(g, QTR); g.stroke();
+        poly(g, [[-0.615, 1.06], [-0.70, 1.0], [-0.70, 0.84], [-0.625, 0.84]]); g.fill();
+        smooth(g, LOWG); g.fill();
+        smooth(g, INTAKE); g.fill();
+        poly(g, [[-1.22, 0.10], [0.80, 0.10], [0.78, 0.215], [-1.20, 0.225]]); g.fill();
+        smooth(g, [[1.475, 0.40], [1.56, 0.45], [1.66, 0.42], [1.70, 0.13], [1.47, 0.13]]); g.fill();
+        smooth(g, [[-2.42, 0.08], [-1.98, 0.08], [-1.94, 0.25], [-1.97, 0.45], [-2.06, 0.60], [-2.20, 0.62], [-2.42, 0.56]]); g.fill(); // 後輪後面的碳纖維（包到車尾）
+      },
+      (g) => { // 縫：車門（前緣在前輪拱後面、下緣在門檻上、後緣在進氣口前面）、前蓋側邊
+        line(g, [[0.73, 0.735], [0.76, 0.60], [0.75, 0.40], [0.70, 0.26], [0.62, 0.225]], 0.005);
+        line(g, [[0.62, 0.225], [-0.27, 0.23]], 0.004);
+        line(g, [[-0.27, 0.23], [-0.29, 0.50], [-0.30, 0.82]], 0.005);
+        line(g, [[1.55, 0.73], [1.85, 0.66], [2.05, 0.60]], 0.004);
+      },
+      (g) => { // A（senna-spec.js 的補丁讀它）：霧面黑，側面進氣口裡面
+        smooth(g, INTAKE); g.fill();
+      },
+    ]);
+  }
+
+  // ---- 正面（u＝|z|，畫的時候左右鏡射；y）----
+  // 大燈下面那一大塊凹進去的黑色（下面是進氣口，上面掛著細長的大燈）
+  const PIT = [[0.425, 0.09], [0.42, 0.30], [0.43, 0.42], [0.47, 0.50], [0.58, 0.56], [0.72, 0.60], [0.83, 0.62], [0.865, 0.58], [0.865, 0.40], [0.85, 0.09]];
+  // 細長的大燈（內低外高，斜斜的）
+  const HEAD = [[0.47, 0.50], [0.60, 0.548], [0.74, 0.59], [0.84, 0.612], [0.855, 0.57], [0.76, 0.535], [0.62, 0.49], [0.50, 0.455], [0.455, 0.465]];
+  // 鼻子下面的格柵
+  const GRILLE = [[0, 0.30], [0.30, 0.30], [0.37, 0.27], [0.38, 0.14], [0, 0.135]];
+  function front() {
+    return layers(BOX.front, [
+      (g) => { for (const s of [1, -1]) { smooth(g, S2(HEAD, s)); g.fill(); } }, // R：大燈
+      (g) => { // G：黑色（凹進去的大進氣口、格柵）
+        for (const s of [1, -1]) { smooth(g, S2(PIT, s)); g.fill(); }
+        smooth(g, [...GRILLE, ...M(GRILLE).reverse()]); g.fill();
+      },
+      null,
+      (g) => { // A：大燈大部分是暗色的燈殼（上緣留一條亮的 LED）、格柵裡淡淡的網子
+        for (const s of [1, -1]) {
+          g.save(); smooth(g, S2(HEAD, s)); g.clip();
+          smooth(g, S2(HEAD, s)); g.fill();
+          g.fillStyle = '#000'; line(g, [[0.49 * s, 0.492], [0.62 * s, 0.538], [0.84 * s, 0.598]], 0.01); g.restore();
+          g.fillStyle = g.strokeStyle = 'rgb(90,90,90)';
+          g.save(); smooth(g, [...GRILLE, ...M(GRILLE).reverse()]); g.clip();
+          for (let y = 0.15; y < 0.30; y += 0.02) line(g, [[-0.5, y], [0.5, y]], 0.005);
+          g.restore();
+          g.fillStyle = g.strokeStyle = '#fff';
+        }
+      },
+    ]);
+  }
+
+  // ---- 後面（u＝z，y）：上面一整片黑色網子（上緣一條細細的尾燈），下面碳纖維橫樑、兩角紅色反光片 ----
+  const MESH = [[0, 0.715], [0.55, 0.712], [0.78, 0.70], [0.86, 0.665], [0.87, 0.56], [0.80, 0.525], [0.40, 0.522], [0, 0.522]];
+  function rear() {
+    return layers(BOX.rear, [
+      (g) => { // R：尾燈（網子上緣兩條細燈）、下面兩角的反光片
+        for (const s of [1, -1]) {
+          poly(g, S2([[0.26, 0.722], [0.80, 0.716], [0.86, 0.69], [0.80, 0.703], [0.26, 0.708]], s)); g.fill();
+          poly(g, S2([[0.62, 0.448], [0.86, 0.462], [0.86, 0.488], [0.62, 0.474]], s)); g.fill();
+        }
+      },
+      (g) => { // G：黑（網子、碳纖維橫樑；反光片那裡留空）
+        smooth(g, [...MESH, ...M(MESH).reverse()]); g.fill();
+        g.save(); g.beginPath(); g.rect(-1, 0.30, 2, 0.225);
+        for (const s of [1, -1]) { const p = S2([[0.62, 0.448], [0.86, 0.462], [0.86, 0.488], [0.62, 0.474]], s); g.moveTo(...p[0]); for (const q of p.slice(1).reverse()) g.lineTo(...q); g.closePath(); }
+        g.fill('evenodd'); g.restore();
+      },
+      null,
+      (g) => { // A：網子的六角形格子（看起來是網子）、後蓋的縫
+        g.save(); smooth(g, [...MESH, ...M(MESH).reverse()]); g.clip();
+        for (let y = 0.53, r = 0; y < 0.72; y += 0.026, r++) for (let u = -0.9 + (r % 2) * 0.018; u < 0.9; u += 0.036) { g.beginPath(); g.arc(u, y, 0.009, 0, Math.PI * 2); g.fill(); }
+        g.restore();
+        line(g, [[-0.82, 0.745], [0.82, 0.745]], 0.004);
+      },
+    ]);
+  }
+
+  // ---- 上面（x, z）----
+  const WS = [[1.00, 0], [0.99, 0.40], [0.95, 0.62], [0.87, 0.745], [0.75, 0.765], [0.55, 0.705], [0.38, 0.575], [0.255, 0.49], [0.205, 0.30], [0.195, 0]];
+  const VENT = [[1.93, 0], [1.92, 0.10], [1.80, 0.20], [1.50, 0.32], [1.20, 0.39], [1.10, 0.40], [1.10, 0]]; // 引擎蓋中間凹下去的出風口
+  const DECK = [[-1.02, 0], [-1.02, 0.28], [-1.30, 0.34], [-1.70, 0.44], [-2.05, 0.50], [-2.16, 0.46], [-2.18, 0]]; // 車尾引擎蓋（碳纖維、百葉）
+  function top() {
+    return layers(BOX.top, [
+      (g) => { smooth(g, both(VENT)); g.fill(); }, // R：霧面黑（引擎蓋出風口）
+      (g) => { // G：黑色（前擋黑邊、車尾引擎蓋、尾翼支架腳）
+        frit(g, both(WS), 0.03, [0.15, 0.24], [0.96, 1.05]);
+        smooth(g, both(DECK)); g.fill();
+      },
+      (g) => { // B：縫（前蓋、車門上緣）、引擎蓋上的百葉
+        line(g, [[1.02, 0.78], [1.50, 0.86], [1.95, 0.80], [2.18, 0.60]], 0.004); line(g, [[1.02, -0.78], [1.50, -0.86], [1.95, -0.80], [2.18, -0.60]], 0.004);
+        for (let x = -1.25; x > -1.95; x -= 0.06) for (const s of [1, -1]) line(g, [[x, 0.06 * s], [x, (0.24 + (-1.25 - x) * 0.25) * s]], 0.012);
+      },
+      (g) => { smooth(g, both(WS)); g.fill(); }, // A：前擋玻璃
+    ]);
+  }
+
+  // ---- 拉花「紅黑雙色」----
+  // 側面：車頂兩側（車窗上面）黑色；左上角一個記號（只有 duo 有）
+  function livery(sd, s = 'duo') {
+    const { c, g } = canvas(BOX.side);
+    g.clearRect(-3, -1, 6, 3);
+    if (s === 'none') return c;
+    g.fillStyle = DARK;
+    g.beginPath(); g.moveTo(0.80, 1.45); g.lineTo(0.80, 0.80);
+    for (const [x, y] of [[0.70, 0.80], [0.52, 0.965], [0.38, 1.10], [0.18, 1.15], [-0.08, 1.158], [-0.34, 1.135], [-0.60, 1.088], [-0.80, 1.02], [-1.05, 0.96]]) g.lineTo(x, y);
+    g.lineTo(-1.05, 1.45); g.closePath(); g.fill();
+    g.fillRect(-2.35, 1.37, 0.03, 0.03); // 記號（車身碰不到的角落）
+    return c;
+  }
+  function frontLivery() { const { c, g } = canvas(BOX.front); g.clearRect(-2, -1, 4, 3); return c; }
+  // 上面（x, z）：引擎蓋中間的黑色寬帶（邊上一條白線、裡面一條紅線）＋黑色車頂（車頂進氣口留車身顏色）
+  const BAND = [[2.40, 0.30], [2.25, 0.33], [2.05, 0.37], [1.80, 0.41], [1.55, 0.45], [1.30, 0.49], [1.12, 0.53], [1.02, 0.58]];
+  function topLivery() {
+    const { c, g } = canvas(BOX.top);
+    g.clearRect(-3, -2, 6, 4);
+    g.fillStyle = DARK;
+    g.beginPath(); BAND.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z))); BAND.slice().reverse().forEach(([x, z]) => g.lineTo(x, -z)); g.closePath(); g.fill();
+    // 車頂（前擋上緣到車頂後面）
+    smooth(g, both([[0.30, 0], [0.30, 0.52], [0.10, 0.62], [-0.30, 0.64], [-0.70, 0.56], [-1.00, 0.42], [-1.08, 0]])); g.fill();
+    g.globalCompositeOperation = 'destination-out'; g.fillStyle = '#000'; smooth(g, both([[-0.40, 0], [-0.40, 0.14], [-0.60, 0.155], [-0.92, 0.12], [-0.96, 0]])); g.fill(); // 車頂進氣口
+    g.globalCompositeOperation = 'source-over';
+    for (const s of [1, -1]) {
+      const P = (o) => BAND.map(([x, z]) => [x, (z + o) * s]);
+      g.strokeStyle = '#eceef0'; line(g, P(0.004), 0.009);
+      g.strokeStyle = '#c8101c'; line(g, P(-0.016), 0.012);
+    }
+    return c;
+  }
+
   return {
-    side, rear, top, fronts: { base: front }, livery, frontLivery, livDefault: 1, nose: () => 'base',
-    U: { uXr: -1.578, uXf: 1.092, uFx: [1.85, 1.95], uRx: [-1.95, -2.05], uWell: [0.327, 0.39, 0.95], uWellR: [0.3485, 0.41, 0.95], uGlassY: 0.76 },
+    side, rear, top,
+    fronts: { base: front },
+    livery, frontLivery, topLivery,
+    livDefault: 1,
+    nose: () => 'base',
+    U: { uXr: -1.578, uXf: 1.092, uFx: [1.80, 1.90], uRx: [-2.0, -2.08], uWell: [0.327, 0.385, 0.99], uWellR: [0.3485, 0.405, 0.99], uGlassY: 0.74 },
   };
 })();
