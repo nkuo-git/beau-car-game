@@ -30,6 +30,7 @@ import { SP3_SPEC, SP3_GARAGE } from './sp3-spec.js';
 import { JESKO_SPEC, JESKO_GARAGE } from './jesko-spec.js';
 import { MONSTER_SPEC, MONSTER_GARAGE } from './monster-spec.js'; // 第 4 批：怪獸卡車
 import { RX7_SPEC, RX7_GARAGE } from './rx7-spec.js'; // 2026-10-17 新的 10 台車
+import { HUAYRA_SPEC, HUAYRA_GARAGE } from './huayra-spec.js';
 import { SENNA_SPEC, SENNA_GARAGE } from './senna-spec.js';
 import { ALTIS_SPEC, ALTIS_GARAGE } from './altis-spec.js';
 import { AVENTADOR_SPEC, AVENTADOR_GARAGE } from './aventador-spec.js';
@@ -40,11 +41,11 @@ export const { buildLodCar, LOD_CARS } = (() => {
   // spec、預設外觀用 switch 拿（只算到用到的那一個）：沒打包 Yaris 的版本（build-art.mjs 沒加 --yaris）拿 YARIS_SPEC 會丟 ReferenceError → 那台就不列在 LOD_CARS
   // 打包時這個檔要接在每台車的 spec 後面（build-art.mjs／build-app.mjs 是這樣接的）
   const SPEC = (k) => { switch (k) { case 'supra': return SUPRA_SPEC; case 'gtr': return GTR_SPEC; case 'gc8': return GC8_SPEC; case 'yaris': return YARIS_SPEC; case 'p918': return P918_SPEC; case 'sp3': return SP3_SPEC; case 'jesko': return JESKO_SPEC; case 'monster': return MONSTER_SPEC; case 'rx7': return RX7_SPEC; case 'chiron': return CHIRON_SPEC; } return null; };
-  const KEYS = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'monster', 'rx7', 'senna', 'altis', 'aventador', 'ae86', 'chiron'].filter((k) => { try { return !!SPEC(k); } catch { return false; } });
+  const KEYS = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'monster', 'rx7', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron'].filter((k) => { try { return !!SPEC(k); } catch { return false; } });
   const DEF = (k) => { switch (k) { // Supra、GT-R 的預設寫在車庫頁（garage.src.html CARS），這裡抄一份；其他台用 <KEY>_GARAGE.state
     case 'supra': return { paint: '#ff7414', rim: 'chrome', caliper: '#9da1a6', wing: 'gt', kit: 'bomex', height: '0', livery: 'ff', tint: 'light' };
     case 'gtr': return { paint: '#1d4fc9', rim: 'gunmetal', caliper: '#c8141e', wing: 'stock', kit: 'bomex', height: '-0.03', livery: 'none', tint: 'light' };
-    case 'gc8': return GC8_GARAGE.state; case 'yaris': return YARIS_GARAGE.state; case 'p918': return P918_GARAGE.state; case 'sp3': return SP3_GARAGE.state; case 'jesko': return JESKO_GARAGE.state; case 'monster': return MONSTER_GARAGE.state; case 'rx7': return RX7_GARAGE.state; case 'senna': return SENNA_GARAGE.state; case 'altis': return ALTIS_GARAGE.state; case 'aventador': return AVENTADOR_GARAGE.state; case 'ae86': return AE86_GARAGE.state; case 'chiron': return CHIRON_GARAGE.state;
+    case 'gc8': return GC8_GARAGE.state; case 'yaris': return YARIS_GARAGE.state; case 'p918': return P918_GARAGE.state; case 'sp3': return SP3_GARAGE.state; case 'jesko': return JESKO_GARAGE.state; case 'monster': return MONSTER_GARAGE.state; case 'rx7': return RX7_GARAGE.state; case 'huayra': return HUAYRA_GARAGE.state; case 'senna': return SENNA_GARAGE.state; case 'altis': return ALTIS_GARAGE.state; case 'aventador': return AVENTADOR_GARAGE.state; case 'ae86': return AE86_GARAGE.state; case 'chiron': return CHIRON_GARAGE.state;
   } return {}; };
   const BASE = { wide: 'off', finish: 'stock', rimStyle: 'stock', glow: 'none', lights: false, brake: false };
   const FILES = { supra: 'car-supra-lod.txt', gtr: 'car-gtr-lod.txt', gc8: 'car-gc8-lod.txt', yaris: 'car-yaris-lod.txt', p918: 'car-p918-lod.txt', sp3: 'car-sp3-lod.txt', jesko: 'car-jesko-lod.txt', monster: 'car-monster-lod.txt', rx7: 'car-rx7-lod.txt', chiron: 'car-chiron-lod.txt' };

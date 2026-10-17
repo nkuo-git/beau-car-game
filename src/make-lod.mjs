@@ -22,7 +22,7 @@ import { Document, NodeIO } from '@gltf-transform/core';
 import { KHRMeshQuantization } from '@gltf-transform/extensions';
 import { serve, browser, DIR } from './lod-serve.mjs';
 
-const ALL = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'rx7', 'senna', 'altis', 'aventador', 'ae86', 'chiron'];
+const ALL = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'rx7', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron'];
 const arg = (k, d) => { const a = process.argv.find((s) => s.startsWith(`--${k}=`)); return a ? a.split('=')[1] : d; };
 const KEYS = (process.argv.slice(2).find((s) => !s.startsWith('--')) || ALL.join(',')).split(',');
 const HALF = +arg('half', 9000); // 半邊車身（含車頭）目標三角形數
