@@ -130,7 +130,7 @@ export const RX7_SPEC = {
     none: () => new THREE.Group(),
   },
   wing: 'stock',
-  interior: { dx: -0.06, cage: false, wheelZ: -0.36, dashX: 0.30, dashY: 0.74, seatDy: -0.07, shelf: false },
+  interior: { dx: -0.06, cage: false, wheelZ: 0.36, dashX: 0.30, dashY: 0.74, seatDy: -0.07, shelf: false },
   build(body, paint, mats) { // 套件：原廠（黑色前下巴）、賽道（碳纖維大下巴＋風刀＋側裙刀片＋擴散器）
     mats.pipe = new THREE.MeshPhysicalMaterial({ color: 0xc4c6c9, roughness: 0.22, metalness: 1, side: THREE.DoubleSide });
     for (const z of [0.38, 0.47]) body.add(RX7_tip(mats, -2.04, 0.29, z));
