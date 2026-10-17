@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mirror, aeroKit } from './parts.js';
 import { RX7_LOOK } from './rx7-look.js';
+import { popLamps } from './popup.js';
 
 // 輪框：原廠 16 吋五輻（照片 1、3），每根輻條從輪轂往外微微掃過去、越外面越細，輪轂那邊比較寬
 export function RX7_wheel(rim, w, mats) {
@@ -136,6 +137,7 @@ export const RX7_SPEC = {
     for (const z of [0.38, 0.47]) body.add(RX7_tip(mats, -2.04, 0.29, z));
     const chin = RX7_chin(mats); body.add(chin);
     const aero = aeroKit(mats, RX7_AERO); aero.visible = false; body.add(aero);
+    body.add(popLamps('rx7', paint.color, body.getObjectByName('paint')?.geometry).mesh); // 跳燈（popup.js）：燈蓋收好的時候藏起來
     return (kit) => { chin.visible = kit !== 'track'; aero.visible = kit === 'track'; };
   },
   kit: 'stock',

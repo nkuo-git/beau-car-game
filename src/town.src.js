@@ -451,6 +451,7 @@ function makeDrv(pose) {
   arrangeCars(); // 停著的車：放碰撞（開車的是新的）、走路的清單
   drv.setDestination(tripDest);
   dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
+  popDrv(); // 跳燈（86、R7）
 }
 // 改車廠有沒有買得起的（還沒裝的引擎零件、還沒買的輪胎）
 function canShop() {
@@ -508,6 +509,23 @@ for (const b of document.querySelectorAll('#tiltPop button')) b.addEventListener
   tiltOpen(false);
   if (ask) DeviceMotionEvent.requestPermission().then((r) => tiltMode(r === 'granted' ? 'tilt' : 'btn', true), tiltFail); else tiltMode(k, true);
 });
+// 跳燈（Nick 2026-10-17，草稿 https://claude.ai/artifact/NjStMe4AhSWuk9dBUELzde；popup.js）：86、R7 開車的時候「手煞車」旁邊多一顆「跳燈」（drive.js setPop）
+//   按一下燈蓋立起來、燈亮；再按一下收回去。每台車記在存檔 GAME.pop（{車: 1}）；借來的車不記（下次借又是關著的）。朋友看得到（netState 的 pl）
+const POP = { P: null }; // 現在開的這台的燈座（makeDrv 換）
+const popT = () => (calm ? 0.12 : 0.3);
+function popDrv() { // makeDrv 最後叫：放到存檔的樣子（不用轉）、按鈕出現（沒有跳燈的車＝藏起來）
+  const P = tripS?.body.getObjectByName('popup')?.userData.pop || null;
+  POP.P = P;
+  if (P && !BORROW_K) P.set(!!GAME.pop?.[cur], 0);
+  drv.setPop(P ? P.on : null, popToggle);
+}
+function popToggle() {
+  const P = POP.P; if (!P || !drv) return;
+  const on = !P.on; P.set(on, popT()); drv.setPop(on, popToggle);
+  if (!BORROW_K) { GAME.pop = GAME.pop || {}; if (on) GAME.pop[cur] = 1; else delete GAME.pop[cur]; save(); }
+}
+const popStep = (dt) => { if (POP.P) POP.P.step(dt); }; // 只有在轉的時候才改東西
+const popSend = () => (POP.P && POP.P.on && POP.P.mesh.parent && POP.P.mesh.parent === tripS?.body ? 1 : 0); // 送給朋友：燈開著嗎
 function foldStep(dt, v) { // 每一格（開車）
   if (bodyFlags.destsopen && (FOLD.destsopen < 0 ? Math.abs(v) > 4 : (FOLD.destsopen -= dt) <= 0)) destOpen(false);
   if (bodyFlags.moreopen && (FOLD.moreopen < 0 ? Math.abs(v) > 4 : (FOLD.moreopen -= dt) <= 0)) moreOpen(false);
@@ -1928,6 +1946,7 @@ function driveStep(dt) {
       const t = drv.telemetry();
       dvoice?.set({ rpm: t.rpm, throttle: t.load, speed: Math.abs(t.v) });
       tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); tripS?.cabin?.userData.setSteer?.(t.steer); // 駕駛座視角看得到轉速表、速度表、方向盤跟著轉
+      popStep(dt); // 跳燈：燈蓋在轉
       foldStep(dt, t.v); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {

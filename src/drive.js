@@ -22,7 +22,7 @@
 //                                  ox, oz（撞到的東西的中心）, h（它多高） }，全部是車子座標（+x 車頭、+z 右邊，原點＝車子原點）
 //     eye: CABIN_VIEW[key],   駕駛座視角 { eye: [x, y, z], look: [x, y, z], fov }（車身座標）；沒給就用估的
 //     maxKmh,                 限速（可省略：省略＝這台車的極速 perf.vmax）；草地 50、稻田 16 另外限
-//     keyboard: true（方向鍵／WASD、空白鍵手煞車、C 換視角、E 按 HUD 的大按鈕）；camButton: true（HUD 上的換視角鈕）
+//     keyboard: true（方向鍵／WASD、空白鍵手煞車、C 換視角、E 按 HUD 的大按鈕、L 跳燈）；camButton: true（HUD 上的換視角鈕）
 //     mapLayer,               小地圖的底圖 { c, ms, x0, z0 }（可省略：自己畫一張，最多 16 MB）；走路（walk.js）的 walker.mapLayer 同一張，給了就不用再畫
 //     audio,                  第 3 批（甩尾）：createEngineAudio() 回傳的（可省略）：輪胎叫 audio.skid(level, pitch, dirt)（跟引擎聲同一條總輸出：音量、靜音一樣）
 //   });
@@ -60,6 +60,9 @@
 //                          左下角的 ◀ ▶ 換成一個小方向盤（看得到轉多少）＋「置中」（現在拿的樣子＝直直開）；鍵盤照舊；
 //                          開了 1.5 秒都沒有感應器的資料：跳「這支手機不能轉手機開車」、變回按鈕、叫 onFail()；drive.tilt＝開著沒有
 //                          tiltAngle({ x, y }, screenAngle) → 手機在螢幕上轉了幾度（順時針＝正；createDrive 外面也拿得到，測試用）
+//   drive.setPop(on | null, onToggle)   跳燈（86、RX-7；Nick 2026-10-17 草稿說好）：「手煞車」旁邊多一顆「跳燈」（直拿在手煞車上面、橫拿在左邊）；
+//                          on＝燈開著（按鈕變黃、aria-pressed＝true）、false＝關著、null＝這台車沒有（不顯示）；按一下（或鍵盤 L）叫 onToggle()（換燈的是叫的人，再叫 setPop 換按鈕）；
+//                          drive.pop＝現在（null＝沒有這顆）
 //   drive.setDamage({ power, top, maxKmh, steerPull } | null)   撞壞了（damage.js 的 dmg.perf）：出力 ×power、極速 ×top、最多 maxKmh、
 //                          方向盤偏 steerPull（−1 左～1 右，最多偏 8%）；null＝恢復
 //   drive.toast(text, ms)；drive.carInfo：{ nose, tail, len, halfW, wheelbase, vmax（km/h） }；drive.dispose()（拿掉 HUD、按鍵、影子、光柱，車子交回）
@@ -193,6 +196,20 @@ const CSS = `
 @container (max-height:290px){.dv-hb{right:288px}.dv-spd.tach{left:auto;right:366px;transform:none}} /* 轉速表（80 寬）放手煞車左邊 */
 /* 第 3 批（b3-int）：App 沒全螢幕、螢幕又高又寬（平板、電腦）：畫面只是中間一小塊（426×320），手煞車（油門上面）會壓到換視角、全螢幕鈕 → 放到全螢幕鈕左邊（同一排）；通緝中跟著往下推 */
 @media (min-height:561px){@container (max-height:409px){.dv-hb{top:142px;right:114px;bottom:auto;height:44px}.pw-host.pw-on .dv-hb{margin-top:46px}.dv-act2{top:auto;right:auto;left:10px;bottom:98px}}} /* 修 11（2026-10-10）：小舞台（平板、電腦、426×320）「下車」放左邊、轉彎鍵上面（本來在右邊壓到油門） */
+/* 跳燈（86、RX-7）：直拿在手煞車上面（同寬）；橫拿（矮的畫面）在手煞車左邊（同高）；更矮的（沒全螢幕的手機橫拿）跟著手煞車往左，轉速表再往左；小舞台（426×320）在手煞車左邊同一排 */
+.dv-pop{right:10px;bottom:184px;width:74px;height:50px;box-sizing:border-box;margin:0;padding:0;border:0;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:#2B2E35;color:#F2F3F5;font:700 15px/1 ${SANS};letter-spacing:.04em;white-space:nowrap;box-shadow:0 5px 0 #111216;pointer-events:auto;touch-action:manipulation;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.dv-pop svg{width:26px;height:19px;flex:none}
+.dv-pop rect{fill:#59606B}
+.dv-pop path{fill:none;stroke:transparent;stroke-width:2.4;stroke-linecap:round}
+.dv-pop[aria-pressed="true"]{background:#FFE27A;color:#2A1D00;box-shadow:0 5px 0 #A8862A,0 0 16px rgba(255,226,122,0.7)}
+.dv-pop[aria-pressed="true"] rect{fill:#2A1D00}
+.dv-pop[aria-pressed="true"] path{stroke:#2A1D00}
+.dv-pop.on{transform:translateY(4px);box-shadow:none}
+.dv-pop:focus-visible{outline:3px solid #F2F3F5;outline-offset:3px}
+@media (max-height:560px){.dv-pop{right:238px;bottom:12px;width:62px;height:70px;border-radius:18px;gap:5px}}
+@container (max-height:290px){.dv-pop{right:360px}.dv.pop .dv-spd.tach{right:438px}}
+@media (min-height:561px){@container (max-height:540px){.dv-pop{right:94px;bottom:124px;height:46px;flex-direction:row;gap:4px;font-size:14px}.dv-pop svg{width:22px;height:16px}}} /* 沒全螢幕的電腦（舞台 410–540 高）：上面放不下（壓到「下車」）→ 手煞車左邊、煞車上面 */
+@media (min-height:561px){@container (max-height:409px){.dv-pop{top:142px;right:196px;bottom:auto;height:44px;flex-direction:row;gap:4px;font-size:14px}.dv-pop svg{width:22px;height:16px}.pw-host.pw-on .dv-pop{margin-top:46px}}}
 .dv-spd i{position:absolute;bottom:calc(100% + 24px);left:50%;transform:translateX(-50%);padding:5px 13px;border-radius:999px;background:#FF6A1F;color:#1A0F07;font:700 17px/1 ${SANS};font-style:normal;letter-spacing:.04em;white-space:nowrap;box-shadow:0 3px 0 #9E4213}
 .dv-spd i span{font:700 19px/1 ${COND};color:inherit;margin:0 0 0 5px;letter-spacing:0}
 .dv-toast{top:34%;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:9px 20px;border-radius:22px;background:rgba(14,15,18,0.78);font-size:20px;font-weight:700;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,-50%) scale(.92);transition:opacity .15s,transform .15s}
@@ -209,6 +226,7 @@ const ICON = {
   door: '<svg viewBox="0 0 24 24"><path d="M3.5 20.5v-16h17v16"/><path d="M3.5 8.5h17M3.5 12h17"/><path d="M12 20.5v-5.8M9.2 17.2l2.8-2.8 2.8 2.8"/></svg>',
   key: '<svg viewBox="0 0 24 24"><circle cx="8" cy="15.5" r="4.2"/><path d="M11 12.5l8.5-8.5M16.2 7.3l2.6 2.6M13.8 9.7l2 2"/></svg>',
   hand: '<svg viewBox="0 0 24 24"><path d="M10.2 21l-3.6-4.6a1.5 1.5 0 0 1 2.3-1.9l1.3 1.5V9.2a1.6 1.6 0 0 1 3.2 0v4.6l3.8.8a1.9 1.9 0 0 1 1.5 2.1l-.6 4.3"/><path d="M7.6 6.6a5 5 0 0 1 8.3 0"/></svg>',
+  pop: '<svg viewBox="0 0 30 22" aria-hidden="true"><rect x="9" y="5" width="13" height="12" rx="3"/><path d="M3 6L7 8M2 11L7 11M3 16L7 14"/></svg>', // 跳燈（燈＋光線，跟草稿一樣）
   // 第二顆按鈕（下車）：走路的人
   walk: '<svg viewBox="0 0 24 24"><circle cx="13.4" cy="4.3" r="2"/><path d="M11.6 8.5l-3 1.6-1.3 3.2M11.6 8.5l2.4 2 2.9.6M11.6 8.5l-1 5.3 3 2.5.9 4.3M10.6 13.8l-1.9 3.4-3 1.3"/></svg>',
 };
@@ -376,7 +394,7 @@ function createDrive(o) {
   let imp = null; // 這一幀最大的一下（onImpact）
   const human = { thr: 0, brk: 0, steer: 0, hb: 0, kb: {} };
   const tilt = { on: false, a: 0, n: 0, center: 0, val: 0, wait: 0, fail: null, scr: () => (typeof screen !== 'undefined' && screen.orientation ? screen.orientation.angle : typeof window !== 'undefined' && +window.orientation) || 0 };
-  let forced = null, paused = false, auto = null, alive = true, dest = null, mode = 'chase', view = null, intro = null, now = 0, action = null, action2 = null;
+  let forced = null, paused = false, auto = null, alive = true, dest = null, mode = 'chase', view = null, intro = null, now = 0, action = null, action2 = null, popOn = null, popFn = null;
   let marks = null; // 第 3 批（b3-int）別的模組給的小地圖點（setMarkers）：[{ x, z, fill, ring, r, on }]
   const marksT = {}; // 大地圖那一批：setMarkers(list, tag) 另外一組（比賽的對手 'race'），label＝點上面的字（名次）
   let mapTap = null, mapWhole = null; // setMapTap：點小地圖做什麼（下面一條字）；setMapView：小地圖看整個範圍（北朝上，比賽的整個賽道）
@@ -796,7 +814,8 @@ function createDrive(o) {
       + `<div class="dv-steer"><b role="button" aria-label="左轉">${ICON.L}</b><b role="button" aria-label="右轉">${ICON.R}</b></div>`
       + `<div class="dv-tilt"><i aria-hidden="true"><svg viewBox="-30 -30 60 60"><g><circle r="24" stroke-width="6"/><path d="M-22 2L-7 5M22 2L7 5M0 9V22" stroke-width="5"/><circle r="6" fill="#F2F3F5" stroke="none"/><rect class="r" x="-3" y="-28" width="6" height="9" rx="1.5"/></g></svg></i><b role="button" aria-label="置中">置中</b></div>`
       + `<div class="dv-ped"><b class="dv-brk" role="button" aria-label="煞車">煞車</b><b class="dv-gas" role="button" aria-label="油門">油門</b></div><div class="dv-toast" role="status"></div>`
-      + `<b class="dv-hb" role="button" aria-label="手煞車">手煞車</b>`; // 第 3 批（甩尾）
+      + `<b class="dv-hb" role="button" aria-label="手煞車">手煞車</b>` // 第 3 批（甩尾）
+      + `<button type="button" class="dv-pop" aria-pressed="false" hidden>${ICON.pop}<span>跳燈</span></button>`; // 跳燈（86、RX-7）
     o.hudParent.append(root);
     const q = (s) => root.querySelector(s), H = { root, chip: q('.dv-chip'), arrow: q('.dv-chip svg'), name: q('.dv-chip b'), dist: q('.dv-chip small'), map: q('.dv-map canvas'), cam: q('.dv-cam'),
       act: q('.dv-act'), actIcon: q('.dv-act i'), actText: q('.dv-act span'), act2: q('.dv-act2'), act2Icon: q('.dv-act2 i'), act2Text: q('.dv-act2 span'),
@@ -804,6 +823,7 @@ function createDrive(o) {
     if (o.camButton === false) H.cam.hidden = true;
     H.hb = q('.dv-hb'); H.drift = q('.dv-spd i'); H.driftA = q('.dv-spd i span'); // 第 3 批
     H.tiltG = q('.dv-tilt g'); H.tiltC = q('.dv-tilt b'); // 轉手機開車
+    H.pop = q('.dv-pop'); // 跳燈
     H.spdBox = q('.dv-spd'); H.tach = q('.dv-spd svg'); H.tachA = q('.dv-spd svg .a'); H.spdBox.classList.toggle('tach', mode !== 'eye'); // 轉速表
     const on = (el, t, f, opt) => { el.addEventListener(t, f, opt); H.off.push(() => el.removeEventListener(t, f, opt)); };
     on(root, 'contextmenu', (e) => e.preventDefault());
@@ -822,6 +842,9 @@ function createDrive(o) {
     on(H.tiltC, 'pointerdown', () => H.tiltC.classList.add('on'));
     for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.tiltC, t, () => H.tiltC.classList.remove('on'));
     on(H.tiltC, 'click', (e) => { e.preventDefault(); tilt.center = tilt.n ? tilt.a : 0; tiltVal(); toast('置中了：現在這樣＝直直開'); });
+    on(H.pop, 'pointerdown', () => H.pop.classList.add('on')); // 跳燈：按下去縮一下，放開（click）才換；另一隻手指按著油門也按得到
+    for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.pop, t, () => H.pop.classList.remove('on'));
+    on(H.pop, 'click', (e) => { e.preventDefault(); doPop(); });
     H.mapBox = q('.dv-map'); H.mapB = q('.dv-mapb'); on(H.mapBox, 'click', (e) => { if (mapTap) { e.preventDefault(); mapTap.onClick(); } }); // 點小地圖（setMapTap）：大地圖、比賽看整個賽道
     // 大按鈕：按下去縮一下，放開（click）才做；另一隻手指按著油門也按得到
     on(H.act, 'pointerdown', () => H.act.classList.add('on'));
@@ -950,6 +973,14 @@ function createDrive(o) {
     if (!action2 || paused || !alive) return;
     const f = action2.onClick; if (typeof f === 'function') f(api);
   }
+  // 跳燈（86、RX-7）：手煞車旁邊的按鈕；on＝null 這台沒有（藏起來）；按了叫 onToggle（叫的人換燈、再 setPop 換按鈕）
+  function setPop(on, onToggle) {
+    popOn = on == null ? null : !!on; popFn = typeof onToggle === 'function' ? onToggle : popFn;
+    if (!hud) return;
+    hud.pop.hidden = popOn === null; hud.root.classList.toggle('pop', popOn !== null);
+    hud.pop.setAttribute('aria-pressed', String(popOn === true)); hud.pop.setAttribute('aria-label', popOn ? '跳燈（開著）' : '跳燈');
+  }
+  function doPop() { if (popOn === null || paused || !alive || !popFn) return; popFn(api); }
 
   // ---- 鍵盤 ----
   const KEYS = { ArrowUp: 'U', KeyW: 'U', ArrowDown: 'D', KeyS: 'D', ArrowLeft: 'L', KeyA: 'L', ArrowRight: 'R', KeyD: 'R', Space: 'B' };
@@ -958,6 +989,7 @@ function createDrive(o) {
     const k = KEYS[e.code], down = e.type === 'keydown';
     if (k) { if (!paused) e.preventDefault(); human.kb[k] = down; }
     else if (down && e.code === 'KeyC' && !e.repeat && !paused) setCameraMode(mode === 'eye' ? 'chase' : 'eye');
+    else if (down && e.code === 'KeyL' && !e.repeat && !paused && popOn !== null) { e.preventDefault(); doPop(); } // 跳燈
     else if (down && e.code === 'KeyE' && !e.repeat && !paused && (action || action2)) { e.preventDefault(); if (action) doAction(); else doAction2(); } // 沒有大按鈕：按第二顆（下車）
   };
   const onBlur = () => { human.kb = {}; };
@@ -1082,7 +1114,7 @@ function createDrive(o) {
     st.rev = false; st.gear = 0; st.hold = 0;
     st.slip = st.slipV = st.loose = st.dm = 0; // 第 3 批：自動停車不甩
   }
-  function pause() { paused = true; auto = null; events.length = 0; neutral(); setHidden(true); human.thr = human.brk = human.steer = human.hb = 0; human.kb = {}; fxOff(); if (hud) hud.hb.classList.remove('on'); /* 第 3 批 */ if (hud) { hud.act.classList.remove('on'); hud.act2.classList.remove('on'); } }
+  function pause() { paused = true; auto = null; events.length = 0; neutral(); setHidden(true); human.thr = human.brk = human.steer = human.hb = 0; human.kb = {}; fxOff(); if (hud) hud.hb.classList.remove('on'); /* 第 3 批 */ if (hud) { hud.act.classList.remove('on'); hud.act2.classList.remove('on'); hud.pop.classList.remove('on'); } }
   function resume() { if (!alive) return; paused = false; setHidden(false); cam.ok = false; }
   function release() { pause(); if (ride) ride.release(); st.spin = 0; car.position.set(0, 0, 0); car.rotation.set(0, 0, 0); S.wheels.forEach((w) => (w.rotation.z = 0)); car.updateMatrixWorld(true); }
   function setDestination(name) { dest = name && places[name] ? name : null; routeT = 0; routeTick(0, true); if (hud) hud.last.here = undefined; }
@@ -1111,6 +1143,7 @@ function createDrive(o) {
     setDamage: (p) => { dmgP.power = p && p.power > 0 ? Math.min(1, p.power) : 1; dmgP.top = p && p.top > 0 ? Math.min(1, p.top) : 1; dmgP.maxKmh = p && p.maxKmh > 0 ? p.maxKmh : Infinity; dmgP.steerPull = p ? clamp(+p.steerPull || 0, -1, 1) : 0; },
     setCamCeil: (fn) => { camCeil = typeof fn === 'function' ? fn : null; }, // 修 5（2026-10-10）
     setTilt, get tilt() { return tilt.on; },
+    setPop, get pop() { return popOn; }, // 跳燈
     setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
     carInfo: { nose: info.nose, tail: info.tail, len: info.len, halfW: Math.max(info.halfW, +o.halfW || 0), wheelbase: L, vmax: P.vmax }, hud: hud && hud.root, // halfW：碰撞的半寬（怪獸卡車：輪胎比車身寬）

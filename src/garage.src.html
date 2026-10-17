@@ -420,6 +420,7 @@ function save(now) {
     try {
       const d = { v: 2, cur, scene: studioKind, money: GAME.money, owned: [...GAME.owned], parts: GAME.parts, tyres: GAME.tyres, wins: GAME.wins, park: GAME.park, dmg: GAME.dmg, look: GAME.look || undefined, guns: GAME.guns, best: GAME.best, home: GAME.home ?? undefined, // home：車庫街你那間（0–5；第一次進入世界拿到的號碼）
         key: GAME.key || undefined, cars: Object.fromEntries(Object.entries(CARS).map(([k, C]) => [k, C.state])) };
+      if (GAME.pop && Object.keys(GAME.pop).length) d.pop = GAME.pop; // 跳燈（86、R7）：哪幾台開著燈 {車: 1}（都關著就不存）
       if (saveFix) try { saveFix(d); } catch (e) { console.warn(e); } // 第 19 批：開借來的車的時候，存的還是你自己的車（net.src.js）
       localStorage.setItem(SAVE_KEY, JSON.stringify(d));
     } catch { /* 不給存就算了 */ }
@@ -457,6 +458,7 @@ function okValue(k, o, v) { // 存的值還是現在有的選項才用（改版�
   for (const [id, n] of Object.entries(d.wins || {})) GAME.wins[id] = Math.max(0, Math.floor(+n || 0));
   for (const [k, n] of Object.entries((d.best && d.best.hill) || {})) if (CARS[k] && +n > 1 && +n < 3600) GAME.best.hill[k] = Math.round(+n * 100) / 100; // 爬山計時賽（以前的存檔沒有：空的）
   GAME.key = typeof d.key === 'string' && /^[0-9]{4}$/.test(d.key) ? d.key : null; // 第 19 批：借車的密碼
+  GAME.pop = Object.fromEntries(Object.entries(d.pop && typeof d.pop === 'object' ? d.pop : {}).filter(([k, v]) => CARS[k] && v === 1)); // 跳燈：開著燈的車（以前的存檔沒有＝都關著）
   GAME.home = Number.isInteger(d.home) && d.home >= 0 && d.home < 6 ? d.home : null; // 第 17 批：車庫街你那間（以前的存檔沒有：還沒進過世界＝1 號）
   if (d.park && typeof d.park === 'object' && Array.isArray(d.park.decks)) GAME.park = { mid: typeof d.park.mid === 'string' ? d.park.mid : null, decks: d.park.decks.slice(0, 12), rev: Array.isArray(d.park.rev) ? d.park.rev.slice(0, 12) : [], ring: Array.isArray(d.park.ring) ? d.park.ring.slice(0, 31) : [] }; // ring：圓環車庫 31 格（第 20 批；舊存檔沒有＝空的） // 升降機上停哪台（第 2 批；舊存檔沒有：照價錢排，town.src.js 的 normPark）
   if (CRASH_DAMAGE) for (const [k, st] of Object.entries(d.dmg || {})) if (PERF[k] && st && typeof st === 'object' && Array.isArray(st.h) && st.h.length) GAME.dmg[k] = st; // 撞壞的（apply 會再檢查每一下）

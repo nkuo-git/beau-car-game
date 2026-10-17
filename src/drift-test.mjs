@@ -226,6 +226,7 @@ const hook = 'window.__G = () => GAME; window.__S = () => S; window.__scene = ()
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, TR, LODS, cur, built, walker });'
   + ' window.__N = () => NPC;'
+  + ' window.__switch = (k) => { GAME.owned.add(k); if (!tripPose[k]) { const t = drv.telemetry(); tripPose[k] = { x: t.x + Math.sin(t.heading) * 6, z: t.z + Math.cos(t.heading) * 6, heading: t.heading }; } return switchCar(k); };'
   + ' window.__remake = () => { const t = drv.telemetry(); drv.dispose(); makeDrv({ x: t.x, z: t.z, heading: t.heading }); return drv.tilt; };'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };';
@@ -456,6 +457,73 @@ const pre = await p.evaluate(({ X, Z }) => { const d = window.__D().drv; d.telep
 const paused = await p.evaluate(() => ({ smoke: window.__D().TR.scene.getObjectByName('drive-smoke').visible, sq: window.__sq.slice(), hb: window.__D().drv.telemetry().handbrake }));
 check(pre.skid > 0.3 && pre.smoke && !paused.smoke && paused.sq.some((a) => a[0] === 0) && paused.hb === 0, `drive.pause() (getting out): smoke hidden, squeal off (${JSON.stringify(paused.sq)}), handbrake released`);
 await p.evaluate(() => { const d = window.__D().drv; d.setInput(null); d.resume(); window.__dstep(5); });
+// 跳燈（Nick 2026-10-17 草稿說好）：只有 86、R7 有「跳燈」；直拿在手煞車上面、橫拿在左邊；不壓到別的按鈕；按了 aria-pressed、燈蓋真的轉上來（多畫 1 個 draw call、第一人稱也看得到）、記在存檔；再按收回去
+{
+  const popUi = () => p.evaluate(() => { const e = document.querySelector('#stage .dv-pop'), D = window.__D(), P = D.tripS.body.getObjectByName('popup')?.userData.pop, sv = (() => { try { return JSON.parse(localStorage.getItem('carid.tune')).pop || null; } catch { return 'bad'; } })();
+    const u = P && P.mesh.material.userData.u.uPop.value;
+    return { cur: D.cur, has: !!e, shown: !!e && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && e.getClientRects().length > 0, pressed: e && e.getAttribute('aria-pressed'), text: e && e.textContent, api: D.drv.pop, pod: !!P,
+      t: P && +P.t.toFixed(3), on: P && P.on, vis: P && P.mesh.visible, glow: P && +P.glow.toFixed(3), tipY: P && +(P.info.L * Math.sin(P.info.theta - P.info.phi + Math.atan2(u.w, u.z))).toFixed(3), save: sv }; });
+  const rect = (s) => p.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; }, s);
+  await p.evaluate(({ X, Z }) => { const d = window.__D().drv; d.setInput(null); d.teleport({ x: X, z: Z, heading: 0 }); window.__dstep(10); }, pad);
+  const u0 = await popUi();
+  check(u0.cur === 'supra' && u0.has && !u0.shown && u0.api === null && !u0.pod, `SUPRA: no 跳燈 button (hidden, drive.pop null) and no pop-up lamp mesh (${JSON.stringify({ shown: u0.shown, api: u0.api })})`);
+  const res = {};
+  for (const k of ['ae86', 'rx7']) {
+    await p.evaluate((k) => window.__switch(k), k); await p.evaluate(() => window.__dstep(5));
+    const a = await popUi();
+    await p.evaluate(() => document.querySelector('#stage .dv-pop').click());
+    const b1 = await popUi(); await p.evaluate(() => window.__dstep(9)); const mid = await popUi(); await p.evaluate(() => window.__dstep(20)); const up = await popUi();
+    await p.waitForTimeout(450); const saved = await popUi();
+    res[k] = { a, b1, mid, up, saved };
+    check(a.cur === k && a.shown && a.pressed === 'false' && a.text === '跳燈' && a.api === false && a.pod && a.t === 0 && !a.vis, `${k}: 跳燈 button shows (aria-pressed false), lids folded and the pod mesh hidden (0 draw calls) (${JSON.stringify(a)})`);
+    check(b1.pressed === 'true' && b1.api === true && b1.on && mid.t > 0.2 && mid.t < 0.8 && mid.vis && up.t === 1 && up.vis && up.glow === 1 && a.tipY < 0.01 && mid.tipY > a.tipY + 0.03 && up.tipY > 0.12 && saved.save && saved.save[k] === 1,
+      `${k}: press → button yellow (aria-pressed true), lids turn up over ~0.3 s (lid tip ${a.tipY} → ${mid.tipY} → ${up.tipY} m above the hinge, t ${mid.t} at 0.15 s), lamps lit (glow ${up.glow}), saved pop.${k} = 1`);
+  }
+  // 位置：直拿＝手煞車正上面；橫拿＝手煞車左邊；全螢幕（整個 HUD）／沒全螢幕（跳燈）5 種螢幕都不壓到別的按鈕
+  HUD_SEL.push('.dv-pop');
+  const pBad = [], pOff = [], where = {};
+  for (const fsOn of [true, false]) {
+    const isFs = await p.evaluate(() => document.body.classList.contains('fs'));
+    if (isFs !== fsOn) { await p.evaluate(() => document.getElementById('fsBtn').click()); await p.waitForTimeout(300); }
+    for (const [w, h] of sizes) {
+      await p.setViewportSize({ width: w, height: h }); await p.waitForTimeout(250); await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      const c = await clash(fsOn ? null : '.dv-pop', fsOn), a = await rect('#stage .dv-pop'), hb = await rect('#stage .dv-hb');
+      const above = a.b <= hb.t + 0.5 && a.l < hb.r && hb.l < a.r, left = a.r <= hb.l + 0.5 && a.t < hb.b && hb.t < a.b;
+      where[`${fsOn ? 'fs' : 'page'} ${w}x${h}`] = above ? 'above' : left ? 'left' : `? ${[a.l, a.t, a.r, a.b].map(Math.round)} hb ${[hb.l, hb.t, hb.r, hb.b].map(Math.round)}`;
+      const cr = c ? await p.evaluate((sels) => sels.map((s) => { const e = document.querySelector('#stage ' + s) || document.querySelector(s), r = e.getBoundingClientRect(); return `${s} ${[r.left, r.top, r.right, r.bottom].map(Math.round)}`; }).join('; '), [...new Set(c.split(/, | × /).map((x) => x.replace(/ off-screen$/, '')))]) : '';
+      if (c) (fsOn ? pBad : pOff).push(`${w}x${h}: ${c} (${cr})`);
+      if (fsOn && w === 800) await drawAndShot('10-pop-landscape');
+      if (!fsOn && w === 1280) await drawAndShot('10b-pop-small-stage');
+    }
+  }
+  await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(250);
+  if (!(await p.evaluate(() => document.body.classList.contains('fs')))) { await p.evaluate(() => document.getElementById('fsBtn').click()); await p.waitForTimeout(300); }
+  console.log('  跳燈 where:', JSON.stringify(where));
+  check(where['fs 360x800'] === 'above' && where['fs 412x915'] === 'above' && where['fs 915x412'] === 'left' && where['fs 800x360'] === 'left', `跳燈 sits right above 手煞車 when held upright and left of it when held sideways (${JSON.stringify(where)})`);
+  check(!pBad.length, `fullscreen with 跳燈: whole HUD on screen, nothing overlapping at 360×800, 412×915, 915×412, 800×360, 1280×720 (${pBad.join(' / ') || 'ok'})`);
+  check(!pOff.length, `not fullscreen: 跳燈 does not cover any other button on the same 5 screens (${pOff.join(' / ') || 'ok'})`);
+  // 畫幾個 draw call：同一個畫面燈蓋收好／立起來（追車、第一人稱）
+  const cost = await p.evaluate(async () => {
+    const D = window.__D(), P = D.tripS.body.getObjectByName('popup').userData.pop, frame = async () => { const n = window.__dframes || 0; window.__noDraw = false; while ((window.__dframes || 0) < n + 2) await new Promise((r) => requestAnimationFrame(r)); window.__noDraw = true; return window.__rinfo(); };
+    const o = {};
+    for (const m of ['chase', 'eye']) { D.drv.setCameraMode(m); window.__dstep(3); P.set(true, 0); o[m + 'Up'] = await frame(); P.set(false, 0); o[m + 'Down'] = await frame(); P.set(true, 0); }
+    D.drv.setCameraMode('chase'); window.__dstep(3); return o;
+  });
+  console.log('  跳燈 render (rx7):', JSON.stringify(cost));
+  check(cost.chaseUp.calls - cost.chaseDown.calls === 1 && cost.eyeUp.calls - cost.eyeDown.calls === 1 && cost.chaseUp.tris - cost.chaseDown.tris < 400, `raised lids cost exactly 1 draw call (+${cost.chaseUp.tris - cost.chaseDown.tris} triangles) and are drawn from the driver's seat too (first person ${cost.eyeDown.calls} → ${cost.eyeUp.calls} calls)`);
+  await p.evaluate(() => { window.__D().drv.setCameraMode('eye'); window.__dstep(3); }); await drawAndShot('11-pop-eye'); await p.evaluate(() => { window.__D().drv.setCameraMode('chase'); window.__dstep(3); });
+  // 重新上車（新的 drive）：照存檔馬上是立起來的；鍵盤 L＝跳燈；再按收回去、存檔拿掉；換回 SUPRA 按鈕不見
+  const re1 = await p.evaluate(() => { window.__remake(); return null; }), r1 = await popUi();
+  await p.keyboard.press('KeyL'); const kL = await popUi(); await p.evaluate(() => window.__dstep(30)); const kD = await popUi(); await p.waitForTimeout(450); const kS = await popUi();
+  await p.keyboard.press('KeyL'); await p.evaluate(() => window.__dstep(30)); const kU = await popUi();
+  await p.evaluate(() => document.querySelector('#stage .dv-pop').click()); await p.evaluate(() => window.__dstep(30)); const off = await popUi();
+  console.log('  跳燈 remake / L / off:', JSON.stringify({ r1, kL, kD, kS, kU, off }));
+  check(r1.cur === 'rx7' && r1.pressed === 'true' && r1.t === 1 && r1.vis && r1.glow === 1, `a new drive of the same car starts with the saved state: lids up, button pressed (${JSON.stringify({ t: r1.t, pressed: r1.pressed })})`);
+  check(kL.pressed === 'false' && kD.t === 0 && !kD.vis && kD.glow === 0 && kD.tipY < 0.01 && kS.save && !('rx7' in kS.save) && kS.save.ae86 === 1 && kU.t === 1 && kU.pressed === 'true', `keyboard L toggles 跳燈: lids fold back (t 0, mesh hidden again, lamp dark), save drops rx7 but keeps ae86; L again → up`);
+  check(off.pressed === 'false' && off.api === false && off.t === 0 && !off.vis, `pressing 跳燈 again: lights off and lids folded (${JSON.stringify({ t: off.t, pressed: off.pressed })})`);
+  await p.evaluate(() => window.__switch('supra')); await p.evaluate(() => window.__dstep(5)); const back = await popUi();
+  check(back.cur === 'supra' && !back.shown && back.api === null, `back in the SUPRA: no 跳燈 button again`);
+}
 check(!errs.length, `no page errors (${errs.join(' | ') || 'none'})`);
 await b.close(); srv.close();
 console.log(fails.length ? `\n${fails.length} FAILED:\n- ${fails.join('\n- ')}` : '\nALL OK', el());
