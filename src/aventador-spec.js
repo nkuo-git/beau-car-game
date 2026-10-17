@@ -181,9 +181,9 @@ export const AVENTADOR_SPEC = {
 };
 // 照片相機（aventador3d/silfit.mjs：輪子＋車身輪廓＋照片 3 的車牌反推）
 export const AVENTADOR_CAMS = {
-  photo1: { a: 29.116, d: 6.215, h: 1.689, tx: 0.604, ty: 0.411, fov: 18.96, rl: -2.922 },
-  photo2: { a: -36.139, d: 6.264, h: 1.256, tx: 0.495, ty: 0.466, fov: 18.869, rl: 4.74 },
-  photo3: { a: -152.089, d: 7.064, h: 1.88, tx: -0.76, ty: 0.31, fov: 17.746, rl: -1.684 },
+  photo1: { a: 29.096, d: 6.208, h: 1.692, tx: 0.605, ty: 0.41, fov: 18.959, rl: -2.888 },
+  photo2: { a: -36.238, d: 6.258, h: 1.284, tx: 0.499, ty: 0.468, fov: 18.87, rl: 4.593 },
+  photo3: { a: -151.995, d: 7.064, h: 1.909, tx: -0.76, ty: 0.307, fov: 17.803, rl: -1.59 },
 };
 export const AVENTADOR_GARAGE = {
   name: 'AV12 剪刀門', sub: '藍色剪刀門超跑 · 3D 試做版',
