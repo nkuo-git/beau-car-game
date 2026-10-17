@@ -93,6 +93,12 @@ export function makeSDF(opt = {}) {
       hole(Math.max(Math.abs(y - 0.395) - 0.05, Math.abs(az - 0.668) - 0.09), 0.02, 0.01); // 兩邊的導風口
       hole(Math.max(Math.abs(y - 0.64) - 0.045 + (az > 0.3 ? 0 : 0), az - (0.50 - (0.69 - y) * 0.3)), 0.015, 0.008); // 上面的水箱罩
     }
+    // 後保桿下面的黑色擴散器：往裡面縮 4 公分（排氣管從右邊伸出來）
+    if (x < -1.95 && y < 0.5) {
+      const top = 0.445 - 0.08 * sstep(0.55, 0.78, az);
+      const box = smax(y - top, az - 0.80, 0.03);
+      d = smax(d, -smax(box, x + 2.185, 0.012), 0.012);
+    }
     // 輪拱：外緣一圈（外擴的葉子板翻邊）、挖洞
     for (const xa of [EVO.xr, EVO.xf]) {
       if (y > 0.16 && Math.abs(x - xa) < 0.6) {

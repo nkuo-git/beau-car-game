@@ -5,25 +5,34 @@ import * as THREE from 'three';
 import { mirror, aeroKit, slab } from './parts.js';
 import { CIVIC_LOOK } from './civic-look.js';
 
+// 幾何合成一個（只留 position、normal）：同材質的小零件合成一個網格，draw call 少
+function CIVIC_merge(list) {
+  const P = [], N = []; let n = 0;
+  for (let g of list) { if (g.index) g = g.toNonIndexed(); P.push(g.attributes.position.array); N.push(g.attributes.normal.array); n += g.attributes.position.count; }
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3); let o = 0;
+  for (let i = 0; i < P.length; i++) { pos.set(P[i], o); nor.set(N[i], o); o += P[i].length; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  return geo;
+}
+
 // 輪框：20 吋，五組 Y 形雙輻（每組兩根從輪轂分開到外緣），輻條往外緣微微往外凸；輪唇內側一圈紅線（只有原廠輪框有）
 function CIVIC_wheel(rim, w, mats) {
-  const g = new THREE.Group();
+  const g = new THREE.Group(), L = []; // L：同一個材質的零件（輻條、輪轂、外圈）合成一個網格
   const ro = rim - 0.012, rh = 0.07, zo = w / 2 - 0.026, zi = w / 2 - 0.068, rs = 0.135; // rs：Y 分叉的地方
   const P = (r, ang, z, off) => [Math.cos(ang) * r - Math.sin(ang) * off, Math.sin(ang) * r + Math.cos(ang) * off, z];
   const zs = zo - 0.008;
   for (let j = 0; j < 5; j++) {
     const a = (j * 2 * Math.PI) / 5 + Math.PI / 2;
-    g.add(new THREE.Mesh(slab([P(rh, a, zi, -0.026), P(rs + 0.01, a, zs, -0.022), P(rs + 0.01, a, zs, 0.022), P(rh, a, zi, 0.026)], 0.026), mats.chrome)); // Y 的根（粗）
+    L.push(slab([P(rh, a, zi, -0.026), P(rs + 0.01, a, zs, -0.022), P(rs + 0.01, a, zs, 0.022), P(rh, a, zi, 0.026)], 0.026)); // Y 的根（粗）
     for (const s of [-1, 1]) {
       const ai = a + s * 0.085, ao = a + s * 0.25; // 分成兩根，到外緣分開
-      g.add(new THREE.Mesh(slab([P(rs - 0.01, ai, zs, -0.0135), P(ro, ao, zo, -0.0105), P(ro, ao, zo, 0.0105), P(rs - 0.01, ai, zs, 0.0135)], 0.024), mats.chrome));
+      L.push(slab([P(rs - 0.01, ai, zs, -0.0135), P(ro, ao, zo, -0.0105), P(ro, ao, zo, 0.0105), P(rs - 0.01, ai, zs, 0.0135)], 0.024));
     }
   }
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.09, 0.04, 40), mats.chrome);
-  hub.geometry.rotateX(Math.PI / 2); hub.position.z = zi + 0.006; g.add(hub);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(ro + 0.003, 0.006, 8, 96), mats.chrome);
-  ring.position.z = zo + 0.004; g.add(ring);
-  mats.civRed ??= new THREE.MeshPhysicalMaterial({ color: 0xc8101c, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05 }); // 紅色細線（四個輪子共用）
+  L.push(new THREE.CylinderGeometry(0.078, 0.09, 0.04, 40).rotateX(Math.PI / 2).translate(0, 0, zi + 0.006));
+  L.push(new THREE.TorusGeometry(ro + 0.003, 0.006, 8, 96).translate(0, 0, zo + 0.004));
+  g.add(new THREE.Mesh(CIVIC_merge(L), mats.chrome));
+  mats.civRed ??= new THREE.MeshPhysicalMaterial({ color: 0xc8101c, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05 }); // 輪唇的紅色細線（四個輪子共用）
   const red = new THREE.Mesh(new THREE.TorusGeometry(ro + 0.009, 0.0028, 6, 120), mats.civRed);
   red.position.z = zo + 0.009; g.add(red);
   return g;
@@ -31,18 +40,15 @@ function CIVIC_wheel(rim, w, mats) {
 CIVIC_wheel.capInset = 0.055;
 // 原廠大尾翼：尾燈上面、尾門兩邊各一片同色的直立端板（下面往後踢一個腳），上面一片亮黑的主翼
 // 位置從照片 2（側面）和照片 3（左後）兩張一起量的（civic3d/tri.mjs、bp.mjs）：端板在 z ±0.64，
-// 上緣前 (-1.93, 1.355) 後 (-2.18, 1.375)，下緣前 (-1.86, 1.15)、後腳尖 (-2.30, 1.14)
+// 上緣前 (-1.80, 1.36)（照片 2 只看到 -1.93 以後，照片 3 看起來更前面，取中間）後 (-2.18, 1.375)，下緣靠在 C 柱尾端、後腳尖 (-2.30, 1.14)
 function CIVIC_wing(paint, mats) {
   const g = new THREE.Group();
   const zAt = () => 0.64;
   const ep = new THREE.Shape(); // 端板側面（x, y）
-  ep.moveTo(-1.925, 1.358); ep.lineTo(-2.165, 1.378); ep.quadraticCurveTo(-2.19, 1.376, -2.19, 1.35); ep.lineTo(-2.188, 1.215);
-  ep.lineTo(-2.30, 1.148); ep.quadraticCurveTo(-2.305, 1.128, -2.28, 1.126); ep.lineTo(-2.10, 1.125); ep.lineTo(-1.87, 1.135);
-  ep.quadraticCurveTo(-1.845, 1.14, -1.85, 1.17); ep.closePath();
-  for (const sz of [-1, 1]) {
-    const m = new THREE.Mesh(new THREE.ExtrudeGeometry(ep, { depth: 0.024, bevelEnabled: true, bevelThickness: 0.007, bevelSize: 0.007, bevelSegments: 2, curveSegments: 6 }), paint);
-    m.geometry.translate(0, 0, sz * 0.64 - 0.012); g.add(m);
-  }
+  ep.moveTo(-1.80, 1.362); ep.lineTo(-2.165, 1.378); ep.quadraticCurveTo(-2.19, 1.376, -2.19, 1.35); ep.lineTo(-2.188, 1.215);
+  ep.lineTo(-2.30, 1.148); ep.quadraticCurveTo(-2.305, 1.128, -2.28, 1.126); ep.lineTo(-2.10, 1.125); ep.lineTo(-1.93, 1.15);
+  ep.lineTo(-1.82, 1.19); ep.quadraticCurveTo(-1.79, 1.21, -1.785, 1.25); ep.closePath();
+  g.add(new THREE.Mesh(CIVIC_merge([-1, 1].map((sz) => new THREE.ExtrudeGeometry(ep, { depth: 0.024, bevelEnabled: true, bevelThickness: 0.007, bevelSize: 0.007, bevelSegments: 2, curveSegments: 6 }).translate(0, 0, sz * 0.64 - 0.012))), paint));
   // 主翼：倒過來的機翼剖面，亮黑；弦長 0.24，在端板上段後半，前緣低一點；翼展跟著兩片端板（前面寬、後面窄）
   const chord = 0.22, s = new THREE.Shape(), N = 18, top = [], bot = [];
   for (let i = 0; i <= N; i++) {
@@ -63,22 +69,22 @@ function CIVIC_wing(paint, mats) {
   return g;
 }
 
-// 排氣管：中間三支（兩邊大、中間小），亮的管口、裡面黑
-function CIVIC_pipe(mats, z, r) {
+// 排氣管：中間三支（兩邊大、中間小），亮的管口、裡面黑；三支合成兩個網格（管子＋管口、裡面的黑）
+function CIVIC_pipes(mats) {
+  const tubes = [], ins = [], X = -2.185, Y = 0.285;
+  for (const [z, r] of [[-0.118, 0.05], [0, 0.04], [0.118, 0.05]]) {
+    tubes.push(new THREE.CylinderGeometry(r, r, 0.16, 28, 1, true).rotateZ(Math.PI / 2).translate(X, Y, z));
+    tubes.push(new THREE.TorusGeometry(r, 0.004, 8, 28).rotateY(Math.PI / 2).translate(X - 0.08, Y, z));
+    ins.push(new THREE.CircleGeometry(r - 0.004, 28).rotateY(-Math.PI / 2).translate(X - 0.04, Y, z));
+  }
   const g = new THREE.Group();
-  const tube = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.16, 28, 1, true), mats.pipe);
-  tube.geometry.rotateZ(Math.PI / 2); g.add(tube);
-  const lip = new THREE.Mesh(new THREE.TorusGeometry(r, 0.004, 8, 28), mats.pipe);
-  lip.rotation.y = Math.PI / 2; lip.position.x = -0.08; g.add(lip);
-  const inner = new THREE.Mesh(new THREE.CircleGeometry(r - 0.004, 28), mats.black);
-  inner.rotation.y = -Math.PI / 2; inner.position.x = -0.04; g.add(inner);
-  g.position.set(-2.215, 0.285, z);
+  g.add(new THREE.Mesh(CIVIC_merge(tubes), mats.pipe), new THREE.Mesh(CIVIC_merge(ins), mats.black));
   return g;
 }
 
 export const CIVIC_AERO = {
   front: [[2.20, 0], [2.19, 0.25], [2.155, 0.45], [2.085, 0.62], [1.985, 0.76], [1.89, 0.85]], back: 1.88, y: 0.152, rods: [2.15, 0.18],
-  canard: { S: [1.96, 0.80], t: [-0.60, 0.80], ys: [0.43, 0.33] },
+  canard: { S: [1.93, 0.835], t: [-0.60, 0.80], ys: [0.50, 0.42] },
   skirt: { y: 0.162, x0: -0.98, x1: 0.86, z0: 0.86, z1: 0.955 },
   diff: { x0: -1.95, x1: -2.20, x2: -2.33, y0: 0.18, y1: 0.20, y2: 0.24, w: 0.40, fin0: -2.0 },
 };
@@ -100,14 +106,15 @@ export const CIVIC_SPEC = {
   interior: { dx: 0.0, cage: false, wheelZ: -0.37, dashX: 0.62, dashY: 0.92, bench: { x: -0.88, shelfX: -1.55, shelfY: 1.06 } },
   build(body, paint, mats) { // 套件：原廠（什麼都不加）、賽道（碳纖維前下巴＋風刀＋側裙刀片＋擴散器）
     mats.pipe = new THREE.MeshPhysicalMaterial({ color: 0xc4c0b8, roughness: 0.22, metalness: 1, side: THREE.DoubleSide });
-    for (const [z, r] of [[-0.118, 0.05], [0, 0.04], [0.118, 0.05]]) body.add(CIVIC_pipe(mats, z, r));
+    body.add(CIVIC_pipes(mats));
     // 引擎蓋進氣口的開口（黑色，朝前，x 1.30）
     const scoop = new THREE.Mesh(new THREE.PlaneGeometry(0.40, 0.024), mats.black);
     scoop.rotation.y = Math.PI / 2; scoop.position.set(1.302, 1.032, 0); body.add(scoop);
     // 車頭的黑色車牌底座位置沒有車牌（空白）；車頂後緣的整流鰭片（九片，跟車身同色）
-    const fin = new THREE.Shape(); fin.moveTo(0, 0); fin.lineTo(-0.075, 0); fin.lineTo(-0.075, 0.022); fin.quadraticCurveTo(-0.03, 0.02, 0, 0);
+    const fin = new THREE.Shape(); fin.moveTo(0.01, -0.01); fin.lineTo(-0.085, -0.01); fin.lineTo(-0.085, 0.03); fin.quadraticCurveTo(-0.035, 0.026, 0.01, -0.01);
     const fg = new THREE.ExtrudeGeometry(fin, { depth: 0.006, bevelEnabled: false });
-    for (let i = -4; i <= 4; i++) { const f = new THREE.Mesh(fg, paint); f.position.set(-1.565, 1.388 - Math.abs(i) * 0.0045, i * 0.085 - 0.003); body.add(f); }
+    const fins = []; for (let i = -4; i <= 4; i++) fins.push(fg.clone().translate(-1.565, 1.388 - Math.abs(i) * 0.0045, i * 0.085 - 0.003));
+    body.add(new THREE.Mesh(CIVIC_merge(fins), paint));
     const aero = aeroKit(mats, CIVIC_AERO); aero.visible = false; body.add(aero);
     return (kit) => { aero.visible = kit === 'track'; };
   },

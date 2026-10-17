@@ -114,7 +114,7 @@ export const CIVIC_LOOK = (() => {
     const BB = BAR.concat(M(BAR).slice(1, -1).reverse()), D = DIFF.concat(M(DIFF).slice(1, -1).reverse());
     return layers(BOX.rear, [
       (g) => { // R：紅色 C、反光片
-        for (const s of [1, -1]) { g.lineJoin = 'round'; line(g, S(CRED, s), 0.036); poly(g, S(REFL, s)); g.fill(); }
+        for (const s of [1, -1]) { g.lineJoin = 'round'; line(g, S(CRED, s), 0.05); poly(g, S(REFL, s)); g.fill(); }
       },
       (g) => { // G：燻黑燈殼、黑橫條、車牌、通風口、擴散器
         both2(LAMP, (P) => { smooth(g, P); g.fill(); });
@@ -123,7 +123,7 @@ export const CIVIC_LOOK = (() => {
         both2(VENTR, (P) => { poly(g, P); g.fill(); });
         poly(g, D); g.fill();
         g.strokeStyle = '#000'; g.fillStyle = '#000'; // 紅色的地方不要黑
-        for (const s of [1, -1]) { line(g, S(CRED, s), 0.036); poly(g, S(REFL, s)); g.fill(); }
+        for (const s of [1, -1]) { line(g, S(CRED, s), 0.05); poly(g, S(REFL, s)); g.fill(); }
         g.strokeStyle = g.fillStyle = '#fff';
       },
       (g) => { for (const s of [1, -1]) { smooth(g, S(REV, s)); g.fill(); } }, // B：倒車燈（白）
