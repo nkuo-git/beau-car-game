@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}canvas{display:block}</style>
+</head><body>
+<script type="module">
+// 做車用的看車頁（shot.mjs 用 Chromium 開）：?car=<key>&v=<視角>&W=&H=
+// v＝<KEY>_CAMS 裡的照片相機，或 side|front|rear|top|front34|rear34|low|custom（custom 用 a d h tx ty fov rl）
+// 其他參數：bg=none（透明，疊照片用）、paint、kit、wing、liv（拉花名字，0＝none）、ride（車身高度）、rim、caliper、studio=dark、tint
+// 相機（跟 CARS-CONTRACT.md 一樣）：位置 (tx + cos(a)·d, h, −sin(a)·d)，看 (tx, ty, 0)；fov 是垂直視角（度）；rl 是照片轉幾度
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { buildCar, carGeos, SUPRA_SPEC, GTR_SPEC } from './supra.js';
+const Q = new URLSearchParams(location.search), key = Q.get('car') || 'supra';
+const W = +(Q.get('W') || 1200), H = +(Q.get('H') || 800);
+const KEY = key.toUpperCase();
+let spec, cams = {};
+if (key === 'supra') spec = SUPRA_SPEC; else if (key === 'gtr') spec = GTR_SPEC;
+else { const m = await import(`./${key}-spec.js?t=${Date.now()}`); spec = m[`${KEY}_SPEC`]; cams = m[`${KEY}_CAMS`] || {}; }
+const glb = key === 'supra' ? 'body-q.glb' : `body-${key}-q.glb`;
+const gltf = await new GLTFLoader().loadAsync(`${glb}?t=${Date.now()}`);
+const S = buildCar(spec, carGeos(gltf.scene), { paint: Q.get('paint') || spec.paint, tint: Q.get('tint') === 'dark' ? 0.75 : undefined });
+if (Q.has('kit')) S.setKit(Q.get('kit'));
+if (Q.has('wing')) S.setWing(Q.get('wing'));
+if (Q.has('rim')) S.setRim(Q.get('rim'));
+if (Q.has('liv')) S.tex.setLivery?.(Q.get('liv') === '0' ? 'none' : Q.get('liv'));
+if (Q.has('caliper')) S.mats.caliper.color.set(Q.get('caliper'));
+if (Q.has('ride')) S.body.position.y = +Q.get('ride');
+const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+r.setSize(W, H); r.setPixelRatio(1); r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(), dark = Q.get('studio') === 'dark';
+scene.environment = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = dark ? 0.35 : 1;
+if (Q.get('bg') !== 'none') scene.background = new THREE.Color(dark ? 0x15161a : 0xd9dce1);
+const sun = new THREE.DirectionalLight(0xffffff, dark ? 1.2 : 2.2); sun.position.set(3, 6, 2); scene.add(sun, new THREE.HemisphereLight(0xffffff, 0x444444, dark ? 0.2 : 0.5));
+if (Q.get('bg') !== 'none') { const fl = new THREE.Mesh(new THREE.CircleGeometry(8, 64), new THREE.MeshStandardMaterial({ color: dark ? 0x222327 : 0xc4c7cc, roughness: 0.8 })); fl.rotation.x = -Math.PI / 2; fl.position.y = -0.001; scene.add(fl); }
+scene.add(S.car);
+const STD = { side: { a: 90, d: 9, h: 0.65, tx: 0, ty: 0.6, fov: 30 }, front: { a: 0, d: 9, h: 0.7, tx: 0, ty: 0.65, fov: 22 }, rear: { a: 180, d: 9, h: 0.75, tx: 0, ty: 0.65, fov: 22 },
+  top: { a: 90, d: 0.01, h: 14, tx: 0, ty: 0, fov: 25 }, front34: { a: 35, d: 7.5, h: 1.6, tx: 0, ty: 0.55, fov: 32 }, rear34: { a: 145, d: 7.5, h: 1.6, tx: 0, ty: 0.55, fov: 32 },
+  low: { a: 30, d: 5.5, h: 0.45, tx: 0, ty: 0.6, fov: 40 } };
+const v = Q.get('v') || 'front34';
+const c = v === 'custom' ? Object.fromEntries(['a', 'd', 'h', 'tx', 'ty', 'fov', 'rl'].map((k) => [k, +(Q.get(k) || 0)])) : cams[v] || STD[v];
+if (!c) throw new Error('沒有這個視角 ' + v);
+const cam = new THREE.PerspectiveCamera(c.fov, W / H, 0.05, 200), a = c.a * Math.PI / 180;
+cam.position.set(c.tx + Math.cos(a) * c.d, c.h, -Math.sin(a) * c.d);
+if (v === 'top') cam.up.set(-1, 0, 0);
+cam.lookAt(c.tx, c.ty, 0);
+if (c.rl) cam.rotateZ(c.rl * Math.PI / 180);
+r.render(scene, cam);
+window.info = { calls: r.info.render.calls, tris: r.info.render.triangles };
+window.done = true;
+</script></body></html>

@@ -16,6 +16,18 @@ src/body-p918.glb
 src/body-sp3.glb
 src/body-yaris.glb
 src/lod3d/
+# 新的 10 台車（2026-10-17）的中間檔和暫存資料夾
+src/body-chiron.glb
+src/body-aventador.glb
+src/body-senna.glb
+src/body-laferrari.glb
+src/body-huayra.glb
+src/body-rx7.glb
+src/body-ae86.glb
+src/body-civic.glb
+src/body-evo.glb
+src/body-altis.glb
+src/*3d/
 src/monster3d/
 # 備份
 *.bak*
