@@ -91,7 +91,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `node test-b3.mjs ../out/b3/b3` | 警察（星星、追、抓、拘留、罰款；通緝中躲回車庫「關鐵捲門」）、槍店、靶場、槍 | 56 ok |
 | `node neihu-test.mjs ../out/nh/nh` | 內湖：轉換程式重跑一樣、地標、開到港墘站、路牌、走路、內湖的車流和行人 | 35 ok |
 | `node circuit-test.mjs ../out/ci/ci` | 賽車場、AI、名次、每一圈錄下來＋鬼影車；大地圖（走路、開車、拖、點地方、去這裡）、比賽的小地圖（對手號碼點、整個賽道）、撞到對手 | 37 ok，PASSED |
-| `node drift-test.mjs ../out/drift/drift` | 甩尾（Node＋瀏覽器；沒甩的時候跟舊 drive.js 一模一樣） | 42 ok |
+| `node drift-test.mjs ../out/drift/drift` | 甩尾（Node＋瀏覽器；沒甩的時候跟舊 drive.js 一模一樣）；轉手機開車（假的 devicemotion：選單、30 度打到底、置中、橫拿、沒有感應器變回按鈕） | 52 ok |
 | `node bump-test.mjs` | 撞到會動的車（比賽的對手）：追撞掉到差不多前車的速度、前車被推快、撞牆照舊、擦到旁邊（Node，一秒） | 7 ok |
 | `node crush-test.mjs ../out/crush/crush` | 怪獸卡車輾扁車、騎的機車和路邊的東西、人跳開、輾扁的東西長回來 | 57 ok |
 | `node mountain-test.mjs ../out/mt/mt` | 山：去山頂、爬山計時賽、上山下山貼著路、山頂走路、越野車捷徑、輾扁山上的東西、警察追上山、爬山的鬼影車 | 42 ok |
@@ -123,6 +123,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `carid.sound` | 引擎聲 `'on'`／`'off'` |
 | `carid.roomq` | 車庫畫質 `'high'`／`'low'` |
 | `carid.btnsize` | 全螢幕按鈕大小 `'s'`／`'m'`／`'l'`（內容 8 起；搬家不帶） |
+| `carid.tilt` | 方向盤 `'btn'`（按鈕）／`'tilt'`（轉手機；內容 16 起；搬家不帶） |
 | `carid.theme`、`carid.accent` | 萬能軟體設定裡的亮暗、主色（網站的 head 會照它；這裡沒有設定頁） |
 
 **搬家格式（萬能軟體那邊的「搬家」要照這個做）**：

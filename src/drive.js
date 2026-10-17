@@ -56,6 +56,10 @@
 //   drive.pause() / resume()     暫停（不吃按鍵、藏 HUD／影子／光柱、車身擺正、前輪回正）／繼續
 //   drive.release()              把車交給別人（賽道、車庫）：pause＋車子放回原點、不轉、輪子歸零（race.src.js 的 carSize 用世界座標量車頭，一定要）
 //   drive.setInput({ throttle, brake, steer, handbrake } | null)   程式開車（測試）；null＝回到手指、鍵盤
+//   drive.setTilt(on, onFail)    轉手機開車（Nick 2026-10-17）：手機本身當方向盤（devicemotion 的重力），轉 30 度＝打到底、中間 2 度不算；
+//                          左下角的 ◀ ▶ 換成一個小方向盤（看得到轉多少）＋「置中」（現在拿的樣子＝直直開）；鍵盤照舊；
+//                          開了 1.5 秒都沒有感應器的資料：跳「這支手機不能轉手機開車」、變回按鈕、叫 onFail()；drive.tilt＝開著沒有
+//                          tiltAngle({ x, y }, screenAngle) → 手機在螢幕上轉了幾度（順時針＝正；createDrive 外面也拿得到，測試用）
 //   drive.setDamage({ power, top, maxKmh, steerPull } | null)   撞壞了（damage.js 的 dmg.perf）：出力 ×power、極速 ×top、最多 maxKmh、
 //                          方向盤偏 steerPull（−1 左～1 右，最多偏 8%）；null＝恢復
 //   drive.toast(text, ms)；drive.carInfo：{ nose, tail, len, halfW, wheelbase, vmax（km/h） }；drive.dispose()（拿掉 HUD、按鍵、影子、光柱，車子交回）
@@ -79,12 +83,19 @@ import * as THREE from 'three';
 import { createRide } from './terrain.js'; // 第 4 批：地形（越野車場）
 
 // 打包時全部接在同一個 script 裡：只露出 createDrive
-export const { createDrive, DRIVE_DEST } = (() => {
+export const { createDrive, DRIVE_DEST, tiltAngle } = (() => {
 const TAU = Math.PI * 2, GEARS = [3.3, 2.2, 1.62, 1.28, 1.05, 0.86];
 const AERO = 0.55, STEP = 0.25, HZ = 120; // 風阻（街機）、一步最多走幾公尺（碰撞）、物理每秒最少幾步
 const torqueAt = (x) => 0.8 + 0.4 * x - 0.4 * x * x;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const wrapA = (a) => { a = (a + Math.PI) % TAU; return a < 0 ? a + Math.PI : a - Math.PI; };
+// 轉手機開車：accelerationIncludingGravity（停著的時候＝往上 9.8）在手機上的方向 → 手機順時針轉了幾度；再加上畫面轉了幾度（橫拿 90／270）＝在畫面上轉了幾度
+// 手機平放（重力幾乎跟螢幕垂直）量不準：回傳 null（照舊用上一次的）
+const TILT = { full: 30, dead: 2, k: 0.3, wait: 1.5 };
+function tiltAngle(g, scr) {
+  const ax = +g.x || 0, ay = +g.y || 0; if (Math.hypot(ax, ay) < 3) return null;
+  let a = (Math.atan2(-ax, ay) * 180) / Math.PI + (+scr || 0); a = ((a + 180) % 360 + 360) % 360 - 180; return a;
+}
 const toward = (a, b, r) => (a < b ? Math.min(b, a + r) : Math.max(b, a - r));
 const ease = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 const smooth01 = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -160,6 +171,14 @@ const CSS = `
 .dv-steer svg{width:30px;height:30px;fill:#F2F3F5}
 .dv-steer b.on{background:#FF6A1F;transform:translateY(3px);box-shadow:none}
 .dv-steer b.on svg{fill:#1A0F07}
+/* 轉手機開車：◀ ▶ 換成小方向盤（跟著轉）＋「置中」 */
+.dv-tilt{bottom:12px;left:10px;display:flex;align-items:center;gap:6px}
+.dv-tilt i{width:74px;height:74px;border-radius:50%;background:rgba(14,15,18,0.62);display:grid;place-items:center}
+.dv-tilt i svg{width:60px;height:60px;fill:none;stroke:#F2F3F5;stroke-linecap:round}
+.dv-tilt i .r{fill:#E8322A;stroke:none}
+.dv-tilt b{width:64px;height:44px;border-radius:22px;display:grid;place-items:center;background:rgba(14,15,18,0.62);font-size:17px;font-weight:700;letter-spacing:.04em;pointer-events:auto;touch-action:manipulation;cursor:pointer}
+.dv-tilt b.on{background:#FF6A1F;color:#1A0F07}
+.dv:not(.tilt) .dv-tilt,.dv.tilt .dv-steer{display:none}
 .dv-ped{bottom:12px;right:10px;display:flex;align-items:flex-end;gap:10px;pointer-events:auto;touch-action:none}
 .dv-ped b{font-weight:700;border-radius:18px;letter-spacing:.04em}
 .dv-gas{width:74px;height:100px;background:#FF6A1F;color:#1A0F07;font-size:21px;box-shadow:0 5px 0 #9E4213}
@@ -356,6 +375,7 @@ function createDrive(o) {
   const dmgP = { power: 1, top: 1, maxKmh: Infinity, steerPull: 0 }; // 撞壞了（setDamage）
   let imp = null; // 這一幀最大的一下（onImpact）
   const human = { thr: 0, brk: 0, steer: 0, hb: 0, kb: {} };
+  const tilt = { on: false, a: 0, n: 0, center: 0, val: 0, wait: 0, fail: null, scr: () => (typeof screen !== 'undefined' && screen.orientation ? screen.orientation.angle : typeof window !== 'undefined' && +window.orientation) || 0 };
   let forced = null, paused = false, auto = null, alive = true, dest = null, mode = 'chase', view = null, intro = null, now = 0, action = null, action2 = null;
   let marks = null; // 第 3 批（b3-int）別的模組給的小地圖點（setMarkers）：[{ x, z, fill, ring, r, on }]
   const marksT = {}; // 大地圖那一批：setMarkers(list, tag) 另外一組（比賽的對手 'race'），label＝點上面的字（名次）
@@ -774,6 +794,7 @@ function createDrive(o) {
     root.innerHTML = `<div class="dv-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="dv-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="dv-map"><canvas></canvas><b class="dv-mapb" hidden></b></div>`
       + `<b class="dv-cam" role="button" aria-label="換視角" aria-pressed="false">${ICON.cam}</b><button type="button" class="dv-act2" hidden><i></i><span></span></button><div class="dv-spd"><svg viewBox="0 0 100 100" aria-hidden="true"><path class="t" d="M20.3 79.7A42 42 0 1 1 79.7 79.7"/><path class="z" d="M91.87 53.3A42 42 0 0 1 79.7 79.7"/><path class="a" d="M20.3 79.7A42 42 0 1 1 79.7 79.7" pathLength="100" stroke-dasharray="0 100"/></svg><b>0</b><span>KM/H</span><em>1</em><i hidden>甩尾<span></span></i></div>`
       + `<div class="dv-steer"><b role="button" aria-label="左轉">${ICON.L}</b><b role="button" aria-label="右轉">${ICON.R}</b></div>`
+      + `<div class="dv-tilt"><i aria-hidden="true"><svg viewBox="-30 -30 60 60"><g><circle r="24" stroke-width="6"/><path d="M-22 2L-7 5M22 2L7 5M0 9V22" stroke-width="5"/><circle r="6" fill="#F2F3F5" stroke="none"/><rect class="r" x="-3" y="-28" width="6" height="9" rx="1.5"/></g></svg></i><b role="button" aria-label="置中">置中</b></div>`
       + `<div class="dv-ped"><b class="dv-brk" role="button" aria-label="煞車">煞車</b><b class="dv-gas" role="button" aria-label="油門">油門</b></div><div class="dv-toast" role="status"></div>`
       + `<b class="dv-hb" role="button" aria-label="手煞車">手煞車</b>`; // 第 3 批（甩尾）
     o.hudParent.append(root);
@@ -782,6 +803,7 @@ function createDrive(o) {
       spd: q('.dv-spd b'), gear: q('.dv-spd em'), steer: q('.dv-steer'), steerB: [...root.querySelectorAll('.dv-steer b')], gas: q('.dv-gas'), brk: q('.dv-brk'), toast: q('.dv-toast'), off: [] };
     if (o.camButton === false) H.cam.hidden = true;
     H.hb = q('.dv-hb'); H.drift = q('.dv-spd i'); H.driftA = q('.dv-spd i span'); // 第 3 批
+    H.tiltG = q('.dv-tilt g'); H.tiltC = q('.dv-tilt b'); // 轉手機開車
     H.spdBox = q('.dv-spd'); H.tach = q('.dv-spd svg'); H.tachA = q('.dv-spd svg .a'); H.spdBox.classList.toggle('tach', mode !== 'eye'); // 轉速表
     const on = (el, t, f, opt) => { el.addEventListener(t, f, opt); H.off.push(() => el.removeEventListener(t, f, opt)); };
     on(root, 'contextmenu', (e) => e.preventDefault());
@@ -797,6 +819,9 @@ function createDrive(o) {
     const fingers = new Map(), steerNow = () => { let s = 0; for (const v of fingers.values()) s = v; human.steer = s; H.steerB[0].classList.toggle('on', s < 0); H.steerB[1].classList.toggle('on', s > 0); };
     hold(H.steer, (e) => { const r = H.steer.getBoundingClientRect(); fingers.delete(e.pointerId); fingers.set(e.pointerId, e.clientX < r.left + r.width / 2 ? -1 : 1); steerNow(); }, (e) => { fingers.delete(e.pointerId); steerNow(); });
     on(H.cam, 'click', () => setCameraMode(mode === 'eye' ? 'chase' : 'eye'));
+    on(H.tiltC, 'pointerdown', () => H.tiltC.classList.add('on'));
+    for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.tiltC, t, () => H.tiltC.classList.remove('on'));
+    on(H.tiltC, 'click', (e) => { e.preventDefault(); tilt.center = tilt.n ? tilt.a : 0; tiltVal(); toast('置中了：現在這樣＝直直開'); });
     H.mapBox = q('.dv-map'); H.mapB = q('.dv-mapb'); on(H.mapBox, 'click', (e) => { if (mapTap) { e.preventDefault(); mapTap.onClick(); } }); // 點小地圖（setMapTap）：大地圖、比賽看整個賽道
     // 大按鈕：按下去縮一下，放開（click）才做；另一隻手指按著油門也按得到
     on(H.act, 'pointerdown', () => H.act.classList.add('on'));
@@ -882,6 +907,7 @@ function createDrive(o) {
     const kmh = Math.round(Math.abs(st.v) * 3.6), gear = st.rev ? 'R' : String(st.gear + 1), set = (k, v, f) => { if (H.last[k] !== v) { H.last[k] = v; f(v); } };
     set('spd', kmh, (v) => (H.spd.textContent = v)); set('gear', gear, (v) => { H.gear.textContent = v; H.gear.classList.toggle('r', v === 'R'); });
     if (mode !== 'eye') { const r = Math.min(1, st.rpm); set('rpm', Math.round(r * 50), (v) => H.tachA.setAttribute('stroke-dasharray', `${v * 2} 100`)); set('redl', r > 0.86, (v) => H.tach.classList.toggle('red', v)); } // 轉速表：50 格，紅區（86% 以上）弧變紅
+    if (tilt.on) set('tilt', Math.round(tilt.val * 45), (v) => H.tiltG.setAttribute('transform', `rotate(${v * 2})`)); // 轉手機開車：小方向盤（打到底 90 度，跟駕駛座的一樣）
     set('rev', st.rev, (v) => { H.brk.textContent = v ? '倒車' : '煞車'; H.brk.classList.toggle('rev', v); });
     const dd = dest && destStyle(dest); set('dest', dest, () => { H.chip.hidden = !dd; if (dd) H.name.textContent = dd.label; });
     if (dd && routeData) {
@@ -939,8 +965,24 @@ function createDrive(o) {
   if (useKeys) { window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey); window.addEventListener('blur', onBlur); }
   const input = () => {
     if (forced) return forced;
-    const k = human.kb; return { thr: Math.max(k.U ? 1 : 0, human.thr), brk: Math.max(k.D ? 1 : 0, human.brk), hb: Math.max(k.B ? 1 : 0, human.hb), steer: clamp((k.R ? 1 : 0) - (k.L ? 1 : 0) + human.steer, -1, 1) };
+    const k = human.kb; return { thr: Math.max(k.U ? 1 : 0, human.thr), brk: Math.max(k.D ? 1 : 0, human.brk), hb: Math.max(k.B ? 1 : 0, human.hb), steer: clamp((k.R ? 1 : 0) - (k.L ? 1 : 0) + human.steer + (tilt.on ? tilt.val : 0), -1, 1) };
   };
+  // ---- 轉手機開車：重力的方向（低通）→ 跟「置中」差幾度 → −1～1 ----
+  function tiltVal() { const d = wrapA(((tilt.a - tilt.center) * Math.PI) / 180) * 180 / Math.PI, m = Math.abs(d) - TILT.dead; tilt.val = m > 0 ? clamp((Math.sign(d) * m) / (TILT.full - TILT.dead), -1, 1) : 0; }
+  const onMotion = (e) => {
+    const g = e && e.accelerationIncludingGravity, a = g && tiltAngle(g, tilt.scr()); if (a == null) return;
+    tilt.a = tilt.n ? tilt.a + wrapA(((a - tilt.a) * Math.PI) / 180) * (180 / Math.PI) * TILT.k : a; tilt.a = ((tilt.a + 180) % 360 + 360) % 360 - 180; tilt.n++; tiltVal();
+  };
+  function setTilt(on, onFail) {
+    on = !!on && typeof window !== 'undefined'; if (!alive) return;
+    if (on !== tilt.on) { if (on) window.addEventListener('devicemotion', onMotion); else window.removeEventListener('devicemotion', onMotion); }
+    tilt.on = on; tilt.val = 0; tilt.n = 0; tilt.center = 0; tilt.wait = on ? TILT.wait : 0; tilt.fail = on && typeof onFail === 'function' ? onFail : null;
+    if (hud) { hud.root.classList.toggle('tilt', on); hud.last.tilt = undefined; }
+  }
+  function tiltTick(dt) { // 開了 1.5 秒都沒有資料：這支手機沒有感應器（或不給用）
+    if (!tilt.on || tilt.n || (tilt.wait -= dt) > 0) return;
+    const f = tilt.fail; setTilt(false); toast('這支手機不能轉手機開車', 2400); if (f) f();
+  }
 
   // ---- 第 3 批（甩尾）：胎痕、輪胎的煙（場景共用的 skidFx）、輪胎叫（audio.skid）：每幀 ----
   // 四個輪子：在地上的位置一直跟著，夠鬆就每 0.35 公尺畫一段（後輪；甩很大前輪也畫）；後輪冒煙；輪胎叫一秒最多送 20 次、有變才送
@@ -992,7 +1034,7 @@ function createDrive(o) {
   function update(dt) {
     if (!alive || paused) return;
     dt = Math.min(0.1, Math.max(0, +dt || 0)); if (!dt) return;
-    now += dt;
+    now += dt; tiltTick(dt);
     if (auto) { stepAuto(dt); if (ride) ride.follow(dt); zones(false); }
     else {
       st.surf = world.surfaceAt ? world.surfaceAt(st.x + Math.cos(st.th) * CX, st.z - Math.sin(st.th) * CX) : 0;
@@ -1046,7 +1088,7 @@ function createDrive(o) {
   function setDestination(name) { dest = name && places[name] ? name : null; routeT = 0; routeTick(0, true); if (hud) hud.last.here = undefined; }
   function dispose() {
     if (!alive) return;
-    release(); alive = false; action = null; action2 = null; cw.clear();
+    release(); setTilt(false); alive = false; action = null; action2 = null; cw.clear();
     if (useKeys) { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); window.removeEventListener('blur', onBlur); }
     if (hud) { hud.off.forEach((f) => f()); hud.root.remove(); }
     clearTimeout(toastT);
@@ -1056,7 +1098,7 @@ function createDrive(o) {
   const telemetry = () => ({ x: st.x, z: st.z, heading: st.th, v: st.v, kmh: Math.abs(st.v) * 3.6, rpm: st.rpm, gear: st.rev ? -1 : st.gear + 1, throttle: st.cut > 0 ? 0 : st.thrEff, load: paused ? 0 : st.load,
     brake: Math.max(st.rev ? st.thr : st.brk, st.hb), steer: st.steer, surface: st.surf, cap: Math.min(999, Math.round(st.cap * 36) / 10), reversing: st.rev, bumps: st.bumps, shifts: st.shifts, zone: zoneNow, dest, destDist: routeData ? Math.max(0, routeData.len - routeS) : null, auto: !!auto, paused,
     slip: st.slip, travel: wrapA(st.th + st.slip), drift: st.dm, drifting: Math.abs(st.slip) > 0.175, drifts: st.drifts, loose: st.loose, skid: st.skid, handbrake: st.hb > 0 ? 1 : 0, // 第 3 批（甩尾）
-    marks: SK ? SK.count() : 0, smoke: SK ? SK.alive() : 0, ...(ride ? ride.tele() : null) });
+    marks: SK ? SK.count() : 0, smoke: SK ? SK.alive() : 0, tilt: tilt.on ? tilt.val : null, ...(ride ? ride.tele() : null) });
 
   const api = {
     update, telemetry, setDestination, setCameraMode, teleport, parkAt, pause, resume, release, dispose, toast, setAction, setAction2,
@@ -1068,6 +1110,7 @@ function createDrive(o) {
     get mapTap() { return mapTap ? mapTap.label : null; }, get mapView() { return mapWhole; },
     setDamage: (p) => { dmgP.power = p && p.power > 0 ? Math.min(1, p.power) : 1; dmgP.top = p && p.top > 0 ? Math.min(1, p.top) : 1; dmgP.maxKmh = p && p.maxKmh > 0 ? p.maxKmh : Infinity; dmgP.steerPull = p ? clamp(+p.steerPull || 0, -1, 1) : 0; },
     setCamCeil: (fn) => { camCeil = typeof fn === 'function' ? fn : null; }, // 修 5（2026-10-10）
+    setTilt, get tilt() { return tilt.on; },
     setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
     carInfo: { nose: info.nose, tail: info.tail, len: info.len, halfW: Math.max(info.halfW, +o.halfW || 0), wheelbase: L, vmax: P.vmax }, hud: hud && hud.root, // halfW：碰撞的半寬（怪獸卡車：輪胎比車身寬）
@@ -1076,5 +1119,5 @@ function createDrive(o) {
   setCameraMode('chase');
   return api;
 }
-return { createDrive, DRIVE_DEST: DEST };
+return { createDrive, DRIVE_DEST: DEST, tiltAngle };
 })();

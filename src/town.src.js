@@ -440,6 +440,7 @@ function makeDrv(pose) {
     onZone: arrive, onShift: () => dvoice?.shift(), onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
     crush: crushFx && offK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
+  if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
   drv.setCamCeil((x, z) => { if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75; const q = garLocal(x, z), c = GAR.ring.ceilingAt(q.x, q.z); return c < 50 ? c - 0.75 : Infinity; }); // 第 20 批：圓環車庫一樓（2.9 公尺）、走道（2.38） // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
@@ -470,7 +471,7 @@ destBtns.forEach((b) => b.addEventListener('click', () => { if (DRIVE.on) setDes
 const FOLD = { destsopen: -1, moreopen: -1 };
 const foldStart = () => { const t = drv && DRIVE.on ? drv.telemetry() : null; return t && Math.abs(t.v) > 4 ? 8 : -1; };
 function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.destsopen = foldStart(); }
-function moreOpen(on) { if (!on) sizeOpen(false); if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
+function moreOpen(on) { if (!on) { sizeOpen(false); tiltOpen(false); } if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
 // 按鈕大小（Nick 2026-10-10）：小 0.8、中 1（原本的）、大 1.15；每支手機自己記（carid.btnsize，不用搬家、不上雲端）
 const BTN_Z = { s: 0.8, m: 1, l: 1.15 }, BTN_KEY = 'carid.btnsize';
 // 「大」只放大到排得下：直拿看寬（390 寬剛好排滿＝1 倍）、橫拿看高（340 高＝1 倍）；小螢幕（或手機「顯示大小」調大）上「大」＝「中」
@@ -484,10 +485,29 @@ function btnSize(k, keep) {
   for (const b of document.querySelectorAll('#sizePop button')) b.setAttribute('aria-pressed', String(b.dataset.z === k));
   if (keep) try { localStorage.setItem(BTN_KEY, k); } catch {}
 }
-function sizeOpen(on) { if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function sizeOpen(on) { if (on) tiltOpen(false); if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 try { btnSize(localStorage.getItem(BTN_KEY)); } catch { btnSize('m'); }
 $('sizeTog').addEventListener('click', () => sizeOpen(true));
 for (const b of document.querySelectorAll('#sizePop button')) b.addEventListener('click', () => { btnSize(b.dataset.z, true); sizeOpen(false); });
+// 轉手機開車（Nick 2026-10-17「把手機本身改成可以方向盤的模式」）：「⋯」那一排多一顆「🎮」→「方向盤 按鈕 ⬅➡／轉手機 📱」；
+//   一開始是按鈕；每支手機自己記（carid.tilt，跟按鈕大小一樣不用搬家、不上雲端）；這支手機沒有感應器（drive.js 1.5 秒沒資料）就變回按鈕
+const TILT_KEY = 'carid.tilt';
+let tiltK = 'btn';
+const tiltFail = () => tiltMode('btn', true);
+function tiltMode(k, keep) {
+  tiltK = k === 'tilt' ? 'tilt' : 'btn';
+  for (const b of document.querySelectorAll('#tiltPop button')) b.setAttribute('aria-pressed', String(b.dataset.t === tiltK));
+  if (keep) try { localStorage.setItem(TILT_KEY, tiltK); } catch {}
+  if (drv) drv.setTilt(tiltK === 'tilt', tiltFail);
+}
+function tiltOpen(on) { if (on) sizeOpen(false); if (bodyFlags.tiltopen === on) return; bodyFlag('tiltopen', on); $('tiltTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+try { tiltMode(localStorage.getItem(TILT_KEY)); } catch { tiltMode('btn'); }
+$('tiltTog').addEventListener('click', () => tiltOpen(true));
+for (const b of document.querySelectorAll('#tiltPop button')) b.addEventListener('click', () => {
+  const k = b.dataset.t, ask = k === 'tilt' && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'; // iPhone：要先問可不可以用
+  tiltOpen(false);
+  if (ask) DeviceMotionEvent.requestPermission().then((r) => tiltMode(r === 'granted' ? 'tilt' : 'btn', true), tiltFail); else tiltMode(k, true);
+});
 function foldStep(dt, v) { // 每一格（開車）
   if (bodyFlags.destsopen && (FOLD.destsopen < 0 ? Math.abs(v) > 4 : (FOLD.destsopen -= dt) <= 0)) destOpen(false);
   if (bodyFlags.moreopen && (FOLD.moreopen < 0 ? Math.abs(v) > 4 : (FOLD.moreopen -= dt) <= 0)) moreOpen(false);

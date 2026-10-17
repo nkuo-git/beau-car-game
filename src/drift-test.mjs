@@ -226,6 +226,7 @@ const hook = 'window.__G = () => GAME; window.__S = () => S; window.__scene = ()
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, TR, LODS, cur, built, walker });'
   + ' window.__N = () => NPC;'
+  + ' window.__remake = () => { const t = drv.telemetry(); drv.dispose(); makeDrv({ x: t.x, z: t.z, heading: t.heading }); return drv.tilt; };'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };';
 const srv = http.createServer((req, res) => {
@@ -372,7 +373,7 @@ console.log('  render after marks faded:', JSON.stringify(riC), JSON.stringify(v
 check(!vis5.m && !vis5.s && fxCost.on.calls - fxCost.off.calls === 2, `skid marks + smoke: hidden once faded (0 draw calls); when showing they cost exactly 2 draw calls (${fxCost.on.calls} vs ${fxCost.off.calls}, +${fxCost.on.tris - fxCost.off.tris} triangles)`);
 
 // 手煞車按鈕：5 種螢幕、全螢幕／沒全螢幕都不壓到別的按鈕（停著：有「下車」）
-const HUD_SEL = ['.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '#dests', '#driveHome', '#dSndBtn', '#fsBtn'];
+const HUD_SEL = ['.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-tilt', '.dv-brk', '.dv-gas', '.dv-hb', '#dests', '#driveHome', '#dSndBtn', '#fsBtn', '#moreTog', '#sizeTog', '#tiltTog', '#destTog'];
 const clash = (only, inView) => p.evaluate(([S, only, inView]) => {
   const R = S.map((s) => [s, document.querySelector(s)]).filter(([, e]) => e && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden' && e.getClientRects().length).map(([s, e]) => [s, e.getBoundingClientRect()]), out = [];
   for (const [s, r] of R) if (inView && s === only && (r.left < 4 || r.top < 4 || r.right > innerWidth - 4 || r.bottom > innerHeight - 4)) out.push(`${s} off-screen`);
@@ -402,6 +403,54 @@ await p.evaluate(() => window.__dstep(2)); await drawAndShot('7-hud-portrait');
 // 鍵盤：空白鍵＝手煞車
 await p.keyboard.down('Space'); const kb = await p.evaluate(() => window.__dstep(2).handbrake); await p.keyboard.up('Space'); const kb2 = await p.evaluate(() => window.__dstep(2).handbrake);
 check(kb === 1 && kb2 === 0, 'keyboard: Space is the handbrake (telemetry.handbrake 1 while held)');
+// 轉手機開車（Nick 2026-10-17）：「⋯」→「🎮」→「方向盤 按鈕／轉手機」；devicemotion 的重力（假的事件）→ 方向；小方向盤、置中；橫拿（畫面轉 90 度）；沒有感應器變回按鈕
+const motion = (deg, scr = 0, n = 30) => p.evaluate(([deg, scr, n]) => { const a = ((deg - scr) * Math.PI) / 180; for (let i = 0; i < n; i++) window.dispatchEvent(new DeviceMotionEvent('devicemotion', { accelerationIncludingGravity: { x: -9.8 * Math.sin(a), y: 9.8 * Math.cos(a), z: 0.5 } })); return window.__dstep(30); }, [deg, scr, n]);
+const tiltUi = () => p.evaluate(() => { const v = (s) => { const e = document.querySelector(s); return !!e && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && e.getClientRects().length > 0; }; const g = document.querySelector('#stage .dv-tilt g');
+  return { tog: v('#tiltTog'), pop: v('#tiltPop'), wheel: v('#stage .dv-tilt'), steer: v('#stage .dv-steer'), rot: g && g.getAttribute('transform'), on: window.__D().drv.tilt, key: localStorage.getItem('carid.tilt'), pressed: [...document.querySelectorAll('#tiltPop button')].map((b) => b.getAttribute('aria-pressed')).join(','), toast: document.querySelector('#stage .dv-toast').textContent }; });
+await p.evaluate(({ X, Z }) => { const d = window.__D().drv; d.setInput(null); d.teleport({ x: X, z: Z, heading: 0 }); window.__dstep(5); }, pad);
+const tl0 = await tiltUi();
+await p.evaluate(() => document.getElementById('moreTog').click()); const tl1 = await tiltUi();
+await p.evaluate(() => document.getElementById('tiltTog').click()); const tl2 = await tiltUi();
+await p.evaluate(() => document.querySelector('#tiltPop [data-t="tilt"]').click()); const tl3 = await tiltUi();
+console.log('  tilt menu:', JSON.stringify({ tl0, tl1, tl2, tl3 }));
+check(!tl0.tog && tl1.tog && !tl1.pop && tl2.pop && !tl2.tog && tl2.pressed === 'true,false' && !tl3.pop && tl3.on && tl3.key === 'tilt' && tl3.pressed === 'false,true' && tl3.wheel && !tl3.steer,
+  `🎮 in the ⋯ row → 方向盤 按鈕／轉手機 (按鈕 first); picking 轉手機 turns tilt on, saves carid.tilt, swaps ◀ ▶ for the small wheel (${JSON.stringify(tl3)})`);
+const tSt = {};
+for (const [k, deg] of [['r15', 15], ['r40', 40], ['l15', -15], ['dead', 1.5], ['zero', 0]]) { const t = await motion(deg); tSt[k] = { tilt: +t.tilt.toFixed(3), steer: +t.steer.toFixed(3), rot: (await tiltUi()).rot }; }
+console.log('  tilt steer:', JSON.stringify(tSt));
+const want = 13 / 28;
+check(Math.abs(tSt.r15.tilt - want) < 0.03 && tSt.r15.steer > 0.3 && Math.abs(tSt.l15.tilt + want) < 0.03 && tSt.l15.steer < -0.3 && tSt.r40.tilt === 1 && tSt.r40.steer > 0.95 && tSt.dead.tilt === 0 && tSt.zero.tilt === 0 && Math.abs(tSt.zero.steer) < 0.05,
+  `phone turned 15° right → steer ${tSt.r15.tilt} (≈ ${want.toFixed(3)}), 40° → full lock, 15° left → ${tSt.l15.tilt}, 1.5° → 0 (dead zone), back to 0 → straight`);
+check(tSt.r15.rot === `rotate(${Math.round(want * 45) * 2})` && tSt.r40.rot === 'rotate(90)' && tSt.l15.rot === `rotate(${-Math.round(want * 45) * 2})`, `small wheel turns with the phone (${tSt.r15.rot}, ${tSt.r40.rot}, ${tSt.l15.rot})`);
+await motion(10); const c0 = (await motion(10)).tilt; await p.evaluate(() => document.querySelector('#stage .dv-tilt b').click()); const c1 = (await motion(10)).tilt, c2 = (await motion(25)).tilt, cT = (await tiltUi()).toast;
+check(c0 > 0.2 && c1 === 0 && Math.abs(c2 - want) < 0.03 && /置中/.test(cT), `置中: holding 10° then 置中 → straight (${c0.toFixed(3)} → ${c1}); 25° is now 15° right (${c2.toFixed(3)}); toast 「${cT}」`);
+await p.evaluate(() => document.querySelector('#stage .dv-tilt b').click()); await motion(0); await p.evaluate(() => document.querySelector('#stage .dv-tilt b').click()); // 置中回到 0
+// 橫拿：畫面轉 90 度（landscape-primary），手機在畫面上往右轉 15 度
+await p.setViewportSize({ width: 800, height: 360 }); await p.evaluate(() => Object.defineProperty(screen.orientation, 'angle', { get: () => 90, configurable: true })); await p.waitForTimeout(250);
+const land = { scr: await p.evaluate(() => screen.orientation && screen.orientation.angle), r15: (await motion(15, 90)).tilt, l15: (await motion(-15, 90)).tilt };
+await p.evaluate(() => window.__dstep(2)); await drawAndShot('8-tilt-landscape');
+await p.evaluate(() => { if (!document.body.classList.contains('moreopen')) document.getElementById('moreTog').click(); }); await p.waitForTimeout(100);
+const rowHit = await clash(null, true), rowSel = await p.evaluate(() => { const r = (s) => { const e = document.querySelector(s); if (!e || getComputedStyle(e).display === 'none') return null; const q = e.getBoundingClientRect(); return [q.left, q.top, q.right, q.bottom].map(Math.round); }; return { tilt: r('#tiltTog'), size: r('#sizeTog'), act2: r('#stage .dv-act2'), map: r('#stage .dv-map') }; });
+const rowBad = (() => { const t = rowSel.tilt, o = []; for (const k of ['act2', 'map', 'size']) { const q = rowSel[k]; if (t && q && t[0] < q[2] - 0.5 && q[0] < t[2] - 0.5 && t[1] < q[3] - 0.5 && q[1] < t[3] - 0.5) o.push(k); } return o; })();
+await p.evaluate(() => { if (document.body.classList.contains('moreopen')) document.getElementById('moreTog').click(); });
+await p.evaluate(() => delete screen.orientation.angle); await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(250);
+console.log('  tilt landscape:', JSON.stringify({ land, rowSel, rowHit }));
+check(land.scr === 90 && Math.abs(land.r15 - want) < 0.03 && Math.abs(land.l15 + want) < 0.03, `landscape (screen turned 90°): turning the phone 15° right/left on screen → ${land.r15.toFixed(3)} / ${land.l15.toFixed(3)}`);
+check(rowSel.tilt && !rowBad.length && !rowHit, `landscape fullscreen with ⋯ open: 🎮 sits left of Aa and covers nothing; tilt HUD overlaps nothing (${rowBad.join(', ') || rowHit || 'ok'})`);
+const fit = []; for (const [w, h] of [[360, 800], [412, 915], [915, 412], [800, 360]]) { await p.setViewportSize({ width: w, height: h }); await p.waitForTimeout(200); const c = await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))).then(() => clash('.dv-tilt', true)); if (c) fit.push(`${w}x${h}: ${c} ${await p.evaluate(() => ['.dv-tilt', '.dv-spd', '.dv-steer'].map((s) => { const r = document.querySelector('#stage ' + s).getBoundingClientRect(); return s + ' ' + [r.left, r.top, r.right, r.bottom].map(Math.round); }).join(' '))}`); }
+await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(250);
+check(!fit.length, `small wheel + 置中 on screen and not covering other buttons at 360×800, 412×915, 915×412, 800×360 (${fit.join(' / ') || 'ok'})`);
+await p.evaluate(() => window.__dstep(2)); await drawAndShot('9-tilt-portrait');
+// 重新上車（新的 drive）：還是轉手機；沒有感應器（1.5 秒沒資料）：跳提示、變回按鈕、記住
+const re = { on: await p.evaluate(() => window.__remake()), r15: (await motion(15)).tilt };
+await p.evaluate(() => { document.querySelector('#tiltPop [data-t="btn"]').click(); });
+const off = await tiltUi();
+await p.evaluate(() => { document.querySelector('#tiltPop [data-t="tilt"]').click(); });
+const noS = await p.evaluate(() => { window.__dstep(110); return null; }), fl = await tiltUi();
+console.log('  tilt off / no sensor:', JSON.stringify({ re, off, fl }));
+check(re.on && Math.abs(re.r15 - want) < 0.03, `a new drive (getting back in) is still tilt-steered (${re.r15.toFixed(3)} at 15°)`);
+check(!off.on && off.key === 'btn' && off.steer && !off.wheel, `picking 按鈕 again: ◀ ▶ back, carid.tilt = btn`);
+check(!fl.on && fl.key === 'btn' && fl.steer && !fl.wheel && /不能轉手機開車/.test(fl.toast), `no motion sensor (no devicemotion for 1.5 s): toast 「${fl.toast}」, back to buttons and remembered`);
 // 下車：煙藏起來、輪胎不叫、手煞車放開
 const pre = await p.evaluate(({ X, Z }) => { const d = window.__D().drv; d.teleport({ x: X - 38, z: Z + 20, heading: 0 }); d.setInput({ throttle: 1, brake: 0, steer: 0 }); for (let i = 0; i < 420 && d.telemetry().kmh < 60; i++) window.__dstep(1); d.setInput({ throttle: 1, brake: 0, steer: 1, handbrake: 1 }); window.__dstep(30); const t = d.telemetry(), v = window.__D().TR.scene.getObjectByName('drive-smoke').visible; window.__sq.length = 0; d.pause(); return { skid: t.skid, smoke: v }; }, pad);
 const paused = await p.evaluate(() => ({ smoke: window.__D().TR.scene.getObjectByName('drive-smoke').visible, sq: window.__sq.slice(), hb: window.__D().drv.telemetry().handbrake }));
