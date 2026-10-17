@@ -181,9 +181,12 @@ function parkedAt(p) {
   if (inBox(GAR.zones.inside, q.x, q.z)) return [GAR.interior, { x: q.x, z: q.z, heading: (p.heading || 0) - VIL.places.garage.lot.heading }];
   return [VIL.group, p];
 }
+let padOff = 0; // 車行轉盤擺第幾台開始（車比轉盤多：按到後面的車，轉盤換一批：lookAtCar）
 function arrangeCars() {
   const inTown = !!(trip && GAR && tripPose && DECK), R = inTown ? GAR : room; // 車庫頁是攝影棚（不是豪華車庫）就沒有升降機（room 還沒蓋）
-  const shows = inTown ? VIL.places.dealer?.display || [] : [], pads = saleOf('dealer').filter((k) => LOD_CARS[k]).slice(0, shows.length);
+  const shows = inTown ? VIL.places.dealer?.display || [] : [], sale = saleOf('dealer').filter((k) => LOD_CARS[k]);
+  if (padOff >= sale.length) padOff = Math.max(0, Math.floor((sale.length - 1) / (shows.length || 1)) * (shows.length || 1));
+  const pads = sale.slice(padOff, padOff + shows.length);
   const at = new Map(); // key → [Group, 位置, 自己的影子要不要開, 世界的位置]（升降機上的另外掛：syncLifts）
   let want = null, rev = null;
   if (inTown) {
@@ -1124,7 +1127,9 @@ function openDealer() {
   dcam.fov = 60; dcam.updateProjectionMatrix(); lookAtCar(dealerSel, 0); // 先看選好的那台（畫面變寬變矮了，整間看車子太小），按了別台再移過去
 }
 function lookAtCar(k, T = 0.8) {
-  const D = VIL.places[dealerAt], i = forSale().indexOf(k), pad = D.display[i];
+  const D = VIL.places[dealerAt], n = D.display.length; let i = forSale().indexOf(k);
+  if (dealerAt === 'dealer' && i >= 0) { const o = Math.floor(i / n) * n; if (o !== padOff) { padOff = o; arrangeCars(); } i -= padOff; } // 2026-10-17：車比 6 個轉盤多
+  const pad = D.display[i];
   if (!pad) { viewCar(D.park, 5.2, 3.4, 1.8, T); return; }
   // 從那台車往展示間的鏡頭那邊（門口）退 5.5 公尺、高 1.6 公尺看過去：鏡頭一定在展示間裡面、中間沒有別台車
   const v = D.view?.pos || [pad.x + 5, 0, pad.z + 5], dx = v[0] - pad.x, dz = v[2] - pad.z, l = Math.hypot(dx, dz) || 1;
