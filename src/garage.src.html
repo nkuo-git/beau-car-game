@@ -283,6 +283,7 @@ const CARS = {
   altis: { file: 'car-altis.txt', size: SIZES.altis, spec: ALTIS_SPEC, btn: ['小黃', '計程車 · 黃'], ...ALTIS_GARAGE },
   senna: { file: 'car-senna.txt', size: SIZES.senna, spec: SENNA_SPEC, btn: ['SN8', '大尾翼 · 紅'], ...SENNA_GARAGE },
   huayra: { file: 'car-huayra.txt', size: SIZES.huayra, spec: HUAYRA_SPEC, btn: ['HY', '風神 · 藍'], ...HUAYRA_GARAGE },
+  laferrari: { file: 'car-laferrari.txt', size: SIZES.laferrari, spec: LAFERRARI_SPEC, btn: ['LF', '紅色流線 · 紅'], ...LAFERRARI_GARAGE },
   monster: { file: 'car-monster.txt', size: SIZES.monster, spec: MONSTER_SPEC, btn: ['怪獸卡車', '越野車 · 桃紅'], ...MONSTER_GARAGE }, // ==== 第 4 批：越野車（越野車場的越野車行才買得到）====
 };
 // 性能（約略照真車）：馬力、重量、四驅、紅線、極速、風阻；drive＝後驅的車起步時後輪壓到多少重量（引擎在中間的比較會起步）
@@ -346,6 +347,10 @@ const PERF = {
     ['filter', '賽車空濾', '吸氣更順', 10, 5], ['exhaust', '鈦合金排氣', '四根排氣管叫得更大聲', 30, 30], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 50],
     ['ic', '大中冷', '進氣溫度降下來', 25, 40], ['fuel', '大噴油嘴', '大馬力要更多油', 20, 50], ['cams', '賽車凸輪軸', '高轉更有力', 35, 70],
     ['forged', '鍛造內部', '撐得住更高增壓', 50, 150], ['turbo', '大渦輪', '兩顆渦輪都換大', 180, 300]] },
+  laferrari: { price: 5000, hp: 963, kg: 1255, awd: 0, drive: 0.8, red: 9250, vmax: 350, cda: 0.65, eng: '6.3 V12 油電（中置後驅）', tyres: [12, 20], parts: [
+    ['filter', '賽車空濾', '吸氣更順', 10, 5], ['exhaust', '鈦合金排氣', 'V12 叫得更大聲', 30, 30], ['ecu', 'ECU 調校', '重寫點火和汽門正時', 40, 40],
+    ['battery', '大電池', '馬達可以出力更久', 40, 60], ['motor', '強化馬達', '起步更快', 50, 80], ['cams', '賽車凸輪軸', '高轉更有力', 35, 70],
+    ['forged', '鍛造活塞', '撐得住雙渦輪', 30, 120], ['turbo', '雙渦輪套件', '自然進氣改成雙渦輪', 300, 400]] },
   // ==== 第 4 批：越野車：offroad＝越野車行賣的（泥巴、石頭、沙跑得動：terrain.js）；big＝大車（車庫頁鏡頭拉遠、不停車位）；halfW＝碰撞半寬（輪胎比車身寬）；gears＝自己的齒比 ====
   monster: { price: 100, hp: 1500, kg: 5400, awd: 1, red: 6800, vmax: 110, cda: 2.2, offroad: 1, big: 1, halfW: 1.905, gears: [2.1, 1.35, 1.0, 0.92, 0.88, 0.86], eng: '機械增壓 V8（燒甲醇）', tyres: [8, 15], parts: [
     ['intake', '大口徑進氣帽', '增壓器上面的進氣帽換大', 50, 6], ['ecu', '噴射電腦調校', '甲醇噴射重新調', 90, 12], ['exhaust', '直排頭段', '八根短管直排，聲音更兇', 70, 18],
