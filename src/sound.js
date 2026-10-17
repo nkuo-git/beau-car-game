@@ -554,6 +554,25 @@ const SND_CARS = {
     cut: 0.06, dct: true,
   },
 };
+// 2026-10-17 新的 10 台車：從上面七台改出來的（音量沒有用 sound-analyze.mjs 重新對齊，耳朵聽過再調）
+const SND_I4 = [0, 180, 360, 540], SND_V12 = [0, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 660];
+Object.assign(SND_CARS, {
+  rx7: { ...SND_CARS.gc8, name: '13B 雙轉子雙渦輪', red: 8000, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.98, 1, 0.98], uel: 0, uelHi: 0, width: 95, rasp: 0.5, raspHz: 2600, drive: 1.9,
+    turbo: { ...SND_CARS.gc8.turbo, n: 2, bov: 'atmo', bovLvl: 1.0 }, pops: { ...SND_CARS.gc8.pops, lift: 0.8, lvl: 1.0, rate: 14 } },
+  ae86: { ...SND_CARS.yaris, name: '4A-GE 1.6 直列四缸', red: 7600, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.96, 1, 0.97], turbo: null, gain: 1.1,
+    intake: { ...SND_CARS.yaris.intake, lvl: 0.3, tone: 0.45, hiss: 0.1 }, pops: { ...SND_CARS.yaris.pops, lift: 0.3, shift: 0.15 } },
+  civic: { ...SND_CARS.yaris, name: 'K20C 2.0 直列四缸渦輪', red: 7000, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.97, 1, 0.98], gain: 1.1 },
+  evo: { ...SND_CARS.gc8, name: '4G63 2.0 直列四缸渦輪', red: 7000, bank: [0, 0, 0, 0], uel: 0, uelHi: 0, width: 140,
+    turbo: { ...SND_CARS.gc8.turbo, bov: 'flutter', bovLvl: 1.0, bovDur: 0.3 } },
+  altis: { ...SND_CARS.yaris, name: '1.8 直列四缸油電', red: 5200, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.97, 1, 0.98], turbo: null, gain: 0.9, drive: 1.2, rasp: 0.15,
+    pops: { ...SND_CARS.yaris.pops, lift: 0, shift: 0 }, motor: { ...SND_CARS.p918.motor, lvl: 0.06, lvlR: 0 } },
+  chiron: { ...SND_CARS.jesko, name: '8.0 W16 四渦輪', red: 6700, fire: Array.from({ length: 16 }, (_, i) => i * 45), bank: Array.from({ length: 16 }, (_, i) => i % 2), width: 70,
+    turbo: { ...SND_CARS.jesko.turbo, n: 4, whoosh: 1.0, whistle: 0.25 }, pops: { ...SND_CARS.jesko.pops, lift: 0.2, shift: 0.3, lvl: 0.7 } },
+  aventador: { ...SND_CARS.sp3, name: '6.5 V12 自然進氣', red: 8500, pops: { ...SND_CARS.sp3.pops, lift: 0.7, shift: 0.6, lvl: 0.9 }, dct: false, cut: 0.1 },
+  senna: { ...SND_CARS.jesko, name: '4.0 V8 平面曲軸雙渦輪', red: 8250 },
+  laferrari: { ...SND_CARS.sp3, name: '6.3 V12＋電動馬達', red: 9250, motor: SND_CARS.p918.motor },
+  huayra: { ...SND_CARS.sp3, name: '6.0 V12 雙渦輪', red: 6000, fire: SND_V12, lp: 5000, turbo: { ...SND_CARS.jesko.turbo, whoosh: 0.9, bov: 'atmo', bovLvl: 1.1 } },
+});
 // 車庫的引擎零件會改變聲音
 function SND_profile(key, parts) {
   const B = SND_CARS[key] || SND_CARS.supra;

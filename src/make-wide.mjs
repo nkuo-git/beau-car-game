@@ -9,8 +9,11 @@ const CARS = {
   yaris: { mod: './yaris-body.mjs', xf: 1.17, xr: -1.39, RF: 0.319, RR: 0.319, trackF: 0.7675, trackR: 0.7825, wF: 0.225, wR: 0.225 },
   gc8: { mod: './gc8-body.mjs', xf: 1.28, xr: -1.24, RF: 0.307, RR: 0.307, trackF: 0.7625, trackR: 0.7575, wF: 0.225, wR: 0.225 },
   p918: { mod: './p918-body.mjs', xf: 1.3135, xr: -1.4165, RF: 0.347, RR: 0.364, trackF: 0.832, trackR: 0.806, wF: 0.265, wR: 0.325 },
+  chiron: { mod: './chiron-body.mjs', xf: 1.37, xr: -1.341, RF: 0.3395, RR: 0.3555, trackF: 0.85, trackR: 0.83, wF: 0.285, wR: 0.355 },
+  rx7: { mod: './rx7-body.mjs', xf: 1.21, xr: -1.215, RF: 0.316, RR: 0.316, trackF: 0.73, trackR: 0.73, wF: 0.225, wR: 0.225 },
 };
-const out = fs.existsSync('wide.json') ? JSON.parse(fs.readFileSync('wide.json', 'utf8')) : {};
+// 沒有 wide.json 就從現在的 wide.js 接著寫（只重算給的那幾台）
+const out = fs.existsSync('wide.json') ? JSON.parse(fs.readFileSync('wide.json', 'utf8')) : fs.existsSync('wide.js') ? JSON.parse(fs.readFileSync('wide.js', 'utf8').match(/export const WIDE = (.*);\s*$/s)[1]) : {};
 const keys = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(CARS);
 const NK = 9, DR = 0.02; // 每個角度往外量 9 點、間隔 2 公分
 for (const key of keys) {

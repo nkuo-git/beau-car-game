@@ -40,3 +40,4 @@ android/*.iml
 .idea/
 .DS_Store
 !src/site/icons/*.png
+wide.json
