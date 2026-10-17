@@ -20,7 +20,7 @@ const NET_COL = ['#4a8cff', '#46c46f', '#f2c230', '#ff5fa2', '#a77bff', '#2fd3c7
 const NET_MAX = 5, NET_FAR = 320; // 最多看幾個人；多遠以外只畫地圖上的點（車、人不畫）
 const NET_DELAY = 220; // 畫朋友的位置：0.22 秒前的（網路不穩也平順）
 const NET_HOLD = { throttle: 0, brake: 1, steer: 0, handbrake: 1 };
-const NET = { on: false, code: '', me: '', host: '', slot: -1, off: 0, mem: [], P: new Map(), race: null, doneSeq: 0, outSeq: 0, hud: null, marks: [], cols: [], wkT: 0, setD: null, setW: null, tex: {}, shGeo: null, shMat: null, inv: null, invT: 0, goal: null };
+const NET = { on: false, code: '', me: '', host: '', slot: -1, off: 0, mem: [], P: new Map(), race: null, doneSeq: 0, outSeq: 0, hud: null, marks: [], cols: [], wkT: 0, setD: null, setW: null, tex: {}, shGeo: null, shMat: null, inv: null, invT: 0, goal: null, goalHome: -1 };
 const netNow = () => Date.now() + NET.off;
 const netEv = (type, d = {}) => { try { window.dispatchEvent(new CustomEvent('beau-net', { detail: { type, ...d } })); } catch { /* 沒有人聽就算了 */ } };
 const netWorld = () => DRIVE.on && !indoor && !!VIL; // 在外面（開車、走路；不含房子裡面、400 公尺）
@@ -157,7 +157,7 @@ function netStep(dt) {
     if (P.obj) { P.obj.car.visible = !!O; P.obj.sh.visible = !!O; }
     if (P.chr) P.chr.group.visible = !!C;
     P.mk.on = !!s; P.vis = !!(O || C);
-    if (s) { P.mk.x = s.x; P.mk.z = s.z; if (NET.goal === P.uid && VIL.places.friend) { VIL.places.friend.pos[0] = s.x; VIL.places.friend.pos[1] = s.z; } }
+    if (s) { P.mk.x = s.x; P.mk.z = s.z; if (NET.goal === P.uid && NET.goalHome < 0 && VIL.places.friend) { VIL.places.friend.pos[0] = s.x; VIL.places.friend.pos[1] = s.z; } }
     if (O) {
       const ox = car ? s.x : pk[1], oz = car ? s.z : pk[2], oh = car ? s.h : pk[3], ov = car ? s.v : 0; // 開的車：內插的位置；停著的：停的位置
       const fx = Math.cos(oh) * 1.3, fz = -Math.sin(oh) * 1.3, y = netH(ox, oz);
@@ -315,7 +315,7 @@ function netHudTick(dt) {
 
 // ---- 車庫街（village.js 第 16、17 批）：6 間車庫的名牌（門上面的黑大理石橫帶；一張貼圖 6 格＝1 個 draw call）：每個人在自己世界號碼那間（你那間不畫：大理石車庫自己的招牌），沒有人就「空的」----
 // 走到（或開到）別人那間門口 6 公尺內：「🚗 看小明的車庫」（回車庫頁參觀，網站那邊做）；自己那間：開鐵捲門開進去
-const NET_GST = { mesh: null, cv: null, tex: null, sig: null, at: -1, own: [] };
+const NET_GST = { mesh: null, cv: null, tex: null, sig: null, at: -1, own: [], dots: [] }; // dots：第 21 批，朋友的家畫在大地圖上（名字寫在旁邊）
 const NET_GST_W = 512, NET_GST_H = 50;
 function netGstBuild() {
   const SL = VIL?.places?.garst?.slots; if (!SL || NET_GST.mesh || !TR?.scene) return !!NET_GST.mesh;
@@ -342,11 +342,13 @@ function netGstPaint() {
   const sig = own.map((o) => (o ? o.uid + ':' + o.n : '-')).join('|');
   if (sig === NET_GST.sig) return;
   NET_GST.sig = sig;
+  NET_GST.dots.length = 0;
+  for (let i = 0; i < SL.length; i++) { const o = own[i]; if (o && !o.me) NET_GST.dots.push({ x: SL[i].door.x, z: SL[i].door.z, fill: o.col || '#4a8cff', ring: '#FFFFFF', r: 5, label: '⌂', name: `${o.n}的車庫` }); }
   const g = NET_GST.cv.getContext('2d'), W = NET_GST_W, H = NET_GST_H;
   g.clearRect(0, 0, W, H * SL.length);
   for (let i = 0; i < SL.length; i++) {
     const o = own[i], y = i * H;
-    if (o && o.me) continue; // 你家：大理石車庫自己的招牌（大便龍的車庫）
+    if (o && o.me) continue; // 你家：圓塔自己的名牌（大便龍的車庫）
     g.fillStyle = '#1d2026'; g.fillRect(0, y, W, H);
     g.font = `800 ${o ? 34 : 28}px "Noto Sans TC", "PingFang TC", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
     if (o) { if (!o.me) { g.fillStyle = o.col || '#4a8cff'; g.beginPath(); g.arc(28, y + H / 2, 9, 0, Math.PI * 2); g.fill(); } g.fillStyle = o.me ? '#FF8A3D' : '#F3F3F1'; g.fillText(o.me ? `${o.n}（你）` : `${o.n}的車庫`, W / 2, y + H / 2 + 1, W - 80); }
@@ -376,7 +378,7 @@ function netGstGo() {
 }
 function netGstOff() {
   if (NET_GST.mesh) NET_GST.mesh.visible = false;
-  NET_GST.at = -1; NET_GST.sig = null; NET_GST.own.length = 0;
+  NET_GST.at = -1; NET_GST.sig = null; NET_GST.own.length = 0; NET_GST.dots.length = 0;
   if (NET.hud) NET.hud.gar.hidden = true;
 }
 
@@ -409,13 +411,24 @@ function netAnswer(ok) {
 }
 
 // ---- 去找他：目的地＝他現在在哪裡（VIL.places.friend，每一格跟著他動；沒有路線就直直指過去）；走到 14 公尺內就到了 ----
+// 第 21 批（Nick 2026-10-17 草稿「「去找他」可以直接開到他的車庫」）：他在家（車庫裡）＝去他的家（6 個家分散在地圖上：照回家的路線帶路，到門口 14 公尺內就到了）
 function netGoTo(uid) {
   const P = NET.P.get(uid);
   if (!P) return 'gone';
   if (!trip || !DRIVE.on || !VIL) return 'garage';
-  if (!(netNow() - P.last < 6000) || !(P.cur.o === 1 || P.cur.o === 2)) return 'away'; // 他在車庫、在比賽：找不到
+  if (!(netNow() - P.last < 6000) || !(P.cur.o === 1 || P.cur.o === 2)) { // 他在車庫（或在 400 公尺）
+    const SL = VIL.places.garst?.slots, m = NET.mem.find((q) => q.uid === uid), i = m ? parseInt(m.s, 10) : -1;
+    if (P.cur.o === 3 || (m && m.w && m.w !== '在車庫') || !SL || !(i >= 0 && i < SL.length) || i === homeSlot() || !VIL.homeAt) return 'away'; // 在比賽：找不到
+    const H = VIL.homeAt(i, {});
+    VIL.places.friend = { name: `${P.n || '朋友'}的車庫`, pos: H.pos.slice(), via: H.via, end: H.end, tail: H.tail };
+    NET.goal = uid; NET.goalHome = i;
+    BIGMAP?.close();
+    setDest('friend');
+    (walker && walker.mode !== 'off' ? walker : drv)?.toast(`去${P.n}的車庫：跟著左上角的箭頭`, 2400);
+    return 'ok';
+  }
   VIL.places.friend = { name: P.n || '朋友', pos: [P.cur.x, P.cur.z] };
-  NET.goal = uid;
+  NET.goal = uid; NET.goalHome = -1;
   BIGMAP?.close();
   setDest('friend');
   (walker && walker.mode !== 'off' ? walker : drv)?.toast(`去找${P.n}：跟著左上角的箭頭`, 2400);
@@ -425,6 +438,7 @@ function netGoalTick(me) {
   if (!NET.goal) return;
   const P = NET.P.get(NET.goal);
   if (tripDest !== 'friend' || !P) { NET.goal = null; if (tripDest === 'friend') setDest(null); return; }
+  if (me && NET.goalHome >= 0) { const d = VIL.places.friend?.pos; if (d && Math.hypot(d[0] - me.x, d[1] - me.z) < 14) { NET.goal = null; NET.goalHome = -1; setDest(null); (walker && walker.mode !== 'off' ? walker : drv)?.toast(`到${P.n}的車庫了！`, 2000); } return; }
   if (!me || !P.mk.on) return;
   if (Math.hypot(P.mk.x - me.x, P.mk.z - me.z) < 14) { NET.goal = null; setDest(null); (walker && walker.mode !== 'off' ? walker : drv)?.toast(`找到${P.n}了！`, 2000); }
 }
@@ -863,7 +877,7 @@ function netBorrowEnd(why) {
   const k = B.k, p = B.prev, driving = !!drv && cur === k && !!walker && walker.mode === 'off';
   let pose = tripPose[k] ? { x: tripPose[k].x, z: tripPose[k].z, heading: tripPose[k].heading } : null;
   if (drv && cur === k) { const t = drv.telemetry(); pose = { x: t.x, z: t.z, heading: t.heading }; }
-  if (pose && (HOME.in || inBox(GAR.zones.inside, garLocal(pose.x, pose.z).x, garLocal(pose.x, pose.z).z, 1))) pose = { ...B.pose0 }; // 開進你自己的車庫裡：還到他原本停的地方（他進不去你的車庫）
+  if (pose && (HOME.in || GAR.isInside(garLocal(pose.x, pose.z).x, garLocal(pose.x, pose.z).z, -1))) pose = { ...B.pose0 }; // 開進你自己的車庫裡：還到他原本停的地方（他進不去你的車庫）
   dvoice?.dispose(); dvoice = null;
   if (drv && cur === k) { drv.dispose(); drv = null; }
   disposeCar(B.car);
@@ -895,8 +909,8 @@ function borParked() { // 我下車停著的那台（朋友看得到、借得到
   if (BOR.on || LENT_K || !walker || walker.mode === 'off' || walker.mode === 'seat' || walker.mode === 'in' || HOME.in || !tripPose) return null;
   let t = null;
   if (drv) { if (tripFull !== cur || !tripS) return null; const d = drv.telemetry(); if (!d.paused) return null; t = { x: d.x, z: d.z, heading: d.heading }; }
-  else { const p = tripPose[cur]; if (!p || p.deck != null || tripFull === cur || PFULL[cur] || !GAME.owned.has(cur)) return null; t = p; } // 還回來停著（輕量車）
-  const q = garLocal(t.x, t.z); if (inBox(GAR.zones.inside, q.x, q.z, 1)) return null;
+  else { const p = tripPose[cur]; if (!p || p.tw != null || tripFull === cur || PFULL[cur] || !GAME.owned.has(cur)) return null; t = p; } // 還回來停著（輕量車）
+  const q = garLocal(t.x, t.z); if (GAR.isInside(q.x, q.z, -1)) return null;
   return t;
 }
 function borLendInfo() { // 網站問：可以借嗎（可以＝車子的樣子、零件、停在哪裡）

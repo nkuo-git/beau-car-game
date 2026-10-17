@@ -155,7 +155,7 @@ const ENV = { light: pmrem.fromScene(studioEnv('light'), 0.02).texture, dark: pm
 const floorMat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0 });
 const floor = new THREE.Mesh(new THREE.CircleGeometry(40, 72), floorMat);
 floor.rotation.x = -Math.PI / 2; scene.add(floor);
-// 豪華車庫（room.js）：第一次用到才蓋。鏡面地板要把車再畫一次，手機太慢就換成不反射的亮面地板（記在手機裡，下次直接用）
+// 豪華車庫（第 21 批：圓塔的大廳，tower.js）：第一次用到才蓋。鏡面地板要把車再畫一次，手機太慢就換成不反射的亮面地板（記在手機裡，下次直接用）
 let seat = null; // 坐在車裡（cabin.js）：{ 原本的鏡頭, yaw, pitch }；null＝在車外
 const ROOMQ_KEY = 'carid.roomq';
 let room = null, roomQ = (() => { try { return localStorage.getItem(ROOMQ_KEY) === 'low' ? 'low' : 'high'; } catch { return 'high'; } })();
@@ -221,8 +221,8 @@ controls.minPolarAngle = Math.PI * 0.18; controls.maxPolarAngle = Math.PI * 0.49
 controls.autoRotate = true; controls.autoRotateSpeed = 1.0;
 controls.target.set(0, 0.55, 0);
 
-let fitD = 7, bigCam = 1 /* 第 4 批：大車（怪獸卡車）鏡頭拉遠 bigCam 倍（showCar 設）*/, camCap = Infinity; // camCap：升降機升起來（上層在頭上 2.1 公尺）的時候鏡頭最遠 7 公尺（town.src.js 設），不會跑到平台底下
-function camMax() { controls.maxDistance = Math.min(fitD * 1.4, room?.group.visible ? camCap : Infinity); } // 鏡頭最遠：升起來的升降機只在豪華車庫裡（攝影棚不用限）
+let fitD = 7, bigCam = 1 /* 第 4 批：大車（怪獸卡車）鏡頭拉遠 bigCam 倍（showCar 設）*/;
+function camMax() { controls.maxDistance = fitD * 1.4; } // 鏡頭最遠（第 21 批：豪華車庫＝圓塔的大廳，鏡頭留在大廳裡面是 room.camClamp 管）
 function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
   // 全螢幕（手機直拿 412×915 這種）：畫的像素最多大約 110 萬（以前開車 390×560 × 2 倍是 87 萬），不然手機畫不動；電腦的大視窗至少 1 倍
@@ -460,7 +460,7 @@ function okValue(k, o, v) { // 存的值還是現在有的選項才用（改版�
   GAME.key = typeof d.key === 'string' && /^[0-9]{4}$/.test(d.key) ? d.key : null; // 第 19 批：借車的密碼
   GAME.pop = Object.fromEntries(Object.entries(d.pop && typeof d.pop === 'object' ? d.pop : {}).filter(([k, v]) => CARS[k] && v === 1)); // 跳燈：開著燈的車（以前的存檔沒有＝都關著）
   GAME.home = Number.isInteger(d.home) && d.home >= 0 && d.home < 6 ? d.home : null; // 第 17 批：車庫街你那間（以前的存檔沒有：還沒進過世界＝1 號）
-  if (d.park && typeof d.park === 'object' && Array.isArray(d.park.decks)) GAME.park = { mid: typeof d.park.mid === 'string' ? d.park.mid : null, decks: d.park.decks.slice(0, 12), rev: Array.isArray(d.park.rev) ? d.park.rev.slice(0, 12) : [], ring: Array.isArray(d.park.ring) ? d.park.ring.slice(0, 31) : [] }; // ring：圓環車庫 31 格（第 20 批；舊存檔沒有＝空的） // 升降機上停哪台（第 2 批；舊存檔沒有：照價錢排，town.src.js 的 normPark）
+  if (d.park && typeof d.park === 'object') { const A = (a, n) => (Array.isArray(a) ? a.slice(0, n) : []); GAME.park = { mid: typeof d.park.mid === 'string' ? d.park.mid : null, tower: A(d.park.tower, 40), decks: A(d.park.decks, 12), ring: A(d.park.ring, 31) }; } // 第 21 批：tower＝圓塔 40 格；舊存檔的 decks（升降機 12 格，第 2 批）、ring（圓環車庫 31 格，第 20 批）：town.src.js 的 normPark 照順序搬進圓塔（一台都不會不見）；都沒有＝照價錢排
   if (CRASH_DAMAGE) for (const [k, st] of Object.entries(d.dmg || {})) if (PERF[k] && st && typeof st === 'object' && Array.isArray(st.h) && st.h.length) GAME.dmg[k] = st; // 撞壞的（apply 會再檢查每一下）
   if (CARS[d.cur] && GAME.owned.has(d.cur)) cur = d.cur; // 車庫裡只停你的車（還沒買的在車店）
   GAME.guns = gunSave.load(d.guns); // 第 3 批（b3-int）：槍、子彈（舊存檔沒有 → 空的；壞掉的修好）
@@ -553,9 +553,9 @@ function dmgOf(car, key) {
 
 const carsEl = document.getElementById('cars');
 async function showCar(key) {
-  const was = cur, ringI = was !== key && Array.isArray(GAME.park?.ring) ? GAME.park.ring.indexOf(key) : -1; // 第 20 批：選了停在圓環車庫的車：電梯把它送下來（說一聲）
+  const was = cur, twI = was !== key && Array.isArray(GAME.park?.tower) ? GAME.park.tower.indexOf(key) : -1; // 第 21 批：選了停在圓塔樓上的車：電梯把它送下來（說一聲）
   cur = key; save();
-  if (ringI >= 0 && room?.group.visible && typeof RING_BAYS !== 'undefined') gtoast(`${CARS[key].btn[0]} 從圓環車庫 ${RING_BAYS[ringI].f + 1} 樓開下來了`, 2000);
+  if (twI >= 0 && room?.group.visible && typeof TOWER_BAYS !== 'undefined') gtoast(`${CARS[key].btn[0]} 坐電梯從 ${TOWER_BAYS[twI].f + 1} 樓下來了`, 2000);
   const bc = PERF[key].big ? 1.55 : 1; // 第 4 批：大車（怪獸卡車）鏡頭拉遠、看高一點、影子放大
   if (bc !== bigCam) { bigCam = bc; controls.target.y = bc > 1 ? 1.45 : 0.55; sh.scale.set(bc > 1 ? 1.25 : 1, bc > 1 ? 1.7 : 1, 1); if (!seat) { resize(); view(38); } }
   carsEl.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.car === key)));
@@ -955,16 +955,8 @@ renderer.setAnimationLoop((now) => {
   if (seat) {
     if (seat.key !== cur) { seat.key = cur; camera.fov = cabinFov(cur, camera.aspect); camera.updateProjectionMatrix(); } // 坐在車裡換車
     if (S) cabinCamera(camera, S.body, cur, seat.yaw, seat.pitch); // 車子還在載入就先不動
-  } else { controls.update(); if (room?.baySig) keepOutOfBays(); }
-  if (room?.ring && room.group.visible) room.ring.cull(camera); // 第 20 批：後面的圓環車庫：門洞看得到才畫一樓的車
+  } else { controls.update(); if (room?.group.visible) room.camClamp(camera.position, controls.target); } // 第 21 批：鏡頭留在圓塔的大廳裡面（玻璃裡、天花板下、不鑽進小房子、櫃子）
+  if (room?.group.visible) room.cull(camera); // 樓上的車只畫看得到的
   renderer.render(scene, camera);
 });
-// 後面車位停了車：鏡頭轉到車後面、拉遠的時候不要鑽進那些車的車頭（車頭在 x −7.55）
-const bayOff = new THREE.Vector3();
-function keepOutOfBays() {
-  const p = camera.position, t = controls.target;
-  if (p.x >= -7.1) return;
-  bayOff.subVectors(p, t); if (bayOff.x > -1e-3) return;
-  p.copy(t).addScaledVector(bayOff, (-7.1 - t.x) / bayOff.x);
-}
 </script>

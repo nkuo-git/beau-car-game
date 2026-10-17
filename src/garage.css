@@ -393,3 +393,21 @@ html.lk-open, html.lk-open body { overflow: hidden; }
 .cta.alt span { color: var(--soft); opacity: 1; }
 /* 大地圖（bigmap.js）打開的時候：去哪裡那一排收起來（全螢幕的時候它在舞台上面，會蓋到地圖） */
 body.bigmap #drivebar { display: none !important; }
+
+/* 第 21 批：圓塔的電梯面板（town.src.js elPanel；草稿 https://claude.ai/artifact/GZcpBA7kY8HVfa7zYk3Si4）：開（走）到電梯圓台上才出現
+   3 × 2 的樓層（4F 5F 6F／1F 2F 3F；2F–6F 寫還有幾格空的；現在這層橘色）＋樓上開車的時候一排 ◀ ▶；直拿在左上、橫拿在上面中間 */
+.elpanel { position: absolute; z-index: 6; left: 10px; top: 128px; padding: 8px; border-radius: 16px; background: rgba(29,31,36,0.94); box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
+.elpanel[hidden], .elpanel .elr[hidden] { display: none; }
+.elpanel .elg { display: grid; grid-template-columns: repeat(3, 54px); gap: 6px; }
+.elpanel .elr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.elpanel button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 54px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: #34383f; color: #F2F3F5;
+  font: 700 20px/1 var(--cond); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.elpanel button small { font: 700 11px/1 var(--sans); color: #9fe3b9; }
+.elpanel button.on { background: #ff6a1f; color: #1a0f07; }
+.elpanel button.on small { color: #1a0f07; }
+.elpanel button:active { filter: brightness(1.25); }
+@media (max-height: 560px) { .elpanel { left: 50%; top: 8px; transform: translateX(-50%); } }
+body.fs #stage .elpanel { left: calc(var(--fs-l) + 10px); top: calc(var(--fs-t) + 128px); zoom: var(--hudz); }
+@media (max-height: 560px) { body.fs #stage .elpanel { left: 50%; top: calc(var(--fs-t) + 8px); } }
+#stage.el-on .dv-toast, #stage.el-on .wk-toast { top: max(34%, 362px); }
+@media (max-height: 560px) { #stage.el-on .dv-toast, #stage.el-on .wk-toast { top: max(34%, 220px); } }

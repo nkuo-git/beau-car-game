@@ -548,7 +548,7 @@
       nm.className = 'nm'; b.textContent = me ? `${m.n}（你）` : m.n; sm.textContent = `${carName(m.car)} · ${m.w || '在路上'}`;
       nm.append(b, sm); li.append(ava(m.n, col), nm);
       if (!me) {
-        if (out && !['在車庫', '在比賽', '在 400 公尺'].includes(m.w)) li.append(btn('去找他', `去找${m.n}`, () => goTo(m.uid, m.n)));
+        if (out && !['在比賽', '在 400 公尺'].includes(m.w)) li.append(btn('去找他', `去找${m.n}`, () => goTo(m.uid, m.n)));
         li.append(btn('🏁', `找${m.n}比賽`, () => { errMsg = ''; pickFor = { uid: m.uid, n: m.n }; UI().show('race'); }, 'go'));
         li.append(btn('🚗', `看${m.n}的車庫`, () => visit(m.uid, m.n)));
         li.append(btn('🚫', `封鎖${m.n}`, () => block(m.uid, m.n)));

@@ -5,21 +5,22 @@
 // Nick 2026-09-28 05:34：「那個車庫是我要人可以下來走是要走上車開出去不是停在那邊轉來轉去」
 // Nick 2026-09-28 05:36：「還有人走到哪時候可以下車要可以進去房子」；05:38：「自己可以下車走來走去可以自訂角色有居民可以走來走去」
 // Nick 2026-09-28 05:37：「我要有在車庫裡面有一個房子小房子可以睡覺的地方」；06:28：「車庫是有升降停車格」
-// 村子、賽道、你家在同一個場景（TR.scene，世界座標一樣）；村子和你家（room.js 另外蓋一棟低畫質的，擺在 places.garage.lot）第一次出門才蓋，蓋好就留著
-// 出門：人站在車庫裡（走路 walk.js），現在這台停在中間（車頭朝鐵捲門），你其他的車停在後牆的升降停車格（六台兩層的地坑式升降機＝12 格，輕量車 carlod.js）
-//   → 走到車子旁邊按「上車」（跟地板平的那層、中間那台都可以上）→ 按「開鐵捲門」→ 自己開出去；停住了按右邊的「下車」就下來走（車子停在原地，走回去按「上車」接著開）
+// 村子、賽道、你家在同一個場景（TR.scene，世界座標一樣）；村子和你家（tower.js 另外蓋一棟低畫質的，擺在 places.garage.lot）第一次出門才蓋，蓋好就留著
+// 第 21 批（Nick 2026-10-17「把原本正方形的車庫直接弄掉」「可以自行決定要停在哪一層可以自己搭電梯上去」；草稿 https://claude.ai/artifact/GZcpBA7kY8HVfa7zYk3Si4，「弄好直接弄上手機」）：
+//   你家＝圓圓的玻璃塔（tower.js）：一樓大廳（鐵捲門、中間的圓電梯、小房子、獎盃）、二到六樓停車（每層 8 格、車頭朝外，一共 40 格）
+// 出門：人站在一樓大廳（走路 walk.js），現在這台停在電梯圓台上（車頭朝鐵捲門），你其他的車停在樓上的格子（輕量車 carlod.js）
+//   → 走到車子旁邊按「上車」→ 按「開鐵捲門」→ 自己開出去；停住了按右邊的「下車」就下來走（車子停在原地，走回去按「上車」接著開）
 //   開的那台（還有剛下來停著的那台）是完整的車（tripS）；別台都是輕量車，走過去上車才換成完整的（載入的時候「發動中⋯」）
-//   這一趟車子停在哪裡都記著（tripPose）；「直接回車庫」回到車庫頁：最後開的那台停中間（轉盤），停在升降機上的照停，停在外面的回到空的格子
-// 升降停車格（GAME.park，存在手機裡；下一趟出門、重新整理都還在）：
-//   升降機：兩台中間的操作柱前面按「換下面的車／換上面的車」（大按鈕是升降機的圖示；7 秒、馬達聲）；只有跟地板平的那層（lift.floorDeck）走得到、開得上去；有人、有車在平台上不動
-//   停車：開上跟地板平的空平台（或中間的轉盤），停住按「下車」→ 差一點點會自己開正（車頭朝門、朝裡面都可以）→ 車子掛到平台上（升降機動的時候跟著動）
-//   車庫頁：現在這台在轉盤上、其他照 GAME.park 停；下層有車的那台升起來（下層在地上、上層在頭上，兩台都看得到），鏡頭最遠 7 公尺（不會跑到平台底下）；平常跟以前一樣
-// 小房子「大便龍的家」（車庫左前角）：從門走進去，站到床邊按「睡覺」→ 躺到床上、畫面黑掉 →「睡飽了！」站在床邊；在小房子裡鏡頭不會穿過斜天花板（ceilingAt）
+//   這一趟車子停在哪裡都記著（tripPose）；「直接回車庫」回到車庫頁：最後開的那台停電梯圓台，停在格子裡的照停，停在外面的回到空的格子
+// 停車（GAME.park，存在手機裡；下一趟出門、重新整理都還在）：
+//   開（走）到電梯圓台上 → 面板按幾樓（每一樓寫還有幾格空的）→ 電梯載著你和車上去、自己轉到最近的空格子（◀ ▶ 再轉）→ 往前開進去停好、下車 → 走回電梯按 1F
+//   拿車：走進電梯按那一樓 → 上車、倒車回到電梯上 → 按 1F：電梯下樓，自己轉到車頭對著鐵捲門；電梯不在你這層：電梯井旁邊按「叫電梯」
+// 小房子「大便龍的家」（一樓北邊）：從門走進去，站到床邊按「睡覺」→ 躺到床上、畫面黑掉 →「睡飽了！」站在床邊；在小房子裡鏡頭不會穿過天花板（ceilingAt）
 // 改車廠、車店：自己開進去，停在「改車區／買車區」→ 下面打開改車廠（引擎零件、輪胎）／車店（還沒買的車擺在店裡）→「開走」自己開出去
-//   車店買了車：新車停到店門口，開它回家；原本那台車行幫你送回車庫（停在空的升降機車位，要動升降機就直接動好：你在車店看不到；13 格都滿了＝車庫滿了）
+//   車店買了車：新車停到店門口，開它回家；原本那台車行幫你送回車庫（停在樓上空的格子）
 // 回家：開到鐵捲門前面按「開鐵捲門」→ 開進去停好 →「下車」走下來；要回車庫頁（改外觀）按下面的「直接回車庫」
 // 賽道：開進起跑區（慢一點）自己停到起跑線 → race.src.js 的 enterRace()；比完「開回村子」接著開，「直接回車庫」一下回到車庫
-// 引擎聲：開車一個聲音（dvoice；踩著油門就一直有聲浪：drive.js 的 load）；下車熄火、上車再發動；比賽有自己的兩個，交給賽道前先收掉；升降機的馬達聲（sound.js 的 lift）
+// 引擎聲：開車一個聲音（dvoice；踩著油門就一直有聲浪：drive.js 的 load）；下車熄火、上車再發動；比賽有自己的兩個，交給賽道前先收掉；電梯的馬達聲（sound.js 的 lift）
 // 撞爛（damage.js）：出門就把現在這台（完整的車）接上 createDamage（garage.src.html 的 dmgOf）；drive.js 的 onImpact → crashed → dmg.hit（凹、玻璃、燈、零件、撞車聲）
 //   → drv.setDamage（變慢、方向盤偏）、存進 GAME.dmg；煙、掉下來的零件每一格 dmg.update（走路的時候也冒煙）；停著的輕量車照存檔也是凹的（damageLod）；到改車廠付錢修
 // 路上的人和車（npc.js）：第一次出門「出門中⋯」先做好（輕量車＋駕駛、機車＋騎士、居民放在池子裡）；每一格 npcStep：開車的時候你的車是障礙物（AI 車停、讓、按喇叭，撞到人 onHit），
@@ -32,7 +33,7 @@
 //   甩開：警察看不到你（躲在房子裡面也算）、開回自己的車庫關上鐵捲門＝星星清掉；通緝中自己走進警察局＝自首
 //   槍店：走進去，櫃台買槍、子彈，後面的靶場練習（每把槍第一次全部打倒拿 2 萬）；拿槍走出去：瞄準、開槍、換彈匣、換槍
 //   規矩：卡通、沒有血（人倒下去再爬起來）；警察永遠不開槍；小孩永遠打不到（揍、撞、開槍都一樣）；被抓不會沒收槍、子彈；開車不能用槍
-// build-art.mjs 把這個檔案接在 race.src.js 後面（用得到 TR、buildTrack、enterRace、exitRace、S、GAME、engineAudio、room、built、camCap、fitD⋯；walk.js 的 createWalker、charstub.js 的 buildCharacter）
+// build-art.mjs 把這個檔案接在 race.src.js 後面（用得到 TR、buildTrack、enterRace、exitRace、S、GAME、engineAudio、room、built、fitD⋯；walk.js 的 createWalker、charstub.js 的 buildCharacter）
 const DRIVE = { on: false, frame: driveFrame };
 const SHOP_NAME = '阿輝改車廠';
 const driveBar = $('drivebar'), shopEl = $('shop'), dealerEl = $('dealer'), driveOutBtn = $('driveOut'), destBtns = [...document.querySelectorAll('#dests button')];
@@ -41,15 +42,16 @@ let OB = null; // 第 6 批：越野車車庫（orbay.js；跟村子一起蓋，
 let home = null; // 這一趟：{ open（門的碰撞現在是開的還是關的）, hw（說過快速道路了）, slow（說過開慢一點了） }
 let dEye = null; // 駕駛座視角（給 drive.js 的，每一格都讀）：畫面大小變了（全螢幕、轉手機）視角跟著重算
 let walker = null; // 走路（walk.js）：第一次出門做，做好就留著（回車庫頁收起來）
-let tripPose = null; // 這一趟每台車停在哪裡（世界座標 { x, z, heading }；停在升降機上的多一個 deck＝第幾格）；回車庫頁就忘掉
+let tripPose = null; // 這一趟每台車停在哪裡（世界座標 { x, z, heading }；停在圓塔格子裡的多一個 tw＝第幾格，塔裡別的地方多一個 f＝第幾層）；回車庫頁就忘掉
 let tripFull = null; // 村子裡用完整模型（tripS）的那台（開的、剛下車停著的、出門停在中間的、停上升降機的）；別台都是輕量車
 let tripBox = null; // 完整模型的車身長方形（沒在開的時候給走路的）
 const PFULL = {}; // 第 4 批：大車（怪獸卡車）換開別台以後，停在原地用完整的車（輕量車只會平平放在 y 0：越野車場的地形上不對）：key → { S（完整的車）, box（fullBox）, sd（影子）}；回車庫頁收掉
 let tripDest = null; // 現在的目的地（換車、換開車的都照這個）
 let parkShadow = null; // 出門停在中間那台（還沒開過，沒有開車的影子）底下的影子
 let boarding = null; // 換車中（完整模型載入中）：回車庫頁了就不換
-let DECK = null, DREV = null; // 這一趟升降機上停哪台：DECK[id]＝key（id＝room.js 的 parkSlots：0–5 六台的上層、6–11 下層）、DREV[id]＝1 車頭朝裡面
-let RING = null, ringKey = null, ringPend = null, ringPick = 0; // 第 20 批（四層圓環車庫，ringgar.js）：這一趟 RING[i]＝第 i 格停哪台（31 格，一樓先）；ringKey＝在電梯圓台上（拿下來、停上去中）的那台；ringPend＝下車停在圓台上、等你走出圓台再停上去 { k }；ringPick＝「叫車」下一台從第幾格找
+let TWR = null; // 第 21 批：這一趟 TWR[i]＝圓塔第 i 格停哪台（40 格，TOWER_BAYS 的順序：二樓先）
+const EL = { ride: null, keys: new Set(), panel: null }; // 第 21 批：電梯（ride＝坐電梯中、keys＝掛在圓台上一起坐的車、panel＝按樓層的面板）
+let PW = null; // 第 21 批：開車、走路用的世界（VIL 包一層：塔裡面的地板高度＝現在那一層）
 let tripNo = 0; // 第幾趟（升降機停好的時候說話：已經是下一趟就不說）
 let sleep = null, fadeEl = null; // 睡覺中 { t, woke }、黑掉的那一層（睡覺、走進門口共用）
 let indoor = null; // 在房子裡面（interiors.js）：{ b（村子的那一棟）, I（buildInterior）, scene（只有房子裡面＋你＋裡面的人）, t（換完幾秒：0.4 秒內不理門口）, dist0（外面的鏡頭距離）, folks（這一層的人） }
@@ -60,8 +62,8 @@ const camAt = new THREE.Vector3(); // 鏡頭現在看的點（camGo 從這裡移
 let BORROW_K = null, LENT_K = null; // 第 19 批（借車，net.src.js）：正在開借來的哪台；借給朋友的是哪台（藏起來、不能上）
 const snooze = {}; // 剛比完：離開起跑區 30 公尺以前開回去不會又去比賽
 const bayLock = {}; // 改車區、買車區：開走以後要先開出去，下次停進來才會再打開
-const liftSnd = {}; // 升降機的馬達聲（sound.js 的 lift）：第幾台 → 聲音
-const SPAWN = { x: -4.6, z: -7.7, heading: -1.05 }; // 出門的時候人站哪裡（車庫本地：休息區前面，看著車子）
+const liftSnd = {}; // 電梯的馬達聲（sound.js 的 lift）
+const SPAWN = { x: 3.6, z: -5.4, heading: Math.atan2(-5.4, -3.6) }; // 出門的時候人站哪裡（塔的本地：大廳、小房子旁邊，看著電梯上的車）
 let meChar = null; // 你自己（character.js）：第一次出門在「出門中⋯」的時候先做好（第一個人會先畫大家共用的貼圖，手機 0.1～0.5 秒）；樣子＝GAME.look（自訂角色）
 let NPC = null; // 路上的人和車（npc.js）：第一次出門做好就留著（回車庫頁藏起來、停住）；做不出來就沒有（不擋出門）
 let crushFx = null, junkVer = -1; // 第 7 批（輾扁，crush.js）：怪獸卡車開上去把東西壓扁；junkVer＝表演場的垃圾車碰撞換過幾次
@@ -75,9 +77,7 @@ const CLOSE_ACT = { label: '關鐵捲門', icon: 'doorDown', onClick: () => clos
 const OUT_ACT = { label: '下車', icon: 'walk', onClick: () => leaveCar() }; // 開車 HUD 的第二顆（右邊、換視角下面）：不會被「開鐵捲門」蓋掉
 const SLEEP_ACT = { label: '睡覺', icon: 'bed', onClick: () => goSleep() };
 const DRESS_ACT = { label: '換衣服', icon: 'shirt', onClick: () => openLook('cabin') }; // 小房子的衣櫃前面：自訂角色（garage.src.html）
-// 衣櫃（room.js：東牆 x 4.37、z −12.62…−11.12）前面站得到的地方（床尾跟書桌的椅子中間；衣櫃正前面被床、椅子夾住，人過不去）
-const DRESS_ZONE = { x: 3.55, z: -10.15, hx: 0.5, hz: 0.45 };
-const LIFT_BUSY = { label: '升降機動作中⋯', icon: 'lift', onClick: () => {} }; // 在動的時候站在操作柱前面：按了不會怎樣（不會變成旁邊那台的「上車」）
+const LIFT_BUSY = { label: '電梯動作中⋯', icon: 'lift', onClick: () => {} }; // 電梯在動的時候站在電梯井旁邊：按了不會怎樣
 const CABIN_EYE = true; // 走進小房子自動換第一人稱（房間 5 × 4.2 公尺、斜天花板：第三人稱鏡頭一直被牆推到貼著頭）；走出來換回去
 $('shopName').textContent = SHOP_NAME;
 const inBox = (r, x, z, m = 0) => { const dx = x - r.x, dz = z - r.z, c = Math.cos(r.rot || 0), s = Math.sin(r.rot || 0); return Math.abs(dx * c - dz * s) <= r.hx + m && Math.abs(dx * s + dz * c) <= r.hz + m; };
@@ -88,14 +88,11 @@ const forSale = () => saleOf(dealerAt); // 車店擺的：還沒買的車（便�
 const canBuy = () => saleOf('dealer').some((k) => GAME.money >= PERF[k].price);
 const dealerName = () => VIL?.places[dealerAt]?.name || '阿財車行';
 
-// ---- 升降停車格：存檔、擺車、升降機直接擺到哪一層 ----
-// GAME.park（存檔）＝{ mid（中間轉盤上那台＝現在這台 cur）, decks: [12]（parkSlots 的順序；key 或 null）, rev: [12]（1＝車頭朝裡面停的）}
-function deckOf(id) { return id < 6 ? { lift: id, deck: 1 } : { lift: id - 6, deck: 0 }; } // 第 id 格 → 第幾台、哪層（1 上、0 下；跟 room.js 的 parkSlots 一樣）
-function slotId(lift, deck) { return deck ? lift : 6 + lift; }
-// 整理存檔的停車位：只留你的車、一台一格；現在這台 cur 停中間（它原本的格子換給原本停中間那台）；
-// 沒有格子的（舊存檔、剛買的）照價錢停空的格子（上層先：跟 room.js 的 freeSlot 一樣的順序、跟以前的六個車位一樣）
-//   第 4 批：大車（PERF.big：怪獸卡車，輪胎外 3.81 公尺寬，升降機一格 3.7 公尺）、沒有輕量車的不停升降機：車庫頁選它才看得到（停中間的轉盤）；
-//   出門的時候不是開它：停在旁邊的越野車車庫（第 6 批：baySpot）
+// ---- 圓塔的停車格：存檔、擺車 ----
+// GAME.park（存檔）＝{ mid（電梯圓台上那台＝現在這台 cur）, tower: [40]（TOWER_BAYS 的順序：二樓先；key 或 null）}
+// 整理存檔的停車位：只留你的車、一台一格；現在這台 cur 停電梯圓台（它原本的格子換給原本停圓台那台）；
+// 舊存檔（升降機 decks 12 格、後面的圓環車庫 ring 31 格）照順序搬進來，一台都不會不見；沒有格子的（剛買的）照價錢停空的格子（二樓先）
+//   第 4 批：大車（PERF.big：怪獸卡車）、沒有輕量車的不停圓塔：車庫頁選它才看得到（停電梯圓台）；出門的時候不是開它：停在越野車車庫（第 6 批：baySpot）
 const liftOK = (k) => !!LOD_CARS[k] && !PERF[k]?.big; // 停得上升降機的車（有輕量車可以掛、不會壓到隔壁那格）
 // ==== 第 6 批：越野車車庫（orbay.js）：車庫西邊自己一棟，四個停車格（4.6 × 7.5 公尺、裡面 5 公尺高），有自己的鐵捲門 ====
 // Nick 2026-10-07：「越野車專屬位」；本來停在鐵捲門前面的水泥地（大車位，只有兩格、沒有遮雨）＝拿掉了
@@ -106,72 +103,52 @@ function baySpot(k) { // 那台越野車在家停哪一格（照價錢排：同�
 // 這一格有沒有別台停著（停進來的時候看；照 tripPose 算）
 function bayTaken(i, skip) {
   const r = OB.zones.bays[i];
-  for (const k of GAME.owned) { const p = tripPose?.[k]; if (!p || k === skip || p.deck != null) continue; if (inBox(r, p.x, p.z)) return k; }
+  for (const k of GAME.owned) { const p = tripPose?.[k]; if (!p || k === skip || p.tw != null) continue; if (inBox(r, p.x, p.z)) return k; }
   return null;
 }
 const carH = (k) => (PERF[k]?.big ? 3 : undefined); // 第 4 批：車子多高（走路的鏡頭從上面看過去的高度；一般的車 walk.js 當 1.4 公尺，怪獸卡車 3 公尺：鏡頭不會跑進車身裡）
 function normPark() {
-  const P0 = GAME.park || {}, d = [], rev = [], lod = liftOK;
-  for (let i = 0; i < 12; i++) { const k = P0.decks?.[i]; d[i] = typeof k === 'string' && GAME.owned.has(k) && lod(k) && !d.includes(k) ? k : null; rev[i] = d[i] && P0.rev?.[i] ? 1 : 0; }
-  const r = []; // 第 20 批：圓環車庫（舊存檔沒有＝空的）：升降機 12 格先停滿，再照價錢（便宜的先）停圓環車庫（一樓先）
-  for (let i = 0; i < RING_BAYS.length; i++) { const k = P0.ring?.[i]; r[i] = typeof k === 'string' && GAME.owned.has(k) && lod(k) && !d.includes(k) && !r.includes(k) ? k : null; }
-  const ci = d.indexOf(cur), ri = r.indexOf(cur), mid = P0.mid, midOK = mid && mid !== cur && GAME.owned.has(mid) && lod(mid) && !d.includes(mid) && !r.includes(mid);
-  if (ci >= 0) { d[ci] = null; rev[ci] = 0; if (midOK) d[ci] = mid; }
-  if (ri >= 0) { r[ri] = null; if (midOK && !d.includes(mid)) r[ri] = mid; } // 開圓環車庫的車：原本停中間那台換上去停它那格
-  for (const k of byPrice([...GAME.owned])) if (k !== cur && lod(k) && !d.includes(k) && !r.includes(k)) { const f = d.indexOf(null); if (f >= 0) d[f] = k; else { const g = r.indexOf(null); if (g >= 0) r[g] = k; } }
-  return (GAME.park = { mid: cur, decks: d, rev, ring: r });
+  const P0 = GAME.park || {}, n = TOWER_BAYS.length, t = Array(n).fill(null), seen = new Set();
+  const ok = (k) => typeof k === 'string' && GAME.owned.has(k) && liftOK(k) && !seen.has(k);
+  const put = (i, k) => { t[i] = k; seen.add(k); };
+  if (Array.isArray(P0.tower)) P0.tower.forEach((k, i) => { if (i < n && ok(k)) put(i, k); });
+  for (const k of [...(Array.isArray(P0.decks) ? P0.decks : []), ...(Array.isArray(P0.ring) ? P0.ring : [])]) if (ok(k)) { const f = t.indexOf(null); if (f >= 0) put(f, k); } // 舊存檔
+  const ci = t.indexOf(cur), mid = P0.mid;
+  if (ci >= 0) { t[ci] = null; seen.delete(cur); if (mid !== cur && ok(mid)) put(ci, mid); } // 開格子裡的車：原本停圓台那台換上去停它那格
+  seen.add(cur);
+  for (const k of byPrice([...GAME.owned])) if (ok(k)) { const f = t.indexOf(null); if (f >= 0) put(f, k); }
+  return (GAME.park = { mid: cur, tower: t });
 }
-// 升降機直接擺到那一層（不用等 7 秒、沒有聲音、不叫 onLift）：車庫頁、出門前、車行送車來（你看不到）
-function snapLift(R, lf, level) {
-  const hook = R.onLift; R.onLift = null;
-  for (let i = 0; i < 200 && lf.busy; i++) lf.update(0.1); // 還在動：先動完
-  if (lf.level !== level) { lf.setLevel(level); for (let i = 0; i < 200 && lf.busy; i++) lf.update(0.1); }
-  R.onLift = hook;
-}
-// 升降機上的車照 want 擺（R＝車庫頁的 room 或村子的 GAR）：want[id]＝那格停哪台；rev[id]＝車頭朝裡面；objOf(k)＝要掛上去的 Object3D（還在載入＝null：先掛名牌）
-// R.dk＝我們掛了什麼（room.js 不給讀名牌）；同一台換格子也可以（Object3D 只會有一個 parent）
-function syncLifts(R, want, rev, objOf) {
-  const dk = R.dk || (R.dk = Array(12).fill(null));
-  for (let id = 0; id < 12; id++) {
-    const { lift, deck } = deckOf(id), lf = R.lifts[lift], k = want[id], have = lf.cars[deck];
-    if (!k) { if (have || dk[id]) lf.take(deck); dk[id] = null; continue; }
+// 圓塔的格子照 want 擺（R＝車庫頁的 room 或村子的 GAR）：want[i]＝第 i 格停哪台；objOf(k)＝要掛上去的 Object3D（還在載入＝null：先記名字）
+// R.tk＝我們掛了什麼；同一台換格子也可以（Object3D 只會有一個 parent）
+function syncTower(R, want, objOf) {
+  const tk = R.tk || (R.tk = Array(TOWER_BAYS.length).fill(null));
+  for (let i = 0; i < TOWER_BAYS.length; i++) {
+    const k = want?.[i] || null, have = R.cars[i];
+    if (!k) { if (have || tk[i]) R.take(i); tk[i] = null; continue; }
     const o = objOf(k);
-    if (o) { if (have !== o || o.parent !== lf.platforms[deck] || dk[id] !== k) lf.put(deck, o, CARS[k].btn[0]); o.position.set(0, 0, 0); o.rotation.set(0, rev[id] ? Math.PI : 0, 0); }
-    else if (dk[id] !== k || have?.isObject3D) { lf.take(deck); lf.put(deck, CARS[k].btn[0]); }
-    dk[id] = k;
-  }
-  R.baySig = want.map((k) => (k ? CARS[k].btn[0] : '')).join('|');
-}
-// 第 id 格停的車（世界座標，車子原點＝平台中間）；rev＝車頭朝裡面
-function deckPose(id) {
-  const lf = GAR.lifts[deckOf(id).lift], w = garWorld({ x: lf.x, z: lf.z, heading: DREV[id] ? Math.PI : 0 });
-  return { x: w.x, z: w.z, heading: w.heading, deck: id };
-}
-// 第 20 批：圓環車庫的車照 want 擺（跟 syncLifts 一樣：R.rk＝我們掛了什麼）；第 i 格的世界座標（車頭朝外）
-function syncRing(R, want, objOf) {
-  const G = R.ring; if (!G) return;
-  const rk = R.rk || (R.rk = Array(RING_BAYS.length).fill(null));
-  for (let i = 0; i < RING_BAYS.length; i++) {
-    const k = want?.[i] || null, have = G.cars[i];
-    if (!k) { if (have || rk[i]) G.take(i); rk[i] = null; continue; }
-    const o = objOf(k);
-    if (o) { if (have !== o || !o.parent || o.parent.name !== 'ringBay' + (i + 1) || rk[i] !== k) G.put(i, o, CARS[k].btn[0]); }
-    else if (rk[i] !== k || have?.isObject3D) { G.take(i); G.put(i, CARS[k].btn[0]); }
-    rk[i] = k;
+    if (o) { if (have !== o || o.parent?.name !== 'towerBay' + (i + 1) || tk[i] !== k) R.put(i, o, CARS[k].btn[0]); }
+    else if (tk[i] !== k || have?.isObject3D) { R.take(i); R.put(i, CARS[k].btn[0]); }
+    tk[i] = k;
   }
 }
-function ringPose(i) { const b = RING_BAYS[i], w = garWorld({ x: b.x, z: b.z, heading: b.heading }); return { x: w.x, z: w.z, heading: w.heading, ring: i }; }
-function deckUp(id) { const { lift, deck } = deckOf(id), lf = GAR.lifts[lift]; return !lf.busy && lf.floorDeck === deck; } // 那格現在跟地板平（走得到、開得上去）
-// 停在中間轉盤上的（不是 skip 那台；差 1.5 公尺以內都算）
-function midCar(skip) {
+// 第 i 格停的車（世界座標，車子原點＝格子中間、車頭朝外）
+function towerPose(i) { const w = garWorld(TOWER_BAYS[i]); return { x: w.x, z: w.z, heading: w.heading, tw: i }; }
+// 停在第幾層（格子裡的照格子；塔裡別的地方記著 f；外面＝0）
+const poseF = (p) => (!p ? 0 : p.tw != null ? TOWER_BAYS[p.tw].f : p.f || 0);
+const inTower = (x, z, m = 0) => { const q = garLocal(x, z); return GAR.isInside(q.x, q.z, m); };
+const floorAt = (x, z) => (inTower(x, z, -0.4) ? GAR.floor : 0); // 下車、停車的那一點在第幾層
+// 停在電梯圓台上的車（第 f 層；不是 skip 那台；車子中心離圓台中心 r 公尺以內）
+function padCars(f, skip, r = 1.6) {
+  const out = [];
   for (const k of GAME.owned) {
-    const p = tripPose?.[k]; if (!p || p.deck != null || p.ring != null || k === skip) continue;
-    const q = garLocal(p.x, p.z); if (Math.abs(q.x) < 1.5 && Math.abs(q.z) < 1.2) return k;
+    const p = tripPose?.[k]; if (!p || p.tw != null || k === skip || k === LENT_K || EL.keys.has(k) || poseF(p) !== f) continue;
+    const q = garLocal(p.x, p.z); if (Math.hypot(q.x, q.z) < r) out.push(k);
   }
-  return null;
+  return out;
 }
-// 這一趟停在升降機上的記進存檔（重新整理也還在；回車庫頁再整理一次：normPark）
-function keepPark() { if (!DECK) return; GAME.park = { mid: midCar(), decks: DECK.slice(), rev: DREV.slice(), ring: RING ? RING.slice() : [] }; save(); }
+// 這一趟停在格子裡的記進存檔（重新整理也還在；回車庫頁再整理一次：normPark）
+function keepPark() { if (!TWR) return; GAME.park = { mid: padCars(0, null)[0] || null, tower: TWR.slice() }; save(); }
 
 // ---- 停著的車（輕量車 carlod.js）：你的其他車停在車庫的升降停車格（出門的時候停在哪就在哪），還沒買的擺在車店 ----
 // 一台車一份（LODS[key]），看現在在哪裡就搬過去：車庫頁的車庫（room，原點）、出門時村子裡你家（GAR）或停在村子裡的地方、車店的展示台
@@ -193,31 +170,30 @@ function lodFor(k) { // 有了就給；沒有就開始載入（載好了再排�
 }
 // 車身長方形（碰撞）：p＝車子原點的位置（世界）
 const carBox = (B, p) => { const c = Math.cos(p.heading || 0), s = Math.sin(p.heading || 0); return { t: 'box', x: p.x + B.cx * c + B.cz * s, z: p.z - B.cx * s + B.cz * c, hx: B.hx, hz: B.hz, rot: p.heading || 0, h: 1.3 }; };
-// 停在村子裡的位置 → [放在哪個 Group, 那個 Group 裡的位置]：車庫裡面放進車庫的 interior（門關著、鏡頭在外面就一起不畫）
+// 停在村子裡的位置 → [放在哪個 Group, 那個 Group 裡的位置]：塔裡面放進塔（一樓：大廳；樓上：那一層的 Group，cull 照鏡頭開關）；外面照地面高度（山上、越野車場）
 function parkedAt(p) {
-  const q = garLocal(p.x, p.z);
-  if (inBox(GAR.zones.inside, q.x, q.z)) return [GAR.interior, { x: q.x, z: q.z, heading: (p.heading || 0) - VIL.places.garage.lot.heading }];
-  if (GAR.ring.inside(q.x, q.z)) return [GAR.ring.floors[0], { x: q.x, z: q.z, heading: (p.heading || 0) - VIL.places.garage.lot.heading }]; // 第 20 批：圓環車庫一樓（從外面被車庫擋住就不畫）
-  return [VIL.group, p];
+  const q = garLocal(p.x, p.z), LH = VIL.places.garage.lot.heading;
+  if (GAR.isInside(q.x, q.z)) { const f = poseF(p); return [f ? GAR.floors[f] : GAR.interior, { x: q.x, y: GAR.fy(f), z: q.z, heading: (p.heading || 0) - LH }]; }
+  return [VIL.group, { x: p.x, y: VIL.heightAt ? VIL.heightAt(p.x, p.z) || 0 : 0, z: p.z, heading: p.heading }];
 }
 let padOff = 0; // 車行轉盤擺第幾台開始（車比轉盤多：按到後面的車，轉盤換一批：lookAtCar）
 function arrangeCars() {
-  const inTown = !!(trip && GAR && tripPose && DECK), R = inTown ? GAR : room; // 車庫頁是攝影棚（不是豪華車庫）就沒有升降機（room 還沒蓋）
+  const inTown = !!(trip && GAR && tripPose && TWR), R = inTown ? GAR : room; // 車庫頁是攝影棚（不是豪華車庫）就沒有圓塔（room 還沒蓋）
   const shows = inTown ? VIL.places.dealer?.display || [] : [], sale = saleOf('dealer').filter((k) => LOD_CARS[k]);
   if (padOff >= sale.length) padOff = Math.max(0, Math.floor((sale.length - 1) / (shows.length || 1)) * (shows.length || 1));
   const pads = sale.slice(padOff, padOff + shows.length);
-  const at = new Map(); // key → [Group, 位置, 自己的影子要不要開, 世界的位置]（升降機上的另外掛：syncLifts）
-  let want = null, rev = null, ringWant = null;
+  const at = new Map(); // key → [Group, 位置, 自己的影子要不要開, 世界的位置]（格子裡的另外掛：syncTower）
+  let want = null;
   if (inTown) {
-    want = DECK.slice(); rev = DREV; ringWant = RING; // 完整模型那台（停上升降機的）也在裡面：掛的是 tripS.car
+    want = TWR; // 完整模型那台（停進格子的）也在裡面：掛的是 tripS.car
     for (const k of GAME.owned) {
-      const p = tripPose[k]; if (!p || k === tripFull || p.deck != null || p.ring != null || k === LENT_K) continue; // 第 20 批：圓環車庫的（ring）另外掛 // 完整模型那台（開的、下車停著的）不用輕量車；第 19 批：借給朋友的那台不畫
+      const p = tripPose[k]; if (!p || k === tripFull || p.tw != null || k === LENT_K || EL.keys.has(k)) continue; // 完整模型那台（開的、下車停著的）不用輕量車；第 19 批：借給朋友的那台不畫；第 21 批：坐電梯中的掛在圓台上
       if (PFULL[k]) { pfullShow(k); continue; } // 第 4 批：大車換開別台：完整的車停在原地
       const [g, q] = parkedAt(p); at.set(k, [g, q, true, p]);
     }
-  } else if (R) { const P = normPark(); want = P.decks; rev = P.rev; ringWant = P.ring; }
+  } else if (R) want = normPark().tower;
   pads.forEach((k, i) => at.set(k, [VIL.group, shows[i], true, shows[i]]));
-  const onDeck = new Set([...(want || []), ...(ringWant || []), inTown ? ringKey : null].filter((k) => k && !(inTown && k === tripFull))); // 第 20 批：圓環車庫、電梯圓台上的也不收
+  const onDeck = new Set([...(want || []), ...(inTown ? EL.keys : [])].filter((k) => k && !(inTown && k === tripFull))); // 格子裡的、坐電梯中的也不收
   for (const k of Object.keys(CARS)) {
     const w = at.get(k);
     if (!w && !onDeck.has(k)) { LODS[k]?.lod?.car.removeFromParent(); continue; }
@@ -226,28 +202,16 @@ function arrangeCars() {
     if (LODS[k].sig !== sig) { lod.setLook(CARS[k].state); LODS[k].sig = sig; LODS[k].dl?.update(0.016); } // 在車庫頁改過外觀（撞壞的照新的網格重播）
     const st = GAME.owned.has(k) ? GAME.dmg[k] || null : null, dsig = st ? JSON.stringify(st.h) : ''; // 撞壞的車停在升降機上、村子裡也是凹的（damage.js 的 damageLod）
     if ((LODS[k].dsig || '') !== dsig) { if (!LODS[k].dl) LODS[k].dl = damageLod(lod, null, { spec: LOD_CARS[k].spec }); LODS[k].dl.apply(st); LODS[k].dsig = dsig; }
-    if (!w) { LODS[k].shadow.visible = false; continue; } // 升降機上：下面 syncLifts 掛上去（平台上的影子 room.js 自己畫）
+    if (!w) { LODS[k].shadow.visible = false; continue; } // 格子裡：下面 syncTower 掛上去
     w[0].add(lod.car); lod.car.position.set(w[1].x, w[1].y || 0, w[1].z); lod.car.rotation.set(0, w[1].heading || 0, 0); // 車店的轉盤比地面高一點（y）
     LODS[k].shadow.visible = w[2];
   }
-  if (R && want) {
-    syncLifts(R, want, rev, (k) => (inTown && k === tripFull ? tripS.car : LODS[k]?.lod ? LODS[k].lod.car : null)); // 名牌、平台上的影子 room.js 照 put／take 自己改
-    syncRing(R, ringWant, (k) => (LODS[k]?.lod ? LODS[k].lod.car : null)); // 第 20 批：圓環車庫
-    if (!inTown) { // 車庫頁：下層有車的升起來（下層在地上、上層在頭上：兩台都看得到）；有升起來的鏡頭最遠 7 公尺
-      // 第 4 批：大車（怪獸卡車）在轉盤上：鏡頭要退到 9～13 公尺才看得到整台 → 升降機不升（下層的車收在坑裡），鏡頭不限 7 公尺
-      const big = !!PERF[cur]?.big, cap0 = camCap;
-      let up = false;
-      for (const lf of R.lifts) { const l = !big && want[slotId(lf.id, 0)] ? 0 : 1; snapLift(R, lf, l); up ||= l === 0; }
-      camCap = up ? 7 : Infinity; camMax();
-      if (big && cap0 !== camCap && !seat) view(38); // 剛換成大車（showCar 先擺鏡頭的時候還被 7 公尺限住）：重擺一次
-    }
-  }
-  if (inTown) { // 停著的車：開過去會撞到、走過去會擋到（升降機上的只有跟地板平的那層擋：頭上的、坑裡的不擋）
-    const cols = [], padCols = [];
-    for (const [k, w] of at) { const L = LODS[k]; if (L?.lod && w[3]) (GAME.owned.has(k) ? cols : padCols).push(carBox(L, w[3])); }
-    for (let id = 0; id < 12; id++) { const k = DECK[id]; if (k && k !== tripFull && LODS[k]?.lod && deckUp(id)) cols.push(carBox(LODS[k], deckPose(id))); }
-    for (let i = 0; i < RING.length; i++) { const k = RING[i]; if (k && RING_BAYS[i].f === 0 && LODS[k]?.lod) padCols.push(carBox(LODS[k], ringPose(i))); } // 第 20 批：圓環車庫一樓停的車（開車、走路都擋；不能上：要用「叫車」）
-    for (const k in PFULL) { const p = tripPose[k]; if (p && k !== tripFull) cols.push(carBox(PFULL[k].box, p)); } // 第 4 批：停著的完整的車（大車換開別台）
+  if (R && want) syncTower(R, want, (k) => (inTown && k === tripFull ? tripS.car : LODS[k]?.lod ? LODS[k].lod.car : null));
+  if (inTown) { // 停著的車：開過去會撞到、走過去會擋到（第 21 批：跟你同一層的才擋：樓上的格子、你在樓上的時候外面的都不擋）
+    const cols = [], padCols = [], fl = GAR.floor;
+    for (const [k, w] of at) { const L = LODS[k], own = GAME.owned.has(k); if (L?.lod && w[3] && (!own || poseF(w[3]) === fl)) (own ? cols : padCols).push(carBox(L, w[3])); }
+    for (let i = 0; i < TWR.length; i++) { const k = TWR[i]; if (k && k !== tripFull && TOWER_BAYS[i].f === fl && LODS[k]?.lod) cols.push(carBox(LODS[k], towerPose(i))); }
+    for (const k in PFULL) { const p = tripPose[k]; if (p && k !== tripFull && poseF(p) === fl) cols.push(carBox(PFULL[k].box, p)); } // 第 4 批：停著的完整的車（大車換開別台）
     if (drv) { drv.removeColliders('parked'); drv.addColliders([...cols, ...padCols], 'parked'); }
     if (walker) { walker.removeColliders('pads'); walker.addColliders(padCols, 'pads'); walker.setCars(walkCars()); } // 你的車：走路那邊自己加碰撞（setCars）
   }
@@ -255,16 +219,15 @@ function arrangeCars() {
 }
 onCars = arrangeCars; // 車庫頁換車、買車、重新開始、車庫重蓋的時候叫（garage.src.html）
 arrangeCars();
-// 走路可以上的車：你的車（停在哪就在哪；升降機上的只有跟地板平的那層）；開著的、剛下車停著的那台 walk.js 自己記著
+// 走路可以上的車：你的車（停在哪就在哪；第 21 批：跟你同一層的才上得去）；開著的、剛下車停著的那台 walk.js 自己記著
 function walkCars() {
   const list = [];
-  if (!tripPose || !DECK) return list;
+  if (!tripPose || !TWR) return list;
   for (const k of GAME.owned) {
-    const p = tripPose[k]; if (!p || k === LENT_K) continue; // 第 19 批：借給朋友了
-    if (p.deck != null && !deckUp(p.deck)) continue; // 升起來在頭上、降下去在坑裡、在動：走不到
-    if (p.ring != null) continue; // 第 20 批：圓環車庫裡的（要「叫車」叫下來）、電梯圓台上在動的
+    const p = tripPose[k]; if (!p || k === LENT_K || EL.keys.has(k)) continue; // 第 19 批：借給朋友了；第 21 批：坐電梯中
+    if (poseF(p) !== GAR.floor) continue; // 第 21 批：別層的（樓上的格子；你在樓上的時候外面的）走不到
     const name = CARS[k].btn[0];
-    if (k === tripFull) { if (!drv && tripS && tripBox) list.push({ key: k, name, x: p.x, z: p.z, heading: p.heading, ...tripBox, h: carH(k), object: tripS.car }); continue; } // 出門停在中間、停上升降機（還沒開、沒在開）
+    if (k === tripFull) { if (!drv && tripS && tripBox) list.push({ key: k, name, x: p.x, z: p.z, heading: p.heading, ...tripBox, h: carH(k), object: tripS.car }); continue; } // 出門停在電梯圓台上、停進格子（還沒開、沒在開）
     if (PFULL[k]) { list.push({ key: k, name, x: p.x, z: p.z, heading: p.heading, ...PFULL[k].box, h: carH(k), object: PFULL[k].S.car }); continue; } // 第 4 批：大車換開別台（完整的車停著）
     const L = LODS[k]; if (!L?.lod) continue; // 還在載入：載好了會再排一次
     list.push({ key: k, name, x: p.x, z: p.z, heading: p.heading, hx: L.hx, hz: L.hz, cx: L.cx, cz: L.cz, h: carH(k), object: L.lod.car }); // h：大車（怪獸卡車）3 公尺高
@@ -272,7 +235,7 @@ function walkCars() {
   return list;
 }
 
-// ---- 你家（村子裡那棟）：車庫裡的座標 ↔ 世界座標（車庫裡 x 往門外、z＝車頭朝門時車子的右邊）----
+// ---- 你家（村子裡那棟圓塔）：塔的座標 ↔ 世界座標（原點＝塔的中心、x 往門外、z＝車頭朝門時車子的右邊；只管 x、z）----
 function garWorld(p) {
   const L = VIL.places.garage.lot, c = Math.cos(L.heading), s = Math.sin(L.heading);
   return { x: L.x + p.x * c + p.z * s, z: L.z - p.x * s + p.z * c, heading: (p.heading || 0) + L.heading };
@@ -281,7 +244,18 @@ function garLocal(x, z) {
   const L = VIL.places.garage.lot, c = Math.cos(L.heading), s = Math.sin(L.heading), dx = x - L.x, dz = z - L.z;
   return { x: dx * c - dz * s, z: dx * s + dz * c };
 }
-const garCols = (open) => GAR.colliders(open).map((b) => { const w = garWorld(b); return { ...b, x: w.x, z: w.z, rot: (b.rot || 0) + VIL.places.garage.lot.heading }; });
+const garCols = (open) => GAR.colliders(open, true); // 現在這一層的碰撞（世界座標；電梯不在這層＝井擋起來）
+// 第 21 批：開車、走路用的世界（VIL 包一層）：塔裡面（樓板蓋得到的地方）地板＝塔的一樓多高（山頂那間 ≈ 103）＋現在這一層；平的、柏油；外面完全照舊
+function proxyWorld() {
+  const W = Object.create(VIL), R2 = TOWER.RW * TOWER.RW, UP = [0, 1, 0];
+  const inT = (x, z) => { const L = VIL.places.garage.lot, dx = x - L.x, dz = z - L.z; return dx * dx + dz * dz < R2; };
+  const base = () => GAR.group.position.y + towerFy(GAR.floor);
+  W.heightAt = (x, z) => (inT(x, z) ? base() : VIL.heightAt ? VIL.heightAt(x, z) : 0);
+  W.terrainAt = (x, z) => (inT(x, z) ? base() !== 0 : VIL.terrainAt ? VIL.terrainAt(x, z) : false);
+  W.normalAt = (x, z) => (inT(x, z) ? UP : VIL.normalAt ? VIL.normalAt(x, z) : UP);
+  W.surfaceAt = (x, z) => (inT(x, z) ? 0 : VIL.surfaceAt(x, z));
+  return W;
+}
 
 // ---- 出門：村子、你家第一次要蓋（等招牌的字型、蓋一下子），蓋好再出門 ----
 async function enterDrive() {
@@ -298,13 +272,12 @@ async function enterDrive() {
     await new Promise((r) => setTimeout(r, 30)); // 讓「出門中」先畫出來（蓋村子要一下子，這時候畫面不會動）
     try {
       if (!TR) TR = buildTrack();
-      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMountain(VIL, { renderer }); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
+      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMountain(VIL, { renderer }); VIL.wrapHome(); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
       const L = VIL.places.garage.lot;
-      GAR = buildRoom(renderer, { quality: 'low', exterior: true }); // 村子裡看得到外牆、屋頂、招牌；地板不反射（省）
-      GAR.group.position.set(L.x, 0, L.z); GAR.group.rotation.y = L.heading; TR.scene.add(GAR.group);
-      GAR.onLift = onLift; // 升降機開始動、停好：馬達聲、碰撞、走得到的車
-      GAR.ring.onLift = onRingLift; // 第 20 批：圓環車庫的電梯
-      TR.scene.onBeforeRender = garHideFull; TR.scene.onAfterRender = garShowFull; // 第 17 批：門關著從外面看，車庫裡停的完整的車不畫
+      GAR = buildRoom(renderer, { quality: 'low', exterior: true }); // 第 21 批：圓塔（tower.js）；村子裡看得到玻璃、名牌；地板不反射（省）
+      GAR.group.position.set(L.x, VIL.places.garage.y || 0, L.z); GAR.group.rotation.y = L.heading; TR.scene.add(GAR.group);
+      GAR.onLift = onLift; // 電梯開始動、停好：馬達聲、碰撞、走得到的車
+      PW = proxyWorld();
       OB = buildOrbay(VIL, { renderer }); // 第 6 批：越野車車庫（車庫西邊那棟：牆、停車格、鐵捲門的碰撞都加進 VIL 了）
       $('dealerName').textContent = dealerName();
       if (!meChar) meChar = buildCharacter(meLook());
@@ -341,7 +314,7 @@ function townFog(on) {
 }
 // 走路的（walk.js）：第一次出門做（村子、你家蓋好以後），之後一直用同一個
 function makeWalker() {
-  walker = createWalker({ scene: TR.scene, camera: dcam, world: VIL, colliders: stripColliders(), character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
+  walker = createWalker({ scene: TR.scene, camera: dcam, world: PW, colliders: stripColliders(), character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
   walker.setGarage(GAR); // 鐵捲門：碰撞跟著門、門口給「開鐵捲門」
   if (NPC) { walker.addColliders(NPC.peds.props.colliders, 'npc-props'); walker.setMovers(NPC.MOV); } // 板凳、椅子；路上的車、居民（npcStep 每一格換）
   makeGuns(); // 第 3 批（b3-int）：槍、「揍」的按鈕、警車和警察擋人、小地圖上的警車
@@ -359,7 +332,7 @@ function startDrive() {
   townFog(true);
   for (const k of Object.keys(snooze)) delete snooze[k];
   for (const k of Object.keys(bayLock)) delete bayLock[k];
-  GAR.door.t = 0; GAR.setTrophies(trophyCount()); homePlace(); // 第 17 批：你家（大理石車庫）搬到車庫街你那間（下面的停車位置都照新的 lot 算）
+  GAR.door.t = 0; GAR.setTrophies(trophyCount()); elEnd(); stopLiftSnd(); GAR.liftSnap(0, 0); GAR.setFloor(0); homePlace(); // 第 17 批：你家搬到你那間（下面的停車位置都照新的 lot 算）；第 21 批：電梯在一樓、你在一樓
   if (OB) { OB.door.t = 0; obDoor.drv = null; obDoor.walk = null; } // 第 6 批：越野車車庫的鐵捲門關著
   home = { open: null, hw: false, slow: false }; hurtSaid = false;
   if (!walker) makeWalker();
@@ -367,18 +340,15 @@ function startDrive() {
   police?.setEnabled(true); // 第 3 批（b3-int）
   if (gcam.auto && walker.cameraMode === 'eye') walker.setCamera({ mode: 'follow' }); // 上一趟在小房子裡自動換的第一人稱：換回來
   endSleep(); gcam.maxY = Infinity; gcam.house = false; gcam.auto = false; walker.setCamera({ maxY: null });
-  // 這一趟：現在這台停在中間（車頭朝鐵捲門），你其他的車照存檔停在升降機上（跟車庫頁一樣：下層有車的那台升起來）
-  const P = normPark(); DECK = P.decks.slice(); DREV = P.rev.slice();
-  tripPose = { [cur]: { ...VIL.places.garage.spawn } };
-  for (let id = 0; id < 12; id++) if (DECK[id]) tripPose[DECK[id]] = deckPose(id);
-  RING = P.ring.slice(); ringKey = null; ringPend = null; ringPick = 0; GAR.ring.unload(); GAR.ring.snap(); if (GAR.rk) GAR.rk.fill(null); // 第 20 批：圓環車庫（電梯在一樓、全部重掛）
-  for (let i = 0; i < RING.length; i++) if (RING[i]) tripPose[RING[i]] = ringPose(i);
+  // 這一趟：現在這台停在電梯圓台上（車頭朝鐵捲門；車庫頁選了樓上的車＝電梯已經把它送下來了），你其他的車照存檔停在樓上的格子
+  const P = normPark(); TWR = P.tower.slice();
+  tripPose = { [cur]: { ...VIL.places.garage.spawn, f: 0 } };
+  for (let i = 0; i < TWR.length; i++) if (TWR[i]) tripPose[TWR[i]] = towerPose(i);
   for (const k of GAME.owned) if (k !== cur && !liftOK(k)) { const p = baySpot(k); if (p) tripPose[k] = p; } // 第 6 批：越野車停越野車車庫自己的格子（輕量車）
-  stopLiftSnd(); for (const lf of GAR.lifts) snapLift(GAR, lf, DECK[slotId(lf.id, 0)] ? 0 : 1);
-  if (GAR.dk) for (let id = 0; id < 12; id++) GAR.dk[id] = null; // 上一趟掛的東西可能被車庫頁拿走了（Object3D 只有一個 parent）：全部重掛
+  if (GAR.tk) GAR.tk.fill(null); // 上一趟掛的東西可能被車庫頁拿走了（Object3D 只有一個 parent）：全部重掛
   parkFull();
   walker.setCars([], { keepParked: false }); // 新的一趟：上次下車停著的那台忘掉
-  liftChanged(); // 輕量車掛到村子這棟的升降機上、還沒買的擺到車店；碰撞（升降機、只擋鏡頭的平台）、走路可以上的車
+  liftChanged(); // 輕量車掛到村子這棟的格子上、還沒買的擺到車店；碰撞（塔、只擋鏡頭的天花板）、走路可以上的車
   setDest(canShop() ? 'shop' : canBuy() ? 'dealer' : 'circuit'); // 買得起東西就先帶你去買（不然去賽車場比賽）
   walker.teleport(garWorld(SPAWN)); walker.resume();
   // 教怎麼開始：第一次出門 walk.js 先教怎麼走（3.2 秒），接著才說走去上車；已經走到車子旁邊（有「上車」）就不說
@@ -392,13 +362,14 @@ startDrive.n = 0;
 function parkFull() {
   const Sx = tripS, p = tripPose[cur];
   TR.scene.add(Sx.car); Sx.car.visible = true; Sx.body.position.y = +CARS[cur].state.height;
-  Sx.car.position.set(p.x, 0, p.z); Sx.car.rotation.set(0, p.heading, 0); Sx.car.updateMatrixWorld(true);
+  const gy = PW ? PW.heightAt(p.x, p.z) || 0 : 0; // 第 21 批：塔的一樓（山頂那間 ≈ 103）
+  Sx.car.position.set(p.x, gy, p.z); Sx.car.rotation.set(0, p.heading, 0); Sx.car.updateMatrixWorld(true);
   Sx.cabin?.userData.setGauges(0, 0); Sx.cabin?.userData.setSteer?.(0);
   tripFull = cur; tripBox = fullBox(Sx);
   if (!parkShadow) { parkShadow = sh.clone(); parkShadow.name = 'park-shadow'; }
   const c = Math.cos(p.heading), s = Math.sin(p.heading);
   TR.scene.add(parkShadow); parkShadow.visible = true;
-  parkShadow.position.set(p.x + tripBox.cx * c, 0.006, p.z - tripBox.cx * s); parkShadow.rotation.set(-Math.PI / 2, 0, p.heading); parkShadow.scale.set(tripBox.hx / 2.2, tripBox.hz / 0.97, 1);
+  parkShadow.position.set(p.x + tripBox.cx * c, gy + 0.006, p.z - tripBox.cx * s); parkShadow.rotation.set(-Math.PI / 2, 0, p.heading); parkShadow.scale.set(tripBox.hx / 2.2, tripBox.hz / 0.97, 1);
 }
 // 完整模型的車身長方形（跟 drive.js 量的一樣：放回原點量車身）
 function fullBox(Sx, k = cur) {
@@ -436,17 +407,17 @@ function makeDrv(pose) {
   const eye = CABIN_VIEW[cur] ? { ...CABIN_VIEW[cur], fov: cabinFov(cur, dcam.aspect) } : undefined;
   dEye = eye;
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
-  drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur) }, world: VIL, colliders: stripColliders(), hudParent: stage,
+  drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur) }, world: PW, colliders: stripColliders(), hudParent: stage,
     onZone: arrive, onShift: () => dvoice?.shift(), onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
     crush: crushFx && offK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
-  drv.setCamCeil((x, z) => { if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75; const q = garLocal(x, z), c = GAR.ring.ceilingAt(q.x, q.z); return c < 50 ? c - 0.75 : Infinity; }); // 第 20 批：圓環車庫一樓（2.9 公尺）、走道（2.38） // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
+  drv.setCamCeil((x, z) => { if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75; const c = GAR.ceilingAt(x, z, true); return c < 50 ? GAR.group.position.y + c - 0.75 : Infinity; }); // 第 21 批：圓塔現在這一層的天花板（一樓 4.2、樓上 2.9 公尺） // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
   if (police) drv.setMarkers(police.markers); // 第 3 批（b3-int）：小地圖上的警車
   drv.teleport(pose);
-  tripFull = cur; tripPose[cur] = { x: pose.x, z: pose.z, heading: pose.heading }; if (parkShadow) parkShadow.visible = false;
+  tripFull = cur; tripPose[cur] = { x: pose.x, z: pose.z, heading: pose.heading, f: floorAt(pose.x, pose.z) }; if (parkShadow) parkShadow.visible = false;
   home.open = null; obDoor.drv = null; // 門的碰撞下一格放（照門現在開著還是關著；第 6 批：越野車車庫的門一樣）
   arrangeCars(); // 停著的車：放碰撞（開車的是新的）、走路的清單
   drv.setDestination(tripDest);
@@ -555,7 +526,7 @@ function arrive(name, inside) {
   if (name === 'orbay' && !home.ob && !liftOK(cur)) { home.ob = true; drv.toast('越野車車庫：開進去停在黃線的格子裡', 2800); } // 第 6 批
   if (name === 'offroad' && !home.or) { home.or = true; drv.toast('到越野車場了！越野車行買越野車，起跑區比越野賽', 2800); } // 第 4 批
   if (name === 'neihu' && !home.nhs) { home.nhs = true; drv.toast('到港墘站了！上面是捷運文湖線，可以下車走走', 2800); } // 內湖（neihu.js）
-  if (name === 'mountain' && !home.mt) { home.mt = true; drv.toast(`到山頂了！海拔 ${Math.round(VIL.mountain?.top || 100)} 公尺，下車去涼亭看風景`, 2800); } // 山（mountain.js）
+  if (name === 'mountain' && !home.mt && VIL.homeSites?.[HOME.slot]?.via !== 'mountain') { home.mt = true; drv.toast(`到山頂了！海拔 ${Math.round(VIL.mountain?.top || 100)} 公尺，下車去涼亭看風景`, 2800); } // 山（mountain.js）；第 21 批：你家就在山頂不用說
   if (name === 'highway' && !home.hw) { home.hw = true; drv.toast(`上快速道路了：油門踩到底，看 ${CARS[cur].btn[0]} 開得到幾 km/h！`, 2800); }
 }
 
@@ -608,25 +579,24 @@ function hillStep(t, dt) {
 }
 
 // ---- 下車、上車（walk.js）：停住了按「下車」，車子停在原地；走到哪一台旁邊按「上車」就開那台 ----
-// 停在升降機的平台上、中間的轉盤上（差一點點：自己開正再下車）：跟地板平、空的平台＝停上去（掛到平台上，升降機動的時候跟著動）
+// 第 21 批：停在圓塔樓上的空格子裡（差一點點：自己開正再下車，車頭朝外）＝停進去（車子掛到格子上）；一樓沒有格子：停在哪就在哪
 function parkSpot(t) {
   const ob = orbaySpot(t); if (ob) return ob; // 第 6 批：越野車停進越野車車庫的格子
-  const rs = ringSpot(t); if (rs) return rs; // 第 20 批：停在圓環車庫的電梯圓台上（怎麼停都可以：電梯會轉正）
-  const q = garLocal(t.x, t.z), h = wrapPi(t.heading - VIL.places.garage.lot.heading), rev = Math.abs(h) > Math.PI / 2;
-  if (Math.abs(wrapPi(h - (rev ? Math.PI : 0))) > 0.5) return null; // 歪太多（橫著停）不算
-  const at = (x, z) => { const w = garWorld({ x, z, heading: rev ? Math.PI : 0 }); return { x: w.x, z: w.z, heading: t.heading + wrapPi(w.heading - t.heading), rev }; };
-  for (const lf of liftOK(cur) ? GAR.lifts : []) { // 第 4 批：大車（怪獸卡車）、沒有輕量車的不停升降機
-    const id = slotId(lf.id, lf.floorDeck);
-    if (lf.busy || DECK[id] || Math.abs(q.x - lf.x) > 1.5 || Math.abs(q.z - lf.z) > 0.8) continue;
-    return { ...at(lf.x, lf.z), deck: id };
+  if (!TWR || !GAR.floor || !liftOK(cur)) return null;
+  const q = garLocal(t.x, t.z), h = wrapPi(t.heading - VIL.places.garage.lot.heading);
+  for (const b of TOWER_BAYS) {
+    if (b.f !== GAR.floor || TWR[b.id] || Math.abs(wrapPi(h - b.heading)) > 0.6) continue; // 歪太多（橫著停、倒車停進去）不算
+    const ca = Math.cos(b.a), sa = Math.sin(b.a), u = q.x * ca + q.z * sa - TOWER.RB, v = q.z * ca - q.x * sa; // 格子的本地：u 往外、v 往旁邊
+    if (u < -2.4 || u > 2.6 || Math.abs(v) > 1.5) continue; // 開到底（車頭碰到玻璃）、還在電梯口都算，parkAt 會擺正
+    const w = garWorld(b);
+    return { x: w.x, z: w.z, heading: t.heading + wrapPi(w.heading - t.heading), tw: b.id };
   }
-  if (Math.abs(q.x) < 1.5 && Math.abs(q.z) < 0.9 && !midCar(cur)) return { ...at(0, 0), deck: null };
   return null;
 }
 function leaveCar() {
   if (!drv || !walker || !DRIVE.on || !tripPose || jailed()) return; // 第 3 批：被抓到了不能下車
   const t = drv.telemetry(); if (t.paused || t.auto) return;
-  const spot = Math.abs(t.v) < 1 && !BORROW_K ? parkSpot(t) : null; // 第 19 批：借來的車不停進你的升降機、車位
+  const spot = Math.abs(t.v) < 1 && !BORROW_K ? parkSpot(t) : null; // 第 19 批：借來的車不停進你的格子
   if (spot && (Math.hypot(spot.x - t.x, spot.z - t.z) > 0.02 || Math.abs(wrapPi(spot.heading - t.heading)) > 0.01)) { // 開正（0.6–1 秒）再下車
     const d = drv; drv.parkAt(spot, () => { if (drv === d && DRIVE.on && trip) outAt(spot); }); return;
   }
@@ -635,50 +605,47 @@ function leaveCar() {
 function outAt(spot) {
   const car = walker.getOut(drv, tripS, { key: cur, name: CARS[cur].btn[0], h: carH(cur) }); // 開太快、四邊都沒地方站就不下（walk.js 會說）
   if (!car) return;
-  tripPose[cur] = { x: car.x, z: car.z, heading: car.heading };
+  tripPose[cur] = { x: car.x, z: car.z, heading: car.heading, f: floorAt(car.x, car.z) };
   dvoice?.dispose(); dvoice = null; // 熄火（上車再發動）
   tripS?.cabin?.userData.setGauges(0, 0); tripS?.cabin?.userData.setSteer?.(0);
-  if (spot?.deck != null && liftOK(cur) && !DECK[spot.deck] && deckUp(spot.deck)) { // 停上升降機：車子掛到平台上；開車的收掉（上車再做一個：車子要從平台拿下來）
+  if (spot?.tw != null && liftOK(cur) && !TWR[spot.tw]) { // 停進格子：車子掛到格子上；開車的收掉（上車再做一個：車子要從格子拿下來）
     drv.dispose(); drv = null; home.open = null; obDoor.drv = null;
-    DECK[spot.deck] = cur; DREV[spot.deck] = spot.rev ? 1 : 0; tripPose[cur] = deckPose(spot.deck);
-    walker.setCars([], { keepParked: false }); // walk.js 記的「剛下來那台」（接回開車的）不要了：現在是平台上的車
-    const { lift, deck } = deckOf(spot.deck);
-    if (spot.rev) walker.setCamera({ yaw: car.heading + Math.PI }); // 車頭朝裡面停：鏡頭轉過來看車庫裡面（不然貼著後牆）
-    walker.toast(`${CARS[cur].btn[0]} 停好了：${lift + 1} 號升降機${deck ? '上層' : '下層'}`, 2200);
+    TWR[spot.tw] = cur; tripPose[cur] = towerPose(spot.tw);
+    walker.setCars([], { keepParked: false }); // walk.js 記的「剛下來那台」（接回開車的）不要了：現在是格子裡的車
+    const b = TOWER_BAYS[spot.tw];
+    walker.toast(`${CARS[cur].btn[0]} 停好了：${b.f + 1} 樓 ${b.i + 1} 號`, 2200);
   } else if (spot?.bay != null) walker.toast(`${CARS[cur].btn[0]} 停好了：越野車車庫 ${spot.bay + 1} 號格`, 2200); // 第 6 批
-  else if (spot?.ring) { ringPend = { k: cur }; walker.toast(`走出圓台，電梯就會把 ${CARS[cur].btn[0]} 停上去`, 2600); } // 第 20 批
   arrangeCars(); keepPark();
 }
-// 開走停在升降機上的那台：從平台拿下來（完整模型交給 makeDrv 放回村子的場景；輕量車交給 arrangeCars 收掉），那格空出來
-function offDeck(k) {
-  const p = tripPose?.[k]; if (!p || p.deck == null) return null;
-  const id = p.deck, { lift, deck } = deckOf(id), lf = GAR.lifts[lift], pose = { x: p.x, z: p.z, heading: p.heading };
-  DECK[id] = null; DREV[id] = 0; tripPose[k] = pose;
-  if (lf.cars[deck]) lf.take(deck);
-  if (GAR.dk) GAR.dk[id] = null;
+// 開走停在格子裡的那台：從格子拿下來（完整模型交給 makeDrv 放回村子的場景；輕量車交給 arrangeCars 收掉），那格空出來
+function offTower(k) {
+  const p = tripPose?.[k]; if (!p || p.tw == null) return null;
+  const i = p.tw, pose = { x: p.x, z: p.z, heading: p.heading, f: TOWER_BAYS[i].f };
+  TWR[i] = null; tripPose[k] = pose;
+  if (GAR.cars[i]) GAR.take(i);
+  if (GAR.tk) GAR.tk[i] = null;
   keepPark();
   return pose;
 }
-// 坐進車裡了（walk.js 的 onGetIn）：剛下來那台＝接著開；出門停在中間那台、停上升降機那台（完整模型）＝開始開；別台（輕量車）＝換成完整的車開
+// 坐進車裡了（walk.js 的 onGetIn）：剛下來那台＝接著開；出門停在電梯圓台上那台、停進格子那台（完整模型）＝開始開；別台（輕量車）＝換成完整的車開
 function onGetIn(car) {
   if (!trip || !DRIVE.on || !tripPose) return;
   gunner?.holster(); // 第 3 批（b3-int）：上車把槍收起來（開車不能用槍）
-  if (ringPend && ringPend.k === car.key) ringPend = null; // 第 20 批：又坐回去了：不停上去
   if (car.borrow) { netBorrowBoard(car); return; } // 第 19 批：打對密碼，坐進朋友的車
   if (car.drive) { // 剛下來那台：walk.js 已經 drv.resume() 了，引擎再發動
     dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
     arrangeCars(); return;
   }
   if (car.key === tripFull && !drv) {
-    const pose = offDeck(car.key) || tripPose[car.key];
+    const pose = offTower(car.key) || tripPose[car.key];
     makeDrv(pose);
-    const p = garLocal(pose.x, pose.z);
-    if (GAR.door.t === 0 && inBox(GAR.zones.inside, p.x, p.z)) drv.toast('按「開鐵捲門」，開出去！', 2600);
+    if (GAR.floor && inTower(pose.x, pose.z)) drv.toast(GAR.liftHere(GAR.floor) ? '倒車回到電梯上，按 1F' : '開到電梯旁邊，按「叫電梯」', 2600); // 第 21 批
+    else if (GAR.door.t === 0 && inTower(pose.x, pose.z)) drv.toast('按「開鐵捲門」，開出去！', 2600);
     return;
   }
   if (GAME.owned.has(car.key)) switchCar(car.key); else walker.resume();
 }
-// 換開別台：原本那台停在原地（換成輕量車；停在升降機上的照停），這台載入完整的車（第一次要一下子：「發動中⋯」），從停的地方開
+// 換開別台：原本那台停在原地（換成輕量車；停在格子裡的照停），這台載入完整的車（第一次要一下子：「發動中⋯」），從停的地方開
 async function switchCar(k) {
   const tok = (boarding = { k });
   const old = tripS;
@@ -702,7 +669,7 @@ async function switchCar(k) {
   if (PFULL[k]) pfullOff(k); // 第 4 批：停著的完整的車（大車換開別台停的）：就開它
   keepRecent(k);
   cur = k; S = car; tripS = car; save();
-  const pose = offDeck(k) || tripPose[k]; // 停在升降機上的：從平台開下來
+  const pose = offTower(k) || tripPose[k]; // 停在格子裡的：從格子開出來
   tripBox = fullBox(car);
   makeDrv(pose);
   renderWallet(); refreshCarBtns();
@@ -856,160 +823,166 @@ async function warmHouses() {
   HOUSE_WARM = { shared: +(T1 - T0).toFixed(0), compile: +(performance.now() - T1).toFixed(0) };
 }
 
-// ---- 升降機（走路的時候在操作柱前面按）：7 秒、馬達聲；有人、有車在平台上不動 ----
-function liftAct(i) {
-  const lf = GAR.lifts[i];
-  if (lf.busy) return LIFT_BUSY;
-  const up = lf.level === 1, k = DECK[slotId(i, up ? 0 : 1)]; // level 1（上層在地上）→ 按了升起來：下層上來；level 0 → 降下去：上層下來
-  return { label: `換${up ? '下' : '上'}面的${k ? '車' : '空位'}`, icon: 'lift', onClick: () => runLift(i) }; // 手機上大按鈕只放得下 8 個字（「升降機：」會被切掉）：圖示是升降機
-}
-// 為什麼現在不能動（有人站在平台上、有沒掛在這台上的車壓在坑上）；可以動＝null
-function liftBlocked(lf) {
-  const pit = { x: lf.pit.x, z: lf.pit.z, hx: lf.pit.hx, hz: lf.pit.hz, rot: 0 }, R = (walker.character?.radius ?? 0.28) - 0.02;
-  const t = walker.telemetry(), q = garLocal(t.x, t.z);
-  if (Math.abs(q.x - pit.x) < pit.hx + R && Math.abs(q.z - pit.z) < pit.hz + R) return '你站在升降機上：先走下來';
-  const LH = VIL.places.garage.lot.heading;
-  for (const k of GAME.owned) {
-    const p = tripPose[k]; if (!p || (p.deck != null && deckOf(p.deck).lift === lf.id)) continue; // 掛在這台上的會跟著動
-    const B = k === tripFull ? tripBox : PFULL[k] ? PFULL[k].box : LODS[k]?.lod ? LODS[k] : null; if (!B) continue;
-    const c = garLocal(p.x, p.z);
-    if (boxHit(carBox(B, { x: c.x, z: c.z, heading: p.heading - LH }), pit)) return `${CARS[k].btn[0]} 壓在升降機上：先開走`;
+// ==== 第 21 批：圓塔的電梯（tower.js；Nick 2026-10-17「可以自行決定要停在哪一層可以自己搭電梯上去」，草稿 https://claude.ai/artifact/GZcpBA7kY8HVfa7zYk3Si4）====
+//   開（走）到電梯圓台上停住 → 面板（直拿在左上、橫拿在上面中間）按幾樓（2F–6F 寫還有幾格空的）→ 電梯載著你（和車、圓台上停著的車）上去
+//   開車上樓：電梯自己轉到最近的空格子（車頭朝它）；◀ ▶ 一次轉 45 度；回 1 樓：自己轉到車頭對著鐵捲門
+//   坐電梯的時候：開車的、走路的停住（drive.js／walk.js 的 pause），車子、人、鏡頭用 attach 掛到圓台上跟著動；第三人稱的鏡頭放在電梯井裡（在你後面上面，不會穿過樓板）
+//   電梯不在你這層：電梯井旁邊按「叫電梯」（圓台上停著的車一起下來）
+const EL_R = 1.4; // 車子中心離圓台中心多近才算開上電梯（按了樓層：差一點點自己開到正中間）
+const EL_CALL = { label: '叫電梯', icon: 'lift', onClick: () => elCall() };
+const elFree = (f) => { let n = 0; for (const b of TOWER_BAYS) if (b.f === f && !TWR?.[b.id]) n++; return n; }; // 第 f 層還有幾格空的
+// 現在可以按樓層嗎：0 不行；1 開車停在圓台上；2 開車停在圓台上、可是這台不能坐電梯（大車、借來的）；3 走路站在圓台上
+function elWho() {
+  if (!trip || !DRIVE.on || !GAR || !TWR || EL.ride || indoor || sleep || doorFade || boarding || jailed() || !GAR.liftHere(GAR.floor)) return 0;
+  if (drv && walker?.mode === 'off') {
+    const t = drv.telemetry(); if (t.paused || t.auto || Math.abs(t.v) > 1) return 0;
+    const q = garLocal(t.x, t.z); if (Math.hypot(q.x, q.z) > EL_R) return 0;
+    return liftOK(cur) && !BORROW_K ? 1 : 2;
   }
-  return null;
+  if (walker?.mode === 'walk') { const t = walker.telemetry(), q = garLocal(t.x, t.z); return Math.hypot(q.x, q.z) < TOWER.RP - 0.35 ? 3 : 0; }
+  return 0;
 }
-// 兩個長方形有沒有重疊（分離軸；長方形跟 inBox 一樣：rot＝rotation.y）
-function boxHit(a, b) {
-  const pj = (o, ux, uz) => { const c = Math.cos(o.rot || 0), s = Math.sin(o.rot || 0), m = o.x * ux + o.z * uz, e = o.hx * Math.abs(c * ux - s * uz) + o.hz * Math.abs(s * ux + c * uz); return [m - e, m + e]; };
-  for (const r of [a.rot || 0, b.rot || 0]) for (const [ux, uz] of [[Math.cos(r), -Math.sin(r)], [Math.sin(r), Math.cos(r)]]) {
-    const A = pj(a, ux, uz), B = pj(b, ux, uz); if (A[1] < B[0] || B[1] < A[0]) return false;
+// 面板（garage.css .elpanel）：3 × 2 的樓層（4F 5F 6F／1F 2F 3F），樓上開車的時候多一排 ◀ ▶
+function elPanel() {
+  if (EL.panel) return EL.panel;
+  const el = document.createElement('div'); el.className = 'elpanel'; el.hidden = true;
+  el.innerHTML = '<div class="elg"></div><div class="elr"><button type="button" data-r="1" aria-label="往左轉">◀</button><button type="button" data-r="-1" aria-label="往右轉">▶</button></div>';
+  const g = el.querySelector('.elg'), btn = [];
+  for (const f of [3, 4, 5, 0, 1, 2]) { const b = document.createElement('button'); b.type = 'button'; b.dataset.f = f; b.innerHTML = `${f + 1}F${f ? '<small></small>' : ''}`; g.appendChild(b); btn[f] = b; }
+  el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.f != null) elGo(+b.dataset.f, null); else elGo(GAR.floor, (+b.dataset.r * Math.PI) / 4); });
+  for (const ev of ['pointerdown', 'touchstart']) el.addEventListener(ev, (e) => e.stopPropagation(), { passive: true }); // 按面板不要變成拖鏡頭
+  stage.appendChild(el);
+  return (EL.panel = { el, btn, row: el.querySelector('.elr'), sig: NaN });
+}
+// 每一格：面板開關、每一樓還有幾格（有變才改字）
+function elPanelStep() {
+  const w = elWho(); if (!w && !EL.panel) return;
+  const P = elPanel(); if (P.el.hidden === !!w) { P.el.hidden = !w; stage.classList.toggle('el-on', !!w); } // 面板出來：提示字往下一點（不要蓋在面板上）
+  if (!w) return;
+  let sig = GAR.floor * 4 + w; for (let i = 0; i < TWR.length; i++) sig = (sig * 3 + (TWR[i] ? 1 : 0)) % 1000000007;
+  if (sig === P.sig) return; P.sig = sig;
+  for (let f = 0; f < TOWER.NF; f++) { P.btn[f].classList.toggle('on', f === GAR.floor); if (f) P.btn[f].querySelector('small').textContent = `空 ${elFree(f)}`; }
+  P.row.hidden = !(GAR.floor > 0 && w === 1);
+}
+// 按了樓層（F）或 ◀ ▶（turn＝轉多少；F＝這一層）
+function elGo(F, turn) {
+  const w = elWho(); if (!w) return;
+  if (w === 2) { drv.toast(BORROW_K ? '借來的車不能停在你家' : '這台太大了，不能坐電梯', 2400); return; }
+  if (F === GAR.floor && turn == null) { (w === 3 ? walker : drv).toast(F ? `這裡就是 ${F + 1} 樓` : '這裡就是 1 樓', 1600); return; }
+  if (w === 1) { // 開車：差一點點先開到正中間（方向不變）
+    const t = drv.telemetry(), c = garWorld({ x: 0, z: 0 }), d = drv;
+    if (Math.hypot(t.x - c.x, t.z - c.z) > 0.02) { drv.parkAt({ x: c.x, z: c.z, heading: t.heading }, () => { if (drv === d && DRIVE.on && trip && !EL.ride) elRide(F, turn, true); }); return; }
   }
-  return true;
+  elRide(F, turn, true);
 }
-function runLift(i) {
-  const lf = GAR?.lifts[i]; if (!lf || lf.busy || !walker || !trip || !DECK) return;
-  const why = liftBlocked(lf); if (why) { walker.toast(why, 2200); return; }
-  const to = lf.level ? 0 : 1, id = slotId(i, to), n = tripNo, k0 = DECK[id];
-  const ok = lf.setLevel(to, () => { // 停好了（onLift 'stop' 已經換好碰撞、走得到的車）
-    if (n !== tripNo || !DRIVE.on || !walker || walker.mode === 'off') return;
-    const k = DECK[id]; walker.toast(k ? `${CARS[k].btn[0]} ${to ? '降下來' : '升上來'}了，走過去按「上車」` : `${i + 1} 號升降機好了：空的平台可以停車`, 2400);
-  });
-  if (ok) walker.toast(`${i + 1} 號升降機：${to ? '上層降下來' : '下層升上來'}${k0 ? '（' + CARS[k0].btn[0] + '）' : ''}⋯`, 2400);
+// 電梯去第 F 層：me＝你坐上去（開車或走路）；圓台上停著的車一起；turn＝轉多少（null：開車上樓轉到最近的空格子、回 1 樓轉到車頭朝鐵捲門）
+function elRide(F, turn, me) {
+  if (EL.ride || GAR.lift.busy) return;
+  const LH = VIL.places.garage.lot.heading, P = GAR.platform, rot0 = GAR.lift.rot;
+  const driving = me && !!drv && walker.mode === 'off';
+  let dr = turn ?? 0;
+  if (driving && turn == null) {
+    const hl = wrapPi(drv.telemetry().heading - LH); // 車頭（塔的本地）
+    if (F > 0) { let best = null; for (const b of TOWER_BAYS) if (b.f === F && !TWR[b.id]) { const d = wrapPi(b.heading - hl); if (best === null || Math.abs(d) < Math.abs(best)) best = d; } dr = best ?? 0; }
+    else dr = wrapPi(-hl);
+  }
+  const from = me ? GAR.floor : GAR.lift.floor, pads = padCars(from, driving ? cur : null);
+  const R = { F, n: tripNo, me, drive: driving, turn: turn != null, riders: [], cam: false };
+  if (!GAR.liftTo(F, rot0 + dr, () => elArrive(R))) return;
+  EL.ride = R;
+  const add = (o, k, hw) => { if (!o) return; R.riders.push({ o, k, hl: wrapPi(hw - LH - rot0) }); P.attach(o); if (k) EL.keys.add(k); };
+  if (driving) { drv.pause(); add(tripS.car, cur, drv.telemetry().heading); }
+  else if (me) { const t = walker.telemetry(); walker.pause(); add(walker.character.group, null, t.heading); }
+  for (const k of pads) { const p = tripPose[k]; add(k === tripFull ? tripS.car : PFULL[k] ? PFULL[k].S.car : LODS[k]?.lod?.car, k, p.heading); }
+  if (pads.includes(tripFull) && parkShadow) parkShadow.visible = false;
+  if (me) { // 鏡頭：第一人稱跟著掛上去；第三人稱放在電梯井裡（你後面 2.9 公尺、高一點，看著圓台中間）
+    R.cam = true;
+    if ((driving ? drv.cameraMode : walker.cameraMode) === 'eye') P.attach(dcam);
+    else {
+      const h = R.riders[0]?.hl || 0, v = new THREE.Vector3();
+      P.add(dcam); dcam.position.set(-Math.cos(h) * 2.9, driving ? 2.6 : 2.3, Math.sin(h) * 2.9); dcam.quaternion.identity();
+      P.updateMatrixWorld(true); dcam.lookAt(P.localToWorld(v.set(0, 0.8, 0)));
+    }
+    gtoast(R.turn ? '電梯轉一下⋯' : `電梯去 ${F + 1} 樓⋯`, 1400);
+  }
 }
-function stopLiftSnd(i) { for (const k of i == null ? Object.keys(liftSnd) : [i]) { liftSnd[k]?.stop(); delete liftSnd[k]; } }
-// room.js 的 onLift：開始動（馬達聲）、停好（聲音停）；兩個時候碰撞、鏡頭的盒子、走得到的車都換
-function onLift(lf, what) {
-  stopLiftSnd(lf.id);
-  if (what === 'start') liftSnd[lf.id] = engineAudio.lift();
+// 電梯停好了：掛在圓台上的放回村子的場景（世界的位置、方向照圓台轉的算），開車的、走路的接著動
+function elArrive(R) {
+  if (EL.ride !== R) return;
+  EL.ride = null;
+  const LH = VIL.places.garage.lot.heading, rot = GAR.lift.rot, F = R.F, v = new THREE.Vector3();
+  if (R.me) GAR.setFloor(F);
+  let me = null;
+  for (const r of R.riders) {
+    r.o.getWorldPosition(v); TR.scene.attach(r.o);
+    const pose = { x: v.x, z: v.z, heading: LH + rot + r.hl };
+    if (!r.k) me = pose; // 走路的你
+    else if (R.drive && r.k === cur) { me = pose; tripPose[cur] = { ...pose, f: F }; }
+    else tripPose[r.k] = { ...pose, f: F };
+  }
+  EL.keys.clear();
+  if (R.cam && dcam.parent === GAR.platform) dcam.removeFromParent();
+  if (me && R.drive && drv) { drv.teleport(me); drv.resume(); }
+  else if (me && walker) { walker.teleport(me, { keepCamera: false }); walker.resume(); }
+  if (tripFull && tripPose[tripFull] && !(R.drive && tripFull === cur) && R.riders.some((r) => r.k === tripFull)) parkFull(); // 圓台上停著的完整的車：照新的位置放好、影子
+  liftChanged(); keepPark();
+  if (!R.me || R.turn) return;
+  if (!R.drive) walker.toast(F ? `${F + 1} 樓` : '1 樓', 1600);
+  else if (F) drv.toast(elFree(F) ? `${F + 1} 樓：往前開進空的格子，停好再下車` : `${F + 1} 樓停滿了`, 2600);
+  else drv.toast(GAR.door.t === 0 ? '1 樓：按「開鐵捲門」開出去' : '1 樓', 2200);
+}
+// 叫電梯：電梯不在你這層（沒在動）、你在電梯井旁邊（離中間 RI＋2.6 公尺以內）
+function elCallAct(x, z) {
+  if (!GAR || !TWR || EL.ride) return null;
+  const q = garLocal(x, z); if (!GAR.isInside(q.x, q.z) || Math.hypot(q.x, q.z) > TOWER.RI + 2.6) return null;
+  if (GAR.lift.busy) return LIFT_BUSY;
+  return GAR.liftHere(GAR.floor) ? null : EL_CALL;
+}
+function elCall() {
+  if (!GAR || GAR.lift.busy || EL.ride || GAR.liftHere(GAR.floor)) return;
+  const dn = GAR.lift.floor > GAR.floor; elRide(GAR.floor, 0, false);
+  (drv && walker.mode === 'off' ? drv : walker).toast(dn ? '電梯下來了⋯' : '電梯上來了⋯', 1600);
+}
+// 不坐了（回車庫頁、重新出門、被抓）：掛在圓台上的放回場景、鏡頭拿下來、面板收起來（電梯自己動完）
+function elEnd() {
+  const R = EL.ride; EL.ride = null; EL.keys.clear();
+  if (R) for (const r of R.riders) if (r.o.parent === GAR.platform) TR.scene.attach(r.o);
+  if (dcam?.parent === GAR?.platform) dcam.removeFromParent();
+  if (EL.panel) { EL.panel.el.hidden = true; stage.classList.remove('el-on'); }
+}
+function stopLiftSnd() { for (const k of Object.keys(liftSnd)) { liftSnd[k]?.stop(); delete liftSnd[k]; } }
+// tower.js 的 onLift：開始動（馬達聲）、停好（聲音停）；兩個時候碰撞（電梯井）、走得到的車都換
+function onLift(what) {
+  stopLiftSnd();
+  if (what === 'start') liftSnd.tower = engineAudio.lift();
   liftChanged();
 }
 function liftChanged() {
   if (!trip || !tripPose || !GAR) return;
-  if (home) home.open = null; // 開車的 'garage' 碰撞下一格重給（升起來＝四根柱子、在動＝整個坑、降下去＝沒有）
-  if (walker) { walker.setGarage(GAR); walker.removeColliders('garcam'); walker.addColliders(garCamCols(), 'garcam'); obDoor.walk = null; } // 只擋鏡頭的（小房子的屋頂、頭上的平台）只給走路的
-  arrangeCars(); // 停著的車的碰撞（跟地板平的才擋）、走路可以上的車
+  if (home) home.open = null; // 開車的 'garage' 碰撞下一格重給（這一層、電梯在不在這層）
+  if (walker) { walker.setGarage(GAR); walker.removeColliders('garcam'); walker.addColliders(garCamCols(), 'garcam'); obDoor.walk = null; } // 只擋鏡頭的（天花板、小房子的屋頂）只給走路的
+  arrangeCars(); // 停著的車的碰撞（同一層的才擋）、走路可以上的車
 }
-// ==== 第 20 批：四層圓環車庫（ringgar.js；Nick 2026-10-17「四層圓環車庫」，草稿 https://claude.ai/artifact/8wfsexFQSJDZGAab2h12Ra）====
-//   大理石車庫後牆左後角的門 → 走道 → 塔的一樓；中間電梯的圓台＝「叫車」叫下來的車停的地方，也是要停上去的車停的地方
-//   操作台（一樓，走道進來右手邊）：圓台上有車＝「停上去」；沒有＝「叫車：X」（X 一台一台輪流）；在動＝「電梯動作中⋯」
-//   開到圓台上下車（leaveCar → ringSpot）：走出圓台，電梯就把它停上去（ringStep；輕量車停在格子裡）
-const RING_BUSY = { label: '電梯動作中⋯', icon: 'lift', onClick: () => {} };
-const ringIn = (p) => { const q = garLocal(p.x, p.z); return GAR.ring.inside(q.x, q.z); };
-const ringFree = () => (RING ? RING.indexOf(null) : -1);
-function ringOnPad(x, z, r) { const q = garLocal(x, z), P = GAR.ring.zones.pad; return Math.hypot(q.x - P.x, q.z - P.z) < r; }
-// 停在圓台上的車（不是在電梯上動的那台）
-function ringPadCar() {
-  for (const k of GAME.owned) { const p = tripPose?.[k]; if (p && p.deck == null && p.ring == null && k !== LENT_K && ringOnPad(p.x, p.z, 2.4)) return k; }
-  return null;
-}
-// 下車的時候停在圓台上（車子中心離圓台中心 1.2 公尺以內）：開到正中間（方向不改）
-function ringSpot(t) {
-  if (!GAR?.ring || !RING || !liftOK(cur) || BORROW_K || !ringOnPad(t.x, t.z, 1.2)) return null;
-  const R = GAR.ring; if (!R.liftDown() || ringKey || ringFree() < 0) return null;
-  for (const k of GAME.owned) { if (k === cur) continue; const p = tripPose[k]; if (p && p.deck == null && p.ring == null && ringOnPad(p.x, p.z, 2.4)) return null; }
-  const w = garWorld(R.zones.pad); return { x: w.x, z: w.z, heading: t.heading, ring: true };
-}
-const walkerOnPad = () => { const t = walker.telemetry(); return ringOnPad(t.x, t.z, RING_SIZE.RP + 0.25 + (walker.character?.radius ?? 0.28)); };
-function ringAct() {
-  if (!RING) return null;
-  if (GAR.ring.lift.busy || ringKey) return RING_BUSY;
-  const pk = ringPadCar();
-  if (pk) return liftOK(pk) && ringFree() >= 0 ? { label: `停上去：${CARS[pk].btn[0]}`, icon: 'lift', onClick: () => { ringPend = { k: pk }; if (walkerOnPad()) walker.toast(`走出圓台，電梯就會把 ${CARS[pk].btn[0]} 停上去`, 2400); } }
-    : { label: '圓台上有車', icon: 'lift', onClick: () => walker.toast(ringFree() < 0 ? '圓環車庫停滿了' : '這台不能停圓環車庫', 2200) };
-  const n = RING.length; let i = -1;
-  for (let j = 0; j < n && i < 0; j++) { const q = (ringPick + j) % n; if (RING[q]) i = q; }
-  if (i < 0) return { label: '圓環車庫是空的', icon: 'lift', onClick: () => walker.toast('車子開到中間的圓台上下車，電梯就會把它停上去', 2600) };
-  const k = RING[i];
-  return { label: `叫車：${CARS[k].btn[0]}`, icon: 'lift', onClick: () => ringFetch(i) };
-}
-// 叫車：電梯上去拿第 i 格那台 → 下來停在圓台上（車頭朝走道）→ 走過去「上車」
-function ringFetch(i) {
-  const k = RING?.[i]; if (!k || !walker || GAR.ring.lift.busy || ringKey) return;
-  if (walkerOnPad()) { walker.toast('你站在電梯圓台上：先走下來', 2200); return; }
-  if (ringPadCar()) { walker.toast('圓台上有車：先開走，或按「停上去」', 2200); return; }
-  const n = tripNo, b = RING_BAYS[i], name = CARS[k].btn[0];
-  RING[i] = null; if (GAR.rk) GAR.rk[i] = null; ringKey = k; ringPick = i + 1;
-  tripPose[k] = { ...garWorld(GAR.ring.spots.deliver), ring: -1 };
-  const ok = GAR.ring.fetch(i, () => {
-    GAR.ring.unload(); if (n !== tripNo || !tripPose) return;
-    ringKey = null; tripPose[k] = garWorld(GAR.ring.spots.deliver);
-    liftChanged(); keepPark();
-    if (DRIVE.on && walker && walker.mode !== 'off') walker.toast(`${name} 下來了：走過去按「上車」`, 2400);
-  });
-  if (!ok) { RING[i] = k; ringKey = null; tripPose[k] = ringPose(i); return; }
-  walker.toast(`電梯去 ${b.f + 1} 樓拿 ${name}⋯`, 2400); liftChanged();
-}
-// 每一格：下車停在圓台上的那台，等你走出圓台（輕量車也載好了）才停上去
-function ringStep() {
-  const P = ringPend; if (!P || !RING || !walker) return;
-  const k = P.k, p = tripPose?.[k];
-  if (!p || p.deck != null || p.ring != null || !ringOnPad(p.x, p.z, 2.4) || (drv && cur === k && walker.mode === 'off')) { ringPend = null; return; } // 開走了、又坐回去了
-  if (walker.mode !== 'walk' || walkerOnPad() || GAR.ring.lift.busy || ringKey) return;
-  const i = ringFree(); if (i < 0) { ringPend = null; walker.toast('圓環車庫停滿了', 2200); return; }
-  if (!LODS[k]?.lod) { lodFor(k); return; } // 輕量車載好再停（停在格子裡的都是輕量車）
-  ringPend = null;
-  if (k === tripFull) { if (drv && cur === k) { drv.dispose(); drv = null; if (home) home.open = null; obDoor.drv = null; dvoice?.dispose(); dvoice = null; } stowFull(tripS); tripFull = null; tripBox = null; if (parkShadow) parkShadow.visible = false; walker.setCars([], { keepParked: false }); }
-  if (PFULL[k]) pfullOff(k, true);
-  const n = tripNo, obj = LODS[k].lod.car, q = garLocal(p.x, p.z), name = CARS[k].btn[0], b = RING_BAYS[i];
-  ringKey = k; tripPose[k] = { x: p.x, z: p.z, heading: p.heading, ring: -1 };
-  obj.removeFromParent(); LODS[k].shadow.visible = false;
-  GAR.ring.load(obj, { x: q.x, z: q.z, heading: p.heading - VIL.places.garage.lot.heading });
-  const ok = GAR.ring.store(i, () => {
-    if (n !== tripNo || !tripPose || !RING) return;
-    ringKey = null; RING[i] = k; tripPose[k] = ringPose(i); if (GAR.rk) GAR.rk[i] = k;
-    liftChanged(); keepPark();
-    if (DRIVE.on && walker && walker.mode !== 'off') walker.toast(`${name} 停好了：圓環車庫 ${b.f + 1} 樓`, 2400);
-  });
-  if (!ok) { GAR.ring.unload(); ringKey = null; tripPose[k] = { x: p.x, z: p.z, heading: p.heading }; arrangeCars(); return; }
-  liftChanged(); keepPark();
-}
-// ringgar.js 的 onLift：開始動（馬達聲）、停好（聲音停）；電梯井的碰撞（不在一樓、在動＝整個井擋起來）、走得到的車都換
-function onRingLift(what) {
-  stopLiftSnd('ring');
-  if (what === 'start') liftSnd.ring = engineAudio.lift();
-  liftChanged();
-}
-// 只擋鏡頭的盒子（世界座標；drive.js 不看 y0，不要給開車的）：room.js 的（小房子的屋頂、升起來或在動的上層平台）＋小房子門洞上面那塊牆
-//   （門楣：第三人稱在小房子裡面，鏡頭不會從門洞穿出去、被門楣擋掉半個畫面；跟 walk.js 給鐵捲門的門楣一樣）
-//   升起來的上層平台：盒子底 1.94，walk.js 的鏡頭離東西 0.22（上下也算）→ 1.72，比鏡頭看的那一點（頭上面一點，1.75）還低：
-//   站在平台底下（停到下層、下車）鏡頭拉不出去、一直貼著頭（角色藏起來）。只擋鏡頭的盒子底抬到 2.02：
-//   平台底下鏡頭最高 maxY（ceilingAt＝平台底 1.94）− 0.15 = 1.79，碰不到；從外面往平台底下拉的鏡頭一過 1.80 就擋
-const DECK_CAM_Y0 = 2.02;
+// 只擋鏡頭的盒子（世界座標、世界的高度；drive.js 不看 y0，不要給開車的）：tower.js 的（這一層的天花板；一樓：小房子的屋頂、門楣）＋小房子門洞上面那塊牆
+//   （第三人稱在小房子裡面，鏡頭不會從門洞穿出去、被門楣擋掉半個畫面）
 function garCamCols() {
-  const D = GAR.zones.houseDoor, w = garWorld({ x: D.x, z: D.z });
-  const cols = GAR.cameraColliders(true).map((c) => (c.y0 < DECK_CAM_Y0 ? { ...c, y0: DECK_CAM_Y0 } : c)); // 小房子的屋頂（底 2.64）不動
-  return [...cols, { t: 'box', x: w.x, z: w.z, hx: D.hx, hz: D.hz + 0.02, rot: VIL.places.garage.lot.heading, y0: D.h, h: GAR.zones.house.ridge }];
+  const cols = GAR.cameraColliders(true);
+  if (GAR.floor) return cols;
+  const D = GAR.zones.houseDoor, w = garWorld({ x: D.x, z: D.z }), by = GAR.group.position.y;
+  cols.push({ t: 'box', x: w.x, z: w.z, hx: D.hx, hz: D.hz + 0.02, rot: VIL.places.garage.lot.heading, y0: by + D.h, h: by + GAR.zones.house.ridge });
+  return cols;
 }
 
 // ---- 小房子：床邊按「睡覺」→ 躺到床上、畫面黑掉 →「睡飽了！」站在床邊 ----
 function goSleep() {
   if (sleep || !walker || walker.mode !== 'walk' || !DRIVE.on || !GAR) return;
   walker.pause(); // HUD 收起來、不吃按鍵（角色還在）：躺到床上
-  const B = GAR.spots.bed, w = garWorld({ x: B.feet.x, z: B.feet.z, heading: B.heading }), ch = walker.character;
-  ch.group.visible = true; ch.group.position.set(w.x, B.y, w.z); ch.group.rotation.set(0, w.heading, 0); ch.update(1 / 60, { speed: 0, state: 'fall' });
+  const B = GAR.spots.bed, w = garWorld({ x: B.feet.x, z: B.feet.z, heading: B.heading }), ch = walker.character, by = GAR.group.position.y; // by：塔的一樓多高（山頂那間）
+  ch.group.visible = true; ch.group.position.set(w.x, by + B.y, w.z); ch.group.rotation.set(0, w.heading, 0); ch.update(1 / 60, { speed: 0, state: 'fall' });
   // 鏡頭（走路的停住了不會動）：站在床尾、靠門那邊高一點，斜斜看著躺在床上的你（第一人稱的時候眼睛前面是牆）
   const hx = B.feet.x - B.head.x, hz = B.feet.z - B.head.z, l = Math.hypot(hx, hz) || 1, ux = hx / l, uz = hz / l;
   const cv = garWorld({ x: B.feet.x + ux * 1.25 - uz * 1.2, z: B.feet.z + uz * 1.25 + ux * 1.2 }), cl = garWorld({ x: (B.x + B.head.x) / 2, z: (B.z + B.head.z) / 2 });
-  dcam.position.set(cv.x, 1.75, cv.z); dcam.lookAt(cl.x, B.y + 0.15, cl.z);
+  dcam.position.set(cv.x, by + 1.75, cv.z); dcam.lookAt(cl.x, by + B.y + 0.15, cl.z);
   fader('Zzz⋯').style.opacity = '0';
   sleep = { t: 0, woke: false };
 }
@@ -1022,22 +995,18 @@ function sleepStep(dt) {
   if (s.t >= T3) { sleep = null; fadeEl.style.display = 'none'; }
 }
 function endSleep() { sleep = null; if (fadeEl) fadeEl.style.display = 'none'; }
-// 走路在你家裡面：操作柱前面（升降機）、床邊（睡覺）的大按鈕；頭上多高有東西（鏡頭別穿過天花板、頭上的平台）；小房子裡面自動第一人稱
+// 走路在你家裡面：床邊（睡覺）、衣櫃前面（換衣服）、電梯井旁邊（叫電梯）的大按鈕；頭上多高有東西（鏡頭別穿過天花板）；小房子裡面自動第一人稱
 function homeWalk() {
-  const t = walker.telemetry(), q = garLocal(t.x, t.z), Z = GAR.zones;
+  const t = walker.telemetry(), q = garLocal(t.x, t.z), Z = GAR.zones, inT = GAR.isInside(q.x, q.z);
   let act = null;
-  if (inBox(Z.inside, q.x, q.z)) {
-    for (let i = 0; i < 6 && !act; i++) if (inBox(Z.lifts[i], q.x, q.z)) act = liftAct(i);
-    if (!act && inBox(Z.bedSide, q.x, q.z)) act = SLEEP_ACT;
-    if (!act && inBox(DRESS_ZONE, q.x, q.z)) act = DRESS_ACT;
-  }
-  if (!act && GAR.ring.zones && inBox(GAR.ring.zones.panel, q.x, q.z)) act = ringAct(); // 第 20 批：圓環車庫的操作台：「叫車」「停上去」
+  if (inT && !GAR.floor) { if (inBox(Z.bedSide, q.x, q.z)) act = SLEEP_ACT; else if (inBox(Z.dress, q.x, q.z)) act = DRESS_ACT; }
+  if (!act && inT) act = elCallAct(t.x, t.z); // 第 21 批：電梯不在這層
   if (!act && !t.near) act = orbayAct(t); // 第 6 批：站在越野車車庫門口（旁邊沒有車可以上）：「開鐵捲門」
   if (!act) act = hideAct(t.x, t.z, 0.3); // 第 3 批（b3-int）：通緝中躲回車庫：「關鐵捲門」
   walker.setAction(act);
-  const c = OB && OB.inside(t.x, t.z, -0.35) ? OB.size.ceil - 0.25 : GAR.ceilingAt(q.x, q.z); // 第 6 批：在越野車車庫裡面，鏡頭不要穿過天花板
+  const c = OB && OB.inside(t.x, t.z, -0.35) ? OB.size.ceil - 0.25 : GAR.group.position.y + GAR.ceilingAt(q.x, q.z); // 第 6 批：在越野車車庫裡面，鏡頭不要穿過天花板；第 21 批：塔的這一層
   if (c !== gcam.maxY) { gcam.maxY = c; walker.setCamera({ maxY: isFinite(c) ? c : null }); }
-  const inHouse = inBox(Z.house, q.x, q.z, -0.05);
+  const inHouse = !GAR.floor && inBox(Z.house, q.x, q.z, -0.05);
   if (CABIN_EYE && inHouse !== gcam.house) {
     gcam.house = inHouse;
     if (inHouse && walker.cameraMode === 'follow') { gcam.auto = true; walker.setCamera({ mode: 'eye' }); }
@@ -1048,7 +1017,7 @@ function homeWalk() {
 // ---- 你家：鐵捲門（碰撞跟著門開關）、HUD 的大按鈕（開鐵捲門）、走遠了門自己關 ----
 function homeAct(t) {
   const p = garLocal(t.x, t.z), Z = GAR.zones, D = Z.door.x; // 門在 x = D
-  const inside = inBox(Z.inside, p.x, p.z), front = p.x > D && p.x < D + 16 && Math.abs(p.z) < 9; // 門前面那塊
+  const inside = GAR.isInside(p.x, p.z) && !GAR.floor, front = p.x > D && p.x < D + 16 && Math.abs(p.z) < 9; // 一樓、門前面那塊
   if ((inside || front) && GAR.door.t === 0 && !GAR.door.moving) return OPEN_ACT;
   return drv ? hideAct(t.x, t.z, Math.max(drv.carInfo.nose, -drv.carInfo.tail)) : null; // 第 3 批（b3-int）：通緝中開進車庫：「關鐵捲門」
 }
@@ -1056,13 +1025,13 @@ function openDoor() {
   if (!GAR || GAR.door.t > 0 || GAR.door.moving) return;
   GAR.door.open(calm ? 1.2 : 2.2); drv?.setAction(null);
 }
-// 每一格（走路的時候也要）：開車的碰撞跟著門、升降機（開到 0.9 才不擋車；走路的 walk.js 自己跟）；人或車離門 30 公尺以上、門下面沒有停車 → 遙控器關門
+// 每一格（走路的時候也要）：開車的碰撞跟著門、電梯（開到 0.9 才不擋車；走路的 walk.js 自己跟）；人或車離門 30 公尺以上、門下面沒有停車 → 遙控器關門
 function doorStep() {
   const open = GAR.door.t >= 0.9;
   if (drv && open !== home.open) { drv.removeColliders('garage'); drv.addColliders(garCols(open), 'garage'); home.open = open; }
   if (GAR.door.t !== 1 || GAR.door.moving || !tripPose) return;
   const onFoot = !!walker && walker.mode !== 'off', t = onFoot ? walker.telemetry() : drv ? drv.telemetry() : null; if (!t) return; // 換車中（載入）先不管
-  const D = GAR.zones.door.x, p = garLocal(t.x, t.z); if (Math.hypot(p.x - D, p.z) <= 30 || GAR.ring.inside(p.x, p.z)) return; // 第 20 批：在圓環車庫裡面（後面離門 30 公尺以上）也不關
+  const D = GAR.zones.door.x, p = garLocal(t.x, t.z); if (Math.hypot(p.x - D, p.z) <= 30 || GAR.isInside(p.x, p.z)) return; // 在塔裡面（樓上）也不關
   for (const k of GAME.owned) {
     const q = tripPose[k]; if (!q || (k === tripFull && !onFoot)) continue; // 開著的那台就是你
     const c = garLocal(q.x, q.z); if (c.x > D - 3.2 && c.x < D + 3.6 && Math.abs(c.z) < 5.5) return; // 車停在門下面：不關
@@ -1070,54 +1039,48 @@ function doorStep() {
   GAR.door.close(calm ? 1 : 1.8);
 }
 
-// ==== 車庫街的家 ====
-// 第 16 批（內容 12，Nick 2026-10-11「每個人要從自己的車庫出來」）：本來是走出鐵捲門就跳到車庫街
-// 第 17 批（Nick 2026-10-13「開出車庫 他是突然閃跳到街上 可以像之前一樣 順著開出車庫 而且不同人開出來的位置也不同」「所有人都在車庫街有個固定位置 不管有沒有連線」；
-//   草稿 https://claude.ai/artifact/QHscDepQgHfWxNHL8GGNAJ 第 2 版，Nick 說「可以做了」）：
-//   你家（大理石車庫 GAR）整棟蓋在車庫街你那間（VIL.places.garage.lot）：開鐵捲門直接開出去、開回來按「開鐵捲門」開進去（跟以前一樣）
+// ==== 你的家 ====
+// 第 16 批（內容 12，Nick 2026-10-11「每個人要從自己的車庫出來」）、第 17 批（Nick 2026-10-13「所有人都在車庫街有個固定位置 不管有沒有連線」）：
 //   你那間＝homeSlot()：在大家的世界裡＝世界的號碼；沒連線＝存檔的 GAME.home（第一次進入世界拿到的號碼，net.src.js；還沒進過＝1 號）
+// 第 21 批（Nick 2026-10-17「每個車庫分散各處」，草稿 https://claude.ai/artifact/EaTT7dijRcjfStUoV1SU4x，Nick「可以」）：
+//   6 個家分散在地圖上（village.js HOME_SITES：1 車庫街、2 山頂、3 賽車場門口、4 越野車場旁邊、5 內湖入口、6 快速道路裡面）；你家＝圓塔（GAR）蓋在你那個號碼的地方
 //   換號碼（出門的時候進入世界、拿到別間）：整棟搬過去，裡面的車、在裡面的人一起搬；外面的不動
-//   別人那 5 間：同一個外殼（GAR.exterior 的牆、燈、關著的門；名牌是 net.src.js 畫的），InstancedMesh 3 個 draw call；碰撞是 village.js 的盒子（VIL.colliders，每間一個；你那間 off＝不算，裡面是 GAR 自己的碰撞）
+//   別人那 5 間：同一個外殼（GAR.parts＋關著的門），InstancedMesh 7 個 draw call；碰撞是 village.js 的圓＋門洞（tcol、pcol；你那間 off＝不算，裡面是 GAR 自己的碰撞）
 //   HOME.in：人（車）在你家裡面（net.src.js：朋友看不到，名單寫「在車庫」）
 const HOME = { in: false, slot: -1, ext: null };
 function homeSlot() { const SL = VIL?.places?.garst?.slots, n = NET.on && NET.slot >= 0 ? NET.slot : Number.isInteger(GAME.home) ? GAME.home : 0; return SL && n >= 0 && n < SL.length ? n : 0; }
-const garIn = (p) => { const q = garLocal(p.x, p.z); return inBox(GAR.zones.inside, q.x, q.z); };
-// 你那間（換號碼才做）：places.garage 換成那間、整棟搬過去、別人那幾間的外殼和碰撞重排
+const garIn = (p) => { const q = garLocal(p.x, p.z); return GAR.isInside(q.x, q.z); };
+// 你那間（換號碼才做）：places.garage 換成那間、整棟搬過去（山頂那間：整棟抬高）、別人那幾間的外殼和碰撞重排
 function homePlace() {
   if (!GAR || !VIL?.places?.garst || !VIL.homeAt) return;
   const n = homeSlot(); if (n === HOME.slot) return;
   const P = VIL.places.garage, L0 = { ...P.lot };
   HOME.slot = n; VIL.homeAt(n, P);
   const L = P.lot;
-  GAR.group.position.set(L.x, 0, L.z); GAR.group.rotation.y = L.heading; GAR.group.updateMatrixWorld(true);
+  GAR.group.position.set(L.x, P.y || 0, L.z); GAR.group.rotation.y = L.heading; GAR.group.updateMatrixWorld(true);
   homeExt();
   if (trip && tripPose) homeMove(L0);
   if (drv && tripDest === 'garage') drv.setDestination('garage'); else if (walker && tripDest === 'garage') walker.setDestination('garage');
 }
-// 別人那幾間：GAR.exterior 的外殼（牆、燈）＋關著的門（門片合成一個網格），6 個位置，你那間縮成 0
+// 別人那幾間：GAR.parts（大理石、霧面、金色、玻璃、透明、燈）＋關著的門（門片合成一個網格），6 個位置（各自的高度），你那間縮成 0
 function homeExt() {
   const SL = VIL.places.garst.slots;
   if (!HOME.ext) {
-    const get = (n) => GAR.exterior.getObjectByName(n), shell = get('roomExtShell'), lights = get('roomExtLights'), slats = get('roomDoorOut');
-    const parts = [];
-    if (shell) parts.push(new THREE.InstancedMesh(shell.geometry, shell.material, SL.length));
-    if (lights) parts.push(new THREE.InstancedMesh(lights.geometry, lights.material, SL.length));
-    if (slats) parts.push(new THREE.InstancedMesh(bakeSlats(slats), slats.material, SL.length));
-    for (const P of GAR.ring.parts) { const m = new THREE.InstancedMesh(P.geometry, P.material, SL.length); if (P.name === 'glass') m.renderOrder = 3; parts.push(m); } // 第 20 批：後面的圓環車庫（外殼、金色、玻璃、燈、關著的門；裡面沒有車）
+    const parts = GAR.parts.map((P) => { const m = new THREE.InstancedMesh(P.geometry, P.material, SL.length); m.renderOrder = P.name === 'glass' ? 3 : P.name === 'clear' ? 2 : 0; return m; });
+    const slats = GAR.interior.getObjectByName('roomDoor'); if (slats) parts.push(new THREE.InstancedMesh(bakeSlats(slats), slats.material, SL.length));
     parts.forEach((m, i) => { m.name = 'garst-ext-' + i; m.matrixAutoUpdate = false; TR.scene.add(m); });
     HOME.ext = parts;
   }
   const M = new THREE.Matrix4(), Z = new THREE.Matrix4().makeScale(0, 0, 0);
   SL.forEach((q, i) => {
     const L = q.lot, me = i === HOME.slot;
-    if (q.tcol) q.tcol.off = q.vcol.off = me; // 第 20 批：圓環車庫整座一個圓（你那間用 GAR 的玻璃牆）
-    if (q.col) q.col.off = me; // 開車、走路、子彈、輾扁都看 off（外牆整間的盒子：你那間不擋，用 GAR 的牆、門）
+    if (q.tcol) q.tcol.off = me; if (q.pcol) q.pcol.off = me; // 開車、走路、子彈、輾扁都看 off（你那間不擋，用 GAR 的玻璃、門）
     if (me) { for (const m of HOME.ext) m.setMatrixAt(i, Z); return; }
-    M.makeRotationY(L.heading).setPosition(L.x, 0, L.z); for (const m of HOME.ext) m.setMatrixAt(i, M);
+    M.makeRotationY(L.heading).setPosition(L.x, q.y || 0, L.z); for (const m of HOME.ext) m.setMatrixAt(i, M);
   });
   for (const m of HOME.ext) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
 }
-// 關著的鐵捲門（room.js 的門片 InstancedMesh，每片的位置、顏色）合成一個網格
+// 關著的鐵捲門（tower.js 的門片 InstancedMesh，每片的位置、顏色）合成一個網格
 function bakeSlats(im) {
   const g = im.geometry, n = im.count, M = new THREE.Matrix4(), C = new THREE.Color(), names = Object.keys(g.attributes), out = {}, idx = [];
   const nv = g.attributes.position.count, gi = g.index ? g.index.array : null;
@@ -1134,30 +1097,31 @@ function bakeSlats(im) {
   b.setIndex(idx); b.computeBoundingSphere();
   return b;
 }
-// 換號碼的時候已經出門了：車庫裡面的（舊的 lot 的本地座標）搬到新的 lot；升降機上的照新的算
+// 換號碼的時候已經出門了：塔裡面的（舊的 lot 的本地座標）搬到新的 lot；格子裡的照新的算（格子跟著塔搬了）
 function homeMove(L0) {
   const c0 = Math.cos(L0.heading), s0 = Math.sin(L0.heading);
   const old = (x, z) => { const dx = x - L0.x, dz = z - L0.z; return { x: dx * c0 - dz * s0, z: dx * s0 + dz * c0 }; };
-  const moved = (p) => { const q = old(p.x, p.z); if (!inBox(GAR.zones.inside, q.x, q.z, 1) && !GAR.ring.inside(q.x, q.z, -1)) return null; const w = garWorld({ x: q.x, z: q.z, heading: (p.heading || 0) - L0.heading }); return { x: w.x, z: w.z, heading: w.heading }; }; // 第 20 批：圓環車庫裡面的也搬
+  const moved = (p, f) => { const q = old(p.x, p.z); if (!GAR.isInside(q.x, q.z, -1)) return null; const w = garWorld({ x: q.x, z: q.z, heading: (p.heading || 0) - L0.heading }); return { x: w.x, z: w.z, heading: w.heading, f }; };
   for (const k of Object.keys(tripPose)) {
     const p = tripPose[k]; if (!p) continue;
-    if (p.deck != null) { tripPose[k] = deckPose(p.deck); continue; }
-    if (p.ring != null) { tripPose[k] = p.ring >= 0 ? ringPose(p.ring) : { ...garWorld(GAR.ring.spots.deliver), ring: -1 }; continue; } // 第 20 批
-    const w = moved(p); if (w) tripPose[k] = w;
+    if (p.tw != null) { tripPose[k] = towerPose(p.tw); continue; }
+    const w = moved(p, p.f || 0); if (w) tripPose[k] = w;
   }
-  const onFoot = !!walker && walker.mode !== 'off', t = onFoot ? walker.telemetry() : drv ? drv.telemetry() : null, me = t && moved(t);
-  if (me) { if (onFoot) walker.teleport(me, { keepCamera: false }); else { drv.teleport(me); if (tripPose[cur] && tripPose[cur].deck == null) tripPose[cur] = { ...me }; } }
-  if (tripS?.car && tripS.car.parent === TR.scene && tripFull && tripPose[tripFull] && (!drv || cur !== tripFull)) { const p = tripPose[tripFull]; tripS.car.position.set(p.x, 0, p.z); tripS.car.rotation.set(0, p.heading, 0); tripS.car.updateMatrixWorld(true); if (parkShadow?.parent && tripBox) { const c = Math.cos(p.heading), s = Math.sin(p.heading); parkShadow.position.set(p.x + tripBox.cx * c, 0.006, p.z - tripBox.cx * s); parkShadow.rotation.set(-Math.PI / 2, 0, p.heading); } }
-  for (const k in PFULL) { const p = tripPose[k]; if (p && k !== cur) { const o = PFULL[k].S.car; o.position.set(p.x, 0, p.z); o.rotation.set(0, p.heading, 0); o.updateMatrixWorld(true); } }
+  const onFoot = !!walker && walker.mode !== 'off', t = onFoot ? walker.telemetry() : drv ? drv.telemetry() : null, me = t && moved(t, GAR.floor);
+  if (me) { if (onFoot) walker.teleport(me, { keepCamera: false }); else { drv.teleport(me); if (tripPose[cur] && tripPose[cur].tw == null) tripPose[cur] = { ...me }; } }
+  const gy = (p) => (inTower(p.x, p.z) ? GAR.group.position.y + towerFy(poseF(p)) : VIL.heightAt ? VIL.heightAt(p.x, p.z) || 0 : 0);
+  if (tripS?.car && tripS.car.parent === TR.scene && tripFull && tripPose[tripFull] && (!drv || cur !== tripFull)) { const p = tripPose[tripFull], y = gy(p); tripS.car.position.set(p.x, y, p.z); tripS.car.rotation.set(0, p.heading, 0); tripS.car.updateMatrixWorld(true); if (parkShadow?.parent && tripBox) { const c = Math.cos(p.heading), s = Math.sin(p.heading); parkShadow.position.set(p.x + tripBox.cx * c, y + 0.006, p.z - tripBox.cx * s); parkShadow.rotation.set(-Math.PI / 2, 0, p.heading); } }
+  for (const k in PFULL) { const p = tripPose[k]; if (p && k !== cur) { const o = PFULL[k].S.car; o.position.set(p.x, gy(p), p.z); o.rotation.set(0, p.heading, 0); o.updateMatrixWorld(true); } }
   CRUSH_SAFE = null;
-  liftChanged(); // 開車、走路的碰撞（車庫、升降機、停著的車）跟著新的位置重給
+  liftChanged(); // 開車、走路的碰撞（塔、停著的車）跟著新的位置重給
 }
 // 每一格（driveStep 最前面）：換號碼、你在不在家裡面
 function homeTick() {
   if (!GAR || !tripPose || !VIL) return;
   homePlace();
   const onFoot = !!walker && walker.mode !== 'off', t = onFoot ? walker.telemetry() : drv ? drv.telemetry() : null;
-  HOME.in = !!t && !indoor && (garIn(t) || ringIn(t)); // 第 20 批：在圓環車庫裡面也算在家
+  HOME.in = !!t && !indoor && garIn(t);
+  if (t && GAR.floor && !EL.ride && !garIn(t)) { GAR.setFloor(0); liftChanged(); } // 第 21 批：不在塔裡面了（被抓、傳送）＝回到一樓
 }
 
 // ---- 第 6 批：越野車車庫（orbay.js，車庫西邊那棟）：門口的大按鈕、停進黃線的格子、碰撞跟著門 ----
@@ -1348,39 +1312,17 @@ function swapTripCar(k, car) {
   setTimeout(() => { if (drv === d) d.toast(where, 3000); }, 3200);
   stage.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
 }
-// 車行把舊的那台送回車庫：停到空的升降機車位（room.js 的 freeSlot：先挑現在跟地板平的；要動升降機就直接動好，你在車店看不到）
-// 12 格都滿了停中間；中間也有車＝「車庫滿了」（照以前一樣停中間）；回傳要說的話
+// 車行把舊的那台送回車庫：停到樓上空的格子（二樓先；你在車店看不到）；40 格都滿了停一樓大廳；回傳要說的話
 function deliver(k, name) {
-  if (!liftOK(k)) { // 第 6 批：越野車不停升降機：送回越野車車庫自己的格子（格子不夠、沒有輕量車的：車庫頁選它才看得到）
+  if (!liftOK(k)) { // 第 6 批：越野車不停圓塔：送回越野車車庫自己的格子（格子不夠、沒有輕量車的：車庫頁選它才看得到）
     const p = baySpot(k); if (p) tripPose[k] = p; else delete tripPose[k];
     liftChanged(); keepPark();
     return p ? `${name} 車行幫你開回家了：停在越野車車庫` : `${name} 車行幫你開回車庫了（車庫頁選它就看得到）`;
   }
-  if (RING) { const j = RING.indexOf(k); if (j >= 0) { RING[j] = null; if (GAR.rk) GAR.rk[j] = null; } } // 第 20 批：本來停在圓環車庫的（不會有：車行收的是你開去的那台）先拿掉
-  let s = GAR.freeSlot();
-  if (s && s.move && liftCarOn(GAR.lifts[s.lift])) s = GAR.parkSlots.map((q) => ({ ...q, level: q.deck, move: true })).find((q) => !DECK[q.id] && !GAR.lifts[q.lift].cars[q.deck] && !liftCarOn(GAR.lifts[q.lift])) || null; // 那台上面壓著別的車：換一台
-  if (s) {
-    const lf = GAR.lifts[s.lift];
-    if (s.move && lf.floorDeck !== s.deck) { stopLiftSnd(lf.id); snapLift(GAR, lf, s.level); }
-    DECK[s.id] = k; DREV[s.id] = 0; tripPose[k] = deckPose(s.id);
-    liftChanged(); keepPark();
-    return `${name} 車行幫你送回車庫了：${s.lift + 1} 號升降機${s.deck ? '上層' : '下層'}`;
-  }
-  const ri = RING ? RING.indexOf(null) : -1; // 第 20 批：12 格都滿了：停圓環車庫（一樓先）
-  if (ri >= 0) { RING[ri] = k; tripPose[k] = ringPose(ri); liftChanged(); keepPark(); return `${name} 車行幫你送回車庫了：圓環車庫 ${RING_BAYS[ri].f + 1} 樓`; }
-  const full = !!midCar(k);
-  tripPose[k] = garWorld(GAR.spots.main); keepPark();
-  return full ? `車庫滿了：${name} 先停在中間` : `${name} 車行幫你送回車庫了：停在中間`;
-}
-// 有沒有沒掛在這台上的車壓在它的坑上（車行送車的時候不動那台）
-function liftCarOn(lf) {
-  const pit = { x: lf.pit.x, z: lf.pit.z, hx: lf.pit.hx, hz: lf.pit.hz, rot: 0 }, LH = VIL.places.garage.lot.heading;
-  for (const k of GAME.owned) {
-    const p = tripPose[k]; if (!p || (p.deck != null && deckOf(p.deck).lift === lf.id)) continue;
-    const B = k === tripFull ? tripBox : PFULL[k] ? PFULL[k].box : LODS[k]?.lod ? LODS[k] : null; if (!B) continue;
-    const c = garLocal(p.x, p.z); if (boxHit(carBox(B, { x: c.x, z: c.z, heading: p.heading - LH }), pit)) return true;
-  }
-  return false;
+  const i = TWR.indexOf(k) >= 0 ? TWR.indexOf(k) : TWR.indexOf(null);
+  if (i >= 0) { TWR[i] = k; tripPose[k] = towerPose(i); liftChanged(); keepPark(); return `${name} 車行幫你送回車庫了：停在 ${TOWER_BAYS[i].f + 1} 樓`; }
+  tripPose[k] = { ...garWorld({ x: -6.5, z: 4, heading: Math.PI / 2 }), f: 0 }; liftChanged(); keepPark();
+  return `車庫滿了：${name} 先停在一樓大廳`;
 }
 $('dealerGo').addEventListener('click', () => { if (!dealerEl.hidden && !buying) driveOff(dealerAt, dealerAt === 'odealer' ? 'orace' : 'circuit'); }); // 第 4 批：越野車行開走 → 起跑區
 
@@ -1515,16 +1457,16 @@ function goHome() {
   leaveDrive();
 }
 // 離開村子：開車的收掉（HUD、按鍵、影子、光柱、聲音）、走路的收起來，車子放回車庫頁的原點、不轉，車庫的鏡頭、場景回來
-// 停在升降機上的記進存檔（下一趟還在）；最後開的那台（cur）到中間的轉盤（它停的格子給原本停中間那台）；停在外面的回到空的格子（normPark）
+// 停在格子裡的記進存檔（下一趟還在）；最後開的那台（cur）到電梯圓台（它停的格子給原本停圓台那台）；停在外面的回到空的格子（normPark）
 function leaveDrive() {
   if (!trip) return;
   netBorrowEnd('home'); netLendHome(); // 第 19 批：開借來的車回車庫頁＝還車；借給朋友的拿回來
-  const P = tripPose && DECK ? { mid: midCar(), decks: DECK.slice(), rev: DREV.slice(), ring: RING ? RING.slice() : [] } : null; // 第 20 批：電梯圓台上在動的那台不在裡面（normPark 再找一格）
+  const P = tripPose && TWR ? { mid: padCars(0, null)[0] || null, tower: TWR.slice() } : null; // 第 21 批：坐電梯中的那幾台不在裡面（normPark 再找一格）
   trip = false; DRIVE.on = false; boarding = null;
   panelClose(); driveBar.hidden = true;
   document.body.classList.remove('driving'); bodyWalking(false);
   dvoice?.dispose(); dvoice = null;
-  stopLiftSnd(); endSleep();
+  stopLiftSnd(); endSleep(); elEnd();
   if (doorFade) { doorFade = null; fadeEl.style.display = 'none'; }
   if (indoor) leaveHouse(null); // 在房子裡面按「直接回車庫」：碰撞、門、鏡頭換回村子的，你搬回村子的場景
   crushFx?.reset(); junkVer = -1; // 第 7 批（輾扁）：墊子清掉、輾扁的車收回車流的池子、表演場的垃圾車擺回來
@@ -1538,7 +1480,7 @@ function leaveDrive() {
   npcShow(false);
   if (parkShadow) parkShadow.visible = false;
   for (const k of Object.keys(PFULL)) pfullOff(k, true); // 第 4 批：停在村子裡的完整的車（大車換開別台停的）收回車庫頁
-  tripPose = null; tripFull = null; tripBox = null; DECK = null; DREV = null; RING = null; ringKey = null; ringPend = null;
+  tripPose = null; tripFull = null; tripBox = null; TWR = null;
   if (P) GAME.park = P;
   if (GAR) GAR.door.t = 0;
   if (OB) OB.door.t = 0; // 第 6 批
@@ -1550,7 +1492,7 @@ function leaveDrive() {
     Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0); Sx.cabin?.userData.setSteer?.(0);
   }
   controls.enabled = true; controls.update();
-  showCar(cur); // 在車店買了新車、走去開了別台：車庫頁換成那台（名字、選項），其他的車停回升降機（onCars → normPark 整理好再存）
+  showCar(cur); // 在車店買了新車、走去開了別台：車庫頁換成那台（名字、選項），其他的車停回格子（onCars → normPark 整理好再存）
   renderWallet(); refreshCarBtns();
   window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' });
 }
@@ -1599,10 +1541,10 @@ async function makeNpc() {
     load: { graphs: Math.round(T1 - T0), cars: Math.round(T2 - T1), people: Math.round(T3 - T2), warmCars: warm, warmPeople: nPeds } };
 }
 function npcShow(on) { if (NPC) NPC.g.visible = on; if (NPC && !on) NPC.MOV.length = 0; }
-// 你現在那台（完整模型）停在哪裡：走路的時候給 AI 車當停著的車、居民繞過去（停在升降機上、還沒有就放很遠）
+// 你現在那台（完整模型）停在哪裡：走路的時候給 AI 車當停著的車、居民繞過去（停在塔的樓上、還沒有就放很遠）
 function parkedBox(q) {
   const p = tripFull && tripPose?.[tripFull], B = tripBox;
-  if (!p || !B || p.deck != null) { q.x = 1e6; q.z = 1e6; return; }
+  if (!p || !B || poseF(p) > 0) { q.x = 1e6; q.z = 1e6; return; }
   const c = Math.cos(p.heading), s = Math.sin(p.heading);
   q.x = p.x + B.cx * c; q.z = p.z - B.cx * s; q.heading = p.heading; q.hx = B.hx; q.hz = B.hz; q.v = 0;
 }
@@ -1656,7 +1598,7 @@ function inGarage(x, z) {
   if (OB && OB.inside(x, z)) return true; // 越野車車庫裡面（輪擋、工具⋯也是自己的）
   if (!GAR) return false;
   const L = VIL.places.garage.lot, c = Math.cos(L.heading), s = Math.sin(L.heading), dx = x - L.x, dz = z - L.z;
-  return inBox(GAR.zones.inside, dx * c - dz * s, dx * s + dz * c);
+  return GAR.isInside(dx * c - dz * s, dx * s + dz * c);
 }
 // 第 9 批（路變大）Nick 2026-10-09「越車可碾任何東西」：越野車（PERF.offroad；以後的越野車自己就有）什麼都輾（房子、樹、路燈、牆、警車⋯）；一般的車照舊
 const offK = (k) => !!(PERF[k] && PERF[k].offroad);
@@ -1750,7 +1692,7 @@ function polPlayer(o) {
   o.x = t.x; o.z = t.z; o.heading = t.heading; o.v = driving ? t.v : t.speed;
   o.mode = !DRIVE.on || sleep || gsDesk || boarding || document.body.classList.contains('shopping') || (!driving && walker.mode === 'off') ? 'off' : driving ? 'drive' : 'walk';
   if (driving) { const ci = drv.carInfo; PL_CAR.hx = ci.len / 2; PL_CAR.hz = ci.halfW; PL_CAR.cx = (ci.nose + ci.tail) / 2; o.car = PL_CAR; }
-  if (GAR && !indoor) { const q = garLocal(t.x, t.z); o.safe = inBox(GAR.zones.inside, q.x, q.z) && GAR.door.t === 0 && !GAR.door.moving; }
+  if (GAR && !indoor) { const q = garLocal(t.x, t.z); o.safe = GAR.isInside(q.x, q.z) && GAR.door.t === 0 && !GAR.door.moving; }
   return o;
 }
 function onCaught() {
@@ -1761,7 +1703,7 @@ function onCaught() {
 function onArrest(i) { // 畫面全黑：車拖到警察局的停車場、人關進拘留室
   if (!DRIVE.on || !walker || !trip) return;
   if (doorFade) { doorFade = null; fadeEl.style.display = 'none'; }
-  endSleep();
+  endSleep(); elEnd(); // 第 21 批：坐電梯中被抓
   if (indoor) leaveHouse(null);
   impounded = false;
   if (drv) { // 開的那台（或剛下車停著的那台）：開車的收掉，完整的車停到停車場
@@ -1912,7 +1854,7 @@ function closeDoor() { if (GAR && GAR.door.t === 1 && !GAR.door.moving) GAR.door
 function hideAct(x, z, hl) {
   if (!police || police.state !== 'wanted' || !GAR || GAR.door.t !== 1 || GAR.door.moving) return null;
   const q = garLocal(x, z), D = GAR.zones.door.x;
-  return inBox(GAR.zones.inside, q.x, q.z) && q.x + hl < D - 0.3 ? CLOSE_ACT : null;
+  return GAR.isInside(q.x, q.z) && q.x + hl < D - 0.3 ? CLOSE_ACT : null;
 }
 // 每一格（driveStep 最後）：警車的碰撞給開車的、開車撞到下車的警察、警察、槍
 function polStep(dt) {
@@ -1937,7 +1879,7 @@ function townReset() { police?.clear(); gunner?.holster(); gunner?.refresh(); }
 function driveStep(dt) {
   GAR.update(dt); // 門、升降機在動（開、關、升、降）每一格都要跟著（停好的時候 onLift 換碰撞）
   OB?.update(dt); // 第 6 批：越野車車庫的鐵捲門
-  homeTick(); doorStep(); orbayStep(); ringStep(); // 第 20 批：圓環車庫（下車停在圓台上，走出圓台就停上去）；第 17 批：換號碼就把你家搬過去；別人那幾間的外殼、碰撞
+  homeTick(); doorStep(); orbayStep(); elPanelStep(); // 第 17 批：換號碼就把你家搬過去；別人那幾間的外殼、碰撞；第 21 批：電梯的面板
   if (drv) {
     drv.update(dt); // 開進賽道、快速道路的事（arrive）在這裡面叫
     if (drv && DRIVE.on) orRace?.update(dt); // 第 4 批：越野賽（drive.update 之後）
@@ -1950,7 +1892,7 @@ function driveStep(dt) {
       foldStep(dt, t.v); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {
-        drv.setAction(homeAct(t) || orbayAct(t) || bayAct(t)); // HUD 的大按鈕：開鐵捲門（車庫、越野車車庫）、停在這裡改車／看車
+        drv.setAction(elCallAct(t.x, t.z) || homeAct(t) || orbayAct(t) || bayAct(t)); // HUD 的大按鈕：叫電梯、開鐵捲門（車庫、越野車車庫）、停在這裡改車／看車
         const t2 = drv.telemetry(); // 停進改車區（parkAt）、開正停上升降機的時候就不能下車
         drv.setAction2(!t2.paused && !t2.auto && Math.abs(t2.v) < 1 ? OUT_ACT : null); // 停住了：右邊多一顆「下車」
         if (!drv.telemetry().paused) trackStep(t);
@@ -1989,7 +1931,7 @@ function bigMake() {
   BIGMAP = createBigMap({ parent: stage, world: VIL, layer: () => MAPT.layer || (MAPT.layer = walker?.mapLayer), // 小地圖同一張底圖
     me: () => { if (mapWalking()) { const t = walker.telemetry(); return { x: t.x, z: t.z, h: t.heading }; } const t = drv?.telemetry(); return t ? { x: t.x, z: t.z, h: t.heading } : null; },
     route: () => (mapWalking() ? walker.route : drv?.route),
-    dots: () => [police?.markers, MAPT.race ? MAPT.marks : null, NET.on ? NET.marks : null], // 一起開車的朋友（名字寫在點旁邊）
+    dots: () => [police?.markers, MAPT.race ? MAPT.marks : null, NET.on ? NET_GST.dots : null, NET.on ? NET.marks : null], // 朋友的家（第 21 批）、一起開車的朋友（名字寫在點旁邊）
     dest: () => tripDest,
     onGo: (k, name) => { setDest(k); (mapWalking() ? walker : drv)?.toast(`去${name}：跟著左上角的箭頭`, 2200); },
     onOpen: () => { document.body.classList.add('bigmap'); if (mapWalking()) walker.setInput({ x: 0, y: 0 }); else drv?.setInput({ throttle: 0, brake: 0.5, steer: 0 }); }, // 車子自己慢慢停
@@ -2051,18 +1993,7 @@ function driveFrame(now) {
     if (camGo.t >= camGo.T) camGo = null;
   }
   if (indoor) { renderer.render(indoor.scene, dcam); return; } // 在房子裡面：只畫房子裡面（自己的燈；村子的地面跟地板重疊，不畫）
-  GAR.cull(dcam); // 門關著、鏡頭在外面就不畫裡面；鏡頭在裡面不畫外殼
+  GAR.cull(dcam); // 第 21 批：每一層的車只畫看得到的（在塔裡面＝只畫那一層）
   OB?.cull(dcam); // 第 6 批：鏡頭跑到越野車車庫的屋頂上面就不畫屋頂（才看得到裡面的車）
   renderer.render(TR.scene, dcam);
-}
-// 第 17 批：你家在車庫街的路邊（從路上常常看得到）：門關著、鏡頭在外面，停在裡面的完整的車（不在 GAR.interior 裡）這一格也不畫（輕量車本來就掛在 interior）
-//   TR.scene.onBeforeRender／onAfterRender（startDrive 掛上）：畫之前藏、畫完馬上放回來（別的程式看到的 visible 都不變）
-const GAR_HID = [];
-function garShowFull() { for (let i = 0; i < GAR_HID.length; i++) GAR_HID[i].visible = true; GAR_HID.length = 0; }
-function garHideFull() {
-  garShowFull();
-  if (!trip || !GAR || GAR.interior.visible || !tripPose) return;
-  const hide = (o, p) => { if (o && o.visible && p && p.deck == null && garIn(p)) { o.visible = false; GAR_HID.push(o); } };
-  if (tripS?.car && tripFull && (!drv || cur !== tripFull)) { hide(tripS.car, tripPose[tripFull]); if (GAR_HID.length) hide(parkShadow, tripPose[tripFull]); }
-  for (const k in PFULL) if (!drv || k !== cur) hide(PFULL[k].S.car, tripPose[k]);
 }
