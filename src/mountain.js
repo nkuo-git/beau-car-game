@@ -48,6 +48,7 @@ const CORNER = [-250, -72]; // 村子的路（G → C）在這裡轉彎：山路
 const CTRL = [[-250, -80, 0], [-250, -134, 24], [-160, -166, 14], [-158, -197, 14], [-418, -226, 14], [-420, -257, 14], [-178, -290, 14], [-176, -321, 14], [-362, -352, 14], [-364, -383, 14], [-318, -401, 18], [-304, -404, 0]];
 const SUMMIT = { x0: -306, x1: -230, z0: -418, z1: -391 }; // 山頂平的地方：停車場（x −302…−252）＋涼亭（東邊）
 const PARK = { x0: -301, x1: -253, z0: -415, z1: -394 };
+const HOMEPAD = { x0: -290, x1: -260, z0: -450, z1: -415 }; // 第 21 批：2 號家（圓塔車庫，village.js HOME_SITES[1]，中心 (−276.25, −436.25)、門朝南）：停車場北邊整平成山頂的高度（邊在 2.5 公尺的格子上）
 const PAV = { x: -241, z: -404.5, hw: 3.4 }; // 涼亭（柱子中心到中心 6.8 公尺）
 const PEAK = { x: -284, z: -428 }; // 山的外形（看不到路的那邊）：橢圓的山頭
 const TRAIL = [[-224, -150], [-226, -168], [-236, -200], [-252, -232], [-262, -262], [-268, -292], [-276, -326], [-282, -356], [-286, -384], [-282, -394]]; // 越野車的泥土捷徑（直直往上，穿過每一段山路）
@@ -170,7 +171,7 @@ function mountainLayout(start = [-252.5, -69.5]) {
     const pr = project(x, z, BLEND + 30), dr = pr.d;
     h += (vnoise(x, z, 1 / 55, 11) * 3.2 + vnoise(x, z, 1 / 19, 23) * 1.1) * ss(9, 24, dr) * ss(0, 14, h);
     // 山頂平的地方
-    const ex = Math.max(SUMMIT.x0 - x, 0, x - SUMMIT.x1), ez = Math.max(SUMMIT.z0 - z, 0, z - SUMMIT.z1), ed = Math.hypot(ex, ez);
+    const ex = Math.max(SUMMIT.x0 - x, 0, x - SUMMIT.x1), ez = Math.max(SUMMIT.z0 - z, 0, z - SUMMIT.z1), hx = Math.max(HOMEPAD.x0 - x, 0, x - HOMEPAD.x1), hz = Math.max(HOMEPAD.z0 - z, 0, z - HOMEPAD.z1), ed = Math.min(Math.hypot(ex, ez), Math.hypot(hx, hz)); // ＋2 號家
     if (ed < 9) h = lerp(top, h, ss(0, 9, ed));
     // 路：附近的中線點加權（髮夾彎裡面兩邊的路平順接起來）
     if (dr < BLEND) {
@@ -333,7 +334,7 @@ function buildMountain(V, opts = {}) {
     if (x < MB.x0 - 2 || x > MB.x1 + 2 || z < MB.z0 - 2 || z > -62) return s0(x, z);
     if (L.project(x, z, 8, PRS).d <= RW / 2 + 0.4) return 3;
     if (z > MB.z1) return s0(x, z); // 村子那邊（路以外）照舊
-    if (inRect(SUMMIT, x, z)) return 3;
+    if (inRect(SUMMIT, x, z) || inRect(HOMEPAD, x, z)) return 3;
     if (trailD(x, z) <= 2.6) return 5;
     return 1;
   };
@@ -535,6 +536,7 @@ function buildMountain(V, opts = {}) {
   const TOP = top, ASPH = C('#55575b'), STONE = C('#cfc8ba'), LINE = C('#f2f3f5');
   const flatQuad = (m, x0, z0, x1, z1, y, col) => { B.at((x0 + x1) / 2, (z0 + z1) / 2); const a = [x0, y, z1], b = [x1, y, z1], c = [x1, y, z0], d = [x0, y, z0]; B.tri(m, a, b, c, col, [x0 / 4, z1 / 4], [x1 / 4, z1 / 4], [x1 / 4, z0 / 4]); B.tri(m, a, c, d, col, [x0 / 4, z1 / 4], [x1 / 4, z0 / 4], [x0 / 4, z0 / 4]); };
   flatQuad('pave', PARK.x0, PARK.z0, PARK.x1, PARK.z1, TOP + 0.045, ASPH);
+  flatQuad('pave', -282.25, -423.65, -270.25, PARK.z0, TOP + 0.04, C('#d2d2cd')); // 第 21 批：2 號家門外的水泥地（到停車場）
   for (const z0 of [PARK.z0 + 0.6, PARK.z1 - 5.6]) for (let x = PARK.x0 + 4; x <= PARK.x1 - 2; x += 3.2) flatQuad('main', x - 0.06, z0, x + 0.06, z0 + 5, TOP + 0.06, LINE); // 停車格（北邊一排、南邊一排面向風景）
   flatQuad('pave', PAV.x - 6, PAV.z - 6, PAV.x + 6, PAV.z + 6, TOP + 0.05, STONE);
   flatQuad('pave', PARK.x1, PAV.z - 2, PAV.x - 6, PAV.z + 2, TOP + 0.05, STONE); // 停車場走到涼亭的石板路
@@ -576,7 +578,7 @@ function buildMountain(V, opts = {}) {
     const px = x + (R() - 0.5) * 7, pz = z + (R() - 0.5) * 7, kind = R(), sz = 0.8 + R() * 0.55, r3 = R(), seed = (R() * 1e6) | 0;
     const dens = 0.18 + 0.4 * ss(-0.1, 0.5, vnoise(px, pz, 1 / 60, 77)); if (r3 > dens) continue;
     const pr = L.project(px, pz, 14); if (pr.d < 10.5) continue;
-    if (trailD(px, pz) < 5.5 || inRect(SUMMIT, px, pz, 5) || L.edgeK(px, pz) < 0.6 || pz > -128) continue;
+    if (trailD(px, pz) < 5.5 || inRect(SUMMIT, px, pz, 5) || inRect(HOMEPAD, px, pz, 5) || L.edgeK(px, pz) < 0.6 || pz > -128) continue;
     const y = heightAt(px, pz) - 0.15;
     if (kind < 0.5) { const T = frame(px, y, pz); cyl(T, 0, 0, 0, 2.2 * sz, 0.2 * sz, 0.14 * sz, 5, TRUNK, false); const g = GREENS[(R() * GREENS.length) | 0]; blob(px, y + 3.1 * sz, pz, 1.9 * sz, 1.6 * sz, 1.9 * sz, g, 0.22, seed); addCircle(px, pz, 0.3 * sz, 5 * sz, { mt: 'tree' }); }
     else { const T = frame(px, y, pz, R() * TAU); cyl(T, 0, 0, 0, 1.2 * sz, 0.18 * sz, 0.13 * sz, 5, TRUNK, false); cyl(T, 0, 0, 1.0 * sz, 6.4 * sz, 1.6 * sz, 0, 7, PINES[(R() * PINES.length) | 0], false); addCircle(px, pz, 0.28 * sz, 6.4 * sz, { mt: 'tree' }); }
@@ -585,6 +587,7 @@ function buildMountain(V, opts = {}) {
   const bp = B.build(mats, 'mt-'); group.add(bp.group);
   for (const c of colliders) V.colliders.push(c);
   V.group.add(group);
+  for (const q of V.places?.garst?.slots || []) if (inBox(q.x, q.z)) { const y = heightAt(q.x, q.z); q.y = y; q.sign.y += y; } // 第 21 批：山上的家（2 號）整座抬到地面的高度（town.src.js 的塔、net.src.js 的名牌照 q.y）
 
   // 6) 地方、路（小地圖、警察的路網：noNpc＝路上的車、居民不走）
   const zone = { x: (SUMMIT.x0 + SUMMIT.x1) / 2, z: (SUMMIT.z0 + SUMMIT.z1) / 2, hx: (SUMMIT.x1 - SUMMIT.x0) / 2, hz: (SUMMIT.z1 - SUMMIT.z0) / 2, rot: 0 };

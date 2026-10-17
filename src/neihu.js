@@ -18,6 +18,7 @@
 //   路名牌、直立招牌一個網格；沒有法線（flatShading）；遠的格子不畫（房子 1300、地面 1500、標線 420、樹 400 公尺）
 import * as THREE from 'three';
 import { NEIHU_DATA } from './neihu-data.js';
+import { HOME_SITES, homeFront } from './village.js';
 
 // 打包（build-art.mjs、build-app.mjs）：整個包在一個函式裡，只露出下面這些名字
 export const { buildNeihu, neihuFonts, NEIHU_TEXT, NEIHU_KEEP } = (() => {
@@ -703,13 +704,23 @@ function buildNeihu(V, opt = {}) {
   }
   // 聯外道路的護欄（兩邊）
   {
-    const P = LK.pts; for (const sd of [-1, 1]) for (let i = 1; i < P.length; i++) {
-      const a = P[i - 1], b = P[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]), vx = -(b[1] - a[1]) / L, vz = (b[0] - a[0]) / L, wa = LK.w[i - 1] / 2 + 0.6, wb = LK.w[i] / 2 + 0.6;
-      const A = [a[0] + vx * sd * wa, a[1] + vz * sd * wa], B = [b[0] + vx * sd * wb, b[1] + vz * sd * wb]; if (inBox(B[0], B[1], -1) || Math.hypot(A[0] - LINK_J[0], A[1] - LINK_J[1]) < 18) continue; // 岔出來的路口（越野車場的水泥路）沒有護欄
+    const P = LK.pts, gaps = HOME_SITES.map((_, n) => homeFront(n, HOME_SITES[n].apron)).filter((g) => linkDist(g[0], g[1]).d < 15); // 第 21 批：家（4、5 號）的門口：護欄開一個 20 公尺的口
+    const rail = (A, B, post) => {
       const m = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2], rot = rotOf(B[0] - A[0], B[1] - A[1]), l = Math.hypot(B[0] - A[0], B[1] - A[1]);
       boxG(bank('wall', m[0], m[1], TB), m[0], m[1], l / 2 + 0.02, 0.12, rot, 0.35, 0.85, [214, 218, 222], 20);
-      if (i % 2) boxG(bank('wall', A[0], A[1], TB), A[0], A[1], 0.08, 0.08, rot, 0, 0.85, [170, 172, 176], 20, false);
+      if (post) boxG(bank('wall', A[0], A[1], TB), A[0], A[1], 0.08, 0.08, rot, 0, 0.85, [170, 172, 176], 20, false);
       colliders.push({ t: 'box', x: m[0], z: m[1], hx: l / 2 + 0.05, hz: 0.25, rot, h: 0.9, noCrush: true }); // 第 9 批：聯外道路的護欄不輾（山谷）
+    };
+    for (const sd of [-1, 1]) for (let i = 1; i < P.length; i++) {
+      const a = P[i - 1], b = P[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]), vx = -(b[1] - a[1]) / L, vz = (b[0] - a[0]) / L, wa = LK.w[i - 1] / 2 + 0.6, wb = LK.w[i] / 2 + 0.6;
+      const A = [a[0] + vx * sd * wa, a[1] + vz * sd * wa], B = [b[0] + vx * sd * wb, b[1] + vz * sd * wb]; if (inBox(B[0], B[1], -1) || Math.hypot(A[0] - LINK_J[0], A[1] - LINK_J[1]) < 18) continue; // 岔出來的路口（越野車場的水泥路）沒有護欄
+      const near = gaps.filter((g) => segD2(g[0], g[1], A[0], A[1], B[0], B[1]) < 100);
+      if (!near.length) { rail(A, B, i % 2); continue; }
+      const nP = Math.ceil(Math.hypot(B[0] - A[0], B[1] - A[1])), at = (t) => [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t]; let run = -1; // 碰到口的那段：1 公尺一小段，口外面的接起來
+      for (let k = 0; k <= nP; k++) {
+        const q = at((k + 0.5) / nP), open = k < nP && !near.some((g) => (q[0] - g[0]) ** 2 + (q[1] - g[1]) ** 2 < 100);
+        if (open && run < 0) run = k; else if (!open && run >= 0) { rail(at(run / nP), at(k / nP), true); run = -1; }
+      }
     }
   }
 
