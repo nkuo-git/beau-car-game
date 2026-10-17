@@ -456,7 +456,7 @@ function okValue(k, o, v) { // 存的值還是現在有的選項才用（改版�
   for (const [k, n] of Object.entries((d.best && d.best.hill) || {})) if (CARS[k] && +n > 1 && +n < 3600) GAME.best.hill[k] = Math.round(+n * 100) / 100; // 爬山計時賽（以前的存檔沒有：空的）
   GAME.key = typeof d.key === 'string' && /^[0-9]{4}$/.test(d.key) ? d.key : null; // 第 19 批：借車的密碼
   GAME.home = Number.isInteger(d.home) && d.home >= 0 && d.home < 6 ? d.home : null; // 第 17 批：車庫街你那間（以前的存檔沒有：還沒進過世界＝1 號）
-  if (d.park && typeof d.park === 'object' && Array.isArray(d.park.decks)) GAME.park = { mid: typeof d.park.mid === 'string' ? d.park.mid : null, decks: d.park.decks.slice(0, 12), rev: Array.isArray(d.park.rev) ? d.park.rev.slice(0, 12) : [] }; // 升降機上停哪台（第 2 批；舊存檔沒有：照價錢排，town.src.js 的 normPark）
+  if (d.park && typeof d.park === 'object' && Array.isArray(d.park.decks)) GAME.park = { mid: typeof d.park.mid === 'string' ? d.park.mid : null, decks: d.park.decks.slice(0, 12), rev: Array.isArray(d.park.rev) ? d.park.rev.slice(0, 12) : [], ring: Array.isArray(d.park.ring) ? d.park.ring.slice(0, 31) : [] }; // ring：圓環車庫 31 格（第 20 批；舊存檔沒有＝空的） // 升降機上停哪台（第 2 批；舊存檔沒有：照價錢排，town.src.js 的 normPark）
   if (CRASH_DAMAGE) for (const [k, st] of Object.entries(d.dmg || {})) if (PERF[k] && st && typeof st === 'object' && Array.isArray(st.h) && st.h.length) GAME.dmg[k] = st; // 撞壞的（apply 會再檢查每一下）
   if (CARS[d.cur] && GAME.owned.has(d.cur)) cur = d.cur; // 車庫裡只停你的車（還沒買的在車店）
   GAME.guns = gunSave.load(d.guns); // 第 3 批（b3-int）：槍、子彈（舊存檔沒有 → 空的；壞掉的修好）
@@ -549,7 +549,9 @@ function dmgOf(car, key) {
 
 const carsEl = document.getElementById('cars');
 async function showCar(key) {
+  const was = cur, ringI = was !== key && Array.isArray(GAME.park?.ring) ? GAME.park.ring.indexOf(key) : -1; // 第 20 批：選了停在圓環車庫的車：電梯把它送下來（說一聲）
   cur = key; save();
+  if (ringI >= 0 && room?.group.visible && typeof RING_BAYS !== 'undefined') gtoast(`${CARS[key].btn[0]} 從圓環車庫 ${RING_BAYS[ringI].f + 1} 樓開下來了`, 2000);
   const bc = PERF[key].big ? 1.55 : 1; // 第 4 批：大車（怪獸卡車）鏡頭拉遠、看高一點、影子放大
   if (bc !== bigCam) { bigCam = bc; controls.target.y = bc > 1 ? 1.45 : 0.55; sh.scale.set(bc > 1 ? 1.25 : 1, bc > 1 ? 1.7 : 1, 1); if (!seat) { resize(); view(38); } }
   carsEl.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.car === key)));
@@ -950,6 +952,7 @@ renderer.setAnimationLoop((now) => {
     if (seat.key !== cur) { seat.key = cur; camera.fov = cabinFov(cur, camera.aspect); camera.updateProjectionMatrix(); } // 坐在車裡換車
     if (S) cabinCamera(camera, S.body, cur, seat.yaw, seat.pitch); // 車子還在載入就先不動
   } else { controls.update(); if (room?.baySig) keepOutOfBays(); }
+  if (room?.ring && room.group.visible) room.ring.cull(camera); // 第 20 批：後面的圓環車庫：門洞看得到才畫一樓的車
   renderer.render(scene, camera);
 });
 // 後面車位停了車：鏡頭轉到車後面、拉遠的時候不要鑽進那些車的車頭（車頭在 x −7.55）

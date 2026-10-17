@@ -18,10 +18,10 @@ const [prefix = 'b1'] = process.argv.slice(2);
 if (path.dirname(prefix) !== '.') fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () => S; window.__snd = () => snd; window.__room = () => room; window.__scene = () => scene; window.__controls = () => controls;'
-  + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
+  + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles }); window.__renderer = () => renderer;'
   + ' window.__money = (n) => { GAME.money = n; save(true); renderWallet(); renderOptions(); refreshCarBtns(); };'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, home, bayLock, snooze, TR, LODS, camGo, cur, built, walker, tripPose, tripFull, boarding,'
-  + '   DECK, DREV, sleep, gcam, liftSnd, deliver, offDeck, runLift, midCar, normPark, CABIN_EYE, setDest });'
+  + '   DECK, DREV, RING, sleep, gcam, liftSnd, deliver, offDeck, runLift, midCar, normPark, CABIN_EYE, setDest, CARS, PERF });'
   + ' window.__HOME = () => HOME; window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
   + ' window.__pol = () => (typeof police !== "undefined" ? police : null);' // 第 3 批（b3-int）：警察（撞人的測試以後把星星清掉：警察的部分在 test-b3.mjs）
   + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR });'
@@ -832,8 +832,11 @@ check(r.arrived, 'drove into the dealer bay and the dealer opened');
 const dealer = await p.evaluate(() => ({ list: [...document.querySelectorAll('#dealerCars .part')].map((x) => x.querySelector('b').textContent + (x.classList.contains('sel') ? '*' : '') + ':' + x.className.replace('part ', '')),
   buy: document.getElementById('dealerBuyHead').textContent, msg: document.getElementById('dealerMsg').textContent, name: document.getElementById('dealerName').textContent, cash: document.getElementById('dealerCash').textContent }));
 console.log('4', el(), 'dealer:', JSON.stringify(dealer), '| lods', JSON.stringify(await lodAt()));
-check(dealer.list.length === 5 && /SUPRA\*/.test(dealer.list.join()) && /SUPRA/.test(dealer.buy), 'dealer lists the 5 unowned cars, SUPRA (affordable) selected');
-await p.waitForFunction(() => Object.entries(window.__D().LODS).filter(([k, L]) => L.lod?.car.parent === window.__D().VIL.group).length === 5, null, { timeout: 180000 });
+// 2026-10-17：多了 10 台新車（一般的車 17 台）→ 車行擺所有還沒買的（便宜的在前面），先選買得起最便宜的那台；轉盤 6 個（多的按到才換一批）
+const dWant = await p.evaluate(() => { const D = window.__D(), G = window.__G(), sale = Object.keys(D.CARS).filter((k) => !G.owned.has(k) && !D.PERF[k].offroad).sort((a, b) => D.PERF[a].price - D.PERF[b].price);
+  return { n: sale.length, names: sale.map((k) => D.CARS[k].btn[0]), sel: D.CARS[sale.find((k) => G.money >= D.PERF[k].price)].btn[0] }; });
+check(dealer.list.length === dWant.n && dWant.n >= 15 && dealer.list.map((x) => x.split(/[*:]/)[0]).join() === dWant.names.join() && dealer.list.some((x) => x.startsWith(dWant.sel + '*')) && dealer.buy.includes(dWant.sel), `dealer lists the ${dWant.n} unowned cars cheapest first, ${dWant.sel} (cheapest affordable) selected`);
+await p.waitForFunction(() => Object.entries(window.__D().LODS).filter(([k, L]) => L.lod?.car.parent === window.__D().VIL.group).length === 6, null, { timeout: 180000 });
 await p.evaluate(() => window.scrollTo(0, 0)); await drawAndShot('12-dealer');
 await p.evaluate(() => [...document.querySelectorAll('#dealerCars .part')].find((x) => /JESKO/.test(x.textContent)).click());
 await p.waitForTimeout(1500);
@@ -1277,9 +1280,9 @@ const sm = await p.evaluate(() => {
   // 13 格都滿了
   away(k2); put(true);
   const m3 = D.deliver(k2, k2.toUpperCase());
-  out.full = { msg: m3, deck: D.tripPose[k2].deck ?? null };
+  out.full = { msg: m3, deck: D.tripPose[k2].deck ?? null, ring: D.tripPose[k2].ring ?? null, R0: window.__D().RING[0] }; // 第 20 批：12 格都滿了＝停圓環車庫（一樓第 1 格）
   for (const [li, dk] of fill) G.lifts[li].take(dk);
-  const m4 = D.deliver(k2, k2.toUpperCase()); out.again = { msg: m4, id: D.DECK.indexOf(k2) };
+  const m4 = D.deliver(k2, k2.toUpperCase()); out.again = { msg: m4, id: D.DECK.indexOf(k2), inRing: window.__D().RING.includes(k2) };
   H.step(5);
   out.decks = window.__D().DECK.slice(); out.park = window.__G().park.decks.slice();
   return out;
@@ -1288,7 +1291,7 @@ console.log('  dealer deliveries:', JSON.stringify(sm));
 check(sm.one.id >= 0 && sm.one.onDeck && sm.one.floor && !sm.one.busy && sm.one.snd === 0 && sm.one.levels !== sm.before.levels && new RegExp(`${sm.k[0].toUpperCase()} 車行幫你送回車庫了：\\d 號升降機[上下]層`).test(sm.one.msg),
   `delivered while every floor-level deck was taken: the lift was moved at once (no 7 s, no motor sound; ${sm.before.levels} → ${sm.one.levels}) and the car put on the free deck: 「${sm.one.msg}」`);
 check(sm.two.id === 7 && sm.two.l0 === 1 && /2 號升降機下層/.test(sm.two.msg), `a car standing over lift 1's pit: the delivery used the next lift instead (「${sm.two.msg}」)`);
-check(/^車庫滿了/.test(sm.full.msg) && sm.full.deck === null && sm.again.id >= 0, `all 13 places taken: 「${sm.full.msg}」; with room again it goes on a deck (「${sm.again.msg}」)`);
+check(/圓環車庫 1 樓$/.test(sm.full.msg) && sm.full.deck === null && sm.full.ring === 0 && sm.full.R0 === sm.k[1] && sm.again.id >= 0 && !sm.again.inRing, `all 12 decks and the middle taken: the dealer parks it in the round tower (「${sm.full.msg}」); with room again it goes on a deck and leaves the tower (「${sm.again.msg}」)`);
 check(JSON.stringify(sm.decks) === JSON.stringify(sm.park), 'the deck layout is saved as it changes');
 // 升降機的馬達聲（OfflineAudioContext 算出來）：開鎖「喀」→ 馬達嗡嗡（有聲音）→ 停：落鎖「喀」→ 安靜
 const sn = await p.evaluate(async () => {
@@ -1356,6 +1359,110 @@ await p.evaluate(() => { const c = window.__camera(), ctl = window.__controls();
 await p.waitForTimeout(1500);
 await p.screenshot({ path: `${prefix}-32-page-lifts.png` }); console.log('  shot', `${prefix}-32-page-lifts.png`, el());
 await p.evaluate(() => { window.__controls().autoRotate = true; });
+
+// ---- 12 四層圓環車庫（第 20 批，ringgar.js）：後牆左後角的門 → 走道 → 玻璃塔（4 層、31 格）；存檔 park.ring（舊存檔沒有＝空的）；
+//   車庫頁選圓環車庫的車＝送下來（原本中間那台換上去）；出門：操作台「叫車」→ 電梯拿下來停在圓台上 → 上車、開出走道、大廳、鐵捲門；開回來停到圓台上下車 → 走出圓台就停上去；記進存檔
+check(Array.isArray(s11b.park.ring) && s11b.park.ring.length === 31 && s11b.park.ring.every((k) => k === null), 'old save without ring parking loads: the round tower is empty (31 spots), the lifts as before');
+const RING9 = ['gc8', 'yaris', 'supra', 'gtr', 'p918', 'sp3', 'jesko', 'rx7', 'chiron'];
+await p.waitForTimeout(800);
+await p.evaluate((own) => localStorage.setItem('carid.tune', JSON.stringify({ v: 2, cur: 'gc8', scene: 'room', money: 5, owned: own, parts: {}, tyres: {}, wins: {}, cars: {},
+  park: { mid: 'gc8', decks: ['yaris', 'supra', 'gtr', 'p918', null, null, null, null, null, null, null, null], rev: [], ring: ['sp3', null, 'jesko', null, null, null, null, null, 'bogus', 'yaris'] } })), RING9);
+await p.reload({ waitUntil: 'domcontentloaded' }); await ready();
+await p.waitForFunction((ks) => ks.every((k) => window.__D().LODS[k]?.lod), RING9.slice(1), { timeout: 300000 }); await p.waitForTimeout(1000);
+const ringWhere = () => p.evaluate((ks) => { const D = window.__D(), out = {}; for (const k of ks) { const o = D.LODS[k]?.lod?.car; out[k] = o?.parent?.name?.startsWith('ringBay') ? o.parent.name : null; } return out; }, RING9.slice(1));
+const s12a = await p.evaluate(() => { const G = window.__G(), R = window.__room(); return { park: G.park, size: R.ring?.bays.length, floors: R.ring?.floors.map((f) => f.visible), door: !!R.ring }; });
+const w12a = await ringWhere();
+console.log('12', el(), 'round tower:', JSON.stringify({ ring: s12a.park.ring.slice(0, 10), decks: s12a.park.decks, size: s12a.size, where: w12a }));
+check(s12a.size === 31 && s12a.park.ring[0] === 'sp3' && s12a.park.ring[2] === 'jesko' && s12a.park.ring.filter(Boolean).length === 2 && s12a.park.decks.includes('rx7') && s12a.park.decks.includes('chiron') && s12a.park.decks.filter(Boolean).length === 6
+  && w12a.sp3 === 'ringBay1' && w12a.jesko === 'ringBay3' && !w12a.yaris,
+  'garage page: SP3 and JESKO stay in the round tower spots they were saved in (light cars hung in tower bays 1 and 3); a bad name and a car already on a lift are dropped; new cars fill the lifts first');
+const pg12 = await p.evaluate(() => { const r = window.__renderer(), c = window.__camera(); r.render(window.__scene(), c); return window.__rinfo(); });
+await p.evaluate(() => { const c = window.__camera(), C = window.__controls(); C.autoRotate = false; C.target.set(-12.7, 1.0, -13.1); c.position.set(-2.5, 1.8, -6.5); C.update(); });
+await p.waitForTimeout(1500);
+const pg12d = await p.evaluate(() => { const r = window.__renderer(), c = window.__camera(), R = window.__room(); R.ring.cull(c); r.render(window.__scene(), c); return { ...window.__rinfo(), vis: R.ring.floors.map((f) => f.visible) }; });
+await p.screenshot({ path: `${prefix}-33-page-ring-door.png` }); console.log('  shot', `${prefix}-33-page-ring-door.png`, '| renderer page', JSON.stringify(pg12), 'door view', JSON.stringify(pg12d));
+check(pg12d.vis[0] && !pg12d.vis[1] && !pg12d.vis[2] && !pg12d.vis[3], 'looking at the back-left door from the hall: only the tower ground floor cars are drawn');
+await p.evaluate(() => { window.__controls().autoRotate = true; });
+// 車庫頁選 SP3（停在圓環車庫）：轉盤上換成 SP3、GC8 停去它那格；再選回 GC8
+const pick = (k) => p.evaluate(async (k) => { document.querySelector(`[data-car="${k}"]`).click(); await new Promise((r) => setTimeout(r, 400)); const G = window.__G(); return { cur: window.__D().cur, ring0: G.park.ring[0], mid: G.park.mid, toast: document.getElementById('gtoast').textContent }; }, k);
+const pk1 = await pick('sp3'), pk2 = await pick('gc8');
+console.log('  pick SP3 / GC8:', JSON.stringify(pk1), JSON.stringify(pk2));
+check(pk1.cur === 'sp3' && pk1.ring0 === 'gc8' && /圓環車庫 1 樓/.test(pk1.toast) && pk2.cur === 'gc8' && pk2.ring0 === 'sp3',
+  'choosing a round-tower car on the garage page brings it to the turntable ("從圓環車庫 1 樓開下來了"), the turntable car takes its tower spot; choosing back swaps again');
+await p.waitForFunction((ks) => ks.every((k) => window.__D().LODS[k]?.lod), RING9.slice(1), { timeout: 300000 });
+// 出門
+await p.evaluate(() => document.getElementById('driveOut').click());
+await p.waitForFunction(() => window.__D().on && window.__D().walker && window.__D().walker.mode === 'walk', null, { timeout: 300000 });
+await p.evaluate(() => { window.__hold = true; }); await p.waitForTimeout(500);
+const t12 = await p.evaluate(() => { const D = window.__D(), R = D.GAR.ring; return { RING: D.RING.slice(0, 4), poses: ['sp3', 'jesko'].map((k) => D.tripPose[k]?.ring), parents: ['sp3', 'jesko'].map((k) => D.LODS[k]?.lod?.car.parent?.name), lift: [R.lift.y, R.lift.busy] }; });
+console.log('  trip:', JSON.stringify(t12));
+check(t12.RING[0] === 'sp3' && t12.RING[2] === 'jesko' && t12.poses.join() === '0,2' && t12.parents.join() === 'ringBay1,ringBay3' && t12.lift.join() === '0,false',
+  'out in the village: the round tower behind your garage holds SP3 and JESKO in the same spots, lift parked at the ground floor');
+// 走去操作台：大廳 → 左後角的門 → 走道 → 塔的一樓
+const wk12 = await p.evaluate(() => { const H = window.__H, R = window.__D().GAR.ring, s = R.spots.stand; const r = H.walkLocal([[-3, -8], [-6, -13], [-10.5, -13.1], [-14, -13.1], [-17.5, -12.5], [s.x, s.z]]); const t = window.__D().walker.telemetry(); return { ok: r.ok, at: r.at || null, local: H.gl(t.x, t.z), act: H.actText(), home: window.__HOME().in, maxY: window.__D().gcam.maxY }; });
+console.log('  walk to the tower panel:', JSON.stringify(wk12));
+check(wk12.ok && wk12.act === '叫車：SP3' && wk12.home && wk12.maxY < 3, `walked from the hall through the back-left door and corridor to the tower panel: button "${wk12.act}", counts as at home, camera kept under the 2.9 m ceiling`);
+const f12 = await p.evaluate(() => { const H = window.__H, pressed = H.press(); H.step(20); const D0 = window.__D(), busy = D0.GAR.ring.lift.busy, mid = H.actText(), say = document.querySelector('#stage .wk-toast')?.textContent; let n = 0, maxY = 0;
+  for (; n < 60 * 20 && window.__D().GAR.ring.lift.busy; n++) { H.step(1); maxY = Math.max(maxY, window.__D().GAR.ring.lift.y); }
+  const D = window.__D(), p = D.tripPose.sp3, q = H.gl(p.x, p.z), R = D.GAR.ring; return { pressed, busy, mid, say, s: +(n / 60).toFixed(1), maxY, q, ring: p.ring ?? null, RING0: D.RING[0], act: H.actText(), on: D.LODS.sp3.lod.car.parent?.name, say2: document.querySelector('#stage .wk-toast')?.textContent, pad: [R.zones.pad.x, R.zones.pad.z] }; });
+console.log('  call SP3:', JSON.stringify(f12));
+check(f12.pressed === '叫車：SP3' && f12.busy && f12.mid === '電梯動作中⋯' && f12.s > 2 && f12.s < 15 && Math.hypot(f12.q.x - f12.pad[0], f12.q.z - f12.pad[1]) < 0.05 && f12.ring === null && f12.RING0 === null && f12.act === '停上去：SP3' && f12.on === 'ringFloor1' && /SP3 下來了/.test(f12.say2),
+  `"叫車": the lift fetches SP3 (${f12.s} s) and leaves it on the round platform at the ground floor, nose to the corridor; its tower spot is free; the panel now says "停上去：SP3"`);
+const tw12 = await p.evaluate(() => { const D = window.__D(), H = window.__H, a = H.gw(-15.3, -9.3), l = H.gw(-23.2, -13.1), c = D.dcam; window.__noDraw = true; c.position.set(a.x, 2.2, a.z); c.lookAt(l.x, 0.8, l.z); c.updateMatrixWorld(); D.GAR.cull(c); window.__renderer().render(D.TR.scene, c); return { ...window.__rinfo(), vis: D.GAR.ring.floors.map((f) => f.visible) }; });
+await p.screenshot({ path: `${prefix}-34-ring-tower.png` }); console.log('  shot', `${prefix}-34-ring-tower.png`, '| renderer tower ground floor', JSON.stringify(tw12));
+await p.evaluate(() => { window.__noDraw = false; });
+check(tw12.vis.join() === 'true,false,false,false', 'in the tower ground floor only that floor\'s cars are drawn');
+// 上車（換開 SP3），開出走道 → 大廳（開鐵捲門）→ 出去
+const bd12 = await p.evaluate(() => { const H = window.__H, r = H.walkLocal([[-21.2, -11.6]]); const a = H.actText(), pr = a && a.startsWith('上車') ? H.press() : null, b = pr ? H.board(10) : null; return { ok: r.ok, a, pr, b }; });
+await p.waitForFunction(() => !!window.__D().drv && window.__D().cur === 'sp3', null, { timeout: 120000 }).catch(() => {});
+console.log('  board SP3:', JSON.stringify(bd12), await p.evaluate(() => window.__D().cur));
+await p.evaluate(() => { // 照本地座標的點慢慢開（不撞東西）
+  const H = window.__H; H.drvL = (pts, { v = 3.5, max = 40 } = {}) => {
+    const d = window.__D().drv, b0 = d.telemetry().bumps; let i = 0, n = 0;
+    for (; n < max * 60 && i < pts.length; n++) {
+      const t = d.telemetry(), q = H.gw(pts[i][0], pts[i][1]), dx = q.x - t.x, dz = q.z - t.z;
+      if (Math.hypot(dx, dz) < (i === pts.length - 1 ? 0.8 : 2.2)) { i++; continue; }
+      const a = H.wrapA(Math.atan2(-dz, dx) - t.heading), sp = Math.abs(t.v);
+      d.setInput({ throttle: sp < v ? 0.45 : 0, brake: sp > v + 1 ? 0.5 : 0, steer: Math.max(-1, Math.min(1, -2.5 * a)) }); window.__dstep(1);
+    }
+    for (let k = 0; k < 180 && Math.abs(d.telemetry().v) > 0.15; k++) { d.setInput({ throttle: 0, brake: 1, steer: 0 }); window.__dstep(1); }
+    d.setInput({ throttle: 0, brake: 0, steer: 0 }); window.__dstep(20); d.setInput(null);
+    const t = d.telemetry(); return { done: i >= pts.length, s: +(n / 60).toFixed(1), local: H.gl(t.x, t.z), bumps: t.bumps - b0 };
+  };
+});
+const dr12 = await p.evaluate(() => { const H = window.__H, D = window.__D(), a = H.drvL([[-16, -13.1], [-13.6, -13.1], [-11, -13.1], [-9.6, -13.0]]); const act = H.actText(), pr = act === '開鐵捲門' ? H.press() : null; window.__dstep(150);
+  const b = H.drvL([[-3.5, -9.5], [0.5, -6], [3.5, -3.2], [6, -2.2], [10, -1.5], [15, -1]]); return { a, act, pr, door: D.GAR.door.t, b }; });
+console.log('  drive out of the tower:', JSON.stringify(dr12));
+check(bd12.ok && bd12.pr && dr12.a.done && dr12.a.bumps === 0 && dr12.pr === '開鐵捲門' && dr12.b.done && dr12.b.bumps === 0 && dr12.b.local.x > 12,
+  `got into SP3 on the platform and drove it out: corridor, hall (button "開鐵捲門"), out of the roller door to the street (${dr12.b.local.x} m out), no bumps`);
+const st12 = await p.evaluate(() => { const D = window.__D(), r = window.__renderer(); D.GAR.cull(D.dcam); r.render(D.TR.scene, D.dcam); return window.__rinfo(); });
+console.log('  renderer street outside your garage (driving):', JSON.stringify(st12));
+// 開回來停到圓台上：下車 → 走出圓台 → 電梯停上去
+const bk12 = await p.evaluate(() => { const H = window.__H, d = window.__D().drv; d.teleport(H.gw(12, -1.5, Math.PI)); window.__dstep(30);
+  return H.drvL([[10, -1.5], [6, -2.2], [3.5, -3.2], [0.5, -6], [-3.5, -9.5], [-6.8, -13.0], [-11, -13.1], [-13.6, -13.1], [-17, -13.1], [-23.1, -13.1]], { v: 2.5 }); });
+const pk12 = await p.evaluate(() => { const H = window.__H; H.step(5); const a2 = H.act2(), out = H.press2(); H.step(90); const say = document.querySelector('#stage .wk-toast')?.textContent, mode = window.__D().walker.mode, held = window.__D().GAR.ring.lift.busy;
+  const r = H.walkLocal([[-17, -11]]); H.step(10); const busy = window.__D().GAR.ring.lift.busy; let n = 0; for (; n < 60 * 25 && window.__D().GAR.ring.lift.busy; n++) H.step(1);
+  const D = window.__D(), i = D.RING.indexOf('sp3'); return { a2, out, say, mode, held, walked: r.ok, busy, s: +(n / 60).toFixed(1), i, pose: D.tripPose.sp3?.ring, tripFull: D.tripFull, drv: !!D.drv, on: D.LODS.sp3.lod.car.parent?.name, say2: document.querySelector('#stage .wk-toast')?.textContent }; });
+await p.waitForTimeout(600);
+const sv12 = await p.evaluate(() => JSON.parse(localStorage.getItem('carid.tune')).park.ring);
+console.log('  drive back onto the platform, get out, store:', JSON.stringify(bk12), JSON.stringify(pk12), 'saved', JSON.stringify(sv12.slice(0, 4)));
+check(bk12.done && bk12.bumps === 0 && pk12.out === '下車' && /走出圓台/.test(pk12.say) && pk12.mode === 'walk' && !pk12.held && pk12.walked && pk12.busy && pk12.i === 0 && pk12.pose === 0 && pk12.on === 'ringBay1' && !pk12.drv && pk12.tripFull === null && /停好了：圓環車庫 1 樓/.test(pk12.say2) && sv12[0] === 'sp3',
+  `drove back in onto the round platform and got out: once you step off it the lift parks SP3 in tower spot 1 (${pk12.s} s, light car in the bay) and the phone remembers it`);
+// 大廳、塔裡、街上的 renderer（走路的鏡頭）
+const rn12 = {};
+for (const [name, x, z, h] of [['hall', -3, -7, Math.PI * 1.25], ['tower', -17, -11, Math.PI], ['street', 16, 4, Math.PI * 0.85]]) {
+  rn12[name] = await p.evaluate(([x, z, h]) => { const D = window.__D(), H = window.__H, W = D.walker, q = H.gw(x, z, h); W.teleport(q, { keepCamera: false }); W.setCamera({ yaw: q.heading }); H.step(40); D.GAR.cull(D.dcam); window.__renderer().render(D.TR.scene, D.dcam); return { ...window.__rinfo(), vis: D.GAR.ring.floors.map((f) => +f.visible).join('') }; }, [x, z, h]);
+}
+console.log('  renderer on foot:', JSON.stringify(rn12));
+// 直接回車庫：最後開的 SP3 到轉盤上，GC8（本來停中間）停去 SP3 那格；重新整理也一樣
+await p.evaluate(() => document.getElementById('driveHome').click());
+await p.evaluate(() => { window.__hold = false; window.__noDraw = false; }); await p.waitForTimeout(1500);
+const hm12 = await p.evaluate(() => { const G = window.__G(); return { cur: window.__D().cur, mid: G.park.mid, ring: G.park.ring.slice(0, 4) }; });
+await p.reload({ waitUntil: 'domcontentloaded' }); await ready(); await p.waitForTimeout(800);
+const rl12 = await p.evaluate(() => { const G = window.__G(); return { cur: window.__D().cur, ring: G.park.ring.slice(0, 4) }; });
+console.log('  home / reload:', JSON.stringify(hm12), JSON.stringify(rl12));
+check(hm12.cur === 'sp3' && hm12.mid === 'sp3' && hm12.ring[0] === 'gc8' && hm12.ring[2] === 'jesko' && rl12.cur === 'sp3' && rl12.ring.join() === hm12.ring.join(),
+  'back on the garage page: SP3 (the car you drove last) on the turntable, GC8 parked in its tower spot, JESKO untouched; the same after a reload');
 
 await b.close(); srv.close();
 console.log(errs.length ? `ERRORS ${errs.length}` : 'no page errors');

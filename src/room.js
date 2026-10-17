@@ -66,6 +66,7 @@
 // 內嵌進車庫頁時（build-art.mjs 會拿掉 import）：頁面要自己 import Reflector；這個檔頂層只有 ROOM_SIZE、buildRoom 兩個名字
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { RING_SIZE, buildRingGarage } from './ringgar.js';
 
 export const ROOM_SIZE = { X: 5, XB: -12.7, Z: 15.7, H: 6, T: 0.3, TOP: 7.2, DZ: 4, DH: 5 }; // 第 10 批（Nick「所有車庫變高變寬」）：天花板 4.5 → 6、門 6 × 3.8 → 8 × 5 公尺；第 11 批（Nick「要變寬」）：寬 25.4 → 31.4（z ±12.7 → ±15.7）
 
@@ -589,13 +590,34 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
       get count() { return I.length; },
       // 四邊形 a b c d：從正面看逆時針（左下、右下、右上、左上）；r＝貼圖範圍（'M'＝隨便挑一塊大理石）；col＝一個顏色或四個角各一個；mat＝MM 的一個；seam＝畫石板縫
       quad(a, bb, c, d, r = RW, col = W1, mat = MM.paint, seam = false) {
-        const k = P.length / 3, ab = bb.clone().sub(a), ad = d.clone().sub(a), n = ab.clone().cross(ad).normalize(), w = ab.length(), h = ad.length();
+        const ab = bb.clone().sub(a), ad = d.clone().sub(a), n = ab.clone().cross(ad).normalize(), w = ab.length(), h = ad.length();
         if (r === 'M') r = mwin(w, h, rnd() < 0.5);
         const cs = Array.isArray(col[0]) ? col : [col, col, col, col], sm = [[0, 0], [w, 0], [w, h], [0, h]];
-        [[a, r[0], r[1]], [bb, r[2], r[1]], [c, r[2], r[3]], [d, r[0], r[3]]].forEach(([p, u, v], i) => {
-          P.push(p.x, p.y, p.z + b.oz); N.push(n.x, n.y, n.z); Uv.push(u, v); C.push(...cs[i]); Ma.push(...mat); Se.push(...(seam ? [sm[i][0], sm[i][1], w, h] : NOSEAM));
-        });
-        I.push(k, k + 1, k + 2, k, k + 2, k + 3);
+        const V4 = [[a, r[0], r[1]], [bb, r[2], r[1]], [c, r[2], r[3]], [d, r[0], r[3]]].map(([p, u, v], i) => ({ p, u, v, c: cs[i], s: seam ? [sm[i][0], sm[i][1], w, h] : NOSEAM }));
+        const emit = (vs) => { const k = P.length / 3; for (const q of vs) { P.push(q.p.x, q.p.y, q.p.z + b.oz); N.push(n.x, n.y, n.z); Uv.push(q.u, q.v); C.push(...q.c); Ma.push(...mat); Se.push(...q.s); } I.push(k, k + 1, k + 2, k, k + 2, k + 3); };
+        // 第 20 批（圓環車庫）：後牆的門洞（HOLE）：牆上的四邊形（後牆那一層裡、跟門洞重疊）切掉門洞那塊，剩下的分成左、右、上面（亂數照樣用掉：別的東西長得一樣）
+        const hz = b.hole && Math.abs(n.x) > 0.9 ? 'v' : b.hole && Math.abs(n.y) > 0.9 ? 'h' : null;
+        if (hz && [a, bb, c, d].every((p) => p.x > b.hole.x0 && p.x < b.hole.x1)) {
+          const H = b.hole, ys = [a.y, bb.y, c.y, d.y], zs = [a.z, bb.z, c.z, d.z], z0 = Math.min(...zs), z1 = Math.max(...zs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+          if (z1 > H.z0 && z0 < H.z1 && y0 < H.y1 && (hz === 'h' || y1 > 0)) {
+            const lerp4 = (s, t) => { // 雙線性（a 那個角 s＝0、t＝0；ab 方向 s、ad 方向 t）
+              const q = (k) => { const A0 = V4[0][k], B0 = V4[1][k], C0 = V4[2][k], D0 = V4[3][k]; return Array.isArray(A0) ? A0.map((x, j) => (A0[j] * (1 - s) + B0[j] * s) * (1 - t) + (D0[j] * (1 - s) + C0[j] * s) * t) : (A0 * (1 - s) + B0 * s) * (1 - t) + (D0 * (1 - s) + C0 * s) * t; };
+              return { p: a.clone().addScaledVector(ab, s).addScaledVector(ad, t), u: q('u'), v: q('v'), c: q('c'), s: seam ? q('s') : NOSEAM };
+            };
+            const zAlongS = Math.abs(ab.z) > Math.abs(ad.z), sz = (z) => (zAlongS ? (z - a.z) / ab.z : (z - a.z) / ad.z), ty = (y) => (zAlongS ? (Math.abs(ad.y) > 1e-6 ? (y - a.y) / ad.y : 0) : (Math.abs(ab.y) > 1e-6 ? (y - a.y) / ab.y : 0));
+            const rect = (za, zb, ya, yb) => { // 一塊（z za … zb、y ya … yb）：照原本的方向（a → b＝s、a → d＝t）排
+              const zA = sz(za), zB = sz(zb), yA = hz === 'v' ? ty(ya) : 0, yB = hz === 'v' ? ty(yb) : 1;
+              const [sA, sB, tA, tB] = zAlongS ? [zA, zB, yA, yB] : [yA, yB, zA, zB];
+              const sl = Math.min(sA, sB), sh = Math.max(sA, sB), tl = Math.min(tA, tB), th = Math.max(tA, tB);
+              emit([lerp4(sl, tl), lerp4(sh, tl), lerp4(sh, th), lerp4(sl, th)]);
+            };
+            if (z0 < H.z0) rect(z0, H.z0, y0, y1);
+            if (z1 > H.z1) rect(H.z1, z1, y0, y1);
+            if (hz === 'v' && y1 > H.y1) rect(Math.max(z0, H.z0), Math.min(z1, H.z1), Math.max(y0, H.y1), y1);
+            return;
+          }
+        }
+        emit(V4);
       },
       // 盒子：m＝位置方向，s＝[寬, 高, 深]，f＝{ px: [r, col, mat, seam], ..., all: [...], skip: 'nz ny' }（沒有的面不畫）
       box(m, s, f) {
@@ -699,6 +721,8 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
 
   // ---- 牆 A（x = XB，後牆）：六個展示車位；白大理石＋壁柱（兩邊黃銅條）、上面黑大理石橫帶（招牌、徽章），每個車位一塊黑玻璃名牌 ----
   const PIL = [-11.1, -7.4, -3.7, 0, 3.7, 7.4, 11.1]; // 壁柱（u）
+  const RG = RING_SIZE, HOLE_IN = { x0: XB - 0.05, x1: XB + 0.15, z0: RG.DZ0, z1: RG.DZ1, y1: RG.DH }; // 第 20 批：左後角開門去圓環車庫（z −14.75 … −11.45、高 2.38）
+  S.hole = HOLE_IN;
   slabs('A', -ZS, ZS, [0.12, FB0 + 0.02]); slabs('A', -ZS, ZS, [FB1 - 0.02, HC]); skirt('A', -ZS, ZS);
   for (const u of PIL) {
     wb(S, 'A', u - 0.23, u + 0.23, 0, FB0, 0, 0.13, { pz: ['M', W1, MM.marble, true], px: ['M', W1, MM.marble, true], nx: ['M', W1, MM.marble, true] });
@@ -712,6 +736,16 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
   for (const z of BAYZ) { // 名牌：黑玻璃＋黃銅框
     const u = -z;
     wb(S, 'A', u - 0.48, u + 0.48, 1.56, 1.86, 0, 0.025, { pz: [RW, [0.008, 0.008, 0.009], MM.gloss], px: [RW, BRASS, MM.brass], nx: [RW, BRASS, MM.brass], py: [RW, BRASS, MM.brass], ny: [RW, BRASS, MM.brass] });
+  }
+  S.hole = null;
+  { // 門洞：牆的厚度那一圈（兩邊、上面白大理石，地上門檻）＋大廳這面一圈黑框（不用亂數：別的東西長得一樣）
+    const x0 = XBO, x1 = XB, z0 = RG.DZ0, z1 = RG.DZ1, h = RG.DH, mr = [0.21, 0.32, 0.21 + WT / MT, 0.32 + h / MT];
+    S.quad(V(x0, 0, z0), V(x1, 0, z0), V(x1, h, z0), V(x0, h, z0), mr, W1, MM.honed);
+    S.quad(V(x1, 0, z1), V(x0, 0, z1), V(x0, h, z1), V(x1, h, z1), mr, W1, MM.honed);
+    S.quad(V(x0, h, z0), V(x1, h, z0), V(x1, h, z1), V(x0, h, z1), RW, CEIL, MM.paint);
+    S.quad(V(x0, 0.004, z1), V(x1, 0.004, z1), V(x1, 0.004, z0), V(x0, 0.004, z0), [0.55, 0.1, 0.55 + WT / MT, 0.1 + (z1 - z0) / MT], W1, MM.honed);
+    const fr = { pz: [RW, [0.012, 0.012, 0.013], MM.satin], px: [RW, BLK, MM.satin], nx: [RW, BLK, MM.satin], py: [RW, BLK, MM.satin], ny: [RW, BLK, MM.satin] };
+    wb(S, 'A', -z1 - 0.07, -z1, 0, h + 0.07, 0, 0.04, fr); wb(S, 'A', -z0, -z0 + 0.07, 0, h + 0.07, 0, 0.04, fr); wb(S, 'A', -z1, -z0, h, h + 0.07, 0, 0.04, fr);
   }
 
   // ---- 牆 B（x = XD，門那面）：鐵捲門（兩邊黑色導軌、上面白色捲筒盒＋警示燈、門邊開關盒）；右邊輪胎架、左邊模型車展示櫃 ----
@@ -841,7 +875,7 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
     COLS.push({ t: 'circle', x, z, r: 0.24, h: 1.8 });
   }
   { // 盆栽（黑色高盆＋一叢長葉子）
-    for (const [x, z] of [[-0.55, -12.1 - ZW], [-11.9, 11.9 + ZW], [-11.9, -11.9 - ZW]]) {
+    for (const [x, z] of [[-0.55, -12.1 - ZW], [-11.9, 11.9 + ZW], [-11.95, -15.25]]) { // 第 20 批：左後角那盆往牆角挪（旁邊是去圓環車庫的門）
       S.geo(new THREE.CylinderGeometry(0.26, 0.2, 0.62, 20).translate(x, 0.31, z), M4(), RW, [0.015, 0.015, 0.016], MM.gloss);
       for (let i = 0; i < 26; i++) {
         const a = rnd() * Math.PI * 2, tilt = 0.12 + rnd() * 0.42, len = 0.7 + rnd() * 0.75, g = new THREE.PlaneGeometry(0.075, len, 1, 3);
@@ -1223,7 +1257,9 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
     wb(E, w, u0, u1, PAR + 0.03, PAR + 0.05, 0.03, 0.036, { pz: [RW, [0.45, 0.33, 0.18], MM.brass] });
     wb(E, w, u0 - 0.04, u1 + 0.04, TOP - 0.06, TOP, -WT - 0.02, 0.06, { py: [RW, [0.62, 0.62, 0.6], MM.alu], pz: [RW, [0.62, 0.62, 0.6], MM.alu], ny: [RW, [0.3, 0.3, 0.3], MM.alu] });
   };
+  E.hole = { x0: XBO - 0.1, x1: XBO + 0.01, z0: RG.DZ0, z1: RG.DZ1, y1: RG.DH }; // 後牆外面也開門洞（走道接在這裡）
   for (const [w, u0, u1] of [['EA', -ZO, ZO], ['EC', XBO, XO], ['ED', -XO, -XBO]]) { eslabs(w, u0, u1); eplinth(w, u0, u1); ecap(w, u0, u1); }
+  E.hole = null;
   { // 門面（EB：u = −z）：門洞四周一圈黑色門框（凸出 6 公分）；上面一條黑大理石橫帶（上下黃銅線）放金色招牌；兩邊直條壁燈、牆腳車道燈、警示燈、密碼盤
     const P0 = DZ + 0.34, PY = DH + 0.34;
     eslabs('EB', -ZO, -P0); eslabs('EB', P0, ZO); eplinth('EB', -ZO, -P0); eplinth('EB', P0, ZO); ecap('EB', -ZO, ZO);
@@ -1342,6 +1378,8 @@ float liftBlink(int i) { float v = 0.0; for (int k = 0; k < 6; k++) if (k == i) 
   inner.add(floor, shell, lights, tro, glass, sign, slatsIn, liftCarriage);
   outer.add(extShell, extLights, extSign, slatsOut);
   outer.visible = !!exterior;
+  // 第 20 批：四層圓環車庫（ringgar.js）：接在後牆左後角的門外面；車庫頁、村子都有
+  const ring = buildRingGarage(renderer, { exterior, marble: marbleC }); group.add(ring.group);
   const setTrophies = (n) => { n = Math.max(0, Math.min(9, Math.floor(+n || 0))); tro.geometry.setDrawRange(0, ends[n]); tro.visible = n > 0; };
   setTrophies(0);
   // 每一格：世界 → 本地（切牆用）、環境貼圖跟著整棟轉（村子裡轉了角度，反射的方向要轉回房間的座標）
@@ -1483,7 +1521,8 @@ void main() { if (roomPitXZ(vLoc.xz)) discard; vec3 a, e; float r, m, ao; roomFl
   const WALLS = [
     { t: 'box', x: XD + WT / 2, z: -(ZO + DZ) / 2, hx: WT / 2, hz: (ZO - DZ) / 2, rot: 0, h: TOP },
     { t: 'box', x: XD + WT / 2, z: (ZO + DZ) / 2, hx: WT / 2, hz: (ZO - DZ) / 2, rot: 0, h: TOP },
-    { t: 'box', x: XB - WT / 2, z: 0, hx: WT / 2, hz: ZO, rot: 0, h: TOP },
+    { t: 'box', x: XB - WT / 2, z: (RING_SIZE.DZ1 + ZO) / 2, hx: WT / 2, hz: (ZO - RING_SIZE.DZ1) / 2, rot: 0, h: TOP }, // 後牆：左後角是去圓環車庫的門
+    { t: 'box', x: XB - WT / 2, z: (RING_SIZE.DZ0 - ZO) / 2, hx: WT / 2, hz: (ZO + RING_SIZE.DZ0) / 2, rot: 0, h: TOP },
     { t: 'box', x: (XBO + XO) / 2, z: ZS + WT / 2, hx: (XO - XBO) / 2, hz: WT / 2, rot: 0, h: TOP },
     { t: 'box', x: (XBO + XO) / 2, z: -ZS - WT / 2, hx: (XO - XBO) / 2, hz: WT / 2, rot: 0, h: TOP },
   ];
@@ -1504,7 +1543,7 @@ void main() { if (roomPitXZ(vLoc.xz)) discard; vec3 a, e; float r, m, ao; roomFl
     return world ? toWorldCols(out) : out;
   };
   const colliders = (doorOpen = DS.t >= 0.9, world = false) => { // 鐵捲門那個盒子一定放最後一個（walk.js 靠這個認門）
-    const out = [...WALLS, ...COLS, ...lifts.flatMap(liftCols), ...(doorOpen ? [] : [DOOR_COL])].map((c) => ({ ...c }));
+    const out = [...WALLS, ...COLS, ...lifts.flatMap(liftCols), ...ring.colliders(), ...(doorOpen ? [] : [DOOR_COL])].map((c) => ({ ...c }));
     return world ? toWorldCols(out) : out;
   };
   const zones = {
@@ -1525,7 +1564,7 @@ void main() { if (roomPitXZ(vLoc.xz)) discard; vec3 a, e; float r, m, ao; roomFl
     for (const lf of lifts) if (lf.pos < 0.999 && Math.abs(x - BX) < DKX && Math.abs(z - lf.z) < DKZ) return PD * (1 - ease(lf.pos)) - DKT;
     if (x > XB && x < XD && Math.abs(z) < ZS) return x > XD - BOXN - 0.05 && Math.abs(z) < DZ + 0.4 ? BOXY : H;
     if (x >= XD && x <= XO && Math.abs(z) < DZ) return DH;
-    return Infinity;
+    return ring.ceilingAt(x, z); // 圓環車庫（塔裡、走道、門洞）；外面 Infinity
   };
 
   let extOn = !!exterior;
@@ -1538,13 +1577,14 @@ void main() { if (roomPitXZ(vLoc.xz)) discard; vec3 a, e; float r, m, ao; roomFl
     for (let k = 0; k < n; k++) { const v = list[k], s = parkSlots[k]; deckNames[s.lift * 2 + s.deck] = v == null || v === false ? null : typeof v === 'string' ? v : v.name || ''; }
     flushDecks();
   };
-  const update = (dt) => { let m = door.update(dt); for (const lf of lifts) m = lf.update(dt) || m; return m; }; // 每一格叫一次：鐵捲門＋六台升降機；有東西在動就 true
+  const update = (dt) => { let m = door.update(dt); for (const lf of lifts) m = lf.update(dt) || m; return ring.update(dt) || m; }; // 每一格叫一次：鐵捲門＋六台升降機；有東西在動就 true
   const _c = V(0, 0, 0), cullOut = { inside: false, house: false, ceil: H };
   const cull = (camera) => { // 每一格可以叫：外殼開著（村子）→ 門關著、鏡頭在外面就不畫裡面，鏡頭在裡面就不畫外殼；回傳 { inside, house, ceil }（在車庫裡、在小房子裡、頭上多高）
     group.updateMatrixWorld(); syncRY(); _c.setFromMatrixPosition(camera.matrixWorld); group.worldToLocal(_c); // envRotation 在畫之前就對（停在裡面的車要用）
     const inside = _c.x > XB && _c.x < XD && Math.abs(_c.z) < ZS && _c.y < H;
-    const out = _c.x > XO || _c.x < XBO || Math.abs(_c.z) > ZO || _c.y > TOP;
-    if (extOn) { inner.visible = !(out && DS.t === 0 && !door.moving); outer.visible = !inside; }
+    const out = (_c.x > XO || _c.x < XBO || Math.abs(_c.z) > ZO || _c.y > TOP) && !(ring.inside(_c.x, _c.z) && _c.y < RING_SIZE.FH); // 在圓環車庫一樓：從門洞看得到大廳
+    if (extOn) { inner.visible = !(out && DS.t === 0 && !door.moving); outer.visible = !inside; ring.doorPanel.visible = !inner.visible; }
+    ring.cull(camera);
     cullOut.inside = inside; cullOut.house = _c.x > IX0 && _c.x < IX1 && _c.z > IZ0 && _c.z < IZ1 && _c.y < hIn(_c.x); cullOut.ceil = ceilingAt(_c.x, _c.z);
     return cullOut;
   };
@@ -1559,9 +1599,9 @@ void main() { if (roomPitXZ(vLoc.xz)) discard; vec3 a, e; float r, m, ao; roomFl
     dead = true; group.removeFromParent();
     for (const o of trash) o.dispose();
     if (refl) refl.getRenderTarget().dispose();
-    envRT.dispose(); signL = signG = null;
+    envRT.dispose(); signL = signG = null; ring.dispose();
   };
   const api = { group, env: envRT.texture, setTrophies, resize, dispose, ready, size: ROOM_SIZE, door, spots, colliders, zones, setExterior, setBays, cull, toWorld, toLocal, interior: inner, exterior: outer, envRotation,
-    update, lifts, parkSlots, freeSlot, liftColliders, cameraColliders, onLift: null, house, ceilingAt, setCutaway };
+    update, lifts, parkSlots, freeSlot, liftColliders, cameraColliders, onLift: null, house, ceilingAt, setCutaway, ring };
   return api;
 }
