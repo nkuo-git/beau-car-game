@@ -500,6 +500,7 @@ const s3b = await ev(() => {
   const kid = X.person(A[0], A[1], 'kid', 400) || X.kid(A[0], A[1], 3000), out = {}; // 附近沒有小孩（這段路人少）：遠一點的也行（等一下放到車前面）；第 18 批：先找（X.kid 可能要等小孩站起來：車還停著）
   const h0 = N.hits, w0 = window.__P3().police.wanted;
   drive(28);
+  if (!kid) out.kids = N.peds.people.filter((q) => q.age === 'kid').map((q) => `${q.mode}:${q.gone ? 'gone' : q.active === false ? 'off' : 'on'}:${q.y.toFixed(1)}:${Math.hypot(q.x - A[0], q.z - A[1]).toFixed(0)}`).join(' ') || 'none'; // 找不到小孩：記下來每個小孩在做什麼
   if (kid) { ahead(kid, 1.6); const m0 = kid.mode; for (let i = 0; i < 40; i++) X.step(1); out.kid = { m0, m1: kid.mode, hits: N.hits - h0, wanted: window.__P3().police.wanted - w0, y: +kid.y.toFixed(2), kmh: d.telemetry().kmh }; }
   for (let i = 0; i < 30; i++) X.step(1);
   drive(28);
@@ -744,17 +745,24 @@ const s6c = await ev(() => {
   pol.clear(); X.step(2);
   const t = w.telemetry(), ad = X.person(t.x, t.z, 'adult', 300); if (!ad) return { err: 'no adult' };
   // 站的地方要打得到他（中間沒有柱子、牆；不要剛好站在一排柱子那一線上）
-  let seen = false;
-  for (let i = 0; i < 16 && !seen; i++) {
-    const ang = (i * Math.PI) / 8, x = ad.x + Math.cos(ang) * 6, z = ad.z - Math.sin(ang) * 6;
-    w.teleport({ x, z, heading: ang + Math.PI }); X.step(1); const t1 = w.telemetry(); if (Math.hypot(t1.x - x, t1.z - z) > 0.12) continue;
-    const dx = ad.x - x, dy = 1.1 - 1.36, dz = ad.z - z, L = Math.hypot(dx, dy, dz); seen = g.probe(x, 1.36, z, dx / L, dy / L, dz / L, { maxT: 20 }).ref === ad; // 子彈從胸口打出去：第一個打到的就是他
-  }
+  const clear = () => { const p = w.telemetry(), dx = ad.x - p.x, dy = 1.1 - 1.36, dz = ad.z - p.z, L = Math.hypot(dx, dy, dz); return g.probe(p.x, 1.36, p.z, dx / L, dy / L, dz / L, { maxT: 20 }).ref === ad; }; // 子彈從胸口打出去：第一個打到的就是他
+  const spot = () => {
+    for (let i = 0; i < 16; i++) {
+      const ang = (i * Math.PI) / 8, x = ad.x + Math.cos(ang) * 6, z = ad.z - Math.sin(ang) * 6;
+      w.teleport({ x, z, heading: ang + Math.PI }); X.step(1); const t1 = w.telemetry(); if (Math.hypot(t1.x - x, t1.z - z) > 0.12) continue;
+      if (clear()) return true;
+    }
+    return false;
+  };
+  let seen = spot(), moved = 0;
   X.step(5); g.setAim(true); X.step(20);
   const k0 = g.telemetry().knocks, c0 = pol.telemetry().crimes.length; let shots = 0;
-  const hits = []; for (let i = 0; i < 4 && !['fall', 'lie', 'getup'].includes(ad.mode); i++) { X.aimAt(ad.x, 1.1, ad.z, 8); shots += X.fire(); hits.push(g.telemetry().last); }
+  const hits = []; for (let i = 0; i < 4 && !['fall', 'lie', 'getup'].includes(ad.mode); i++) {
+    if (!clear() && moved < 3) { moved++; seen = spot(); X.step(5); } // 瞄準的時候他走到柱子（紅綠燈）後面去了：換一個打得到的地方再開槍
+    X.aimAt(ad.x, 1.1, ad.z, 8); shots += X.fire(); hits.push(g.telemetry().last);
+  }
   X.step(3);
-  const t2 = w.telemetry(), a = { at: [+t2.x.toFixed(1), +t2.z.toFixed(1)], ad: [+ad.x.toFixed(1), +ad.z.toFixed(1)], seen, hits, shots, m1: ad.mode, age: ad.age, knocks: g.telemetry().knocks - k0, crimes: pol.telemetry().crimes.slice(c0).map((c) => c.type).join(), wanted: pol.wanted, state: pol.state, said: X.toasts.slice(-2), mag: g.telemetry().mag };
+  const t2 = w.telemetry(), a = { at: [+t2.x.toFixed(1), +t2.z.toFixed(1)], ad: [+ad.x.toFixed(1), +ad.z.toFixed(1)], seen, moved, hits, shots, m1: ad.mode, age: ad.age, knocks: g.telemetry().knocks - k0, crimes: pol.telemetry().crimes.slice(c0).map((c) => c.type).join(), wanted: pol.wanted, state: pol.state, said: X.toasts.slice(-2), mag: g.telemetry().mag };
   g.setAim(false); X.step(5);
   return a;
 });
