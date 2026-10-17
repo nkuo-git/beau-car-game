@@ -652,7 +652,7 @@ function netRaceEnd() {
 function netDragInit(Rc) {
   const R = NET.race; if (!R || R.kind !== 'drag' || !R.dragPending) return false;
   R.dragPending = false;
-  Rc.net = R; Rc.phase = 'intro'; Rc.t = 0; Rc.green = null; Rc.greenAt = null; Rc.foul = false; Rc.doneT = null; Rc.opp = null; Rc.oppS = null;
+  Rc.net = R; Rc.phase = 'intro'; Rc.t = 0; Rc.green = null; Rc.greenAt = null; Rc.goSeen = null; Rc.wallAt = 0; Rc.foul = false; Rc.doneT = null; Rc.opp = null; Rc.oppS = null;
   Rc.nOpp = R.order.filter((u) => u !== NET.me).map((u, i) => ({ uid: u, obj: null, x: 0, i }));
   document.body.classList.add('netdrag');
   $('raceGo').disabled = true; $('raceGo').textContent = '一起比賽中';
@@ -675,12 +675,13 @@ function netDragInit(Rc) {
   return true;
 }
 function netDragTick(Rc, dt) { // raceFrame 一開始：出發時間換成比賽的時鐘
-  const R = Rc.net, wall = Date.now(); Rc.gapMs = wall - (Rc.wallAt || wall); Rc.wallAt = wall; // 這一格跟上一格差多久（測試看綠燈是不是 go 以後的第一格）
+  const R = Rc.net;
   netRaceTick(dt);
-  if (R.go) R.goT = Rc.t + (R.go - netNow()) / 1000; // 每一格重算：手機卡卡的（一格超過 0.1 秒）比賽的時鐘會慢，綠燈還是照伺服器的時間亮
+  const wall = Date.now(); Rc.gapMs = wall - (Rc.wallAt || wall); Rc.wallAt = wall; // 這一格跟上一格差多久（就在看出發時間的地方量；測試看綠燈是不是 go 以後的第一格）
+  if (R.go) { R.goT = Rc.t + (R.go - netNow()) / 1000; if (Rc.goSeen == null) Rc.goSeen = wall; } // 每一格重算：手機卡卡的（一格超過 0.1 秒）比賽的時鐘會慢，綠燈還是照伺服器的時間亮；goSeen：什麼時候知道出發時間（測試看）
   if (Rc.phase === 'intro' && R.goT != null && (Rc.t > 1.6 || R.goT - Rc.t < 0.5)) { Rc.phase = 'stage'; Rc.stageT = Rc.t; toast('準備', 800); }
-  // 手機很卡（一格超過 0.05 秒，比賽的時鐘比真的慢）：進場還沒播完、出發時間快到了 → 直接準備，綠燈還是準時亮
-  if (Rc.phase === 'stage' && R.goT != null) Rc.greenAt = Math.max(Rc.stageT + 0.2, R.goT);
+  // 手機很卡（一格超過 0.05 秒，比賽的時鐘比真的慢）：進場還沒播完、出發時間快到了 → 直接準備；綠燈就是出發時間（不再多等 0.2 秒：比賽的時鐘慢，會晚將近 1 秒）
+  if (Rc.phase === 'stage' && R.goT != null) Rc.greenAt = R.goT;
 }
 function netDragFrame(Rc) { // raceFrame（車子位置那一段之後）：朋友的車、跑完了沒
   const R = Rc.net, me = Rc.me, T = netNow() - NET_DELAY;

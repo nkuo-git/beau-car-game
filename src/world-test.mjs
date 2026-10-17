@@ -285,6 +285,9 @@ check(getAt('world/m/u2/w') && getAt('world/m/u2/w') !== '在車庫', `the list 
 const w0 = await A.evaluate(() => ({ ...window.__NET().P.get('u2').mk }));
 const bt0 = await B.evaluate(() => { const t = window.__D().walker.telemetry(); return { x: t.x, z: t.z, yaw: t.camYaw }; });
 await B.evaluate(() => window.__D().walker.setInput({ y: 1 })); await B.waitForTimeout(3000); // 往外走（後面是自己的車庫，門開著） await B.evaluate(() => window.__D().walker.setInput(null));
+// 兩個瀏覽器的畫面一格可能要好幾秒（走路一格最多算 0.05 秒）：等 B 真的走了 2 公尺，A 那邊的點也動了（最多 20 秒）才量
+await B.waitForFunction((q) => { const t = window.__D().walker.telemetry(); return Math.hypot(t.x - q.x, t.z - q.z) > 2; }, bt0, { timeout: 20000, polling: 200 }).catch(() => {});
+await waitFor(A, (q) => { const m = window.__NET().P.get('u2')?.mk; return !!m && Math.hypot(m.x - q.x, m.z - q.z) > 1; }, w0, 20000);
 await A.waitForTimeout(800);
 const w1 = await A.evaluate(() => ({ ...window.__NET().P.get('u2').mk }));
 const bt1 = await B.evaluate(() => { const t = window.__D().walker.telemetry(); return { x: t.x, z: t.z, yaw: t.camYaw }; });
@@ -385,8 +388,8 @@ for (const p of [A, B]) await p.evaluate(() => { // 機器人：綠燈 0.2 秒�
   const tick = () => { const r = window.__R(); if (!r || !r.net) return; if (r.phase === 'run' && r.me.fin == null) { const c = r.me; if (c.go == null) { if (r.t - r.green > 0.2) press('goBtn'); } else if (c.rpm >= 0.93 && c.shiftT <= 0 && c.gear < 5) press('goBtn'); } };
   setInterval(tick, 30);
 });
-const greens = await Promise.all([A, B].map((p) => p.waitForFunction(() => { const r = window.__R(); return r && r.greenNow ? { d: r.greenNow - r.net.go, gap: r.gapMs } : false; }, null, { timeout: 90000, polling: 100 }).then((h) => h.jsonValue())));
-check(greens.every((g) => g.d >= 0 && g.d <= g.gap + 50), `green light on the first frame after the agreed time on both phones (${greens.map((g) => g.d).join(' / ')} ms)`);
+const greens = await Promise.all([A, B].map((p) => p.waitForFunction(() => { const r = window.__R(); return r && r.greenNow ? { d: r.greenNow - r.net.go, gap: r.gapMs, seen: r.net.go - r.goSeen } : false; }, null, { timeout: 90000, polling: 100 }).then((h) => h.jsonValue())));
+check(greens.every((g) => g.d >= 0 && g.d <= g.gap + 50), `green light on the first frame after the agreed time on both phones (${greens.map((g) => g.d).join(' / ')} ms; frame ${greens.map((g) => g.gap).join(' / ')} ms; knew the time ${greens.map((g) => g.seen).join(' / ')} ms before)`);
 await A.waitForFunction(() => window.__R()?.me.x > 120, null, { timeout: 60000, polling: 100 });
 const mid = await A.evaluate(() => { const r = window.__R(), o = r.nOpp[0]; return { me: r.me.x, opp: o.x, vis: !!o.obj && o.obj.car.visible, z: o.obj?.car.position.z }; });
 console.log('   drag mid: B own x', await B.evaluate(() => { const r = window.__R(); return r && [r.me.x.toFixed(1), r.phase, r.me.go != null]; }), 'A sees', mid.opp.toFixed(1));
