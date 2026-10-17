@@ -204,8 +204,7 @@ export const { buildRoom } = (() => {
     // ---- 一樓地板（白大理石，另外一個網格：車庫頁的鏡面地板）＋門洞的地板；電梯的坑（圓台不在一樓的時候看得到）----
     F.annulus(0, RP + 0.24, RW, SLABC, { seg: 112 });
     F.quad(V(XP - 0.4, 0, DZ), V(DX1, 0, DZ), V(DX1, 0, -DZ), V(XP - 0.4, 0, -DZ), SLABC);
-    S.annulus(-0.25, 0, RP + 0.12, PIT, { seg: 48 });
-    S.band(RP + 0.12, -0.25, 0.004, [0.18, 0.18, 0.19], { out: false, seg: 48 });
+    const PM = mesher(); PM.annulus(0.002, 0, RP + 0.13, PIT, { seg: 48, uv: [FLAT, FLAT, FLAT, FLAT] }); // 電梯的坑：一片深色的圓（另外一個網格：圓台不在一樓才畫；不挖地面）
     for (let k = 0; k < 24; k++) S.annulus(0.004, RP + 0.12, RP + 0.24, k & 1 ? BLACK : HAZ, { t0: (k * Math.PI) / 12, t1: ((k + 1) * Math.PI) / 12, seg: 48, uv: [FLAT, FLAT, FLAT, FLAT] }); // 坑口一圈黃黑斜紋
     S.bx(DX0 - 0.05, DX0 + 0.15, 0, 0.012, -DZ, DZ, STEEL); // 門檻（不鏽鋼）
     // 一樓外面一圈黑色牆腳（門洞那邊沒有）
@@ -240,8 +239,7 @@ export const { buildRoom } = (() => {
       const a = (k + 0.5) * (Math.PI / 12), y0 = Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) < GAP + 0.04 ? ceilY(0) : 0;
       S.box(T4((RO + 0.05) * Math.cos(a), (y0 + TOP) / 2, (RO + 0.05) * Math.sin(a), -a), [0.16, TOP - y0, 0.1], BLACK);
     }
-    // ---- 電梯井的柱子（二樓以上；一樓沒有）：8 根金色細柱（在兩格中間）----
-    for (let k = 0; k < 8; k++) { const a = Math.PI / 8 + (k * Math.PI) / 4, r = RI - 0.12; G.cyl(r * Math.cos(a), ceilY(0), TOP - SLAB, r * Math.sin(a), 0.06, 0.06, [1, 1, 1], 8); }
+    // 電梯井沒有柱子（車子從格子倒車回電梯，斜一點也不會卡住）：井邊一圈黃黑斜紋＋燈
     // ---- 門洞（一樓 +x）：兩邊的牆（白大理石）、門楣、黑框、金線、鐵捲門的導軌 ----
     for (const sz of [-1, 1]) {
       const z0 = sz < 0 ? -PZ : DZ, z1 = sz < 0 ? -DZ : PZ;
@@ -316,7 +314,7 @@ export const { buildRoom } = (() => {
       M.cyl(x, 0.66, 0.7, z, 0.38, 0.38, [0.06, 0.04, 0.03], 18);
       for (let k = 0; k < 7; k++) { const a = k * 0.9, r = k ? 0.22 : 0; M.geo(new THREE.IcosahedronGeometry(0.34 - k * 0.01, 0), T4(x + Math.cos(a) * r, 1.05 + (k % 3) * 0.28 + (k ? 0 : 0.5), z + Math.sin(a) * r, a), k & 1 ? LEAF : LEAF2, FLAT); }
     }
-    Object.assign(GEO, { shell: S.build(), matte: M.build(), gold: G.build(), glass: GL.build(), clear: CG.build(), lights: L.build(), floor: F.build(), door: K.build() });
+    Object.assign(GEO, { shell: S.build(), matte: M.build(), gold: G.build(), glass: GL.build(), clear: CG.build(), lights: L.build(), floor: F.build(), door: K.build(), pit: PM.build() });
     GEO.floorXY = GEO.floor.clone().rotateX(Math.PI / 2); // Reflector 要躺在 xy 平面、法線朝 +z（擺的時候再轉回來）
     // 電梯的圓台：深色大理石面、金色邊、白色箭頭（前面）
     const Pm = mesher();
@@ -384,6 +382,7 @@ export const { buildRoom } = (() => {
     const trophyMat = keep(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.22, metalness: exterior ? 0.5 : 1 }));
     const floorMat = keep(new THREE.MeshStandardMaterial({ map: marbleTex, vertexColors: true, roughness: exterior ? 0.25 : 0.1, metalness: 0 }));
     const slatMat = keep(new THREE.MeshStandardMaterial({ color: 0xc9ccd1, roughness: 0.38, metalness: 0.55 }));
+    if (exterior) for (const m of [shellMat, floorMat]) { m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -4; } // 村子：塔的地板、圓台跟地面（草地、山）一樣高：往鏡頭推一點點（地面不用挖洞）
     const signCv = document.createElement('canvas'); signCv.width = 1024; signCv.height = 256; drawSign(signCv);
     const signTex = keep(new THREE.CanvasTexture(signCv)); signTex.colorSpace = THREE.SRGBColorSpace; signTex.anisotropy = aniso;
     const signMat = keep(new THREE.MeshBasicMaterial({ map: signTex, toneMapped: false }));
@@ -440,9 +439,10 @@ export const { buildRoom } = (() => {
     // ---- 電梯的圓台 ----
     const platform = new THREE.Group(); platform.name = 'towerLift'; group.add(platform);
     const platMesh = new THREE.Mesh(G0.plat, shellMat); platMesh.name = 'towerLiftDeck'; platform.add(platMesh);
+    const pit = new THREE.Mesh(G0.pit, shellMat); pit.name = 'towerPit'; pit.visible = false; inner.add(pit); // 圓台離開一樓才看得到坑
     const lift = { y: 0, rot: 0, floor: 0, busy: false };
     const A = { t: 0, T: 1, y0: 0, y1: 0, r0: 0, r1: 0, f: 0, onDone: null };
-    const place = () => { platform.position.y = lift.y; platform.rotation.y = lift.rot; };
+    const place = () => { platform.position.y = lift.y; platform.rotation.y = lift.rot; pit.visible = lift.y > 0.02; };
     // ---- 鐵捲門 ----
     const DS = { t: 0, target: 0, speed: 1 };
     const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _z = new THREE.Vector3(0, 0, 0);
@@ -493,15 +493,14 @@ export const { buildRoom } = (() => {
       bxc(CAB.x0, CAB.x1, CAB.z0, CAB.z1, CAB.h), bxc(SOFA.x0, SOFA.x1, SOFA.z0, SOFA.z1, 0.88), bxc(TABLE.x - TABLE.hx, TABLE.x + TABLE.hx, TABLE.z - TABLE.hz, TABLE.z + TABLE.hz, 0.42),
       { t: 'circle', x: LAMP.x, z: LAMP.z, r: 0.22, h: 1.75 }, ...PLANTS.map(([x, z]) => ({ t: 'circle', x, z, r: 0.45, h: 1.9 }))];
     const COLU = [...ring(30, 0, Math.PI * 2, TOP + 0.7)];
-    for (let k = 0; k < 8; k++) { const a = Math.PI / 8 + (k * Math.PI) / 4, r = RI - 0.12; COLU.push({ t: 'circle', x: r * Math.cos(a), z: r * Math.sin(a), r: 0.08, h: TOP }); }
     const PIT0 = { t: 'circle', x: 0, z: 0, r: RP + 0.16, h: 0.3 }, HOLE = { t: 'circle', x: 0, z: 0, r: RI + 0.02, h: TOP }; // 一樓的坑（低）、樓上的洞
     const DOOR_COL = { t: 'box', x: XS, z: 0, hx: 0.25, hz: DZ, rot: 0, h: DH };
     const liftHere = (f) => !lift.busy && lift.floor === f && Math.abs(lift.y - fy(f)) < 1e-3;
     const isInside = (x, z, m = 0) => x * x + z * z < (RO - m) * (RO - m) || (x > XP - 0.5 && x < DX0 + 0.2 && Math.abs(z) < DZ - m);
     const groupRY = () => { group.updateMatrixWorld(); const e = group.matrixWorld.elements; return Math.atan2(e[8], e[10]); };
-    const toWorld = (p) => { const ry = groupRY(); _w.set(p.x, 0, p.z).applyMatrix4(group.matrixWorld); return { x: _w.x, z: _w.z, heading: (p.heading || 0) + ry }; };
+    const toWorld = (p) => { const ry = groupRY(); _w.set(p.x, 0, p.z).applyMatrix4(group.matrixWorld); return { x: _w.x, y: _w.y, z: _w.z, heading: (p.heading || 0) + ry }; }; // y＝塔的一樓地板在世界多高（山頂那間 ≈ 103）
     const toLocal = (x, z) => { group.updateMatrixWorld(); _w.set(x, group.matrixWorld.elements[13], z); group.worldToLocal(_w); return { x: _w.x, z: _w.z }; };
-    function toWorldCols(out) { const ry = groupRY(); for (const c of out) { _w.set(c.x, 0, c.z).applyMatrix4(group.matrixWorld); c.x = _w.x; c.z = _w.z; if (c.t === 'box') c.rot = (c.rot || 0) + ry; } return out; }
+    function toWorldCols(out, yOff = false) { const ry = groupRY(), by = yOff ? group.matrixWorld.elements[13] : 0; for (const c of out) { _w.set(c.x, 0, c.z).applyMatrix4(group.matrixWorld); c.x = _w.x; c.z = _w.z; if (c.t === 'box') c.rot = (c.rot || 0) + ry; if (by) { c.h = (c.h ?? 9) + by; c.y0 = (c.y0 || 0) + by; } } return out; } // yOff：高度也換成世界的（只擋鏡頭的那些）
     const api = { group, size: { X: DX0, T: DX1 - DX0, DZ, DH, XB: -RO, Z: RO, H: ceilY(0), TOP: H1, round: true }, door, spots, zones, house, interior: inner, exterior: outer,
       bays: TOWER_BAYS, floors, cars, platform, lift, onLift: null, floor: 0, colVer: 0, isInside, toWorld, toLocal, liftHere, fy, envRotation: new THREE.Euler() };
     const colliders = (doorOpen = DS.t >= 0.9, world = false) => { // 鐵捲門那個盒子一定放最後一個（walk.js 靠這個認門）
@@ -515,7 +514,7 @@ export const { buildRoom } = (() => {
       const f = api.floor, out = [{ t: 'circle', x: 0, z: 0, r: RW + 0.3, y0: ceilY(f), h: TOP + 1 }];
       if (!f) out.push({ t: 'box', x: (HX0 + HX1) / 2, z: (HZ0 + HZ1) / 2, hx: (HX1 - HX0) / 2 + 0.15, hz: (HZ1 - HZ0) / 2 + 0.15, rot: 0, y0: HC - 0.02, h: HW + 0.15 },
         { t: 'box', x: (XP + DX1) / 2, z: 0, hx: (DX1 - XP) / 2, hz: PZ, rot: 0, y0: DH, h: H1 });
-      return world ? toWorldCols(out) : out;
+      return world ? toWorldCols(out, true) : out;
     };
     // ceilingAt(x, z, world)：現在這一層、這一點頭上多高（本地 y；第三人稱鏡頭別穿過去）；塔外面 Infinity
     const ceilingAt = (x, z, world = false) => {

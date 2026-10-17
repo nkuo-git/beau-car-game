@@ -556,25 +556,28 @@ function createWalker(o) {
   const ACT_CLOSE = { label: '關鐵捲門', icon: 'doorDown', onClick: () => { if (gar && gar.G.door.t === 1 && !gar.G.door.moving) gar.G.door.close(calm ? 1 : 1.8); } };
   function setGarage(G, op = {}) {
     cw.remove('__garage');
-    gar = G ? { G, open: null, doorCam: null, close: !!op.close, act: op.doorAction !== false, ox: 0, oz: 0, c: 1, s: 0 } : null;
-    if (gar) { const w = G.toWorld({ x: 0, z: 0, heading: 0 }); gar.ox = w.x; gar.oz = w.z; gar.c = Math.cos(w.heading); gar.s = Math.sin(w.heading); } // 世界 → 車庫本地（每一格用，不要每次問 room.js）
+    gar = G ? { G, open: null, doorCam: null, close: !!op.close, act: op.doorAction !== false, ox: 0, oy: 0, oz: 0, c: 1, s: 0 } : null;
+    if (gar) { const w = G.toWorld({ x: 0, z: 0, heading: 0 }); gar.ox = w.x; gar.oy = w.y || 0; gar.oz = w.z; gar.c = Math.cos(w.heading); gar.s = Math.sin(w.heading); } // 世界 → 車庫本地（每一格用，不要每次問 room.js）；oy＝車庫的地板在世界多高（山頂的家）
   }
   function garageTick() {
     if (!gar) return null;
     const G = gar.G, Z = G.size || { X: 5, XB: -12.7, Z: 12.7, H: 4.5, T: 0.3, TOP: 5.7, DZ: 3, DH: 3.8 }, t = G.door.t, open = t >= OPEN_T;
     if (open !== gar.open) { // 門開到人過得去（或關到過不去）：碰撞換一套
       cw.remove('__garage');
-      const cols = G.colliders(open, true), w = (x, z) => G.toWorld({ x, z, heading: 0 }), ry = w(0, 0).heading;
-      const lin = w(Z.X + Z.T / 2, 0), ceil = w((Z.XB + Z.X) / 2, 0);
-      cols.push({ t: 'box', x: lin.x, z: lin.z, hx: Z.T / 2 + 0.02, hz: Z.DZ, rot: ry, y0: Z.DH, h: Z.TOP }); // 門楣（門上面的牆）：擋鏡頭
-      cols.push({ t: 'box', x: ceil.x, z: ceil.z, hx: (Z.X - Z.XB) / 2, hz: Z.Z, rot: ry, y0: Z.H - 0.02, h: Z.TOP }); // 天花板：擋鏡頭
+      const cols = G.colliders(open, true), w = (x, z) => G.toWorld({ x, z, heading: 0 }), ry = w(0, 0).heading, oy = gar.oy;
+      if (oy) for (const c of cols) c.h = (c.h ?? 9) + oy; // 山頂的家：牆的高度換成世界的（鏡頭的線是世界的高度；擋人只看 y0）
+      if (!Z.round) { // 圓環車庫（tower.js）：門楣、天花板（每一層不一樣）頁面自己給（cameraColliders）
+        const lin = w(Z.X + Z.T / 2, 0), ceil = w((Z.XB + Z.X) / 2, 0);
+        cols.push({ t: 'box', x: lin.x, z: lin.z, hx: Z.T / 2 + 0.02, hz: Z.DZ, rot: ry, y0: Z.DH, h: Z.TOP }); // 門楣（門上面的牆）：擋鏡頭
+        cols.push({ t: 'box', x: ceil.x, z: ceil.z, hx: (Z.X - Z.XB) / 2, hz: Z.Z, rot: ry, y0: Z.H - 0.02, h: Z.TOP }); // 天花板：擋鏡頭
+      }
       let door = null;
-      if (open) { const d = G.colliders(false, true).pop(); door = { ...d, y0: t * Z.DH }; cols.push(door); } // 捲一半的門：底在 t × 門高（人從下面過、鏡頭不穿過去）
+      if (open) { const d = G.colliders(false, true).pop(); door = { ...d, h: (d.h ?? 9) + oy, y0: oy + t * Z.DH }; cols.push(door); } // 捲一半的門：底在 t × 門高（人從下面過、鏡頭不穿過去）
       const added = cw.add(cols, '__garage');
       gar.doorCam = door ? added[added.length - 1] : null; gar.open = open;
     }
-    if (gar.doorCam) gar.doorCam.y0 = t * Z.DH;
-    if (!gar.act || st.mode !== 'walk') return null;
+    if (gar.doorCam) gar.doorCam.y0 = gar.oy + t * Z.DH;
+    if (!gar.act || st.mode !== 'walk' || G.floor) return null; // 圓環車庫的樓上（G.floor ≥ 1）：沒有鐵捲門
     const dx = st.x - gar.ox, dz = st.z - gar.oz, px = dx * gar.c - dz * gar.s, pz = dx * gar.s + dz * gar.c; // 車庫本地
     if (!(px > Z.X - 2.6 && px < Z.X + Z.T + 2.8 && Math.abs(pz) < Z.DZ + 0.7)) return null; // 門口（裡面、外面）
     if (G.door.moving) return null;
