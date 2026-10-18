@@ -15,6 +15,9 @@
 //     → 還車 borrow/r/{車主}/{借的人}＝{ id, x, z, h, t }（停在哪裡）；車主錯 3 次鎖 30 秒（每個借的人分開算）
 // 比賽：A 按 🏁 選比什麼 → matches/{id}（ok 0）＋ world/ch/B/A → B 的遊戲跳出卡片（好／不要，15 秒）→ 好：ok 1 → A 寫 seq → 兩邊 net.race（order [A, B]）
 //   → 兩邊準備好寫 r/{seq}/{uid}＝{ t: 0 } → A 看兩個都好了（最多等 30 秒）寫 go＝4.5 秒後 → 同時出發；「再比一次」（A）＝新的 seq；「回去開車」＝這場比賽收掉（matches/{id} 刪掉）
+// 按門鈴（第 23 批，Nick 2026-10-18「可以開進別人的車庫」，卡片選「按門鈴」）：A 在 B 家門口按「🔔 按門鈴」→ matches/{id}（kind 'bell'、ok 0）＋ world/ch/B/A（跟比賽邀請同一條路：封鎖、關掉邀請的聽不到）
+//   → B 的遊戲跳卡片（好／不要，15 秒）→ 好：ok 1 → A 讀 garages/B（車、格子 tw、獎盃 tr）→ 遊戲把塔搬到 B 家、門打開；A 出來（走遠了）＝刪掉 matches/{id}
+//   → B 那邊「X在你的車庫裡／請他出去」；請他出去＝ok −9（A 的人、車送到門口外面）；A 斷線＝伺服器刪掉 matches/{id}；規則不用改
 // 斷線（關掉 App、沒網路）：伺服器幫你離開世界、收掉你的比賽；網路回來自己再進去
 // 測試：window.__beauCloudBackend().rt 換成假的即時資料庫；window.__beauWorld 看狀態
 {
@@ -85,7 +88,7 @@
   }
   async function start(slot) {
     const r = rt, me = uid();
-    W = { me, slot, mem: [], all: {}, pos: {}, offs: [], last: null, lastT: 0, conn: true, seen: {}, myBl: {}, blMe: new Set(), inc: {}, showing: null, answered: {}, out: null, match: null, myCar: '', w: '', n: myName(), wT: 0, cleanT: 0, rejoin: false, lkK: lookKey(), lkT: 0, bq: null, bor: null, lent: null, tries: {}, bSeen: {} };
+    W = { me, slot, mem: [], all: {}, pos: {}, offs: [], last: null, lastT: 0, conn: true, seen: {}, myBl: {}, blMe: new Set(), inc: {}, showing: null, answered: {}, out: null, match: null, myCar: '', w: '', n: myName(), wT: 0, cleanT: 0, rejoin: false, lkK: lookKey(), lkT: 0, bq: null, bor: null, lent: null, tries: {}, bSeen: {}, bell: null, guest: null };
     await discSet();
     G()?.net?.join({ code: 'world', me, host: '', name: myName(), slot });
     G()?.net?.clock(r.now() - Date.now());
@@ -132,6 +135,8 @@
     if (W.match) matchOff(W.match);
     if (W.out && W.out.off) try { W.out.off(); } catch { /* 算了 */ }
     if (W.lent) rt.set(`borrow/a/${W.lent.to}/${W.me}`, { id: W.lent.id, ok: -9, t: rt.now() }).catch(() => {}); // 借出去的：拿回來
+    if (W.bell) bellOff(true); // 第 23 批：按了門鈴、在朋友家：收掉（遊戲那邊 leave 自己出來）
+    if (W.guest) { const id = W.guest.id; guestOff(''); rt.remove(`matches/${id}`).catch(() => {}); } // 朋友在我家：他那邊出來
     G()?.net?.leave(); // 遊戲那邊：借來的還（送 return）、借出去的收回來
     W = null; paintAll();
   }
@@ -172,6 +177,8 @@
     if (W.lent && !here.has(W.lent.to)) lendBack(W.lent.last || null); // 借車的人離開了：車停在他最後的地方
     if (W.bor && !here.has(W.bor.owner)) { const o = W.bor.owner; W.bor = null; G()?.net?.borrowAns({ uid: o, ok: -8 }); } // 車主離開了：車還他
     if (W.bq && !here.has(W.bq.owner)) { const o = W.bq.owner; W.bq = null; G()?.net?.borrowAns({ uid: o, ok: -2 }); }
+    if (W.bell && !here.has(W.bell.to)) { const b = W.bell; bellOff(true); if (b.on) G()?.net?.visitEnd?.('gone'); else G()?.net?.bellAns?.({ uid: b.to, n: b.n, ok: -5 }); } // 第 23 批：他離開世界了
+    if (W.guest && !here.has(W.guest.from)) guestOff('left');
     invites(); paintAll();
   }
   async function block(u, n) {
@@ -181,6 +188,8 @@
     if (W.match && (W.match.a === u || W.match.b === u)) matchEnd(false);
     if (W.lent && W.lent.to === u) takeBack();
     if (W.bor && W.bor.owner === u) { W.bor = null; G()?.net?.borrowAns({ uid: u, ok: -8 }); }
+    if (W.bell && W.bell.to === u) { const b = W.bell; bellOff(true); if (b.on) G()?.net?.visitEnd?.('gone'); } // 第 23 批
+    if (W.guest && W.guest.from === u) { rt.update(`matches/${W.guest.id}`, { ok: -9 }).catch(() => {}); guestOff(''); }
     try { await rt.set(`world/bl/${W.me}/${u}`, String(n || '').slice(0, 12) || '?'); } catch (e) { fail(e, '封鎖不了，等一下再試一次。'); msg = ''; }
     paintAll();
   }
@@ -236,6 +245,7 @@
       if (lk && key !== W.lkK) { W.lkK = key; W.lkT = now; rt.update(`world/m/${W.me}`, { car: String(lk.car).slice(0, 12), l: lk.l || null }).catch((e) => console.warn('改車', e)); }
     }
     if (W.out && !W.match && now - W.out.at > INV_MS) cancelOut('他沒有回答。');
+    if (W.bell && !W.bell.on && now - W.bell.at > INV_MS) { const b = W.bell; bellOff(true); G()?.net?.bellAns?.({ uid: b.to, n: b.n, ok: 0 }); } // 第 23 批：門鈴沒人回答
     if (W.out && UI().view === 'wait') paintWait();
     invites(); hostTick();
     if (now - W.cleanT > 30000) { W.cleanT = now; clean(); }
@@ -261,9 +271,10 @@
     for (const [from, v] of Object.entries(W.inc)) {
       if (!v || typeof v.id !== 'string' || W.answered[v.id] || (W.showing && W.showing.id === v.id)) continue;
       const stale = !(now - (+v.t || 0) < INV_MS), m = W.mem.find((x) => x.uid === from);
-      if (stale || hid(from) || !here.has(from) || !KIND[v.kind]) { W.answered[v.id] = 1; rt.remove(`world/ch/${W.me}/${from}`).catch(() => {}); continue; }
+      const bell = v.kind === 'bell'; // 第 23 批：有人按我家的門鈴
+      if (stale || hid(from) || !here.has(from) || !(KIND[v.kind] || bell)) { W.answered[v.id] = 1; rt.remove(`world/ch/${W.me}/${from}`).catch(() => {}); continue; }
       if (!invOn) { reply(from, v.id, -1); continue; }
-      if (W.match || W.out || W.lent || G()?.net?.borrowing?.()) { reply(from, v.id, -2); continue; } // 在比賽、在開借來的車、車借出去了
+      if (bell ? W.match || W.guest : W.match || W.out || W.lent || G()?.net?.borrowing?.()) { reply(from, v.id, -2); continue; } // 在比賽、在開借來的車、車借出去了；門鈴：在比賽、已經有朋友在我家
       if (W.showing) continue; // 排隊：這張回答完再跳
       if (G()?.net?.invite({ id: v.id, name: m.n, kind: v.kind, car: carName(m.car) })) W.showing = { id: v.id, from, kind: v.kind };
       else reply(from, v.id, -2); // 在比賽
@@ -280,6 +291,11 @@
     if (!ok) { reply(from, id, -1); invites(); return; }
     W.answered[id] = 1;
     rt.remove(`world/ch/${W.me}/${from}`).catch(() => {});
+    if (kind === 'bell') { // 第 23 批：讓他進來
+      const m = W.mem.find((x) => x.uid === from);
+      try { await rt.update(`matches/${id}`, { ok: 1 }); if (W && !W.guest) guestOn({ id, from, n: m ? m.n : '' }); } catch (e) { console.warn('門鈴', e); toast('對方已經走了'); }
+      return;
+    }
     try {
       await rt.update(`matches/${id}`, { ok: 1 });
       matchStart({ id, a: from, b: W.me, kind });
@@ -398,7 +414,60 @@
     else if (d.type === 'borrow') borrowAsk(String(d.uid || ''), String(d.code || ''));
     else if (d.type === 'return') borrowReturn(String(d.uid || ''), d);
     else if (d.type === 'takeback') { if (W.lent && W.lent.to === String(d.uid || '')) takeBack(); }
+    else if (d.type === 'bell') bellAsk(String(d.uid || '')); // 第 23 批
+    else if (d.type === 'bellEnd') { if (W.bell && W.bell.to === String(d.uid || '')) bellOff(true); }
+    else if (d.type === 'kick') { const g = W.guest; if (g && g.from === String(d.uid || '')) { rt.update(`matches/${g.id}`, { ok: -9 }).catch((e) => console.warn('請他出去', e)); guestOff(''); } }
   });
+
+  // ---- 第 23 批：按門鈴（A）、讓他進來（B）----
+  async function bellAsk(to) {
+    if (!W || W.bell) return;
+    const m = W.mem.find((x) => x.uid === to), ans = (ok) => G()?.net?.bellAns?.({ uid: to, n: m ? m.n : '', ok });
+    if (!m || hid(to) || to === W.me) { ans(-5); return; }
+    if (m.inv === 0) { ans(-3); return; }
+    const id = `${W.me.slice(0, 10)}-${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_-]/g, '');
+    const B = W.bell = { id, to, n: m.n, at: performance.now(), off: null, on: false };
+    try {
+      await rt.set(`matches/${id}`, { a: W.me, b: to, kind: 'bell', at: rt.now(), ok: 0 });
+      await rt.disc(`matches/${id}`).catch(() => {});
+      await rt.set(`world/ch/${to}/${W.me}`, { kind: 'bell', t: rt.now(), id });
+      if (!W || W.bell !== B) return;
+      B.off = rt.on(`matches/${id}`, (v) => onBell(B, v), (e) => console.warn('門鈴', e));
+    } catch (e) { console.warn('門鈴', e); if (W && W.bell === B) { bellOff(true); ans(-4); } }
+  }
+  async function onBell(B, v) {
+    if (!W || W.bell !== B) return;
+    if (!v) { bellOff(false); if (B.on) G()?.net?.visitEnd?.('gone'); else G()?.net?.bellAns?.({ uid: B.to, n: B.n, ok: 0 }); return; } // 他那邊收掉了（離開世界）
+    if (v.ok === -1 || v.ok === -2) { bellOff(true); G()?.net?.bellAns?.({ uid: B.to, n: B.n, ok: v.ok }); }
+    else if (v.ok === -9 && B.on) { bellOff(true); G()?.net?.visitEnd?.('kick'); }
+    else if (v.ok === 1 && !B.on) {
+      B.on = true;
+      rt.remove(`world/ch/${B.to}/${W.me}`).catch(() => {});
+      let g = null; try { g = await rt.get(`garages/${B.to}`); } catch (e) { console.warn('他的車庫', e); }
+      if (!W || W.bell !== B) return;
+      const r = G()?.net?.bellAns?.({ uid: B.to, n: B.n, ok: 1, g: g || { cars: {} } });
+      if (r !== 'ok') bellOff(true); // 走遠了、在比賽⋯：這次不進去
+    }
+  }
+  function bellOff(rm) {
+    const B = W && W.bell; if (!B) return;
+    W.bell = null;
+    try { B.off && B.off(); } catch { /* 算了 */ }
+    rt.remove(`world/ch/${B.to}/${W.me}`).catch(() => {});
+    if (rm) { rt.discOff(`matches/${B.id}`).catch(() => {}); rt.remove(`matches/${B.id}`).catch(() => {}); }
+  }
+  function guestOn(g) {
+    if (!W) return;
+    const G0 = W.guest = { id: g.id, from: g.from, n: g.n, off: null };
+    G0.off = rt.on(`matches/${g.id}`, (v) => { if (!v && W && W.guest === G0) guestOff('left'); }, (e) => console.warn('朋友在我家', e)); // 他出來了（走遠了、斷線）
+    G()?.net?.guest?.({ uid: g.from, n: g.n });
+  }
+  function guestOff(why) {
+    const g = W && W.guest; if (!g) return;
+    W.guest = null;
+    try { g.off && g.off(); } catch { /* 算了 */ }
+    G()?.net?.guest?.(null, why);
+  }
 
   // ---- 借車（第 19 批）----
   const B_TRY = 3, B_LOCK = 30000, B_OLD = 20000;
@@ -475,7 +544,7 @@
     const me = uid(), n = myName(); if (!me || !n || !G()?.net) return;
     const g = G().net.garage(), body = JSON.stringify([n, g]);
     if (body === pubLast) return;
-    try { const r = await getRt(); await r.set(`garages/${me}`, { n: n.slice(0, 12), t: r.now(), cur: g.cur, cars: g.cars }); pubLast = body; } catch (e) { console.warn('車庫', e); }
+    try { const r = await getRt(); await r.set(`garages/${me}`, { n: n.slice(0, 12), t: r.now(), cur: g.cur, cars: g.cars, tw: g.tw || '', tr: g.tr | 0 }); pubLast = body; } catch (e) { console.warn('車庫', e); } // 第 23 批：tw（格子）、tr（獎盃）：朋友開進來看得到
   }
   window.addEventListener('beau-save', () => { if (uid() && myName() && (W || pubLast)) publish(false); });
   async function visit(who, name) {

@@ -9,11 +9,14 @@
 //     第 22 批：pi＝那幾台警車是他那邊的第幾台（撞到的時候用）；ph＝[朋友, 第幾台, dvx, dvz, 第幾下]：我撞到朋友的警車（他那邊 police.bump）；
 //       pv＝[車, x, z, h]：他停著的車（不管他在走路、在房子裡、在警察局、被關）；o＝4：在警察局裡面（x、z 是裡面的座標；我也在裡面才畫）
 //   emote(uid, e)：朋友送的表情（NET_E 的第幾個）；clock(off)：伺服器時間＝Date.now()＋off
-//   state() → 自己現在的（送給朋友）；look() → { car, l, ch }（自己開的車、外觀、角色）；garage() → { cur, cars: { key: 外觀 } }（參觀車庫用）
+//   state() → 自己現在的（送給朋友）；look() → { car, l, ch }（自己開的車、外觀、角色）；garage() → { cur, cars: { key: 外觀 }, tw, tr }（參觀車庫、第 23 批開進來看）
 //   race({ seq, kind, go, order })：比賽（kind：circuit 賽車場 3 圈｜drag 400 公尺｜hill 爬山；go＝出發的伺服器時間，0＝還在等兩個人準備好；order＝比的人：起跑格）；host(uid)＝發起的人（可以按「再比一次」）
 //   results(seq, { uid: 秒 | −1（沒跑完）})；where() → 'garage' | 'out' | 'race'（參觀車庫只能在車庫頁）
+//   第 23 批（開進朋友的車庫）：bellAns({ uid, n, ok, g })＝門鈴的回答（1 好＋g＝他的車庫 garages/{uid}、−1 不要、−2 在忙、−3 關掉邀請、−4 送不出去、−5 不在線上、0 沒回答）；
+//     visitEnd(why)＝在他家的時候 'kick' 他請你出去／'gone' 他走了；guest({ uid, n } | null, why)＝朋友在我的車庫裡（上面那一條「請他出去」）；invite 的 kind 'bell'＝有人按我家的門鈴
 //   invite({ id, name, kind, car })：別人找你比賽（遊戲裡跳出卡片：好／不要，15 秒）；uninvite(id)；goTo(uid)＝去找他（目的地＝他現在在哪裡，跟著箭頭）；place() → 現在在哪裡（給名單看：在車庫、在山頂⋯）
 //   遊戲發 window 事件 'beau-net'（detail.type）：emote { e }｜ready { seq }｜fin { seq, t }（t＝−1 沒跑完）｜again（發起的人按「再比一次」）｜back（「回去開車」）｜list（點右邊那一塊：線上的人）｜answer { id, ok }（邀請：好／不要）
+//     ｜bell { uid, name }（按他家的門鈴）｜bellEnd { uid }（離開他家了）｜kick { uid }（請他出去）
 // window.beauGame.visit({ name, cars: [{ k, l }], likes, liked, onLike, onClose }) → { setLikes(n, liked), close() } | null（不在車庫頁）
 // 安全（草稿說好的）：只有名字（網站擋過髒話）；表情只有固定的幾個；朋友的車在比賽中穿過去，平常會擋（撞到照兩台車的速度算）；朋友走路的人不會被撞到（穿過去）；警察只追自己
 //   第 22 批：追朋友的警車也會擋，撞到了朋友那邊的那台會被撞開、暈一下（不算犯罪、不會給你星星）
@@ -200,6 +203,7 @@ function netStep(dt) {
   netCell(inPol, jin);
   netGoalTick(me);
   netGstTick(me, show && !race);
+  gvTick(); // 第 23 批：在朋友家（他的車一格做一台、走遠了＝出來了）
   borTick(me, show, race); // 第 19 批：借車
   if (drv) {
     if (NET.setD !== drv) { NET.setD = drv; drv.setMarkers(NET.marks, 'net'); }
@@ -322,6 +326,7 @@ body.netdrag #race :is(.minirow,.group,.me,.how){display:none}
 .nt-inv{position:absolute;z-index:10;left:50%;top:calc(var(--fs-t,0px) + 64px);transform:translateX(-50%);width:min(330px,calc(100% - 20px));box-sizing:border-box;padding:13px;border-radius:16px;background:rgba(20,21,24,0.95);border:2px solid #FF6A1F;color:#F2F3F5;font-family:"Noto Sans TC",sans-serif;display:flex;flex-direction:column;gap:7px;pointer-events:auto}
 .nt-inv[hidden]{display:none}
 .nt-inv b{font-size:16px}
+.nt-inv small{font-size:13px;font-weight:700;color:#f2a14a}.nt-inv small[hidden]{display:none}
 .nt-inv span{font-size:13px;color:#C6CAD1}
 .nt-invbar{height:4px;border-radius:4px;background:rgba(255,255,255,.15);overflow:hidden}
 .nt-invbar i{display:block;height:100%;background:#FF6A1F}
@@ -330,6 +335,7 @@ body.netdrag #race :is(.minirow,.group,.me,.how){display:none}
 .nt-inv .a{background:#FF6A1F;color:#1a0d05}.nt-inv .b{background:#24262b;color:#F2F3F5;border:1px solid #34363c}
 .nt-gar{position:absolute;z-index:6;left:50%;bottom:calc(var(--fs-b,0px) + 150px);transform:translateX(-50%);max-width:calc(100% - 20px);padding:11px 18px;border:2px solid #FF6A1F;border-radius:999px;background:rgba(20,21,24,0.92);color:#F2F3F5;font:800 15px "Noto Sans TC",sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;touch-action:manipulation}
 .nt-gar[hidden],body:not(.driving) .nt-gar{display:none}
+.nt-gar.wait{border-color:#6d717a;color:#C6CAD1}
 body.bigmap .nt,body.shopping .nt,body.cimenu .nt,body.bigmap .nt-gar{display:none}`;
   document.head.appendChild(st);
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -345,12 +351,12 @@ body.bigmap .nt,body.shopping .nt,body.cimenu .nt,body.bigmap .nt-gar{display:no
   quit.type = 'button'; quit.hidden = true; quit.addEventListener('click', () => netQuit('quit'));
   rc.append(big, mk('br'), sub); rc.hidden = true;
   const res = mk('div', 'nt-res'); res.hidden = true;
-  const inv = mk('div', 'nt-inv'), invT = mk('b'), invS = mk('span'), invBar = mk('div', 'nt-invbar'), invI = mk('i'), invRow = mk('div', 'row'), invOk = mk('button', 'a', '好'), invNo = mk('button', 'b', '不要');
-  invOk.type = invNo.type = 'button'; invBar.append(invI); invRow.append(invOk, invNo); inv.append(invT, invS, invBar, invRow); inv.hidden = true;
+  const inv = mk('div', 'nt-inv'), invH = mk('small', null, '🔔 有人按你家的門鈴'), invT = mk('b'), invS = mk('span'), invBar = mk('div', 'nt-invbar'), invI = mk('i'), invRow = mk('div', 'row'), invOk = mk('button', 'a', '好'), invNo = mk('button', 'b', '不要');
+  invOk.type = invNo.type = 'button'; invBar.append(invI); invRow.append(invOk, invNo); inv.append(invH, invT, invS, invBar, invRow); inv.hidden = true; invH.hidden = true;
   invOk.addEventListener('click', () => netAnswer(true)); invNo.addEventListener('click', () => netAnswer(false));
   const gar = mk('button', 'nt-gar'); gar.type = 'button'; gar.hidden = true; gar.addEventListener('click', netGstGo);
   stage.append(root, rc, quit, res, inv, gar);
-  NET.hud = { root, room, emo, tray, rc, big, sub, quit, res, inv, invT, invS, invI, gar, msg: '', msgT: 0, last: '', sig: '' };
+  NET.hud = { root, room, emo, tray, rc, big, sub, quit, res, inv, invH, invT, invS, invI, gar, msg: '', msgT: 0, last: '', sig: '' };
   return NET.hud;
 }
 function netTray(on) { const H = netHud(); H.tray.hidden = !on; H.room.hidden = on; H.emo.hidden = on; }
@@ -376,7 +382,7 @@ function netHudTick(dt) {
 
 // ---- 車庫街（village.js 第 16、17 批）：6 間車庫的名牌（門上面的黑大理石橫帶；一張貼圖 6 格＝1 個 draw call）：每個人在自己世界號碼那間（你那間不畫：大理石車庫自己的招牌），沒有人就「空的」----
 // 走到（或開到）別人那間門口 6 公尺內：「🚗 看小明的車庫」（回車庫頁參觀，網站那邊做）；自己那間：開鐵捲門開進去
-const NET_GST = { mesh: null, cv: null, tex: null, sig: null, at: -1, own: [], dots: [] }; // dots：第 21 批，朋友的家畫在大地圖上（名字寫在旁邊）
+const NET_GST = { mesh: null, cv: null, tex: null, sig: null, at: -1, txt: '', own: [], dots: [] }; // dots：第 21 批，朋友的家畫在大地圖上（名字寫在旁邊）
 const NET_GST_W = 512, NET_GST_H = 50;
 function netGstBuild() {
   const SL = VIL?.places?.garst?.slots; if (!SL || NET_GST.mesh || !TR?.scene) return !!NET_GST.mesh;
@@ -400,7 +406,7 @@ function netGstPaint() {
   const own = NET_GST.own, mine = homeSlot(); own.length = SL.length; own.fill(null); // 車庫街的家：每個人在自己號碼那間（世界的號碼 0–5）
   own[mine] = { uid: NET.me, n: NET.myName || '你', me: true };
   for (const m of NET.mem) { const i = parseInt(m.s, 10); if (i >= 0 && i < SL.length && !own[i]) own[i] = { uid: m.uid, n: NET.P.get(m.uid)?.n || String(m.n || '朋友').slice(0, 12), col: NET.P.get(m.uid)?.col }; }
-  const sig = own.map((o) => (o ? o.uid + ':' + o.n : '-')).join('|');
+  const sig = HOME.gs + '#' + own.map((o) => (o ? o.uid + ':' + o.n : '-')).join('|');
   if (sig === NET_GST.sig) return;
   NET_GST.sig = sig;
   NET_GST.dots.length = 0;
@@ -409,7 +415,7 @@ function netGstPaint() {
   g.clearRect(0, 0, W, H * SL.length);
   for (let i = 0; i < SL.length; i++) {
     const o = own[i], y = i * H;
-    if (o && o.me) continue; // 你家：圓塔自己的名牌（大便龍的車庫）
+    if (i === HOME.gs) continue; // 塔蓋在這裡（你家；第 23 批：去朋友家＝他家）：圓塔自己的名牌
     g.fillStyle = '#1d2026'; g.fillRect(0, y, W, H);
     g.font = `800 ${o ? 34 : 28}px "Noto Sans TC", "PingFang TC", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
     if (o) { if (!o.me) { g.fillStyle = o.col || '#4a8cff'; g.beginPath(); g.arc(28, y + H / 2, 9, 0, Math.PI * 2); g.fill(); } g.fillStyle = o.me ? '#FF8A3D' : '#F3F3F1'; g.fillText(o.me ? `${o.n}（你）` : `${o.n}的車庫`, W / 2, y + H / 2 + 1, W - 80); }
@@ -417,6 +423,7 @@ function netGstPaint() {
   }
   NET_GST.tex.needsUpdate = true;
 }
+// 第 23 批（Nick 2026-10-18「可以開進別人的車庫」，卡片選「按門鈴」）：朋友家門口的按鈕＝「🔔 按門鈴 · 小明的家」（以前是「🚗 看他的車庫」：名單上的 🚗 還在）
 function netGstTick(me, out) {
   if (!netGstBuild()) return;
   NET_GST.mesh.visible = true;
@@ -424,36 +431,44 @@ function netGstTick(me, out) {
   let at = -1;
   if (out && me && Math.abs(me.v ?? me.speed ?? 0) < 4) {
     const SL = VIL.places.garst.slots;
-    for (let i = 0; i < SL.length && i < NET_GST.own.length; i++) { const d = SL[i].door; if (NET_GST.own[i] && !NET_GST.own[i].me && (d.x - me.x) * (d.x - me.x) + (d.z - me.z) * (d.z - me.z) < 36) { at = i; break; } } // 自己那間：開鐵捲門開進去
+    for (let i = 0; i < SL.length && i < NET_GST.own.length; i++) { const d = SL[i].door; if (NET_GST.own[i] && !NET_GST.own[i].me && !(GV.on && GV.slot === i) && (d.x - me.x) * (d.x - me.x) + (d.z - me.z) * (d.z - me.z) < 36) { at = i; break; } } // 自己那間：開鐵捲門開進去；在他家（門開了）：不用按
   }
-  if (at === NET_GST.at) return;
-  NET_GST.at = at;
-  const H = netHud(), o = at >= 0 ? NET_GST.own[at] : null;
+  const o = at >= 0 ? NET_GST.own[at] : null, wait = !!o && BELL.uid === o.uid, txt = o ? (wait ? `🔔 等${o.n}回答⋯` : `🔔 按門鈴 · ${o.n}的家`) : '';
+  if (at === NET_GST.at && txt === NET_GST.txt) return;
+  const first = !!o && at !== NET_GST.at && !wait;
+  NET_GST.at = at; NET_GST.txt = txt;
+  const H = netHud();
   H.gar.hidden = !o;
-  if (o) H.gar.textContent = `🚗 看${o.n}的車庫`;
+  if (o) { H.gar.textContent = txt; H.gar.classList.toggle('wait', wait); }
+  if (first) netToast(`這是${o.n}的家。按門鈴問他可不可以開進去`);
 }
 function netGstGo() {
-  const o = NET_GST.at >= 0 ? NET_GST.own[NET_GST.at] : null; if (!o) return;
-  NET_GST.at = -1; netHud().gar.hidden = true;
-  netEv('visit', { uid: o.uid, name: o.n });
+  const o = NET_GST.at >= 0 ? NET_GST.own[NET_GST.at] : null; if (!o || BELL.uid) return;
+  if (police && police.state === 'wanted') { netToast('被警察追的時候不能按門鈴'); return; }
+  if (BOR.on) { netToast('開借來的車不能進朋友家：先還車'); return; }
+  BELL.uid = o.uid; BELL.n = o.n; BELL.t = performance.now();
+  netEv('bell', { uid: o.uid, name: o.n });
+  netToast(`🔔 叮咚！等${o.n}回答⋯`);
 }
 function netGstOff() {
   if (NET_GST.mesh) NET_GST.mesh.visible = false;
-  NET_GST.at = -1; NET_GST.sig = null; NET_GST.own.length = 0; NET_GST.dots.length = 0;
+  NET_GST.at = -1; NET_GST.txt = ''; NET_GST.sig = null; NET_GST.own.length = 0; NET_GST.dots.length = 0;
   if (NET.hud) NET.hud.gar.hidden = true;
 }
 
 // ---- 別人找你比賽：卡片（好／不要），15 秒沒按＝不要；車庫頁也看得到（卡片放在畫面上）----
 const NET_INV_S = 15;
 function netInvite(d) {
-  if (!NET.on || !d || !d.id || !NET_KIND[d.kind]) return false;
+  if (!NET.on || !d || !d.id || !(NET_KIND[d.kind] || d.kind === 'bell')) return false;
   const H = netHud();
   if (NET.inv && NET.inv.id !== d.id) return false; // 一次一張（網站排隊）
   if (NET.race && NET.race.phase !== 'done') return false; // 比賽中：網站說「在比賽」
   clearTimeout(NET.invT);
   NET.inv = { id: String(d.id) };
-  H.invT.textContent = `🏁 ${String(d.name || '有人').slice(0, 12)}找你比${NET_KIND[d.kind].replace(' 3 圈', '')}！`;
-  H.invS.textContent = d.car ? `他開 ${String(d.car).slice(0, 24)}` : '';
+  const bell = d.kind === 'bell'; // 第 23 批：有人按我家的門鈴（草稿：「有人按你家的門鈴／X想開進你的車庫／他只能看你的車，不能開走。」）
+  H.invH.hidden = !bell;
+  H.invT.textContent = bell ? `${String(d.name || '有人').slice(0, 12)}想開進你的車庫` : `🏁 ${String(d.name || '有人').slice(0, 12)}找你比${NET_KIND[d.kind].replace(' 3 圈', '')}！`;
+  H.invS.textContent = bell ? '他只能看你的車，不能開走。' : d.car ? `他開 ${String(d.car).slice(0, 24)}` : '';
   H.inv.hidden = false;
   H.invI.style.transition = 'none'; H.invI.style.width = '100%'; void H.invI.offsetWidth;
   H.invI.style.transition = `width ${NET_INV_S}s linear`; H.invI.style.width = '0%';
@@ -508,6 +523,7 @@ function netPlace() {
   if (NET.race && NET.race.phase !== 'done') return '在比賽';
   if (RACE.on) return '在 400 公尺';
   if (!trip || HOME.in) return '在車庫';
+  if (GV.in) return `在${GV.n}家`; // 第 23 批
   if (jailed()) { if (police.state !== 'jail') return '在警察局'; const L = Math.ceil(police.jailLeft / 10) * 10; return `在拘留室 ${Math.floor(L / 60)}:${String(L % 60).padStart(2, '0')}`; } // 10 秒一格（名單上倒數，不用一直送）
   if (ciRace) return '在賽車場';
   if (orRace) return '在越野車場';
@@ -1042,6 +1058,127 @@ function borOff() { // 離開世界：借來的還、借出去的拿回來（網
   if (BOR.ui) { BOR.ui.near.hidden = true; BOR.ui.bar.hidden = true; }
 }
 
+// ==== 第 23 批：開進朋友的車庫（Nick 2026-10-18「可以開進別人的車庫」；草稿 https://claude.ai/artifact/RUhVB6G34nJk9SBLt1rm6q，卡片選「按門鈴」）====
+// 走到朋友家門口（他在世界裡）→「🔔 按門鈴 · 小明的家」→ 他的遊戲跳卡片（好／不要，15 秒）→ 好：你這邊的塔（GAR）搬到他家（你家變外殼，你的車照停）、
+//   格子裡換成他的車（輕量車、他的樣子；只能看，不能開、不能停進他的格子）、名牌、獎盃換他的；鐵捲門打開 → 開進去、下車走路、坐電梯（走路才能坐）看每一層
+// 出來：開（走）出門外 25 公尺（你的車還停在裡面就不算）；他按「請他出去」、他離開世界：人、車送到門口外面；塔搬回你家
+// 他那邊：上面一條「🏠 X在你的車庫裡」＋「請他出去」；他在一樓的時候朋友看得到他（平常在家裡看不到）
+// 網站（site/world.js）：matches/{id}（kind 'bell'）＋ world/ch（跟找人比賽同一條路：封鎖、關掉邀請的聽不到）；規則不用改
+const BELL = { uid: '', n: '', t: 0 }; // 我按了誰家的門鈴（等他回答）
+const GUEST = { uid: '', n: '', ui: null }; // 誰在我的車庫裡（我說好了）
+function netBellAns(a) {
+  if (!a || !a.uid) return 'gone';
+  const n = String(a.n || BELL.n || '朋友').slice(0, 12);
+  if (BELL.uid === a.uid) BELL.uid = '';
+  if (a.ok === 1) {
+    const r = gvStart(a.uid, n, a.g);
+    if (r === 'far') netToast(`${n}說好了，可是你已經走遠了`); else if (r !== 'ok') netToast(`${n}說好了，可是你現在進不去`);
+    return r;
+  }
+  const m = { [-1]: `${n}說「不要」。`, [-2]: `${n}在忙（在比賽），等一下再按。`, [-3]: `${n}關掉了邀請，聽不到門鈴。`, [-4]: '門鈴按不響，等一下再試一次。', [-5]: `${n}已經不在線上了。`, 0: `${n}沒有回答。` }[a.ok | 0];
+  if (m) netToast(m);
+  return 'ok';
+}
+// 他說好了：塔搬到他家（g＝他的車庫：{ cars: { key: 外觀 }, tw: 'gc8,,supra,…'（40 格）, tr（獎盃）, cur }）→ 'ok' | 'far' | 'gone' | 'busy'
+function gvStart(uid, n, g) {
+  if (GV.on) return GV.uid === uid ? 'ok' : 'busy';
+  if (!trip || !DRIVE.on || !GAR || !tripPose || !VIL?.places?.garst || RACE.on || indoor || jailed() || EL.ride || GAR.lift.busy || BOR.on) return 'busy';
+  const i = NET_GST.own.findIndex((o) => o && !o.me && o.uid === uid), SL = VIL.places.garst.slots;
+  if (i < 0 || !SL[i]) return 'gone';
+  const t = walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : null, d = SL[i].door;
+  if (!t || Math.hypot(t.x - d.x, t.z - d.z) > 40) return 'far';
+  const cars = g && g.cars && typeof g.cars === 'object' ? g.cars : {}, ok = (k) => typeof k === 'string' && !!CARS[k] && !!LOD_CARS[k] && liftOK(k) && Object.prototype.hasOwnProperty.call(cars, k);
+  const want = Array(TOWER_BAYS.length).fill(null), seen = new Set(), tw = typeof g?.tw === 'string' ? g.tw.split(',') : null;
+  if (tw) tw.forEach((k, j) => { if (j < want.length && ok(k) && !seen.has(k)) { want[j] = k; seen.add(k); } });
+  else for (const k of Object.keys(cars)) if (ok(k) && k !== g?.cur && !seen.has(k)) { const j = want.indexOf(null); if (j < 0) break; want[j] = k; seen.add(k); } // 舊版（內容 16）沒有送格子：照順序擺
+  Object.assign(GV, { on: true, uid, n: String(n || '朋友').slice(0, 12), slot: i, want, looks: cars, objs: {}, q: [...seen], tr: Math.max(0, Math.min(9, (g && g.tr) | 0)), lift0: { f: GAR.lift.floor, rot: GAR.lift.rot }, in: false, loading: false });
+  GV.job++;
+  stopLiftSnd(); GAR.liftSnap(0, 0); GAR.setFloor(0); GAR.door.t = 0;
+  homePlace(); // 塔搬到他家（你的東西不動）
+  GAR.setTrophies(GV.tr); GAR.setSign?.(`${GV.n}的車庫`, `${GV.n}的家`);
+  GAR.door.open(calm ? 1.2 : 2.2);
+  arrangeCars();
+  netToast(`${GV.n}說好！開進去吧（他的車只能看，不能開走）`);
+  return 'ok';
+}
+// 他的車（輕量車、他的樣子）：一格做一台，做好就掛到格子上
+function gvLoad(k) {
+  const job = GV.job; GV.loading = true;
+  LOD_CARS[k].load().then((sc) => {
+    GV.loading = false;
+    if (job !== GV.job || !GV.on) return;
+    const lod = buildLodCar(k, sc, netLook(k, GV.looks[k])), box = new THREE.Box3().setFromObject(lod.car);
+    lod.car.name = 'guest-' + k;
+    GV.objs[k] = { lod, cx: (box.min.x + box.max.x) / 2, cz: (box.min.z + box.max.z) / 2, hx: (box.max.x - box.min.x) / 2, hz: (box.max.z - box.min.z) / 2 };
+    arrangeCars();
+  }, (e) => { if (job === GV.job) GV.loading = false; console.warn('朋友的車沒載好', e); });
+}
+function gvTick() {
+  if (BELL.uid && performance.now() - BELL.t > 25000) BELL.uid = ''; // 網站 20 秒會說沒回答；保險
+  if (!GV.on) return;
+  if (!trip || !DRIVE.on || !GAR || !tripPose) { gvEnd('home'); return; }
+  if (GV.q.length && !GV.loading) gvLoad(GV.q.shift());
+  const t = walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : null;
+  if (!t || indoor || RACE.on || EL.ride || garIn(t)) return;
+  const D = garWorld({ x: TOWER.DX1 + 2, z: 0 }), p = tripPose[cur];
+  if (Math.hypot(t.x - D.x, t.z - D.z) > 25 && !(walker && walker.mode !== 'off' && p && p.tw == null && garIn(p))) gvEnd('left'); // 走遠了（車還停在他家裡面就不算）
+}
+// 還在他家裡面（他請你出去、他走了）：人、車送到門口外面（車頭朝外）
+function gvOut() {
+  const riding = !!(EL.ride && EL.ride.me);
+  elEnd();
+  const out = (z) => { const w = garWorld({ x: TOWER.DX1 + 7, z, heading: 0 }); return { x: w.x, z: w.z, heading: w.heading }; };
+  if (drv && walker && walker.mode === 'off') { const t = drv.telemetry(); if (garIn(t)) { const q = out(0); drv.teleport(q); tripPose[cur] = { ...q, f: 0 }; } return; }
+  if (!walker || walker.mode === 'off') return;
+  const p = tripPose[cur];
+  if (p && p.tw == null && garIn(p) && tripS) { if (drv) dropDrv(); tripPose[cur] = { ...out(0), f: 0 }; parkFull(); }
+  if (garIn(walker.telemetry())) walker.teleport(out(3.6), { keepCamera: false });
+  if (riding) walker.resume();
+}
+// 出來了：塔搬回你家、格子換回你的車、名牌和獎盃換回來；why：left 走遠了｜kick 他請你出去｜gone 他走了｜leave 你離開世界｜home 回車庫頁
+function gvEnd(why) {
+  if (!GV.on) return;
+  const n = GV.n, uid = GV.uid, L0 = GV.lift0, live = trip && tripPose && GAR;
+  if (live && why !== 'home') gvOut();
+  GV.on = false; GV.in = false; GV.job++; GV.q.length = 0; GV.loading = false;
+  if (GAR) {
+    GAR.door.t = 0; if (!EL.ride) { GAR.setFloor(0); stopLiftSnd(); }
+    homePlace(); // 塔搬回你家（你在外面）
+    GAR.liftSnap(L0 ? L0.f : 0, L0 ? L0.rot : 0);
+    GAR.setTrophies(trophyCount()); GAR.setSign?.();
+    if (live) liftChanged(); // 碰撞、格子換回你的車
+  }
+  for (const k of Object.keys(GV.objs)) { const o = GV.objs[k]; o.lod.car.removeFromParent(); o.lod.dispose(); }
+  GV.objs = {}; GV.want = null; GV.looks = {};
+  netEv('bellEnd', { uid });
+  if (why === 'kick') netToast(`${n}請你出去了`);
+  else if (why === 'gone') netToast(`${n}離開了，你從他家出來了`);
+  else if (why === 'left') netToast(`離開${n}的家了`);
+}
+// 我這邊：朋友在我的車庫裡（上面一條＋「請他出去」；車庫頁也看得到）
+function gstUi() {
+  if (GUEST.ui) return GUEST.ui;
+  netHud();
+  const st = document.createElement('style');
+  st.textContent = `.nt-gst{position:absolute;z-index:7;left:50%;top:calc(var(--fs-t,0px) + 112px);transform:translateX(-50%);max-width:calc(100% - 20px);display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;border-radius:999px;background:rgba(20,21,24,0.9);border:2px solid #FF6A1F;color:#F2F3F5;font:700 14px "Noto Sans TC",sans-serif;pointer-events:auto;box-sizing:border-box}
+.nt-gst[hidden],body.bigmap .nt-gst,body.shopping .nt-gst{display:none}
+.nt-gst.low{top:calc(var(--fs-t,0px) + 160px)}
+.nt-gst span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nt-gst button{flex:none;min-height:34px;padding:0 14px;border:0;border-radius:999px;background:#FF6A1F;color:#1a0d05;font:800 14px "Noto Sans TC",sans-serif;cursor:pointer;touch-action:manipulation}`;
+  document.head.appendChild(st);
+  const bar = document.createElement('div'), t = document.createElement('span'), b = document.createElement('button');
+  bar.className = 'nt-gst'; b.type = 'button'; b.textContent = '請他出去'; bar.append(t, b); bar.hidden = true;
+  b.addEventListener('click', () => { const u = GUEST.uid, n = GUEST.n; if (!u) return; netEv('kick', { uid: u }); netGuest(null); netToast(`請${n}出去了`); });
+  stage.append(bar);
+  return (GUEST.ui = { bar, t, b });
+}
+function netGuest(g, why) {
+  if (g && g.uid) { const U = gstUi(); GUEST.uid = String(g.uid); GUEST.n = String(g.n || '朋友').slice(0, 12); U.t.textContent = `🏠 ${GUEST.n}在你的車庫裡`; U.bar.classList.toggle('low', !!(BOR.ui && !BOR.ui.bar.hidden)); U.bar.hidden = false; return; }
+  const n = GUEST.n; GUEST.uid = ''; GUEST.n = '';
+  if (GUEST.ui) GUEST.ui.bar.hidden = true;
+  if (why === 'left' && n) netToast(`${n}離開你的車庫了`);
+}
+
 // ---- 自己的（送給朋友）----
 const NET_ME = { o: 0, x: 0, z: 0, h: 0, v: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pc: [0, 0, 0, 0, 0, 0, 0, 0, 0], pi: [0, 0, 0], pn: 0, pk: null, pv: null, ph: null }; // w、jl、pc／pi／pn：被警察追（幾顆星、被抓了、追你的警車、第幾台）；pk：第 19 批，下車停著的車 [車, x, z, h]；pv、ph：第 22 批（停著的車、撞到朋友的警車）
 NET_ME.pl = 0; // 跳燈：開的（停著的）這台燈蓋立起來＝1（town.src.js popSend）
@@ -1052,7 +1189,7 @@ function netState() {
   if (RACE.on && race) { s.o = 3; s.x = race.me.x; s.v = race.me.v; if (race.net) { s.rp = Math.round(race.me.x * 10) / 10; s.rs = race.net.seq; } return s; }
   const pv = netParked(); if (pv) s.pv = [cur, Math.round(pv.x * 100) / 100, Math.round(pv.z * 100) / 100, Math.round(pv.heading * 1000) / 1000]; // 第 22 批：停著的車（我在哪裡都送）
   if (DRIVE.on && trip && indoor && indoor.kind === 'police' && walker && walker.mode !== 'off') { const t = walker.telemetry(); s.o = 4; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed; return s; } // 第 22 批：在警察局裡面（關在拘留室也是）
-  if (!netWorld() || HOME.in) return s; // 在自己車庫裡面：朋友看不到（名單寫「在車庫」）
+  if (!netWorld() || (HOME.in && !(GUEST.uid && !GAR.floor)) || (GV.in && GAR.floor)) return s; // 在自己車庫裡面：朋友看不到（名單寫「在車庫」）；第 23 批：有朋友來我家、我在一樓＝看得到；我在朋友家樓上＝不送（高度對不起來）
   if (walker && walker.mode !== 'off' && walker.mode !== 'seat') {
     const t = walker.telemetry(); s.o = 2; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed;
     const p = borParked(); if (p) { s.pk = [cur, Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100, Math.round(p.heading * 1000) / 1000]; s.pv = null; } // 第 19 批：下車停著的車（朋友看得到、借得到）
@@ -1167,6 +1304,7 @@ Object.assign(window.beauGame, {
     },
     leave() {
       borOff(); // 第 19 批：借來的還、借出去的拿回來
+      gvEnd('leave'); netGuest(null); BELL.uid = ''; // 第 23 批：在朋友家＝出來；朋友在我家＝收掉那一條
       netRaceEnd(); netUninvite(); if (NET.goal) { NET.goal = null; if (tripDest === 'friend') setDest(null); }
       NET.on = false; NET.code = ''; NET.mem = []; NET.slot = -1; netGstOff();
       for (const P of [...NET.P.values()]) netDropPeer(P);
@@ -1214,7 +1352,8 @@ Object.assign(window.beauGame, {
     clock(off) { NET.off = +off || 0; },
     state: netState,
     look: () => ({ car: cur, l: { ...CARS[cur].state }, ch: GAME.look || null }),
-    garage: () => ({ cur, cars: Object.fromEntries([...GAME.owned].filter((k) => CARS[k]).map((k) => [k, { ...CARS[k].state }])) }),
+    garage: () => ({ cur, cars: Object.fromEntries([...GAME.owned].filter((k) => CARS[k]).map((k) => [k, { ...CARS[k].state }])), // 第 23 批：tw＝圓塔 40 格停哪台（'gc8,,supra,…'）、tr＝獎盃（朋友開進來看得到）
+      tw: (Array.isArray(GAME.park?.tower) ? GAME.park.tower : []).map((k) => (typeof k === 'string' && GAME.owned.has(k) ? k : '')).join(','), tr: trophyCount() }),
     race: netRace,
     results: netResults,
     end() { netRaceEnd(); }, // 對方走了、對方按「回去開車」：這一場收掉
@@ -1231,9 +1370,14 @@ Object.assign(window.beauGame, {
     unlend(p) { borUnlend(p && [p.x, p.z, p.h].every(Number.isFinite) ? { x: p.x, z: p.z, heading: p.h } : null); }, // 還回來了（停在哪裡；null＝原本停的地方）
     borrowing: () => !!(BOR.on || BOR.want || BOR.loading),
     lent: () => (BOR.lent ? { uid: BOR.lent.uid, k: BOR.lent.k } : null),
+    bellAns: netBellAns, // 第 23 批：門鈴的回答
+    visitEnd(why) { gvEnd(why === 'kick' ? 'kick' : 'gone'); }, // 他請你出去／他走了
+    guest: netGuest, // 朋友在我的車庫裡（null＝走了）
     place: netPlace,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
-    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, pv: P.cur.pv ? P.cur.pv[0] : null, park: !!P.pkOn, carVis: !!(P.obj && P.obj.car.visible), inPol: !!(P.chr && P.chr.group.visible && PSC && P.chr.group.parent === PSC), car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, polHits: NET_POL.hits, phSent: NET_PH.sent, bumped: NET.bumped, cellShut: NET.cellShut, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '', bar: BOR.ui && !BOR.ui.bar.hidden ? BOR.ui.barT.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at }; },
+    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, pv: P.cur.pv ? P.cur.pv[0] : null, park: !!P.pkOn, carVis: !!(P.obj && P.obj.car.visible), inPol: !!(P.chr && P.chr.group.visible && PSC && P.chr.group.parent === PSC), car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, polHits: NET_POL.hits, phSent: NET_PH.sent, bumped: NET.bumped, cellShut: NET.cellShut, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '', bar: BOR.ui && !BOR.ui.bar.hidden ? BOR.ui.barT.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at,
+      gstBtn: NET.hud && !NET.hud.gar.hidden ? NET.hud.gar.textContent : '', bell: BELL.uid || null, guest: GUEST.uid || null, guestBar: GUEST.ui && !GUEST.ui.bar.hidden ? GUEST.ui.t.textContent : '',
+      gv: GV.on ? { uid: GV.uid, n: GV.n, slot: GV.slot, in: GV.in, want: GV.want.filter(Boolean).length, made: Object.keys(GV.objs).length, gs: HOME.gs, home: HOME.slot } : null }; },
   },
   visit: netVisit,
 });

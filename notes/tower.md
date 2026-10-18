@@ -51,3 +51,6 @@ The 4-floor ring garage behind the marble garage (an earlier step of the same da
 - test-b1: sections 2, 7, 10, 10b, 10c, 11. They cover walls and door, the panel on every screen, riding up and parking, walking rides, 叫電梯, deliveries, old-save migration, and the garage-page camera.
 - test-b4 section 9: the monster truck refuses the lift and parks on 1F; you ride up on foot to GC8 and come back down.
 - world-test section 3: B's home is the summit, too far to see except as a map dot.
+
+## A friend's tower (第 23 批, 2026-10-18)
+- Visiting a friend after the doorbell moves this same `GAR` to the friend's lot: all tower math goes through `garLot()` (= `HOME.lot`, where GAR stands now; `HOME.gs` its slot, `HOME.slot` your real home). `twrNow()` = the friend's bays while `GV.on`. tower.js `setSign(top, bottom)` writes the friend's name on the sign. Details in notes/world.md 第 23 批.

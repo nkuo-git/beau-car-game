@@ -7,7 +7,7 @@
 // 本地座標：原點＝塔的中心（電梯的中間）、x 往鐵捲門（+x 出去）、y 上、z＝車頭朝門時車子的右邊；一樓地板 y 0
 //   車庫頁：放在原點（車子停在電梯圓台上給你看）；村子：group 擺到 lot（town.src.js；lot＝塔的中心、heading＝本地 +x 朝外）
 // buildRoom(renderer, { quality = 'high', exterior = false }) → {   ← 名字跟 room.js 一樣（頁面不用改太多）
-//   group, env, setTrophies(n), resize(w, h), dispose(), ready, size（walk.js 的鐵捲門：round＝圓的，門楣、天花板的鏡頭盒子這裡自己給）
+//   group, env, setTrophies(n), setSign(上, 下)（名牌、小房子的字；不給＝大便龍的車庫／大便龍的家）, resize(w, h), dispose(), ready, size（walk.js 的鐵捲門：round＝圓的，門楣、天花板的鏡頭盒子這裡自己給）
 //   door：鐵捲門 { t（0 關 … 1 開，可以直接設）, open(sec), close(sec), update(dt), moving }（16 片門片往上收進門楣）
 //   spots：{ main（電梯圓台中間、車頭朝門）, outside, bed, wake, houseIn, houseOut }；zones：{ inside（大概的方塊：舊的用法）, door, apron, house, bedSide, houseDoor, dress, pad }
 //   house：{ door, zone, bedSide, bed, wake, ceil, ridge, beam }（跟 room.js 一樣：小房子是平頂，ceil＝ridge）
@@ -343,7 +343,7 @@ export const { buildRoom } = (() => {
 
   // ---- 名牌（門上面）＋小房子的字：canvas 一張 1024 × 256（上半「大便龍的車庫」、下半「大便龍的家」）----
   const SIGN_FONT = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
-  function drawSign(cv) {
+  function drawSign(cv, top = '大便龍的車庫', bottom = '大便龍的家') { // 第 23 批：去朋友家（town.src.js 把塔搬過去）寫他的名字
     const g = cv.getContext('2d'), W = cv.width, H = cv.height / 2;
     g.clearRect(0, 0, W, H * 2);
     const gold = (y0, y1) => { const gr = g.createLinearGradient(0, y0, 0, y1); for (const [t, c] of [[0, '#fff3cf'], [0.2, '#e9c77d'], [0.55, '#b98a3c'], [0.8, '#d9b366'], [1, '#8a6427']]) gr.addColorStop(t, c); return gr; };
@@ -354,7 +354,7 @@ export const { buildRoom } = (() => {
       g.textAlign = 'center'; g.textBaseline = 'middle';
       g.shadowColor = 'rgba(255,180,100,0.7)'; g.shadowBlur = 18; g.fillStyle = gold(y + H / 2 - px / 2, y + H / 2 + px / 2); g.fillText(txt, W / 2, y + H / 2 + 4); g.shadowBlur = 0;
     };
-    plate(0, '大便龍的車庫', 92); plate(H, '大便龍的家', 92);
+    plate(0, top, 92); plate(H, bottom, 92);
   }
 
   const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -600,10 +600,12 @@ export const { buildRoom } = (() => {
       pmrem.dispose(); eg.dispose(); em.dispose();
     }
     if (envRT) for (const m of [shellMat, matteMat, goldMat, trophyMat, floorMat, slatMat, clearMat]) { m.envMap = envRT.texture; m.envMapIntensity = 1; }
+    let signTxt = []; // 名牌現在寫什麼（空的＝大便龍的車庫／大便龍的家）；字型還沒載好就先記著
+    const setSign = (top, bottom) => { signTxt = top ? [String(top), String(bottom || top)] : []; drawSign(signCv, ...signTxt); signTex.needsUpdate = true; };
     const setTrophies = (n) => { n = Math.max(0, Math.min(9, Math.floor(+n || 0))); tro.geometry.setDrawRange(0, G0.trophyEnds[n]); tro.visible = n > 0; };
     setTrophies(0);
     const ready = Promise.race([document.fonts?.load ? document.fonts.load(`700 92px ${SIGN_FONT}`, '大便龍的車庫家') : Promise.resolve(), new Promise((r) => setTimeout(r, 1500))])
-      .catch(() => {}).then(() => { if (!dead) { drawSign(signCv); signTex.needsUpdate = true; } });
+      .catch(() => {}).then(() => { if (!dead) { drawSign(signCv, ...signTxt); signTex.needsUpdate = true; } });
     const resize = (w, h) => {
       if (!refl) return;
       if (!w || !h) { const v = renderer.getDrawingBufferSize(new THREE.Vector2()); w = v.x; h = v.y; }
@@ -613,7 +615,7 @@ export const { buildRoom } = (() => {
     const update = (dt) => { const a = door.update(dt), b = liftStep(dt); return a || b; };
     const dispose = () => { dead = true; group.removeFromParent(); for (const o of trash) o.dispose(); if (refl) refl.getRenderTarget().dispose(); envRT?.dispose(); };
     api.parts = [{ geometry: G0.ext, material: shellMat, name: 'shell' }, { geometry: G0.matte, material: matteMat, name: 'matte' }, { geometry: G0.gold, material: goldMat, name: 'gold' }, { geometry: G0.glass, material: glassMat, name: 'glass' }, { geometry: G0.clear, material: clearMat, name: 'clear' }, { geometry: G0.lights, material: lightMat, name: 'lights' }];
-    Object.assign(api, { env: envRT ? envRT.texture : null, setTrophies, resize, dispose, ready, colliders, cameraColliders, ceilingAt, heightAt, setFloor, liftTo, liftSnap, put, take, cull, camClamp, update,
+    Object.assign(api, { env: envRT ? envRT.texture : null, setTrophies, setSign, resize, dispose, ready, colliders, cameraColliders, ceilingAt, heightAt, setFloor, liftTo, liftSnap, put, take, cull, camClamp, update,
       setExterior: () => {}, setCutaway: () => {} });
     return api;
   }
