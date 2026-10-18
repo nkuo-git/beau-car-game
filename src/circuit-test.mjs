@@ -2,7 +2,7 @@
 //   車庫頁（直線加速的說明）→ 出門走去上 GC8（去哪裡：去賽車場、預設就是它）→ 小地圖畫得到賽車場 → 自己開過去（開鐵捲門 → 村子 → 直線加速賽道入口往北的路 → 維修區）
 //   → 報名處停好、選對手（9 個，只有第一個開著）→ 起跑格、五顆紅燈 → 機器人照跑線開兩圈 → 第 1 名、獎金、新對手 → 對手自己跑完
 //   → 再比一次：只在起終點來回不算圈、開反了會說、放棄比賽 → 截圖（主直線、第 1 彎、髮夾彎、減速彎、S 彎、駕駛座、維修道、空中、聯外道路、從村子看）、畫了多少
-//   → 路面（柏油、草地、碎石）、護欄擋得住 → 開去直線加速（還在；對手名單跟著賽車場）→ 直接回車庫 → 重新整理（錢、贏過的都在）
+//   → 路面（柏油、草地、碎石）、護欄擋得住（3 號家門口開一個口）→ 開去直線加速（還在；對手名單跟著賽車場）→ 直接回車庫 → 重新整理（錢、贏過的都在）
 // 開車、走路都不是真的即時（SwiftShader 一格要一兩秒）：頁面自己的開車先停住（__hold）、不畫（__noDraw），測試在頁面裡一步一步開，要截圖才畫
 // node circuit-test.mjs [prefix]（截圖：<prefix>-01-menu.png …；預設 ci-shots/ci）
 // node test-b4.mjs [prefix]（截圖：<prefix>-1-page.png …）
@@ -690,6 +690,9 @@ check(sf.track === 0 && sf.grass === 1 && sf.gravelT1 === 2 && sf.pit === 0 && s
 // 護欄擋得住：往外直直開
 const wall = await p.evaluate(() => { const d = window.__D().drv; d.teleport({ x: 800, z: -165, heading: Math.PI / 2 }); d.setInput({ throttle: 1, brake: 0, steer: 0 }); let zmin = 0; for (let i = 0; i < 300; i++) { window.__dstep(1); zmin = Math.min(zmin, d.telemetry().z); } d.setInput(null); window.__dstep(30); return { zmin: +zmin.toFixed(1), bumps: d.telemetry().bumps }; });
 check(wall.zmin > -176 && wall.bumps > 0, `barriers stop you (drove north into the infield wall: stopped at z ${wall.zmin})`);
+// 第 22 批（Nick 2026-10-18「在賽道那邊的車庫車子出不來 要弄一個出口」）：3 號家（賽車場門口，門朝 +z）前面聯外道路的護欄開一個口：從門口直直開得到聯外道路（z −100）；旁邊的護欄還在
+const h3 = await p.evaluate(() => { const d = window.__D().drv, run = (x) => { d.teleport({ x, z: -110.6, heading: -Math.PI / 2 }); d.setInput({ throttle: 0.45, brake: 0, steer: 0 }); let zmax = -1e9; for (let i = 0; i < 200; i++) { window.__dstep(1); zmax = Math.max(zmax, d.telemetry().z); } d.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); window.__dstep(60); d.setInput(null); return +zmax.toFixed(1); }; return { door: run(172), side: run(194) }; });
+check(h3.door > -100 && h3.side < -105, `home 3 (賽車場門口): the access-road guardrail has a gap at the door, you drive out onto the road (z ${h3.door}); the rail beside it still stops you (z ${h3.side})`);
 
 // ---- 7 直線加速還在：從賽車場開到旁邊的起跑區 → 直線加速的畫面（對手名單：隔壁同學贏過了、巷口阿伯開了）→ 開回村子 ----
 const lv = await p.evaluate(() => { const d = window.__D().drv; d.teleport({ x: 420, z: -144, heading: 0 }); d.setInput({ throttle: 0.3, brake: 0, steer: 0 }); for (let i = 0; i < 900 && !window.__CI().menu; i++) window.__dstep(1); d.setInput(null);

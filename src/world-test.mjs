@@ -11,6 +11,7 @@
 //   9 車庫街：名牌（第 1 間是你）、停在朋友的車庫門口「🚗 看他的車庫」→ 回車庫頁參觀
 //   10 參觀車庫（名單上 🚗）
 //   11 離開世界、斷線（自己再進去）、滿了（16 個人）、斷線沒收好的人被清掉、重新打開遊戲自己進去
+//   7c 第 22 批：A 開車撞追 B 的警車（B 那邊那台被撞開、暈一下，B 看到「💥 …撞開了追你的警車！」，A 不會被通緝）；B 被關 → A 走進警察局看得到 B 關在拘留室（鐵門關著），走出來看得到 B 的車停在警察局的停車場
 //   8b 借車（第 19 批）：A 下車車停著（B 看得到）→ B「🔑 借車」打錯密碼、錯 3 次鎖 30 秒、A 改密碼 → 對了上車開 A 的車（A 的顏色）→ 下車＝還車（停在新的地方）；再借、A 按「拿回來」；存檔還是 B 自己的
 import http from 'node:http';
 import fs from 'node:fs';
@@ -26,6 +27,7 @@ const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '
 const hook = 'window.__R = () => race; window.__D = () => ({ on: DRIVE.on, drv, walker, trip, VIL, cur, indoor, GAR });'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
   + ' window.__NET = () => NET; window.__CARS = () => CARS; window.__HILL = () => HILL; window.__TD = () => tripDest; window.__POL = () => police; window.__GAME = () => GAME; window.__HOME = () => HOME; window.__TOWN = () => ({ leaveCar, tripPose, tripFull, tripS, LENT_K, BORROW_K });'
+  + ' window.__NETPOL = () => NET_POL; window.__PI = () => PI; window.__ST = (j) => enterStation(j); window.__LEAVE = () => leaveHouse(indoor.exits[0]);'
   + ' renderer.setAnimationLoop = function (cb) { clearInterval(this.__iv); this.__iv = cb ? setInterval(() => { const t = performance.now(); cb(t); window.__ticks = (window.__ticks || 0) + 1; }, 30) : 0; };'
   + ' window.__thin = (n) => { if (!renderer.__rr) { renderer.__rr = renderer.render.bind(renderer); renderer.__rn = 0; renderer.render = (s, c) => { if (++renderer.__rn % renderer.__every === 0) renderer.__rr(s, c); }; } renderer.__every = Math.max(1, n | 0); }; window.__thin(300);'
   + ' window.__switch = (k) => { GAME.owned.add(k); if (!tripPose[k]) { const t = drv.telemetry(); tripPose[k] = { x: t.x + Math.sin(t.heading) * 6, z: t.z + Math.cos(t.heading) * 6, heading: t.heading }; } return switchCar(k); };'
@@ -55,6 +57,7 @@ const T0 = Date.now(), el = () => `${((Date.now() - T0) / 1000).toFixed(0)}s`;
 // ---- 假的即時資料庫 ----
 const DB = {};
 let NO_BORROW_RULES = false; // 8b：假裝爸媽還沒貼借車的規則
+const PH_LOG = []; // 第 22 批：world/p 裡的 ph（撞到朋友的警車）
 const clone = (v) => (v == null ? null : JSON.parse(JSON.stringify(v)));
 const segs = (p) => String(p).split('/').filter(Boolean);
 function getAt(p, root = DB) { let o = root; for (const k of segs(p)) { if (o == null || typeof o !== 'object') return null; o = o[k]; } return o === undefined ? null : clone(o); }
@@ -125,6 +128,7 @@ function write(uid, ops) { // ops：[[路徑, 值]]（一次全部檢查，全�
   for (const [p, v] of ops) putAt(after, p, v);
   for (const [p, v] of ops) if (!allowed(uid, p, v, after)) throw new Error('PERMISSION_DENIED ' + p);
   for (const [p, v] of ops) putAt(DB, p, v);
+  for (const [p, v] of ops) if (v && v.ph && /^world\/p\//.test(p)) PH_LOG.push([p, clone(v.ph)]); // 第 22 批：撞到朋友的警車送了什麼
   setTimeout(notify, 0);
   return true;
 }
@@ -438,6 +442,12 @@ await B.evaluate(() => { const T = window.__TOWN(); window.__GAME().owned.delete
 check(await waitFor(B, () => window.__D().cur === 'gc8' && !!window.__D().drv && !!document.querySelector('#stage .dv-pop[hidden]'), null, 30000), 'B is back in the GC8 (no 跳燈 button)');
 await A.evaluate(() => window.__thin(300));
 // Nick 2026-10-11「別人被警察抓我看不到」：B 被警察追 → A 看到 B 的名字旁邊兩顆星、追 B 的警車（紅藍燈）；B 被抓 → A 跳「🚓 阿明快車手被警察抓走了！」、名單「在拘留室 10:00」
+// 第 22 批：先把兩個人放到大停車場（空的、警察局就在旁邊，警車開得進來；400 公尺起點旁邊不會跑進比賽）；撞警車以前 B 先不要被抓（撞完改回來）
+await B.evaluate(() => { const T = window.__POL()._dbg.T; T.__keep = [T.catchT, T.boxT]; T.catchT = T.boxT = 1e9; const D = window.__D(), P = D.VIL.parking; D.drv.teleport({ x: P.x - 8.5, z: P.z - 12, heading: 0 }); D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); window.__dstep(30); });
+await A.evaluate(() => { const D = window.__D(), P = D.VIL.parking; D.drv.teleport({ x: P.x - 8.5, z: P.z + 22, heading: 0 }); D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); window.__dstep(30); D.drv.setInput(null); });
+const bSt = await B.evaluate(() => { const D = window.__D(), Q = window.__POL(); return { drv: !!D.drv, on: D.on, mode: D.walker?.mode, st: Q.state, w: Q.wanted, cur: D.cur, race: !!window.__R() }; });
+const bDrv = await waitFor(B, () => !!window.__D().drv, null, 30000);
+console.log('   before ram', JSON.stringify(bSt), bDrv, JSON.stringify(await B.evaluate(() => { const D = window.__D(), Q = window.__POL(); return { drv: !!D.drv, on: D.on, mode: D.walker?.mode, st: Q.state, w: Q.wanted, cur: D.cur }; })));
 await B.evaluate(() => { const t = window.__D().drv.telemetry(); window.__POL().crime('hit', { x: t.x, z: t.z }); });
 const chased = await waitFor(A, () => { const i = window.beauGame.net.info, q = i.peers[0]; return q && q.w === 2 && q.tagW === 2 && i.pol >= 1; }, null, 120000);
 const ch7 = await A.evaluate(() => { const i = window.beauGame.net.info; return { pol: i.pol, peer: i.peers[0] }; });
@@ -445,6 +455,33 @@ const bPol = await B.evaluate(() => window.__POL().telemetry().cars.map((c) => [
 console.log('   chased', chased, JSON.stringify(ch7), JSON.stringify(bPol), JSON.stringify(getAt('world/p/u2')));
 check(chased, `B is wanted (2★): A sees ★★ next to B’s name and ${ch7.pol} police car(s) chasing B`);
 await shot(A, `${prefix}-7-chased.png`);
+console.log('   B after chase', JSON.stringify(await B.evaluate(() => { const D = window.__D(), Q = window.__POL(); return { drv: !!D.drv, on: D.on, mode: D.walker?.mode, st: Q.state, w: Q.wanted, race: !!window.__R(), cars: Q.telemetry().cars.map((c) => [c.x, c.z, c.mode]) }; })));
+// 第 22 批（Nick 2026-10-18「別人被警察抓你要撞得到別人的那個警察」）：B 停到大停車場（空的，警車開得進來）、A 停在旁邊；等追 B 的警車圍住 B 停下來，A 開過去撞（A 這邊畫的那台）
+const copNear = await waitFor(A, () => { // A 這邊：有一台追 B 的警車在 B 旁邊 30 公尺內、1 秒多沒動
+  const NP = window.__NETPOL(), Pm = [...window.__NET().P.values()][0]?.mk, now = performance.now(), W = (window.__cw = window.__cw || {});
+  if (!Pm || !Pm.on) return false;
+  for (let c = 0; c < NP.n; c++) { const g = NP.cars[c].group.position, q = W[c]; if (Math.hypot(g.x - Pm.x, g.z - Pm.z) > 30) { W[c] = null; continue; } if (!q || Math.hypot(g.x - q.x, g.z - q.z) > 0.6) W[c] = { x: g.x, z: g.z, t: now }; else if (now - q.t > 1200) { window.__copC = c; return true; } }
+  return false; }, null, 150000);
+const ram = await A.evaluate(() => {
+  const D = window.__D(), NP = window.__NETPOL(), h0 = NP.hits, tries = [], c0 = window.__copC | 0;
+  for (const c of [c0, ...[0, 1, 2, 3].filter((k) => k !== c0 && k < NP.n)]) for (const a of [0, Math.PI / 2, -Math.PI / 2, Math.PI]) { // 從後面、兩邊、前面 9 公尺，車頭朝它
+    if (NP.hits !== h0) break;
+    const g = NP.cars[c].group, from = g.rotation.y + Math.PI + a, x = g.position.x + Math.cos(from) * 9, z = g.position.z - Math.sin(from) * 9, h = from + Math.PI;
+    D.drv.teleport({ x, z, heading: h }); D.drv.setInput({ throttle: 1, brake: 0, steer: 0 });
+    let i = 0; for (; i < 200 && NP.hits === h0; i++) window.__dstep(1);
+    D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); for (let j = 0; j < 60; j++) window.__dstep(1); D.drv.setInput(null);
+    tries.push([c, +a.toFixed(2), i]);
+  }
+  return { hits: NP.hits - h0, tries, sent: window.beauGame.net.info.phSent, pol: window.__POL().state, wanted: window.__POL().wanted };
+});
+const bumped = await waitFor(B, () => window.__NET().bumped > 0 && (window.__POL()._dbg.CNT.bump || 0) > 0, null, 30000);
+const phOut = PH_LOG.some(([p, ph]) => p === 'world/p/u1' && ph[0] === 'u2' && Number.isInteger(ph[1]) && Math.hypot(ph[2], ph[3]) > 0.5);
+const bToast = await waitFor(B, () => /💥 大便龍車神撞開了追你的警車！/.test(document.querySelector('#stage .dv-toast')?.textContent || ''), null, 15000);
+const bCars = await B.evaluate(() => { const T = window.__POL()._dbg.T; [T.catchT, T.boxT] = T.__keep; return window.__POL().telemetry().cars.map((c) => ({ id: c.id, bumps: c.bumps, daze: c.daze })); });
+console.log('   ram', copNear, JSON.stringify(ram), phOut, JSON.stringify(PH_LOG.slice(0, 3)), bumped, bToast, JSON.stringify(bCars));
+check(copNear && ram.hits > 0 && ram.sent > 0 && phOut, `A rams a police car chasing B (A’s side: ${ram.hits} hit frame(s), sends ph to B)`);
+check(bumped && bToast, 'B’s police car gets knocked away and dazed (police.bump), B sees 「💥 大便龍車神撞開了追你的警車！」');
+check(ram.pol === 'free' && ram.wanted === 0, 'ramming a friend’s police car is not a crime for A (no stars)');
 await B.evaluate(() => window.__POL().surrender());
 const jail7 = await waitFor(B, () => window.__POL().state === 'jail', null, 30000);
 const toast7 = await waitFor(A, () => /🚓 阿明快車手被警察抓走了！/.test(document.querySelector('#stage .dv-toast')?.textContent || ''), null, 15000);
@@ -453,6 +490,23 @@ const gone7 = await waitFor(A, () => { const i = window.beauGame.net.info; retur
 console.log('   jailed', jail7, toast7, list7, gone7, getAt('world/m/u2/w'));
 check(jail7 && toast7 && gone7, 'B is caught: A gets 「🚓 阿明快車手被警察抓走了！」, the stars and police cars go away');
 check(list7, `A’s list says where B is: 「${getAt('world/m/u2/w')}」`);
+// 第 22 批（Nick「別人被拘留你要看得到他在裡面」「他的車不管在哪裡你都要看得到」）：A 下車走進警察局 → 看得到 B 在拘留室裡（鐵門關著）
+const inSt = await A.evaluate(() => { const D = window.__D(); window.__TOWN().leaveCar(); for (let i = 0; i < 150 && D.walker.mode !== 'walk'; i++) window.__dstep(1); window.__ST(false); window.__dstep(3); return { mode: D.walker.mode, indoor: window.__D().indoor?.kind }; });
+const seeJail = await waitFor(A, () => { const i = window.beauGame.net.info, q = i.peers[0]; return !!q && q.o === 4 && q.inPol && i.cellShut && !window.__PI().cellOpen; }, null, 30000);
+const jailAt = await A.evaluate(() => { const P = [...window.__NET().P.values()][0], g = P.chr && P.chr.group, Z = window.__PI().zones.cell; if (!g) return null; const dx = g.position.x - Z.x, dz = g.position.z - Z.z, c = Math.cos(Z.rot), s = Math.sin(Z.rot); return { inCell: Math.abs(dx * c - dz * s) < Z.hx + 0.2 && Math.abs(dx * s + dz * c) < Z.hz + 0.2, tag: P.tag && P.tag.visible, rinfo: window.__rinfo() }; });
+console.log('   station', JSON.stringify(inSt), seeJail, JSON.stringify(jailAt), JSON.stringify(getAt('world/p/u2')));
+check(inSt.indoor === 'police' && seeJail && jailAt && jailAt.inCell && jailAt.tag, 'A walks into the police station: sees B (name tag) inside the cell, cell door shut');
+await A.evaluate(() => { const Z = window.__PI().zones.cell, c = Math.cos(Z.rot), s = Math.sin(Z.rot); window.__D().walker.teleport({ x: Z.x + c * 4.6, z: Z.z - s * 4.6, heading: Z.rot + Math.PI }); window.__dstep(3); }); // 截圖：站在拘留室鐵門外面看進去
+await shot(A, `${prefix}-7-jail.png`);
+await A.evaluate(() => { window.__LEAVE(); window.__dstep(3); });
+const seeYard = await waitFor(A, () => { const i = window.beauGame.net.info, q = i.peers[0]; return !window.__D().indoor && !!q && q.o === 4 && q.pv === 'gc8' && q.carVis && !i.cellShut && window.__PI().cellOpen; }, null, 30000);
+const carAt = await A.evaluate(() => { const P = [...window.__NET().P.values()][0], y = window.__D().VIL.places.police?.yard; return P.obj && y ? +Math.hypot(P.obj.car.position.x - y.x, P.obj.car.position.z - y.z).toFixed(1) : null; });
+console.log('   yard', seeYard, carAt, JSON.stringify(getAt('world/p/u2')?.pv));
+check(seeYard && carAt != null && carAt < 4, `A walks out: sees B’s GC8 parked at the police yard while B is locked up (${carAt} m from the yard spot); the cell door opens again`);
+await A.evaluate(() => { const W = window.__D().walker, t = W.telemetry(), P = [...window.__NET().P.values()][0], g = P.obj.car.position; W.teleport({ x: t.x, z: t.z, heading: Math.atan2(-(g.z - t.z), g.x - t.x) }); window.__dstep(3); }); // 截圖：看 B 停在停車場的車
+await shot(A, `${prefix}-7-yard.png`);
+const backIn = await A.evaluate(() => { const D = window.__D(), t = D.drv.telemetry(); D.walker.teleport({ x: t.x + Math.sin(t.heading) * 2.3, z: t.z + Math.cos(t.heading) * 2.3, heading: t.heading }); window.__dstep(2); const ok = D.walker.getIn(); for (let i = 0; i < 200 && D.walker.mode !== 'off'; i++) window.__dstep(1); return { ok, mode: D.walker.mode }; });
+check(backIn.mode === 'off', 'A gets back into the car');
 const paid7 = await B.evaluate(() => { window.__GAME().money = Math.max(window.__GAME().money, 10); return window.__POL().payFine(); }); // 罰款 2★＝4 萬
 console.log('   paid', paid7);
 const out7 = await waitFor(B, () => window.__POL().state === 'free' && window.__D().walker && window.__D().walker.mode === 'walk', null, 30000);

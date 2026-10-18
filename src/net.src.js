@@ -6,6 +6,8 @@
 //   join({ code, me, host, slot（世界的號碼 0–5＝車庫街你那間）})／slot(n)／leave()；members([{ uid, n, car, l（外觀）, ch（角色的樣子）}])（不含自己、不含封鎖的；順序＝進世界的順序，決定顏色；最多 15 個）
 //   snap(uid, { t, x, z, h, v, o, k, rp, rs, w, jl, pc })：朋友的位置（t＝伺服器時間毫秒；o：0 不在外面、1 開車、2 走路、3 在 400 公尺；rp＝這一場跑多遠、rs＝第幾場；
 //     w＝通緝幾顆星、jl＝1 被警察抓了、pc＝追他的警車 [x, z, h, …]（最多 3 台）：名字旁邊畫星星、後面畫警車（閃紅藍燈）、被抓跳「🚓 X被警察抓走了！」）
+//     第 22 批：pi＝那幾台警車是他那邊的第幾台（撞到的時候用）；ph＝[朋友, 第幾台, dvx, dvz, 第幾下]：我撞到朋友的警車（他那邊 police.bump）；
+//       pv＝[車, x, z, h]：他停著的車（不管他在走路、在房子裡、在警察局、被關）；o＝4：在警察局裡面（x、z 是裡面的座標；我也在裡面才畫）
 //   emote(uid, e)：朋友送的表情（NET_E 的第幾個）；clock(off)：伺服器時間＝Date.now()＋off
 //   state() → 自己現在的（送給朋友）；look() → { car, l, ch }（自己開的車、外觀、角色）；garage() → { cur, cars: { key: 外觀 } }（參觀車庫用）
 //   race({ seq, kind, go, order })：比賽（kind：circuit 賽車場 3 圈｜drag 400 公尺｜hill 爬山；go＝出發的伺服器時間，0＝還在等兩個人準備好；order＝比的人：起跑格）；host(uid)＝發起的人（可以按「再比一次」）
@@ -14,13 +16,14 @@
 //   遊戲發 window 事件 'beau-net'（detail.type）：emote { e }｜ready { seq }｜fin { seq, t }（t＝−1 沒跑完）｜again（發起的人按「再比一次」）｜back（「回去開車」）｜list（點右邊那一塊：線上的人）｜answer { id, ok }（邀請：好／不要）
 // window.beauGame.visit({ name, cars: [{ k, l }], likes, liked, onLike, onClose }) → { setLikes(n, liked), close() } | null（不在車庫頁）
 // 安全（草稿說好的）：只有名字（網站擋過髒話）；表情只有固定的幾個；朋友的車在比賽中穿過去，平常會擋（撞到照兩台車的速度算）；朋友走路的人不會被撞到（穿過去）；警察只追自己
+//   第 22 批：追朋友的警車也會擋，撞到了朋友那邊的那台會被撞開、暈一下（不算犯罪、不會給你星星）
 // 效能：朋友一台車＝輕量車 4 個 draw call＋影子＋名字；走路的人 2 個＋名字；每一格不 new（位置照 0.2 秒前的兩筆內插）
 const NET_E = ['👍', '😂', '好車！', '跟我來', '比一場？'];
 const NET_COL = ['#4a8cff', '#46c46f', '#f2c230', '#ff5fa2', '#a77bff', '#2fd3c7', '#ff8f5a', '#9bd14a', '#5ac8fa', '#e05ad7', '#ffd166', '#7f8cff', '#4cd98f', '#ff6b8b', '#c9a227']; // 別人的顏色（進世界的順序）；你自己是橘色
 const NET_MAX = 5, NET_FAR = 320; // 最多看幾個人；多遠以外只畫地圖上的點（車、人不畫）
 const NET_DELAY = 220; // 畫朋友的位置：0.22 秒前的（網路不穩也平順）
 const NET_HOLD = { throttle: 0, brake: 1, steer: 0, handbrake: 1 };
-const NET = { on: false, code: '', me: '', host: '', slot: -1, off: 0, mem: [], P: new Map(), race: null, doneSeq: 0, outSeq: 0, hud: null, marks: [], cols: [], wkT: 0, setD: null, setW: null, tex: {}, shGeo: null, shMat: null, inv: null, invT: 0, goal: null, goalHome: -1 };
+const NET = { on: false, code: '', me: '', host: '', slot: -1, off: 0, mem: [], P: new Map(), race: null, doneSeq: 0, outSeq: 0, hud: null, marks: [], cols: [], wkT: 0, setD: null, setW: null, tex: {}, shGeo: null, shMat: null, inv: null, invT: 0, goal: null, goalHome: -1, cellShut: false, bumped: 0 };
 const netNow = () => Date.now() + NET.off;
 const netEv = (type, d = {}) => { try { window.dispatchEvent(new CustomEvent('beau-net', { detail: { type, ...d } })); } catch { /* 沒有人聽就算了 */ } };
 const netWorld = () => DRIVE.on && !indoor && !!VIL; // 在外面（開車、走路；不含房子裡面、400 公尺）
@@ -61,9 +64,9 @@ function netSprite(map, w, h, cy) {
 function netPeer(uid) {
   let P = NET.P.get(uid);
   if (!P) {
-    P = { uid, n: '', car: '', l: null, ch: null, col: NET_COL[0], buf: [], cur: { t: 0, x: 0, z: 0, h: 0, v: 0, o: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pk: null }, last: 0, pkOn: false, tagW: 0, jlSeen: 0,
+    P = { uid, n: '', car: '', l: null, ch: null, col: NET_COL[0], buf: [], cur: { t: 0, x: 0, z: 0, h: 0, v: 0, o: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pk: null, pv: null }, last: 0, pkOn: false, tagW: 0, jlSeen: 0,
       obj: null, objK: '', job: 0, chr: null, chrK: '', tag: null, bub: null, bubT: 0, roll: 0, px: null, pz: null, mk: { x: 0, z: 0, fill: NET_COL[0], ring: '#ffffff', r: 6, label: '', name: '', on: false },
-      box: { t: 'box', x: 0, z: 0, hx: 2.2, hz: 0.9, rot: 0, h: 1.4, vx: 0, vz: 0, m: 1, dvx: 0, dvz: 0 }, vis: false };
+      box: { t: 'box', x: 0, z: 0, hx: 2.2, hz: 0.9, rot: 0, h: 1.4, vx: 0, vz: 0, m: 1, dvx: 0, dvz: 0, noCrush: true }, vis: false }; // noCrush：越野車輾不過去（照車撞車算）
     NET.P.set(uid, P); NET.marks.push(P.mk);
   }
   return P;
@@ -138,17 +141,23 @@ function netStep(dt) {
   if (!NET.on) return;
   netHudTick(dt);
   netRaceTick(dt);
+  netPhTick();
   const show = netWorld(), T = netNow() - NET_DELAY, now = netNow(), race = !!(NET.race && NET.race.kind !== 'out') || !!ciRace || !!orRace;
+  const inPol = !!(DRIVE.on && indoor && indoor.kind === 'police' && walker && PSC); // 第 22 批：我在警察局裡面：看得到也在裡面的朋友（關在拘留室的也是）
   const me = show ? (walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : null) : null, mx = me ? me.x : 0, mz = me ? me.z : 0;
+  const cols = !race && !!(drv || walker);
+  let jin = false; // 有朋友關在拘留室（我看得到的）
   NET.cols.length = 0; NET_POL.n = 0;
   for (const P of NET.P.values()) {
-    const c = P.cur, fresh = now - P.last < 6000, s = show && fresh && (c.o === 1 || c.o === 2) ? netSample(P, T) : null;
+    const c = P.cur, fresh = now - P.last < 6000, s = fresh && ((show && (c.o === 1 || c.o === 2)) || (inPol && c.o === 4)) ? netSample(P, T) : null;
     if (c.jl !== P.jlSeen) { P.jlSeen = c.jl; if (c.jl && P.n) netToast(`🚓 ${P.n}被警察抓走了！`); } // 朋友被警察抓走
     const tw = fresh && (c.o === 1 || c.o === 2) ? c.w : 0; if (tw !== P.tagW) { P.tagW = tw; if (P.n) netTag(P); } // 名字旁邊的星星
-    const near = !!s && (!me || (s.x - mx) * (s.x - mx) + (s.z - mz) * (s.z - mz) < NET_FAR * NET_FAR); // 遠的：只有地圖上的點
-    const car = near && c.o === 1, walkin = near && c.o === 2;
+    const near = !!s && (c.o === 4 || !me || (s.x - mx) * (s.x - mx) + (s.z - mz) * (s.z - mz) < NET_FAR * NET_FAR); // 遠的：只有地圖上的點
+    const car = near && c.o === 1, walkin = near && (c.o === 2 || c.o === 4), inside = c.o === 4;
     // 第 19 批：他下車停著的車（走路的時候）：畫在停的地方、會擋；借給你了（你在開、在載入）就不畫這台
-    const pk = show && fresh && !race && c.o === 2 && c.pk && !(BOR.on && BOR.on.uid === P.uid) && !(BOR.loading && BOR.loading.uid === P.uid) ? c.pk : null;
+    // 第 22 批（Nick「他的車不管在哪裡你都要看得到」）：他在房子裡、在警察局、被關（車拖到警察局的停車場）也畫（pv）
+    const pq = c.pk || c.pv;
+    const pk = show && fresh && !race && c.o !== 1 && c.o !== 3 && pq && !(BOR.on && BOR.on.uid === P.uid) && !(BOR.loading && BOR.loading.uid === P.uid) ? pq : null;
     const pkOn = !!pk && (!me || (pk[1] - mx) * (pk[1] - mx) + (pk[2] - mz) * (pk[2] - mz) < NET_FAR * NET_FAR);
     if (car) netCar(P, c.k); else if (pkOn) netCar(P, pk[0]);
     if (walkin) netChr(P);
@@ -156,8 +165,8 @@ function netStep(dt) {
     P.pkOn = pkOn && !!O;
     if (P.obj) { P.obj.car.visible = !!O; P.obj.sh.visible = !!O; }
     if (P.chr) P.chr.group.visible = !!C;
-    P.mk.on = !!s; P.vis = !!(O || C);
-    if (s) { P.mk.x = s.x; P.mk.z = s.z; if (NET.goal === P.uid && NET.goalHome < 0 && VIL.places.friend) { VIL.places.friend.pos[0] = s.x; VIL.places.friend.pos[1] = s.z; } }
+    P.mk.on = !!s && !inside; P.vis = !!(O || C);
+    if (s && !inside) { P.mk.x = s.x; P.mk.z = s.z; if (NET.goal === P.uid && NET.goalHome < 0 && VIL.places.friend) { VIL.places.friend.pos[0] = s.x; VIL.places.friend.pos[1] = s.z; } }
     if (O) {
       const ox = car ? s.x : pk[1], oz = car ? s.z : pk[2], oh = car ? s.h : pk[3], ov = car ? s.v : 0; // 開的車：內插的位置；停著的：停的位置
       const fx = Math.cos(oh) * 1.3, fz = -Math.sin(oh) * 1.3, y = netH(ox, oz);
@@ -166,24 +175,29 @@ function netStep(dt) {
       O.sh.matrix.makeRotationY(oh).scale(V_NET.set(O.nose - O.tail + 0.6, 1, O.hw * 2 + 0.4)).setPosition(ox + Math.cos(oh) * O.cx, y + 0.05, oz - Math.sin(oh) * O.cx); O.sh.matrixWorldNeedsUpdate = true;
       if (P.tag && car) P.tag.position.set(ox, y + O.top + 0.35, oz);
       const pp = O.lod.pop; if (pp) { if (pp.on !== !!c.pl) pp.set(!!c.pl, calm ? 0.12 : 0.3); pp.step(dt); } // 跳燈：朋友開燈＝燈蓋立起來（開著的、停著的車都一樣）
-      if (car && c.w) netPolPlace(P, s, dt);
-      if (!race && (drv || walker)) { // 平常會擋（撞到照兩台車的速度算；朋友那邊自己算自己的）；比賽中穿過去
+      if (cols) { // 平常會擋（撞到照兩台車的速度算；朋友那邊自己算自己的）；比賽中穿過去
         const k = P.box; k.x = ox + Math.cos(oh) * O.cx; k.z = oz - Math.sin(oh) * O.cx; k.hx = (O.nose - O.tail) / 2; k.hz = O.hw; k.rot = oh;
         k.vx = Math.cos(oh) * ov; k.vz = -Math.sin(oh) * ov; k.dvx = k.dvz = 0; NET.cols.push(k);
       }
     }
     if (C) {
-      const y = netH(s.x, s.z);
+      const scn = inside ? PSC : TR.scene, y = inside ? 0 : netH(s.x, s.z); // 第 22 批：警察局裡面＝它自己的場景（地板 0）
+      if (C.group.parent !== scn) scn.add(C.group);
       C.group.position.set(s.x, y, s.z); C.group.rotation.y = s.h;
       C.update(dt, { speed: Math.abs(s.v) });
       if (P.tag) P.tag.position.set(s.x, y + C.height + 0.45, s.z);
+      if (inside && c.jl) jin = true;
     }
+    netPolOffStep(P, dt);
+    if (s && near && c.w && (car || (walkin && !inside))) netPolPlace(P, s, dt, cols); // 追他的警車（他開車、走路都畫）
     P.px = O && car ? s.x : null; P.pz = O && car ? s.z : null;
-    if (P.vis) for (const sp of [P.tag, P.bub]) if (sp && !sp.parent) TR.scene.add(sp);
+    const tsc = C && inside ? PSC : TR.scene;
+    if (P.vis) for (const sp of [P.tag, P.bub]) if (sp && sp.parent !== tsc) tsc.add(sp);
     if (P.tag) P.tag.visible = P.vis;
     if (P.bub) { P.bubT -= dt; P.bub.visible = P.vis && P.bubT > 0; if (P.bub.visible) P.bub.position.copy(P.tag.position); }
   }
   for (let i = NET_POL.n; i < NET_POL.cars.length; i++) NET_POL.cars[i].group.visible = false;
+  netCell(inPol, jin);
   netGoalTick(me);
   netGstTick(me, show && !race);
   borTick(me, show, race); // 第 19 批：借車
@@ -196,27 +210,74 @@ function netStep(dt) {
     NET.wkT -= dt; if (NET.wkT <= 0) { NET.wkT = 0.2; walker.removeColliders('net'); if (NET.cols.length) walker.addColliders(NET.cols, 'net'); } // 走路的碰撞 5 次／秒就好
   }
 }
+// 第 22 批（Nick 2026-10-18「別人被拘留你要看得到他在裡面」）：朋友關在拘留室、我也在警察局裡面（我沒被關）：鐵門關著（他在裡面）；我站在拘留室裡面就不關
+function netCell(inPol, jin) {
+  const want = !!(inPol && jin && PI && police && police.state === 'free' && !netInCell());
+  if (want === NET.cellShut) return;
+  NET.cellShut = want;
+  if (want) { PI.setCellDoor(false); walker.addColliders([{ ...PI.cellCollider }], 'netcell'); return; } // 鐵門的碰撞（走路的碰撞是進來的時候抄的：另外放一個）
+  walker?.removeColliders('netcell');
+  if (PI && police && police.state === 'free') PI.setCellDoor(true);
+}
+function netInCell() {
+  const t = walker.telemetry(), Z = PI.zones.cell, dx = t.x - Z.x, dz = t.z - Z.z, c = Math.cos(Z.rot), s = Math.sin(Z.rot);
+  return Math.abs(dx * c - dz * s) < Z.hx + 0.5 && Math.abs(dx * s + dz * c) < Z.hz + 0.5;
+}
 const V_NET = new THREE.Vector3();
-// 追朋友的警車（police.js 的 makePoliceCar，一台 2 個 draw call；全部最多 4 台，用完重用）：照朋友送來的位置畫（跟他的車一樣內插），紅藍燈一直閃；只是畫出來（不會擋你、不會抓你）
-const NET_POL = { cars: [], n: 0, MAX: 4 };
-function netPolPlace(P, s, dt) {
+// 追朋友的警車（police.js 的 makePoliceCar，一台 2 個 draw call；全部最多 4 台，用完重用）：照朋友送來的位置畫（跟他的車一樣內插），紅藍燈一直閃
+// 第 22 批（Nick 2026-10-18「別人被警察抓你要撞得到別人的那個警察」）：會擋（長方形，照兩台車的動量算）；你撞到的推力送給朋友（ph）：他那邊那台被撞開、暈一下（police.bump）
+//   你這邊先自己滑一下、轉一下（P.pof：慢慢回到朋友送來的位置），不用等網路
+const NET_POL = { cars: [], n: 0, MAX: 4, hits: 0 };
+const NET_PH = { to: '', i: -1, ax: 0, az: 0, n: 0, out: null, outT: 0, seq: Date.now() % 1000000, sent: 0 }; // 撞到朋友的警車：攢起來，0.15 秒送一次（world.js 一秒 8 次）
+function netPolPlace(P, s, dt, cols) {
   const b = P.buf, A = b[s.i], pa = A && A.pc; if (!pa) return;
-  const B = s.f > 0 ? b[s.i + 1] : null, pb = B && B.pc && B.pc.length === pa.length ? B.pc : null, f = s.f;
+  const B = s.f > 0 ? b[s.i + 1] : null, pi = A.pi, pb = B && B.pc && B.pc.length === pa.length && String(B.pi) === String(pi) ? B.pc : null, f = s.f, gap = pb ? Math.max(0.05, (B.t - A.t) / 1000) : 1;
   for (let j = 0; j + 2 < pa.length && NET_POL.n < NET_POL.MAX; j += 3) {
     let x = pa[j], z = pa[j + 1], h = pa[j + 2];
     if (pb) { x += (pb[j] - x) * f; z += (pb[j + 1] - z) * f; h += wrapPi(pb[j + 2] - h) * f; }
     if ((x - s.x) * (x - s.x) + (z - s.z) * (z - s.z) > 250 * 250) continue;
+    const id = pi ? pi[j / 3] : -1, q = id >= 0 ? netPolOff(P, id) : null;
+    if (q) { x += q.x; z += q.z; h += q.a; }
     let k = NET_POL.cars[NET_POL.n];
     if (!k) { k = makePoliceCar(); k.group.name = 'net-police'; k.setLights(true); NET_POL.cars.push(k); }
     if (!k.group.parent) TR.scene.add(k.group);
     k.group.visible = true; k.group.position.set(x, netH(x, z), z); k.group.rotation.set(0, h, 0); k.update(dt); NET_POL.n++;
+    if (id < 0) continue; // 舊版的朋友（沒送第幾台）：只畫
+    const bx = netPolBox(P, id);
+    if (bx.dvx || bx.dvz) netPolHit(P, id, h, bx.dvx, bx.dvz); // 上一格被你推的
+    bx.dvx = bx.dvz = 0;
+    if (!cols) continue;
+    bx.x = x; bx.z = z; bx.rot = h; bx.vx = (pb ? (pb[j] - pa[j]) / gap : 0) + q.vx; bx.vz = (pb ? (pb[j + 1] - pa[j + 1]) / gap : 0) + q.vz;
+    NET.cols.push(bx);
   }
+}
+function netPolBox(P, id) { const a = P.pbx || (P.pbx = []); return a[id] || (a[id] = { t: 'box', x: 0, z: 0, hx: 2.35, hz: 0.92, rot: 0, h: 1.6, vx: 0, vz: 0, m: 1.2, dvx: 0, dvz: 0, noCrush: true, netPol: true }); } // police-ai.js 的警車一樣大；noCrush：越野車輾不扁（是朋友那邊的車）
+function netPolOff(P, id) { const a = P.pof || (P.pof = []); return a[id] || (a[id] = { x: 0, z: 0, vx: 0, vz: 0, a: 0, w: 0 }); }
+function netPolOffStep(P, dt) { // 自己這邊撞開的：滑出去、慢慢回到朋友送來的位置（那時候他那邊也撞開了）
+  if (!P.pof) return;
+  const e = Math.exp(-dt * 4), back = Math.exp(-dt * 1.6);
+  for (const q of P.pof) if (q) { q.x = (q.x + q.vx * dt) * back; q.z = (q.z + q.vz * dt) * back; q.a = (q.a + q.w * dt) * back; q.vx *= e; q.vz *= e; q.w *= e; }
+}
+function netPolHit(P, id, h, dvx, dvz) {
+  const q = netPolOff(P, id), fx = Math.cos(h), fz = -Math.sin(h), al = dvx * fx + dvz * fz, lx = dvx - al * fx, lz = dvz - al * fz;
+  q.vx += dvx; q.vz += dvz; q.w += (lx * fz - lz * fx > 0 ? 1 : -1) * Math.min(3, Math.hypot(lx, lz) * 0.4);
+  const H = NET_PH; if (H.n && (H.to !== P.uid || H.i !== id)) netPhFlush();
+  H.to = P.uid; H.i = id; H.ax += dvx; H.az += dvz; H.n++;
+  NET_POL.hits++;
+}
+function netPhFlush() { const H = NET_PH; H.out = [H.to, H.i, Math.round(H.ax * 10) / 10, Math.round(H.az * 10) / 10, ++H.seq]; H.outT = performance.now(); H.ax = H.az = 0; H.n = 0; H.sent++; }
+function netPhTick() { const H = NET_PH, t = performance.now(); if (H.n && t - H.outT > 150) netPhFlush(); if (H.out && t - H.outT > 4000) H.out = null; } // 留 4 秒（網頁很卡也送得到；朋友那邊照第幾下只算一次）
+function netPolBumped(P, i, dvx, dvz) { // 朋友撞到追我的警車：我這邊那台被撞開、暈一下
+  if (!police || !police.bump || !police.bump(i, dvx, dvz)) return;
+  NET.bumped++;
+  const t = performance.now(); if (P.n && t - (P.bumpT || 0) > 4000) { P.bumpT = t; netToast(`💥 ${P.n}撞開了追你的警車！`); }
 }
 function netToast(text) { const t = walker && walker.mode !== 'off' ? walker : drv; if (t && trip) t.toast(text, 3000); else netSay(text); }
 function netHideAll() {
   for (const k of NET_POL.cars) k.group.visible = false;
   for (const P of NET.P.values()) { if (P.obj) { P.obj.car.visible = false; P.obj.sh.visible = false; } if (P.chr) P.chr.group.visible = false; if (P.tag) P.tag.visible = false; if (P.bub) P.bub.visible = false; P.mk.on = false; }
   drv?.removeColliders('net'); walker?.removeColliders('net');
+  netCell(false, false);
   if (NET.hud) { NET.hud.root.hidden = true; netTray(false); } // 回車庫頁：房間那一塊收起來（netHudTick 只有在外面才跑）
 }
 
@@ -915,6 +976,15 @@ function borParked() { // 我下車停著的那台（朋友看得到、借得到
   const q = garLocal(t.x, t.z); if (GAR.isInside(q.x, q.z, -1)) return null;
   return t;
 }
+// 第 22 批：我的車停在外面哪裡（我在走路、在房子裡、在警察局、被關都算；開著、在自己車庫裡、停在家的格子上、借出去了不算）→ { x, z, heading } | null
+function netParked() {
+  if (BOR.on || LENT_K || HOME.in || !trip || !tripPose || !walker || walker.mode === 'off') return null;
+  let t = null;
+  if (drv) { if (tripFull !== cur || !tripS) return null; const d = drv.telemetry(); if (!d.paused) return null; t = { x: d.x, z: d.z, heading: d.heading }; }
+  else { t = tripPose[cur]; if (!t || t.tw != null || !GAME.owned.has(cur)) return null; } // 被抓：拖到警察局的停車場（完整的車）；還回來的：輕量車
+  const q = garLocal(t.x, t.z); if (GAR.isInside(q.x, q.z, -1)) return null;
+  return t;
+}
 function borLendInfo() { // 網站問：可以借嗎（可以＝車子的樣子、零件、停在哪裡）
   const t = borParked(); if (!t) return null;
   return { k: cur, l: { ...CARS[cur].state }, pt: partsOf(cur).slice(), ty: { own: tyresOf(cur).own.slice(), use: tyresOf(cur).use }, x: Math.round(t.x * 100) / 100, z: Math.round(t.z * 100) / 100, h: Math.round(t.heading * 1000) / 1000 };
@@ -973,24 +1043,26 @@ function borOff() { // 離開世界：借來的還、借出去的拿回來（網
 }
 
 // ---- 自己的（送給朋友）----
-const NET_ME = { o: 0, x: 0, z: 0, h: 0, v: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pc: [0, 0, 0, 0, 0, 0, 0, 0, 0], pn: 0, pk: null }; // w、jl、pc／pn：被警察追（幾顆星、被抓了、追你的警車）；pk：第 19 批，下車停著的車 [車, x, z, h]
+const NET_ME = { o: 0, x: 0, z: 0, h: 0, v: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pc: [0, 0, 0, 0, 0, 0, 0, 0, 0], pi: [0, 0, 0], pn: 0, pk: null, pv: null, ph: null }; // w、jl、pc／pi／pn：被警察追（幾顆星、被抓了、追你的警車、第幾台）；pk：第 19 批，下車停著的車 [車, x, z, h]；pv、ph：第 22 批（停著的車、撞到朋友的警車）
 NET_ME.pl = 0; // 跳燈：開的（停著的）這台燈蓋立起來＝1（town.src.js popSend）
 function netState() {
   const s = NET_ME, R = NET.race;
-  s.k = cur; s.rp = null; s.rs = 0; s.o = 0; s.x = s.z = s.h = s.v = 0; s.w = 0; s.pn = 0; s.pk = null; s.jl = jailed() ? 1 : 0;
+  s.k = cur; s.rp = null; s.rs = 0; s.o = 0; s.x = s.z = s.h = s.v = 0; s.w = 0; s.pn = 0; s.pk = null; s.pv = null; s.ph = NET_PH.out; s.jl = jailed() ? 1 : 0;
   s.pl = 0;
   if (RACE.on && race) { s.o = 3; s.x = race.me.x; s.v = race.me.v; if (race.net) { s.rp = Math.round(race.me.x * 10) / 10; s.rs = race.net.seq; } return s; }
+  const pv = netParked(); if (pv) s.pv = [cur, Math.round(pv.x * 100) / 100, Math.round(pv.z * 100) / 100, Math.round(pv.heading * 1000) / 1000]; // 第 22 批：停著的車（我在哪裡都送）
+  if (DRIVE.on && trip && indoor && indoor.kind === 'police' && walker && walker.mode !== 'off') { const t = walker.telemetry(); s.o = 4; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed; return s; } // 第 22 批：在警察局裡面（關在拘留室也是）
   if (!netWorld() || HOME.in) return s; // 在自己車庫裡面：朋友看不到（名單寫「在車庫」）
   if (walker && walker.mode !== 'off' && walker.mode !== 'seat') {
     const t = walker.telemetry(); s.o = 2; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed;
-    const p = borParked(); if (p) s.pk = [cur, Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100, Math.round(p.heading * 1000) / 1000]; // 第 19 批：下車停著的車（朋友看得到、借得到）
+    const p = borParked(); if (p) { s.pk = [cur, Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100, Math.round(p.heading * 1000) / 1000]; s.pv = null; } // 第 19 批：下車停著的車（朋友看得到、借得到）
   }
   else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; }
   if (s.o) s.pl = popSend(); // 跳燈
   if (R && R.ci && ciRace === R.ci) { s.rp = Math.round(R.ci.me.p * 10) / 10; s.rs = R.seq; }
   if (s.o && police && police.state === 'wanted' && police.enabled) { // 通緝中：幾顆星、200 公尺內追你的警車
     s.w = police.wanted; const nc = police.npcCars;
-    for (let i = 0; i < nc.length && s.pn < 3; i++) { const q = nc[i]; if (q.x > 1e5 || (q.x - s.x) * (q.x - s.x) + (q.z - s.z) * (q.z - s.z) > 200 * 200) continue; s.pc[s.pn * 3] = q.x; s.pc[s.pn * 3 + 1] = q.z; s.pc[s.pn * 3 + 2] = q.heading; s.pn++; }
+    for (let i = 0; i < nc.length && s.pn < 3; i++) { const q = nc[i]; if (q.x > 1e5 || (q.x - s.x) * (q.x - s.x) + (q.z - s.z) * (q.z - s.z) > 200 * 200) continue; s.pc[s.pn * 3] = q.x; s.pc[s.pn * 3 + 1] = q.z; s.pc[s.pn * 3 + 2] = q.heading; s.pi[s.pn] = i; s.pn++; }
   }
   return s;
 }
@@ -1100,6 +1172,7 @@ Object.assign(window.beauGame, {
       for (const P of [...NET.P.values()]) netDropPeer(P);
       for (const k of NET_POL.cars) k.group.visible = false;
       drv?.removeColliders('net'); walker?.removeColliders('net');
+      netCell(false, false); NET_PH.n = 0; NET_PH.out = null;
       if (NET.hud) { NET.hud.root.hidden = true; NET.hud.rc.hidden = true; NET.hud.res.hidden = true; NET.hud.quit.hidden = true; }
     },
     host(uid) { NET.host = String(uid || ''); },
@@ -1123,14 +1196,19 @@ Object.assign(window.beauGame, {
       const P = NET.P.get(uid); if (!P || !s || typeof s.t !== 'number') return;
       const b = P.buf; if (b.length && s.t <= b[b.length - 1].t) return;
       const e = { t: s.t, x: +s.x || 0, z: +s.z || 0, h: +s.h || 0, v: +s.v || 0, rp: typeof s.rp === 'number' ? s.rp : null,
-        pc: Array.isArray(s.pc) && s.pc.length <= 9 && s.pc.length % 3 === 0 && s.pc.every(Number.isFinite) ? s.pc : null };
+        pc: Array.isArray(s.pc) && s.pc.length <= 9 && s.pc.length % 3 === 0 && s.pc.every(Number.isFinite) ? s.pc : null, pi: null };
+      if (e.pc && Array.isArray(s.pi) && s.pi.length * 3 === e.pc.length && s.pi.every((v) => Number.isInteger(v) && v >= 0 && v < 8)) e.pi = s.pi; // 第 22 批：第幾台警車
       if (!P.last) P.jlSeen = s.jl ? 1 : 0; // 進世界的時候他已經被關了：不用跳「被抓走了」
+      if (((s.o | 0) === 4) !== (P.cur.o === 4)) b.length = 0; // 第 22 批：走進、走出警察局（裡面、外面的座標不一樣）：不要滑過去
       b.push(e); if (b.length > 16) b.shift();
       const c = P.cur; c.t = s.t; c.x = e.x; c.z = e.z; c.h = e.h; c.v = e.v; c.o = s.o | 0; c.k = typeof s.k === 'string' ? s.k : ''; c.rp = e.rp; c.rs = s.rs | 0; c.w = Math.max(0, Math.min(3, s.w | 0)); c.jl = s.jl ? 1 : 0;
       c.pl = s.pl === 1 ? 1 : 0; // 跳燈
       const pk = s.pk; c.pk = Array.isArray(pk) && pk.length === 4 && typeof pk[0] === 'string' && CARS[pk[0]] && [pk[1], pk[2], pk[3]].every(Number.isFinite) ? pk : null; // 第 19 批：他停著的車
+      const pv = s.pv; c.pv = Array.isArray(pv) && pv.length === 4 && typeof pv[0] === 'string' && CARS[pv[0]] && [pv[1], pv[2], pv[3]].every(Number.isFinite) ? pv : null; // 第 22 批：他停著的車（他在哪裡都有）
+      const ph = s.ph; // 第 22 批：他撞到追我的警車
+      if (Array.isArray(ph) && ph.length === 5 && ph[0] === NET.me && ph[4] !== P.phSeen) { P.phSeen = ph[4]; if (Number.isInteger(ph[1]) && Number.isFinite(ph[2]) && Number.isFinite(ph[3]) && netNow() - s.t < 3000) netPolBumped(P, ph[1], ph[2], ph[3]); }
       P.last = netNow();
-      if (c.o !== 1 && c.o !== 2) b.length = 0; // 不在外面：下次出來不要從舊的位置滑過去
+      if (c.o !== 1 && c.o !== 2 && c.o !== 4) b.length = 0; // 不在外面（也不在警察局裡面）：下次出來不要從舊的位置滑過去
     },
     emote: netEmote,
     clock(off) { NET.off = +off || 0; },
@@ -1155,7 +1233,7 @@ Object.assign(window.beauGame, {
     lent: () => (BOR.lent ? { uid: BOR.lent.uid, k: BOR.lent.k } : null),
     place: netPlace,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
-    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, park: !!P.pkOn, car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '', bar: BOR.ui && !BOR.ui.bar.hidden ? BOR.ui.barT.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at }; },
+    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, pv: P.cur.pv ? P.cur.pv[0] : null, park: !!P.pkOn, carVis: !!(P.obj && P.obj.car.visible), inPol: !!(P.chr && P.chr.group.visible && PSC && P.chr.group.parent === PSC), car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, polHits: NET_POL.hits, phSent: NET_PH.sent, bumped: NET.bumped, cellShut: NET.cellShut, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '', bar: BOR.ui && !BOR.ui.bar.hidden ? BOR.ui.barT.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at }; },
   },
   visit: netVisit,
 });

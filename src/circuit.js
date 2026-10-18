@@ -27,6 +27,7 @@
 //     result: false＝跑完不出自己的結果（呼叫的人自己顯示大家的成績），「放棄比賽」照樣有
 // 效能：地面（草、柏油、碎石、白線＋路緣石）、護欄、看台、建築都照材質合併（450 公尺一塊）；樹一個 InstancedMesh；對手一台 4 個 draw call（輕量車）＋影子一個
 import * as THREE from 'three';
+import { TOWER } from './tower.js'; // 第 22 批：家（圓塔）門口前面的護欄開一個口
 
 // 打包（build-art.mjs、build-app.mjs）：跟 offroad.js 一樣整個包在一個函式裡，只露出下面這些名字
 export const { buildCircuit, circuitFonts, CIRCUIT_TEXT, CIRCUIT_KEEP, createCircuitRace, CIRCUIT_SKILL, circuitCourse, circuitCSS, circuitFmt, circuitCar, circuitProfile } = (() => {
@@ -438,8 +439,20 @@ function buildCircuit(V, opt = {}) {
   };
   const colliders = [], BAR = [];
   let barLen = 0;
-  for (const ln of contours) {
-    const pts = simplify(ln.pts, 0.2);
+  // 第 22 批（Nick 2026-10-18「在賽道那邊的車庫車子出不來 要弄一個出口」）：3 號家（賽車場門口）的門口正對著聯外道路北邊的護欄 → 門前面（門外到路邊再 4 公尺、門兩邊各 7 公尺）的護欄拿掉
+  const GAPS = (V.homeSites || []).map((L) => ({ x: L.x, z: L.z, c: Math.cos(L.heading), s: Math.sin(L.heading), l0: TOWER.DX1, l1: TOWER.DX1 + (L.apron || 0) + 4, w: TOWER.DZ + 3 }));
+  const inGap = (x, z) => GAPS.some((g) => { const dx = x - g.x, dz = z - g.z, lx = dx * g.c - dz * g.s, lz = dx * g.s + dz * g.c; return lx > g.l0 && lx < g.l1 && Math.abs(lz) < g.w; });
+  const cutGap = (pts) => { // 一條護欄線切掉在口裡面的部分（0.25 公尺一步）→ 好幾條
+    const out = []; let cur = [];
+    for (let i = 0; i < pts.length; i++) {
+      if (i) { const a = pts[i - 1], b = pts[i], n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.25));
+        for (let q = 1; q < n; q++) { const x = a[0] + ((b[0] - a[0]) * q) / n, z = a[1] + ((b[1] - a[1]) * q) / n, gin = inGap(x, z); if (gin && cur.length) { cur.push([x, z]); out.push(cur); cur = []; } else if (!gin && !cur.length) cur.push([x, z]); } }
+      if (inGap(pts[i][0], pts[i][1])) { if (cur.length) { out.push(cur); cur = []; } } else cur.push(pts[i]);
+    }
+    if (cur.length) out.push(cur);
+    return out.filter((c) => c.length > 1);
+  };
+  for (const ln of contours) for (const pts of cutGap(simplify(ln.pts, 0.2))) {
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i], b = pts[i + 1], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (l < 0.05) continue;
       barLen += l;

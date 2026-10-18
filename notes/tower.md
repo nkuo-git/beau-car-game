@@ -41,6 +41,7 @@ The 4-floor ring garage behind the marble garage (an earlier step of the same da
 - `places.garst.slots` = these 6 (name kept for net.src.js). Your home = your world slot, saved as `home`; not in a world = 1.
 - The garage street keeps only house #1. `homeAt(n)` moves `places.garage` to home n, and `wrapHome` reroutes 「回車庫」 to it.
 - Other homes draw as exterior shells with name signs. Friends' homes show on the big map, and 「去找他」 for a friend at home drives to their door (`NET.goalHome`).
+- 第 22 批 (2026-10-18, Nick 「在賽道那邊的車庫車子出不來 要弄一個出口」): home 3's door faced the circuit access road's north guardrail (z ≈ −106.6), so no car could leave. circuit.js now cuts the guardrail contours (colliders and drawn rail pieces) inside a box in front of every home door (`GAPS`: from the door face DX1 to apron + 4 m out, ±(DZ + 3) m wide). Only home 3 is near the circuit, so only that rail changes. circuit-test checks the door drive-out and the rail beside it.
 
 ## Performance (measured in test harness, SwiftShader)
 - Tower interior: 12 calls / 16k tris. Other five homes' exteriors: 9 calls / 97k tris.

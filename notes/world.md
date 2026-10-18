@@ -344,3 +344,12 @@ Nick: 「可以借別人的車來開 每個人自己手機上會有一個密碼 
 - Rules: new top-level `borrow` (q/a/r: `.read` only by `$to`, writes only by `$from`; q needs both in the world and no block). A parent must paste them again.
 - world-test 8b covers it (two fake phones).
 
+
+## Hitting a friend's police, seeing a jailed friend, a friend's car anywhere (第 22 批, 2026-10-18)
+Nick: 「別人被警察抓你要撞得到別人的那個警察」「別人被拘留你要看得到他在裡面」「他的車不管在哪裡你都要看得到」. Rules unchanged (`world/p` only validates x/z/h/t).
+- Police you can hit: `world/p` also carries `pi` (which police-ai car each `pc` triple is). Receivers turn each drawn police car into a moving box (`netPolBox`: police-ai size, m 1.2, `noCrush`, no `police` flag so it is not your crime and crush.js leaves it alone; walker blocks too). drive.js writes the push into the box (`dvx/dvz`); `netPolHit` gives your copy a local slide/spin (`P.pof`, eases back to the synced position) and gathers the push into `NET_PH`, flushed every 0.15 s as `ph = [friendUid, carIndex, dvx, dvz, seq]` (kept 4 s; the friend applies each seq once, only if `t` is under 3 s old).
+- The chased friend: `police.bump(i, dvx, dvz)` (police-ai.js): the push along the car is added to its speed, the sideways part becomes a slide, a spin, and `dazeT` 1.2–4 s (stepCar just brakes and slides; catchTick ignores dazed cars) → toast 「💥 X撞開了追你的警車！」 (once per 4 s). No stars for anyone. Police are now drawn behind walking friends too.
+- In the police station: `o = 4` with interior coordinates. If you are inside too, the friend's character, tag and bubble move into `PSC` (floor 0). A jailed friend (`jl`) shuts the cell door on your side (`netCell`: `PI.setCellDoor(false)` + a `netcell` walker collider copied from `PI.cellCollider`; not while you stand in the cell, never while you are caught/jailed yourself; reopened when you leave, leave the world or go home).
+- Parked car anywhere: `pv = [car, x, z, h]` (`netParked()`: the current car parked outside your garage while you walk, are in a house, in the station or jailed — after an arrest it is the full car at the police yard; not in a tower bay, not lent, not while borrowing). Receivers draw `pk || pv` whenever the friend is not driving or drag racing (same LOD car, NET_FAR culling, blocks like before). Borrowing still needs `pk` (friend walking).
+- Fixed on the way: friends' car boxes are `noCrush` (an off-road car used to "crush" them as a big object and report a crime).
+- world-test 7c covers it.

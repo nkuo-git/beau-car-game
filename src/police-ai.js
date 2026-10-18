@@ -791,7 +791,7 @@ function createPolice(o = {}) {
     x: 0, z: 0, th: 0, v: 0, steer: 0, pitch: 0, roll: 0,
     mode: 'go', path: mkPath(900), rt: 0, losT: 0, seen: false, clear: false, d: 999, role: -1, slot: -1, slotDone: false,
     stuck: 0, exitCool: 0, offT: 0, offOk: true, manOn: false, manT: 0, manN: 0, manD: 0, manS: 0, manB: 0, manCool: 0, ancX: 0, ancZ: 0, ancT: 0, wantV: 0, waitT: 0, touch: 0, pathOff: 0,
-    officer: null, siren: null, lights: false, hitCool: 0, homeT: 0, age: 0, dist: 0, wreckT: 0, wreckA: 0, // wreckT：第 9 批（被越野車輾扁）還留幾秒
+    officer: null, siren: null, lights: false, hitCool: 0, homeT: 0, age: 0, dist: 0, wreckT: 0, wreckA: 0, dazeT: 0, spin: 0, sx: 0, sz: 0, // wreckT：第 9 批（被越野車輾扁）還留幾秒；dazeT、spin、sx／sz：第 22 批（被朋友撞開：還暈幾秒、轉多快、滑多快）
     stats: { stuckMax: 0, relocs: 0, bumps: 0, recov: 0, stuckSec: 0, manSec: 0, shots: 0 },
   });
   const offs = []; // 警察（一台一個）
@@ -854,13 +854,13 @@ function createPolice(o = {}) {
   function placeCar(c, x, z, th, v) {
     ensureModel(c);
     c.on = true; c.x = x; c.z = z; c.th = th; c.v = v; c.steer = 0; c.mode = 'go'; c.rt = 0; c.losT = rnd() * 0.25; c.stuck = 0; c.manOn = false; c.manT = 0; c.manN = 0; c.slot = -1; c.age = 0; c.homeT = 0;
-    c.ancX = x; c.ancZ = z; c.ancT = 0; c.wantV = 0; c.waitT = 0; c.pathOff = 0; c.seen = false; c.clear = false; c.d = Math.hypot(P.cx - x, P.cz - z);
+    c.ancX = x; c.ancZ = z; c.ancT = 0; c.wantV = 0; c.waitT = 0; c.pathOff = 0; c.seen = false; c.clear = false; c.d = Math.hypot(P.cx - x, P.cz - z); c.dazeT = 0; c.spin = 0; c.sx = c.sz = 0;
     c.path.n = 0; c.path.ok = false; c.lights = true; if (c.model.setLights) c.model.setLights(true);
     c.group.visible = enabled; poseCar(c);
     hideOfficer(c.officer);
   }
   function removeCar(c) {
-    c.on = false; if (c.group) { c.group.visible = false; c.group.scale.set(1, 1, 1); } c.wreckT = 0; c.wreckA = 0; // 第 9 批：輾扁的變回原狀（下次出來是好的）
+    c.on = false; if (c.group) { c.group.visible = false; c.group.scale.set(1, 1, 1); } c.wreckT = 0; c.wreckA = 0; c.dazeT = 0; c.spin = 0; c.sx = c.sz = 0; // 第 9 批：輾扁的變回原狀（下次出來是好的）
     if (c.model && c.model.setLights) c.model.setLights(false); c.lights = false;
     if (c.siren) { c.siren.stop(); c.siren = null; }
     hideOfficer(c.officer);
@@ -1201,6 +1201,11 @@ function createPolice(o = {}) {
 
   function stepCar(c, h) {
     const f = c.officer;
+    if (c.dazeT > 0) { // 第 22 批：被朋友撞開：滑出去、轉一下、停著（不追、不抓）
+      c.dazeT -= h; c.th = wrapA(c.th + c.spin * h); c.x += c.sx * h; c.z += c.sz * h;
+      const e = Math.exp(-h * 2.5); c.spin *= e; c.sx *= e; c.sz *= e;
+      c.wantV = 0; c.manOn = false; drivePhys(c, h, 0, 0); return;
+    }
     let sT = 0, vT = 0, mg = false, mgx = 0, mgz = 0; // mg：要去的地方（慢慢倒車、轉頭的時候用）
     const vcap = !c.seen && c.d > 220 ? T.vfar : T.vmax; // 離很遠、看不到你：快一點追上來
     c.touch -= h; c.manCool -= h;
@@ -1685,7 +1690,7 @@ function createPolice(o = {}) {
   function catchTick(dt) {
     let rate = 0, near = 0;
     if (P.mode === 'drive' && !P.hidden) {
-      for (const c of cars) { if (!c.on || c.mode === 'home' || c.wreckT > 0) continue; const g = Math.hypot(c.x - P.cx, c.z - P.cz); if (g < T.boxR) near++; if (g < T.catchR) rate = 1 / T.catchT; }
+      for (const c of cars) { if (!c.on || c.mode === 'home' || c.wreckT > 0 || c.dazeT > 0) continue; const g = Math.hypot(c.x - P.cx, c.z - P.cz); if (g < T.boxR) near++; if (g < T.catchR) rate = 1 / T.catchT; } // 第 22 批：被朋友撞暈的不算
       if (near >= 2) rate = 1 / T.boxT;
       if (P.spd > T.catchV) rate = 0;
       catchP = rate > 0 ? catchP + rate * dt : Math.max(0, catchP - dt * 0.8);
@@ -1755,6 +1760,19 @@ function createPolice(o = {}) {
     CNT.wreck = (CNT.wreck || 0) + 1;
     crime('crushCop', { x: c.x, z: c.z });
     return { x: c.x, z: c.z, th: c.th, hl: c.hl, hw: c.hw };
+  }
+  // 第 22 批（Nick 2026-10-18「別人被警察抓你要撞得到別人的那個警察」）：連線的朋友開車撞到追你的警車（他那邊算的推力 dvx、dvz，m/s）：
+  //   被撞開（往前後的加到速度、往旁邊的滑出去）、轉一下、暈 1.2–4 秒（不追、不算抓你）；不算你的犯罪
+  function bump(i, dvx, dvz) {
+    const c = cars[i]; if (!alive || !enabled || !c || !c.on || c.wreckT > 0 || !isFinite(dvx) || !isFinite(dvz)) return false;
+    let m = Math.hypot(dvx, dvz); if (m < 0.5) return false;
+    if (m > 25) { dvx *= 25 / m; dvz *= 25 / m; m = 25; }
+    const fx = Math.cos(c.th), fz = -Math.sin(c.th), along = dvx * fx + dvz * fz, lx = dvx - along * fx, lz = dvz - along * fz;
+    c.v = clamp(c.v + along, -8, 40); c.sx += lx; c.sz += lz;
+    c.spin = clamp(c.spin + (lx * fz - lz * fx > 0 ? 1 : -1) * Math.min(3.5, Math.hypot(lx, lz) * 0.4 + 0.6), -4, 4);
+    c.dazeT = Math.max(c.dazeT, clamp(0.8 + m * 0.3, 1.2, 4)); c.slot = -1; c.manOn = false;
+    c.stats.bumps++; CNT.bump = (CNT.bump || 0) + 1;
+    return true;
   }
   function wreckTick(c, dt) { // 扁下去（0.45 秒）、留著，時間到收掉
     c.wreckA = Math.min(1, c.wreckA + dt / 0.45); const e = c.wreckA * c.wreckA * (3 - 2 * c.wreckA);
@@ -1848,14 +1866,14 @@ function createPolice(o = {}) {
       wanted, state, seen: seenNow, everSeen, hunt: +huntT.toFixed(1), heat: +heat.toFixed(2), catch: +catchP.toFixed(3), last: { x: +lastX.toFixed(1), z: +lastZ.toFixed(1) }, enabled,
       player: { mode: P.mode, x: +P.cx.toFixed(1), z: +P.cz.toFixed(1), kmh: Math.round(P.spd * 3.6), hidden: P.hidden, safe: P.safe },
       cars: cars.filter((c) => c.on).map((c) => ({ id: c.id, mode: c.mode, x: +c.x.toFixed(1), z: +c.z.toFixed(1), th: +c.th.toFixed(2), kmh: Math.round(c.v * 3.6), d: +c.d.toFixed(1), seen: c.seen, clear: c.clear, role: c.role, slot: c.slot,
-        stuck: +c.ancT.toFixed(2), stuckMax: +c.stats.stuckMax.toFixed(2), recov: c.stats.recov, relocs: c.stats.relocs, bumps: c.stats.bumps, path: c.path.ok ? c.path.n : 0, wreck: c.wreckT > 0, officer: c.officer.on ? c.officer.st : 'in', ox: +c.officer.x.toFixed(1), oz: +c.officer.z.toFixed(1), siren: !!c.siren })),
+        stuck: +c.ancT.toFixed(2), stuckMax: +c.stats.stuckMax.toFixed(2), recov: c.stats.recov, relocs: c.stats.relocs, bumps: c.stats.bumps, path: c.path.ok ? c.path.n : 0, wreck: c.wreckT > 0, daze: +c.dazeT.toFixed(2), officer: c.officer.on ? c.officer.st : 'in', ox: +c.officer.x.toFixed(1), oz: +c.officer.z.toFixed(1), siren: !!c.siren })),
       jail: state === 'jail' || state === 'release' ? { left: +jailLeft.toFixed(1), fine: jailFine, paid } : null,
       arrests, escapes, crimes: crimes.slice(-8), ms: { avg: perf.n ? +(perf.sum / perf.n).toFixed(4) : 0, max: +perf.max.toFixed(3), last: +perf.last.toFixed(4), frames: perf.n },
       graph: { nodes: G.N, segs: G.M },
     };
   }
   return {
-    update, crime, punch, carHit, shot, carObject, shotCar, colliders, wreck, movers, npcCars, markers: markerList, clear, setEnabled, dispose, telemetry, payFine, preload,
+    update, crime, punch, carHit, shot, carObject, shotCar, colliders, wreck, bump, movers, npcCars, markers: markerList, clear, setEnabled, dispose, telemetry, payFine, preload,
     surrender: () => { if (state !== 'wanted') return false; caught('surrender'); return true; }, // 第 3 批（b3-int）：通緝中自己走進警察局＝自首（一樣關、一樣罰）
     get wanted() { return wanted; }, get state() { return state; }, get enabled() { return enabled; },
     get jailLeft() { return state === 'jail' ? Math.max(0, jailLeft) : 0; }, // 連線：朋友的名單寫「在拘留室 9:30」
