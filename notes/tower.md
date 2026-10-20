@@ -54,3 +54,25 @@ The 4-floor ring garage behind the marble garage (an earlier step of the same da
 
 ## A friend's tower (第 23 批, 2026-10-18)
 - Visiting a friend after the doorbell moves this same `GAR` to the friend's lot: all tower math goes through `garLot()` (= `HOME.lot`, where GAR stands now; `HOME.gs` its slot, `HOME.slot` your real home). `twrNow()` = the friend's bays while `GV.on`. tower.js `setSign(top, bottom)` writes the friend's name on the sign. Details in notes/world.md 第 23 批.
+
+## The ramp round the outside (第 24 批, 2026-10-20)
+Nick: 「車庫外圍的那個外面那一圈的路可以弄了」. Mock https://claude.ai/artifact/Xbe4taBBqkM6gL9VDyV3xb; Nick picked 「照草稿」.
+- Shape (tower.js `TOWER_RAMP`): a spiral road from r 12.6 to 17.2 m round the glass. It starts at local angle 45° (A0, front right of the door) at ground level and climbs with the tower on your right. Each half lap goes up one floor (`towerRampY(u)`: smoothstep per half lap, so it is level at every entrance). The steepest part is 14% on the first half lap and about 10% after that. It ends 0.32 rad past the 6F entrance (`UEND`).
+- Entrances: 2F back, 3F front, 4F back, 5F front, 6F back (`ent(f) = 45° + f·180°`). Each has an orange frame with a "2F"…"6F" LED sign, readable from both sides. The bay at each entrance became the road (`TOWER_BAYS[i].road`, ids 5, 9, 21, 25, 37), so there are 35 parking bays. Each floor has yellow lane lines and chevrons from the entrance to the lift.
+- Drawing: the ramp is merged into the exterior shell, gold and lights meshes (`GEO.shellX/goldX/lightsX`), so there are no extra draw calls. Other people's homes use `GEO.ext`, which includes the ramp. The first half lap is a solid embankment; above it the deck has an underside, and you can drive under it at the back.
+- Collisions (all flat 2D; drive.js has no heights):
+  - `towerRampCols(F)`, used while driving on the ramp or upstairs: an inner kerb ring with a gap at floor F's entrance and an outer parapet ring, both 1.1 m high so they don't pull the chase camera in. The top end wall exists only for F = 5, because a 2D wall would block every lap passing that angle.
+  - `towerRampGround()`, used from the ground (village.js, every home): the low half lap is solid (`rcol`), plus the start line (`mcol`). town.src.js `rampStep` turns these `off` for your own home: `rcol` while you are up, `mcol` while you drive a car that may go up.
+  - Upstairs, `GAR.colliders(open, world, car)` gives cars a glass ring with that floor's entrance open (`COLR`); walkers keep the full ring.
+- State (town.src.js `TRAMP`): `on` means driving on the ramp. `u` is how far round from the start (unwrapped angle), and the car height and the ceiling for the chase camera both come from it. While on the ramp, `GAR.floor` is the nearest floor, so the entrance floor, colliders and parked cars line up. You get on by crossing the start line, enter a floor by driving inside the glass at its entrance, and get back on by driving out of a floor's entrance.
+- Rules:
+  - The monster truck (`liftOK` false), a borrowed car and a car at a friend's home (`GV.on`) can't go up. The start line blocks them and you get a toast.
+  - Walkers never go up: the start line always blocks them, and the upstairs glass is a full ring for them.
+  - You can't get out on the ramp (「在斜坡上不能下車」).
+  - Arriving on a floor where the lift isn't calls it up (「3 樓：電梯上來了⋯」). `elRide` never counts the car you are driving as a turntable passenger, because its `tripPose` is still on the 1F turntable.
+  - Upstairs, the lift's ◀ ▶ turns you 45° at a time to face the yellow lines and drive back out.
+- Police: while you are more than 2.5 m up the ramp (`rampHigh`), police don't see you or collide with you.
+- Friends: `world/p` carries `y` (the ramp height) while you drive on the ramp. Their game draws your car at that height, pitched with the slope, and doesn't collide with it when the heights differ by more than 2.2 m. The rules need no change because `world/p` validates only x, z, h and t.
+- Old saves: cars in the 5 road bays move to free bays (`normPark`). The deliveries and the lift skip road bays (`twFree`). A friend on an older version may have a car in a road bay; `gvStart` moves it.
+- Fixes found while building: `garCols` now passes `car = true`, so the floor's entrance is open for driving.
+- Tests: `ramp-test.mjs` (new). test-b1 / test-app-b1 expect 7 free bays per floor and price-ordered parking that skips 2F #6. world-test section 9 uses B's bay 10 instead of 9, and the new 9c checks that B sees A up on the ramp.

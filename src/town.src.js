@@ -261,7 +261,9 @@ function proxyWorld() {
   const rampH = (x, z) => { // 不配置記憶體（輪子每一步都問）
     const ref = rampRef(); if (ref == null) return null;
     const L = garLot(), dx = x - L.x, dz = z - L.z; if (dx * dx + dz * dz >= RR2) return null;
-    const c = Math.cos(L.heading), s = Math.sin(L.heading), y = rampAtY(dx * c - dz * s, dx * s + dz * c, ref);
+    const c = Math.cos(L.heading), s = Math.sin(L.heading), lx = dx * c - dz * s, lz = dx * s + dz * c;
+    if (!TRAMP.on && Math.abs(wrapPi(Math.atan2(lz, lx) - TOWER_RAMP.A0 - ref)) > TOWER_RAMP.GW + 0.2) return null; // 在樓上：只有這一層的口那邊接斜坡（外面別的地方＝地面：停在外面的車不會浮起來）
+    const y = rampAtY(lx, lz, ref);
     return y == null ? null : GAR.group.position.y + y;
   };
   W.heightAt = (x, z) => { if (inT(x, z)) return base(); const h = rampH(x, z); return h != null ? h : VIL.heightAt ? VIL.heightAt(x, z) : 0; };

@@ -266,6 +266,7 @@ console.log('6', el(), JSON.stringify(mon6));
 check(mon6.mode === 'off' && mon6.cur === 'monster' && !mon6.ok && !mon6.ramp && mon6.maxA < mon6.a0 && !mon6.mcol && mon6.toasts.some((x) => /這台太大了，不能開上斜坡/.test(x)), `the monster truck can't go up: stopped at the start (${mon6.maxA} < ${mon6.a0.toFixed(3)}), 「${mon6.toasts.join(' / ')}」`);
 await shot('6-monster');
 
+console.log('ext parts (one other home):', JSON.stringify(await p.evaluate(() => { const tri = (g) => (g.index ? g.index.count : g.attributes.position.count) / 3; const P = window.__D().GAR.parts; return { tris: P.reduce((s, q) => s + tri(q.geometry), 0), parts: P.map((q) => [q.name, tri(q.geometry)]) }; })));
 console.log('draw calls:', JSON.stringify({ entrance3F: ri3, sign3F: riSign, outside: riOut, aerial: riAir, back: riBack, door: riDoor }));
 check(!errs.length, `no page errors (${errs.length})`);
 console.log(fails.length ? `FAILED ${fails.length}: ${fails.join(' | ')}` : 'ALL CHECKS OK', el());
