@@ -967,10 +967,15 @@ check(up7.floor === 2 && !up7.lift.busy && Math.abs(up7.y - up7.fy) < 0.01 && up
   `arrived on 3F after ${up7.s} s: the car is on the 3F floor (y ${up7.y}), turned to face a free spot (3 樓 ${up7.bay - 7} 號), drivable again, motor quiet`);
 check(up7.panel.shown && up7.panel.on === '3F' && up7.panel.row && /3 樓：往前開進空的格子/.test(up7.toast), `upstairs the panel lights 3F and adds ◀ ▶ to turn to another spot (「${up7.toast}」)`);
 await drawAndShot('17-lift-3f');
-// ▶：電梯在這一層轉 45 度（車頭對著下一格）
-const tn7 = await p.evaluate(() => { const D = window.__D(), H = window.__H, h0 = D.drv.telemetry().heading, pressed = H.elClick('▶'), w = H.elWait(), D2 = window.__D(); return { pressed, s: w.s, dh: +H.wrapA(D2.drv.telemetry().heading - h0).toFixed(4), floor: D2.GAR.floor, rot: +D2.GAR.lift.rot.toFixed(4) }; });
-console.log('  ▶:', JSON.stringify(tn7));
-check(tn7.pressed === '▶' && Math.abs(tn7.dh + Math.PI / 4) < 1e-3 && tn7.floor === 2, `▶ turns the lift (and the car) 45° to the right, to the next spot (${tn7.dh} rad, ${tn7.s} s)`);
+// ▶：電梯在這一層轉 45 度（車頭對著下一格）。第 24 批：3 樓 2 號是斜坡的口（路），▶ 先對著口（要開下樓就從這裡出去），再按一次才是下一個空格
+const tn7 = await p.evaluate(() => {
+  const face = (D) => { const h = window.__H.wrapA(D.drv.telemetry().heading - D.VIL.places.garage.lot.heading), b = D.TOWER_BAYS.find((b) => b.f === 2 && Math.abs(window.__H.wrapA(b.heading - h)) < 1e-3); return b ? { id: b.id, road: !!b.road, free: !window.__D().TWR[b.id] } : null; };
+  const one = () => { const D = window.__D(), H = window.__H, h0 = D.drv.telemetry().heading, pressed = H.elClick('▶'), w = H.elWait(), D2 = window.__D(); return { pressed, s: w.s, dh: +H.wrapA(D2.drv.telemetry().heading - h0).toFixed(4), floor: D2.GAR.floor, rot: +D2.GAR.lift.rot.toFixed(4), bay: face(D2) }; };
+  const a = one(), b = one(); return { ...b, first: a };
+});
+console.log('  ▶ ▶:', JSON.stringify(tn7));
+check(tn7.first.pressed === '▶' && Math.abs(tn7.first.dh + Math.PI / 4) < 1e-3 && tn7.first.floor === 2 && tn7.first.bay?.id === 9 && tn7.first.bay.road, `▶ turns the lift (and the car) 45° to the right: now facing the ramp's mouth (3 樓 2 號 is road since 第 24 批; ${tn7.first.dh} rad, ${tn7.first.s} s)`);
+check(tn7.pressed === '▶' && Math.abs(tn7.dh + Math.PI / 4) < 1e-3 && tn7.floor === 2 && tn7.bay && !tn7.bay.road && tn7.bay.free, `▶ again: 45° more, to the next free spot (3 樓 ${tn7.bay?.id - 7} 號; ${tn7.dh} rad, ${tn7.s} s)`);
 // 往前開進格子（開到車頭快碰到玻璃）→ 下車：自己開正、停進格子（掛在那一格上；存檔記著）
 const pk7 = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, d = D.drv; let n = 0;
