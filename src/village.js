@@ -59,7 +59,7 @@
 import * as THREE from 'three';
 import { buildStreet, STREET_TEXT } from './street.js'; // ==== 第 3 批：街景 ====
 import { buildPoliceStation, POLICE_TEXT } from './police.js'; // ==== 第 3 批：警察局 ====
-import { TOWER, towerFoot } from './tower.js'; // 第 21 批：你的家＝圓塔車庫（tower.js）
+import { TOWER, towerFoot, TOWER_RAMP, towerRampGround, towerColsAt } from './tower.js'; // 第 21 批：你的家＝圓塔車庫（tower.js）；第 24 批：外面繞圈的斜坡
 
 // 打包（build-art.mjs、build-app.mjs）會拿掉 import、把 export 變成一般宣告、所有檔接在同一個 script 裡：
 // 這個檔全部包在一個函式裡，只露出下面三個名字，不會跟別的檔撞名（跟 cabin.js 的 CABIN 一樣）
@@ -815,6 +815,7 @@ const HOME_SITES = [
 const HOME_FOOT = HOME_SITES.map(towerFoot);
 const homeFront = (n, d = 0) => { const L = HOME_SITES[n], r = TOWER.DX1 + d; return [L.x + r * Math.cos(L.heading), L.z - r * Math.sin(L.heading)]; }; // 第 n 號家門外 d 公尺（neihu.js：聯外道路的護欄在門口開一個口）
 const nearHome = (x, z, m = 0) => HOME_FOOT.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + m);
+const nearRamp = (x, z, m = 0) => HOME_FOOT.some((t) => Math.hypot(x - t.x, z - t.z) < TOWER_RAMP.R1 + 0.3 + m); // 第 24 批：塔外面的斜坡（到外面的護欄）
 ROADS.push({ a: 'GW', b: 'GST', kind: 'street', w: 10.5, pts: [[-345, -72], [-392, -72]] }); // 車庫街：只剩 1 號（第 17 批到 −490）
 NODES.GST[0] = -392;
 NODES.H6 = [HOME_SITES[5].x + TOWER.DX1 + 2.5, 0]; ROADS.push({ a: 'HI', b: 'H6', kind: 'drive', w: 8, pts: [[HW.x - HW.mid, 0], NODES.H6.slice()] }); // 6 號：內圈的路口往西過護欄的口
@@ -1391,7 +1392,10 @@ function buildVillage(opts = {}) {
     if (L.via === 'H6') { const x0 = w(TOWER.DX1 + L.apron)[0], x1 = HW.x - HW.half; B.at((x0 + x1) / 2, 0); addPave((x0 + x1) / 2, 0, (x1 - x0) / 2, 4, 0, ASPH, 0.03); } // 6 號：門外到快速道路內圈的柏油（8 公尺寬）
     buildings.push({ kind: 'garage', name: L.name, x: lot.x, z: lot.z, hx: R, hz: R, rot: 0, h: TOWER.TOP, slot: n, round: R });
     const tcol = { t: 'circle', x: lot.x, z: lot.z, r: R, h: TOWER.TOP, noCrush: true, off: false }, pcol = { t: 'box', ...ft.portal, h: TOWER.TOP - 2, noCrush: true, off: false }; colliders.push(tcol, pcol);
-    GST_SLOTS.push({ n, x: lot.x, z: lot.z, y: 0, ry, lot, name: L.name, via: L.via, tcol, pcol, sign: { x: sp[0], y: (TOWER.DH + TOWER.H1) / 2 + 0.02, z: sp[1], ry, w: 6.4, h: 0.62 }, door: { x: dp[0], z: dp[1] } }); // door：門外 2 公尺（net.src.js 走到這裡 6 公尺內跳「看他的車庫」）；sign.y：mountain.js 會加上地面高
+    // 第 24 批：外面繞圈的斜坡：低的那半圈（實心）＋起點橫的一道（mouth）；你家那座 town.src.js 照你在哪裡開關（off），別人家的一直擋
+    const rg = towerRampGround(), rcol = towerColsAt(rg.wedge, lot).map((c) => ({ ...c, noCrush: true, off: false })), mcol = { ...towerColsAt([rg.mouth], lot)[0], noCrush: true, off: false }; colliders.push(...rcol, mcol);
+    addPave(lot.x, lot.z, TOWER_RAMP.R1 + 0.3, TOWER_RAMP.R1 + 0.3, ry, null, 0, false); // 斜坡、門口到斜坡起點那塊：算水泥地（不畫：塔自己畫）
+    GST_SLOTS.push({ n, x: lot.x, z: lot.z, y: 0, ry, lot, name: L.name, via: L.via, tcol, pcol, rcol, mcol, sign: { x: sp[0], y: (TOWER.DH + TOWER.H1) / 2 + 0.02, z: sp[1], ry, w: 6.4, h: 0.62 }, door: { x: dp[0], z: dp[1] } }); // door：門外 2 公尺（net.src.js 走到這裡 6 公尺內跳「看他的車庫」）；sign.y：mountain.js 會加上地面高
   });
   // 你家＝第 n 號：places.garage 的每一塊都照那座塔算（本地 x 往門外、z＝車頭朝門時車子的右邊）
   const homeAt = (n, P = {}) => {
@@ -1640,12 +1644,12 @@ function buildVillage(opts = {}) {
     for (let i = 0; i < 16; i++) palm(-214 + (i % 4) * 4 + rnd(), 72 + ((i / 4) | 0) * 4 + rnd(), 7 + rnd() * 3, rnd);
     for (let x = -124; x <= -80; x += 9 + rnd() * 3) palm(x, -10.5 - rnd() * 1.5, 7 + rnd() * 3, rnd);         // 往賽道的路邊（改車廠出口的東邊開始）
     for (let x = -186; x <= -120; x += 10 + rnd() * 4) { const gs = x > -168 && x < -155; if (gs) B = new Builder(200); palm(x, 8.5 + rnd(), 6.5 + rnd() * 3, rnd, !gs); B = VB; } // 第 3 批：槍店門口那棵不種（亂數照樣用掉）
-    for (let z = -100; z <= 84; z += 9 + rnd() * 3) { if (Math.abs(z) < 14) continue; const bx = -389 + rnd() * 2, gs = z < -44 || nearHome(bx, z, 2); if (gs) B = new Builder(200); const nc = colliders.length; bamboo(bx, z, rnd); B = VB; if (gs) colliders.length = nc; } // 西邊竹林（大路穿過去）；第 16 批：車庫街那段不種（亂數照樣用掉）；第 21 批：圓塔車庫那邊也不種
-    for (let x = -505; x <= -66; x += 6 + rnd() * 3) { if (x > -320 && x < -280) continue; const tz = -112 + rnd() * 2, mt = (x > -260 && x < -241) || nearHome(x, tz, 2.5); if (mt) B = new Builder(200); tree(x, tz, 1.2 + rnd() * 0.4, rnd, !mt); B = VB; } // 北邊一排樹（車庫後面空著）// 第 14 批：上山的路穿過去的那兩棵不種（亂數照樣用掉）；第 21 批：圓塔車庫那幾棵也不種
+    for (let z = -100; z <= 84; z += 9 + rnd() * 3) { if (Math.abs(z) < 14) continue; const bx = -389 + rnd() * 2, gs = z < -44 || nearHome(bx, z, 2) || nearRamp(bx, z, 1.2); if (gs) B = new Builder(200); const nc = colliders.length; bamboo(bx, z, rnd); B = VB; if (gs) colliders.length = nc; } // 西邊竹林（大路穿過去）；第 16 批：車庫街那段不種（亂數照樣用掉）；第 21 批：圓塔車庫那邊也不種
+    for (let x = -505; x <= -66; x += 6 + rnd() * 3) { if (x > -320 && x < -280) continue; const tz = -112 + rnd() * 2, mt = (x > -260 && x < -241) || nearHome(x, tz, 2.5) || nearRamp(x, tz, 1.5); if (mt) B = new Builder(200); tree(x, tz, 1.2 + rnd() * 0.4, rnd, !mt); B = VB; } // 北邊一排樹（車庫後面空著）// 第 14 批：上山的路穿過去的那兩棵不種（亂數照樣用掉）；第 21 批：圓塔車庫那幾棵也不種
     for (let x = -505; x <= -66; x += 6 + rnd() * 3) { const g4 = x > -121 && x < -103; if (g4) B = new Builder(200); tree(x, 91 + rnd() * 2, 1.2 + rnd() * 0.4, rnd, !g4); B = VB; } // 南邊一排樹 // ==== 第 4 批：往越野車場的水泥路穿過去的那兩棵不種（亂數照樣用掉）====
     // 第 2 批（路上的車）：農路邊的兩棵原本種在路面上（(-248.5, 30) 在往北的車道正中間、(-244, 60) 樹幹壓到轉角的路邊）→ 移到路邊的草地上（離路 2 公尺以上、不在稻田裡；亂數照樣用）
     for (const [x, z] of [[-352, -8], [-351, 12], [-255.5, 27], [-228, 30], [-192, -20], [-196, 40], [-245, 64.5], [-192, -48], [-186, -62], [-194, -80]]) tree(x, z, 1 + rnd() * 0.3, rnd);
-    for (const [x, z] of [[-396, -12], [-396, -30], [-395, -41], [-424, -52], [-426, -46], [-424, -34], [-406, 14], [-398, 18], [-476, 14], [-488, 16], [-500, 12], [-510, 18], [-509, -40], [-510, -22]]) { const gt = nearHome(x, z, 2.5); if (gt) B = new Builder(200); tree(x, z, 1 + rnd() * 0.35, rnd, !gt); B = VB; } // 車店、往快速道路那段的空地；第 21 批：圓塔車庫裡那棵不種（亂數照樣用掉）
+    for (const [x, z] of [[-396, -12], [-396, -30], [-395, -41], [-424, -52], [-426, -46], [-424, -34], [-406, 14], [-398, 18], [-476, 14], [-488, 16], [-500, 12], [-510, 18], [-509, -40], [-510, -22]]) { const gt = nearHome(x, z, 2.5) || nearRamp(x, z, 1.5); if (gt) B = new Builder(200); tree(x, z, 1 + rnd() * 0.35, rnd, !gt); B = VB; } // 車店、往快速道路那段的空地；第 21 批：圓塔車庫裡那棵不種（亂數照樣用掉）
   }
 
   // ---- 電線桿（每條路一排）、路口反光鏡 ----

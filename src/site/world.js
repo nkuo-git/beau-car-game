@@ -218,7 +218,8 @@
     if (s.pn) { o.pc = []; for (let i = 0; i < s.pn * 3; i++) o.pc.push(rd(s.pc[i], i % 3 === 2 ? 100 : 10)); if (s.pi) o.pi = s.pi.slice(0, s.pn); } // pi：第 22 批，第幾台警車（朋友撞到的時候用）
     if (s.pv) o.pv = s.pv.slice(); // 第 22 批：停著的車（我在房子裡、在警察局、被關也送）
     if (s.ph) o.ph = s.ph.slice(); // 第 22 批：我撞到朋友的警車 [朋友, 第幾台, dvx, dvz, 第幾下]
-    const L = W.last, moved = !L || L.o !== o.o || L.k !== o.k || String(L.pk) !== String(o.pk) || String(L.pv) !== String(o.pv) || String(L.ph) !== String(o.ph) || L.pl !== o.pl || L.rs !== o.rs || L.w !== o.w || L.jl !== o.jl || pcMoved(L.pc, o.pc) || Math.abs(L.x - o.x) > 0.05 || Math.abs(L.z - o.z) > 0.05 || Math.abs(L.h - o.h) > 0.01 || Math.abs(L.v - o.v) > 0.2 || L.rp !== o.rp;
+    if (s.y != null) o.y = rd(s.y, 100); // 第 24 批：在圓塔外面的斜坡上有多高
+    const L = W.last, moved = !L || L.o !== o.o || L.k !== o.k || String(L.pk) !== String(o.pk) || String(L.pv) !== String(o.pv) || String(L.ph) !== String(o.ph) || L.pl !== o.pl || L.rs !== o.rs || L.w !== o.w || L.jl !== o.jl || pcMoved(L.pc, o.pc) || Math.abs(L.x - o.x) > 0.05 || Math.abs(L.z - o.z) > 0.05 || Math.abs(L.h - o.h) > 0.01 || Math.abs(L.v - o.v) > 0.2 || L.rp !== o.rp || (L.y == null) !== (o.y == null) || Math.abs((L.y ?? 0) - (o.y ?? 0)) > 0.05;
     const gap = now - W.lastT;
     if (!(moved && gap > 110 || gap > (o.o ? 1500 : 3000))) return;
     o.t = rt.now(); W.last = o; W.lastT = now;

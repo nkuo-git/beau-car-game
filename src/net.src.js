@@ -8,6 +8,7 @@
 //     w＝通緝幾顆星、jl＝1 被警察抓了、pc＝追他的警車 [x, z, h, …]（最多 3 台）：名字旁邊畫星星、後面畫警車（閃紅藍燈）、被抓跳「🚓 X被警察抓走了！」）
 //     第 22 批：pi＝那幾台警車是他那邊的第幾台（撞到的時候用）；ph＝[朋友, 第幾台, dvx, dvz, 第幾下]：我撞到朋友的警車（他那邊 police.bump）；
 //       pv＝[車, x, z, h]：他停著的車（不管他在走路、在房子裡、在警察局、被關）；o＝4：在警察局裡面（x、z 是裡面的座標；我也在裡面才畫）
+//     第 24 批：y＝他開在圓塔外面的斜坡上有多高（沒有＝在地上；車子照這個高度畫、高度差太多不會撞到）
 //   emote(uid, e)：朋友送的表情（NET_E 的第幾個）；clock(off)：伺服器時間＝Date.now()＋off
 //   state() → 自己現在的（送給朋友）；look() → { car, l, ch }（自己開的車、外觀、角色）；garage() → { cur, cars: { key: 外觀 }, tw, tr }（參觀車庫、第 23 批開進來看）
 //   race({ seq, kind, go, order })：比賽（kind：circuit 賽車場 3 圈｜drag 400 公尺｜hill 爬山；go＝出發的伺服器時間，0＝還在等兩個人準備好；order＝比的人：起跑格）；host(uid)＝發起的人（可以按「再比一次」）
@@ -125,17 +126,20 @@ function netTag(P) {
   P.tag = netSprite(netTagTex(P.n, P.col, P.tagW), 0.22, 0.041, 0); P.tag.visible = false; // 放進場景：netStep（在車庫頁還沒有 TR）
 }
 // 0.22 秒前的位置（前後兩筆內插；最後一筆之後照速度往前推最多 0.5 秒）
-const NET_S = { x: 0, z: 0, h: 0, v: 0, i: 0, f: 0 }; // i、f：用哪兩筆（b[i]→b[i+1] 的 f；f＝0 只用 b[i]）：警車也照這個內插
+const NET_S = { x: 0, z: 0, y: null, h: 0, v: 0, i: 0, f: 0 }; // i、f：用哪兩筆（b[i]→b[i+1] 的 f；f＝0 只用 b[i]）：警車也照這個內插
 function netSample(P, T) {
   const b = P.buf, n = b.length; if (!n) return null;
   let a = b[0];
   NET_S.i = 0; NET_S.f = 0;
+  NET_S.y = a.y; // 第 24 批：開在斜坡上（有送高度）
   if (T <= a.t || n === 1) { NET_S.x = a.x; NET_S.z = a.z; NET_S.h = a.h; NET_S.v = a.v; return NET_S; }
   let i = n - 1; while (i > 0 && b[i].t > T) i--;
   a = b[i]; NET_S.i = i;
+  NET_S.y = a.y;
   if (i === n - 1) { const d = Math.min(0.5, (T - a.t) / 1000); NET_S.x = a.x + Math.cos(a.h) * a.v * d; NET_S.z = a.z - Math.sin(a.h) * a.v * d; NET_S.h = a.h; NET_S.v = a.v; return NET_S; }
   const c = b[i + 1], f = (T - a.t) / Math.max(1, c.t - a.t);
   NET_S.f = f; NET_S.x = a.x + (c.x - a.x) * f; NET_S.z = a.z + (c.z - a.z) * f; NET_S.h = a.h + wrapPi(c.h - a.h) * f; NET_S.v = a.v + (c.v - a.v) * f;
+  if (a.y != null && c.y != null) NET_S.y = a.y + (c.y - a.y) * f;
   return NET_S;
 }
 const netH = (x, z) => (VIL && VIL.heightAt ? VIL.heightAt(x, z) : 0);
@@ -149,6 +153,7 @@ function netStep(dt) {
   const inPol = !!(DRIVE.on && indoor && indoor.kind === 'police' && walker && PSC); // 第 22 批：我在警察局裡面：看得到也在裡面的朋友（關在拘留室的也是）
   const me = show ? (walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : null) : null, mx = me ? me.x : 0, mz = me ? me.z : 0;
   const cols = !race && !!(drv || walker);
+  const myY = drv && TRAMP.on && me ? PW.heightAt(mx, mz) : null; // 第 24 批：我開在斜坡上：只撞得到跟我差不多高的
   let jin = false; // 有朋友關在拘留室（我看得到的）
   NET.cols.length = 0; NET_POL.n = 0;
   for (const P of NET.P.values()) {
@@ -172,13 +177,15 @@ function netStep(dt) {
     if (s && !inside) { P.mk.x = s.x; P.mk.z = s.z; if (NET.goal === P.uid && NET.goalHome < 0 && VIL.places.friend) { VIL.places.friend.pos[0] = s.x; VIL.places.friend.pos[1] = s.z; } }
     if (O) {
       const ox = car ? s.x : pk[1], oz = car ? s.z : pk[2], oh = car ? s.h : pk[3], ov = car ? s.v : 0; // 開的車：內插的位置；停著的：停的位置
-      const fx = Math.cos(oh) * 1.3, fz = -Math.sin(oh) * 1.3, y = netH(ox, oz);
-      O.car.position.set(ox, y, oz); O.car.rotation.set(0, oh, Math.atan2(netH(ox + fx, oz + fz) - netH(ox - fx, oz - fz), 2.6));
+      const fx = Math.cos(oh) * 1.3, fz = -Math.sin(oh) * 1.3, ry = car && s.y != null ? s.y : null, y = ry != null ? ry : netH(ox, oz); // 第 24 批：開在斜坡上＝他送來的高度
+      if (ry != null && P.ryx != null) { const d = Math.hypot(ox - P.ryx, oz - P.ryz); if (d > 0.02) { P.rpt = Math.atan2((y - P.ryy) * (s.v < 0 ? -1 : 1), d); P.ryx = ox; P.ryz = oz; P.ryy = y; } } else if (ry != null) { P.ryx = ox; P.ryz = oz; P.ryy = y; P.rpt = 0; } else P.ryx = null;
+      if (ry != null) P.rp = (P.rp || 0) + ((P.rpt || 0) - (P.rp || 0)) * Math.min(1, dt * 6); // 上坡、下坡：車頭抬起來
+      O.car.position.set(ox, y, oz); O.car.rotation.set(0, oh, ry != null ? P.rp : Math.atan2(netH(ox + fx, oz + fz) - netH(ox - fx, oz - fz), 2.6));
       if (car && P.px != null) { P.roll += Math.hypot(s.x - P.px, s.z - P.pz) * (s.v < 0 ? -1 : 1); O.lod.setRoll(P.roll); }
       O.sh.matrix.makeRotationY(oh).scale(V_NET.set(O.nose - O.tail + 0.6, 1, O.hw * 2 + 0.4)).setPosition(ox + Math.cos(oh) * O.cx, y + 0.05, oz - Math.sin(oh) * O.cx); O.sh.matrixWorldNeedsUpdate = true;
       if (P.tag && car) P.tag.position.set(ox, y + O.top + 0.35, oz);
       const pp = O.lod.pop; if (pp) { if (pp.on !== !!c.pl) pp.set(!!c.pl, calm ? 0.12 : 0.3); pp.step(dt); } // 跳燈：朋友開燈＝燈蓋立起來（開著的、停著的車都一樣）
-      if (cols) { // 平常會擋（撞到照兩台車的速度算；朋友那邊自己算自己的）；比賽中穿過去
+      if (cols && (myY == null && ry == null || Math.abs(y - (myY != null ? myY : netH(mx, mz))) < 2.2)) { // 平常會擋（撞到照兩台車的速度算；朋友那邊自己算自己的）；比賽中穿過去；第 24 批：在斜坡上差太高的不擋
         const k = P.box; k.x = ox + Math.cos(oh) * O.cx; k.z = oz - Math.sin(oh) * O.cx; k.hx = (O.nose - O.tail) / 2; k.hz = O.hw; k.rot = oh;
         k.vx = Math.cos(oh) * ov; k.vz = -Math.sin(oh) * ov; k.dvx = k.dvz = 0; NET.cols.push(k);
       }
@@ -192,7 +199,7 @@ function netStep(dt) {
       if (inside && c.jl) jin = true;
     }
     netPolOffStep(P, dt);
-    if (s && near && c.w && (car || (walkin && !inside))) netPolPlace(P, s, dt, cols); // 追他的警車（他開車、走路都畫）
+    if (s && near && c.w && (car || (walkin && !inside))) netPolPlace(P, s, dt, cols && !rampHigh()); // 追他的警車（他開車、走路都畫）；第 24 批：我在斜坡上面撞不到地上的
     P.px = O && car ? s.x : null; P.pz = O && car ? s.z : null;
     const tsc = C && inside ? PSC : TR.scene;
     if (P.vis) for (const sp of [P.tag, P.bub]) if (sp && sp.parent !== tsc) tsc.add(sp);
@@ -1089,8 +1096,9 @@ function gvStart(uid, n, g) {
   if (!t || Math.hypot(t.x - d.x, t.z - d.z) > 40) return 'far';
   const cars = g && g.cars && typeof g.cars === 'object' ? g.cars : {}, ok = (k) => typeof k === 'string' && !!CARS[k] && !!LOD_CARS[k] && liftOK(k) && Object.prototype.hasOwnProperty.call(cars, k);
   const want = Array(TOWER_BAYS.length).fill(null), seen = new Set(), tw = typeof g?.tw === 'string' ? g.tw.split(',') : null;
-  if (tw) tw.forEach((k, j) => { if (j < want.length && ok(k) && !seen.has(k)) { want[j] = k; seen.add(k); } });
-  else for (const k of Object.keys(cars)) if (ok(k) && k !== g?.cur && !seen.has(k)) { const j = want.indexOf(null); if (j < 0) break; want[j] = k; seen.add(k); } // 舊版（內容 16）沒有送格子：照順序擺
+  if (tw) tw.forEach((k, j) => { if (j < want.length && !TOWER_BAYS[j].road && ok(k) && !seen.has(k)) { want[j] = k; seen.add(k); } });
+  if (tw) tw.forEach((k, j) => { if (j < want.length && TOWER_BAYS[j].road && ok(k) && !seen.has(k)) { const f = twFree(want); if (f >= 0) { want[f] = k; seen.add(k); } } }); // 第 24 批：舊版（內容 17）停在變成路的那一格：換到空的格子
+  else for (const k of Object.keys(cars)) if (ok(k) && k !== g?.cur && !seen.has(k)) { const j = twFree(want); if (j < 0) break; want[j] = k; seen.add(k); } // 舊版（內容 16）沒有送格子：照順序擺
   Object.assign(GV, { on: true, uid, n: String(n || '朋友').slice(0, 12), slot: i, want, looks: cars, objs: {}, q: [...seen], tr: Math.max(0, Math.min(9, (g && g.tr) | 0)), lift0: { f: GAR.lift.floor, rot: GAR.lift.rot }, in: false, loading: false });
   GV.job++;
   stopLiftSnd(); GAR.liftSnap(0, 0); GAR.setFloor(0); GAR.door.t = 0;
@@ -1180,12 +1188,12 @@ function netGuest(g, why) {
 }
 
 // ---- 自己的（送給朋友）----
-const NET_ME = { o: 0, x: 0, z: 0, h: 0, v: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pc: [0, 0, 0, 0, 0, 0, 0, 0, 0], pi: [0, 0, 0], pn: 0, pk: null, pv: null, ph: null }; // w、jl、pc／pi／pn：被警察追（幾顆星、被抓了、追你的警車、第幾台）；pk：第 19 批，下車停著的車 [車, x, z, h]；pv、ph：第 22 批（停著的車、撞到朋友的警車）
+const NET_ME = { o: 0, x: 0, z: 0, h: 0, v: 0, y: null, k: '', rp: null, rs: 0, w: 0, jl: 0, pc: [0, 0, 0, 0, 0, 0, 0, 0, 0], pi: [0, 0, 0], pn: 0, pk: null, pv: null, ph: null }; // y：第 24 批，開在外面的斜坡上（高度） // w、jl、pc／pi／pn：被警察追（幾顆星、被抓了、追你的警車、第幾台）；pk：第 19 批，下車停著的車 [車, x, z, h]；pv、ph：第 22 批（停著的車、撞到朋友的警車）
 NET_ME.pl = 0; // 跳燈：開的（停著的）這台燈蓋立起來＝1（town.src.js popSend）
 function netState() {
   const s = NET_ME, R = NET.race;
   s.k = cur; s.rp = null; s.rs = 0; s.o = 0; s.x = s.z = s.h = s.v = 0; s.w = 0; s.pn = 0; s.pk = null; s.pv = null; s.ph = NET_PH.out; s.jl = jailed() ? 1 : 0;
-  s.pl = 0;
+  s.pl = 0; s.y = null;
   if (RACE.on && race) { s.o = 3; s.x = race.me.x; s.v = race.me.v; if (race.net) { s.rp = Math.round(race.me.x * 10) / 10; s.rs = race.net.seq; } return s; }
   const pv = netParked(); if (pv) s.pv = [cur, Math.round(pv.x * 100) / 100, Math.round(pv.z * 100) / 100, Math.round(pv.heading * 1000) / 1000]; // 第 22 批：停著的車（我在哪裡都送）
   if (DRIVE.on && trip && indoor && indoor.kind === 'police' && walker && walker.mode !== 'off') { const t = walker.telemetry(); s.o = 4; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed; return s; } // 第 22 批：在警察局裡面（關在拘留室也是）
@@ -1194,7 +1202,7 @@ function netState() {
     const t = walker.telemetry(); s.o = 2; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed;
     const p = borParked(); if (p) { s.pk = [cur, Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100, Math.round(p.heading * 1000) / 1000]; s.pv = null; } // 第 19 批：下車停著的車（朋友看得到、借得到）
   }
-  else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; }
+  else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; if (TRAMP.on) s.y = Math.round(PW.heightAt(t.x, t.z) * 100) / 100; } // 第 24 批：開在斜坡上送高度
   if (s.o) s.pl = popSend(); // 跳燈
   if (R && R.ci && ciRace === R.ci) { s.rp = Math.round(R.ci.me.p * 10) / 10; s.rs = R.seq; }
   if (s.o && police && police.state === 'wanted' && police.enabled) { // 通緝中：幾顆星、200 公尺內追你的警車
@@ -1333,7 +1341,7 @@ Object.assign(window.beauGame, {
     snap(uid, s) {
       const P = NET.P.get(uid); if (!P || !s || typeof s.t !== 'number') return;
       const b = P.buf; if (b.length && s.t <= b[b.length - 1].t) return;
-      const e = { t: s.t, x: +s.x || 0, z: +s.z || 0, h: +s.h || 0, v: +s.v || 0, rp: typeof s.rp === 'number' ? s.rp : null,
+      const e = { t: s.t, x: +s.x || 0, z: +s.z || 0, h: +s.h || 0, v: +s.v || 0, y: Number.isFinite(s.y) && Math.abs(s.y) < 500 ? +s.y : null, rp: typeof s.rp === 'number' ? s.rp : null, // y：第 24 批，他開在斜坡上
         pc: Array.isArray(s.pc) && s.pc.length <= 9 && s.pc.length % 3 === 0 && s.pc.every(Number.isFinite) ? s.pc : null, pi: null };
       if (e.pc && Array.isArray(s.pi) && s.pi.length * 3 === e.pc.length && s.pi.every((v) => Number.isInteger(v) && v >= 0 && v < 8)) e.pi = s.pi; // 第 22 批：第幾台警車
       if (!P.last) P.jlSeen = s.jl ? 1 : 0; // 進世界的時候他已經被關了：不用跳「被抓走了」
