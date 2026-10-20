@@ -743,11 +743,11 @@ const ramp9 = await A.evaluate(() => {
   const t = D.drv.telemetry(); return { n, on: T.TRAMP.on, u: +T.TRAMP.u.toFixed(2), y: +t.y.toFixed(2), x: t.x, z: t.z, sent: window.beauGame.net.state().y };
 });
 const bAt9 = await B.evaluate(([x, z]) => { const D = window.__D(), w = D.walker; if (D.drv && w.mode === 'off') { D.drv.teleport({ x: x + 34, z: z + 6, heading: 0 }); D.drv.setInput({ throttle: 0, brake: 1, steer: 0 }); } else w.teleport({ x: x + 34, z: z + 6, heading: 0 }); window.__dstep(3); return w.mode; }, [ramp9.x, ramp9.z]);
-const seen9 = await waitFor(B, (y) => { const P = [...window.__NET().P.values()].find((q) => q.uid === 'u1'); return P && P.cur.y > 2.5 && P.obj?.car.visible && Math.abs(P.obj.car.position.y - y) < 0.3; }, ramp9.y, 20000);
-const b9c = await B.evaluate(() => { const P = [...window.__NET().P.values()].find((q) => q.uid === 'u1'), N = window.__NET(); return { y: P?.cur.y ?? null, carY: P?.obj ? +P.obj.car.position.y.toFixed(2) : null, vis: !!P?.obj?.car.visible, cols: N.cols.filter((k) => P?.box === k).length }; });
+const seen9 = await waitFor(B, (y) => { const P = [...window.__NET().P.values()].find((q) => q.uid === 'u1'); return P && P.buf.at(-1)?.y > 2.5 && P.obj?.car.visible && Math.abs(P.obj.car.position.y - y) < 0.3; }, ramp9.y, 20000);
+const b9c = await B.evaluate(() => { const P = [...window.__NET().P.values()].find((q) => q.uid === 'u1'), N = window.__NET(); return { y: P?.buf.at(-1)?.y ?? null, carY: P?.obj ? +P.obj.car.position.y.toFixed(2) : null, vis: !!P?.obj?.car.visible, cols: N.cols.filter((k) => P?.box === k).length }; });
 console.log('9c', el(), JSON.stringify(ramp9), bAt9, JSON.stringify(b9c));
-check(ramp9.on && ramp9.y > 3 && Math.abs(ramp9.sent - ramp9.y) < 0.02 && seen9 && b9c.vis && Math.abs(b9c.carY - ramp9.y) < 0.3 && b9c.cols === 0,
-  `A drives up the ramp round its tower (${ramp9.y} m up): A sends the height, B (on the ground below) sees A’s car up there (${b9c.carY} m), and it does not block B (too high)`);
+check(ramp9.on && ramp9.y > 3 && Math.abs(ramp9.sent - ramp9.y) < 0.02 && seen9 && Math.abs(b9c.y - ramp9.sent) < 0.02 && b9c.vis && Math.abs(b9c.carY - ramp9.y) < 0.3 && b9c.cols === 0,
+  `A drives up the ramp round its tower (${ramp9.y} m up): A sends the height, B (on the ground below) gets the height (${b9c.y} m) and sees A’s car up there (${b9c.carY} m), and it does not block B (too high)`);
 await A.evaluate(() => window.__D().drv.setInput(null));
 // A 也回車庫頁（後面跟以前一樣：兩個人都在車庫頁）
 await A.evaluate(() => document.getElementById('driveHome').click());
