@@ -412,6 +412,7 @@ function keepRecent(k) {
 // 完整模型收回車庫頁（原點、不轉、輪子歸零、藏起來；還在 built 裡：車庫頁切回來不用再載）
 function stowFull(Sx) {
   if (!Sx) return;
+  if (MIR.S === Sx) mirrorSet(false); // 第 25 批：照後鏡換回原本的
   scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.rotation.set(0, 0, 0); Sx.car.visible = false;
   Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0); Sx.cabin?.userData.setSteer?.(0);
 }
@@ -2069,6 +2070,59 @@ function mapStep() {
 }
 // 走路的時候 body.walking（garage.css：全螢幕的時候去哪裡那一排放到搖桿上面，不要蓋到搖桿）
 function bodyWalking(on) { if (on !== bodyWalking.on) { bodyWalking.on = on; document.body.classList.toggle('walking', on); } }
+// ---- 第 25 批：駕駛座的後照鏡照出後面真的東西（Nick 2026-10-21「第一人稱駕駛的時候 後照鏡要真的顯示後方景色 有車子也要顯示出來 且會跟著開車方向移動」）----
+// 一台往後看的相機（駕駛眼睛的高度、車子正中間；畫的時候自己的車藏起來）畫到一張 512×170 的圖；車內後照鏡、左右兩面照後鏡各拿這張圖的一塊（左右相反＝鏡子）
+// 只有駕駛座視角才畫、三格畫一次（每次約 90–110 calls、0.45M 三角形）；照後鏡（S.mats.mirrorGlass 那幾片）換成這張圖，離開駕駛座視角就換回原本的
+const MIR_TH = Math.tan((32 * Math.PI) / 180), MIR_W = 512, MIR_H = 170, MIR_TV = (MIR_TH * MIR_H) / MIR_W; // 相機左右各 32 度
+const MIR_EYE = [0, 1.1, 0], MIR = { on: false, S: null, rt: null, cam: null, mat: null, list: [], n: 0, calls: 0, tris: 0, v: new THREE.Vector3(), w: new THREE.Vector3(), m: new THREE.Matrix4() };
+// o（車身底下的 mesh）：照它在車身上的範圍（z 左右、y 上下）算 uv＝這面鏡子看得到圖的哪一塊；t0～t1＝往左幾度的 tan（左＝正）、s＝往上（中間往下一點）
+function mirUV(S, o, t0, t1, s0) {
+  const g = o.geometry, p = g.attributes.position, n = p.count;
+  MIR.m.copy(S.body.matrixWorld).invert().multiply(o.matrixWorld);
+  let z0 = Infinity, z1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  const zy = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) { const v = MIR.v.fromBufferAttribute(p, i).applyMatrix4(MIR.m); zy[i * 2] = v.z; zy[i * 2 + 1] = v.y; z0 = Math.min(z0, v.z); z1 = Math.max(z1, v.z); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
+  const zw = Math.max(1e-4, z1 - z0), yw = Math.max(1e-4, y1 - y0), sh = ((t1 - t0) * yw) / zw, uv = new Float32Array(n * 2); // 上下看多少照鏡子的長寬比
+  for (let i = 0; i < n; i++) { // 往後看的相機：圖的右邊＝車子的左邊；鏡子左右相反：鏡子左邊（z 小）看左邊（t 大）
+    const t = t1 - ((zy[i * 2] - z0) / zw) * (t1 - t0), q = s0 + ((zy[i * 2 + 1] - y0) / yw - 0.5) * sh;
+    uv[i * 2] = 0.5 + t / (2 * MIR_TH); uv[i * 2 + 1] = 0.5 + q / (2 * MIR_TV);
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+}
+function mirrorSet(on) {
+  for (const e of MIR.list) { e.o.material = e.mat; if (e.cab) e.o.visible = false; } // 換回原本的
+  MIR.list.length = 0; MIR.on = false; MIR.S = null;
+  const S = tripS; if (!on || !S?.body) return;
+  if (!MIR.rt) {
+    MIR.rt = new THREE.WebGLRenderTarget(MIR_W, MIR_H, { depthBuffer: true });
+    MIR.cam = new THREE.PerspectiveCamera((2 * Math.atan(MIR_TV) * 180) / Math.PI, MIR_W / MIR_H, 0.3, 200);
+    MIR.mat = new THREE.MeshBasicMaterial({ map: MIR.rt.texture, side: THREE.DoubleSide, fog: false });
+  }
+  S.body.updateMatrixWorld(true);
+  const cm = S.cabin?.userData.mirror;
+  if (cm) { mirUV(S, cm, -0.3, 0.3, -0.035); MIR.list.push({ o: cm, mat: cm.material, cab: true }); cm.material = MIR.mat; cm.visible = true; } // 車內：正後面左右各 17 度
+  const gl = S.mats?.mirrorGlass;
+  if (gl) S.body.traverse((o) => {
+    if (!o.isMesh || o.material !== gl || !o.geometry.attributes.position) return;
+    o.getWorldPosition(MIR.w); S.body.worldToLocal(MIR.w);
+    if (MIR.w.z < 0) mirUV(S, o, 0.1, 0.52, -0.04); else mirUV(S, o, -0.52, -0.1, -0.04); // 左邊那面看左後方（6～27 度），右邊看右後方
+    MIR.list.push({ o, mat: gl }); o.material = MIR.mat;
+  });
+  MIR.on = true; MIR.S = S; MIR.n = 0;
+}
+function mirrorStep() {
+  const want = !!(drv && DRIVE.on && drv.cameraMode === 'eye' && tripS?.car?.visible);
+  if (want !== MIR.on || (want && MIR.S !== tripS)) mirrorSet(want);
+  if (!MIR.on || MIR.n++ % 3) return; // 三格畫一次
+  const S = MIR.S, e = dEye?.eye || MIR_EYE;
+  S.body.updateMatrixWorld(true);
+  MIR.cam.position.set(e[0], e[1], 0).applyMatrix4(S.body.matrixWorld);
+  MIR.v.set(e[0] - 10, e[1], 0).applyMatrix4(S.body.matrixWorld); MIR.cam.up.set(0, 1, 0); MIR.cam.lookAt(MIR.v);
+  S.car.visible = false; // 自己的車不畫（不然看到的是自己的車尾）
+  renderer.setRenderTarget(MIR.rt); renderer.render(TR.scene, MIR.cam); renderer.setRenderTarget(null);
+  S.car.visible = true;
+  MIR.calls = renderer.info.render.calls; MIR.tris = renderer.info.render.triangles;
+}
 function driveFrame(now) {
   const w = stage.clientWidth, h = stage.clientHeight;
   if (dcam.userData.w !== w || dcam.userData.h !== h) { dcam.aspect = w / h; dcam.updateProjectionMatrix(); dcam.userData.w = w; dcam.userData.h = h; if (dEye) dEye.fov = cabinFov(cur, dcam.aspect); }
@@ -2083,5 +2137,6 @@ function driveFrame(now) {
   if (indoor) { renderer.render(indoor.scene, dcam); return; } // 在房子裡面：只畫房子裡面（自己的燈；村子的地面跟地板重疊，不畫）
   GAR.cull(dcam); // 第 21 批：每一層的車只畫看得到的（在塔裡面＝只畫那一層）
   OB?.cull(dcam); // 第 6 批：鏡頭跑到越野車車庫的屋頂上面就不畫屋頂（才看得到裡面的車）
+  mirrorStep(); // 第 25 批：駕駛座的後照鏡
   renderer.render(TR.scene, dcam);
 }

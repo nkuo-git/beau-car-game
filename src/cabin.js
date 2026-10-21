@@ -6,6 +6,7 @@
 //   cabin.userData.setGauges(轉速比例 0～1（1＝紅線）, 時速 km/h)：轉速表、時速表指針（數位儀表換數字）
 //   cabin.userData.setSteer(steer −1 左～1 右)：方向盤跟著轉（輪圈、輻條、中間、撥片；轉向柱不轉）
 //   cabin.userData.view＝CABIN_VIEW[key]；mats 沒用到（留著以後用）
+//   cabin.userData.mirror：車內後照鏡的鏡面（自己一個 mesh，平常藏著；town.src.js 開車的時候貼往後看的畫面）
 // CABIN_VIEW[key]＝{ eye, look, fov }：駕駛的眼睛、預設往前看的點（車身座標）、建議視角（度）；cabinCamera(camera, S.body, key, yaw, pitch) 幫你擺相機
 // 輕：全部併成 5～6 個 mesh（車內頂點色、亮面頂點色、金屬頂點色、儀表貼圖、指針、數位時速），每台 8 千～1 萬 2 千個三角形
 // 打包（build-art.mjs 拿掉 import／export）：最上層只有 CABIN3D、CABIN_VIEW、buildCabin、cabinCamera、cabinFov，其他都在 IIFE 裡
@@ -835,6 +836,7 @@ export const CABIN3D = (() => {
       const xm = F.wt(0) + 0.02, ym = F.roof(xm + 0.016, 0) - 0.075, R = new THREE.Matrix4().makeRotationY(-sd * 8 * D2R);
       put('gloss', tint(rbox(0.24, 0.065, 0.032, 0.03).rotateY(Math.PI / 2).applyMatrix4(R).translate(xm, ym, 0), 0x0c0c0e));
       put('face', quadUV(V3(-0.0165, 0, 0).applyMatrix4(R).add(V3(xm, ym, 0)), V3(0, 0, 1).applyMatrix4(R), V3(0, 1, 0), 0.222, 0.05, uvOf(REG.mir))); // 鏡子：畫的後面景色
+      cab.userData._mir = quadUV(V3(-0.0175, 0, 0).applyMatrix4(R).add(V3(xm, ym, 0)), V3(0, 0, 1).applyMatrix4(R), V3(0, 1, 0), 0.222, 0.05, [0, 0, 1, 1]); // 第 25 批：真的鏡子（town.src.js 開車的時候貼往後看的畫面，平常藏著）
       const xs = F.wt(0) - 0.012, ys = F.roof(xs, 0) - 0.012;
       put('gloss', tint(tube([[xm + 0.004, ym + 0.025, 0], [lerp(xm, xs, 0.5), lerp(ym + 0.025, ys, 0.65), 0], [xs, ys, 0]], 0.008, 6, 8), 0x0c0c0e));
       // 遮陽板：收起來貼著車頂（四個角照車頂高度，中間拉直線；車頂是凸的所以不會穿出去），前緣在前擋上緣後面 3 公分；外端只到車頂還平的地方
@@ -913,7 +915,9 @@ export const CABIN3D = (() => {
       const d = cab.userData._dig, t = makeDigits('#05070a');
       if (t) { digits = t; const m = new THREE.Mesh(quadUV(d.o, d.U, d.V, d.w, d.h, [0, 0, 1, 1]), new THREE.MeshBasicMaterial({ map: t })); m.name = 'cabin-digits'; cab.add(m); }
     }
-    delete cab.userData._dig; delete cab.userData._con;
+    let mirror = null; // 第 25 批：真的後照鏡（平常藏著；材質、uv 是 town.src.js 給的）
+    if (cab.userData._mir) { mirror = new THREE.Mesh(cab.userData._mir, mat.face); mirror.name = 'cabin-mirror'; mirror.visible = false; cab.add(mirror); }
+    delete cab.userData._dig; delete cab.userData._con; delete cab.userData._mir;
     const _d = V3(), _s = V3(), _p = V3(), NQ = [[-0.18, -0.035], [-0.18, 0.035], [1, 0.012], [1, -0.012]]; // 指針四個角（長度比例、寬度比例）
     let lr = NaN, lk = NaN;
     const setGauges = (rpm = 0, kmh = 0) => { // 每一格叫也可以：沒變就不做事、不產生新物件
@@ -927,7 +931,7 @@ export const CABIN3D = (() => {
       if (digits) digits.userData.set(kmh);
     };
     setGauges(0, 0);
-    Object.assign(cab.userData, { setGauges, setSteer, view: VIEW[key], mats: mat });
+    Object.assign(cab.userData, { setGauges, setSteer, view: VIEW[key], mats: mat, mirror });
     void mats;
     return cab;
   }
