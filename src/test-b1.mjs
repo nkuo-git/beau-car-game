@@ -965,8 +965,8 @@ await drawAndShot('15-home-parked');
 // 開上電梯的圓台（差一點點、歪一點點）→ 面板（一樓：1F 亮著、每層寫還有幾格空的）→ 按 3F：先開到正中間，電梯連車帶鏡頭一起上去，自己轉到最近的空格子
 const pn7 = await p.evaluate(() => { const D = window.__D(), H = window.__H; D.drv.teleport(H.gw(-0.4, 0.3, 0.06)); window.__dstep(30); return { panel: H.elPanel(), who: window.__D().elWho(), act: H.actText(), act2: H.act2() }; });
 console.log('  on the lift:', JSON.stringify(pn7));
-check(pn7.panel.shown && pn7.panel.btns.join() === '4F 空 7,5F 空 7,6F 空 7,1F,2F 空 5,3F 空 7' && pn7.panel.on === '1F' && !pn7.panel.row && pn7.who === 1 && pn7.act2 === '下車',
-  `driving onto the round lift shows the elevator panel: 3×2 floor buttons, 1F lit, free spots per floor (7 each since 第 24 批: one spot per floor is the ramp's road; 2F has YARIS and GC8: 空 5); no ◀ ▶ downstairs (${pn7.panel.btns?.join(' / ')})`);
+check(pn7.panel.shown && pn7.panel.btns.join() === '2F 空 5,3F 空 7,4F 空 7,B2 空 8,B1 空 8,1F' && pn7.panel.on === '1F' && !pn7.panel.row && pn7.who === 1 && pn7.act2 === '下車',
+  `driving onto the round lift shows the elevator panel: 3×2 floor buttons (2F 3F 4F / B2 B1 1F since 第 26 批), 1F lit, free spots per floor (7 upstairs since 第 24 批: one spot per floor is the ramp's road; 2F has YARIS and GC8: 空 5; 8 in the basement); no ◀ ▶ downstairs (${pn7.panel.btns?.join(' / ')})`);
 clash = await hudClash(); const clashEl = await sizeSweep(true, ['.elpanel']);
 check(!clash && !clashEl, `elevator panel in the car (fullscreen): nothing overlapping, on every screen size (${[clash, clashEl].filter(Boolean).join(' / ') || 'ok'})`);
 await drawAndShot('16-lift-panel');
@@ -1130,14 +1130,14 @@ check(ed.pressed === '1F' && ed.floor === 0 && Math.abs(ed.wy) < 0.02 && Math.ab
 const ec = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, G = D.GAR, W = D.walker, a = H.gw(-2.6, -4.2);
   W.teleport({ x: a.x, z: a.z, heading: 0 }); H.step(5);
-  G.liftTo(5, 0); for (let n = 0; n < 2400 && G.lift.busy; n++) H.step(1);
+  G.liftTo(3, 0); for (let n = 0; n < 2400 && G.lift.busy; n++) H.step(1); // 最上面（4F；第 26 批：塔矮 2 層）
   const away = { floor: G.lift.floor, here: G.liftHere(G.floor) }; H.step(5); const act = H.actText(), panel = H.elPanel();
   const pressed = H.press(); H.step(10); const busy = G.lift.busy, act2 = H.actText(); for (let n = 0; n < 2400 && G.lift.busy; n++) H.step(1); H.step(5);
   return { away, act, panel, pressed, busy, act2, floor: G.lift.floor, here: G.liftHere(G.floor), act3: H.actText(), toast: H.toast() };
 });
 console.log('  叫電梯:', JSON.stringify(ec));
-check(ec.away.floor === 5 && !ec.away.here && ec.act === '叫電梯' && !ec.panel.shown && ec.pressed === '叫電梯' && ec.busy && ec.act2 === '電梯動作中⋯' && ec.floor === 0 && ec.here && ec.act3 !== '叫電梯' && /電梯下來了/.test(ec.toast),
-  `the lift is up on 6F: next to the shaft the big button says 「${ec.act}」; pressed, it comes down (「${ec.act2}」 while moving; 「${ec.toast}」)`);
+check(ec.away.floor === 3 && !ec.away.here && ec.act === '叫電梯' && !ec.panel.shown && ec.pressed === '叫電梯' && ec.busy && ec.act2 === '電梯動作中⋯' && ec.floor === 0 && ec.here && ec.act3 !== '叫電梯' && /電梯下來了/.test(ec.toast),
+  `the lift is up on 4F (the top): next to the shaft the big button says 「${ec.act}」; pressed, it comes down (「${ec.act2}」 while moving; 「${ec.toast}」)`);
 // 小房子「大便龍的家」：走進門（自動換第一人稱、鏡頭頭上有斜天花板）→ 床邊「睡覺」
 const si = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, W = D.walker, G = D.GAR, S = G.spots, B = G.zones.bedSide;
@@ -1229,14 +1229,14 @@ const so = await p.evaluate(() => {
 });
 console.log('  out of the cabin:', JSON.stringify(so));
 check(so.walked && so.inCam === 'eye' && so.cam === 'follow' && !so.auto && !so.house, `walked back out of the cabin: third-person camera again (${so.inCam} → ${so.cam})`);
-// 車行送車（你在車店看不到）：停到樓上第一個空的格子（電梯不用動、沒有聲音）；35 格都滿了＝先停一樓大廳（第 24 批：每層一格是斜坡的路）
+// 車行送車（你在車店看不到）：停到樓上第一個空的格子（電梯不用動、沒有聲音）；37 格都滿了＝先停一樓大廳（第 24 批：樓上每層一格是斜坡的路；第 26 批：上面兩層搬到地下室，地下室沒有路）
 const sm = await p.evaluate(() => {
   const D = window.__D(), G = D.GAR, ex = D.VIL.places.dealer.exit, out = {}, away = (k) => { D.offTower(k); D.tripPose[k] = { x: ex.x, z: ex.z, heading: ex.heading }; }; // 開去車店了
   const snap = () => ({ lift: G.lift.floor, busy: G.lift.busy, snd: Object.keys(window.__D().liftSnd).length });
   out.before = snap(); away('gc8');
   const m1 = D.deliver('gc8', 'GC8'), i1 = window.__D().TWR.indexOf('gc8');
   out.one = { msg: m1, i: i1, ...snap(), on: D.LODS.gc8.lod.car.parent?.name, pose: D.tripPose.gc8?.tw, cars: window.__D().walker.cars.map((c) => c.key) };
-  away('gc8'); const T = window.__D().TWR, fill = []; for (let i = 0; i < T.length; i++) if (!T[i] && !D.TOWER_BAYS[i].road) { T[i] = 'jesko'; fill.push(i); } // 開走以後，空的格子先假裝停滿（JESKO 只是名字；第 24 批：斜坡的路那 5 格空著也不能停）
+  away('gc8'); const T = window.__D().TWR, fill = []; for (let i = 0; i < T.length; i++) if (!T[i] && !D.TOWER_BAYS[i].road) { T[i] = 'jesko'; fill.push(i); } // 開走以後，空的格子先假裝停滿（JESKO 只是名字；第 24 批：斜坡的路那 3 格空著也不能停）
   const m2 = D.deliver('gc8', 'GC8'), q = window.__H.gl(D.tripPose.gc8.x, D.tripPose.gc8.z);
   out.full = { msg: m2, tw: D.tripPose.gc8.tw ?? null, f: D.tripPose.gc8.f, q: [+q.x.toFixed(2), +q.z.toFixed(2)], inT: G.isInside(q.x, q.z), lod: D.LODS.gc8.lod.car.parent === G.interior };
   for (const i of fill) T[i] = null;
@@ -1249,7 +1249,7 @@ console.log('  dealer deliveries:', JSON.stringify(sm));
 check(sm.one.i === 0 && sm.one.on === 'towerBay1' && sm.one.pose === 0 && sm.one.lift === sm.before.lift && !sm.one.busy && sm.one.snd === 0 && /GC8 車行幫你送回車庫了：停在 2 樓 1 號/.test(sm.one.msg),
   `delivered: the car goes into the first free spot upstairs, the lift does not move, no motor sound: 「${sm.one.msg}」`);
 check(sm.full.msg === '車庫滿了：GC8 先停在一樓大廳' && sm.full.tw === null && sm.full.f === 0 && sm.full.inT && Math.hypot(sm.full.q[0], sm.full.q[1]) > 6 && sm.full.lod && sm.again.i === 0 && !sm.again.jesko,
-  `all 35 spots taken (the 5 road spots stay empty and are not used): the dealer leaves it in the lobby (「${sm.full.msg}」, local ${sm.full.q.join(', ')}); with room again it goes back upstairs (「${sm.again.msg}」)`);
+  `all 37 spots taken (the 3 road spots stay empty and are not used): the dealer leaves it in the lobby (「${sm.full.msg}」, local ${sm.full.q.join(', ')}); with room again it goes back upstairs (「${sm.again.msg}」)`);
 check(JSON.stringify(sm.tower) === JSON.stringify(sm.park), 'the tower layout is saved as it changes');
 // 電梯的馬達聲（OfflineAudioContext 算出來）：開鎖「喀」→ 馬達嗡嗡（有聲音）→ 停：落鎖「喀」→ 安靜
 const sn = await p.evaluate(async () => {

@@ -121,7 +121,7 @@ const stage = document.getElementById('stage');
 const msg = document.getElementById('msg'), prog = document.getElementById('prog'), status = document.getElementById('status'), hint = document.getElementById('hint');
 let renderer;
 try {
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true }); // stencil：第 26 批，圓塔一樓電梯的洞（往地下室看下去，地面不畫）
 } catch (e) {
   msg.textContent = '這支手機不支援 3D 畫面（WebGL）'; prog.parentElement.hidden = true;
   throw e;
@@ -555,7 +555,7 @@ const carsEl = document.getElementById('cars');
 async function showCar(key) {
   const was = cur, twI = was !== key && Array.isArray(GAME.park?.tower) ? GAME.park.tower.indexOf(key) : -1; // 第 21 批：選了停在圓塔樓上的車：電梯把它送下來（說一聲）
   cur = key; save();
-  if (twI >= 0 && room?.group.visible && typeof TOWER_BAYS !== 'undefined') gtoast(`${CARS[key].btn[0]} 坐電梯從 ${TOWER_BAYS[twI].f + 1} 樓下來了`, 2000);
+  if (twI >= 0 && room?.group.visible && typeof TOWER_BAYS !== 'undefined') gtoast(`${CARS[key].btn[0]} 坐電梯從 ${towerFlTxt(TOWER_BAYS[twI].f)} ${towerUnder(TOWER_BAYS[twI].f) ? '上來' : '下來'}了`, 2000); // 第 26 批：地下室上來
   const bc = PERF[key].big ? 1.55 : 1; // 第 4 批：大車（怪獸卡車）鏡頭拉遠、看高一點、影子放大
   if (bc !== bigCam) { bigCam = bc; controls.target.y = bc > 1 ? 1.45 : 0.55; sh.scale.set(bc > 1 ? 1.25 : 1, bc > 1 ? 1.7 : 1, 1); if (!seat) { resize(); view(38); } }
   carsEl.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.car === key)));

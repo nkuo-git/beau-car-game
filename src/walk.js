@@ -161,7 +161,7 @@ function colGrid() {
     for (const c of list || []) {
       if (!c || !isFinite(c.x) || !isFinite(c.z)) continue;
       const box = c.t === 'box'; if (box ? !(c.hx > 0 && c.hz > 0) : !(c.r > 0)) continue;
-      const rot = c.rot || 0, q = { t: box ? 'box' : 'circle', x: c.x, z: c.z, hx: box ? c.hx : 0, hz: box ? c.hz : 0, r: box ? 0 : c.r, h: c.h ?? 9, y0: c.y0 || 0,
+      const rot = c.rot || 0, q = { t: box ? 'box' : 'circle', x: c.x, z: c.z, hx: box ? c.hx : 0, hz: box ? c.hz : 0, r: box ? 0 : c.r, h: c.h ?? 9, y0: c.y0 || 0, yb: c.y0 == null,
         u0: Math.cos(rot), u1: -Math.sin(rot), w0: Math.sin(rot), w1: Math.cos(rot), tag, src: c, cells: [], _s: 0 }; // src＝原來那個（第 7 批：被怪獸卡車輾扁的 crushed 就不擋了）
       const ex = box ? Math.abs(q.u0) * q.hx + Math.abs(q.w0) * q.hz : q.r, ez = box ? Math.abs(q.u1) * q.hx + Math.abs(q.w1) * q.hz : q.r;
       for (let gx = Math.floor((q.x - ex) / CELL); gx <= Math.floor((q.x + ex) / CELL); gx++) for (let gz = Math.floor((q.z - ez) / CELL); gz <= Math.floor((q.z + ez) / CELL); gz++) {
@@ -236,7 +236,7 @@ function segHit(c, ax, ay, az, dx, dy, dz, m, best) {
 // 碰撞物（原本的格式）→ 算好的（move 用：會動的東西每格照原本的值更新）
 function syncQ(q, c) {
   const box = c.t === 'box', rot = c.rot || 0;
-  q.t = box ? 'box' : 'circle'; q.x = +c.x || 0; q.z = +c.z || 0; q.hx = box ? c.hx : 0; q.hz = box ? c.hz : 0; q.r = box ? 0 : c.r || 0; q.h = c.h ?? 9; q.y0 = c.y0 || 0;
+  q.t = box ? 'box' : 'circle'; q.x = +c.x || 0; q.z = +c.z || 0; q.hx = box ? c.hx : 0; q.hz = box ? c.hz : 0; q.r = box ? 0 : c.r || 0; q.h = c.h ?? 9; q.y0 = c.y0 || 0; q.yb = c.y0 == null;
   if (q.rot !== rot) { q.rot = rot; q.u0 = Math.cos(rot); q.u1 = -Math.sin(rot); q.w0 = Math.sin(rot); q.w1 = Math.cos(rot); }
   q.ok = box ? c.hx > 0 && c.hz > 0 : c.r > 0;
 }
@@ -313,14 +313,15 @@ function createWalker(o) {
     mqN = 0; if (!movers) return;
     for (let i = 0; i < movers.length; i++) { const c = movers[i]; if (!c) continue; if (!mq[mqN]) mq[mqN] = { rot: NaN }; syncQ(mq[mqN], c); if (mq[mqN].ok) mqN++; }
   }
-  const blocksBody = (c) => c.y0 < BH + 0.05; // 天花板、捲起來的門（底比頭高）不擋人
+  // 天花板、捲起來的門（底比頭高）不擋人；gy＝腳下的地面（第 26 批：圓塔的地下室在地面下面，天花板 −0.3 也比頭高）；沒給 y0 的一定擋（yb）
+  const blocksBody = (c, gy) => c.yb || c.y0 < gy + BH + 0.05;
   function collide() { // 推出去（最多 6 輪）；還卡著（夾在兩個東西中間，例如牆跟機車之間的縫）回傳 false
-    const r2 = R - 0.004;
+    const r2 = R - 0.004, gy = groundY(st.x, st.z);
     for (let it = 0; it < 6; it++) {
       let moved = false;
       const list = cw.near(st.x - R - 0.05, st.z - R - 0.05, st.x + R + 0.05, st.z + R + 0.05);
-      for (let i = 0; i < list.length; i++) { const c = list[i]; if (blocksBody(c) && pushOut(st.x, st.z, R, c)) { slide(); moved = true; } }
-      for (let i = 0; i < mqN; i++) { const c = mq[i]; if (blocksBody(c) && pushOut(st.x, st.z, R, c)) { slide(); moved = true; } }
+      for (let i = 0; i < list.length; i++) { const c = list[i]; if (blocksBody(c, gy) && pushOut(st.x, st.z, R, c)) { slide(); moved = true; } }
+      for (let i = 0; i < mqN; i++) { const c = mq[i]; if (blocksBody(c, gy) && pushOut(st.x, st.z, R, c)) { slide(); moved = true; } }
       if (!moved) return true;
     }
     return freeAt(st.x, st.z, r2, true);
@@ -333,14 +334,14 @@ function createWalker(o) {
   }
   function freeAt(x, z, r, anywhere) { // 這裡站得下（不碰到任何擋人的東西、在範圍裡）
     if (!anywhere && (x < wb.x0 || x > wb.x1 || z < wb.z0 || z > wb.z1)) return false;
-    const list = cw.near(x - r, z - r, x + r, z + r);
-    for (let i = 0; i < list.length; i++) if (blocksBody(list[i]) && pushOut(x, z, r, list[i])) return false;
-    for (let i = 0; i < mqN; i++) if (blocksBody(mq[i]) && pushOut(x, z, r, mq[i])) return false;
+    const list = cw.near(x - r, z - r, x + r, z + r), gy = groundY(x, z);
+    for (let i = 0; i < list.length; i++) if (blocksBody(list[i], gy) && pushOut(x, z, r, list[i])) return false;
+    for (let i = 0; i < mqN; i++) if (blocksBody(mq[i], gy) && pushOut(x, z, r, mq[i])) return false;
     return true;
   }
   function segBlocked(ax, az, bx, bz) { // 兩點之間（人的高度）有沒有擋人的東西
-    const list = cw.near(Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz));
-    for (let i = 0; i < list.length; i++) if (blocksBody(list[i]) && segHit(list[i], ax, 1, az, bx - ax, 0, bz - az, 0, 1) < 1) return true;
+    const list = cw.near(Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz)), gy = groundY(ax, az);
+    for (let i = 0; i < list.length; i++) if (blocksBody(list[i], gy) && segHit(list[i], ax, 1, az, bx - ax, 0, bz - az, 0, 1) < 1) return true;
     return false;
   }
   // 鏡頭的線（3D）第一次碰到東西是在哪裡：0–1（1＝沒碰到）；離牆留 CAM_M
@@ -626,7 +627,7 @@ function createWalker(o) {
       const tc = rayT(sx, ay, sz, sx - Lx * D, ay - Ly * D, sz - Lz * D);
       cam.want = D * tc;
       cam.cd = cam.want < cam.cd ? cam.want : cam.cd + (cam.want - cam.cd) * (1 - Math.exp(-dt * 2.5)); // 被擋到馬上拉近、沒擋了慢慢拉回去
-      px = sx - Lx * cam.cd; py = Math.max(0.3, ay - Ly * cam.cd); pz = sz - Lz * cam.cd;
+      px = sx - Lx * cam.cd; py = Math.max(Math.min(0.3, g0 + 0.3), ay - Ly * cam.cd); pz = sz - Lz * cam.cd; // 第 26 批：地下室（腳下 −3.2）鏡頭不要被拉到地面上面
       if (g0 !== 0 || py < 0.35) py = Math.max(py, groundY(px, pz) + 0.3); // 越野車場：鏡頭不鑽進後面的坡
       st.close = st.close ? cam.cd < 0.75 : cam.cd < 0.55; // 貼著頭：角色藏起來
     }

@@ -1,5 +1,5 @@
 // 第 24 批（Nick 2026-10-20「車庫外圍的那個外面那一圈的路可以弄了」，草稿 https://claude.ai/artifact/Xbe4taBBqkM6gL9VDyV3xb，Nick 選「照草稿」）：圓塔外面繞圈的斜坡
-//   舊存檔停在變成路的那 5 格 → 搬到空的格子；出門上 GC8 → 開鐵捲門開出去、右轉開上斜坡（高度照斜坡、不撞、鏡頭在上面那一圈底下）→ 3 樓的口開進去（電梯自己叫上來，不會把你的車載走）
+//   舊存檔停在變成路的那幾格（第 26 批：上面兩層搬到地下室，剩 3 格）→ 搬到空的格子；出門上 GC8 → 開鐵捲門開出去、右轉開上斜坡（高度照斜坡、不撞、鏡頭在上面那一圈底下）→ 3 樓的口開進去（電梯自己叫上來，不會把你的車載走）
 //   → 斜坡上不能下車；3 樓裡面可以下車、走路走不出口 → 上車開到電梯上、轉到黃線 → 開出去、左轉開下斜坡到地上
 //   → 走路、怪獸卡車都上不去（起點那一道擋著、跟你說）；draw calls、三角形
 // 開車、走路都不是真的即時：頁面自己的開車先停住（__hold）、不畫（__noDraw），測試在頁面裡一步一步開，要截圖才畫
@@ -106,13 +106,13 @@ console.log('0', el(), 'page ready');
 const st0 = await p.evaluate(() => {
   const D = window.__D(), R = D.TOWER_RAMP, B = D.TOWER_BAYS, wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
   const roads = B.filter((b) => b.road), at = roads.map((b) => +wrap(Math.atan2(b.z, b.x) - R.ent(b.f)).toFixed(4));
-  const fy = [0, 1, 2, 3, 4, 5].map((k) => +(D.towerRampY(k * Math.PI) - D.towerFy(k)).toFixed(6));
+  const fy = [0, 1, 2, 3].map((k) => +(D.towerRampY(k * Math.PI) - D.towerFy(k)).toFixed(6)); // 第 26 批：斜坡到 4F（再上去沒有了）
   let grade = 0; for (let u = 0; u < R.UEND; u += 0.01) grade = Math.max(grade, (D.towerRampY(u + 0.01) - D.towerRampY(u)) / (0.01 * R.RM));
-  return { roads: roads.map((b) => b.id), floors: roads.map((b) => b.f), at, fy, top: +(D.towerRampY(R.UEND) - D.towerFy(5)).toFixed(6), grade: +grade.toFixed(4), park: window.__G().park };
+  return { roads: roads.map((b) => b.id), floors: roads.map((b) => b.f), at, fy, top: +(D.towerRampY(R.UEND) - D.towerFy(R.NE)).toFixed(6), ne: R.NE, grade: +grade.toFixed(4), park: window.__G().park };
 });
 console.log('  ', JSON.stringify({ ...st0, park: undefined }));
-check(JSON.stringify(st0.roads) === '[5,9,21,25,37]' && JSON.stringify(st0.floors) === '[1,2,3,4,5]' && st0.at.every((a) => Math.abs(a) < 0.01), `one spot per floor (2F–6F) became the ramp's road, right at that floor's entrance (${st0.roads})`);
-check(st0.fy.every((d) => d === 0) && st0.top === 0 && st0.grade < 0.16, `the ramp is level with each floor at its entrance and with 6F at the top; steepest ${(st0.grade * 100).toFixed(1)}%`);
+check(JSON.stringify(st0.roads) === '[5,9,21]' && JSON.stringify(st0.floors) === '[1,2,3]' && st0.at.every((a) => Math.abs(a) < 0.01), `one spot per floor (2F–4F; the basement has no ramp) became the ramp's road, right at that floor's entrance (${st0.roads})`);
+check(st0.fy.every((d) => d === 0) && st0.top === 0 && st0.ne === 3 && st0.grade < 0.16, `the ramp is level with each floor at its entrance and with 4F at the top; steepest ${(st0.grade * 100).toFixed(1)}%`);
 const tw0 = st0.park.tower;
 check(tw0.length === 40 && tw0[0] === 'gtr' && st0.roads.every((i) => !tw0[i]) && ['yaris', 'supra', 'gtr'].every((k) => tw0.filter((x) => x === k).length === 1) && st0.park.mid === 'gc8',
   `old save with YARIS and SUPRA in spots that are now road: both moved to free spots, GT-R kept its spot (${tw0.map((k, i) => (k ? `${i}:${k}` : '')).filter(Boolean).join(' ')})`);

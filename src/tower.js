@@ -2,7 +2,7 @@
 //   草稿 https://claude.ai/artifact/GZcpBA7kY8HVfa7zYk3Si4，Nick「弄好直接弄上手機」）
 // 取代 room.js（白色大理石車庫）＋ringgar.js（後面的四層圓環車庫）：整個家就是一棟圓圓的玻璃塔
 //   一樓＝大廳（挑高 4.5 公尺）：鐵捲門（朝本地 +x）、門上面的名牌、中間的圓電梯（也是車庫頁改車的轉盤）、小房子（床、衣櫃、書桌）、獎盃櫃、沙發、盆栽
-//   二到六樓＝停車：每層 8 格圍著中間的電梯井（車頭朝外停），一共 40 格
+//   二到四樓＝停車：每層 8 格圍著中間的電梯井（車頭朝外停）；第 26 批：地下室 B1、B2（坐電梯去，每層 8 格）＝以前的五樓、六樓搬下去（格子的號碼不變：存檔照舊）
 //   電梯＝一個會升降、會轉的圓台（半徑 3.3）：開車（或走路）站上去，自己選幾樓（頁面的按鈕）；上去以後轉到空的那一格、往前開進去停好
 // 本地座標：原點＝塔的中心（電梯的中間）、x 往鐵捲門（+x 出去）、y 上、z＝車頭朝門時車子的右邊；一樓地板 y 0
 //   車庫頁：放在原點（車子停在電梯圓台上給你看）；村子：group 擺到 lot（town.src.js；lot＝塔的中心、heading＝本地 +x 朝外）
@@ -14,31 +14,39 @@
 //   isInside(x, z, m)：本地的點在塔裡面（玻璃裡面或門洞）；colliders(doorOpen, world, car)：現在這一層（api.floor）的碰撞（鐵捲門一定最後一個；car＝開車：樓上留斜坡的口）；cameraColliders(world)：只擋鏡頭的（y0）
 //   rampColliders(F, world)：第 24 批，開在外面的斜坡上（或在樓上）的矮牆、護欄（towerRampCols）
 //   ceilingAt(x, z, world)：現在這一層頭上多高（本地 y；一樓 4.2、樓上每層 2.9 公尺淨高）；heightAt(x, z)：塔裡面 → 現在這一層的地板高（本地 y），外面 null
-//   floor：人（車）現在在第幾層（0＝一樓 … 5＝六樓；頁面設：setFloor(f)，碰撞、天花板、地板高都照這個）
+//   floor：人（車）現在在第幾層（0＝一樓 … 3＝四樓、4＝B1、5＝B2；頁面設：setFloor(f)，碰撞、天花板、地板高都照這個）
 //   bays（40 格，跟 TOWER_BAYS 一樣）、floors[6]（每層的車位 Group：0＝一樓沒有車位，cull 照鏡頭開關）、cars[40]、put(i, obj, name)、take(i)（跟 ringgar.js 一樣：車頭朝外）
 //   platform：電梯的圓台 Group（車庫頁的車、坐電梯的人和車用 attach 掛上去就跟著動）；lift：{ y, rot, floor, busy }；liftHere(f)：電梯停在第 f 層（沒在動）
 //   liftTo(f, rot, onDone)：電梯去第 f 層、轉到 rot（圓台的 rotation.y）；liftSnap(f, rot)：直接放好；onLift(what)：頁面設（'start'／'stop'）
 //   update(dt)：鐵捲門＋電梯（有東西在動就 true）；cull(camera) → { inside, house, ceil, floor }（每一層的車只畫看得到的）
+//   under、hole：第 26 批，地下室的 Group（村子那棟才有，cull 開關）、一樓地板電梯的洞（模板緩衝畫 1；頁面把地面設成模板不是 1 才畫）
 //   toWorld({ x, z, heading })、toLocal(x, z)；interior（一樓大廳）、exterior（門外的名牌）；parts（別人那幾間的外殼：InstancedMesh 用 [{ geometry, material, name }]）
 //   camClamp(p, t)：車庫頁的鏡頭（p，本地＝世界）留在大廳裡面（玻璃裡、天花板下、不鑽進小房子、櫃子）：從 t（看的點）往 p 那條線上縮
 // }
 // 效能：外殼一次 10 個 draw call（地板、大理石／白漆、霧面（布、木頭）、金色、玻璃、燈、獎盃、門片、名牌、電梯圓台）；車是輕量車，只畫看得到的那幾層
 //   幾何、材質一個網格合併好（兩個 buildRoom 共用幾何：車庫頁、村子各一棟）；每一格不 new 東西
-// 打包（build-art.mjs／build-app.mjs 拿掉 import／export）：最上層只有 TOWER、towerFy、TOWER_RAMP、towerRampY、TOWER_BAYS、towerRampCols、towerRampGround、towerColsAt、towerFoot、buildRoom
+// 打包（build-art.mjs／build-app.mjs 拿掉 import／export）：最上層只有 TOWER、towerFy、towerUp、towerUnder、towerFlName、towerFlTxt、TOWER_RAMP、towerRampY、TOWER_BAYS、towerRampCols、towerRampGround、towerColsAt、towerFoot、buildRoom
 // 第 24 批：外面繞圈的斜坡（TOWER_RAMP）：村子裡那棟、別人家的外殼才畫（車庫頁不畫）；外殼的 draw call 數不變（合進大理石、金色、燈那三個網格）
+// 第 26 批：地下室（Nick 2026-10-21「看可以的話加在地下室然後地下室有幾樓樓上就剪掉幾樓」；草稿 https://claude.ai/artifact/36fLvpmhQmAd2LCwaaeBH2，Nick 選「坐電梯」）
+//   樓上剩 2F–4F（塔矮 2 層、斜坡開到 4F）；B1、B2 只有坐電梯去；層的號碼 f 0 … 5 不變（4＝B1、5＝B2：以前的五樓、六樓），格子的 id 也不變
+//   只有村子裡那棟有地下室（另外兩個網格：水泥、燈；在塔裡面看得到才畫）；一樓地板電梯的洞：towerHole 在模板緩衝畫 1，頁面把地面的材質設成模板不是 1 才畫（town.src.js shaftCut）
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 
-// RO 玻璃半徑、RW 樓板外緣、RI 電梯井（樓上的洞）、RP 電梯圓台、H1 一樓（地板到二樓地板）、FH 樓上每層、NF 層數（一樓＋五層）、RB 車位中心離中間多遠
+// RO 玻璃半徑、RW 樓板外緣、RI 電梯井（樓上的洞）、RP 電梯圓台、H1 一樓（地板到二樓地板）、FH 樓上（地下）每層、NF 層數（一樓＋樓上 3 層＋地下 2 層）、NU 地上幾層（f 0 … NU−1；f ≥ NU＝地下室）、RB 車位中心離中間多遠
 // 門洞：x DX0（裡面）… DX1（外面），z ±DZ、高 DH；門洞兩邊的牆到 ±PZ；TOP＝屋頂
-export const TOWER = { RO: 12, RW: 12.3, RI: 3.6, RP: 3.3, H1: 4.5, FH: 3.2, NF: 6, SLAB: 0.3, RB: 7.6, DX0: 11.95, DX1: 12.6, DZ: 4, DH: 3.6, PZ: 4.6, XP: 11, TOP: 20.5 };
-export const towerFy = (f) => (f <= 0 ? 0 : TOWER.H1 + (f - 1) * TOWER.FH); // 第 f 層的地板高（0＝一樓）
+export const TOWER = { RO: 12, RW: 12.3, RI: 3.6, RP: 3.3, H1: 4.5, FH: 3.2, NF: 6, NU: 4, SLAB: 0.3, RB: 7.6, DX0: 11.95, DX1: 12.6, DZ: 4, DH: 3.6, PZ: 4.6, XP: 11, TOP: 14.1 }; // TOP＝H1 + (NU − 1) × FH（四樓的天花板上面）
+export const towerFy = (f) => (f <= 0 ? 0 : f < TOWER.NU ? TOWER.H1 + (f - 1) * TOWER.FH : (TOWER.NU - 1 - f) * TOWER.FH); // 第 f 層的地板高（0＝一樓；第 26 批：B1 −3.2、B2 −6.4）
+export const towerUp = (f) => f >= 1 && f < TOWER.NU; // 第 26 批：樓上（2F–4F，有斜坡的口）
+export const towerUnder = (f) => f >= TOWER.NU; // 第 26 批：地下室
+export const towerFlName = (f) => (f >= TOWER.NU ? `B${f - TOWER.NU + 1}` : `${f + 1}F`); // 電梯的按鈕：1F … 4F、B1、B2
+export const towerFlTxt = (f) => (f >= TOWER.NU ? `B${f - TOWER.NU + 1}` : `${f + 1} 樓`); // 提示的話：「3 樓」「B1」
 // ==== 第 24 批：外面繞圈的斜坡（Nick 2026-10-20「車庫外圍的那個外面那一圈的路可以弄了」；草稿 https://claude.ai/artifact/Xbe4taBBqkM6gL9VDyV3xb，Nick 選「照草稿」）====
 //   從鐵捲門右手邊（本地角度 A0＝45 度）的地上開始，往角度變大的方向繞（往上開，塔在右手邊），半圈上一層：
-//   第 f 層（1＝2F … 5＝6F）的口在角度 ent(f)＝A0 + f × 180 度（2F 後面、3F 前面、4F 後面、5F 前面、6F 後面）；口對著的那一格變成路（TOWER_BAYS 的 road）＝35 格
-//   路面 R0 … R1（4.6 公尺寬）、厚 RT；外面護欄高 PH、裡面矮牆高 CURB；口的玻璃開 ±GW；UEND＝斜坡到哪裡（6F 的口再過去一點）
+//   第 f 層（1＝2F … 3＝4F）的口在角度 ent(f)＝A0 + f × 180 度（2F 後面、3F 前面、4F 後面）；口對著的那一格變成路（TOWER_BAYS 的 road）；第 26 批：上面兩層變地下室，斜坡開到 4F＝37 格
+//   路面 R0 … R1（4.6 公尺寬）、厚 RT；外面護欄高 PH、裡面矮牆高 CURB；口的玻璃開 ±GW；UEND＝斜坡到哪裡（最上面那一層（4F）的口再過去一點）
 //   towerRampY(u)：u＝從起點轉了多少（弧度）→ 路面多高（本地 y）；每半圈 smoothstep（口那邊是平的，中間最陡：一樓到二樓 14%、上面 10%）
-export const TOWER_RAMP = { A0: Math.PI / 4, R0: 12.6, R1: 17.2, RM: 14.9, RT: 0.4, PH: 1.05, CURB: 0.25, GW: Math.PI / 12, NE: 5, UEND: 5 * Math.PI + 0.32, ent: (f) => Math.PI / 4 + f * Math.PI };
+export const TOWER_RAMP = { A0: Math.PI / 4, R0: 12.6, R1: 17.2, RM: 14.9, RT: 0.4, PH: 1.05, CURB: 0.25, GW: Math.PI / 12, NE: 3, UEND: 3 * Math.PI + 0.32, ent: (f) => Math.PI / 4 + f * Math.PI };
 export const towerRampY = (u) => {
   if (!(u > 0)) return 0;
   const k = Math.floor(u / Math.PI);
@@ -46,12 +54,12 @@ export const towerRampY = (u) => {
   const t = u / Math.PI - k;
   return towerFy(k) + (towerFy(k + 1) - towerFy(k)) * t * t * (3 - 2 * t);
 };
-// 40 格（停車的順序＝id：二樓先）：{ id, f（1＝二樓 … 5＝六樓）, i（方向 i × 45 度，0＝朝門那邊）, a, x, y, z（車子中心，本地）, heading（車頭朝外）, road（第 24 批：斜坡的口對著＝路，不能停）}
+// 40 格（停車的順序＝id：二樓先）：{ id, f（1＝二樓 … 3＝四樓、4＝B1、5＝B2）, i（方向 i × 45 度，0＝朝門那邊）, a, x, y, z（車子中心，本地）, heading（車頭朝外）, road（第 24 批：斜坡的口對著＝路，不能停；地下室沒有）}
 export const TOWER_BAYS = (() => {
   const out = [];
   for (let f = 1; f < TOWER.NF; f++) for (let i = 0; i < 8; i++) {
     const a = (i * Math.PI) / 4;
-    out.push({ id: out.length, f, i, a, x: +(TOWER.RB * Math.cos(a)).toFixed(4), y: towerFy(f), z: +(TOWER.RB * Math.sin(a)).toFixed(4), heading: -a, road: i === (1 + 4 * f) % 8 });
+    out.push({ id: out.length, f, i, a, x: +(TOWER.RB * Math.cos(a)).toFixed(4), y: towerFy(f), z: +(TOWER.RB * Math.sin(a)).toFixed(4), heading: -a, road: f <= TOWER_RAMP.NE && i === (1 + 4 * f) % 8 });
   }
   return out;
 })();
@@ -85,7 +93,7 @@ export function towerFoot(lot) {
 
 export const { buildRoom } = (() => {
   const { RO, RW, RI, RP, H1, FH, NF, SLAB, RB, DX0, DX1, DZ, DH, PZ, XP, TOP } = TOWER;
-  const fy = towerFy, ceilY = (f) => fy(f + 1) - SLAB; // 第 f 層的天花板（樓板底）
+  const { NU } = TOWER, fy = towerFy, ceilY = (f) => fy(f) + (f ? FH : H1) - SLAB; // 第 f 層的天花板（上面那塊樓板的底；地下室也是）
   const GAP = Math.asin(PZ / RO); // 一樓玻璃留給門洞的缺口（半個角度）
   const XS = (DX0 + DX1) / 2 + 0.03; // 門片在哪（x）
   const NS = 16, SH = DH / NS; // 門片：16 片
@@ -252,9 +260,9 @@ export const { buildRoom } = (() => {
     // 一樓外面一圈黑色牆腳（門洞那邊沒有）
     S.band(RO + 0.3, 0, 0.35, NERO, { seg: 96, t0: GAP, t1: Math.PI * 2 - GAP });
     S.annulus(0.35, RO - 0.02, RO + 0.3, NERO, { seg: 96, t0: GAP, t1: Math.PI * 2 - GAP });
-    // ---- 二到六樓的樓板（中間挖電梯井）、屋頂 ----
-    for (let f = 1; f <= NF; f++) {
-      const y = fy(f), roof = f === NF;
+    // ---- 二到四樓的樓板（中間挖電梯井）、屋頂（第 26 批：f＝NU 那塊是屋頂）----
+    for (let f = 1; f <= NU; f++) {
+      const y = f === NU ? TOP : fy(f), roof = f === NU;
       S.annulus(y, roof ? 0 : RI, RW, roof ? [0.6, 0.6, 0.59] : SLABC, { seg: 112 }); // 地板（屋頂：灰色防水）
       S.annulus(y - SLAB, roof ? 0 : RI, RW, UNDER, { seg: 112, up: false }); // 天花板
       S.band(RW, y - SLAB, y, WHITE, { seg: 112 }); // 外緣
@@ -277,7 +285,7 @@ export const { buildRoom } = (() => {
     // ---- 玻璃：一樓留門洞的缺口；黑色直條（每 15 度一根；門洞那幾根從二樓開始）；第 24 批：樓上每一層留斜坡的口（±GW，那幾根直條在口那一層斷開）----
     const RA = TOWER_RAMP, angD = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
     GL.band(RO, 0.35, ceilY(0), [1, 1, 1], { seg: 112, t0: GAP, t1: Math.PI * 2 - GAP });
-    for (let f = 1; f < NF; f++) GL.band(RO, fy(f), ceilY(f), [1, 1, 1], { seg: 112, t0: RA.ent(f) + RA.GW, t1: RA.ent(f) + Math.PI * 2 - RA.GW });
+    for (let f = 1; f < NU; f++) GL.band(RO, fy(f), ceilY(f), [1, 1, 1], { seg: 112, t0: RA.ent(f) + RA.GW, t1: RA.ent(f) + Math.PI * 2 - RA.GW });
     for (let k = 0; k < 24; k++) {
       const a = (k + 0.5) * (Math.PI / 12), y0 = angD(a, 0) < GAP + 0.04 ? ceilY(0) : 0;
       let y = y0;
@@ -419,7 +427,37 @@ export const { buildRoom } = (() => {
       const txt = [GLY[f + 1], null, GLY.F], px = 0.09, rr = pc + 0.046;
       txt.forEach((g, gi) => { if (g) g.forEach((row, ri) => [...row].forEach((on, ci) => { if (on !== '1') return; const col = gi * 2 + ci, tz = (3 - col) * px, yy = py + (2 - ri) * px; XL.box(T4(rr * cs - sn * tz, yy, rr * sn + cs * tz, -e), [0.012, px * 0.88, px * 0.88], LED); })); }); // 從外面看左到右＝往 −切線
     }
-    Object.assign(GEO, { shell: S.build(), matte: M.build(), gold: G.build(), glass: GL.build(), clear: CG.build(), lights: L.build(), floor: F.build(), door: K.build(), pit: PM.build() });
+    // ---- 第 26 批：地下室（B1、B2）：水泥牆一圈、地板（中間電梯井）、天花板、燈、藍色的格子、牆上的 B1／B2；B2 底下電梯的坑 ----
+    //   U 水泥（霧面）、UL 亮的；只有村子裡那棟（GEO.under／underL，在塔裡面看得到才畫）
+    const U = mesher(), UL = mesher(), CONW = [0.4, 0.41, 0.42], CONF = [0.27, 0.28, 0.3], CONU = [0.5, 0.5, 0.5], BLUE = [0.16, 0.21, 0.69], NAVY = [0.025, 0.033, 0.09], WALLB = [0.05, 0.09, 0.4];
+    const GLB = { B: ['110', '101', '110', '101', '110'], 1: ['010', '110', '010', '010', '111'], 2: GLY[2] };
+    for (let f = NU; f < NF; f++) {
+      const y = fy(f), yc = ceilY(f), top = f === NU, bottom = f === NF - 1, rh = top ? RP + 0.12 : RI; // 天花板的洞：B1 上面＝一樓地板的洞（圓台旁邊那圈黃黑斜紋，小一點）
+      U.annulus(y, RI, RO, CONF, { seg: 96, uv: FU }); // 地板
+      U.annulus(yc, rh, RO, CONU, { seg: 96, up: false, uv: FU }); // 天花板
+      U.band(RO, y, yc, CONW, { seg: 96, out: false, flat: true }); // 牆（朝裡面）
+      U.band(RO - 0.01, y + 0.95, y + 1.15, WALLB, { seg: 96, out: false, flat: true }); // 牆上一條藍線
+      if (top) U.band(rh, yc, yc + SLAB, CONW, { seg: 48, out: false, flat: true }); // 一樓地板的洞邊（朝井裡）
+      U.band(RI, y - SLAB, y, CONW, { seg: 48, out: false, flat: true }); // 這一層樓板的洞邊（B2：坑的邊）
+      for (let k = 0; k < 32; k++) U.annulus(y + 0.004, RI, RI + 0.2, k & 1 ? BLACK : HAZ, { t0: (k * Math.PI) / 16, t1: ((k + 1) * Math.PI) / 16, seg: 64, uv: FU }); // 井邊黃黑斜紋
+      for (let k = 0; k < 8; k++) {
+        const a = (k * Math.PI) / 4, cs = Math.cos(a), sn = Math.sin(a), P = (r, t) => V(cs * r - sn * t, y + 0.003, sn * r + cs * t);
+        face4(U, P(RB - 2.45, -1.3), P(RB + 2.45, -1.3), P(RB + 2.45, 1.3), P(RB - 2.45, 1.3), BLUE, FU, 0, 1, 0); // 藍色的格子（草稿那樣）
+        const b = a + Math.PI / 8, bc = Math.cos(b), bs = Math.sin(b), Q = (r, t, yy) => V(bc * r - bs * t, yy, bs * r + bc * t);
+        face4(U, Q(RI + 0.45, -0.05, y + 0.005), Q(RO - 0.45, -0.05, y + 0.005), Q(RO - 0.45, 0.05, y + 0.005), Q(RI + 0.45, 0.05, y + 0.005), LINEW, FU, 0, 1, 0); // 兩格中間的白線
+        face4(UL, Q(7.2, -0.22, yc - 0.004), Q(8.8, -0.22, yc - 0.004), Q(8.8, 0.22, yc - 0.004), Q(7.2, 0.22, yc - 0.004), LED, FU, 0, -1, 0); // 天花板的燈（兩格中間）
+      }
+      UL.annulus(yc - 0.004, rh + 0.2, rh + 0.26, LED2, { seg: 48, up: false, uv: FU }); // 井邊一圈燈
+      // 牆上的牌子（四面，兩格中間）：深藍底、亮的字「B1」／「B2」（從裡面看左到右＝往 +切線）
+      const txt = [GLB.B, null, GLB[f - NU + 1]], px = 0.17, py = y + 1.9;
+      for (let k = 0; k < 4; k++) {
+        const a = Math.PI / 8 + (k * Math.PI) / 2, cs = Math.cos(a), sn = Math.sin(a), rr = RO - 0.078;
+        U.box(T4((RO - 0.04) * cs, py, (RO - 0.04) * sn, -a), [0.06, 1.1, 1.9], NAVY);
+        txt.forEach((g, gi) => { if (g) g.forEach((row, ri) => [...row].forEach((on, ci) => { if (on !== '1') return; const tz = (gi * 2 + ci - 3) * px, yy = py + (2 - ri) * px; UL.box(T4(rr * cs - sn * tz, yy, rr * sn + cs * tz, -a), [0.012, px * 0.88, px * 0.88], LED); })); });
+      }
+      if (bottom) U.annulus(y - SLAB, 0, RI, PIT, { seg: 48, uv: FU }); // 電梯的坑（圓台停在 B2 的時候在它下面）
+    }
+    Object.assign(GEO, { shell: S.build(), matte: M.build(), gold: G.build(), glass: GL.build(), clear: CG.build(), lights: L.build(), floor: F.build(), door: K.build(), pit: PM.build(), under: U.build(), underL: UL.build() });
     { const xs = X.build(), xg = XG.build(), xl = XL.build(); GEO.shellX = merge([GEO.shell, xs]); GEO.goldX = merge([GEO.gold, xg]); GEO.lightsX = merge([GEO.lights, xl]); for (const g of [xs, xg, xl]) g.dispose(); } // 村子那棟：外殼＋斜坡（一樣的 draw call 數）
     GEO.floorXY = GEO.floor.clone().rotateX(Math.PI / 2); // Reflector 要躺在 xy 平面、法線朝 +z（擺的時候再轉回來）
     // 電梯的圓台：深色大理石面、金色邊、白色箭頭（前面）
@@ -546,9 +584,19 @@ export const { buildRoom } = (() => {
     const platform = new THREE.Group(); platform.name = 'towerLift'; group.add(platform);
     const platMesh = new THREE.Mesh(G0.plat, shellMat); platMesh.name = 'towerLiftDeck'; platform.add(platMesh);
     const pit = new THREE.Mesh(G0.pit, shellMat); pit.name = 'towerPit'; pit.visible = false; inner.add(pit); // 圓台離開一樓才看得到坑
+    // 第 26 批：地下室（村子裡那棟）：水泥、燈兩個網格（在塔裡面、看得到才畫：cull）；hole＝一樓地板電梯的洞，在模板緩衝畫 1（最先畫、不畫顏色）：地面的材質模板是 1 的地方不畫（town.src.js shaftCut）
+    let under = null, hole = null;
+    if (exterior) {
+      under = new THREE.Group(); under.name = 'towerUnder'; under.visible = false;
+      const um = new THREE.Mesh(G0.under, matteMat), ul = new THREE.Mesh(G0.underL, lightMat); um.name = 'towerUnderShell'; ul.name = 'towerUnderLights'; under.add(um, ul);
+      hole = new THREE.Mesh(keep(new THREE.CircleGeometry(RP + 0.125, 40).rotateX(-Math.PI / 2)), keep(new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false, side: THREE.DoubleSide,
+        stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp, stencilZFail: THREE.ReplaceStencilOp })));
+      hole.name = 'towerHole'; hole.renderOrder = -100; hole.position.y = 0.002; hole.visible = false;
+      inner.add(under, hole);
+    }
     const lift = { y: 0, rot: 0, floor: 0, busy: false };
     const A = { t: 0, T: 1, y0: 0, y1: 0, r0: 0, r1: 0, f: 0, onDone: null };
-    const place = () => { platform.position.y = lift.y; platform.rotation.y = lift.rot; pit.visible = lift.y > 0.02; };
+    const place = () => { platform.position.y = lift.y; platform.rotation.y = lift.rot; if (!under) pit.visible = lift.y > 0.02; }; // 村子那棟：坑、洞、地下室照鏡頭在哪開關（cull）
     // ---- 鐵捲門 ----
     const DS = { t: 0, target: 0, speed: 1 };
     const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _z = new THREE.Vector3(0, 0, 0);
@@ -599,8 +647,9 @@ export const { buildRoom } = (() => {
       bxc(CAB.x0, CAB.x1, CAB.z0, CAB.z1, CAB.h), bxc(SOFA.x0, SOFA.x1, SOFA.z0, SOFA.z1, 0.88), bxc(TABLE.x - TABLE.hx, TABLE.x + TABLE.hx, TABLE.z - TABLE.hz, TABLE.z + TABLE.hz, 0.42),
       { t: 'circle', x: LAMP.x, z: LAMP.z, r: 0.22, h: 1.75 }, ...PLANTS.map(([x, z]) => ({ t: 'circle', x, z, r: 0.45, h: 1.9 }))];
     const COLU = [...ring(30, 0, Math.PI * 2, TOP + 0.7)];
-    const COLR = [null]; for (let f = 1; f < NF; f++) { const e = TOWER_RAMP.ent(f), g = TOWER_RAMP.GW; COLR.push(ring(28, e + g, e + Math.PI * 2 - g, TOP + 0.7)); } // 第 24 批：開車的時候樓上的玻璃留斜坡的口（走路的照舊一整圈）
-    const PIT0 = { t: 'circle', x: 0, z: 0, r: RP + 0.16, h: 0.3 }, HOLE = { t: 'circle', x: 0, z: 0, r: RI + 0.02, h: TOP }; // 一樓的坑（低）、樓上的洞
+    const COLB = ring(30, 0, Math.PI * 2, TOP + 0.7).map((c) => ({ ...c, y0: fy(NF - 1) - 2 })); // 第 26 批：地下室的水泥牆一整圈（y0 很低：走路的鏡頭在地下也擋得到）
+    const COLR = [null]; for (let f = 1; f < NU; f++) { const e = TOWER_RAMP.ent(f), g = TOWER_RAMP.GW; COLR.push(ring(28, e + g, e + Math.PI * 2 - g, TOP + 0.7)); } // 第 24 批：開車的時候樓上的玻璃留斜坡的口（走路的照舊一整圈）
+    const PIT0 = { t: 'circle', x: 0, z: 0, r: RP + 0.16, h: 0.3 }, HOLE = { t: 'circle', x: 0, z: 0, r: RI + 0.02, h: TOP, y0: fy(NF - 1) - 2 }; // 一樓的坑（低）、樓上（地下室）的洞
     const DOOR_COL = { t: 'box', x: XS, z: 0, hx: 0.25, hz: DZ, rot: 0, h: DH };
     const liftHere = (f) => !lift.busy && lift.floor === f && Math.abs(lift.y - fy(f)) < 1e-3;
     const isInside = (x, z, m = 0) => x * x + z * z < (RO - m) * (RO - m) || (x > XP - 0.5 && x < DX0 + 0.2 && Math.abs(z) < DZ - m);
@@ -609,9 +658,9 @@ export const { buildRoom } = (() => {
     const toLocal = (x, z) => { group.updateMatrixWorld(); _w.set(x, group.matrixWorld.elements[13], z); group.worldToLocal(_w); return { x: _w.x, z: _w.z }; };
     function toWorldCols(out, yOff = false) { const ry = groupRY(), by = yOff ? group.matrixWorld.elements[13] : 0; for (const c of out) { _w.set(c.x, 0, c.z).applyMatrix4(group.matrixWorld); c.x = _w.x; c.z = _w.z; if (c.t === 'box') c.rot = (c.rot || 0) + ry; if (by) { c.h = (c.h ?? 9) + by; c.y0 = (c.y0 || 0) + by; } } return out; } // yOff：高度也換成世界的（只擋鏡頭的那些）
     const api = { group, size: { X: DX0, T: DX1 - DX0, DZ, DH, XB: -RO, Z: RO, H: ceilY(0), TOP: H1, round: true }, door, spots, zones, house, interior: inner, exterior: outer,
-      bays: TOWER_BAYS, floors, cars, platform, lift, onLift: null, floor: 0, colVer: 0, isInside, toWorld, toLocal, liftHere, fy, envRotation: new THREE.Euler() };
+      bays: TOWER_BAYS, floors, cars, platform, lift, under, hole, onLift: null, floor: 0, colVer: 0, isInside, toWorld, toLocal, liftHere, fy, envRotation: new THREE.Euler() };
     const colliders = (doorOpen = DS.t >= 0.9, world = false, car = false) => { // 鐵捲門那個盒子一定放最後一個（walk.js 靠這個認門）；car：第 24 批，開車（樓上留斜坡的口）
-      const f = api.floor, out = (f ? (car ? COLR[f] : COLU) : COL0).map((c) => ({ ...c }));
+      const f = api.floor, out = (!f ? COL0 : f >= NU ? COLB : car ? COLR[f] : COLU).map((c) => ({ ...c }));
       if (!liftHere(f)) out.push({ ...(f ? HOLE : PIT0) });
       if (!doorOpen) out.push({ ...DOOR_COL });
       return world ? toWorldCols(out) : out;
@@ -668,10 +717,17 @@ export const { buildRoom } = (() => {
     const cullOut = { inside: false, house: false, ceil: Infinity, floor: 0 }, vis = Array(NF).fill(true);
     const cull = (camera) => {
       group.updateMatrixWorld(); _v.setFromMatrixPosition(camera.matrixWorld); group.worldToLocal(_v);
-      const cx = _v.x, cy = _v.y, cz = _v.z, d = Math.hypot(cx, cz), inside = d < RO + 0.2 && cy < TOP && cy > -1;
-      let cf = 0; for (let f = 1; f < NF; f++) if (cy >= fy(f) - 0.05) cf = f;
-      for (let f = 1; f < NF; f++) vis[f] = inside ? f === cf || (lift.busy && Math.abs(lift.y - fy(f)) < FH) : exterior && d < 90;
+      const cx = _v.x, cy = _v.y, cz = _v.z, d = Math.hypot(cx, cz), inside = d < RO + 0.2 && cy < TOP && cy > fy(NF - 1) - 1;
+      let cf = 0;
+      if (cy < -0.05) { cf = NU; for (let f = NU + 1; f < NF; f++) if (cy < fy(f) + FH - 0.05) cf = f; } // 第 26 批：地下室（B1 −3.2、B2 −6.4）
+      else for (let f = 1; f < NU; f++) if (cy >= fy(f) - 0.05) cf = f;
+      for (let f = 1; f < NF; f++) vis[f] = inside ? f === cf || (lift.busy && Math.abs(lift.y - fy(f)) < FH) : exterior && d < 90 && f < NU; // 外面看不到地下室的車
       for (let f = 1; f < NF; f++) if (floors[f].visible !== vis[f]) floors[f].visible = vis[f];
+      if (under) { // 第 26 批：圓台不在一樓＝洞開著：在塔裡面看下去（洞、地下室）；外面還是一片深色的坑
+        const open = Math.abs(lift.y) > 0.02, see = inside && (cf >= NU || open);
+        if (under.visible !== see) under.visible = see;
+        hole.visible = inside && open; pit.visible = open && !inside;
+      }
       cullOut.inside = inside; cullOut.floor = cf; cullOut.house = inside && !cf && cx > IX0 && cx < IX1 && cz > IZ0 && cz < IZ1 && cy < HC; cullOut.ceil = ceilingAt(cx, cz);
       return cullOut;
     };
