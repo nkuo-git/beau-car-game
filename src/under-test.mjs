@@ -14,7 +14,7 @@ if (path.dirname(prefix) !== '.') fs.mkdirSync(path.dirname(prefix), { recursive
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const hook = 'window.__THREE = THREE; window.__G = () => GAME; window.__room = () => room;'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
-  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, trip, tripS, TR, LODS, cur, walker, tripPose, TWR, EL, elWho, elFree, padCars, normPark, TOWER_BAYS, towerFy, towerUnder, towerFlName, TOWER, TOWER_RAMP, towerRampY, TRAMP, garLot, HOME, leaveCar, liftChanged });'
+  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, trip, tripS, TR, LODS, cur, walker, tripPose, TWR, EL, elWho, elFree, padCars, normPark, TOWER_BAYS, towerFy, towerUnder, towerFlName, TOWER, TOWER_RAMP, towerRampY, TRAMP, garLot, HOME, leaveCar, liftChanged, elCallAct, elCall });'
   + ' window.__frame = (noHole, w, h) => { GAR.cull(dcam); if (noHole && GAR.hole) GAR.hole.visible = false; renderer.setRenderTarget(null); renderer.render(TR.scene, dcam); const info = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles }, c = renderer.domElement, url = c.toDataURL(), gl = renderer.getContext(), px = new Uint8Array(w * h * 4); gl.readPixels((c.width - w) >> 1, (c.height - h) >> 1, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return { url, px: Array.from(px), info }; };'
   + ' window.__N = () => NPC;'
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
@@ -247,7 +247,15 @@ const out6 = await p.evaluate(() => {
 await frame('7-outside');
 console.log('5', el(), JSON.stringify({ look, st6, out6 }));
 check(!out6.hole && !out6.under && out6.pit && out6.vis[1] && out6.vis[3] && !out6.vis[4] && !out6.vis[5], `from outside: no basement drawn (B1, B2 cars hidden), the lift pit is a dark cover again; 2F–4F cars still drawn`);
-await p.evaluate(() => { const D = window.__D(); D.GAR.liftSnap(0, 0); D.liftChanged(); window.__wstep(2); });
+// 電梯還在 B2、人在一樓：電梯井旁邊「叫電梯」→ 電梯「上來」（地下室的號碼比較大，照高度算）
+const call6 = await p.evaluate(() => {
+  const D = window.__D(), G = D.GAR, W = D.walker, c = window.__gw(4.6, 0.6); W.teleport({ x: c.x, z: c.z, heading: 0 }); window.__wstep(5);
+  const t = W.telemetry(), act = D.elCallAct(t.x, t.z)?.label || null, lf0 = G.lift.floor; D.elCall();
+  const ts = new Set([window.__toast()]); for (let n = 0; n < 1500 && (D.EL.ride || G.lift.busy); n++) { window.__wstep(1); ts.add(window.__toast()); }
+  ts.delete(''); return { act, lf0, lf: G.lift.floor, floor: G.floor, toast: [...ts].join(' / ') };
+});
+console.log('  call:', JSON.stringify(call6));
+check(call6.act === '叫電梯' && call6.lf0 === 5 && call6.lf === 0 && call6.floor === 0 && /電梯上來了/.test(call6.toast) && !/電梯下來了/.test(call6.toast), `on 1F with the lift at B2: 「叫電梯」 brings it up 「${call6.toast}」`);
 
 console.log('perf', JSON.stringify({ panel1F: ri1, ride: fa.info, b1: riB1, b1walk: riW, b2: riB2, lookDown: la.info }));
 check(riB1.calls < 260 && riB2.calls < 260, `draw calls in the basement: B1 ${riB1.calls} (${(riB1.tris / 1e6).toFixed(2)}M tris), B2 ${riB2.calls} (${(riB2.tris / 1e6).toFixed(2)}M tris)`);

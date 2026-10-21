@@ -655,11 +655,11 @@ check(reA && drA, 'A gets back in and drives on');
 // ---- 9 車庫街：名牌；開進朋友的車庫（第 23 批：Nick 2026-10-18「可以開進別人的車庫」，卡片選「按門鈴」）----
 const st9 = await info(A);
 check(JSON.stringify(st9.gst) === JSON.stringify(['大便龍車神', '阿明快車手', null, null, null, null]), `garage street signs: each person on their world number: #1 A (you), #2 B, the rest empty (${st9.gst})`);
-// B 多兩台車停在自己家的格子上（2 樓 1 號、3 樓 3 號；第 24 批：3 樓 2 號變成斜坡的路）→ 存檔 → 車庫放上去（tw：40 格停哪台）
-const b9 = await B.evaluate(() => { const G = window.__GAME(), T = window.__TOWN(); for (const k of ['supra', 'gtr']) G.owned.add(k); T.TWR[0] = 'supra'; T.TWR[10] = 'gtr'; T.keepPark(); T.arrangeCars(); return G.park.tower.filter(Boolean); });
+// B 多三台車停在自己家的格子上（2 樓 1 號、3 樓 3 號、B1 3 號；第 24 批：3 樓 2 號變成斜坡的路；第 26 批：地下室）→ 存檔 → 車庫放上去（tw：40 格停哪台）
+const b9 = await B.evaluate(() => { const G = window.__GAME(), T = window.__TOWN(); for (const k of ['supra', 'gtr', 'yaris']) G.owned.add(k); T.TWR[0] = 'supra'; T.TWR[10] = 'gtr'; T.TWR[26] = 'yaris'; T.keepPark(); T.arrangeCars(); return G.park.tower.filter(Boolean); });
 let pub9 = null; // 存檔以後 8 秒才放上去
-for (let i = 0; i < 100 && !(pub9 && typeof pub9.tw === 'string' && pub9.tw.split(',')[10] === 'gtr'); i++) { await new Promise((r) => setTimeout(r, 200)); pub9 = getAt('garages/u2'); }
-check(pub9 && typeof pub9.tw === 'string' && pub9.tw.split(',')[0] === 'supra' && pub9.tw.split(',')[10] === 'gtr' && pub9.cars.supra && pub9.cars.gtr, `B’s garage on the server says which car is in which bay (tw) (${JSON.stringify(b9)} → ${pub9 && pub9.tw.split(',').filter(Boolean)})`);
+for (let i = 0; i < 100 && !(pub9 && typeof pub9.tw === 'string' && pub9.tw.split(',')[10] === 'gtr' && pub9.tw.split(',')[26] === 'yaris'); i++) { await new Promise((r) => setTimeout(r, 200)); pub9 = getAt('garages/u2'); }
+check(pub9 && typeof pub9.tw === 'string' && pub9.tw.split(',')[0] === 'supra' && pub9.tw.split(',')[10] === 'gtr' && pub9.tw.split(',')[26] === 'yaris' && pub9.cars.supra && pub9.cars.gtr && pub9.cars.yaris, `B’s garage on the server says which car is in which bay (tw) (${JSON.stringify(b9)} → ${pub9 && pub9.tw.split(',').filter(Boolean)})`);
 const door9 = await A.evaluate(() => { const q = window.__D().VIL.places.garst.slots[1]; window.__D().drv.teleport({ x: q.door.x + 1.5, z: q.door.z, heading: 0 }); window.__D().drv.setInput({ throttle: 0, brake: 1, steer: 0 }); return q.door; });
 const near9 = await waitFor(A, () => { const b = document.querySelector('.nt-gar'); return b && !b.hidden && getComputedStyle(b).display !== 'none'; }, null, 15000);
 const btn9 = await A.evaluate(() => ({ btn: document.querySelector('.nt-gar').textContent, toast: document.querySelector('#stage .dv-toast.show')?.textContent || '' }));
@@ -674,18 +674,18 @@ console.log('   card', JSON.stringify(c9), w9, JSON.stringify(m9));
 check(cardB && /有人按你家的門鈴/.test(c9) && /大便龍車神想開進你的車庫/.test(c9) && /他只能看你的車，不能開走/.test(c9) && w9 === '🔔 等阿明快車手回答⋯' && m9 && m9[1].a === 'u1' && m9[1].b === 'u2' && m9[1].ok === 0, `ring → B’s phone: 「${c9}」, A’s button 「${w9}」`);
 await shot(B, `${prefix}-9-bell-card.png`);
 await click(B, '.nt-inv .a');
-const in9 = await waitFor(A, () => { const g = window.beauGame.net.info.gv; return g && g.made === g.want && g.want === 2 && window.__D().GAR.door.t > 0.5; }, null, 60000);
-const g9 = await A.evaluate(() => { const D = window.__D(), G = D.GAR, q = D.VIL.places.garst.slots[1], p = G.group.position, HM = window.__HOME(); return { gv: window.beauGame.net.info.gv, at: Math.hypot(p.x - q.lot.x, p.z - q.lot.z), y: +(p.y - (q.y || 0)).toFixed(2), b0: G.cars[0]?.name || null, b10: G.cars[10]?.name || null, mine: G.cars.filter((o) => o?.isObject3D && !/^guest-/.test(o.name)).length, door: G.door.t, home: { slot: HM.slot, gs: HM.gs, place: D.VIL.places.garage.slot }, shell0: HM.ext[0].instanceMatrix.array[5] !== 0, shell1: HM.ext[0].instanceMatrix.array[16 + 5] !== 0 }; }); // 外殼：0 號（你家）畫出來、1 號（他家，塔蓋在那裡）縮成 0
+const in9 = await waitFor(A, () => { const g = window.beauGame.net.info.gv; return g && g.made === g.want && g.want === 3 && window.__D().GAR.door.t > 0.5; }, null, 60000);
+const g9 = await A.evaluate(() => { const D = window.__D(), G = D.GAR, q = D.VIL.places.garst.slots[1], p = G.group.position, HM = window.__HOME(); return { gv: window.beauGame.net.info.gv, at: Math.hypot(p.x - q.lot.x, p.z - q.lot.z), y: +(p.y - (q.y || 0)).toFixed(2), b0: G.cars[0]?.name || null, b10: G.cars[10]?.name || null, b26: G.cars[26]?.name || null, mine: G.cars.filter((o) => o?.isObject3D && !/^guest-/.test(o.name)).length, door: G.door.t, home: { slot: HM.slot, gs: HM.gs, place: D.VIL.places.garage.slot }, shell0: HM.ext[0].instanceMatrix.array[5] !== 0, shell1: HM.ext[0].instanceMatrix.array[16 + 5] !== 0 }; }); // 外殼：0 號（你家）畫出來、1 號（他家，塔蓋在那裡）縮成 0
 const bar9 = await waitFor(B, () => window.beauGame.net.info.guestBar === '🏠 大便龍車神在你的車庫裡', null, 10000);
 console.log('   in', JSON.stringify(g9), JSON.stringify(getAt(`matches/${m9[0]}`)));
-check(in9 && g9.at < 0.01 && g9.y === 0 && g9.b0 === 'guest-supra' && g9.b10 === 'guest-gtr' && g9.mine === 0 && g9.home.slot === 0 && g9.home.gs === 1 && g9.home.place === 0 && g9.shell0 && !g9.shell1, `B says 好 → A’s tower moves to B’s home (your home is a shell), bays hold B’s cars (2F supra, 3F gtr), door opening (${JSON.stringify(g9)})`);
+check(in9 && g9.at < 0.01 && g9.y === 0 && g9.b0 === 'guest-supra' && g9.b10 === 'guest-gtr' && g9.b26 === 'guest-yaris' && g9.mine === 0 && g9.home.slot === 0 && g9.home.gs === 1 && g9.home.place === 0 && g9.shell0 && !g9.shell1, `B says 好 → A’s tower moves to B’s home (your home is a shell), bays hold B’s cars (2F supra, 3F gtr, B1 yaris), door opening (${JSON.stringify(g9)})`);
 check(bar9 && getAt(`matches/${m9[0]}`)?.ok === 1, 'B sees 「🏠 大便龍車神在你的車庫裡」＋「請他出去」');
 // A 開進去（一樓）、下車、走到電梯上 → 面板寫他每一層有幾台 → 3F
 const drive9 = await A.evaluate(() => { const D = window.__D(), G = D.GAR; for (let i = 0; i < 400 && G.door.t < 1; i++) window.__dstep(1); D.drv.teleport(G.toWorld({ x: 7, z: -2, heading: Math.PI })); D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); window.__dstep(20); D.drv.setInput(null); const T = window.__TOWN(); return { gin: T.GV.in, home: window.__HOME().in, place: window.beauGame.net.place() }; });
 check(drive9.gin && !drive9.home && drive9.place === '在阿明快車手家', `A drove into B’s lobby: 「${drive9.place}」 (not 在車庫, friends can see A)`);
-const pad9 = await A.evaluate(() => { const D = window.__D(), G = D.GAR; window.__TOWN().leaveCar(); for (let i = 0; i < 150 && D.walker.mode !== 'walk'; i++) window.__dstep(1); D.walker.teleport(G.toWorld({ x: 0.4, z: 0, heading: 0 })); window.__dstep(4); const P = document.querySelector('.elpanel'); return { mode: D.walker.mode, panel: !!P && !P.hidden, f2: P?.querySelector('button[data-f="1"] small')?.textContent, f3: P?.querySelector('button[data-f="2"] small')?.textContent, f4: P?.querySelector('button[data-f="3"] small')?.textContent }; });
+const pad9 = await A.evaluate(() => { const D = window.__D(), G = D.GAR; window.__TOWN().leaveCar(); for (let i = 0; i < 150 && D.walker.mode !== 'walk'; i++) window.__dstep(1); D.walker.teleport(G.toWorld({ x: 0.4, z: 0, heading: 0 })); window.__dstep(4); const P = document.querySelector('.elpanel'); return { mode: D.walker.mode, panel: !!P && !P.hidden, f2: P?.querySelector('button[data-f="1"] small')?.textContent, f3: P?.querySelector('button[data-f="2"] small')?.textContent, f4: P?.querySelector('button[data-f="3"] small')?.textContent, b1: P?.querySelector('button[data-f="4"] small')?.textContent, b2: P?.querySelector('button[data-f="5"] small')?.textContent }; });
 console.log('   pad', JSON.stringify(pad9));
-check(pad9.mode === 'walk' && pad9.panel && pad9.f2 === '1 台' && pad9.f3 === '1 台' && pad9.f4 === '0 台', `walked onto B’s lift: the panel says how many of B’s cars are on each floor (2F ${pad9.f2}, 3F ${pad9.f3}, 4F ${pad9.f4})`);
+check(pad9.mode === 'walk' && pad9.panel && pad9.f2 === '1 台' && pad9.f3 === '1 台' && pad9.f4 === '0 台' && pad9.b1 === '1 台' && pad9.b2 === '0 台', `walked onto B’s lift: the panel says how many of B’s cars are on each floor (2F ${pad9.f2}, 3F ${pad9.f3}, 4F ${pad9.f4}, B1 ${pad9.b1}, B2 ${pad9.b2})`);
 await click(A, '.elpanel button[data-f="2"]');
 const up9 = await A.evaluate(async () => { const D = window.__D(), G = D.GAR, T = window.__TOWN(); for (let i = 0; i < 60 && !T.EL.ride; i++) { window.__dstep(1); await new Promise((r) => setTimeout(r, 0)); } for (let i = 0; i < 2000 && (T.EL.ride || G.lift.busy); i++) window.__dstep(1); window.__dstep(3); const o = G.cars[10]; let q = o; while (q && q !== G.floors[2]) q = q.parent; return { floor: G.floor, ride: !!T.EL.ride, gtr: o?.name, on3: !!q, toast: document.querySelector('#stage .wk-toast')?.textContent || '' }; });
 const vis9 = await waitFor(A, () => window.__D().GAR.floors[2].visible && !window.__D().GAR.floors[1].visible, null, 10000); // 塔裡面只畫你這一層
@@ -695,6 +695,15 @@ await A.evaluate(() => { const D = window.__D(), G = D.GAR, b = G.bays[10], w = 
 await shot(A, `${prefix}-9-friend-3f.png`);
 const rc9 = await A.evaluate(() => window.__rinfo());
 console.log('   3F draw calls', JSON.stringify(rc9));
+// 第 26 批：走回電梯、坐到他的 B1 → 他的 YARIS 在那裡；在地下室被請出去也是到門外
+await A.evaluate(() => { const D = window.__D(), G = D.GAR; D.walker.teleport(G.toWorld({ x: 0.4, z: 0, heading: 0 })); window.__dstep(4); });
+await waitFor(A, () => { const P = document.querySelector('.elpanel'); return P && !P.hidden; }, null, 10000);
+await click(A, '.elpanel button[data-f="4"]');
+const dn9 = await A.evaluate(async () => { const D = window.__D(), G = D.GAR, T = window.__TOWN(); for (let i = 0; i < 60 && !T.EL.ride; i++) { window.__dstep(1); await new Promise((r) => setTimeout(r, 0)); } for (let i = 0; i < 2000 && (T.EL.ride || G.lift.busy); i++) window.__dstep(1); window.__dstep(3); const o = G.cars[26]; let q = o; while (q && q !== G.floors[4]) q = q.parent; return { floor: G.floor, ride: !!T.EL.ride, yaris: o?.name, onB1: !!q, cy: +(D.walker.character.group.position.y - G.group.position.y).toFixed(2), toast: document.querySelector('#stage .wk-toast')?.textContent || '' }; });
+console.log('   B1', JSON.stringify(dn9));
+check(dn9.floor === 4 && !dn9.ride && dn9.yaris === 'guest-yaris' && dn9.onB1 && dn9.cy < -2.5 && /B1：阿明快車手的車 1 台（只能看）/.test(dn9.toast), `rode B’s lift down to B1: B’s YARIS is there (「${dn9.toast}」)`);
+await A.evaluate(() => { const D = window.__D(), G = D.GAR, b = G.bays[26], w = G.toWorld({ x: b.x * 0.59, z: b.z * 0.59, heading: -b.a }); D.walker.teleport(w); window.__dstep(3); });
+await shot(A, `${prefix}-9-friend-b1.png`);
 // B 按「請他出去」→ A 的人、車都到門口外面，塔搬回 A 家
 await click(B, '.nt-gst button');
 const out9 = await waitFor(A, () => !window.beauGame.net.info.gv, null, 15000);
@@ -725,7 +734,7 @@ console.log('   left', JSON.stringify(left9), JSON.stringify(save9));
 check(in9b && !left9.gv && /離開阿明快車手的家了/.test(left9.toast) && bLeft, `B 好 again, A walks far away → visit over (「${left9.toast}」), B sees 「大便龍車神離開你的車庫了」`);
 check(save9.tower.every((k) => save9.own.includes(k)) && !save9.tower.includes('gtr') || save9.own.includes('gtr'), `A’s save has none of B’s cars (${save9.tower})`);
 // B 的兩台車收掉（後面的測試照舊）；A 走回車旁邊上車
-await B.evaluate(() => { const G = window.__GAME(), T = window.__TOWN(); T.TWR[0] = null; T.TWR[10] = null; for (const k of ['supra', 'gtr']) { G.owned.delete(k); delete T.tripPose[k]; } T.keepPark(); T.arrangeCars(); });
+await B.evaluate(() => { const G = window.__GAME(), T = window.__TOWN(); T.TWR[0] = null; T.TWR[10] = null; T.TWR[26] = null; for (const k of ['supra', 'gtr', 'yaris']) { G.owned.delete(k); delete T.tripPose[k]; } T.keepPark(); T.arrangeCars(); });
 const re9 = await A.evaluate(() => { const D = window.__D(), p = window.__TOWN().tripPose[D.cur]; D.walker.teleport({ x: p.x + Math.sin(p.heading) * 2.3, z: p.z + Math.cos(p.heading) * 2.3, heading: p.heading }); window.__dstep(2); return D.walker.getIn(); });
 const dr9 = await waitFor(A, () => window.__D().drv && window.__D().walker.mode === 'off' && !window.__D().drv.telemetry().paused, null, 120000);
 check(re9 && dr9, 'A gets back in its own car (parked outside B’s door) and drives on');

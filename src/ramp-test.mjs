@@ -163,7 +163,8 @@ const up = await p.evaluate(() => {
 console.log('  up:', JSON.stringify(up));
 check(up.ok && up.on0 != null && up.on0 < 0.6 && up.maxErr < 0.12 && up.dec < 0.02 && up.uMax > 6, `drove out the door, turned right and up the ramp (got on at u ${up.on0}), the car stays on the road surface the whole way (off by ≤ ${up.maxErr} m, never drops), two half-laps up in ${up.s} s`);
 check(up.bumps === 0, `no bumping into the low walls on the way up (${up.bumps})`);
-check(up.camN > 50 && up.camOver <= 0.02, `chase camera stays under the lap above (${up.camN} samples, worst ${up.camOver} m over)`);
+check(up.camN > 30 && up.camOver <= 0.02, // 第 26 批：斜坡只到 4F，上面還有一圈的只剩前半圈（以前 50 多個）
+   `chase camera stays under the lap above (${up.camN} samples, worst ${up.camOver} m over)`);
 check(up.floor === 2 && !up.on && Math.abs(up.y - 7.7) < 0.05 && up.toasts.some((x) => /3 樓/.test(x)), `turned in at the 3F entrance: on 3F (floor ${up.floor}, y ${up.y}) 「${up.toasts.join(' / ')}」`);
 const lift1 = await p.evaluate(() => { const D = window.__D(); let n = 0; for (; n < 1800 && (D.GAR.lift.busy || D.EL.ride || D.GAR.lift.floor !== 2); n++) window.__dstep(1); return { n, lf: D.GAR.lift.floor, busy: D.GAR.lift.busy, carScene: D.tripS.car.parent === D.TR.scene, toast: window.__toast() }; });
 console.log('  lift:', JSON.stringify(lift1));
