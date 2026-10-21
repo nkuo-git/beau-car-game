@@ -14,7 +14,7 @@ if (path.dirname(prefix) !== '.') fs.mkdirSync(path.dirname(prefix), { recursive
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const hook = 'window.__THREE = THREE; window.__G = () => GAME; window.__room = () => room;'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
-  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, trip, tripS, TR, LODS, cur, walker, tripPose, TWR, EL, elWho, elFree, padCars, normPark, TOWER_BAYS, towerFy, towerUnder, towerFlName, TOWER, TOWER_RAMP, towerRampY, TRAMP, garLot, HOME, leaveCar, liftChanged, elCallAct, elCall });'
+  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, trip, tripS, TR, LODS, cur, walker, tripPose, TWR, EL, elWho, elFree, padCars, normPark, TOWER_BAYS, towerFy, towerUnder, towerFlName, TOWER, TOWER_RAMP, towerRampY, TRAMP, garLot, HOME, leaveCar, liftChanged, elCallAct, elCall, shaftCut, SHAFT });'
   + ' window.__frame = (noHole, w, h) => { GAR.cull(dcam); if (noHole && GAR.hole) GAR.hole.visible = false; renderer.setRenderTarget(null); renderer.render(TR.scene, dcam); const info = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles }, c = renderer.domElement, url = c.toDataURL(), gl = renderer.getContext(), px = new Uint8Array(w * h * 4); gl.readPixels((c.width - w) >> 1, (c.height - h) >> 1, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return { url, px: Array.from(px), info }; };'
   + ' window.__N = () => NPC;'
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
@@ -141,6 +141,8 @@ check(in1.mode === 'off' && in1.who === 1 && in1.panel, 'in GC8 on the lift at 1
 check(JSON.stringify(in1.btns.map((b) => b[0])) === '["2F","3F","4F","B2","B1","1F"]' && in1.btns.every((b) => b[2] === (b[0][0] === 'B')) && in1.btns[3][3] === 'rgb(44, 51, 84)', `panel: top row 2F 3F 4F, bottom row B2 B1 1F; the basement buttons are blue (${in1.btns.map((b) => `${b[0]}${b[1] ? ' ' + b[1] : ''}`).join(' · ')})`);
 check(JSON.stringify(in1.btns.map((b) => b[1])) === '["空 6","空 7","空 7","空 7","空 7",""]', 'free spots: 2F 6 (GT-R + ramp mouth), 3F 7, 4F 7, B1 7 (YARIS), B2 7 (SUPRA)');
 check(!!in1.mat && in1.mat[0] === true && in1.mat[1] === 517 && in1.mat[2] === 0, `the grass under the tower does not draw where the lift hole is (stencil not-equal, never writes): ${JSON.stringify(in1.mat)}`);
+const cut1 = await p.evaluate(() => { const D = window.__D(); D.SHAFT.gs = -1; const t0 = performance.now(); D.shaftCut(); return +(performance.now() - t0).toFixed(1); });
+check(cut1 < 40, `finding the ground under the lift hole is quick (${cut1} ms, once per home)`);
 const ri1 = await (async () => { await p.evaluate(() => window.__dstep(1)); return shot('1-panel'); })();
 
 // ---- 2 按 B1：電梯連車往下；半路從上面看：洞看得下去（不挖洞＝被草地蓋住，畫面不一樣）----

@@ -198,7 +198,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - **內容 18 試做（試做頁 v45，2026-10-21，還沒上線）＝ 地下室＋後照鏡**
   - **地下室**（Nick「看可以的話加在地下室然後地下室有幾樓樓上就剪掉幾樓」；草稿 https://claude.ai/artifact/36fLvpmhQmAd2LCwaaeBH2 ，Nick 選「坐電梯」）：樓上剩 2F–4F（斜坡到 4F），多 B1、B2（只能坐電梯；走路也可以、朋友家也可以；怪獸卡車照舊不行）。37 格（2F 6、3F 7、4F 7、B1 8、B2 8）。樓層號碼不變：原本的 5F＝B1、6F＝B2（舊存檔停 5F、6F 的車自己變成在地下室）。電梯面板：上面 2F 3F 4F、下面 B2 B1 1F（地下室藍色）。水泥牆、天花板燈、藍色格子、牆上 B1／B2 牌。草地在電梯井挖洞：renderer `stencil: true`＋tower.js `towerHole`＋town.src.js `shaftCut`。tower.js `TOWER.NU`、`towerUp`／`towerUnder`／`towerFlName`／`towerFlTxt`（第 26 批）。說明在 `notes/tower.md`。
   - **後照鏡**（Nick「第一人稱駕駛的時候 後照鏡要真的顯示後方景色 有車子也要顯示出來 且會跟著開車方向移動」）：駕駛座視角的時候，車內後照鏡＋左右照後鏡照出後面真的路和車（往後看的相機三格畫一次；town.src.js `MIR`、cabin.js `userData.mirror`，第 25 批）。說明在 `notes/cars.md`。
-  - 效能：地下室 B1 224 calls／1.40M 三角形、坐電梯下去 192／1.26M、一樓電梯面板 208／1.26M；後照鏡多一次約 90–110 calls／0.45M（三格一次，只有駕駛座視角）。
+  - 效能：地下室 B1 224 calls／1.40M 三角形、坐電梯下去 192／1.26M、一樓電梯面板 208／1.26M；後照鏡多一次約 90 calls／0.4M（三格一次，只有駕駛座視角）。
 - **已知問題**
   - 內湖的路是平的（真的港墘一帶本來就很平）。
   - 內湖的車流、行人讓第一次出門的載入多約 0.4–0.7 秒（電腦上；npc.js 路網，`NPC.load.graphs`）。

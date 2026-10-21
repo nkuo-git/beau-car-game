@@ -1150,23 +1150,44 @@ function homePlace() {
   shaftCut();
 }
 // 第 26 批：電梯井往下挖到地下室：一樓地板電梯的洞（tower.js 的 hole 在模板緩衝畫 1）那裡地面不畫（不然坐電梯下去的時候被草地蓋住）
-//   地面＝塔的中間往下打幾條線碰到的大網格（村子的草地、山、賽車場、內湖⋯；塔自己的、別人家外殼的材質不算）；材質設成模板不是 1 才畫；換了家再找一次
-const SHAFT = { gs: -1, vil: null };
+//   地面＝塔的中間往下 5 條短線（y−0.2～+0.08）穿過的大網格（村子的草地、山、賽車場、內湖⋯；塔自己的、別人家外殼的材質不算）；材質設成模板不是 1 才畫；換了家再找一次
+//   不用 Raycaster：它每個三角形都算一次射線（山 8 萬個三角形 × 5 條＝快 200 ms），也碰到名字牌（Sprite 沒有相機會壞掉）；自己先用 5 條線的框擋掉幾乎全部三角形（幾 ms）
+const SHAFT = { gs: -1, vil: null, ms: 0, a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), p: new THREE.Vector3(), box: new THREE.Box3(), ray: new THREE.Ray(), inv: new THREE.Matrix4(), sph: new THREE.Sphere(), seg: [] };
 function shaftCut() {
   if (!GAR?.hole || !VIL || (SHAFT.gs === HOME.gs && SHAFT.vil === VIL)) return;
   SHAFT.gs = HOME.gs; SHAFT.vil = VIL;
-  const L = garLot(), y = GAR.group.position.y, mine = new Set(), rc = new THREE.Raycaster(), o = new THREE.Vector3(), dn = new THREE.Vector3(0, -1, 0), sph = new THREE.Sphere();
+  const t0 = performance.now(), L = garLot(), y = GAR.group.position.y, mine = new Set();
   GAR.group.traverse((m) => { if (m.material) [].concat(m.material).forEach((x) => mine.add(x)); });
   for (const m of HOME.ext || []) mine.add(m.material);
-  rc.far = 1.5;
-  for (const [dx, dz] of [[0, 0], [2.4, 0], [-2.4, 0], [0, 2.4], [0, -2.4]]) {
-    rc.set(o.set(L.x + dx, y + 0.6, L.z + dz), dn);
-    for (const h of rc.intersectObject(TR.scene, true)) {
-      const m = h.object; if (!m.isMesh || m.isInstancedMesh || h.point.y > y + 0.08 || h.point.y < y - 0.2 || !m.geometry.boundingSphere) continue;
-      if (sph.copy(m.geometry.boundingSphere).applyMatrix4(m.matrixWorld).radius < 15) continue; // 車子、小東西不算（地面都很大）
-      for (const x of [].concat(m.material)) if (x && !mine.has(x) && !x.stencilWrite) Object.assign(x, { stencilWrite: true, stencilWriteMask: 0, stencilRef: 1, stencilFunc: THREE.NotEqualStencilFunc, stencilFuncMask: 0xff });
+  const pts = [[0, 0], [2.4, 0], [-2.4, 0], [0, 2.4], [0, -2.4]].map(([dx, dz]) => [L.x + dx, L.z + dz]);
+  TR.scene.traverse((m) => { // 只看大的普通網格（地面都很大）：InstancedMesh（樹、房子）、Sprite、車子小東西都不看
+    if (!m.isMesh || m.isInstancedMesh || m.isSkinnedMesh || !m.geometry?.attributes.position) return;
+    const mats = [].concat(m.material); if (!mats.some((x) => x && !mine.has(x) && !x.stencilWrite)) return;
+    const g = m.geometry; if (!g.boundingSphere) g.computeBoundingSphere();
+    const sp = SHAFT.sph.copy(g.boundingSphere).applyMatrix4(m.matrixWorld);
+    if (sp.radius < 15 || Math.hypot(sp.center.x - L.x, sp.center.y - y, sp.center.z - L.z) > sp.radius + 3 || !shaftHit(m, pts, y - 0.2, y + 0.08)) return;
+    for (const x of mats) if (x && !mine.has(x) && !x.stencilWrite) Object.assign(x, { stencilWrite: true, stencilWriteMask: 0, stencilRef: 1, stencilFunc: THREE.NotEqualStencilFunc, stencilFuncMask: 0xff });
+  });
+  SHAFT.ms = performance.now() - t0;
+}
+// 網格 m 的三角形有沒有穿過其中一條直線（世界座標 x、z，y0～y1）：線搬到網格自己的座標，5 條線的框外的三角形直接跳過
+function shaftHit(m, pts, y0, y1) {
+  const S = SHAFT, g = m.geometry, P = g.attributes.position, I = g.index, n = I ? I.count : P.count, A = P.isInterleavedBufferAttribute ? null : P.array;
+  S.inv.copy(m.matrixWorld).invert(); S.box.makeEmpty();
+  pts.forEach(([x, z], k) => { const sg = S.seg[k] || (S.seg[k] = { o: new THREE.Vector3(), d: new THREE.Vector3(), len: 0 }); sg.o.set(x, y1, z).applyMatrix4(S.inv); S.p.set(x, y0, z).applyMatrix4(S.inv); S.box.expandByPoint(sg.o).expandByPoint(S.p); sg.d.subVectors(S.p, sg.o); sg.len = sg.d.length(); sg.d.divideScalar(sg.len || 1); });
+  S.box.expandByScalar(1e-3);
+  if (!g.boundingBox) g.computeBoundingBox();
+  if (!S.box.intersectsBox(g.boundingBox)) return false;
+  const { min, max } = S.box, v = (j, o) => { const q = I ? I.getX(j) : j; return o.set(A ? A[q * 3] : P.getX(q), A ? A[q * 3 + 1] : P.getY(q), A ? A[q * 3 + 2] : P.getZ(q)); };
+  for (let i = 0; i + 2 < n; i += 3) {
+    const a = v(i, S.a), b = v(i + 1, S.b), c = v(i + 2, S.c);
+    if (Math.max(a.x, b.x, c.x) < min.x || Math.min(a.x, b.x, c.x) > max.x || Math.max(a.z, b.z, c.z) < min.z || Math.min(a.z, b.z, c.z) > max.z || Math.max(a.y, b.y, c.y) < min.y || Math.min(a.y, b.y, c.y) > max.y) continue;
+    for (let k = 0; k < pts.length; k++) {
+      const sg = S.seg[k]; S.ray.origin.copy(sg.o); S.ray.direction.copy(sg.d);
+      if (S.ray.intersectTriangle(a, b, c, false, S.p) && S.p.distanceTo(sg.o) <= sg.len) return true;
     }
   }
+  return false;
 }
 // 別人那幾間：GAR.parts（大理石、霧面、金色、玻璃、透明、燈）＋關著的門（門片合成一個網格），6 個位置（各自的高度），你那間縮成 0
 function homeExt() {
