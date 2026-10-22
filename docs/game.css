@@ -683,6 +683,7 @@ body.bigmap #drivebar { display: none !important; }
 .elpanel button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 54px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: #34383f; color: #F2F3F5;
   font: 700 20px/1 var(--cond); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .elpanel button small { font: 700 11px/1 var(--sans); color: #9fe3b9; }
+.elpanel button.ug { background: #2c3354; } /* 第 26 批：地下室（B1、B2）的按鈕是藍的 */
 .elpanel button.on { background: #ff6a1f; color: #1a0f07; }
 .elpanel button.on small { color: #1a0f07; }
 .elpanel button:active { filter: brightness(1.25); }
