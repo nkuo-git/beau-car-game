@@ -36,6 +36,7 @@ function inPoly(P, x, z) { let c = false; for (let i = 0, j = P.length - 1; i < 
 const rotOf = (ux, uz) => Math.atan2(-uz, ux); // rotation.y：本地 +x 轉到 (ux, uz)
 
 // ---- 店的招牌字（一般的店名，沒有牌子）----
+const NH_VARIETY = false; // 第 28 批（Nick 2026-10-23「內湖的房子都要不一樣」）：每間房子不一樣（12 種一樓住家、側牆、更多店面、女兒牆、水塔、太陽能、加蓋、斜屋頂、遮雨棚、冷氣）；先做給 Nick 看，說好才打開
 const SHOPS = ['早餐', '豆漿', '麵店', '便當', '小吃', '水餃', '飲料', '咖啡', '藥局', '診所', '牙醫', '眼鏡', '文具', '書局', '洗衣', '美髮', '水電', '五金', '機車行', '寵物', '花店', '麵包', '鍋貼', '滷味', '火鍋', '補習班', '房屋', '冰店', '牛肉麵', '自助餐'];
 const BOARD = ['道路施工', '請改道', '內湖', '港墘', '往', '越野車場', '村子', '站'];
 const D = NEIHU_DATA;
@@ -72,7 +73,7 @@ function readData() {
         core = [[P[0][0] + vx * 3.2, P[0][1] + vz * 3.2], [P[1][0] + vx * 3.2, P[1][1] + vz * 3.2], P[2], P[3]];
         col = [[cx + vx * 1.6, cz + vz * 1.6, hx, hz - 1.6, rot]];
       } else if (e[0] === 2) e[0] = 1;
-      bld.push({ P, f, h, st, back, e, core, col, rect: [cx, cz, hx, hz, rot] });
+      bld.push({ P, f, h, st, back, e, core, col, rect: [cx, cz, hx, hz, rot], gen: true }); // gen：補的長方形（第 0 邊＝靠路那邊）
     } else {
       const n = S[k++], P = []; for (let i = 0; i < n; i++) P.push(W(S[k++], S[k++]));
       const e = []; for (let i = 0; i < n; i += 8) { const v = S[k++] & 0xffff; for (let j = 0; j < 8 && i + j < n; j++) e.push((v >> (2 * j)) & 3); }
@@ -105,7 +106,7 @@ function readData() {
 const GROUND_OF = [15, 15, 15, 15, 16, 16, 17, 15, 15, 22, 23];
 const CELL = (i) => [i % 8, Math.floor(i / 8)];
 function facadeAtlas(aniso) {
-  const W = 2048, H = 1024, CS = 256, IN = 248, [c, g] = cv(W, H);
+  const W = 2048, H = NH_VARIETY ? 2048 : 1024, CS = 256, IN = 248, [c, g] = cv(W, H);
   const R = rng(20261004);
   const [tc, tg] = cv(IN, IN);
   const put = (i, draw) => { // 畫一格（248×248，左右上下會重複），四周 4 像素照重複的樣子補（mipmap 不會滲別格的顏色）
@@ -168,8 +169,60 @@ function facadeAtlas(aniso) {
   put(25, (g2, w, h) => { tiles(g2, w, h, '#dfe2e3', 'rgba(130,135,138,0.35)', 4); noise(g2, w, h, 500, ['#d6dadc', '#e8ebec'], 2);
     for (let by = 0; by < 2; by++) { g2.fillStyle = '#c6cacb'; g2.fillRect(0, by * 124 + 18, w, 4); win(g2, 6, by * 124 + 24, 110, 58, { frame: '#e8eaea', g1: '#6b7d87', g2: '#44555f' }); win(g2, 130, by * 124 + 24, 110, 58, { frame: '#e8eaea', g1: '#6b7d87', g2: '#44555f' }); g2.fillStyle = '#cfd3d4'; g2.fillRect(0, by * 124 + 92, w, 30); } });
   put(23, (g2, w, h) => { g2.fillStyle = '#b9bdc1'; g2.fillRect(0, 0, w, h); g2.fillStyle = '#9da2a7'; g2.fillRect(20, 40, 200, h - 40); g2.fillStyle = '#b0b5ba'; for (let y = 44; y < h; y += 8) g2.fillRect(20, y, 200, 3); });
+  if (NH_VARIETY) { // 第 28 批：26–31、44–49 側牆，32–43 十二種一樓住家（一格＝兩間 × 一層樓：6 公尺 × 3.6 公尺，橫的 41 px／公尺、直的 69 px／公尺），50–59 店面，60 紅瓦、61 灰瓦、62 白鐵皮、63 條紋遮雨棚
+    const brickW = (g2, w, h, base) => { g2.fillStyle = base; g2.fillRect(0, 0, w, h); noise(g2, w, h, 500, ['rgba(120,50,30,0.5)', 'rgba(190,110,80,0.5)']); g2.fillStyle = 'rgba(225,215,200,0.75)'; for (let y = 0; y < h; y += 9) { g2.fillRect(0, y, w, 1.5); for (let x = (y / 9) % 2 ? 0 : 11; x < w; x += 22) g2.fillRect(x, y, 1.5, 9); } };
+    const terr = (g2, w, h, base) => { g2.fillStyle = base; g2.fillRect(0, 0, w, h); noise(g2, w, h, 2600, ['#a19e96', '#cfccc4', '#8f8c85', '#d9d6cf'], 2); };
+    const paint = (g2, w, h, base) => { g2.fillStyle = base; g2.fillRect(0, 0, w, h); noise(g2, w, h, 300, ['rgba(0,0,0,0.04)', 'rgba(255,255,255,0.06)'], 6); streaks(g2, w, h, 0.07); };
+    const corr = (g2, w, h, base, hi) => { g2.fillStyle = base; g2.fillRect(0, 0, w, h); g2.fillStyle = hi; for (let x = 0; x < w; x += 10) g2.fillRect(x, 0, 4, h); g2.fillStyle = 'rgba(0,0,0,0.16)'; for (let x = 7; x < w; x += 10) g2.fillRect(x, 0, 2, h); };
+    // [牆, 門的種類, 門的顏色, 鐵窗的顏色（null＝沒有）]
+    const FAM = [
+      [(g2, w, h) => tiles(g2, w, h, '#ecebe6', 'rgba(150,150,150,0.3)', 5), 'iron', '#a8322a', '#f4f4f0'], // 白磁磚＋紅鐵門
+      [(g2, w, h) => tiles(g2, w, h, '#dcc9a4', 'rgba(150,130,100,0.35)', 6), 'iron', '#2f6b45', '#2f3530'], // 米色磁磚＋綠鐵門
+      [(g2, w, h) => brickW(g2, w, h, '#a65a3f'), 'wood', '#6b4426', '#3b3f3a'], // 紅磚＋木門
+      [(g2, w, h) => terr(g2, w, h, '#b9b6ae'), 'roll', '#3f6ea8', null], // 洗石子＋藍鐵捲門
+      [(g2, w, h) => tiles(g2, w, h, '#e2b4aa', 'rgba(140,90,80,0.3)', 6), 'roll', '#e9e9e4', '#f0efe9'], // 粉紅磁磚＋白鐵捲門
+      [(g2, w, h) => tiles(g2, w, h, '#b5cdb0', 'rgba(80,110,80,0.3)', 6), 'glass', '#c9d3d6', null], // 淺綠磁磚＋鋁門
+      [(g2, w, h) => paint(g2, w, h, '#efe3c4'), 'iron', '#6b4a33', '#5a4636'], // 奶油色油漆＋咖啡色鐵門
+      [(g2, w, h) => { paint(g2, w, h, '#a7a49b'); noise(g2, w, h, 900, ['#9a978e', '#b5b2a9', '#8e8b83']); streaks(g2, w, h, 0.3); }, 'roll', '#8a6a4a', '#6d5a48'], // 舊水泥＋生鏽的鐵捲門
+      [(g2, w, h) => corr(g2, w, h, '#5f88b0', '#7da3cb'), 'iron', '#e8e8e4', null], // 藍色鐵皮屋＋白門
+      [(g2, w, h) => paint(g2, w, h, '#f2f1ec'), 'wood', '#3e2a1c', null], // 白油漆＋深色木門
+      [(g2, w, h) => tiles(g2, w, h, '#9a7a5e', 'rgba(60,40,30,0.35)', 5), 'roll', '#9097a0', '#e8e6df'], // 咖啡色磁磚＋灰鐵捲門
+      [(g2, w, h) => tiles(g2, w, h, '#ecdca0', 'rgba(150,130,80,0.3)', 6), 'couplet', '#b8322a', '#f2f2ee'], // 淺黃磁磚＋紅門貼春聯
+    ];
+    const door = (g2, x, kind, colr) => { // 門（1 公尺寬、2.2 公尺高；下面貼地）
+      const w = kind === 'glass' ? 62 : 44, hd = 152, y = 248 - hd;
+      g2.fillStyle = 'rgba(0,0,0,0.28)'; g2.fillRect(x - 4, y - 4, w + 8, hd + 4);
+      if (kind === 'glass') { g2.fillStyle = '#c9d3d6'; g2.fillRect(x, y, w, hd); const gr = g2.createLinearGradient(x, y, x + w, y + hd); gr.addColorStop(0, '#5d7484'); gr.addColorStop(1, '#2d3d49'); g2.fillStyle = gr; g2.fillRect(x + 4, y + 4, w / 2 - 6, hd - 8); g2.fillRect(x + w / 2 + 2, y + 4, w / 2 - 6, hd - 8); g2.fillStyle = 'rgba(255,255,255,0.18)'; g2.fillRect(x + 6, y + 8, 6, hd - 20); return; }
+      if (kind === 'wood') { g2.fillStyle = colr; g2.fillRect(x, y, w, hd); g2.fillStyle = 'rgba(0,0,0,0.22)'; for (let k = 8; k < w; k += 9) g2.fillRect(x + k, y, 1.5, hd); g2.fillStyle = '#d8c068'; g2.fillRect(x + w - 9, y + 80, 4, 8); return; }
+      g2.fillStyle = colr; g2.fillRect(x, y, w, hd); g2.fillStyle = 'rgba(0,0,0,0.2)'; for (let k = y + 10; k < y + hd; k += 18) g2.fillRect(x + 4, k, w - 8, 2); g2.fillStyle = '#d8c068'; g2.fillRect(x + w - 9, y + 80, 4, 9);
+      if (kind === 'couplet') { g2.fillStyle = '#c8261f'; g2.fillRect(x - 14, y + 4, 9, 128); g2.fillRect(x + w + 5, y + 4, 9, 128); g2.fillRect(x - 8, y - 16, w + 16, 11); g2.fillStyle = '#e8c45a'; for (let k = 0; k < 6; k++) { g2.fillRect(x - 12, y + 12 + k * 20, 5, 8); g2.fillRect(x + w + 7, y + 12 + k * 20, 5, 8); }
+        g2.save(); g2.translate(x + w / 2, y + 40); g2.rotate(Math.PI / 4); g2.fillStyle = '#d42a22'; g2.fillRect(-11, -11, 22, 22); g2.restore(); g2.fillStyle = '#1b1b1b'; g2.font = `900 16px ${SANS}`; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillText('福', x + w / 2, y + 41); }
+    };
+    const roll = (g2, x, w, colr) => { const hd = 176, y = 248 - hd; g2.fillStyle = 'rgba(0,0,0,0.3)'; g2.fillRect(x - 3, y - 14, w + 6, hd + 14); g2.fillStyle = colr; g2.fillRect(x, y, w, hd); g2.fillStyle = 'rgba(0,0,0,0.16)'; for (let k = y + 3; k < y + hd; k += 6) g2.fillRect(x, k, w, 2); g2.fillStyle = 'rgba(255,255,255,0.12)'; for (let k = y + 1; k < y + hd; k += 6) g2.fillRect(x, k, w, 1); g2.fillStyle = 'rgba(0,0,0,0.35)'; g2.fillRect(x, y + hd - 6, w, 6); g2.fillRect(x + w / 2 - 6, y + hd - 16, 12, 4); };
+    const plate = (g2, x, y, nmb) => { g2.fillStyle = '#1f4f9c'; g2.fillRect(x, y, 26, 13); g2.fillStyle = '#fff'; g2.font = `700 10px ${SANS}`; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillText(nmb + '號', x + 13, y + 7); }; // 門牌
+    const meter = (g2, x, y) => { g2.fillStyle = '#9da3a6'; g2.fillRect(x, y, 14, 18); g2.fillStyle = '#e8ece8'; g2.beginPath(); g2.arc(x + 7, y + 7, 4, 0, 6.283); g2.fill(); };
+    const pots = (g2, x, R2) => { for (let k = 0; k < 3; k++) { const px = x + k * 15; g2.fillStyle = '#9a5a3a'; g2.fillRect(px, 232, 11, 16); g2.fillStyle = ['#3e6b34', '#4f7f3c', '#2f5a2a'][(R2() * 3) | 0]; g2.beginPath(); g2.arc(px + 5.5, 226, 8 + R2() * 4, 0, 6.283); g2.fill(); } };
+    const winO = (gc, R2) => ({ grille: gc || undefined, ac: false, curtain: R2() < 0.5 ? 'rgba(230,220,200,0.55)' : null });
+    FAM.forEach(([wall, dk, dc, gc], f) => {
+      put(32 + f, (g2, w, h) => { const R2 = rng(500 + f); wall(g2, w, h);
+        // 左邊那間：鐵捲門（車庫）或 門＋窗；右邊那間：門＋窗
+        if (dk === 'roll' || R2() < 0.55) roll(g2, 9, 106, dk === 'roll' ? dc : ['#9aa0a6', '#c9cdd0', '#7f8a94'][(R2() * 3) | 0]); else { door(g2, 14, dk, dc); win(g2, 66, 103, 50, 74, winO(gc, R2)); }
+        door(g2, 124 + 12, dk === 'roll' ? 'iron' : dk, dk === 'roll' ? '#7b2a22' : dc); win(g2, 124 + 70, 103, 46, 74, winO(gc, R2));
+        plate(g2, 124 + 64, 84, 1 + ((R2() * 98) | 0)); if (R2() < 0.7) meter(g2, 124 + 104, 186);
+        if (f === 4 || f === 9 || f === 11 || R2() < 0.25) pots(g2, 124 + 66, R2);
+        g2.fillStyle = 'rgba(0,0,0,0.12)'; g2.fillRect(0, 238, w, 10); // 牆腳髒一點
+      });
+      put(f < 6 ? 26 + f : 38 + f, (g2, w, h) => { const R2 = rng(700 + f); wall(g2, w, h); // 側牆：一個小窗（浴室）、水管
+        win(g2, 40 + R2() * 120, 60, 34, 30, { grille: gc || undefined }); g2.fillStyle = 'rgba(120,120,120,0.8)'; g2.fillRect(20 + R2() * 200, 0, 4, h); g2.fillStyle = 'rgba(0,0,0,0.12)'; g2.fillRect(0, 238, w, 10); });
+    });
+    for (let s2 = 0; s2 < 10; s2++) put(50 + s2, (g2, w, h) => { const R2 = rng(900 + s2); shopFront(g2, 0, 124, h, SHOPS[(s2 * 3 + 1) % SHOPS.length], R2); shopFront(g2, 124, 124, h, SHOPS[(s2 * 7 + 8) % SHOPS.length], R2); });
+    put(60, (g2, w, h) => { g2.fillStyle = '#a8492f'; g2.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 16) { g2.fillStyle = 'rgba(0,0,0,0.28)'; g2.fillRect(0, y + 12, w, 4); for (let x = 0; x < w; x += 14) { g2.fillStyle = 'rgba(255,190,150,0.22)'; g2.fillRect(x + 2, y, 5, 12); } } noise(g2, w, h, 500, ['rgba(60,30,20,0.3)', 'rgba(200,120,90,0.3)'], 3); });
+    put(61, (g2, w, h) => { g2.fillStyle = '#5b5f63'; g2.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 14) { g2.fillStyle = 'rgba(0,0,0,0.3)'; g2.fillRect(0, y + 11, w, 3); for (let x = (y / 14) % 2 ? 0 : 10; x < w; x += 20) { g2.fillStyle = 'rgba(0,0,0,0.18)'; g2.fillRect(x, y, 1.5, 11); } } noise(g2, w, h, 600, ['rgba(255,255,255,0.08)', 'rgba(0,0,0,0.12)'], 3); });
+    put(62, (g2, w, h) => corr(g2, w, h, '#d9dde0', '#eef0f2'));
+    put(63, (g2, w, h) => { for (let x = 0; x < w; x += 31) { g2.fillStyle = '#2e7d4a'; g2.fillRect(x, 0, 16, h); g2.fillStyle = '#f2f2ee'; g2.fillRect(x + 16, 0, 15, h); } });
+  }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = aniso;
-  const cells = []; for (let i = 0; i < 32; i++) { const [cx, cy] = CELL(i); cells.push(new THREE.Vector4((cx * CS + 4) / W, 1 - (cy * CS + 4 + IN) / H, IN / W, IN / H)); }
+  const cells = []; for (let i = 0; i < (NH_VARIETY ? 64 : 32); i++) { const [cx, cy] = CELL(i); cells.push(new THREE.Vector4((cx * CS + 4) / W, 1 - (cy * CS + 4 + IN) / H, IN / W, IN / H)); }
   return { tex: t, cells };
 }
 // 路名牌、直立招牌、車站、公園學校的牌子、施工欄杆：一張 1024×1536
@@ -311,7 +364,7 @@ function buildNeihu(V, opt = {}) {
   // 牆的材質：貼圖格子在著色器裡重複（fract），每個頂點一個「格子編號」→ uniform 陣列裡的 [u0, v0, du, dv]
   mats.wall.onBeforeCompile = (sh) => {
     sh.uniforms.nhCells = { value: FA.cells };
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float cell;\nuniform vec4 nhCells[32];\nvarying vec4 vTile;')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float cell;\nuniform vec4 nhCells[' + (NH_VARIETY ? 64 : 32) + '];\nvarying vec4 vTile;')
       .replace('#include <uv_vertex>', '#include <uv_vertex>\nvTile = nhCells[int(cell + 0.5)];');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vTile;')
       .replace('#include <map_fragment>', 'vec2 nhUv = vTile.xy + fract(vMapUv) * vTile.zw;\nvec4 sampledDiffuseColor = textureGrad(map, nhUv, dFdx(vMapUv) * vTile.zw, dFdy(vMapUv) * vTile.zw);\ndiffuseColor *= sampledDiffuseColor;');
@@ -346,6 +399,65 @@ function buildNeihu(V, opt = {}) {
     for (const [a, b, d] of tri) { if (!down) g.tri(k + a, k + d, k + b); else g.tri(k + a, k + b, k + d); } // 反過來接＝朝上（x-z 平面上「逆時針」的三角形法線朝下）
   }
 
+  // 第 28 批：房子的小東西（遮雨棚、水塔、太陽能、加蓋、斜屋頂、女兒牆）
+  const SHOP_CELLS = [12, 13, 14, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59];
+  const ROOF_COL = [[235, 233, 228], [150, 172, 150], [160, 170, 182]];
+  const AWN = [[46, 125, 70], [196, 58, 48], [40, 92, 170], [226, 178, 40], [230, 230, 226], [120, 72, 40]];
+  function quadUp(g, P, uv, cell, c) { // 四邊形，朝上的那面看得到（順序反了就倒過來）
+    const ax = P[1][0] - P[0][0], ay = P[1][1] - P[0][1], az = P[1][2] - P[0][2], bx = P[2][0] - P[0][0], by = P[2][1] - P[0][1], bz = P[2][2] - P[0][2];
+    if (az * bx - ax * bz >= 0) quad3(g, P, uv, cell, c); else quad3(g, [P[0], P[3], P[2], P[1]], [uv[0], uv[3], uv[2], uv[1]], cell, c); void ay; void by;
+  }
+  function triBoth(g, A, B, Cc, cell, c) { g.grow(6, 6); const k = g.v; for (const p of [A, B, Cc, A, Cc, B]) g.vert(p[0], p[1], p[2], 0.5 + p[0] / 6, p[1] / 3.6, c[0], c[1], c[2], cell); g.tri(k, k + 1, k + 2); g.tri(k + 3, k + 4, k + 5); }
+  function cylG(g, x, z, r, y0, y1, c, sides = 8) { // 圓柱（水塔）
+    const P = []; for (let k = 0; k < sides; k++) { const a = (k / sides) * Math.PI * 2; P.push([x + Math.cos(a) * r, z + Math.sin(a) * r]); }
+    for (let k = 0; k < sides; k++) { const p = P[k], q = P[(k + 1) % sides]; wallQ(g, p[0], p[1], q[0], q[1], y0, y1, 0.3, 0.7, 0.3, 0.7, 20, shade(c, 0.78 + 0.28 * Math.max(0, Math.cos(((k + 0.5) / sides) * 6.283 - 0.8))), c); }
+    flatPoly(g, P, y1, 1, shade(c, 1.06), 20);
+  }
+  function awning(g, a, c, L, ux, uz, ox, oz, dep, k1, k2) { // 店門口的遮雨棚：牆上 2.95 公尺往外斜下來，條紋的或一個顏色
+    const m = Math.min(0.3, L * 0.05), y0 = 2.95, y1 = y0 - 0.38, x0 = a[0] + ux * m, z0 = a[1] + uz * m, x1 = c[0] - ux * m, z1 = c[1] - uz * m, U = (L - 2 * m) / 3;
+    const striped = k1 < 0.3, ac = striped ? [255, 255, 255] : AWN[Math.floor(k2 * AWN.length)], cl = striped ? 63 : 20;
+    const Pt = [[x0, y0, z0], [x1, y0, z1], [x1 + ox * dep, y1, z1 + oz * dep], [x0 + ox * dep, y1, z0 + oz * dep]];
+    quad3(g, Pt, [[0, 0], [U, 0], [U, 0.6], [0, 0.6]], cl, ac);
+    quad3(g, [Pt[0], Pt[3], Pt[2], Pt[1]], [[0, 0], [0, 0.6], [U, 0.6], [U, 0]], cl, shade(ac, 0.72));
+    wallQ(g, Pt[3][0], Pt[3][2], Pt[2][0], Pt[2][2], y1 - 0.22, y1, 0, U, 0, 0.15, cl, ac, ac);
+  }
+  function roofBits(g, b, bi, P, n, rc, top, col, sCell, anyE) {
+    const rk = hh(bi, 72);
+    if (rc && b.gen && !anyE && rk < 0.14 && Math.max(rc[2], rc[3]) <= 12) { // 斜屋頂（紅瓦、灰瓦）
+      const [rx, rz, hx, hz, rot] = rc, ux = Math.cos(rot), uz = -Math.sin(rot), vx = -uz, vz = ux, alongU = hx >= hz;
+      const A = (alongU ? hx : hz) + 0.3, Bw = (alongU ? hz : hx) + 0.35, ax = alongU ? ux : vx, az = alongU ? uz : vz, bx = alongU ? vx : ux, bz = alongU ? vz : uz;
+      const rh = 1.2 + 0.7 * hh(bi, 76), tc = hh(bi, 77) < 0.6 ? 60 : 61, ye = top - 0.12, yr = top + rh;
+      const E00 = [rx - ax * A - bx * Bw, ye, rz - az * A - bz * Bw], E10 = [rx + ax * A - bx * Bw, ye, rz + az * A - bz * Bw], E01 = [rx - ax * A + bx * Bw, ye, rz - az * A + bz * Bw], E11 = [rx + ax * A + bx * Bw, ye, rz + az * A + bz * Bw];
+      const R0 = [rx - ax * A, yr, rz - az * A], R1 = [rx + ax * A, yr, rz + az * A], U = (2 * A) / 3, Vv = Math.hypot(Bw, rh) / 3;
+      quadUp(g, [E00, E10, R1, R0], [[0, 0], [U, 0], [U, Vv], [0, Vv]], tc, [255, 255, 255]);
+      quadUp(g, [E11, E01, R0, R1], [[0, 0], [U, 0], [U, Vv], [0, Vv]], tc, [255, 255, 255]);
+      triBoth(g, E00, E01, R0, sCell, col); triBoth(g, E10, E11, R1, sCell, col);
+      return;
+    }
+    if (hh(bi, 73) < 0.55) { const ph = 0.6 + 0.5 * hh(bi, 74); // 女兒牆
+      for (let i = 0; i < n; i++) { const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
+        wallQ(g, a[0], a[1], c[0], c[1], top, top + ph, 0, L / 6, 0.5, 0.5 + ph / 3.6, sCell, col, col); wallQ(g, c[0], c[1], a[0], a[1], top, top + ph, 0, L / 6, 0.5, 0.5 + ph / 3.6, sCell, shade(col, 0.8), shade(col, 0.8)); } }
+    if (!rc) return;
+    const [rx, rz, hx, hz, rot] = rc, ux = Math.cos(rot), uz = -Math.sin(rot), vx = -uz, vz = ux;
+    if (rk >= 0.14 && rk < 0.26 && hx > 3 && hz > 3) { // 頂樓加蓋（藍色、白色鐵皮）
+      nShed++; const sx = hx * (0.5 + hh(bi, 5) * 0.3), sz = hz * (0.5 + hh(bi, 6) * 0.3), ox = (hh(bi, 7) - 0.5) * (hx - sx), oz = (0.5 + 0.5 * hh(bi, 8)) * (hz - sz), x = rx + ux * ox + vx * oz, z = rz + uz * ox + vz * oz;
+      const Q = boxG(g, x, z, sx, sz, rot, top, top + 2.5, [255, 255, 255], hh(bi, 84) < 0.55 ? 11 : 62, false);
+      quad3(g, [[Q[0][0], top + 2.5, Q[0][1]], [Q[3][0], top + 2.8, Q[3][1]], [Q[2][0], top + 2.8, Q[2][1]], [Q[1][0], top + 2.5, Q[1][1]]], [[0, 0], [0, sz / 3], [sx / 3, sz / 3], [sx / 3, 0]], 19, [255, 255, 255]);
+      return;
+    }
+    if (hh(bi, 9) < 0.55 && hx > 1.6 && hz > 1.6) { // 水塔：不鏽鋼、藍色塑膠、舊的水泥
+      const k = hh(bi, 78), x = rx + ux * hx * (0.55 - hh(bi, 85) * 0.3) + vx * hz * 0.55, z = rz + uz * hx * (0.55 - hh(bi, 85) * 0.3) + vz * hz * 0.55;
+      if (k < 0.45) { boxG(g, x, z, 0.5, 0.5, rot, top, top + 0.35, [90, 92, 96]); cylG(g, x, z, 0.55, top + 0.35, top + 1.55, [206, 210, 214]); }
+      else if (k < 0.75) cylG(g, x, z, 0.6, top, top + 1.25, [52, 104, 186]);
+      else boxG(g, x, z, 0.7, 0.7, rot, top, top + 1.5, [222, 226, 230]);
+    }
+    if (hh(bi, 79) < 0.16 && hx > 1.6 && hz > 2.2) { // 太陽能熱水器：斜的黑藍色板子＋白色的桶子
+      const x = rx - ux * hx * 0.35 + vx * hz * 0.1, z = rz - uz * hx * 0.35 + vz * hz * 0.1, w = 0.9, d = 0.55;
+      const p0 = [x - ux * w - vx * d, top + 0.25, z - uz * w - vz * d], p1 = [x + ux * w - vx * d, top + 0.25, z + uz * w - vz * d], p2 = [x + ux * w + vx * d, top + 1.05, z + uz * w + vz * d], p3 = [x - ux * w + vx * d, top + 1.05, z - uz * w + vz * d];
+      quadUp(g, [p0, p1, p2, p3], [[0.3, 0.3], [0.7, 0.3], [0.7, 0.7], [0.3, 0.7]], 20, [36, 50, 88]);
+      boxG(g, x + vx * (d + 0.2), z + vz * (d + 0.2), w, 0.22, rot, top + 0.9, top + 1.35, [236, 236, 232]);
+    }
+  }
   // ==== 房子 ====
   const STY_COL = [[236, 226, 208], [240, 240, 236], [230, 214, 206], [240, 222, 216], [222, 226, 230], [220, 226, 234], [242, 240, 232], [214, 212, 206], [226, 236, 222], [240, 220, 210], [226, 228, 230]];
   const resSt = new Set([0, 1, 2, 3, 7, 8]);
@@ -357,19 +469,31 @@ function buildNeihu(V, opt = {}) {
     if (b.lm) return; // 地標的房子（西湖圖書館、湖光教會）：下面自己做
     const P = b.P, n = P.length; let cx = 0, cz = 0; for (const p of P) { cx += p[0]; cz += p[1]; } cx /= n; cz /= n;
     const g = bank('wall', cx, cz, TB);
+    const VAR = NH_VARIETY && resSt.has(b.st) && !(LISHAN && inPoly(LISHAN, cx, cz)); // 第 28 批：住宅的樣子才換（學校、廟、工廠、辦公大樓照舊）
     const gh = b.e.includes(2) ? 4.2 : 3.6, top0 = b.h > 2 ? b.h : b.f <= 1 ? 3.8 + hh(bi, 1) * 0.8 : gh + (b.f - 1) * 3.2;
-    const bf = Math.min(b.f, NH_MAX_FL), top = Math.min(top0, gh + (NH_MAX_FL - 1) * 3.2); // 第 10 批（Nick「所有房子變矮」）：最多 2 層樓高
-    const st = b.st, base = STY_COL[st] || WHITE, tint = 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, 0.78), gcell = GROUND_OF[st] ?? 15;
+    const bf = Math.min(b.f, NH_MAX_FL), top = VAR ? (b.e.includes(2) ? gh : gh * (0.94 + 0.16 * hh(bi, 71))) : Math.min(top0, gh + (NH_MAX_FL - 1) * 3.2); // 第 10 批（Nick「所有房子變矮」）：最多 2 層樓高；第 28 批：高高低低一點
+    const st = b.st, base = VAR ? WHITE : STY_COL[st] || WHITE, tint = VAR ? 0.92 + hh(bi, 2) * 0.12 : 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, VAR ? 0.86 : 0.78), gcell = GROUND_OF[st] ?? 15;
+    const fam = Math.floor(hh(bi, 70) * 12), fCell = 32 + fam, sCell = fam < 6 ? 26 + fam : 38 + fam, anyE = b.e.some((x) => x); // 第 28 批：12 種一樓住家（前面）＋同一種的側牆
     const C = b.core || P;
     for (let i = 0; i < n; i++) {
       const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
       const ca = C[i], cc = C[(i + 1) % n], Lc = Math.hypot(cc[0] - ca[0], cc[1] - ca[1]), e = b.e[i] || 0;
-      const shopCell = 12 + Math.floor(hh(bi, 10 + i) * 3);
-      if (b.f <= 1 && b.h <= 2) { wallQ(g, a[0], a[1], c[0], c[1], 0, top, 0, L / 6, 0, 1, e ? shopCell : gcell, low, col); continue; }
-      // 一樓（騎樓的話退到裡面那條線）
-      wallQ(g, ca[0], ca[1], cc[0], cc[1], 0, gh, 0, Math.max(1, Math.round(Lc / 6)), 0, 1, e ? shopCell : gcell, low, col);
-      // 樓上
-      wallQ(g, a[0], a[1], c[0], c[1], gh, top, 0, Math.max(1, Math.round(L / 6)), 0, (top - gh) / 6.4, LISHAN && inPoly(LISHAN, cx, cz) ? 24 : st, col, col);
+      const front = e > 0 || (b.gen ? i === 0 : !anyE);
+      const shopCell = VAR ? SHOP_CELLS[Math.floor(hh(bi, 10 + i) * SHOP_CELLS.length)] : 12 + Math.floor(hh(bi, 10 + i) * 3), wcell = e ? shopCell : !VAR ? gcell : front ? fCell : sCell;
+      if (b.f <= 1 && b.h <= 2) { wallQ(g, a[0], a[1], c[0], c[1], 0, top, 0, L / 6, 0, 1, wcell, low, col); }
+      else {
+        const gw = VAR && !(e === 2 && b.core) ? top : gh; // 第 28 批：一層樓的房子，一樓的牆直接到屋頂
+        // 一樓（騎樓的話退到裡面那條線）
+        wallQ(g, ca[0], ca[1], cc[0], cc[1], 0, gw, 0, Math.max(1, Math.round(Lc / 6)), 0, 1, wcell, low, col);
+        // 樓上
+        if (top > gw + 0.01) wallQ(g, a[0], a[1], c[0], c[1], gw, top, 0, Math.max(1, Math.round(L / 6)), 0, (top - gw) / 6.4, LISHAN && inPoly(LISHAN, cx, cz) ? 24 : st, col, col);
+      }
+      if (VAR) { // 第 28 批：店門口的遮雨棚、牆上的冷氣
+        const ux = (c[0] - a[0]) / L, uz = (c[1] - a[1]) / L, ox = uz, oz = -ux; // 往外
+        if (e === 1 && L >= 2.5 && hh(bi, 80 + i) < 0.72) awning(g, a, c, L, ux, uz, ox, oz, 1.1 + 0.5 * hh(bi, 81 + i), hh(bi, 82 + i), hh(bi, 83 + i));
+        if (!e && L >= 2.5 && hh(bi, 90 + i) < (front ? 0.5 : 0.3)) { const t = 0.2 + 0.6 * hh(bi, 91 + i); boxG(g, a[0] + (c[0] - a[0]) * t + ox * 0.2, a[1] + (c[1] - a[1]) * t + oz * 0.2, 0.42, 0.17, rotOf(ux, uz), 2.2, 2.75, [226, 224, 216], 20); }
+      }
+      if (b.f <= 1 && b.h <= 2) continue;
       if (e === 2 && b.core) { // 騎樓：天花板、柱子
         nArc++;
         quad3(g, [[a[0], gh, a[1]], [ca[0], gh, ca[1]], [cc[0], gh, cc[1]], [c[0], gh, c[1]]], [[0.3, 0.3], [0.3, 0.7], [0.7, 0.7], [0.7, 0.3]], 20, [214, 210, 200]);
@@ -385,11 +509,12 @@ function buildNeihu(V, opt = {}) {
         const m = Math.min(3, Math.floor(L / 7)); for (let j = 0; j < m; j++) { const t = (j + 0.5) / m, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L; vSigns.push({ x: a[0] + (c[0] - a[0]) * t, z: a[1] + (c[1] - a[1]) * t, ox, oz, y0: gh + 0.4, h: Math.min(top - gh - 0.6, 3 + hh(bi, 50 + j) * 2.6), s: Math.floor(hh(bi, 60 + i * 3 + j) * 16) }); }
       }
     }
-    // 屋頂
-    flatPoly(g, P, top, 6, shade([235, 233, 228], 0.9 + hh(bi, 3) * 0.15), 18);
+    // 屋頂（第 28 批：灰的、綠的防水漆、藍灰的）
+    flatPoly(g, P, top, 6, VAR ? shade(ROOF_COL[hh(bi, 3) < 0.6 ? 0 : hh(bi, 3) < 0.85 ? 1 : 2], 0.92 + hh(bi, 4) * 0.1) : shade([235, 233, 228], 0.9 + hh(bi, 3) * 0.15), 18);
     // 一樓的頂點顏色暗一點已經有了；頂樓加蓋、水塔、樓梯間
     const rc = b.rect;
-    if (rc && !b.back && bf >= 3) {
+    if (VAR) roofBits(g, b, bi, P, n, rc, top, col, sCell, anyE);
+    if (rc && !b.back && bf >= 3 && !VAR) {
       const [rx, rz, hx, hz, rot] = rc, ux = Math.cos(rot), uz = -Math.sin(rot), vx = -uz, vz = ux;
       if (resSt.has(st) && bf <= 8 && hh(bi, 4) < 0.45 && hx > 3 && hz > 3) { // 頂樓加蓋（鐵皮屋）
         nShed++; const sx = hx * (0.55 + hh(bi, 5) * 0.3), sz = hz * (0.55 + hh(bi, 6) * 0.3), ox = (hh(bi, 7) - 0.5) * (hx - sx), oz = (hh(bi, 8) - 0.5) * (hz - sz), x = rx + ux * ox + vx * oz, z = rz + uz * ox + vz * oz;
