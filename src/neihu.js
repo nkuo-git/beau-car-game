@@ -215,7 +215,8 @@ function facadeAtlas(aniso) {
       put(f < 6 ? 26 + f : 38 + f, (g2, w, h) => { const R2 = rng(700 + f); wall(g2, w, h); // 側牆：一個小窗（浴室）、水管
         win(g2, 40 + R2() * 120, 60, 34, 30, { grille: gc || undefined }); g2.fillStyle = 'rgba(120,120,120,0.8)'; g2.fillRect(20 + R2() * 200, 0, 4, h); g2.fillStyle = 'rgba(0,0,0,0.12)'; g2.fillRect(0, 238, w, 10); });
     });
-    for (let s2 = 0; s2 < 10; s2++) put(50 + s2, (g2, w, h) => { const R2 = rng(900 + s2); shopFront(g2, 0, 124, h, SHOPS[(s2 * 3 + 1) % SHOPS.length], R2); shopFront(g2, 124, 124, h, SHOPS[(s2 * 7 + 8) % SHOPS.length], R2); });
+    const FREE = SHOPS.map((_, i) => i).filter((i) => ![3, 5, 7, 11, 18, 25].includes(i)); // 12–14 格已經用掉的店名不要再用（剩 24 個，10 格 × 2 家都不一樣）
+    for (let s2 = 0; s2 < 10; s2++) put(50 + s2, (g2, w, h) => { const R2 = rng(900 + s2); shopFront(g2, 0, 124, h, SHOPS[FREE[s2 * 2]], R2); shopFront(g2, 124, 124, h, SHOPS[FREE[(s2 * 2 + 11) % FREE.length]], R2); });
     put(60, (g2, w, h) => { g2.fillStyle = '#a8492f'; g2.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 16) { g2.fillStyle = 'rgba(0,0,0,0.28)'; g2.fillRect(0, y + 12, w, 4); for (let x = 0; x < w; x += 14) { g2.fillStyle = 'rgba(255,190,150,0.22)'; g2.fillRect(x + 2, y, 5, 12); } } noise(g2, w, h, 500, ['rgba(60,30,20,0.3)', 'rgba(200,120,90,0.3)'], 3); });
     put(61, (g2, w, h) => { g2.fillStyle = '#5b5f63'; g2.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 14) { g2.fillStyle = 'rgba(0,0,0,0.3)'; g2.fillRect(0, y + 11, w, 3); for (let x = (y / 14) % 2 ? 0 : 10; x < w; x += 20) { g2.fillStyle = 'rgba(0,0,0,0.18)'; g2.fillRect(x, y, 1.5, 11); } } noise(g2, w, h, 600, ['rgba(255,255,255,0.08)', 'rgba(0,0,0,0.12)'], 3); });
     put(62, (g2, w, h) => corr(g2, w, h, '#d9dde0', '#eef0f2'));
@@ -378,7 +379,8 @@ function buildNeihu(V, opt = {}) {
   const WHITE = [255, 255, 255];
   // 直立的面（牆）：從 a 到 b、y0..y1，正面朝 (a→b) 的右手邊（從上面看、z 往下：順時針的多邊形的外面）
   function wallQ(g, ax, az, bx, bz, y0, y1, u0, u1, v0, v1, cell, c0, c1 = c0) {
-    g.grow(4, 6); const k = g.vert(ax, y0, az, u0, v0, c0[0], c0[1], c0[2], cell); g.vert(bx, y0, bz, u1, v0, c0[0], c0[1], c0[2], cell); g.vert(bx, y1, bz, u1, v1, c1[0], c1[1], c1[2], cell); g.vert(ax, y1, az, u0, v1, c1[0], c1[1], c1[2], cell);
+    // 第 28 批：從外面看 a 在右邊、b 在左邊，貼圖的 u 要從左邊（b）開始，不然招牌的字是反的
+    g.grow(4, 6); const k = g.vert(ax, y0, az, u1, v0, c0[0], c0[1], c0[2], cell); g.vert(bx, y0, bz, u0, v0, c0[0], c0[1], c0[2], cell); g.vert(bx, y1, bz, u0, v1, c1[0], c1[1], c1[2], cell); g.vert(ax, y1, az, u1, v1, c1[0], c1[1], c1[2], cell);
     g.tri(k, k + 2, k + 1); g.tri(k, k + 3, k + 2); // 外面看過去逆時針
   }
   function quad3(g, P, uv, cell, c) { g.grow(4, 6); const k = g.v; for (let i = 0; i < 4; i++) g.vert(P[i][0], P[i][1], P[i][2], uv[i][0], uv[i][1], c[0], c[1], c[2], cell); g.tri(k, k + 1, k + 2); g.tri(k, k + 2, k + 3); }
@@ -465,6 +467,7 @@ function buildNeihu(V, opt = {}) {
   const LISHAN = N.lm && N.lm.lishan ? N.lm.lishan.p : null; // 麗山國中校地裡的房子：白磁磚＋紅磚飾帶的牆（格子 24，照參考照片）
   const NH_MAX_FL = 1; // 第 10 批：內湖一般的房子最多幾層（地標不變）；第 18 批（Nick 2026-10-14「對 把房子變矮」）：1 層
   const GB = 1e6; // 第 9 批：房子的編號（碰撞物的 g；村子的房子沒有 g）
+  const roadAtH = NH_VARIETY ? mkRoadGrid() : null; // 第 28 批：哪一面牆對著路（那一面畫門、窗；其他畫側牆）
   N.bld.forEach((b, bi) => {
     if (b.lm) return; // 地標的房子（西湖圖書館、湖光教會）：下面自己做
     const P = b.P, n = P.length; let cx = 0, cz = 0; for (const p of P) { cx += p[0]; cz += p[1]; } cx /= n; cz /= n;
@@ -474,17 +477,30 @@ function buildNeihu(V, opt = {}) {
     const bf = Math.min(b.f, NH_MAX_FL), top = VAR ? (b.e.includes(2) ? gh : gh * (0.94 + 0.16 * hh(bi, 71))) : Math.min(top0, gh + (NH_MAX_FL - 1) * 3.2); // 第 10 批（Nick「所有房子變矮」）：最多 2 層樓高；第 28 批：高高低低一點
     const st = b.st, base = VAR ? WHITE : STY_COL[st] || WHITE, tint = VAR ? 0.92 + hh(bi, 2) * 0.12 : 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, VAR ? 0.86 : 0.78), gcell = GROUND_OF[st] ?? 15;
     const fam = Math.floor(hh(bi, 70) * 12), fCell = 32 + fam, sCell = fam < 6 ? 26 + fam : 38 + fam, anyE = b.e.some((x) => x); // 第 28 批：12 種一樓住家（前面）＋同一種的側牆
+    let faceR = null; // 第 28 批：每一面牆往外 3 公尺是不是路（人行道）；都不是的話，最靠近路的那一面（8 公尺內）
+    if (VAR) { faceR = []; let bestI = -1, bestD = Infinity;
+      for (let i = 0; i < n; i++) { const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); let f = false;
+        if (L >= 2) { const ux = (c[0] - a[0]) / L, uz = (c[1] - a[1]) / L, r = roadAtH((a[0] + c[0]) / 2 + uz * 3, (a[1] + c[1]) / 2 - ux * 3); if (r) { const over = r.d - (r.r.w / 2 + r.r.sw + 2.5); if (over < 0) f = true; if (over < bestD) { bestD = over; bestI = i; } } }
+        faceR.push(f); }
+      if (!faceR.some((x) => x)) { if (bestI >= 0 && bestD < 8) faceR[bestI] = true; else faceR = null; } }
     const C = b.core || P;
     for (let i = 0; i < n; i++) {
       const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
       const ca = C[i], cc = C[(i + 1) % n], Lc = Math.hypot(cc[0] - ca[0], cc[1] - ca[1]), e = b.e[i] || 0;
-      const front = e > 0 || (b.gen ? i === 0 : !anyE);
+      const front = e > 0 || (faceR ? faceR[i] : b.gen ? i === 0 : !anyE);
       const shopCell = VAR ? SHOP_CELLS[Math.floor(hh(bi, 10 + i) * SHOP_CELLS.length)] : 12 + Math.floor(hh(bi, 10 + i) * 3), wcell = e ? shopCell : !VAR ? gcell : front ? fCell : sCell;
-      if (b.f <= 1 && b.h <= 2) { wallQ(g, a[0], a[1], c[0], c[1], 0, top, 0, L / 6, 0, 1, wcell, low, col); }
+      // 第 28 批：長的店面、長的一排住家，每 6 公尺換一家（不然整排都是同一家店）
+      const gWall = (x0, z0, x1, z1, y1, Lw, u1) => {
+        if (!VAR || !(e || front) || Lw < 7) { wallQ(g, x0, z0, x1, z1, 0, y1, 0, u1, 0, 1, wcell, low, col); return; }
+        const k = Math.max(1, Math.round(Lw / 6));
+        for (let j = 0; j < k; j++) { const t0 = j / k, t1 = (j + 1) / k, r = hh(bi, 100 + i * 17 + j), cl = e ? SHOP_CELLS[Math.floor(r * SHOP_CELLS.length)] : r < 0.5 ? fCell : 32 + Math.floor(hh(bi, 140 + i * 17 + j) * 12);
+          wallQ(g, x0 + (x1 - x0) * t0, z0 + (z1 - z0) * t0, x0 + (x1 - x0) * t1, z0 + (z1 - z0) * t1, 0, y1, 0, 1, 0, 1, cl, low, col); }
+      };
+      if (b.f <= 1 && b.h <= 2) gWall(a[0], a[1], c[0], c[1], top, L, L / 6);
       else {
         const gw = VAR && !(e === 2 && b.core) ? top : gh; // 第 28 批：一層樓的房子，一樓的牆直接到屋頂
         // 一樓（騎樓的話退到裡面那條線）
-        wallQ(g, ca[0], ca[1], cc[0], cc[1], 0, gw, 0, Math.max(1, Math.round(Lc / 6)), 0, 1, wcell, low, col);
+        gWall(ca[0], ca[1], cc[0], cc[1], gw, Lc, Math.max(1, Math.round(Lc / 6)));
         // 樓上
         if (top > gw + 0.01) wallQ(g, a[0], a[1], c[0], c[1], gw, top, 0, Math.max(1, Math.round(L / 6)), 0, (top - gw) / 6.4, LISHAN && inPoly(LISHAN, cx, cz) ? 24 : st, col, col);
       }

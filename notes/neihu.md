@@ -119,3 +119,27 @@ Shots from the other tests are in old-scratch/b4-shots/nh-{b1,b3,b4,ci,drift}/.
 - **Most buildings away from the main streets are generated.** OSM has 719 buildings in this export; the rest are filled-in blocks with plausible heights, not real footprints.
 - **The robot's "south on 港墘路" leg starts at 港墘站.** From the east end of 內湖路一段, the shortest route legitimately cuts through side streets, so the test places the car at 港墘站 first.
 - **The streets are flat (y = 0).** Real 內湖 is flat in this area, but the 金面山 slopes are scenery only and cannot be driven.
+
+## 第 28 批（2026-10-23）：每間房子不一樣（`NH_VARIETY`，先關著）＋招牌的字修正
+
+Nick: 「內湖的房子都要不一樣現在都長得一樣 每間房子都長得一樣」. Since 第 18 批 (`NH_MAX_FL = 1`) every Neihu house was a
+1-floor box with the same grey ground-floor cell, so the streets looked identical. Mock (before/after from the real game):
+https://claude.ai/artifact/FcaD5KwCZGwsHKHuXy67cf . **`NH_VARIETY = false` until Nick says OK**; then flip it (trial page v47).
+
+- **Mirrored text fixed (always on, not behind the flag).** Seen from outside, `wallQ`'s `a` end is on the right, so u ran
+  right→left and every facade was mirrored: the shop signs (咖啡, 補習班, 眼鏡…) read backwards in the live game. `wallQ` now
+  puts `u1` at `a` and `u0` at `b`. Everything else on that path is symmetric (windows, glass, tiles).
+- With the flag on (residential styles 0–3, 7, 8, not 麗山國中, not landmarks):
+  - Facade atlas 2048×2048, 64 cells. 32–43: 12 ground-floor house families (wall, door kind/colour, grille, 門牌, meter, pots);
+    26–31 + 44–49: matching side walls; 50–59: 10 more shop cells (20 new shop names, none repeat 12–14); 60/61 red/grey roof
+    tiles; 62 white corrugated; 63 striped awning.
+  - Which wall is the front: the wall whose point 3 m outward is on a road or sidewalk (`mkRoadGrid`); if none, the closest
+    within 8 m; otherwise edge 0 for generated rects. Front = family cell, other walls = side cell; shop edges stay shops.
+  - Long shop / front walls (≥ 7 m) are split every ~6 m, each piece picks its own shop (or family), so a row is not one shop
+    repeated.
+  - Height 0.94–1.10 × 3.6 m; roof colour grey/green/blue-grey; pitched red/grey tile roofs on 14 % of small generated houses;
+    parapets 55 %; rooftop sheds (blue/white) 12 %; water tanks (steel/blue/concrete) 55 %; solar heaters 16 %; shop awnings
+    (striped or one colour) 72 %; wall AC units.
+  - Cost: Neihu triangles 295k → 458k; draw calls unchanged (same 199 meshes). Street views 1.07M → 1.17M triangles
+    (130–252 calls either way). Build time no visible change. Atlas memory +~11 MB.
+- Probe: `src/probe-nh.mjs` (not committed; flips the flag at serve time, renders 11 spots both ways, `ATLAS=1` dumps the atlas).
