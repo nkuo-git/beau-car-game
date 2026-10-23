@@ -60,7 +60,18 @@ neihu.md 第 28 批). Code: `src/look.js` (new). Test: `src/look-test.mjs`.
 
 ## Cost (SwiftShader, 960×576)
 
-See the numbers printed by look-test.mjs (`perf` line). Roughly, highway: 順 ~290 calls / 1.4M tris, 漂亮 ~540 / 2.1M,
-最真實 ~560 / 2.3–2.9M; tower lobby 最真實 ~690 / 3.1M. Shadows are most of the extra calls (the shadow pass draws casters again).
-`frame()` JS averages ~1–3 ms on the test machine while driving (grass cells are the spikes).
+From look-test.mjs (`perf` line), calls / triangles:
+
+| place | 順 | 漂亮 | 最真實 |
+|---|---|---|---|
+| highway | 260 / 1.33M | 499 / 2.35M | 518 / 2.27M |
+| village | | 521 / 2.58M | 540 / 2.68M |
+| mountain top | | 539 / 2.24M | 558 / 2.78M |
+| Neihu | | 456 / 2.14M | 475 / 2.30M |
+| tunnel | | 450 / 1.67M | 469 / 1.95M |
+| tower lobby | | | 603 |
+
+Shadows are most of the extra calls (the shadow pass draws casters again). Mirror pass 94 calls.
+First switch to 最真實 ~1.6 s (textures 0.9 s, trees 0.3 s), done under 「畫面準備中⋯」 when the level is already picked.
+`frame()` JS while driving: 0.23 ms average, ~10 ms worst (grass cells).
 On a weak phone 最真實 can be slow: Nick can pick 漂亮 or 順 in ⋯ → ✨.
