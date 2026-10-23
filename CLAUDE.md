@@ -208,7 +208,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - terrain.js：下坡被地面推出來的時候跟著地面往下（本來速度變 0：陡的下坡會一直彈起來飛）；上坡、平地照舊。
   - 程式：hills.js（第 27 批），village.js、neihu.js、race.src.js、town.src.js、drive.js（`SURF[9]`、`SURF[10]`）、walk.js（`walkable`）、terrain.js。說明在 `notes/hills.md`，測試 hills-test.mjs。
   - 效能：山頂 138 calls／1.03M 三角形、隧道裡 151／1.04M、隧道口 150／1.04M（有車流 156／1.07M）、海邊 115／0.94M、4 號家旁邊的內湖隧道口 177／1.14M；山、海、隧道共 13 個網格、約 6.3 萬三角形。
-- **還沒做、答應 Nick 的（2026-10-23）**：畫面風格（像真的）：範例 https://claude.ai/artifact/4qQroLLTQSbopBgVqoHeHv 還沒選；Nick 問「可以比範例更真實嗎」→ 試做頁 v46 放好以後做第 5 種「最真實」的範例。內湖的房子每間都不一樣（Nick「現在都長得一樣」）→ 先畫幾種給他看。
+- **等 Nick 選的（2026-10-23）**：畫面風格（像真的）：範例 https://claude.ai/artifact/4qQroLLTQSbopBgVqoHeHv 有 5 種（第 5 種「最真實」很重，約 670–870 calls、650–760 萬三角形，要有「畫質」可以選），還沒選。內湖的房子每間都不一樣（Nick「現在都長得一樣」）：做好了但關著（neihu.js `NH_VARIETY = false`，第 28 批，`notes/neihu.md`），範例 https://claude.ai/artifact/FcaD5KwCZGwsHKHuXy67cf ，Nick 說好就打開放試做頁 v47。內湖招牌的字以前是反的，已經修好（不在開關裡）。
 - **已知問題**
   - 內湖的路是平的（真的港墘一帶本來就很平）。
   - 內湖的車流、行人讓第一次出門的載入多約 0.4–0.7 秒（電腦上；npc.js 路網，`NPC.load.graphs`）。
