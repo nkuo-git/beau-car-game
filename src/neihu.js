@@ -19,6 +19,7 @@
 import * as THREE from 'three';
 import { NEIHU_DATA } from './neihu-data.js';
 import { HOME_SITES, homeFront } from './village.js';
+import { TOWER_RAMP } from './tower.js';
 
 // 打包（build-art.mjs、build-app.mjs）：整個包在一個函式裡，只露出下面這些名字
 export const { buildNeihu, neihuFonts, NEIHU_TEXT, NEIHU_KEEP } = (() => {
@@ -424,6 +425,8 @@ function buildNeihu(V, opt = {}) {
   // ==== 山：範圍外面一圈（北邊：越野車場、賽道那邊一道矮山脊，賽車場的草地（x 1250）東邊才是高的金面山；東邊也高；南邊矮；西邊（村子那邊）照聯外道路留一個山谷）====
   // 邊外 12 公尺以內是平的（路、施工欄杆、綠籬）；高度場 hillH(x, z)：範圍裡、邊外 12 公尺 → −0.02（跟地面一樣高）
   const HM = 12;
+  const RING = [BX0 - 600, BZ0 - 850, BX1 + 700, BZ1 + 600], RING_FADE = 320; // 山的格子的範圍（x0, z0, x1, z1）
+  const HOME_K0 = TOWER_RAMP.R1 + 40, HOME_K1 = TOWER_RAMP.R1 + 100;
   const hillH = (x, z) => {
     const ox = x < BX0 ? BX0 - x : x > BX1 ? x - BX1 : 0, oz = z < BZ0 ? BZ0 - z : z > BZ1 ? z - BZ1 : 0; if (ox <= HM && oz <= HM) return -0.02;
     const lx = x - AX, lz = z - AZ, n = Math.sin(lx * 0.0061 + 1.3) * 0.5 + Math.sin(lx * 0.013 + lz * 0.007) * 0.3 + Math.sin(lz * 0.011 - lx * 0.004 + 2) * 0.2; // −1…1
@@ -438,6 +441,8 @@ function buildNeihu(V, opt = {}) {
     if (x > BX1) h = Math.max(h, rise(ox, 150, 230) * (0.8 + 0.35 * n)); // 東
     if (x < BX0) h = Math.max(h, 50 * (0.8 + 0.35 * n) * (1 - Math.exp(-Math.max(0, ox - HM) / 110)) * ss(N.entP[1] + 40, N.entP[1] + 140, z)); // 西：入口南邊才有山（北邊是聯外道路、村子）
     if (x < BX0 + 40 && h > 0) { const L = linkDist(x, z); h *= ss(L.w / 2 + 30, L.w / 2 + 110, L.d); } // 聯外道路的山谷（底是平的：網格 25 公尺，三角形不要戳到路面）
+    h *= ss(0, RING_FADE, x - RING[0]) * ss(0, RING_FADE, RING[2] - x) * ss(0, RING_FADE, z - RING[1]) * ss(0, RING_FADE, RING[3] - z); // 第 27 批：格子的邊慢慢低到 0（外面接 hills.js 的草地、沙灘：開得過去，不是一面斷崖）
+    if (h > 0) for (const q of HOME_SITES) { const d = Math.hypot(x - q.x, z - q.z); if (d < HOME_K1) h *= ss(HOME_K0, HOME_K1, d); } // 第 27 批：家（5 號在入口旁邊）四周是平的（格子 25 公尺：平的範圍要大一點，三角形才不會蓋到斜坡）
     return h - 0.02;
   };
 
@@ -658,27 +663,31 @@ function buildNeihu(V, opt = {}) {
     }
   }
   // 公園、學校、球場、水池⋯（地上的多邊形）
+  const areaOut = (a) => a.P.some((p) => p[0] < RING[0] || p[0] > RING[2] || p[1] < RING[1] || p[1] > RING[3]);
   const AC = { park: col255('#7fa35c'), school: [214, 206, 188], pitch: col255('#5f9a48'), track: col255('#b55a40'), court: col255('#4c8a78'), water: col255('#5b8fbf'), play: col255('#cbb48c'), parking: [150, 152, 156], plaza: [214, 208, 196], site: col255('#a48e6c') };
   const AY = { school: 0.006, park: 0.008, parking: 0.009, plaza: 0.009, site: 0.008, pitch: 0.011, play: 0.011, court: 0.012, track: 0.012, water: 0.013 };
   const LMSKIP = []; // 地標自己畫的那幾塊（碧湖的湖、國小的操場、游泳池⋯）：一般的地面不要再鋪一次（高度差幾公釐會閃）
   for (const L of Object.values(N.lm || {})) for (const [k, P] of Object.entries(L)) { if (k === 'nm' || k === 'sign' || k === 'p' || k === 'bridge') continue; let x = 0, z = 0; for (const q of P) { x += q[0]; z += q[1]; } LMSKIP.push([x / P.length, z / P.length]); }
   for (const a of N.areas.slice().sort((p, q) => (AY[p.t] || 0) - (AY[q.t] || 0))) { let cx = 0, cz = 0; for (const p of a.P) { cx += p[0]; cz += p[1]; } cx /= a.P.length; cz /= a.P.length;
+    if (areaOut(a)) continue; // 第 27 批：跑出山的格子外面的（河濱公園一路到 x −2664）：外面是海，不鋪
     if (LMSKIP.some((q) => Math.hypot(q[0] - cx, q[1] - cz) < 2.5)) continue;
     flatPoly(bank('area', cx, cz, TG), a.P, AY[a.t] || 0.01, 4, AC[a.t] || WHITE); }
 
   // ==== 山的網格：x 西邊 600、東邊 700 公尺外，z 北邊 850、南邊 600 公尺外；格線對齊「邊外 12 公尺」那一圈（裡面不要）；
   //      世界本來的草地上（worldGround）平的格子不畫（草地已經有了），山腳平的點壓低 6 公分（草地蓋過去，不會閃）====
   let hillTris = 0, hillMesh;
+  const RG = { xs: null, zs: null, Y: null }; // 第 27 批：山的格子（高度跟畫出來的三角形一樣：hills.js 拿去當開得上去的地形）
   {
     const S = 25, axis = (a, b, c, d) => { const o = []; const n1 = Math.max(1, Math.round((b - a) / S)); for (let i = 0; i < n1; i++) o.push(a + ((b - a) * i) / n1); const n2 = Math.max(1, Math.round((c - b) / S)); for (let i = 0; i < n2; i++) o.push(b + ((c - b) * i) / n2); const n3 = Math.max(1, Math.round((d - c) / S)); for (let i = 0; i <= n3; i++) o.push(c + ((d - c) * i) / n3); return o; };
-    const xs = axis(BX0 - 600, BX0 - HM, BX1 + HM, BX1 + 700), zs = axis(BZ0 - 850, BZ0 - HM, BZ1 + HM, BZ1 + 600), nI = xs.length, nJ = zs.length;
+    const xs = axis(RING[0], BX0 - HM, BX1 + HM, RING[2]), zs = axis(RING[1], BZ0 - HM, BZ1 + HM, RING[3]), nI = xs.length, nJ = zs.length;
+    RG.xs = Float64Array.from(xs); RG.zs = Float64Array.from(zs); RG.Y = new Float32Array(nI * nJ);
     const g = new Geo(false), R2 = rng(5), G1 = col255('#55703f'), G2 = col255('#6f8a4a'), G3 = col255('#7d8f62'), GF = col255('#8d9a6b');
     const idx = new Int32Array(nI * nJ);
     for (let j = 0; j < nJ; j++) for (let i = 0; i < nI; i++) {
       const x = xs[i], z = zs[j], h = hillH(x, z), t = clamp(h / 220, 0, 1), r = R2(), f = ss(0, 6, h); // 山腳：跟草地一樣的顏色
       const c = [G1[0] + (G3[0] - G1[0]) * t + (G2[0] - G1[0]) * r * 0.5, G1[1] + (G3[1] - G1[1]) * t + (G2[1] - G1[1]) * r * 0.5, G1[2] + (G3[2] - G1[2]) * t];
       const y = h <= 0 && worldGround(x, z) && !inBox(x, z, -HM - 0.5) ? -0.06 : h;
-      g.grow(1, 0); idx[j * nI + i] = g.vert(x, y, z, 0, 0, GF[0] + (c[0] - GF[0]) * f, GF[1] + (c[1] - GF[1]) * f, GF[2] + (c[2] - GF[2]) * f, 0);
+      g.grow(1, 0); idx[j * nI + i] = g.vert(x, y, z, 0, 0, GF[0] + (c[0] - GF[0]) * f, GF[1] + (c[1] - GF[1]) * f, GF[2] + (c[2] - GF[2]) * f, 0); RG.Y[j * nI + i] = y;
     }
     for (let j = 0; j < nJ - 1; j++) for (let i = 0; i < nI - 1; i++) {
       const mx = (xs[i] + xs[i + 1]) / 2, mz = (zs[j] + zs[j + 1]) / 2; if (mx > BX0 - HM && mx < BX1 + HM && mz > BZ0 - HM && mz < BZ1 + HM) continue; // 範圍裡（地面自己鋪）
@@ -688,6 +697,21 @@ function buildNeihu(V, opt = {}) {
     }
     hillMesh = new THREE.Mesh(g.geometry(), mats.hill); hillMesh.name = 'nh-hill'; hillMesh.matrixAutoUpdate = false;
   }
+  // 第 27 批：山的格子的高度、法線（三角形：對角線 00–11，跟上面 g.tri(a, d, c)、g.tri(a, c, b) 一樣）；範圍裡（邊外 12 公尺以內）沒有山：−Infinity
+  const rseg = (a, v) => { let lo = 0, hi = a.length - 2; if (v <= a[0]) return 0; if (v >= a[hi]) return hi; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (a[m] <= v) lo = m; else hi = m - 1; } return lo; };
+  const ringIn = (x, z) => x >= RING[0] && x <= RING[2] && z >= RING[1] && z <= RING[3] && !(x > BX0 - HM && x < BX1 + HM && z > BZ0 - HM && z < BZ1 + HM);
+  const ringAt = (x, z) => {
+    if (!ringIn(x, z)) return -Infinity;
+    const xs = RG.xs, zs = RG.zs, W1 = xs.length, i = rseg(xs, x), j = rseg(zs, z), u = (x - xs[i]) / (xs[i + 1] - xs[i]), v = (z - zs[j]) / (zs[j + 1] - zs[j]), k = j * W1 + i, Y = RG.Y;
+    const h00 = Y[k], h10 = Y[k + 1], h01 = Y[k + W1], h11 = Y[k + W1 + 1];
+    return u >= v ? h00 + u * (h10 - h00) + v * (h11 - h10) : h00 + u * (h11 - h01) + v * (h01 - h00);
+  };
+  const ringN = (x, z, out) => {
+    const xs = RG.xs, zs = RG.zs, W1 = xs.length, i = rseg(xs, x), j = rseg(zs, z), dx = xs[i + 1] - xs[i], dz = zs[j + 1] - zs[j], u = (x - xs[i]) / dx, v = (z - zs[j]) / dz, k = j * W1 + i, Y = RG.Y;
+    const h00 = Y[k], h10 = Y[k + 1], h01 = Y[k + W1], h11 = Y[k + W1 + 1];
+    const gx = (u >= v ? h10 - h00 : h11 - h01) / dx, gz = (u >= v ? h11 - h10 : h01 - h00) / dz, l = Math.sqrt(gx * gx + gz * gz + 1);
+    out[0] = -gx / l; out[1] = 1 / l; out[2] = -gz / l; return out;
+  };
   // 範圍的邊：一圈綠籬（矮）＋碰撞；路開出去的地方空著（施工欄杆擋）、西邊的入口（聯外道路）開口
   {
     const E = N.entP, half = LK.wEnd / 2 + 3, C = [[BX0, BZ0], [BX1, BZ0], [BX1, BZ1], [BX0, BZ1]];
@@ -1048,7 +1072,8 @@ function buildNeihu(V, opt = {}) {
     const R3 = rng(8); let n = 0;
     for (let tries = 0; n < 2600 && tries < 40000; tries++) {
       const x = BX0 - 550 + R3() * (BX1 + 650 - BX0 + 550), z = BZ0 - 800 + R3() * (BZ1 - BZ0 + 1350), d = boxD(x, z); if (d < 16 || R3() > 1.25 - d / 600) continue;
-      const h = hillH(x, z); if (h < 4) continue; addTree(x, h - 0.3, z, 1.8 + R3() * 1.6, true); n++;
+      const h = hillH(x, z); if (h < 4) continue; const s = 1.8 + R3() * 1.6; addTree(x, ringAt(x, z) - 0.3, z, s, true); n++;
+      const c = { t: 'circle', x, z, r: 0.55, h: 4.9 * s, tk: 'hill', ti: treeTiles.get('hill').length / 4 - 1 }; colliders.push(c); treeCols.push(c); // 第 27 批：山開得上去了，樹要擋（怪獸卡車輾得扁）
     }
   }
   const treeMeshes = [];
@@ -1189,7 +1214,7 @@ function buildNeihu(V, opt = {}) {
   function mapBuild() {
     if (mapReady || typeof Path2D === 'undefined') return; mapReady = true;
     for (const b of N.bld) { if (b.back) continue; const t = mt(b.P[0][0], b.P[0][1]); if (!t.bld) t.bld = new Path2D(); b.P.forEach((p, i) => (i ? t.bld.lineTo(p[0], p[1]) : t.bld.moveTo(p[0], p[1]))); t.bld.closePath(); }
-    for (const a of N.areas) { if (a.t !== 'park' && a.t !== 'pitch' && a.t !== 'water') continue; const t = mt(a.P[0][0], a.P[0][1]); const key = a.t === 'water' ? 'water' : 'park'; if (!t[key]) t[key] = new Path2D(); a.P.forEach((p, i) => (i ? t[key].lineTo(p[0], p[1]) : t[key].moveTo(p[0], p[1]))); t[key].closePath(); }
+    for (const a of N.areas) { if ((a.t !== 'park' && a.t !== 'pitch' && a.t !== 'water') || areaOut(a)) continue; const t = mt(a.P[0][0], a.P[0][1]); const key = a.t === 'water' ? 'water' : 'park'; if (!t[key]) t[key] = new Path2D(); a.P.forEach((p, i) => (i ? t[key].lineTo(p[0], p[1]) : t[key].moveTo(p[0], p[1]))); t[key].closePath(); }
     for (const r of N.roads) for (let k = 1; k < r.n.length; k++) { const a = r.n[k - 1], b = r.n[k], t = mt((nx(a) + nx(b)) / 2, (nz(a) + nz(b)) / 2), wk = Math.max(5, Math.round(r.w * 0.95)) + (r.cls <= 2 ? 100 : 0); let p = t.roads.get(wk); if (!p) t.roads.set(wk, (p = new Path2D())); p.moveTo(nx(a), nz(a)); p.lineTo(nx(b), nz(b)); }
   }
   V.mapLive = (g, cx, cz, span) => { // drive.js／walk.js 的小地圖：底圖畫完、路線畫之前叫（g 已經轉成世界座標）
@@ -1268,6 +1293,7 @@ function buildNeihu(V, opt = {}) {
   if (V.info) V.info.neihu = info;
   const P = {
     group, info, inside, update, uncull, place, routeTo, roadName, bigSigns, names: D.names, link: LK, destNode, pathTo: (x, z) => pathTo(x, z, destNode), data: N, hillH, inBox,
+    ringAt, ringN, ringBox: RING.slice(), // 第 27 批：外面那圈山的地形（hills.js 包進 V.heightAt）
     dispose() {
       uncull(); uncarve(); group.removeFromParent(); group.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
       for (const m of Object.values(mats)) m.dispose(); for (const t of [FA.tex, SA.tex, tAsph, tPave, tGround]) t.dispose();

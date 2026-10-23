@@ -266,10 +266,12 @@ function proxyWorld() {
     const y = rampAtY(lx, lz, ref);
     return y == null ? null : GAR.group.position.y + y;
   };
-  W.heightAt = (x, z) => { if (inT(x, z)) return base(); const h = rampH(x, z); return h != null ? h : VIL.heightAt ? VIL.heightAt(x, z) : 0; };
-  W.terrainAt = (x, z) => (inT(x, z) ? base() !== 0 : rampH(x, z) != null || (VIL.terrainAt ? VIL.terrainAt(x, z) : false));
-  W.normalAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? UP : VIL.normalAt ? VIL.normalAt(x, z) : UP);
-  W.surfaceAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? 0 : VIL.surfaceAt(x, z));
+  // 第 27 批：隧道那段（hills.js）：玩家在上面那層（開到山上了）＝山的地面；下面那層（隧道裡）＝VIL 的（路）
+  const HL = VIL.hills, top = (x, z) => !!HL && HL.high && HL.tunAt(x, z) >= 0;
+  W.heightAt = (x, z) => { if (inT(x, z)) return base(); const h = rampH(x, z); return h != null ? h : top(x, z) ? HL.topAt(x, z) : VIL.heightAt ? VIL.heightAt(x, z) : 0; };
+  W.terrainAt = (x, z) => (inT(x, z) ? base() !== 0 : rampH(x, z) != null || top(x, z) || (VIL.terrainAt ? VIL.terrainAt(x, z) : false));
+  W.normalAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? UP : top(x, z) ? HL.topN(x, z) : VIL.normalAt ? VIL.normalAt(x, z) : UP);
+  W.surfaceAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? 0 : top(x, z) ? 1 : VIL.surfaceAt(x, z));
   return W;
 }
 
@@ -284,11 +286,11 @@ async function enterDrive() {
   if (!VIL) {
     enterDrive.busy = true;
     status.hidden = false; msg.textContent = '出門中⋯'; prog.parentElement.hidden = true;
-    await Promise.race([Promise.all([document.fonts.load('700 58px "Noto Sans TC"', '終點').catch(() => {}), villageFonts(), offroadFonts(), circuitFonts(), neihuFonts(), mountainFonts(), orbayFonts()]), new Promise((r) => setTimeout(r, 1600))]);
+    await Promise.race([Promise.all([document.fonts.load('700 58px "Noto Sans TC"', '終點').catch(() => {}), villageFonts(), offroadFonts(), circuitFonts(), neihuFonts(), mountainFonts(), orbayFonts(), hillsFonts()]), new Promise((r) => setTimeout(r, 1600))]);
     await new Promise((r) => setTimeout(r, 30)); // 讓「出門中」先畫出來（蓋村子要一下子，這時候畫面不會動）
     try {
       if (!TR) TR = buildTrack();
-      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMountain(VIL, { renderer }); VIL.wrapHome(); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
+      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
       const L = VIL.places.garage.lot;
       GAR = buildRoom(renderer, { quality: 'low', exterior: true }); // 第 21 批：圓塔（tower.js）；村子裡看得到玻璃、名牌；地板不反射（省）
       GAR.group.position.set(L.x, VIL.places.garage.y || 0, L.z); GAR.group.rotation.y = L.heading; TR.scene.add(GAR.group);
@@ -328,9 +330,11 @@ function townFog(on) {
   if (!FOG0) FOG0 = [f.near, f.far];
   [f.near, f.far] = on ? [150, 1500] : FOG0;
 }
+// 開車、走路另外要擋的：賽道的東西（stripColliders）、賽道兩邊的樹（buildTrack）；第 27 批：隧道的牆／洞口上面的欄杆（hills.js：照玩家在哪一層開關，只有玩家有）
+const meCols = () => [...stripColliders(), ...(TR?.trees || []), ...(VIL?.hills ? VIL.hills.layerCols : [])];
 // 走路的（walk.js）：第一次出門做（村子、你家蓋好以後），之後一直用同一個
 function makeWalker() {
-  walker = createWalker({ scene: TR.scene, camera: dcam, world: PW, colliders: stripColliders(), character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
+  walker = createWalker({ scene: TR.scene, camera: dcam, world: PW, colliders: meCols(), bounds: VIL.hills?.walkBounds, character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
   walker.setGarage(GAR); // 鐵捲門：碰撞跟著門、門口給「開鐵捲門」
   if (NPC) { walker.addColliders(NPC.peds.props.colliders, 'npc-props'); walker.setMovers(NPC.MOV); } // 板凳、椅子；路上的車、居民（npcStep 每一格換）
   makeGuns(); // 第 3 批（b3-int）：槍、「揍」的按鈕、警車和警察擋人、小地圖上的警車
@@ -424,14 +428,14 @@ function makeDrv(pose) {
   const eye = CABIN_VIEW[cur] ? { ...CABIN_VIEW[cur], fov: cabinFov(cur, dcam.aspect) } : undefined;
   dEye = eye;
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
-  drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur) }, world: PW, colliders: stripColliders(), hudParent: stage,
+  drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur) }, world: PW, colliders: meCols(), hudParent: stage,
     onZone: arrive, onShift: () => dvoice?.shift(), onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
     crush: crushFx && offK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
-  drv.setCamCeil((x, z) => { if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75; if (TRAMP.on) return rampCeil(x, z); const c = GAR.ceilingAt(x, z, true); return c < 50 ? GAR.group.position.y + c - 0.75 : Infinity; }); // 第 24 批：開在斜坡上＝上面那一圈的底下 // 第 21 批：圓塔現在這一層的天花板（一樓 4.2、樓上 2.9 公尺） // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
+  drv.setCamCeil((x, z) => { if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75; if (TRAMP.on) return rampCeil(x, z); if (VIL.hills && !VIL.hills.high && VIL.hills.tunAt(x, z) >= 0) return VIL.hills.ceil; const c = GAR.ceilingAt(x, z, true); return c < 50 ? GAR.group.position.y + c - 0.75 : Infinity; }); // 第 27 批：隧道裡面＝拱頂底下 // 第 24 批：開在斜坡上＝上面那一圈的底下 // 第 21 批：圓塔現在這一層的天花板（一樓 4.2、樓上 2.9 公尺） // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
   if (police) drv.setMarkers(police.markers); // 第 3 批（b3-int）：小地圖上的警車
   drv.teleport(pose);
   tripFull = cur; tripPose[cur] = { x: pose.x, z: pose.z, heading: pose.heading, f: floorAt(pose.x, pose.z) }; if (parkShadow) parkShadow.visible = false;
@@ -1469,7 +1473,7 @@ function toRace() {
   stopLiftSnd();
   tripS?.dmg?.clearDebris(); // 掉在村子裡的零件、煙、嘶嘶聲收掉（車子還是凹的）
   drv.release(); // 車子放回原點、不轉、輪子歸零（carSize、putCar 要）
-  DRIVE.on = false; document.body.classList.remove('driving'); bodyWalking(false); driveBar.hidden = true;
+  DRIVE.on = false; document.body.classList.remove('driving'); bodyWalking(false); driveBar.hidden = true; VIL.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
   townFog(false); npcShow(false); police?.setEnabled(false); bodyFlag('wanted', false); // 第 3 批：比賽的時候警察藏起來（星星留著）
   enterRace(); // 賽道已經蓋好了：不用等，這一行就進去了
   if (!RACE.on) resumeDrive(VIL.places.track.spawn, 'garage'); // 進不去（不會發生）：接著開
@@ -1592,7 +1596,7 @@ function leaveDrive() {
   netBorrowEnd('home'); netLendHome(); // 第 19 批：開借來的車回車庫頁＝還車；借給朋友的拿回來
   gvEnd('home'); // 第 23 批：在朋友家：塔搬回你家
   const P = tripPose && TWR ? { mid: padCars(0, null)[0] || null, tower: TWR.slice() } : null; // 第 21 批：坐電梯中的那幾台不在裡面（normPark 再找一格）
-  trip = false; DRIVE.on = false; boarding = null;
+  trip = false; DRIVE.on = false; boarding = null; VIL?.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
   panelClose(); driveBar.hidden = true;
   document.body.classList.remove('driving'); bodyWalking(false);
   dvoice?.dispose(); dvoice = null;
@@ -1800,7 +1804,7 @@ const GS_DESK = { label: '買槍、子彈', icon: 'hand', onClick: () => openDes
 const jailed = () => !!police && (police.state === 'caught' || police.state === 'jail' || police.state === 'release'); // 被抓到、關著、放出來那一下：不能上車下車、開門、用槍
 async function warmPolice() {
   try { await Promise.race([gunShopFonts(VIL.places.gunshop?.name), new Promise((r) => setTimeout(r, 1600))]); } catch (e) { console.error(e); } // 槍店招牌、貼圖上的字
-  police = createPolice({ scene: TR.scene, world: VIL, colliders: stripColliders(), hudParent: stage,
+  police = createPolice({ scene: TR.scene, world: VIL, colliders: [...stripColliders(), ...(TR.trees || [])], hudParent: stage,
     obstacles: NPC ? (x, z, r) => NPC.traffic.colliders(x, z, r) : null, // 路上的車：警車會閃、會撞到
     sound: { ctx: () => engineAudio.context, get out() { return engineAudio.input; }, muted: () => engineAudio.muted, gain: 0.2 }, // 警笛：跟引擎聲同一條總輸出（音量、靜音）
     makePoliceCar, makeOfficer: () => buildCharacter(POLICE_LOOK),
@@ -1888,7 +1892,7 @@ function stationFolks() {
 function makeGuns() {
   if (police) { walker.setMarkers(police.markers); if (!NPC) walker.setMovers(police.movers); }
   try {
-    townWorld = { scene: TR.scene, colliders: [...VIL.colliders, ...stripColliders(), ...garCols(true)], crime: true, name: 'village' };
+    townWorld = { scene: TR.scene, colliders: [...VIL.colliders, ...stripColliders(), ...(TR.trees || []), ...garCols(true)], crime: true, name: 'village' };
     townTargets = [NPC && gunTargets.pedestrians(NPC.peds), NPC && gunTargets.traffic(NPC.traffic), police && gunTargets.police(police), gunTargets.boxes(gunParked, { kind: 'parked' })].filter(Boolean);
     gunner = createGunner({ scene: TR.scene, camera: dcam, renderer, walker, character: walker.character, GAME, hudParent: stage, keyboard: true, world: townWorld, targets: townTargets,
       audio: { muted: () => engineAudio.muted },
@@ -2011,6 +2015,7 @@ function driveStep(dt) {
   GAR.update(dt); // 門、升降機在動（開、關、升、降）每一格都要跟著（停好的時候 onLift 換碰撞）
   OB?.update(dt); // 第 6 批：越野車車庫的鐵捲門
   homeTick(); doorStep(); rampStep(); orbayStep(); elPanelStep(); // 第 17 批：換號碼就把你家搬過去；別人那幾間的外殼、碰撞；第 21 批：電梯的面板
+  hillsStep(dt); // 第 27 批：隧道的哪一層、海的波浪、隧道裡面暗一點、開進深水
   if (drv) {
     drv.update(dt); // 開進賽道、快速道路的事（arrive）在這裡面叫
     if (drv && DRIVE.on) orRace?.update(dt); // 第 4 批：越野賽（drive.update 之後）
@@ -2048,6 +2053,19 @@ function driveStep(dt) {
   netStep(dt); // 一起開車（net.src.js）：朋友的車、人、名字、表情、一起比賽
   mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）
+}
+// ==== 第 27 批：山、隧道、海邊（hills.js）====
+// 玩家多高 → 在隧道的哪一層（開在山上＝上面：山的地面、洞口上面的欄杆擋；隧道裡＝下面：路、隧道的牆擋）；鏡頭在隧道裡面：太陽、天空光暗一點
+// 開進深水（往前開不動）：「前面是海，倒車回去」（出來再進去會再說一次）
+const HLS = { sea: false };
+function hillsStep(dt) {
+  const H = VIL?.hills; if (!H || !DRIVE.on) return;
+  const wk = walker && walker.mode !== 'off' && walker.character, p = wk ? walker.character.group.position : tripS?.car?.position;
+  if (p) H.level(p.y);
+  H.update(dt, indoor ? null : dcam, TR.scene);
+  if (!p || wk || !drv) return;
+  const d = H.depth(p.x, p.z);
+  if (d > 0.4 && !HLS.sea) { HLS.sea = true; drv.toast('前面是海，倒車回去', 2600); } else if (d < 0.1) HLS.sea = false;
 }
 // ==== 大地圖（bigmap.js；Nick 2026-10-10「可以瀏覽完整地圖」「大地圖OK」，草稿 https://claude.ai/artifact/VF5wb2U1PpAnzBRyJsSSW6）====
 // 開車、走路：點右上角的小地圖（下面寫「🗺 大地圖」）→ 大地圖（車子自己慢慢停、走路的人站著）；點地方 →「去這裡」＝目的地（setDest）

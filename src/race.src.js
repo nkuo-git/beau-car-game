@@ -183,19 +183,15 @@ function buildTrack() {
   const NT = 170, cone = new THREE.ConeGeometry(1.6, 5, 7); cone.translate(0, 4.2, 0);
   const trunk = new THREE.CylinderGeometry(0.18, 0.25, 1.8, 6); trunk.translate(0, 0.9, 0);
   const trees = new THREE.InstancedMesh(cone, mat({ color: 0x3f5a32, roughness: 1 }), NT), trunks = new THREE.InstancedMesh(trunk, mat({ color: 0x5a4332, roughness: 1 }), NT);
-  const q = new THREE.Quaternion(), sc = new THREE.Vector3(), pv = new THREE.Vector3();
+  const q = new THREE.Quaternion(), sc = new THREE.Vector3(), pv = new THREE.Vector3(), treeCols = []; // 第 27 批：樹有碰撞（以前開得過去；400 公尺盡頭的牆拿掉以後開得到這裡）
   for (let i = 0; i < NT; i++) {
     const s = i % 2 ? 1 : -1, k = 0.7 + Math.random() * 0.8; let x, z;
     do { x = -55 + Math.random() * (L1 + 80 + 55); z = s * (20 + Math.random() * 50); } while (CIRCUIT_KEEP.some(([a, b, c, d]) => x > a && x < c && z > b && z < d) || NEIHU_KEEP.some(([a, b, c, d]) => x > a && x < c && z > b && z < d)); // 內湖的聯外道路上也不種 // 賽車場的聯外道路上不種
     m4.compose(pv.set(x, 0, z), q, sc.set(k, k * (0.8 + Math.random() * 0.5), k)); trees.setMatrixAt(i, m4); trunks.setMatrixAt(i, m4);
+    treeCols.push({ t: 'circle', x, z, r: 0.3 * k, h: 6 * k, noCrush: true });
   }
   T.add(trees, trunks);
-  const hillMat = mat({ color: 0x7c8a78, roughness: 1 });
-  // 賽車場（circuit.js）：北邊三座本來在 (80, −300)、(420, −330)、(760, −280)，會蓋到賽車場：往北移到賽車場後面
-  // 南邊三座（(200, 365)、(600, 360)、(1000, 330)）拿掉：內湖（neihu.js）搬到越野車場南邊（z 330 以南），那邊是內湖北邊的山脊
-  for (const [x, z, r] of [[120, -940, 150], [560, -960, 170], [1000, -930, 140]]) {
-    const h = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 12), hillMat); h.scale.y = 0.28; h.position.set(x, -r * 0.05, z); T.add(h);
-  }
+  // 遠山：第 27 批起賽車場北邊那三座（半球）在 hills.js（開得上去的山）
   // 車子底下的影子（兩台）
   const shadows = [0, 1].map(() => { const m = new THREE.Mesh(new THREE.PlaneGeometry(4.9, 2.3), new THREE.MeshBasicMaterial({ map: sh.material.map, transparent: true, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.position.y = 0.006; T.add(m); return m; });
   // 氮氣的藍色火焰（車尾中間下面）
@@ -207,7 +203,7 @@ function buildTrack() {
     o.rotation.z = k.rotation.z = Math.PI / 2; o.position.x = -0.55; k.position.x = -0.3; // 尖端朝後
     f.add(o, k); f.visible = false; T.add(f); return f;
   });
-  return { scene: T, bulbs, shadows, flames };
+  return { scene: T, bulbs, shadows, flames, trees: treeCols };
 }
 
 // ---- 比賽狀態 ----

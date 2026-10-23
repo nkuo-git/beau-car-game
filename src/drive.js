@@ -104,9 +104,11 @@ const ease = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 const smooth01 = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const inRect = (r, x, z, m = 0) => { const dx = x - r.x, dz = z - r.z, c = Math.cos(r.rot || 0), s = Math.sin(r.rot || 0); return Math.abs(dx * c - dz * s) <= r.hx + m && Math.abs(dx * s + dz * c) <= r.hz + m; };
 // 路面（world.surfaceAt）：0 大路、1 草地、2 稻田、3 村子的小路、4 快速道路；cap＝限速 m/s、drag＝多的阻力 m/s²、over＝比限速快的時候怎麼慢下來 [每 m/s, 最多 m/s²]
+// （5 泥土路、6 泥巴、7 沙、8 石頭在 terrain.js）；第 27 批：9 淺水（慢慢開）、10 深水（往前開不動，倒車出得來：drag 要比倒車的力 2.8 小）
 const SURF = [{ cap: Infinity, drag: 0 }, { cap: 50 / 3.6, drag: 1, over: [1.6, 6] }, { cap: 16 / 3.6, drag: 2.2, over: [3, 9] }, { cap: Infinity, drag: 0 }, { cap: Infinity, drag: 0 }];
+SURF[9] = { cap: 12 / 3.6, drag: 1.5, over: [3, 9] }; SURF[10] = { cap: 0, drag: 2.0, over: [4, 12] };
 // 第 3 批（甩尾）：路面多好甩（0 大路…8 石頭：草地、稻田、泥土、泥巴、沙比較滑）；sat：軟軟的飽和（輪胎的側向力）
-const SLIDE = [1, 1.5, 1.7, 1, 1, 1.4, 1.6, 1.5, 1.1], sat = (x) => x / Math.sqrt(1 + x * x);
+const SLIDE = [1, 1.5, 1.7, 1, 1, 1.4, 1.6, 1.5, 1.1, 1.6, 1.6], sat = (x) => x / Math.sqrt(1 + x * x);
 const DEST = {
   garage: { label: '回車庫', icon: '家', bg: '#1d1f23', fg: '#FF6A1F' }, shop: { label: '去改車廠', icon: '改', bg: '#2F6FD6', fg: '#FFFFFF' },
   track: { label: '去賽道', icon: '賽', bg: '#FF6A1F', fg: '#1A0F07' }, dealer: { label: '去車店', icon: '車', bg: '#F2C230', fg: '#1A0F07' },
@@ -274,12 +276,13 @@ function colGrid() {
 // ---- 第 3 批（甩尾）：地上的胎痕、輪胎的煙：同一個場景共用一套（換車、下車再上車，地上的胎痕還在）；全部先配好，每幀不 new 東西 ----
 // 胎痕：640 段（一段＝一個四邊形），環狀：滿了蓋掉最舊的；慢慢淡掉（shader 照「畫上去的時間」算，不用每幀改）；這一幀寫的那幾段才上傳
 // 煙：96 團（一個 draw call：instanced 的四邊形永遠面向鏡頭），自己往上飄、變大、淡掉（shader 算）；沒有胎痕、沒有煙的時候整個藏起來（0 個 draw call）
-const SKID = { NS: 640, NP: 96, life: 18, kind: [0, 1, 2, 0, 0, 2, 2, 3, 0], // 路面 → 樣子
+const SKID = { NS: 640, NP: 96, life: 18, kind: [0, 1, 2, 0, 0, 2, 2, 3, 0, 4, 4], // 路面 → 樣子
   look: [ // 胎痕的顏色（線性 rgb＋不透明度）、煙的顏色、煙多大
     { m: [0.03, 0.03, 0.034, 0.55], s: [0.8, 0.8, 0.84, 0.34], z: 1 }, // 柏油：黑黑的胎痕、白煙
     { m: [0.05, 0.08, 0.02, 0.5], s: [0.42, 0.38, 0.26, 0.24], z: 0.85 }, // 草地：深綠的痕、一點點土
     { m: [0.12, 0.075, 0.03, 0.55], s: [0.46, 0.33, 0.2, 0.4], z: 1.15 }, // 稻田、泥土、泥巴：咖啡色的痕、黃土煙
     { m: [0.3, 0.22, 0.12, 0.42], s: [0.66, 0.55, 0.38, 0.38], z: 1.25 }, // 沙
+    { m: [0, 0, 0, 0], s: [0.85, 0.9, 0.95, 0.42], z: 1.3 }, // 第 27 批：水：沒有胎痕、白白的水花
   ] };
 const SKID_FX = new WeakMap();
 function skidFx(scene) {

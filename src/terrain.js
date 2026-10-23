@@ -188,10 +188,10 @@ function createRide(o) {
     if (Math.abs(R.p) > 0.75) { R.p = clamp(R.p, -0.75, 0.75); R.pv = 0; }
     if (Math.abs(R.r) > 0.6) { R.r = clamp(R.r, -0.6, 0.6); R.rv = 0; }
     { // 還壓在地面下面的（傾到最多了、推兩次還不夠）：整台直接抬上來，輪子不會陷進石頭裡、底盤不會穿過地面
-      const sp3 = Math.sin(R.p), sr3 = Math.sin(R.r); let lift = 0;
-      for (let i = 0; i < 4; i++) { const e = G4[i] - (R.y + (X[i] - xc) * sp3 - Z[i] * sr3) - C.up; if (e > lift) lift = e; }
-      for (let j = 0; j < CH.length; j++) { const [x, zz, cl0] = CH[j], e = CG[j] - (R.y + (x - xc) * sp3 - zz * sr3 + cl0); if (e > lift) lift = e; }
-      if (lift > 0) { R.y += lift; if (R.vy < 0) R.vy = 0; }
+      const sp3 = Math.sin(R.p), sr3 = Math.sin(R.r); let lift = 0, lv = 0;
+      for (let i = 0; i < 4; i++) { const e = G4[i] - (R.y + (X[i] - xc) * sp3 - Z[i] * sr3) - C.up; if (e > lift) { lift = e; lv = GD[i]; } }
+      for (let j = 0; j < CH.length; j++) { const [x, zz, cl0] = CH[j], e = CG[j] - (R.y + (x - xc) * sp3 - zz * sr3 + cl0); if (e > lift) { lift = e; lv = CGd[j]; } }
+      if (lift > 0) { R.y += lift; const fl = Math.min(0, lv); if (R.vy < fl) R.vy = fl; } // 第 27 批：下坡的時候跟著地面往下（本來停在 0：陡的下坡會一直彈起來飛出去）
     }
     nW = nw; nC = nc;
     // 4) 飛、落地

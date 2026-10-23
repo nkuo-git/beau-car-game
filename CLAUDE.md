@@ -3,7 +3,7 @@
 ## 這是什麼
 - 一個 3D 改車開放世界遊戲（three.js 0.186.1，沒有框架），玩家是 Nick，在 Android 手機上玩。
 - 家＝圓形玻璃塔車庫（內容 16 起；以前是白色大理石車庫）：換車色、輪框、套件、寬體、尾翼、引擎零件、輪胎；1 樓大廳＋電梯，2–4 樓＋地下室 B1、B2 停 37 台（內容 18 起：外面一圈繞圈斜坡開上 2–4 樓，地下室只能坐電梯）；下車走路、自訂角色；開車出門到小村莊（台灣小鎮）。17 台車＋怪獸卡車。
-- 地點：阿輝改車廠（零件、修車）、阿財車行（買車）、大便龍賽車場（繞圈賽、AI 對手）、400 公尺直線加速、快速道路、越野車場（粉紅怪獸卡車、越野車行、泥巴賽）、越野車車庫、內湖（OpenStreetMap 1:1，七個真的地標）、山（之字形山路、山頂涼亭、爬山計時賽）、警察局（通緝星星、追捕、拘留室）、槍店＋靶場、可以進去的透天厝、路上的車和行人、甩尾、怪獸卡車輾扁東西。
+- 地點：阿輝改車廠（零件、修車）、阿財車行（買車）、大便龍賽車場（繞圈賽、AI 對手）、400 公尺直線加速、快速道路、越野車場（粉紅怪獸卡車、越野車行、泥巴賽）、越野車車庫、內湖（OpenStreetMap 1:1，七個真的地標）、山（之字形山路、山頂涼亭、爬山計時賽）、其他的山都開得上去＋兩個隧道＋地圖最外面一圈沙灘和海（試做頁 v46，還沒上線）、警察局（通緝星星、追捕、拘留室）、槍店＋靶場、可以進去的透天厝、路上的車和行人、甩尾、怪獸卡車輾扁東西。
 - 以前是「大便龍的萬能軟體」（repo nkuo-git/carid-pwa）裡「汽車 → 改車」那一頁（tune.html）。2026-10-09 搬出來變成自己的網站＋自己的 APK：
   - 網站（GitHub Pages，main 的 `docs/`）：https://nkuo-git.github.io/beau-car-game/
   - APK：GitHub Releases（tag `apk-N`，檔名 `beau-car-game-N.apk`）
@@ -33,7 +33,7 @@
 src/                 遊戲原始碼（平的一層，腳本都用自己的資料夾找檔案）
   garage.src.html    車庫頁（畫面＋主程式；<!--__GARAGE__--> 框起來的是畫面）、garage.css
   town.src.js race.src.js circuit.src.js neihu.src.js   接在頁面 module 裡的程式（出門、比賽、賽車場、內湖）
-  *.js               模組（village street police npc walk drive terrain offroad circuit neihu mountain orbay crush police-ai guns gunshop character lookpanel tower popup cabin damage carlod ghost …；room.js、ringgar.js 是舊的，沒有打包）
+  *.js               模組（village street police npc walk drive terrain offroad circuit neihu mountain hills orbay crush police-ai guns gunshop character lookpanel tower popup cabin damage carlod ghost …；room.js、ringgar.js 是舊的，沒有打包）
   bigmap.js          大地圖（點小地圖打開：拖、放大、點地方「去這裡」）；town.src.js 的 mapStep 接小地圖（比賽：看整個賽道、對手號碼點）
   ghost.src.js       鬼影車排行榜：錄爬山／賽車場一圈／400 公尺、發 'beau-run'、window.beauGame.setGhost（接在 neihu.src.js 後面）
   net.src.js         一起開車／一起比賽／參觀車庫的遊戲那一邊：朋友的車和人、名字牌、表情、地圖上的點、一起比賽、參觀車庫畫面（window.beauGame.net／visit；接在 ghost.src.js 後面）
@@ -68,7 +68,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 ## 版本號
 - 標題旁：`0.<APK 版號>.<內容版號>`。APK 版號＝「編 APK」workflow 的 run number（Release `apk-N`），網頁版（不在 App 裡）是 0。內容版號＝`docs/version.json`。
 - 內容 1 ＝ 跟萬能軟體 0.9.37／內容 38 一樣的遊戲（main 第一次）。
-- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4；v29 ＝ 內容 5）；下一個試做頁是 v46（v45 ＝ 內容 18 試做：地下室 B1、B2＋駕駛座後照鏡照得到後面；v44 ＝ 內容 18 試做：圓塔外面的繞圈斜坡；v43 ＝ 內容 17 試做：按門鈴開進朋友的車庫；v42 ＝ 內容 17 試做：3 號家開得出去、撞朋友的警車、拘留室、朋友的車；v40＋v41 ＝ 內容 16：v40 ＝ 10 台新車＋駕駛座＋四層圓環車庫（沒上線，換成 v41）；v41 ＝ 圓塔的家＋6 個家＋跳燈＋轉手機開車（Nick「做好直接弄上手機」，沒有先試）；v39 ＝ 借朋友的車＝內容 15（Nick「做完直接上線」，沒有先試）；v37＋v38 ＝ 內容 14：v38 ＝ 透天厝全部 1 層＋大停車場；v37 ＝ 第一人稱方向盤會轉（打到底 90 度、中間紅條）；v36 ＝ 順順開出車庫：你家蓋在車庫街你那間、固定號碼＝內容 13；v35 ＝ 自己的車庫＋轉速表＋看到朋友被警察追／抓＋一個帳號一支手機；v34 ＝ 甩尾滑短一點；v33 ＝ 關 10 分鐘＋大家的世界＋車庫街＝內容 11；v32 ＝ 400 公尺再比一次看得到對手；v30 ＝ 撞前車不會整台停住；v31 ＝ 大地圖；v30＋v31 ＝ 內容 7）。
+- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4；v29 ＝ 內容 5）；下一個試做頁是 v47（v46 ＝ 內容 19 試做：每座山都開得上去、兩個隧道、拿掉看不到的牆、地圖最外面一圈沙灘和海；v45 ＝ 內容 18 試做：地下室 B1、B2＋駕駛座後照鏡照得到後面；v44 ＝ 內容 18 試做：圓塔外面的繞圈斜坡；v43 ＝ 內容 17 試做：按門鈴開進朋友的車庫；v42 ＝ 內容 17 試做：3 號家開得出去、撞朋友的警車、拘留室、朋友的車；v40＋v41 ＝ 內容 16：v40 ＝ 10 台新車＋駕駛座＋四層圓環車庫（沒上線，換成 v41）；v41 ＝ 圓塔的家＋6 個家＋跳燈＋轉手機開車（Nick「做好直接弄上手機」，沒有先試）；v39 ＝ 借朋友的車＝內容 15（Nick「做完直接上線」，沒有先試）；v37＋v38 ＝ 內容 14：v38 ＝ 透天厝全部 1 層＋大停車場；v37 ＝ 第一人稱方向盤會轉（打到底 90 度、中間紅條）；v36 ＝ 順順開出車庫：你家蓋在車庫街你那間、固定號碼＝內容 13；v35 ＝ 自己的車庫＋轉速表＋看到朋友被警察追／抓＋一個帳號一支手機；v34 ＝ 甩尾滑短一點；v33 ＝ 關 10 分鐘＋大家的世界＋車庫街＝內容 11；v32 ＝ 400 公尺再比一次看得到對手；v30 ＝ 撞前車不會整台停住；v31 ＝ 大地圖；v30＋v31 ＝ 內容 7）。
 
 ## 試做頁（artifact）
 - https://claude.ai/artifact/29pHoiqGVBs34ERLnJ9T8s（Nick 的；新的專案第一次發佈前要先用 Artifact 的 `read` 讀它，才能更新同一個網址）。
@@ -98,6 +98,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `node bump-test.mjs` | 撞到會動的車（比賽的對手）：追撞掉到差不多前車的速度、前車被推快、撞牆照舊、擦到旁邊（Node，一秒） | 7 ok |
 | `node crush-test.mjs ../out/crush/crush` | 怪獸卡車輾扁車、騎的機車和路邊的東西、人跳開、輾扁的東西長回來 | 57 ok |
 | `node mountain-test.mjs ../out/mt/mt` | 山：去山頂、爬山計時賽、上山下山貼著路、山頂走路、越野車捷徑、輾扁山上的東西、警察追上山、爬山的鬼影車 | 42 ok |
+| `node hills-test.mjs ../out/hills/hl` | 山、隧道、海邊（hills.js）：24 座山、2 個隧道、沒有看不到的牆、網格＝高度（含內湖外面的山）、不超過 35°、6 個家／快速道路／往內湖的路是平的、路面（沙、淺水、深水）；GC8 開上山再開下山（不會彈起來）、穿過兩個隧道（平的、鏡頭不出隧道頂、裡面變暗）、開過隧道上面（上面那層、下面的護欄不擋、洞口欄杆擋住）、開進海裡停住再倒車出來、走路走不進深水、400 公尺後面的沙地、從村子往南往北開出去、draw calls | 39 ok，ALL CHECKS OK（約 2 分；試做頁 v46 起） |
 | `node free-test.mjs` | 試做頁錢用不完、正常頁存檔的錢 | 2 ok（先跑 make-free.mjs） |
 | `node test-app-b1.mjs ../docs ../out/app1/app` | 網站（docs/）整趟：跟 test-b1 一樣（圓塔、電梯、方向盤、一層樓、停車場也有）＋版本號、標題列、App 外殼的全螢幕；沒全螢幕在電梯上（開車、走路）：面板不壓到別的按鈕（網站的畫面只有 426 寬） | 151 ok（試玩頁 docs/try 標題寫「試玩」，版本號那一項會不過） |
 | `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場（跟 test-b4 一樣，含怪獸卡車不能坐電梯） | 80 ok |
@@ -200,6 +201,14 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
     - **地下室**（Nick「看可以的話加在地下室然後地下室有幾樓樓上就剪掉幾樓」；草稿 https://claude.ai/artifact/36fLvpmhQmAd2LCwaaeBH2 ，Nick 選「坐電梯」）：樓上剩 2F–4F（斜坡到 4F），多 B1、B2（只能坐電梯；走路也可以、朋友家也可以；怪獸卡車照舊不行）。37 格（2F 6、3F 7、4F 7、B1 8、B2 8）。樓層號碼不變：原本的 5F＝B1、6F＝B2（舊存檔停 5F、6F 的車自己變成在地下室）。電梯面板：上面 2F 3F 4F、下面 B2 B1 1F（地下室藍色）。水泥牆、天花板燈、藍色格子、牆上 B1／B2 牌。草地在電梯井挖洞：renderer `stencil: true`＋tower.js `towerHole`＋town.src.js `shaftCut`。tower.js `TOWER.NU`、`towerUp`／`towerUnder`／`towerFlName`／`towerFlTxt`（第 26 批）。說明在 `notes/tower.md`。
     - **後照鏡**（Nick「第一人稱駕駛的時候 後照鏡要真的顯示後方景色 有車子也要顯示出來 且會跟著開車方向移動」）：駕駛座視角的時候，車內後照鏡＋左右照後鏡照出後面真的路和車（往後看的相機三格畫一次；town.src.js `MIR`、cabin.js `userData.mirror`，第 25 批）。說明在 `notes/cars.md`。
     - 效能：地下室 B1 224 calls／1.40M 三角形、坐電梯下去 192／1.26M、一樓電梯面板 208／1.26M；後照鏡多一次約 90 calls／0.4M（三格一次，只有駕駛座視角）。
+- **試做頁 v46（2026-10-23，還沒上線）＝ 山、隧道、海邊**：Nick「每座山都可開／要有隧道／往內湖的那個車庫會被山擋住／不要空氣屏障」，草稿 https://claude.ai/artifact/NZ8YUwjuVLyJ4EPExuh7YZ ，地圖的邊 Nick 選「海邊」。
+  - 以前畫上去、會穿過去的山（village.js `hill()`、race.src.js 賽車場北邊的半球）全部變成真的地形：hills.js `HILL_LIST` 24 座（最陡約 34°，GC8 開得上去），山上的樹有碰撞；4 號家旁邊那座搬走；6 個家四周是平的（`homeKeep`）。內湖外面那圈山（neihu.js `ringAt`）也開得上去。
+  - 隧道：快速道路隧道（西邊直線 x −1030，雙孔，156 公尺）、內湖隧道（往內湖的路 x −112，59 公尺）。隧道那段兩層：只有玩家（town.src.js `proxyWorld`、`hillsStep` → `HL.level(y)`）；車流、警察、路人永遠走路面。鏡頭在隧道裡變暗、鏡頭不出隧道頂。
+  - 拿掉看不到的牆：村子南北邊、400 公尺盡頭（後面是沙地，慢下來）。地圖最外面一圈：沙灘＋海（7 沙、9 淺水、10 深水開不動，倒車出得來；「前面是海，倒車回去」；走路走不進深水）。
+  - terrain.js：下坡被地面推出來的時候跟著地面往下（本來速度變 0：陡的下坡會一直彈起來飛）；上坡、平地照舊。
+  - 程式：hills.js（第 27 批），village.js、neihu.js、race.src.js、town.src.js、drive.js（`SURF[9]`、`SURF[10]`）、walk.js（`walkable`）、terrain.js。說明在 `notes/hills.md`，測試 hills-test.mjs。
+  - 效能：山頂 138 calls／1.03M 三角形、隧道裡 151／1.04M、隧道口 150／1.04M（有車流 156／1.07M）、海邊 115／0.94M、4 號家旁邊的內湖隧道口 177／1.14M；山、海、隧道共 13 個網格、約 6.3 萬三角形。
+- **還沒做、答應 Nick 的（2026-10-23）**：畫面風格（像真的）：範例 https://claude.ai/artifact/4qQroLLTQSbopBgVqoHeHv 還沒選；Nick 問「可以比範例更真實嗎」→ 試做頁 v46 放好以後做第 5 種「最真實」的範例。內湖的房子每間都不一樣（Nick「現在都長得一樣」）→ 先畫幾種給他看。
 - **已知問題**
   - 內湖的路是平的（真的港墘一帶本來就很平）。
   - 內湖的車流、行人讓第一次出門的載入多約 0.4–0.7 秒（電腦上；npc.js 路網，`NPC.load.graphs`）。
@@ -208,4 +217,4 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - **價錢（萬，新台幣）**：GC8 75（一開始就有）、YARIS 130、SUPRA 200、GT-R 400、918 3000、SP3 6000、JESKO 7500；內容 16 新的：小黃 45、86 75、R7 100、E9 100、FK 115、AV12 1200、SN8 1500、HY 4500、LF 5000、C16 8000（阿財車行）；怪獸卡車 100（越野車行）。槍：手槍 3、衝鋒槍 12、霰彈槍 18、步槍 30；靶場第一次全中每把槍 2 萬。泥巴賽獎金 20／80／300。被抓罰款每顆星 2 萬。零件、輪胎的價錢在 garage.src.html 的 `PERF`。
 
 ## 筆記（notes/）
-以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）、mountain（山）、online（鬼影排行榜）、room（房間、一起開車、一起比賽、參觀車庫；內容 11 起換成 world）、world（大家的世界、找人比賽、車庫街）、bigmap（大地圖、撞前車）、tower（圓形玻璃塔車庫、電梯、6 個家；內容 16）、cars（10 台新車、駕駛座、跳燈、轉手機開車；內容 16）、fixes（已知問題 5–12 的修法：越野車車庫、輾扁長回來、電線、內湖車流行人、橫拿手機的按鈕）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。
+以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）、mountain（山）、hills（其他的山、隧道、海邊；試做頁 v46）、online（鬼影排行榜）、room（房間、一起開車、一起比賽、參觀車庫；內容 11 起換成 world）、world（大家的世界、找人比賽、車庫街）、bigmap（大地圖、撞前車）、tower（圓形玻璃塔車庫、電梯、6 個家；內容 16）、cars（10 台新車、駕駛座、跳燈、轉手機開車；內容 16）、fixes（已知問題 5–12 的修法：越野車車庫、輾扁長回來、電線、內湖車流行人、橫拿手機的按鈕）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。

@@ -366,6 +366,7 @@ function createWalker(o) {
     for (let i = 0; i < n; i++) {
       const px = st.x, pz = st.z; st.x += st.vx * h; st.z += st.vz * h;
       if (!collide() && freeAt(px, pz, R - 0.004, true)) { st.x = px; st.z = pz; st.vx *= 0.5; st.vz *= 0.5; break; }
+      if (world.walkable && !world.walkable(st.x, st.z) && world.walkable(px, pz)) { st.x = px; st.z = pz; st.vx = st.vz = 0; break; } // 第 27 批：海裡太深走不進去（hills.js）
     }
     st.x = clamp(st.x, wb.x0, wb.x1); st.z = clamp(st.z, wb.z0, wb.z1);
     st.speed = Math.hypot(st.x - x0, st.z - z0) / dt;
