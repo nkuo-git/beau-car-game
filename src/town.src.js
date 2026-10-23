@@ -71,6 +71,7 @@ const SPAWN = { x: 3.6, z: -5.4, heading: Math.atan2(-5.4, -3.6) }; // 出門的
 let meChar = null; // 你自己（character.js）：第一次出門在「出門中⋯」的時候先做好（第一個人會先畫大家共用的貼圖，手機 0.1～0.5 秒）；樣子＝GAME.look（自訂角色）
 let NPC = null; // 路上的人和車（npc.js）：第一次出門做好就留著（回車庫頁藏起來、停住）；做不出來就沒有（不擋出門）
 let crushFx = null, junkVer = -1; // 第 7 批（輾扁，crush.js）：怪獸卡車開上去把東西壓扁；junkVer＝表演場的垃圾車碰撞換過幾次
+let LOOK = null; // 第 29 批：畫質（look.js）：順／漂亮／最真實；第一次出門做好（村子蓋好以後）
 let police = null, gunner = null; // 第 3 批（b3-int）：警察（police-ai.js：第一次出門的載入畫面做好就留著）、槍（guns.js：做走路的時候一起做）
 let PI = null, PSC = null; // 警察局一樓裡面（police.js 的 buildPoliceInterior，載入畫面蓋好一直留著：拘留室的鐵門跟著警察開關）、它自己的場景
 let GS = null, GSC = null, gsDesk = null, gsFov = 60; // 槍店裡面（gunshop.js：第一次走進去才蓋，蓋好留著）、它自己的場景、櫃台的買槍畫面、打開前的視角
@@ -319,6 +320,12 @@ async function enterDrive() {
     msg.textContent = '警察局、槍店準備中⋯';
     await new Promise((r) => setTimeout(r, 30));
     try { await warmPolice(); } catch (e) { console.error(e); }
+    // 第 29 批（Nick 2026-10-23「就用5號的真實度」）：畫質；第一次「漂亮／最真實」要先找樹冠、畫材質貼圖、編 shader（在這裡做，開出去不會頓）
+    try {
+      LOOK = createLook({ renderer, scene: TR.scene, world: VIL, getCar: lookCar, plain: () => GAR?.group || null, indoor: (c) => !!GAR && !!TWR && inTower(c.position.x, c.position.z) });
+      const lv = lookPref(); lookBtns(lv);
+      if (lv > 0) { msg.textContent = '畫面準備中⋯'; await new Promise((r) => setTimeout(r, 30)); await lookSet(lv, false); renderer.compile(TR.scene, dcam); }
+    } catch (e) { console.error(e); }
     enterDrive.busy = false; status.hidden = true;
   }
   startDrive();
@@ -464,7 +471,7 @@ destBtns.forEach((b) => b.addEventListener('click', () => { if (DRIVE.on) setDes
 const FOLD = { destsopen: -1, moreopen: -1 };
 const foldStart = () => { const t = drv && DRIVE.on ? drv.telemetry() : null; return t && Math.abs(t.v) > 4 ? 8 : -1; };
 function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.destsopen = foldStart(); }
-function moreOpen(on) { if (!on) { sizeOpen(false); tiltOpen(false); } if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
+function moreOpen(on) { if (!on) { sizeOpen(false); tiltOpen(false); lookOpen(false); } if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
 // 按鈕大小（Nick 2026-10-10）：小 0.8、中 1（原本的）、大 1.15；每支手機自己記（carid.btnsize，不用搬家、不上雲端）
 const BTN_Z = { s: 0.8, m: 1, l: 1.15 }, BTN_KEY = 'carid.btnsize';
 // 「大」只放大到排得下：直拿看寬（390 寬剛好排滿＝1 倍）、橫拿看高（340 高＝1 倍）；小螢幕（或手機「顯示大小」調大）上「大」＝「中」
@@ -478,7 +485,7 @@ function btnSize(k, keep) {
   for (const b of document.querySelectorAll('#sizePop button')) b.setAttribute('aria-pressed', String(b.dataset.z === k));
   if (keep) try { localStorage.setItem(BTN_KEY, k); } catch {}
 }
-function sizeOpen(on) { if (on) tiltOpen(false); if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function sizeOpen(on) { if (on) { tiltOpen(false); lookOpen(false); } if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 try { btnSize(localStorage.getItem(BTN_KEY)); } catch { btnSize('m'); }
 $('sizeTog').addEventListener('click', () => sizeOpen(true));
 for (const b of document.querySelectorAll('#sizePop button')) b.addEventListener('click', () => { btnSize(b.dataset.z, true); sizeOpen(false); });
@@ -493,13 +500,35 @@ function tiltMode(k, keep) {
   if (keep) try { localStorage.setItem(TILT_KEY, tiltK); } catch {}
   if (drv) drv.setTilt(tiltK === 'tilt', tiltFail);
 }
-function tiltOpen(on) { if (on) sizeOpen(false); if (bodyFlags.tiltopen === on) return; bodyFlag('tiltopen', on); $('tiltTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function tiltOpen(on) { if (on) { sizeOpen(false); lookOpen(false); } if (bodyFlags.tiltopen === on) return; bodyFlag('tiltopen', on); $('tiltTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 try { tiltMode(localStorage.getItem(TILT_KEY)); } catch { tiltMode('btn'); }
 $('tiltTog').addEventListener('click', () => tiltOpen(true));
 for (const b of document.querySelectorAll('#tiltPop button')) b.addEventListener('click', () => {
   const k = b.dataset.t, ask = k === 'tilt' && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'; // iPhone：要先問可不可以用
   tiltOpen(false);
   if (ask) DeviceMotionEvent.requestPermission().then((r) => tiltMode(r === 'granted' ? 'tilt' : 'btn', true), tiltFail); else tiltMode(k, true);
+});
+// 畫質（第 29 批，Nick 2026-10-23「就用5號的真實度」）：「⋯」那一排多一顆「✨」（🎮 左邊）→「畫質 最真實／漂亮／順」（look.js）；
+//   每支手機自己記（carid.look，跟按鈕大小一樣不用搬家、不上雲端）；沒選過：電腦模擬的（測試）＝順，畫得了半精度＝最真實，不然＝漂亮
+const LOOK_KEY = 'carid.look';
+const lookCar = () => ((DRIVE.on || RACE.on) && tripS?.car) || (RACE.on && S?.car) || null; // 車漆反射天空（最真實）：現在開的這台
+function lookPref() { let v = null; try { v = localStorage.getItem(LOOK_KEY); } catch {} return v === '0' || v === '1' || v === '2' ? +v : LOOK ? LOOK.pref : 0; }
+function lookBtns(lv) { for (const b of document.querySelectorAll('#lookPop button')) b.setAttribute('aria-pressed', String(+b.dataset.l === lv)); }
+async function lookSet(lv, tell) {
+  if (!LOOK) return;
+  crushFx?.restoreAll(); // 壓扁的樹先長回來（樹冠的三角形換來換去，頂點原本的位置要對）
+  if (tell && lv === 2 && LOOK.level !== 2) gtoast('畫質：最真實（準備中⋯）', 2400);
+  const got = await LOOK.set(lv);
+  lookBtns(got); if (MIR.on) mirrorSet(true); // 後照鏡的圖換精度
+  if (tell) gtoast('畫質：' + LOOK_NAMES[got], 1400);
+}
+function lookOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); } if (bodyFlags.lookopen === on) return; bodyFlag('lookopen', on); $('lookTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+lookBtns(lookPref());
+$('lookTog').addEventListener('click', () => lookOpen(true));
+for (const b of document.querySelectorAll('#lookPop button')) b.addEventListener('click', () => {
+  const lv = +b.dataset.l; lookOpen(false); lookBtns(lv);
+  try { localStorage.setItem(LOOK_KEY, String(lv)); } catch {}
+  lookSet(lv, true);
 });
 // 跳燈（Nick 2026-10-17，草稿 https://claude.ai/artifact/NjStMe4AhSWuk9dBUELzde；popup.js）：86、R7 開車的時候「手煞車」旁邊多一顆「跳燈」（drive.js setPop）
 //   按一下燈蓋立起來、燈亮；再按一下收回去。每台車記在存檔 GAME.pop（{車: 1}）；借來的車不記（下次借又是關著的）。朋友看得到（netState 的 pl）
@@ -1780,6 +1809,7 @@ function makeCrush() {
     toast: (text) => { if (drv && DRIVE.on) drv.toast(text, 2000); },
     crime: (x, z) => { CRUSH_POS.x = x; CRUSH_POS.z = z; police?.crime('crush', CRUSH_POS); }, // 村子裡輾東西＝1★（越野車場裡面 crush.js 不叫）
     any: () => offK(cur), protect: crushSafe, // 第 9 批：越野車什麼都輾；輾不到的地方
+    treeK: (j, k) => LOOK?.treeK(j, k), // 第 29 批：畫質的樹葉卡片跟著扁
     copWreck: (i, x, z) => (police && police.wreck ? police.wreck(i, x, z) : null), // 第 9 批：警車扁掉、警察下車跑掉、+2★（police-ai.js）
   });
 }
@@ -2153,10 +2183,12 @@ function mirrorSet(on) {
   for (const e of MIR.list) { e.o.material = e.mat; if (e.cab) e.o.visible = false; } // 換回原本的
   MIR.list.length = 0; MIR.on = false; MIR.S = null;
   const S = tripS; if (!on || !S?.body) return;
+  const ty = LOOK?.level > 0 && LOOK.half ? THREE.HalfFloatType : THREE.UnsignedByteType; // 第 29 批：畫質「漂亮」「最真實」用半精度（太陽比較亮，畫到這裡不會白掉）
+  if (MIR.rt && MIR.rt.texture.type !== ty) { MIR.rt.dispose(); MIR.rt = null; }
   if (!MIR.rt) {
-    MIR.rt = new THREE.WebGLRenderTarget(MIR_W, MIR_H, { depthBuffer: true });
-    MIR.cam = new THREE.PerspectiveCamera((2 * Math.atan(MIR_TV) * 180) / Math.PI, MIR_W / MIR_H, 0.3, 200);
-    MIR.mat = new THREE.MeshBasicMaterial({ map: MIR.rt.texture, side: THREE.DoubleSide, fog: false });
+    MIR.rt = new THREE.WebGLRenderTarget(MIR_W, MIR_H, { depthBuffer: true, type: ty });
+    if (!MIR.cam) MIR.cam = new THREE.PerspectiveCamera((2 * Math.atan(MIR_TV) * 180) / Math.PI, MIR_W / MIR_H, 0.3, 200);
+    if (!MIR.mat) MIR.mat = new THREE.MeshBasicMaterial({ map: MIR.rt.texture, side: THREE.DoubleSide, fog: false }); else MIR.mat.map = MIR.rt.texture;
   }
   S.body.updateMatrixWorld(true);
   const cm = S.cabin?.userData.mirror;

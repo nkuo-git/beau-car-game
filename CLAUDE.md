@@ -33,7 +33,7 @@
 src/                 遊戲原始碼（平的一層，腳本都用自己的資料夾找檔案）
   garage.src.html    車庫頁（畫面＋主程式；<!--__GARAGE__--> 框起來的是畫面）、garage.css
   town.src.js race.src.js circuit.src.js neihu.src.js   接在頁面 module 裡的程式（出門、比賽、賽車場、內湖）
-  *.js               模組（village street police npc walk drive terrain offroad circuit neihu mountain hills orbay crush police-ai guns gunshop character lookpanel tower popup cabin damage carlod ghost …；room.js、ringgar.js 是舊的，沒有打包）
+  *.js               模組（village street police npc walk drive terrain offroad circuit neihu mountain hills orbay crush police-ai guns gunshop character lookpanel tower popup cabin damage carlod ghost look …；room.js、ringgar.js 是舊的，沒有打包）
   bigmap.js          大地圖（點小地圖打開：拖、放大、點地方「去這裡」）；town.src.js 的 mapStep 接小地圖（比賽：看整個賽道、對手號碼點）
   ghost.src.js       鬼影車排行榜：錄爬山／賽車場一圈／400 公尺、發 'beau-run'、window.beauGame.setGhost（接在 neihu.src.js 後面）
   net.src.js         一起開車／一起比賽／參觀車庫的遊戲那一邊：朋友的車和人、名字牌、表情、地圖上的點、一起比賽、參觀車庫畫面（window.beauGame.net／visit；接在 ghost.src.js 後面）
@@ -68,7 +68,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 ## 版本號
 - 標題旁：`0.<APK 版號>.<內容版號>`。APK 版號＝「編 APK」workflow 的 run number（Release `apk-N`），網頁版（不在 App 裡）是 0。內容版號＝`docs/version.json`。
 - 內容 1 ＝ 跟萬能軟體 0.9.37／內容 38 一樣的遊戲（main 第一次）。
-- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4；v29 ＝ 內容 5）；下一個試做頁是 v47（v46 ＝ 內容 19 試做：每座山都開得上去、兩個隧道、拿掉看不到的牆、地圖最外面一圈沙灘和海；v45 ＝ 內容 18 試做：地下室 B1、B2＋駕駛座後照鏡照得到後面；v44 ＝ 內容 18 試做：圓塔外面的繞圈斜坡；v43 ＝ 內容 17 試做：按門鈴開進朋友的車庫；v42 ＝ 內容 17 試做：3 號家開得出去、撞朋友的警車、拘留室、朋友的車；v40＋v41 ＝ 內容 16：v40 ＝ 10 台新車＋駕駛座＋四層圓環車庫（沒上線，換成 v41）；v41 ＝ 圓塔的家＋6 個家＋跳燈＋轉手機開車（Nick「做好直接弄上手機」，沒有先試）；v39 ＝ 借朋友的車＝內容 15（Nick「做完直接上線」，沒有先試）；v37＋v38 ＝ 內容 14：v38 ＝ 透天厝全部 1 層＋大停車場；v37 ＝ 第一人稱方向盤會轉（打到底 90 度、中間紅條）；v36 ＝ 順順開出車庫：你家蓋在車庫街你那間、固定號碼＝內容 13；v35 ＝ 自己的車庫＋轉速表＋看到朋友被警察追／抓＋一個帳號一支手機；v34 ＝ 甩尾滑短一點；v33 ＝ 關 10 分鐘＋大家的世界＋車庫街＝內容 11；v32 ＝ 400 公尺再比一次看得到對手；v30 ＝ 撞前車不會整台停住；v31 ＝ 大地圖；v30＋v31 ＝ 內容 7）。
+- 試做頁有自己的版本（v27 ＝ 內容 2；v28 ＝ 內容 4；v29 ＝ 內容 5）；下一個試做頁是 v48（v47 ＝ 內容 19 試做：畫質（最真實／漂亮／順）＋內湖的房子每間都不一樣；v46 ＝ 內容 19 試做：每座山都開得上去、兩個隧道、拿掉看不到的牆、地圖最外面一圈沙灘和海；v45 ＝ 內容 18 試做：地下室 B1、B2＋駕駛座後照鏡照得到後面；v44 ＝ 內容 18 試做：圓塔外面的繞圈斜坡；v43 ＝ 內容 17 試做：按門鈴開進朋友的車庫；v42 ＝ 內容 17 試做：3 號家開得出去、撞朋友的警車、拘留室、朋友的車；v40＋v41 ＝ 內容 16：v40 ＝ 10 台新車＋駕駛座＋四層圓環車庫（沒上線，換成 v41）；v41 ＝ 圓塔的家＋6 個家＋跳燈＋轉手機開車（Nick「做好直接弄上手機」，沒有先試）；v39 ＝ 借朋友的車＝內容 15（Nick「做完直接上線」，沒有先試）；v37＋v38 ＝ 內容 14：v38 ＝ 透天厝全部 1 層＋大停車場；v37 ＝ 第一人稱方向盤會轉（打到底 90 度、中間紅條）；v36 ＝ 順順開出車庫：你家蓋在車庫街你那間、固定號碼＝內容 13；v35 ＝ 自己的車庫＋轉速表＋看到朋友被警察追／抓＋一個帳號一支手機；v34 ＝ 甩尾滑短一點；v33 ＝ 關 10 分鐘＋大家的世界＋車庫街＝內容 11；v32 ＝ 400 公尺再比一次看得到對手；v30 ＝ 撞前車不會整台停住；v31 ＝ 大地圖；v30＋v31 ＝ 內容 7）。
 
 ## 試做頁（artifact）
 - https://claude.ai/artifact/29pHoiqGVBs34ERLnJ9T8s（Nick 的；新的專案第一次發佈前要先用 Artifact 的 `read` 讀它，才能更新同一個網址）。
@@ -208,7 +208,12 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - terrain.js：下坡被地面推出來的時候跟著地面往下（本來速度變 0：陡的下坡會一直彈起來飛）；上坡、平地照舊。
   - 程式：hills.js（第 27 批），village.js、neihu.js、race.src.js、town.src.js、drive.js（`SURF[9]`、`SURF[10]`）、walk.js（`walkable`）、terrain.js。說明在 `notes/hills.md`，測試 hills-test.mjs。
   - 效能：山頂 138 calls／1.03M 三角形、隧道裡 151／1.04M、隧道口 150／1.04M（有車流 156／1.07M）、海邊 115／0.94M、4 號家旁邊的內湖隧道口 177／1.14M；山、海、隧道共 13 個網格、約 6.3 萬三角形。
-- **等 Nick 選的（2026-10-23）**：畫面風格（像真的）：範例 https://claude.ai/artifact/4qQroLLTQSbopBgVqoHeHv 有 5 種（第 5 種「最真實」很重，約 670–870 calls、650–760 萬三角形，要有「畫質」可以選），還沒選。內湖的房子每間都不一樣（Nick「現在都長得一樣」）：做好了但關著（neihu.js `NH_VARIETY = false`，第 28 批，`notes/neihu.md`），範例 https://claude.ai/artifact/FcaD5KwCZGwsHKHuXy67cf ，Nick 說好就打開放試做頁 v47。內湖招牌的字以前是反的，已經修好（不在開關裡）。
+- **試做頁 v47（2026-10-23，還沒上線）＝ 畫質＋內湖的房子**
+  - **內湖的房子每間都不一樣**（Nick「現在都長得一樣」，範例 https://claude.ai/artifact/FcaD5KwCZGwsHKHuXy67cf ，卡片選「照這樣做」）：neihu.js `NH_VARIETY = true`（第 28 批，`notes/neihu.md`）。內湖招牌的字以前是反的，已經修好（不在開關裡）。
+  - **畫質**（Nick「畫面風格不要像卡通」→ 範例 https://claude.ai/artifact/4qQroLLTQSbopBgVqoHeHv 5 種，Nick「就用5號的真實度」）：look.js（第 29 批，`notes/look.md`）。全螢幕開車「⋯」→「✨」（🎮 左邊）→「畫質 最真實／漂亮／順」，每支手機自己記 localStorage `carid.look`（不在存檔、不搬家）；沒選過：電腦模擬的（測試）＝順，畫得了半精度（幾乎所有手機）＝最真實。
+    - 順＝原本的樣子。漂亮＝範例 3 號：真的天空和雲、太陽的影子、霧、地面紋路、山和樹變圓、樹冠換成葉子卡片。最真實＝範例 5 號：漂亮的全部＋路／草／水泥的材質貼圖、車漆反射天空、草地上一叢一叢的草、角落陰影（GTAO）、一點光暈、四角暗一點。
+    - 只改出門的世界（TR.scene；renderer.render 包起來）；車庫頁、房子裡面、警察局照舊。隧道裡、圓塔裡面補光。換回「順」全部回到原本的樣子（測試算過）。輾扁的樹，葉子卡片跟著扁（crush.js `o.treeK`）。後照鏡：漂亮、最真實用半精度的圖。
+    - 效能：見下面「效能（手機）」。手機太慢就選漂亮或順。
 - **已知問題**
   - 內湖的路是平的（真的港墘一帶本來就很平）。
   - 內湖的車流、行人讓第一次出門的載入多約 0.4–0.7 秒（電腦上；npc.js 路網，`NPC.load.graphs`）。
@@ -217,4 +222,4 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - **價錢（萬，新台幣）**：GC8 75（一開始就有）、YARIS 130、SUPRA 200、GT-R 400、918 3000、SP3 6000、JESKO 7500；內容 16 新的：小黃 45、86 75、R7 100、E9 100、FK 115、AV12 1200、SN8 1500、HY 4500、LF 5000、C16 8000（阿財車行）；怪獸卡車 100（越野車行）。槍：手槍 3、衝鋒槍 12、霰彈槍 18、步槍 30；靶場第一次全中每把槍 2 萬。泥巴賽獎金 20／80／300。被抓罰款每顆星 2 萬。零件、輪胎的價錢在 garage.src.html 的 `PERF`。
 
 ## 筆記（notes/）
-以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）、mountain（山）、hills（其他的山、隧道、海邊；試做頁 v46）、online（鬼影排行榜）、room（房間、一起開車、一起比賽、參觀車庫；內容 11 起換成 world）、world（大家的世界、找人比賽、車庫街）、bigmap（大地圖、撞前車）、tower（圓形玻璃塔車庫、電梯、6 個家；內容 16）、cars（10 台新車、駕駛座、跳燈、轉手機開車；內容 16）、fixes（已知問題 5–12 的修法：越野車車庫、輾扁長回來、電線、內湖車流行人、橫拿手機的按鈕）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。
+以前每一塊的工作記錄（英文）：walk（走路）、npc（車流行人）、houses（房子）、city-garage（村子、車庫、升降機）、crash（撞爛，現在關掉）、char（角色）、fullscreen、police、guns、park（越野車場）、monster（怪獸卡車）、int（警察＋槍接進遊戲、第 3 批整合）、circuit（賽車場）、drift（甩尾）、neihu（內湖 v1）、land（內湖地標、路牌）、orbay（越野車車庫）、crush（輾扁）、mountain（山）、hills（其他的山、隧道、海邊；試做頁 v46）、look（畫質：最真實／漂亮／順；試做頁 v47）、online（鬼影排行榜）、room（房間、一起開車、一起比賽、參觀車庫；內容 11 起換成 world）、world（大家的世界、找人比賽、車庫街）、bigmap（大地圖、撞前車）、tower（圓形玻璃塔車庫、電梯、6 個家；內容 16）、cars（10 台新車、駕駛座、跳燈、轉手機開車；內容 16）、fixes（已知問題 5–12 的修法：越野車車庫、輾扁長回來、電線、內湖車流行人、橫拿手機的按鈕）。裡面的 `old-scratch/…` 路徑是舊暫存資料夾，不在 repo。

@@ -37,6 +37,7 @@
 //   壓扁的東西（大的、路邊的小東西都一樣）：扁了 20 秒、你離它 15 公尺以上就 0.8 秒慢慢長回來（頂點的 y 原本是多少記著）；回車庫頁、重新載入也會回來（修 8，2026-10-10）
 //   電線桿扁了：接在它上面的電線垂到地上，長回來的時候拉回去（修 9）
 //   o.any() → 現在開的是不是越野車；o.protect(x, z) → 這裡不能輾；o.copWreck(i, x, z) → police-ai 的 wreck（回傳 { x, z, th, hl, hw } 或 null）
+//   第 29 批：o.treeK(j, k) → 樹（j.tree）壓扁／長回來的每一下（k＝高度倍數，1＝原本的）：畫質的樹葉卡片（look.js treeK）跟著扁
 // 【效能】每幀只跑現在的墊子（最多 16 個）：約 0.01 ms，不配置記憶體；壓扁的頂點是輾到的那一下做一次（一台／一個東西 0.2–3 ms，只傳改到的那一段）
 import * as THREE from 'three';
 
@@ -402,6 +403,7 @@ function createCrush(o = {}) {
       const f = j.kf < 1 ? clamp((1 - k) / (1 - j.kf), 0, 1) : 1;
       for (const w of j.wires) { const P = w.A.array, I = w.idx, Y = w.y0, F = w.yf; for (let i = 0; i < I.length; i++) P[I[i] * 3 + 1] = Y[i] + (F[i] - Y[i]) * f; upd(w.A, w.R, w.lo * 3, (w.hi - w.lo + 1) * 3); }
     }
+    if (j.tree && o.treeK) o.treeK(j, k); // 第 29 批：畫質「漂亮」「最真實」的樹葉卡片（look.js）跟著扁
     if (j.inst) { // 內湖的樹：矩陣的 y 軸縮下去、x z 放大一點（扁扁的一片）
       const A = j.inst.m.instanceMatrix, E = A.array, o16 = j.inst.i * 16, e = j.inst.e, kk = Math.max(k, 0.06), w = 1 + (1 - kk) * 0.35;
       for (let r = 0; r < 16; r++) E[o16 + r] = e[r] * (r < 3 || (r >= 8 && r < 11) ? w : r >= 4 && r < 7 ? kk : 1);
