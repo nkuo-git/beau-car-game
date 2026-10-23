@@ -216,6 +216,7 @@ await p.reload({ waitUntil: 'domcontentloaded' });
 await ready();
 const s10 = await p.evaluate(() => { const D = window.__D(); return { lv: D.LOOK ? D.LOOK.level : null, pressed: [...document.querySelectorAll('#lookPop button')].map((b) => b.dataset.l + ':' + b.getAttribute('aria-pressed')).join(',') }; });
 const g10 = await goOut();
+await helpers();
 const s10b = await p.evaluate(() => { const D = window.__D(); D.renderer.render(D.TR.scene, D.dcam); return { lv: D.LOOK.level, sh: D.renderer.shadowMap.enabled, bad: window.__badProgs() }; });
 check(s10.lv === null && s10.pressed === '2:false,1:true,0:false' && g10.ok && s10b.lv === 1 && s10b.sh && !s10b.bad.length && !errs.length, `reload with 漂亮 saved: the game starts on 漂亮 (menu shows it) and drives out fine${errs.length ? ' — errors: ' + errs.slice(0, 2).join(' | ') : ''}`);
 
