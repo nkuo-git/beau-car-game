@@ -40,11 +40,11 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const LT = { elev: 38, az: 233, turb: 6, ray: 1.3, mie: 0.004, exp: 0.45, sunI: 4.6, sunC: 0xfff0dc, envI: 0.3, hemiI: 0.12, hemiC: 0xdde6ef, hemiG: 0x474a3c, fog: 0xc3ccd3, gnd: 0x3c4235, cloud: 0.32, cden: 0.5 };
 const DAY_MIN = 12; // 第 30 批：遊戲裡一天＝真的 24 分鐘（照手機的時鐘：大家一樣）；第 34 批：Nick「一天時間改成12分鐘」→ 12 分鐘
 const SUN_MAX = 55; // 中午太陽多高（度）
-const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fog: 0xd8b49a, envI: 0.4, turb: 8, ray: 2.0, mie: 0.004, exp: 0.45, sunK: 0.6 }; // 太陽低的時候（橘色、天空濁、霧暖色）；第 31 批：夕陽的光調弱（sunK＝最多少掉幾成）
+const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fog: 0xd8b49a, envI: 0.4, turb: 6, ray: 2.0, mie: 0.002, g: 0.7, exp: 0.38, sunK: 0.6 }; // 太陽低的時候（橘色、天空濁、霧暖色）；第 31 批：夕陽的光調弱（sunK＝最多少掉幾成）；第 34 批：Nick「面像太陽的時候光線還是有點太亮」：太陽的光暈小一點（turb 8 → 6、mie 0.004 → 0.002、g 0.8 → 0.7）、曝光 0.45 → 0.38
 const NIGHT = { hemiI: 0.55, hemiC: 0x34405e, hemiG: 0x14161c, fog: 0x0a0d15, envI: 0.12, exp: 0.95 }; // 晚上：天空光藍藍的、暗
 const MOON = { elev: 48, az: 300, c: 0x9fb4d8, I: 0.5 }; // 月亮當太陽（有影子）
 const LAMP = { n: 4, c: 0xffd9a0, I: 180, dist: 46, fade0: 50, fade1: 88, headC: 0xfff0d0, headI: 18, headDecay: 0.6, headDist: 150, headAim: 60, bloom: 0.18, thr: 2.6, sign: 0.5 }; // 路燈（最近 4 支真的有光；離鏡頭 50–88 公尺慢慢變暗＝換支的時候不跳）、自己的車的大燈（第 31 批：520 → 150，車前面不再一片白；第 34 批：Nick「晚上車燈可以照遠一點嗎」：衰減改成 1／距離^0.6（以前 1／距離²）、強度 18、照到 150 公尺、對準前面 60 公尺——車前面一樣亮（5 公尺 6.8），30 公尺 2.3、60 公尺 1.5（以前 0.17、0.04））、晚上的光暈
-const NSKY = { stars: 900, starR: 870, starSz: 2.4, moonR: 24, moonD: 860, moonC: 0xe9eef7, winC: [1.9, 1.45, 0.85], shopC: [1.5, 1.55, 1.45], winP: 0.6, shopP: 0.85, polI: 70, polD: 34, polT: 0.8, poolN: 12, poolI: 0.34, poolL: 9.5, poolW: 4.4, hwK: 2.2, parkK: 1.4 }; // 第 32 批：晚上的天空（星星、月亮的圓盤）、透天厝一樓窗戶、店面的燈（幾成亮）、警車的紅藍燈（最近一台）、路上車子的大燈照在路上（最近 12 台）、快速道路／停車場的路燈比電線桿的亮（燈頭比較高）
+const NSKY = { stars: 900, starR: 870, starSz: 2.4, moonR: 24, moonD: 860, moonC: 0xe9eef7, winC: [1.9, 1.45, 0.85], shopC: [1.5, 1.55, 1.45], winP: 0.6, shopP: 0.85, polI: 70, polD: 34, polT: 0.8, poolN: 12, poolI: 0.34, poolL: 9.5, poolW: 4.4, hwK: 2.2, parkK: 1.4, beamL: 70, beamW: 18, beamI: 0.65 }; // 第 32 批：晚上的天空（星星、月亮的圓盤）、透天厝一樓窗戶、店面的燈（幾成亮）、警車的紅藍燈（最近一台）、路上車子的大燈照在路上（最近 12 台）、快速道路／停車場的路燈比電線桿的亮（燈頭比較高）
 const WET = { dark: 0.62, pud: 0.55, rough: 0.3, pudRough: 0.04, base: 0.28, lod: 4.5 }; // 下過雨的路（最真實）：變暗、水窪更暗、粗糙度、倒影（水窪外面 35%、模糊）
 const CAVE_I = 1.5, CAVE_C = 0xf4f1ea, CAVE_G = 0x8a8478; // 隧道裡面（hills.js 的 dimK 0.42）、圓塔裡面：天空光補到這麼多、顏色白一點（太陽被擋住了，不然一片黑、藍藍的）
 // 材質（範例 3 號、5 號）
@@ -179,7 +179,7 @@ function createLook(o) {
 
   // ==== 天空、反射 ====
   let skyMat = null, envTex = null; const ENVS = new Map(); let envBand = '';
-  const skyUni = (u) => { const w = TD.warm; u.turbidity.value = THREE.MathUtils.lerp(LT.turb, DUSK.turb, w); u.rayleigh.value = THREE.MathUtils.lerp(LT.ray, DUSK.ray, w); u.mieCoefficient.value = THREE.MathUtils.lerp(LT.mie, DUSK.mie, w); u.mieDirectionalG.value = 0.8;
+  const skyUni = (u) => { const w = TD.warm; u.turbidity.value = THREE.MathUtils.lerp(LT.turb, DUSK.turb, w); u.rayleigh.value = THREE.MathUtils.lerp(LT.ray, DUSK.ray, w); u.mieCoefficient.value = THREE.MathUtils.lerp(LT.mie, DUSK.mie, w); u.mieDirectionalG.value = THREE.MathUtils.lerp(0.8, DUSK.g, w);
     if (TD.day > 0.001) u.sunPosition.value.copy(sun); else dirOf(u.sunPosition.value, TD.elev, TD.az); // 晚上：天空照（地平線下的）太陽算＝黑的；月亮只當燈
     if (u.cloudCoverage) { u.cloudCoverage.value = LT.cloud; u.cloudDensity.value = LT.cden; } };
   function skyOf(scale) { const k = new Sky(); skyUni(k.material.uniforms); k.scale.setScalar(scale); return k; }
@@ -556,8 +556,9 @@ function createLook(o) {
     if (car !== headCar) { headCar = car; headDims = car ? carDims(car) : null; }
     if (car && headDims && k > 0.001) { const D = headDims, xf = D.cx + D.hx - 0.15; car.updateMatrixWorld();
       for (let i = 0; i < 2; i++) { const sz = (i ? -1 : 1) * D.hz * 0.62, l = HLT[i]; HEAD[i].set(xf, 0.62, sz).applyMatrix4(car.matrixWorld); HTGT[i].set(xf + LAMP.headAim, -0.3, sz * 1.6).applyMatrix4(car.matrixWorld);
-        l.position.copy(HEAD[i]); l.target.position.copy(HTGT[i]); l.target.updateMatrixWorld(); l.intensity = LAMP.headI * k; } }
-    else for (const l of HLT) l.intensity = 0;
+        l.position.copy(HEAD[i]); l.target.position.copy(HTGT[i]); l.target.updateMatrixWorld(); l.intensity = LAMP.headI * k; }
+      if (NS) { const bm = NS.beam; bm.position.set(xf, 0.06, 0).applyMatrix4(car.matrixWorld); car.getWorldQuaternion(bm.quaternion); bm.material.opacity = NSKY.beamI * k; if (!bm.visible) bm.visible = true; } } // 第 34 批：路上的長光斑跟著車頭
+    else { for (const l of HLT) l.intensity = 0; if (NS && NS.beam.visible) NS.beam.visible = false; }
     nightStep(cam, k);
     signsK(k);
     if (Math.abs(k - lampSent) > 0.02 || (k === 0) !== (lampSent === 0)) { lampSent = k; nightCb(k); }
@@ -599,10 +600,18 @@ function createLook(o) {
     const pg = new THREE.PlaneGeometry(NSKY.poolL, NSKY.poolW); pg.rotateX(-Math.PI / 2); pg.translate(NSKY.poolL / 2, 0, 0);
     const pool = new THREE.InstancedMesh(pg, new THREE.MeshBasicMaterial({ map: pt, color: LAMP.headC, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }), NSKY.poolN);
     pool.name = 'lk-pool'; pool.frustumCulled = false; pool.count = 0; pool.instanceMatrix.setUsage(THREE.DynamicDrawUsage); pool.visible = false; pool.renderOrder = 3;
-    scene.add(stars, moon, win, pol, pool);
-    NS = { stars, moon, win, pol, pool, lit, polCar: null, polD: 1e9, pools: 0 };
+    // 第 34 批：自己的車的大燈照在路上（Nick「晚上車燈可以照遠一點嗎 不然看不清楚路」）：SpotLight 打在路面是掠射（0.6 公尺高照 30 公尺外＝1 度），Lambert 幾乎是 0，再亮也只照亮樹和護欄；
+    // 所以路面用一片加亮的長光斑（車頭前面 0–70 公尺、越遠越寬越淡；貼圖算一次），跟著車（含坡度）；SpotLight 留著照前面的東西
+    const bc = document.createElement('canvas'); bc.width = 256; bc.height = 64; const bg = bc.getContext('2d'), im = bg.createImageData(256, 64), px = im.data;
+    for (let j = 0; j < 64; j++) for (let i = 0; i < 256; i++) { const u = (i + 0.5) / 256, v = ((j + 0.5) / 64) * 2 - 1, hw = 0.22 + 0.78 * u, lat = Math.exp(-(v / hw) * (v / hw) * 2.2), lon = (1 - u) * (1 - u) * (1 - Math.exp(-u * 40)), a = Math.max(0, Math.min(1, lat * lon * 1.15)); const o = (j * 256 + i) * 4; px[o] = px[o + 1] = px[o + 2] = 255; px[o + 3] = Math.round(a * 255); }
+    bg.putImageData(im, 0, 0); const bt = new THREE.CanvasTexture(bc); bt.colorSpace = THREE.SRGBColorSpace;
+    const bgm = new THREE.PlaneGeometry(NSKY.beamL, NSKY.beamW); bgm.rotateX(-Math.PI / 2); bgm.translate(NSKY.beamL / 2, 0, 0);
+    const beam = new THREE.Mesh(bgm, new THREE.MeshBasicMaterial({ map: bt, color: LAMP.headC, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    beam.name = 'lk-beam'; beam.frustumCulled = false; beam.visible = false; beam.renderOrder = 3;
+    scene.add(stars, moon, win, pol, pool, beam);
+    NS = { stars, moon, win, pol, pool, beam, lit, polCar: null, polD: 1e9, pools: 0 };
   }
-  function nightOff() { if (!NS) return; for (const k of ['stars', 'moon', 'win', 'pol', 'pool']) { const x = NS[k]; x.removeFromParent(); x.geometry?.dispose(); if (x.material) { x.material.map?.dispose(); x.material.dispose(); } } NS = null; }
+  function nightOff() { if (!NS) return; for (const k of ['stars', 'moon', 'win', 'pol', 'pool', 'beam']) { const x = NS[k]; x.removeFromParent(); x.geometry?.dispose(); if (x.material) { x.material.map?.dispose(); x.material.dispose(); } } NS = null; }
   function nightStep(cam, k) {
     if (!NS) return;
     const nk = TD.night * TD.night * (1 - cave); NS.stars.material.opacity = nk; NS.moon.material.opacity = TD.moon * (1 - cave); // 隧道、塔裡面看不到天
@@ -686,7 +695,7 @@ function createLook(o) {
   function postRender(cam) {
     postSize();
     R.info.autoReset = false; R.info.reset();
-    WU.wetK.value = TD.lamp; if (TD.lamp > 0.01) wetRender(cam); else st.wetCalls = 0;
+    WU.wetK.value = TD.night; if (TD.night > 0.01) wetRender(cam); else st.wetCalls = 0; // 第 34 批：濕路照「晚上」（以前照「燈亮」：傍晚太陽還在，濕路把太陽那片天空整個反到路上，前面一片白）
     R.setRenderTarget(PP.a); MASKU.value = 1; r0(scene, cam); MASKU.value = 0;
     PP.ao.camera = cam; PP.ao.render(R, PP.b, PP.a);
     PP.bloom.strength = THREE.MathUtils.lerp(POST.bloom, LAMP.bloom, TD.night); PP.bloom.threshold = THREE.MathUtils.lerp(POST.thr, LAMP.thr, TD.night); // 第 34 批：光暈照「晚上」不照「燈亮」：傍晚太陽還在的時候不會把天空暈成一片白 PP.q.material.uniforms.toneMappingExposure.value = TD.exp;

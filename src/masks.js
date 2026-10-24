@@ -609,6 +609,7 @@ export function patchGlass(mat, tex) {
   if (glass < 0.5 || blk > 0.5) discard;
 `).replace('#include <opaque_fragment>', `#include <opaque_fragment>
   float refl = max(max(outgoingLight.r, outgoingLight.g), outgoingLight.b);
+  if (!gl_FrontFacing) { gl_FragColor.rgb *= 0.3; refl *= 0.2; } // 第 34 批：從車裡面看（駕駛座視角）玻璃的反光弱很多：面向太陽不會整片白（Nick「面像太陽的時候光線還是有點太亮」）
   gl_FragColor.a = clamp(diffuseColor.a + refl * 0.9, 0.0, 1.0);
 `);
   };
