@@ -619,6 +619,7 @@ function patchGlass(mat, tex) {
   if (glass < 0.5 || blk > 0.5) discard;
 `).replace('#include <opaque_fragment>', `#include <opaque_fragment>
   float refl = max(max(outgoingLight.r, outgoingLight.g), outgoingLight.b);
+  if (!gl_FrontFacing) { gl_FragColor.rgb *= 0.3; refl *= 0.2; } // 第 34 批：從車裡面看（駕駛座視角）玻璃的反光弱很多：面向太陽不會整片白（Nick「面像太陽的時候光線還是有點太亮」）
   gl_FragColor.a = clamp(diffuseColor.a + refl * 0.9, 0.0, 1.0);
 `);
   };
@@ -5014,6 +5015,59 @@ function createEngineAudio(opt = {}) {
     } catch (e) { warn(e); }
     return h;
   }
+  // ---- 第 34 批：背景音樂（Nick 2026-10-24「可以有點背景音樂嗎?」）：程式自己彈的，沒有用任何音樂檔（沒有版權問題）
+  //   92 BPM、C 大調，8 小節一段的和弦（C G Am F C G F G）：墊底的和弦（三角波過低通，慢慢進慢慢出）、貝斯（正弦，1、3 拍）、
+  //   五聲音階的小旋律（正弦＋三角波的撥弦，每 16 小節換一段，照種子亂數走：每次聽到的不太一樣）、很輕的踩鈸（高通雜訊，反拍）
+  //   出門就放（開車、走路），跟引擎聲同一條總輸出（靜音、音量一起）；頁面藏起來就先不排音符；set({ level })：房子裡面小聲一點
+  const MUS = { bpm: 92, vol: 0.085, pad: 0.055, bass: 0.1, pluck: 0.075, hat: 0.02, look: 0.45 };
+  const MUS_CH = [[60, 64, 67], [59, 62, 67], [57, 60, 64], [57, 60, 65], [60, 64, 67], [59, 62, 67], [57, 60, 65], [59, 62, 67]], MUS_ROOT = [36, 43, 45, 41, 36, 43, 41, 43], MUS_PENT = [60, 62, 64, 67, 69, 72, 74, 76, 79, 81];
+  const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  function music() {
+    const h = { alive: false, set() {}, dispose() {}, get bar() { return bar; } };
+    let bar = 0;
+    try {
+      if (S.gone) return h;
+      const ctx = ensureCtx(); if (!ctx) return h;
+      wake(); clearTimeout(S.idleT);
+      const t0 = ctx.currentTime + 0.05, keep = [], beat = 60 / MUS.bpm;
+      const out = ctx.createGain(); out.gain.setValueAtTime(0, t0); out.gain.setTargetAtTime(MUS.vol, t0, 1.2); out.connect(S.inp); keep.push(out);
+      const padLp = ctx.createBiquadFilter(); padLp.type = 'lowpass'; padLp.frequency.value = 900; padLp.Q.value = 0.3; padLp.connect(out); keep.push(padLp);
+      const plLp = ctx.createBiquadFilter(); plLp.type = 'lowpass'; plLp.frequency.value = 2600; plLp.Q.value = 0.2; plLp.connect(out); keep.push(plLp);
+      const hatHp = ctx.createBiquadFilter(); hatHp.type = 'highpass'; hatHp.frequency.value = 6500; hatHp.connect(out); keep.push(hatHp);
+      let rng = 1, seed = 7; const rnd = () => { rng = (rng * 1664525 + 1013904223) >>> 0; return rng / 4294967296; };
+      let mel = null; // 這 16 小節的旋律：每小節 8 個半拍 [音（MIDI）或 null]
+      const makeMel = () => { rng = seed * 2654435761 >>> 0; seed++; mel = []; let i = 3;
+        for (let b = 0; b < 16; b++) { const row = [], ch = MUS_CH[b % 8]; for (let k = 0; k < 8; k++) {
+          const rest = k % 2 ? rnd() < 0.55 : rnd() < 0.2; if (rest) { row.push(null); continue; }
+          i += rnd() < 0.5 ? -1 : 1; if (rnd() < 0.25) i += rnd() < 0.5 ? -1 : 1; i = Math.max(1, Math.min(MUS_PENT.length - 2, i)); let n = MUS_PENT[i];
+          if (k === 0 || k === 4) { let best = n, bd = 99; for (const c of ch) for (const o of [0, 12]) { const d = Math.abs(c + o - n); if (d < bd) { bd = d; best = c + o; } } n = best; i = Math.max(0, MUS_PENT.indexOf(n)); if (i < 0) i = 3; } // 重拍落在和弦音上
+          row.push(n); } mel.push(row); } };
+      makeMel();
+      const tone = (type, f, t, a, dur, dest, g0, rel) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(g0, t + a); g.gain.setTargetAtTime(0.0001, t + dur, rel); o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + rel * 6); o.onended = () => { try { o.disconnect(); g.disconnect(); } catch { /* 算了 */ } }; };
+      const schedBar = (b, t) => { // 第 b 小節從 t 秒開始
+        const ch = MUS_CH[b % 8], root = MUS_ROOT[b % 8], L = 4 * beat;
+        for (const m of ch) tone('triangle', hz(m), t, 0.35, L - 0.1, padLp, MUS.pad, 0.25); // 墊底
+        for (const k of [0, 2]) tone('sine', hz(root), t + k * beat, 0.01, beat * 0.9, out, MUS.bass, 0.08); // 貝斯
+        if (b % 16 === 0 && b > 0) makeMel();
+        const row = mel[b % 16]; for (let k = 0; k < 8; k++) { const m = row[k]; if (m == null) continue; const tt = t + k * beat * 0.5; tone('sine', hz(m), tt, 0.008, 0.05, plLp, MUS.pluck, 0.11); tone('triangle', hz(m) * 2, tt, 0.008, 0.03, plLp, MUS.pluck * 0.18, 0.05); } // 撥弦
+        for (let k = 0; k < 4; k++) { const tt = t + (k + 0.5) * beat, n = ctx.createBufferSource(), g = ctx.createGain(); n.buffer = noiseBuf(ctx); g.gain.setValueAtTime(MUS.hat, tt); g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.045); n.connect(g); g.connect(hatHp); n.start(tt); n.stop(tt + 0.06); n.onended = () => { try { n.disconnect(); g.disconnect(); } catch { /* 算了 */ } }; } // 踩鈸（反拍）
+      };
+      let next = t0 + 0.2, done = false, level = 1;
+      const tick = () => { if (done) return; const now = ctx.currentTime; if (typeof document !== 'undefined' && document.hidden) { next = Math.max(next, now + 0.2); return; } if (next < now - 0.5) next = now + 0.1; while (next < now + 0.6) { schedBar(bar, next); bar++; next += 4 * beat; } };
+      const iv = setInterval(tick, 150); tick();
+      if (S.rec) S.rec.n++;
+      h.alive = true;
+      h.set = (o = {}) => { if (done) return; const v = Math.max(0, Math.min(1, num(o.level, 1))); if (v !== level) { level = v; out.gain.setTargetAtTime(MUS.vol * v, ctx.currentTime, 0.5); } };
+      h.dispose = () => {
+        try {
+          if (done) return; done = true; h.alive = false; clearInterval(iv);
+          const t1 = ctx.currentTime; out.gain.cancelScheduledValues(t1); out.gain.setTargetAtTime(0, t1, 0.25);
+          setTimeout(() => { for (const x of keep) try { x.disconnect(); } catch { /* 算了 */ } if (S.rec) { S.rec.n = Math.max(0, S.rec.n - 1); idleCheck(); } }, 1500);
+        } catch (e) { warn(e); }
+      };
+    } catch (e) { warn(e); }
+    return h;
+  }
   // 撞車聲：金屬（4 種大小）＋玻璃（一種，音量看碎了多少）各算一次存起來（全部不到 1 MB）；同時最多 4 個
   //   第一次 resume() 之後在背景慢慢先算好（每 60 ms 算一個），撞的那一下就不用算
   const crashBuf = new Map(), crashes = [];
@@ -5137,7 +5191,7 @@ function createEngineAudio(opt = {}) {
     } catch (e) { warn(e); }
   }
   return {
-    resume, voice, lift, crash, hiss, skid, ambient, setMuted, setVolume, dispose, // skid：第 3 批；ambient：第 31 批（環境聲）
+    resume, voice, lift, crash, hiss, skid, ambient, music, setMuted, setVolume, dispose, // skid：第 3 批；ambient：第 31 批（環境聲）；music：第 34 批（背景音樂）
     get muted() { return S.muted; },
     get volume() { return S.vol; },
     get mode() { return S.mode; }, // 'worklet'｜'script'｜'off'
@@ -6960,7 +7014,7 @@ function buildHills(V, opts = {}) {
   const BK = { x0: -2100, z0: -1600, s: 250, nx: 22, nz: 19 }, BUCK = Array.from({ length: BK.nx * BK.nz }, () => []);
   for (const H of HS) for (let j = Math.max(0, Math.floor((H.bz0 - BK.z0) / BK.s)); j <= Math.min(BK.nz - 1, Math.floor((H.bz1 - BK.z0) / BK.s)); j++) for (let i = Math.max(0, Math.floor((H.bx0 - BK.x0) / BK.s)); i <= Math.min(BK.nx - 1, Math.floor((H.bx1 - BK.x0) / BK.s)); i++) BUCK[j * BK.nx + i].push(H);
   const EMPTY = [];
-  const near = (x, z) => { const i = Math.floor((x - BK.x0) / BK.s), j = Math.floor((z - BK.z0) / BK.s); return i < 0 || j < 0 || i >= BK.nx || j >= BK.nz ? EMPTY : BUCK[j * BK.nx + i]; };
+  const near = (x, z) => { const i = Math.floor((x - BK.x0) / BK.s), j = Math.floor((z - BK.z0) / BK.s); return i >= 0 && j >= 0 && i < BK.nx && j < BK.nz ? BUCK[j * BK.nx + i] : EMPTY; }; // 第 34 批：x、z 是 NaN（一起比 400 公尺，朋友的車還沒有位置）以前拿到 undefined 就爆（每一格 pageerror、比賽開不起來）；現在跟沒有山的時候一樣算 NaN 不爆
   // 隧道的範圍：tunAt＝隧道那段（下面那層是路）、corrAt＝整段（隧道＋挖開的路）
   const tunAt = (x, z) => { for (let k = 0; k < TS.length; k++) { const t = TS[k]; if (x > t.x0 && x < t.x1 && z > t.z0 && z < t.z1) return k; } return -1; };
   const corrAt = (x, z) => { for (let k = 0; k < TS.length; k++) { const t = TS[k]; if (x > t.x0 && x < t.x1 && z > t.cz0 && z < t.cz1) return k; } return -1; };
@@ -9328,6 +9382,7 @@ function buildVillage(opts = {}) {
   return {
     group, places, colliders, surfaceAt, route, homeAt, wrapHome() { homeRouteWrap(this); }, homeSites: HOME_SITES, // 第 17 批：homeAt(n, places.garage)＝搬到車庫街第 n 間
     parking: PARK, // 第 18 批：大停車場 { name, x, z, hx, hz, stalls, lamps }
+    houses: stHouses, // 第 32 批：透天厝 { x, z, ry, w, kind: 'door'|'shutter'|'shop', door, flo }（look.js 晚上：窗戶、店面的燈）
     poles: stPoles, // 第 30 批：電線桿 { x, z, fx, fz, lamp }（look.js 晚上：有路燈的桿子，燈頭在 (x + fx·2.2, 7.8, z + fz·2.2)）
     roads: roads.filter((r) => !HWK.has(r.kind) && r.kind !== 'link').map((r) => ({ pts: r.pts, w: Array.isArray(r.w) ? Math.max(...r.w) : r.w, kind: r.kind }))
       .concat([{ pts: hc.map((p) => [p.x, p.z]), w: HW.half * 2, kind: 'highway' }]),
@@ -22931,7 +22986,7 @@ function gaitStep(S, M, dt, speed, run) {
     } else { // 在空中
       if (!ft.air) liftOff(M, ft);
       ft.s = (ph - beta) / (1 - beta);
-      ft.lift = run ? (0.1 + 0.2 * Math.min(vh, 1.8)) * Lg : (0.03 + 0.05 * vh) * Lg * sstep(0, 0.3, step);
+      ft.lift = run ? (0.1 + 0.2 * Math.min(vh, 1.8)) * Lg : (0.07 + 0.09 * vh) * Lg * sstep(0, 0.3, step); // 第 34 批：走路腳抬高一點（膝蓋才會彎、不會像在滑）
     }
   }
 }
@@ -22964,7 +23019,7 @@ function footTarget(M, ft, run, outA, outQ) {
   const s = ft.s;
   ankleOf(M, ft.x1, ft.z1, ft.yaw1, ft.th1, V_C);
   const e = run ? sstep(0.12, 1, s) : s * s * s * (10 - 15 * s + 6 * s * s);
-  const h = ft.lift * (run ? Math.pow(Math.sin(PI * Math.pow(s, 0.7)), 1.2) : Math.sin(PI * Math.pow(s, 0.8)));
+  const h = ft.lift * (run ? Math.pow(Math.sin(PI * Math.pow(s, 0.7)), 1.2) : Math.sin(PI * Math.pow(s, 0.6))); // 走路：剛離地就抬最高（腳跟往上踢），再往前伸直落地
   outA.set(lerp(ft.ax, V_C.x, e), lerp(ft.ay, V_C.y, e) + h, lerp(ft.az, V_C.z, e));
   const yaw = lerp(ft.ayaw, ft.yaw1, e);
   footQ(yaw, lerp(ft.ath, ft.th1, sstep(0, run ? 0.9 : 0.6, s)), outQ);
@@ -23020,10 +23075,10 @@ function gaitBody(S, M, P, speed) {
     P[CI.hw] += -aw * c2; P[CI.cw] += 1.5 * aw * c2;
     P[CI.hr] += 0.035 * (M.fem ? 1.5 : 1) * amp * Math.cos(TAU * (ph - 0.3));
     P[CI.hp] += -0.02 - 0.03 * vh; P[CI.sp] += -0.02 - 0.04 * vh;
-    const A = (0.12 + 0.3 * vh) * amp * (M.kid ? 1.2 : M.eld ? 0.55 : 1) * (M.fem ? 0.9 : 1);
+    const A = (0.15 + 0.35 * vh) * amp * (M.kid ? 1.2 : M.eld ? 0.55 : 1) * (M.fem ? 0.9 : 1); // 第 34 批：手擺大一點
     for (let k = 0; k < 2; k++) {
       const o = SO[k], sw = (k ? 1 : -1) * A * Math.cos(TAU * (ph - 0.05)); // 右手跟左腳一起往前
-      P[o + X_SF] += sw + 0.02; P[o + X_EL] += 0.08 * vh + 0.5 * Math.max(0, sw); P[o + X_SA] += 0.02 * vh; P[o + X_WF] += 0.1 * Math.max(0, -sw);
+      P[o + X_SF] += sw + 0.02; P[o + X_EL] += 0.1 + 0.1 * vh + 0.6 * Math.max(0, sw); P[o + X_SA] += 0.02 * vh; P[o + X_WF] += 0.1 * Math.max(0, -sw);
     }
   } else {
     P[CI.hy] += -(0.035 + 0.02 * vh) * s - 0.025 * s * Math.cos(2 * TAU * (ph - b / 2));
@@ -30373,6 +30428,7 @@ const { buildLodCar, LOD_CARS } = (() => {
     if (POP_LAMPS[key]) { pop = popLamps(key, paintCol, bodyMesh.geometry); body.add(pop.mesh); } // 跳燈：燈蓋的顏色＝這台的車漆（同一個 Color）
     return api;
   }
+  buildLodCar.nightK = () => NIGHT.k; // 測試：現在燈亮多少
   buildLodCar.night = (k) => { k = Math.max(0, Math.min(1, +k || 0)); if (k === NIGHT.k || (Math.abs(k - NIGHT.k) < 0.04 && k > 0 && NIGHT.k > 0)) return; NIGHT.k = k; for (const a of LIVE) a._lights(); }; // 第 30 批：晚上（look.js 叫）：大燈、尾燈亮；第 31 批：0–1 慢慢亮
 return { buildLodCar, LOD_CARS };
 })();
@@ -33922,7 +33978,9 @@ function placeholderOfficer() {
 }
 
 // ---- 警笛：台灣警車的兩段音（高、低交替、中間滑過去）；每台一個聲音，照距離變大聲、變悶、左右、都卜勒 ----
-// 振盪器（鋸齒波＋方波高八度）→ 帶通 → 音量 → 低通（遠的悶）→ 左右 → 輸出；兩段音＝方波的 LFO 過低通（滑音）× 深度 → 振盪器的頻率
+// 振盪器（三角波＋正弦波高八度）→ 帶通 → 音量 → 低通（遠的悶）→ 左右 → 輸出；兩段音＝方波的 LFO 過低通（滑音）× 深度 → 振盪器的頻率
+// 第 34 批（試做頁 v50）：Nick「警車警鈴改成溫和一點沒這麼吵的」：鋸齒波、方波換成三角波、正弦波（沒有那麼刺）、高低音差小一點、滑得慢一點、整體小聲一半、高音少一點
+const SIREN_VOL = 0.5; // 第 34 批：警笛整體音量（1 ＝ 以前的）
 function makeSiren(ctx, out, seed) {
   try {
     const t = ctx.currentTime;
@@ -33930,13 +33988,13 @@ function makeSiren(ctx, out, seed) {
     const mix2 = ctx.createGain(), bp = ctx.createBiquadFilter(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
     let pan = null; try { pan = ctx.createStereoPanner(); } catch { pan = null; }
     const base = 760 + seed * 25; // 每台差一點點（三台一起叫會一前一後）
-    osc.type = 'sawtooth'; osc.frequency.value = base; osc2.type = 'square'; osc2.frequency.value = base * 2;
-    lfo.type = 'square'; lfo.frequency.value = 0.78 + seed * 0.06; // 一高一低一輪約 1.3 秒
-    lfoLp.type = 'lowpass'; lfoLp.frequency.value = 5; lfoLp.Q.value = 0.5; // 滑過去（不是跳過去）
-    depth.gain.value = 170; depth2.gain.value = 340;
+    osc.type = 'triangle'; osc.frequency.value = base; osc2.type = 'sine'; osc2.frequency.value = base * 2;
+    lfo.type = 'square'; lfo.frequency.value = 0.6 + seed * 0.05; // 一高一低一輪約 1.7 秒
+    lfoLp.type = 'lowpass'; lfoLp.frequency.value = 2.5; lfoLp.Q.value = 0.5; // 滑過去（不是跳過去）
+    depth.gain.value = 120; depth2.gain.value = 240;
     lfo.connect(lfoLp); lfoLp.connect(depth); lfoLp.connect(depth2); depth.connect(osc.frequency); depth2.connect(osc2.frequency);
-    mix2.gain.value = 0.18;
-    bp.type = 'bandpass'; bp.frequency.value = 1150; bp.Q.value = 0.9;
+    mix2.gain.value = 0.1;
+    bp.type = 'bandpass'; bp.frequency.value = 950; bp.Q.value = 0.6;
     lp.type = 'lowpass'; lp.frequency.value = 2000; lp.Q.value = 0.3;
     g.gain.value = 0;
     osc.connect(bp); osc2.connect(mix2); mix2.connect(bp); bp.connect(g); g.connect(lp);
@@ -34093,7 +34151,7 @@ function createPolice(o = {}) {
   const colOut = [], colPool = [];
   const movers = []; for (let i = 0; i < MAXC; i++) movers.push({ t: 'box', x: 0, z: 0, hx: 0, hz: 0, rot: 0, h: 1.6, police: true });
   for (let i = 0; i < MAXC; i++) movers.push({ t: 'circle', x: 0, z: 0, r: 0, h: 1.8, police: true });
-  const npcCars = []; for (let i = 0; i < MAXC; i++) npcCars.push({ id: 'police' + i, x: 1e6, z: 1e6, heading: 0, v: 0, hx: 2.3, hz: 0.9, ai: true, police: true }); // npc.js 的車的格式（沒出來的放很遠）
+  const npcCars = []; for (let i = 0; i < MAXC; i++) npcCars.push({ id: 'police' + i, x: 1e6, z: 1e6, heading: 0, v: 0, hx: 2.3, hz: 0.9, ai: true, police: true, lights: false }); // npc.js 的車的格式（沒出來的放很遠）
   const markers = []; for (let i = 0; i < MAXC; i++) markers.push({ x: 0, z: 0, fill: '#FF3B30', ring: '#FFFFFF', r: 5, on: false });
   const markerList = []; // 現在有的（drive.setMarkers／walker.setMarkers 讀這個陣列）
 
@@ -34854,11 +34912,11 @@ function createPolice(o = {}) {
       if (!want) { if (c.siren) { c.siren.stop(); c.siren = null; } continue; }
       if (!c.siren) c.siren = makeSiren(ctx, SND.out || ctx.destination, c.id);
       if (!c.siren) continue;
-      const d = Math.hypot(c.x - P.cx, c.z - P.cz), near = clamp(1 - d / 320, 0, 1), gain = base * near * near * (state === 'caught' ? 0.6 : 1);
+      const d = Math.hypot(c.x - P.cx, c.z - P.cz), near = clamp(1 - d / 320, 0, 1), gain = base * SIREN_VOL * near * near * (state === 'caught' ? 0.6 : 1);
       const ang = Math.atan2(-(c.z - P.cz), c.x - P.cx) - P.th, pan = clamp(-Math.sin(ang) * 0.75, -0.8, 0.8);
       const ux = d > 1e-3 ? (c.x - P.cx) / d : 0, uz = d > 1e-3 ? (c.z - P.cz) / d : 0;
       const vr = (Math.cos(c.th) * c.v - P.vx) * ux + (-Math.sin(c.th) * c.v - P.vz) * uz; // 正的＝離你越來越遠
-      c.siren.set(gain, 900 + 6500 * near, pan, clamp(-1200 * Math.log2(1 + vr / 343), -260, 260));
+      c.siren.set(gain, 800 + 2400 * near, pan, clamp(-1200 * Math.log2(1 + vr / 343), -260, 260));
     }
   }
 
@@ -35024,7 +35082,7 @@ function createPolice(o = {}) {
     markerList.length = 0;
     for (let i = 0; i < MAXC; i++) {
       const c = cars[i], m = movers[i], mk = markers[i];
-      const nc = npcCars[i]; if (c.on) { nc.x = c.x; nc.z = c.z; nc.heading = c.th; nc.v = c.v; nc.hx = c.hl; nc.hz = c.hw; } else { nc.x = 1e6; nc.z = 1e6; nc.v = 0; }
+      const nc = npcCars[i]; if (c.on) { nc.x = c.x; nc.z = c.z; nc.heading = c.th; nc.v = c.v; nc.hx = c.hl; nc.hz = c.hw; nc.lights = c.lights; } else { nc.x = 1e6; nc.z = 1e6; nc.v = 0; nc.lights = false; } // 第 32 批：lights（紅藍燈在閃）給 look.js 的警車燈
       if (c.on) { m.x = c.x; m.z = c.z; m.hx = c.hl; m.hz = c.hw; m.rot = c.th; mk.x = c.x; mk.z = c.z; mk.fill = c.mode === 'home' || c.wreckT > 0 ? '#8A9099' : Math.floor(T0 * 4 + i) % 2 ? '#2F7BFF' : '#FF3B30'; mk.on = true; markerList.push(mk); }
       else { m.hx = 0; m.hz = 0; mk.on = false; }
       const f = offs[i], mo = movers[MAXC + i];
@@ -37804,7 +37862,7 @@ return { buildGunShopInterior, openGunShop, gunShopFonts, GUNSHOP_TEXT };
 // 每種都換得回去：原本的天空、霧、燈、反射、材質（onBeforeCompile）、法線、顏色、樹冠的三角形、內湖的樹都記著
 // 只改開車出門的世界（scene）：車庫頁、房子裡面、警察局、槍店照舊；畫到別的地方（後照鏡）不做後製、不重算影子（用這一格的）
 // 第 30 批（Nick 2026-10-24「什麼時候會變晚上的街景」，卡片選「自動輪流」）：一天的時間（只有漂亮、最真實）
-//   遊戲裡 24 分鐘＝一天（照手機的時鐘算：(現在的分鐘 % 24) / 24 × 24 小時，大家不用連線就一樣）；6 點太陽從東邊出來、12 點南邊最高（55 度）、18 點西邊下山
+//   遊戲裡 12 分鐘＝一天（第 34 批起；以前 24）（照手機的時鐘算：(現在的分鐘 % 12) / 12 × 24 小時，大家不用連線就一樣）；6 點太陽從東邊出來、12 點南邊最高（55 度）、18 點西邊下山
 //   天空、太陽（顏色、亮度、影子的方向）、天空光、霧的顏色、反射的圖（照太陽高度分 5 段，第一次用到才做）、曝光都跟著時間變；晚上月亮當太陽（藍藍的、暗、有影子）
 //   傍晚起（太陽 6 度以下）：路燈（最近的 4 支真的有光，其他只有亮的燈頭）、招牌亮（emissiveMap 的材質）、大家的車燈亮（masks.js PAINT_NIGHT、carlod.js buildLodCar.night：town.src.js 的 night 回呼）、
 //   自己的車兩盞大燈真的照路（SpotLight 跟著車）、光暈（最真實）；最真實：路面像下過雨（濕、暗、水窪，倒影＝把世界倒過來再畫一次到半張大小的圖；只有路面高度附近的地面）
@@ -37813,7 +37871,8 @@ return { buildGunShopInterior, openGunShop, gunShopFonts, GUNSHOP_TEXT };
 // 【API】
 //   const look = createLook({ renderer, scene, world: V, getCar: () => 現在開的車（Object3D）或 null,
 //     plain: () => 不要加地面紋路的那一棟（圓塔：大理石、玻璃是設計好的）, indoor: (cam) => 鏡頭在屋頂底下（圓塔裡面）→ 補光,
-//     night: (k) => 燈亮多少變了（0–1；車燈：PAINT_NIGHT、buildLodCar.night）, carDims: (car) => { hx, hz, cx }（車身長方形：大燈放在車頭兩邊） })
+//     night: (k) => 燈亮多少變了（0–1；車燈：PAINT_NIGHT、buildLodCar.night）, carDims: (car) => { hx, hz, cx }（車身長方形：大燈放在車頭兩邊）,
+//     police: () => 警車 [{ x, z, heading, lights }]（第 32 批：紅藍燈）, traffic: () => 路上的車 [{ x, z, heading, hx, active, kind, crushed }]（第 32 批：大燈照在路上） })
 //   await look.set(lv)      換畫質；第一次 1、2 要先找樹冠、算法線（約 0.5–1 秒），第一次 2 要先畫材質貼圖（time-slice）
 //   look.level              現在的；look.can.post＝這支手機畫得了最真實嗎（半精度的畫面）；look.half＝半精度的畫面（後照鏡用）
 //   look.treeK(j, k)        crush.js：輾扁的樹（j.grp 裡每棵樹 2 公尺內的葉子卡片跟著扁，k＝高度倍數，1＝長回來）
@@ -37829,12 +37888,13 @@ const LOOK_NAMES = ['順', '漂亮', '最真實'];
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // 光線（範例 2 號以後都一樣）
 const LT = { elev: 38, az: 233, turb: 6, ray: 1.3, mie: 0.004, exp: 0.45, sunI: 4.6, sunC: 0xfff0dc, envI: 0.3, hemiI: 0.12, hemiC: 0xdde6ef, hemiG: 0x474a3c, fog: 0xc3ccd3, gnd: 0x3c4235, cloud: 0.32, cden: 0.5 };
-const DAY_MIN = 24; // 第 30 批：遊戲裡一天＝真的 24 分鐘（照手機的時鐘：大家一樣）
+const DAY_MIN = 12; // 第 30 批：遊戲裡一天＝真的 24 分鐘（照手機的時鐘：大家一樣）；第 34 批：Nick「一天時間改成12分鐘」→ 12 分鐘
 const SUN_MAX = 55; // 中午太陽多高（度）
-const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fog: 0xd8b49a, envI: 0.4, turb: 8, ray: 2.0, mie: 0.004, exp: 0.45, sunK: 0.6 }; // 太陽低的時候（橘色、天空濁、霧暖色）；第 31 批：夕陽的光調弱（sunK＝最多少掉幾成）
+const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fog: 0xd8b49a, envI: 0.4, turb: 6, ray: 2.0, mie: 0.002, g: 0.7, exp: 0.38, sunK: 0.6 }; // 太陽低的時候（橘色、天空濁、霧暖色）；第 31 批：夕陽的光調弱（sunK＝最多少掉幾成）；第 34 批：Nick「面像太陽的時候光線還是有點太亮」：太陽的光暈小一點（turb 8 → 6、mie 0.004 → 0.002、g 0.8 → 0.7）、曝光 0.45 → 0.38
 const NIGHT = { hemiI: 0.55, hemiC: 0x34405e, hemiG: 0x14161c, fog: 0x0a0d15, envI: 0.12, exp: 0.95 }; // 晚上：天空光藍藍的、暗
 const MOON = { elev: 48, az: 300, c: 0x9fb4d8, I: 0.5 }; // 月亮當太陽（有影子）
-const LAMP = { n: 4, c: 0xffd9a0, I: 180, dist: 46, fade0: 50, fade1: 88, headC: 0xfff0d0, headI: 150, bloom: 0.18, thr: 2.6, sign: 0.5 }; // 路燈（最近 4 支真的有光；離鏡頭 50–88 公尺慢慢變暗＝換支的時候不跳）、自己的車的大燈（第 31 批：520 → 150，車前面不再一片白）、晚上的光暈
+const LAMP = { n: 4, c: 0xffd9a0, I: 180, dist: 46, fade0: 50, fade1: 88, headC: 0xfff0d0, headI: 18, headDecay: 0.6, headDist: 150, headAim: 60, bloom: 0.18, thr: 2.6, sign: 0.5 }; // 路燈（最近 4 支真的有光；離鏡頭 50–88 公尺慢慢變暗＝換支的時候不跳）、自己的車的大燈（第 31 批：520 → 150，車前面不再一片白；第 34 批：Nick「晚上車燈可以照遠一點嗎」：衰減改成 1／距離^0.6（以前 1／距離²）、強度 18、照到 150 公尺、對準前面 60 公尺——車前面一樣亮（5 公尺 6.8），30 公尺 2.3、60 公尺 1.5（以前 0.17、0.04））、晚上的光暈
+const NSKY = { stars: 900, starR: 870, starSz: 2.4, moonR: 24, moonD: 860, moonC: 0xe9eef7, winC: [1.9, 1.45, 0.85], shopC: [1.5, 1.55, 1.45], winP: 0.6, shopP: 0.85, polI: 70, polD: 34, polT: 0.8, poolN: 12, poolI: 0.34, poolL: 9.5, poolW: 4.4, hwK: 2.2, parkK: 1.4, beamL: 70, beamW: 18, beamI: 0.65 }; // 第 32 批：晚上的天空（星星、月亮的圓盤）、透天厝一樓窗戶、店面的燈（幾成亮）、警車的紅藍燈（最近一台）、路上車子的大燈照在路上（最近 12 台）、快速道路／停車場的路燈比電線桿的亮（燈頭比較高）
 const WET = { dark: 0.62, pud: 0.55, rough: 0.3, pudRough: 0.04, base: 0.28, lod: 4.5 }; // 下過雨的路（最真實）：變暗、水窪更暗、粗糙度、倒影（水窪外面 35%、模糊）
 const CAVE_I = 1.5, CAVE_C = 0xf4f1ea, CAVE_G = 0x8a8478; // 隧道裡面（hills.js 的 dimK 0.42）、圓塔裡面：天空光補到這麼多、顏色白一點（太陽被擋住了，不然一片黑、藍藍的）
 // 材質（範例 3 號、5 號）
@@ -37842,7 +37902,7 @@ const MB = { desat: 0.9, grain: 0.08, grass: 0.38, patch: 0.3, fine2: 0.22, oliv
 const TREE = [null, { cards: 110, cone: 8 }, { cards: 230, cone: 14 }], TREE_FAR = { cards: 36, cone: 4 }, TREE_NEAR = 190, CELL = 200;
 const SHADOW = 2048, SH_R = 60, SH_AHEAD = 35;
 const GC = 16, GN = 7, GPER = 900; // 草：一格幾公尺、幾格見方、一格最多幾叢
-const POST = { bloom: 0.07, bRad: 0.35, thr: 10, aoR: 2.2, aoS: 2.2, vig: 0.55, carEnv: 0.7 };
+const POST = { bloom: 0.07, bRad: 0.35, thr: 10, aoR: 2.2, aoS: 2.2, vig: 0.55, carEnv: 0.7, skyMax: 6 }; // 第 34 批 skyMax：看得到的天空最亮到幾（太陽的圓盤在 shader 裡是幾千、幾萬：光暈一糊整個畫面都白；夾住就只是一顆白太陽）
 const GROUND = /(^|[-_|])(ground|area|walk|road|paint|grass|paddy|water|asph|line|lane|trail|sea|sand|island|shadow)\b/i; // 地上的：只接影子，不投影子（省）
 const f3 = (v) => v.toFixed(3);
 const NOISE = `
@@ -37969,12 +38029,13 @@ function createLook(o) {
 
   // ==== 天空、反射 ====
   let skyMat = null, envTex = null; const ENVS = new Map(); let envBand = '';
-  const skyUni = (u) => { const w = TD.warm; u.turbidity.value = THREE.MathUtils.lerp(LT.turb, DUSK.turb, w); u.rayleigh.value = THREE.MathUtils.lerp(LT.ray, DUSK.ray, w); u.mieCoefficient.value = THREE.MathUtils.lerp(LT.mie, DUSK.mie, w); u.mieDirectionalG.value = 0.8;
+  const skyUni = (u) => { const w = TD.warm; u.turbidity.value = THREE.MathUtils.lerp(LT.turb, DUSK.turb, w); u.rayleigh.value = THREE.MathUtils.lerp(LT.ray, DUSK.ray, w); u.mieCoefficient.value = THREE.MathUtils.lerp(LT.mie, DUSK.mie, w); u.mieDirectionalG.value = THREE.MathUtils.lerp(0.8, DUSK.g, w);
     if (TD.day > 0.001) u.sunPosition.value.copy(sun); else dirOf(u.sunPosition.value, TD.elev, TD.az); // 晚上：天空照（地平線下的）太陽算＝黑的；月亮只當燈
     if (u.cloudCoverage) { u.cloudCoverage.value = LT.cloud; u.cloudDensity.value = LT.cden; } };
   function skyOf(scale) { const k = new Sky(); skyUni(k.material.uniforms); k.scale.setScalar(scale); return k; }
   function makeSky() {
-    if (!skyMat) { const k = skyOf(1); skyMat = k.material; skyMat.depthWrite = false; k.geometry.dispose(); }
+    if (!skyMat) { const k = skyOf(1); skyMat = k.material; skyMat.depthWrite = false; k.geometry.dispose();
+      const f0 = 'gl_FragColor = vec4( texColor, 1.0 );'; if (skyMat.fragmentShader.includes(f0)) { skyMat.fragmentShader = skyMat.fragmentShader.replace(f0, `gl_FragColor = vec4( min( texColor, vec3( ${POST.skyMax.toFixed(1)} ) ), 1.0 );`); skyMat.needsUpdate = true; } else console.warn('look: sky shader changed, no skyMax clamp'); } // 第 34 批：太陽那一點夾住（反射圖那個 skyOf(100) 不夾：本來就沒有太陽）
     skyUni(skyMat.uniforms);
     const band = TD.band; if (band === envBand && envTex) return; envBand = band;
     let tex = ENVS.get(band);
@@ -38316,38 +38377,114 @@ function createLook(o) {
   function grassReset() { if (!GR) return; GR.slot.clear(); GR.ci = GR.cj = 1e9; }
 
   // ==== 第 30 批：晚上的燈（路燈最近 4 支＋自己的車的大燈；漂亮、最真實都有；白天亮度 0，一直留在場景裡，shader 不用重編）====
-  let PL = null, HLT = null, lampPts = null, headCar = null, headDims = null, lampN = 0; const HEAD = [new THREE.Vector3(), new THREE.Vector3()], HTGT = [new THREE.Vector3(), new THREE.Vector3()];
-  function lampList() { // 所有路燈的燈頭：村子的電線桿（有路燈的）、快速道路（中間護欄上 60 公尺一支、兩邊）、大停車場 5 支
-    const P = [];
-    for (const p of V.poles || []) if (p.lamp) P.push(p.x + p.fx * 2.2, 7.6, p.z + p.fz * 2.2);
+  let PL = null, HLT = null, lampPts = null, lampKs = null, headCar = null, headDims = null, lampN = 0; const HEAD = [new THREE.Vector3(), new THREE.Vector3()], HTGT = [new THREE.Vector3(), new THREE.Vector3()];
+  function lampList() { // 所有路燈的燈頭：村子的電線桿（有路燈的）、快速道路（中間護欄上 60 公尺一支、兩邊）、大停車場 5 支；第 32 批：每支多一個亮度倍數（快速道路、停車場的燈頭高，光要強一點才照得到路）
+    const P = [], K = [];
+    for (const p of V.poles || []) if (p.lamp) { P.push(p.x + p.fx * 2.2, 7.6, p.z + p.fz * 2.2); K.push(1); }
     const H = V.highway; if (H && H.center && H.center.length > 1) { const C = H.center; let s = 0, next = 30; for (let i = 1; i < C.length; i++) { const dx = C[i][0] - C[i - 1][0], dz = C[i][1] - C[i - 1][1], L = Math.hypot(dx, dz); if (L < 1e-6) continue;
-      while (next <= s + L && next <= H.len - 25) { const t = (next - s) / L, x = C[i - 1][0] + dx * t, z = C[i - 1][1] + dz * t, nx = -dz / L, nz = dx / L; if (!(V.hills && V.hills.inTunnel && V.hills.inTunnel(x, z, 3))) { P.push(x + nx * 2.65, 11.0, z + nz * 2.65, x - nx * 2.65, 11.0, z - nz * 2.65); } next += 60; } s += L; } }
-    const K = V.parking; if (K) { const X0 = K.x - K.hx, X1 = K.x + K.hx, Z0 = K.z - K.hz, Z1 = K.z + K.hz, zm = (Z0 + Z1) / 2; for (const [x, z] of [[X0 + 17.1, Z0 + 1.5], [X0 + 17.1, zm], [X0 + 17.1, Z1 - 1.5], [X0 + 2.2, zm], [X1 - 2.2, zm]]) P.push(x, 6.3, z); }
+      while (next <= s + L && next <= H.len - 25) { const t = (next - s) / L, x = C[i - 1][0] + dx * t, z = C[i - 1][1] + dz * t, nx = -dz / L, nz = dx / L; if (!(V.hills && V.hills.inTunnel && V.hills.inTunnel(x, z, 3))) { P.push(x + nx * 2.65, 11.0, z + nz * 2.65, x - nx * 2.65, 11.0, z - nz * 2.65); K.push(NSKY.hwK, NSKY.hwK); } next += 60; } s += L; } }
+    const Kp = V.parking; if (Kp) { const X0 = Kp.x - Kp.hx, X1 = Kp.x + Kp.hx, Z0 = Kp.z - Kp.hz, Z1 = Kp.z + Kp.hz, zm = (Z0 + Z1) / 2; for (const [x, z] of [[X0 + 17.1, Z0 + 1.5], [X0 + 17.1, zm], [X0 + 17.1, Z1 - 1.5], [X0 + 2.2, zm], [X1 - 2.2, zm]]) { P.push(x, 6.3, z); K.push(NSKY.parkK); } }
+    lampKs = new Float32Array(K);
     return new Float32Array(P);
   }
   function lampsOn() {
     if (PL) return;
     PL = []; for (let i = 0; i < LAMP.n; i++) { const l = new THREE.PointLight(LAMP.c, 0, LAMP.dist, 2); l.name = 'lk-lamp'; l.position.set(0, -100, 0); scene.add(l); PL.push(l); }
-    HLT = []; for (let i = 0; i < 2; i++) { const l = new THREE.SpotLight(LAMP.headC, 0, 70, 0.5, 0.7, 2); l.name = 'lk-head'; l.position.set(0, -100, 0); scene.add(l); scene.add(l.target); HLT.push(l); }
+    HLT = []; for (let i = 0; i < 2; i++) { const l = new THREE.SpotLight(LAMP.headC, 0, LAMP.headDist, 0.5, 0.7, LAMP.headDecay); l.name = 'lk-head'; l.position.set(0, -100, 0); scene.add(l); scene.add(l.target); HLT.push(l); }
     if (!lampPts) lampPts = lampList(); headCar = null; lampN = 0;
+    nightOn(); // 第 32 批
   }
-  function lampsOff() { if (!PL) return; for (const l of PL) l.removeFromParent(); for (const l of HLT) { l.target.removeFromParent(); l.removeFromParent(); } PL = HLT = null; headCar = null; }
+  function lampsOff() { if (!PL) return; for (const l of PL) l.removeFromParent(); for (const l of HLT) { l.target.removeFromParent(); l.removeFromParent(); } PL = HLT = null; headCar = null; nightOff(); }
   const lampPos = new THREE.Vector3(1e9, 0, 0);
   function lampStep(cam) {
     if (!PL) return; const k = TD.lamp;
     if (k > 0.001 && (lampN++ % 10 === 0 || cam.position.distanceToSquared(lampPos) > 36)) { lampPos.copy(cam.position); // 鏡頭前面 12 公尺附近最近的 4 支（每 10 格，鏡頭跳了 6 公尺以上馬上算）
       cam.getWorldDirection(V3b); const px = cam.position.x + V3b.x * 12, pz = cam.position.z + V3b.z * 12, P = lampPts, best = [1e18, 1e18, 1e18, 1e18], bi = [-1, -1, -1, -1];
       for (let i = 0; i < P.length; i += 3) { const d = (P[i] - px) * (P[i] - px) + (P[i + 2] - pz) * (P[i + 2] - pz); if (d >= best[3]) continue; let j = 3; while (j > 0 && best[j - 1] > d) { best[j] = best[j - 1]; bi[j] = bi[j - 1]; j--; } best[j] = d; bi[j] = i; }
-      for (let j = 0; j < LAMP.n; j++) { const l = PL[j], i = bi[j]; if (i < 0 || best[j] > LAMP.fade1 * LAMP.fade1) { l.intensity = 0; continue; } l.position.set(P[i], P[i + 1] - 0.3, P[i + 2]); l.intensity = LAMP.I * k * (1 - ss(LAMP.fade0, LAMP.fade1, Math.hypot(P[i] - cam.position.x, P[i + 2] - cam.position.z))); } // 第 31 批：離鏡頭遠的慢慢暗（換支不跳）
+      for (let j = 0; j < LAMP.n; j++) { const l = PL[j], i = bi[j]; if (i < 0 || best[j] > LAMP.fade1 * LAMP.fade1) { l.intensity = 0; continue; } l.position.set(P[i], P[i + 1] - 0.3, P[i + 2]); l.intensity = LAMP.I * lampKs[i / 3] * k * (1 - ss(LAMP.fade0, LAMP.fade1, Math.hypot(P[i] - cam.position.x, P[i + 2] - cam.position.z))); } // 第 31 批：離鏡頭遠的慢慢暗（換支不跳）；第 32 批：每支自己的倍數
     } else if (k <= 0.001) for (const l of PL) l.intensity = 0;
     const car = getCar();
     if (car !== headCar) { headCar = car; headDims = car ? carDims(car) : null; }
     if (car && headDims && k > 0.001) { const D = headDims, xf = D.cx + D.hx - 0.15; car.updateMatrixWorld();
-      for (let i = 0; i < 2; i++) { const sz = (i ? -1 : 1) * D.hz * 0.62, l = HLT[i]; HEAD[i].set(xf, 0.62, sz).applyMatrix4(car.matrixWorld); HTGT[i].set(xf + 30, -0.3, sz * 1.6).applyMatrix4(car.matrixWorld);
-        l.position.copy(HEAD[i]); l.target.position.copy(HTGT[i]); l.target.updateMatrixWorld(); l.intensity = LAMP.headI * k; } }
-    else for (const l of HLT) l.intensity = 0;
+      for (let i = 0; i < 2; i++) { const sz = (i ? -1 : 1) * D.hz * 0.62, l = HLT[i]; HEAD[i].set(xf, 0.62, sz).applyMatrix4(car.matrixWorld); HTGT[i].set(xf + LAMP.headAim, -0.3, sz * 1.6).applyMatrix4(car.matrixWorld);
+        l.position.copy(HEAD[i]); l.target.position.copy(HTGT[i]); l.target.updateMatrixWorld(); l.intensity = LAMP.headI * k; }
+      if (NS) { const bm = NS.beam; bm.position.set(xf, 0.06, 0).applyMatrix4(car.matrixWorld); car.getWorldQuaternion(bm.quaternion); bm.material.opacity = NSKY.beamI * k; if (!bm.visible) bm.visible = true; } } // 第 34 批：路上的長光斑跟著車頭
+    else { for (const l of HLT) l.intensity = 0; if (NS && NS.beam.visible) NS.beam.visible = false; }
+    nightStep(cam, k);
     signsK(k);
     if (Math.abs(k - lampSent) > 0.02 || (k === 0) !== (lampSent === 0)) { lampSent = k; nightCb(k); }
+  }
+
+  // ==== 第 32 批：晚上的天空和燈：星星（跟著鏡頭的點）、月亮的圓盤（光本來就是月亮：方向一樣）、透天厝一樓的窗戶和店面（加亮的面，蓋在原本的窗戶上）、警車的紅藍燈（最近一台、一顆燈換顏色）、路上車子的大燈照在路上（加亮的橢圓，最近 12 台）；白天透明度 0，都留在場景裡 ====
+  let NS = null; const MD = new THREE.Vector3(), POOLC = []; const policeOf = o.police || (() => null), trafficOf = o.traffic || (() => null);
+  function nightOn() {
+    if (NS) return;
+    let sd = 20261024; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    // 星星
+    const n = NSKY.stars, sp = new Float32Array(n * 3), sc = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { let x, y, z; do { x = rnd() * 2 - 1; y = rnd(); z = rnd() * 2 - 1; } while (x * x + y * y + z * z > 1 || y < 0.06); const L = Math.hypot(x, y, z) / NSKY.starR; sp[i * 3] = x / L; sp[i * 3 + 1] = y / L; sp[i * 3 + 2] = z / L;
+      const b = 0.35 + rnd() * rnd() * 1.1, t = rnd(); sc[i * 3] = b * (t < 0.2 ? 1.0 : 0.85); sc[i * 3 + 1] = b * 0.9; sc[i * 3 + 2] = b * (t < 0.2 ? 0.75 : 1.0); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3)); sg.setAttribute('color', new THREE.BufferAttribute(sc, 3));
+    const stars = new THREE.Points(sg, new THREE.PointsMaterial({ size: NSKY.starSz, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false, toneMapped: false }));
+    stars.name = 'lk-stars'; stars.frustumCulled = false; stars.renderOrder = -999; stars.matrixAutoUpdate = false;
+    stars.onBeforeRender = (r, s2, c) => { const e = c.matrixWorld.elements; stars.matrixWorld.makeTranslation(e[12], e[13], e[14]); };
+    // 月亮
+    const moon = new THREE.Mesh(new THREE.CircleGeometry(NSKY.moonR, 24), new THREE.MeshBasicMaterial({ color: NSKY.moonC, transparent: true, opacity: 0, depthWrite: false, fog: false, toneMapped: false }));
+    moon.name = 'lk-moon'; moon.frustumCulled = false; moon.renderOrder = -998; moon.matrixAutoUpdate = false; dirOf(MD, MOON.elev, MOON.az);
+    moon.onBeforeRender = (r, s2, c) => { V3b.setFromMatrixPosition(c.matrixWorld); V3.copy(V3b).addScaledVector(MD, NSKY.moonD); M4.lookAt(V3b, V3, UP); moon.matrixWorld.copy(M4).setPosition(V3); };
+    // 透天厝的窗戶、店面（village.js 的 houses：一樓 kind 'door' 兩邊的窗、'shop' 的店面；鐵捲門的沒有燈）
+    const wp = [], wc = [], wi = []; let lit = 0;
+    const quad = (h, x0, x1, y0, y1, col) => { const c = Math.cos(h.ry), sn = Math.sin(h.ry), z = 0.06, b = wp.length / 3;
+      for (const [lx, ly] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]) { wp.push(h.x + lx * c + z * sn, ly, h.z - lx * sn + z * c); wc.push(col[0], col[1], col[2]); }
+      wi.push(b, b + 1, b + 2, b, b + 2, b + 3); lit++; };
+    for (const h of V.houses || []) { const r = rnd(), w = h.w;
+      if (h.kind === 'shop') { if (r < NSKY.shopP) quad(h, -w / 2 + 0.2, w / 2 - 0.2, 0.1, 2.7, NSKY.shopC); }
+      else if (h.kind === 'door' && w >= 4.6 && r < NSKY.winP) { const warm = 0.85 + rnd() * 0.3, col = [NSKY.winC[0] * warm, NSKY.winC[1] * warm, NSKY.winC[2] * (1.3 - warm * 0.3)]; quad(h, -w / 2 + 0.35, -1.05, 0.9, 2.4, col); if (rnd() < 0.75) quad(h, 1.05, w / 2 - 0.35, 0.9, 2.4, col); } }
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3)); wg.setIndex(wi);
+    const win = new THREE.Mesh(wg, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); win.name = 'lk-win'; win.visible = false;
+    // 警車的紅藍燈：一顆燈，0.8 秒紅藍換
+    const pol = new THREE.PointLight(0xff2a1a, 0, NSKY.polD, 2); pol.name = 'lk-pol'; pol.position.set(0, -100, 0);
+    // 大燈照在路上：橢圓的光斑（貼圖畫一次）
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'), gr = g.createRadialGradient(22, 64, 0, 22, 64, 104);
+    gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.3, 'rgba(255,255,255,0.5)'); gr.addColorStop(0.7, 'rgba(255,255,255,0.12)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    const pt = new THREE.CanvasTexture(cv); pt.colorSpace = THREE.SRGBColorSpace;
+    const pg = new THREE.PlaneGeometry(NSKY.poolL, NSKY.poolW); pg.rotateX(-Math.PI / 2); pg.translate(NSKY.poolL / 2, 0, 0);
+    const pool = new THREE.InstancedMesh(pg, new THREE.MeshBasicMaterial({ map: pt, color: LAMP.headC, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }), NSKY.poolN);
+    pool.name = 'lk-pool'; pool.frustumCulled = false; pool.count = 0; pool.instanceMatrix.setUsage(THREE.DynamicDrawUsage); pool.visible = false; pool.renderOrder = 3;
+    // 第 34 批：自己的車的大燈照在路上（Nick「晚上車燈可以照遠一點嗎 不然看不清楚路」）：SpotLight 打在路面是掠射（0.6 公尺高照 30 公尺外＝1 度），Lambert 幾乎是 0，再亮也只照亮樹和護欄；
+    // 所以路面用一片加亮的長光斑（車頭前面 0–70 公尺、越遠越寬越淡；貼圖算一次），跟著車（含坡度）；SpotLight 留著照前面的東西
+    const bc = document.createElement('canvas'); bc.width = 256; bc.height = 64; const bg = bc.getContext('2d'), im = bg.createImageData(256, 64), px = im.data;
+    for (let j = 0; j < 64; j++) for (let i = 0; i < 256; i++) { const u = (i + 0.5) / 256, v = ((j + 0.5) / 64) * 2 - 1, hw = 0.22 + 0.78 * u, lat = Math.exp(-(v / hw) * (v / hw) * 2.2), lon = (1 - u) * (1 - u) * (1 - Math.exp(-u * 40)), a = Math.max(0, Math.min(1, lat * lon * 1.15)); const o = (j * 256 + i) * 4; px[o] = px[o + 1] = px[o + 2] = 255; px[o + 3] = Math.round(a * 255); }
+    bg.putImageData(im, 0, 0); const bt = new THREE.CanvasTexture(bc); bt.colorSpace = THREE.SRGBColorSpace;
+    const bgm = new THREE.PlaneGeometry(NSKY.beamL, NSKY.beamW); bgm.rotateX(-Math.PI / 2); bgm.translate(NSKY.beamL / 2, 0, 0);
+    const beam = new THREE.Mesh(bgm, new THREE.MeshBasicMaterial({ map: bt, color: LAMP.headC, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    beam.name = 'lk-beam'; beam.frustumCulled = false; beam.visible = false; beam.renderOrder = 3;
+    scene.add(stars, moon, win, pol, pool, beam);
+    NS = { stars, moon, win, pol, pool, beam, lit, polCar: null, polD: 1e9, pools: 0 };
+  }
+  function nightOff() { if (!NS) return; for (const k of ['stars', 'moon', 'win', 'pol', 'pool', 'beam']) { const x = NS[k]; x.removeFromParent(); x.geometry?.dispose(); if (x.material) { x.material.map?.dispose(); x.material.dispose(); } } NS = null; }
+  function nightStep(cam, k) {
+    if (!NS) return;
+    const nk = TD.night * TD.night * (1 - cave); NS.stars.material.opacity = nk; NS.moon.material.opacity = TD.moon * (1 - cave); // 隧道、塔裡面看不到天
+    NS.win.material.opacity = k; if (NS.win.visible !== (k > 0.001 && NS.lit > 0)) NS.win.visible = k > 0.001 && NS.lit > 0;
+    // 警車：最近的、燈在閃的那台
+    const PC = k > 0.001 ? policeOf() : null; let best = 70 * 70, bc = null;
+    if (PC) for (let i = 0; i < PC.length; i++) { const c = PC[i]; if (!c.lights || c.x > 1e5) continue; const d = (c.x - cam.position.x) * (c.x - cam.position.x) + (c.z - cam.position.z) * (c.z - cam.position.z); if (d < best) { best = d; bc = c; } }
+    NS.polCar = bc; NS.polD = bc ? Math.sqrt(best) : 1e9;
+    if (bc) { const ph = ((performance.now() / 1000) % NSKY.polT) / NSKY.polT, red = ph < 0.5, h = bc.heading, side = red ? 0.45 : -0.45, gy = V.heightAt ? V.heightAt(bc.x, bc.z) : 0;
+      NS.pol.color.setHex(red ? 0xff2a1a : 0x2a60ff); NS.pol.position.set(bc.x + Math.sin(h) * side, gy + 2.0, bc.z + Math.cos(h) * side); NS.pol.intensity = NSKY.polI * k * (1 - ss(45, 70, NS.polD)); }
+    else NS.pol.intensity = 0;
+    // 路上車子的大燈：最近 12 台（路上的車、警車）車頭前面的光斑
+    const pool = NS.pool; let n = 0;
+    if (k > 0.001) { const L = POOLC; L.length = 0; const cx = cam.position.x, cz = cam.position.z, R2 = 110 * 110;
+      const TC = trafficOf(); if (TC) for (let i = 0; i < TC.length; i++) { const c = TC[i]; if (!c.active || c.kind !== 'car' || c.crushed) continue; const d = (c.x - cx) * (c.x - cx) + (c.z - cz) * (c.z - cz); if (d < R2) L.push(d, c); }
+      if (PC) for (let i = 0; i < PC.length; i++) { const c = PC[i]; if (c.x > 1e5) continue; const d = (c.x - cx) * (c.x - cx) + (c.z - cz) * (c.z - cz); if (d < R2) L.push(d, c); }
+      const m = L.length / 2; // 近的先（選擇排序：最多 12 個）
+      for (let a = 0; a < m && a < NSKY.poolN; a++) { let bi = a; for (let b = a + 1; b < m; b++) if (L[b * 2] < L[bi * 2]) bi = b; if (bi !== a) { const d0 = L[a * 2], c0 = L[a * 2 + 1]; L[a * 2] = L[bi * 2]; L[a * 2 + 1] = L[bi * 2 + 1]; L[bi * 2] = d0; L[bi * 2 + 1] = c0; }
+        const c = L[a * 2 + 1], h = c.heading, fx = Math.cos(h), fz = -Math.sin(h), hx = c.hx || 2.2, x = c.x + fx * (hx + 0.3), z = c.z + fz * (hx + 0.3), gy = V.heightAt ? V.heightAt(x, z) : 0;
+        Q.setFromAxisAngle(UP, h); M4.compose(V3.set(x, gy + 0.05, z), Q, S3.set(1, 1, 1)); pool.setMatrixAt(n++, M4); }
+      if (n) pool.instanceMatrix.needsUpdate = true; }
+    pool.count = n; NS.pools = n; pool.material.opacity = NSKY.poolI * k; if (pool.visible !== n > 0) pool.visible = n > 0;
   }
 
   // ==== 第 30 批：濕的路的倒影（最真實、燈亮的時候）：把世界從路面倒過來再畫一次到半張大小的圖（地上的東西不畫、鏡頭在路面下面、路面以上才畫）====
@@ -38409,10 +38546,10 @@ function createLook(o) {
   function postRender(cam) {
     postSize();
     R.info.autoReset = false; R.info.reset();
-    WU.wetK.value = TD.lamp; if (TD.lamp > 0.01) wetRender(cam); else st.wetCalls = 0;
+    WU.wetK.value = TD.night; if (TD.night > 0.01) wetRender(cam); else st.wetCalls = 0; // 第 34 批：濕路照「晚上」（以前照「燈亮」：傍晚太陽還在，濕路把太陽那片天空整個反到路上，前面一片白）
     R.setRenderTarget(PP.a); MASKU.value = 1; r0(scene, cam); MASKU.value = 0;
     PP.ao.camera = cam; PP.ao.render(R, PP.b, PP.a);
-    PP.bloom.strength = THREE.MathUtils.lerp(POST.bloom, LAMP.bloom, TD.lamp); PP.bloom.threshold = THREE.MathUtils.lerp(POST.thr, LAMP.thr, TD.lamp); PP.q.material.uniforms.toneMappingExposure.value = TD.exp;
+    PP.bloom.strength = THREE.MathUtils.lerp(POST.bloom, LAMP.bloom, TD.night); PP.bloom.threshold = THREE.MathUtils.lerp(POST.thr, LAMP.thr, TD.night); // 第 34 批：光暈照「晚上」不照「燈亮」：傍晚太陽還在的時候不會把天空暈成一片白 PP.q.material.uniforms.toneMappingExposure.value = TD.exp;
     PP.bloom.render(R, null, PP.b, 0, false);
     PP.q.material.uniforms.tDiffuse.value = PP.b.texture; R.setRenderTarget(null); PP.q.render(R);
     R.info.autoReset = true;
@@ -38531,7 +38668,8 @@ function createLook(o) {
     set, treeK, stats: st,
     get hour() { return hourNow(); }, setHour(h) { hourOv = h == null ? null : clamp(+h, 0, 24) % 24; timeStep(); lampN = 0; }, get night() { return TD.lamp; }, get sun() { return TD.elev; }, // 第 30 批：一天的時間
     _tex: () => TEX, _td: () => TD,
-    info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band }),
+    info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band, stars: NS ? +NS.stars.material.opacity.toFixed(2) : null, moon: NS ? +NS.moon.material.opacity.toFixed(2) : null, win: NS ? NS.lit : 0, winK: NS ? +NS.win.material.opacity.toFixed(2) : 0, pools: NS ? NS.pools : 0, pol: NS ? +NS.pol.intensity.toFixed(1) : 0, polD: NS && NS.polCar ? +NS.polD.toFixed(1) : null }),
+    _ns: () => NS, _az: () => TD.az,
   };
   return API;
 }
@@ -38584,6 +38722,7 @@ let seat = null; // 坐在車裡（cabin.js）：{ 原本的鏡頭, yaw, pitch }
 const ROOMQ_KEY = 'carid.roomq';
 let room = null, roomQ = (() => { try { return localStorage.getItem(ROOMQ_KEY) === 'low' ? 'low' : 'high'; } catch { return 'high'; } })();
 let onCars = null; // town.src.js：換車、買車、車庫重蓋的時候把你其他的車停到車位（輕量車）
+let liftAnim = null; // 第 33 批（town.src.js）：選了樓上的車，電梯真的去載：{ start(key, was, twI), step(dt), cancel(), vis(k, key) }
 function makeRoom() {
   room = buildRoom(renderer, { quality: roomQ }); scene.add(room.group); room.resize();
   if (roomQ === 'high' && window.__roomWatch !== false) watchRoom(room);
@@ -38977,16 +39116,18 @@ function dmgOf(car, key) {
 
 const carsEl = document.getElementById('cars');
 async function showCar(key) {
-  const was = cur, twI = was !== key && Array.isArray(GAME.park?.tower) ? GAME.park.tower.indexOf(key) : -1; // 第 21 批：選了停在圓塔樓上的車：電梯把它送下來（說一聲）
+  liftAnim?.cancel(); // 第 33 批：上一台還在坐電梯：馬上做完
+  const was = cur, twI = was !== key && Array.isArray(GAME.park?.tower) ? GAME.park.tower.indexOf(key) : -1; // 第 21 批：選了停在圓塔樓上的車：電梯把它送下來（第 33 批：真的去載）
+  const anim = twI >= 0 && !!liftAnim?.start(key, was, twI);
   cur = key; save();
-  if (twI >= 0 && room?.group.visible && typeof TOWER_BAYS !== 'undefined') gtoast(`${CARS[key].btn[0]} 坐電梯從 ${towerFlTxt(TOWER_BAYS[twI].f)}${towerUnder(TOWER_BAYS[twI].f) ? ' 上來' : '下來'}了`, 2000); // 第 26 批：地下室上來
+  if (twI >= 0 && room?.group.visible && typeof TOWER_BAYS !== 'undefined') gtoast(`${CARS[key].btn[0]} 坐電梯從 ${towerFlTxt(TOWER_BAYS[twI].f)}${towerUnder(TOWER_BAYS[twI].f) ? ' 上來' : '下來'}${anim ? '⋯' : '了'}`, anim ? 3500 : 2000); // 第 26 批：地下室上來
   const bc = PERF[key].big ? 1.55 : 1; // 第 4 批：大車（怪獸卡車）鏡頭拉遠、看高一點、影子放大
   if (bc !== bigCam) { bigCam = bc; controls.target.y = bc > 1 ? 1.45 : 0.55; sh.scale.set(bc > 1 ? 1.25 : 1, bc > 1 ? 1.7 : 1, 1); if (!seat) { resize(); view(38); } }
   carsEl.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.car === key)));
   document.getElementById('carName').textContent = CARS[key].name;
   document.getElementById('carSub').textContent = CARS[key].sub;
   renderOptions(); onCars?.();
-  for (const [k, c] of Object.entries(built)) c.car.visible = k === key;
+  for (const [k, c] of Object.entries(built)) c.car.visible = liftAnim ? liftAnim.vis(k, key) : k === key; // 第 33 批：電梯載車中：原本那台還看得到（在電梯上），要的那台到了才出來
   const ri = recent.indexOf(key); if (ri >= 0) recent.splice(ri, 1); recent.push(key);
   while (recent.length > 3) dispose(recent.shift());
   S = built[key] || null;
@@ -38998,7 +39139,7 @@ async function showCar(key) {
       built[key] = car; scene.add(car.car);
       if (!recent.includes(key)) { dispose(key); return; } // 載入中已經被換掉很多台了
       if (GAME.dmg[key]) dmgOf(car, key); // 撞壞的車：車庫裡也是凹的
-      car.car.visible = cur === key;
+      car.car.visible = cur === key && !(liftAnim?.on && liftAnim.on.key === key); // 第 33 批：還在坐電梯：到了才出來
       if (cur === key) S = car;
     } catch (err) {
       msg.textContent = '車子沒載入成功，重新整理再試一次'; prog.parentElement.hidden = true; console.error(err);
@@ -39967,7 +40108,7 @@ let boarding = null; // 換車中（完整模型載入中）：回車庫頁了�
 let TWR = null; // 第 21 批：這一趟 TWR[i]＝圓塔第 i 格停哪台（40 格，TOWER_BAYS 的順序：二樓先）
 // 第 23 批：開進朋友的車庫（net.src.js gvStart／gvEnd）：塔（GAR）搬到他家、格子裡換成他的車（輕量車、他的樣子）；你家變成外殼、你的車照停（TWR、存檔都不動）
 //   on、uid、n（名字）、slot（他家的號碼）、want[40]（他的格子）、looks（他每台車的外觀）、objs（key → { lod, cx, cz, hx, hz }）、q（還沒做的車）、tr（他的獎盃）、lift0（你家的電梯原本在哪）、in（你在他家裡面）
-const GV = { on: false, uid: '', n: '', slot: -1, want: null, looks: {}, objs: {}, q: [], tr: 0, lift0: null, in: false, job: 0 };
+const GV = { on: false, uid: '', n: '', slot: -1, want: null, looks: {}, objs: {}, q: [], tr: 0, lift0: null, in: false, job: 0, mine: -1 }; // mine：第 34 批：你停進他哪一格（他也有同一款車的時候才分得出哪台是你的）
 const twrNow = () => (GV.on ? GV.want : TWR); // 塔的格子現在擺誰的車
 const EL = { ride: null, keys: new Set(), panel: null }; // 第 21 批：電梯（ride＝坐電梯中、keys＝掛在圓台上一起坐的車、panel＝按樓層的面板）
 let PW = null; // 第 21 批：開車、走路用的世界（VIL 包一層：塔裡面的地板高度＝現在那一層）
@@ -40045,9 +40186,10 @@ function normPark() {
 function syncTower(R, want, objOf) {
   const tk = R.tk || (R.tk = Array(TOWER_BAYS.length).fill(null));
   for (let i = 0; i < TOWER_BAYS.length; i++) {
+    if (ELA.on && R === room && i === ELA.on.i) continue; // 第 33 批：電梯正在載的那格不動
     const k = want?.[i] || null, have = R.cars[i];
     if (!k) { if (have || tk[i]) R.take(i); tk[i] = null; continue; }
-    const o = objOf(k);
+    const o = objOf(k, i);
     if (o) { if (have !== o || o.parent?.name !== 'towerBay' + (i + 1) || tk[i] !== k) R.put(i, o, CARS[k].btn[0]); }
     else if (tk[i] !== k || have?.isObject3D) { R.take(i); R.put(i, CARS[k].btn[0]); }
     tk[i] = k;
@@ -40112,7 +40254,7 @@ function arrangeCars() {
       if (PFULL[k]) { pfullShow(k); continue; } // 第 4 批：大車換開別台：完整的車停在原地
       const [g, q] = parkedAt(p); at.set(k, [g, q, true, p]);
     }
-  } else if (R) want = normPark().tower;
+  } else if (R) want = ELA.on ? ELA.on.want : normPark().tower; // 第 33 批：電梯載車中：照舊的格子（做完再整理）
   pads.forEach((k, i) => at.set(k, [VIL.group, shows[i], true, shows[i]]));
   const onDeck = new Set([...(inTown && GV.on ? [] : want || []), ...(inTown ? EL.keys : [])].filter((k) => k && !(inTown && k === tripFull))); // 格子裡的、坐電梯中的也不收（第 23 批：在朋友家，你格子裡的車收起來）
   for (const k of Object.keys(CARS)) {
@@ -40127,12 +40269,12 @@ function arrangeCars() {
     w[0].add(lod.car); lod.car.position.set(w[1].x, w[1].y || 0, w[1].z); lod.car.rotation.set(0, w[1].heading || 0, 0); // 車店的轉盤比地面高一點（y）
     LODS[k].shadow.visible = w[2];
   }
-  if (R && want) syncTower(R, want, inTown && GV.on ? (k) => GV.objs[k]?.lod.car || null : (k) => (inTown && k === tripFull ? tripS.car : LODS[k]?.lod ? LODS[k].lod.car : null));
+  if (R && want) syncTower(R, want, inTown && GV.on ? (k, i) => (i === GV.mine ? tripS.car : GV.objs[k]?.lod.car || null) : (k) => (inTown && k === tripFull ? tripS.car : LODS[k]?.lod ? LODS[k].lod.car : null)); // 第 32 批：朋友家：你停進他格子的那台（完整的車）
   if (inTown) { // 停著的車：開過去會撞到、走過去會擋到（第 21 批：跟你同一層的才擋：樓上的格子、你在樓上的時候外面的都不擋）
     const cols = [], padCols = [], fl = GAR.floor;
     for (const [k, w] of at) { const L = LODS[k], own = GAME.owned.has(k); if (L?.lod && w[3] && (!own || poseF(w[3]) === fl)) (own ? cols : padCols).push(carBox(L, w[3])); }
     const TW = twrNow();
-    for (let i = 0; i < TW.length; i++) { const k = TW[i], L = GV.on ? GV.objs[k] : k !== tripFull && LODS[k]; if (k && TOWER_BAYS[i].f === fl && L?.lod) cols.push(carBox(L, towerPose(i))); } // 第 23 批：朋友家的格子＝他的車
+    for (let i = 0; i < TW.length; i++) { const k = TW[i], L = GV.on ? i !== GV.mine && GV.objs[k] : k !== tripFull && LODS[k]; if (k && TOWER_BAYS[i].f === fl && L?.lod) cols.push(carBox(L, towerPose(i))); } // 第 23 批：朋友家的格子＝他的車
     for (const k in PFULL) { const p = tripPose[k]; if (p && k !== tripFull && poseF(p) === fl) cols.push(carBox(PFULL[k].box, p)); } // 第 4 批：停著的完整的車（大車換開別台）
     if (drv) { drv.removeColliders('parked'); drv.addColliders([...cols, ...padCols], 'parked'); }
     if (walker) { walker.removeColliders('pads'); walker.addColliders(padCols, 'pads'); walker.setCars(walkCars()); } // 你的車：走路那邊自己加碰撞（setCars）
@@ -40140,6 +40282,45 @@ function arrangeCars() {
   if (inTown) oShow(); // 第 4 批：越野車行展示台上的車（買走了收掉、開車的是新的再放碰撞）
 }
 onCars = arrangeCars; // 車庫頁換車、買車、重新開始、車庫重蓋的時候叫（garage.src.html）
+// ==== 第 33 批：車庫頁選了停在樓上（地下室）的車：電梯真的去載（以前只說「坐電梯下來了」）====
+//   原本在圓台上那台（完整的車）坐電梯上去、滑進那台的格子；那台（輕量車）從格子滑到圓台上、坐電梯回一樓；到了才換成完整的車
+//   這段時間 arrangeCars 照舊的格子擺（ELA.want）；再點別台、出門、換攝影棚＝馬上做完（cancel）
+const ELA = { on: null, SW: 1.1 }; // on：{ key, was, i, lod, wasCar, ph: 'up'|'swap'|'down', t, want }
+function elaStart(key, was, twI) {
+  const R = room; if (!R || !R.group.visible || R.lift.busy || ELA.on || DRIVE.on || RACE.on) return false;
+  const lod = LODS[key]?.lod?.car; if (!lod || R.cars[twI] !== lod) return false;
+  const wasCar = was && was !== key && built[was]?.car || null, want = (GAME.park?.tower || []).slice(), b = TOWER_BAYS[twI];
+  if (want[twI] !== key) return false;
+  ELA.on = { key, was, i: twI, lod, wasCar, ph: 'up', t: 0, want };
+  if (wasCar) { R.platform.attach(wasCar); wasCar.visible = true; }
+  if (!R.onLift) R.onLift = (w) => { stopLiftSnd(); if (w === 'start') liftSnd.page = engineAudio.lift(); };
+  if (!R.liftTo(b.f, b.heading, () => elaArrive(ELA.on))) { ELA.on = null; if (wasCar) { scene.add(wasCar); wasCar.position.set(0, 0, 0); wasCar.rotation.set(0, 0, 0); } return false; }
+  return true;
+}
+function elaArrive(A) { // 到了那一層：原本那台滑進格子、要的那台滑到圓台上（swap），再回一樓
+  if (!A || ELA.on !== A || A.ph !== 'up') return;
+  const R = room; A.ph = 'swap'; A.t = 0;
+  if (A.wasCar) { R.put(A.i, A.wasCar, CARS[A.was].btn[0]); A.wasCar.position.x = -TOWER.RB; } // 格子的本地：圓台中心在 x = −RB
+  R.platform.add(A.lod); A.lod.position.set(TOWER.RB, 0, 0); A.lod.rotation.set(0, 0, 0); // 圓台的本地：格子在 x = +RB（圓台轉到對著格子了）
+}
+function elaStep(dt) {
+  const A = ELA.on; if (!A) return;
+  const R = room; if (!R || !R.group.visible) { elaCancel(); return; }
+  if (A.ph !== 'swap') return;
+  A.t = Math.min(ELA.SW, A.t + dt); const u = A.t / ELA.SW, e = u * u * (3 - 2 * u);
+  if (A.wasCar) A.wasCar.position.x = -TOWER.RB * (1 - e);
+  A.lod.position.x = TOWER.RB * (1 - e);
+  if (A.t >= ELA.SW) { A.ph = 'down'; if (!R.liftTo(0, 0, () => elaDone(A))) elaDone(A); }
+}
+function elaDone(A) { if (!A || ELA.on !== A) return; ELA.on = null; elaFinish(A); }
+function elaFinish(A) { // 收尾：輕量車拿下來、原本那台回原點（藏著）、格子照新的擺、要的那台（完整的車）出來
+  A.lod.removeFromParent();
+  arrangeCars();
+  if (A.wasCar) { scene.add(A.wasCar); A.wasCar.position.set(0, 0, 0); A.wasCar.rotation.set(0, 0, 0); A.wasCar.visible = false; }
+  const c = built[A.key]; if (c && cur === A.key) c.car.visible = true;
+}
+function elaCancel() { const A = ELA.on; if (!A) return; ELA.on = null; stopLiftSnd(); room?.liftSnap(0, 0); elaFinish(A); }
+liftAnim = { start: elaStart, step: elaStep, cancel: elaCancel, vis: (k, key) => (ELA.on ? k === ELA.on.was && !!ELA.on.wasCar : k === key), get on() { return ELA.on; }, state: () => (ELA.on ? { key: ELA.on.key, was: ELA.on.was, i: ELA.on.i, ph: ELA.on.ph, lodAt: ELA.on.lod.parent?.name || null, wasAt: ELA.on.wasCar?.parent?.name || null, lodX: ELA.on.lod.position.x, wasX: ELA.on.wasCar ? ELA.on.wasCar.position.x : 0 } : null) };
 arrangeCars();
 // 走路可以上的車：你的車（停在哪就在哪；第 21 批：跟你同一層的才上得去）；開著的、剛下車停著的那台 walk.js 自己記著
 function walkCars() {
@@ -40196,6 +40377,7 @@ async function enterDrive() {
   if (DRIVE.on || RACE.on || trip || enterDrive.busy) return;
   if (!S) { gtoast('車子還在開進車庫，等一下'); return; }
   if (!GAME.owned.has(cur)) return;
+  elaCancel(); // 第 33 批：電梯還在載車：馬上做完
   stopRev(); getOut(); engineAudio.resume(); // 在點擊裡、await 之前；坐在車裡（車庫頁的「車內」）就先下車
   trip = true; HOME.in = true; controls.enabled = false; // 第 17 批：出門一定是從車庫裡面開始（載入中名單也寫「在車庫」，不會先跳「在路上」）
   document.body.classList.add('driving'); // 車庫的東西先收起來（換車、選項），畫面變高
@@ -40238,7 +40420,7 @@ async function enterDrive() {
     // 第 29 批（Nick 2026-10-23「就用5號的真實度」）：畫質；第一次「漂亮／最真實」要先找樹冠、畫材質貼圖、編 shader（在這裡做，開出去不會頓）
     try {
       LOOK = createLook({ renderer, scene: TR.scene, world: VIL, getCar: lookCar, plain: () => GAR?.group || null, indoor: (c) => !!GAR && !!TWR && inTower(c.position.x, c.position.z),
-        night: lookNight, carDims: (car) => (tripS && car === tripS.car ? fullBox(tripS) : null) }); // 第 30 批：晚上（車燈）、自己的車的大燈放哪裡
+        night: lookNight, carDims: (car) => (tripS && car === tripS.car ? fullBox(tripS) : null), police: () => police?.npcCars || null, traffic: () => NPC?.traffic?.cars || null }); // 第 30 批：晚上（車燈）、自己的車的大燈放哪裡；第 32 批：警車（紅藍燈）、路上的車（大燈照路）
       const lv = lookPref(); lookBtns(lv);
       if (lv > 0) { msg.textContent = '畫面準備中⋯'; await new Promise((r) => setTimeout(r, 30)); await lookSet(lv, false); renderer.compile(TR.scene, dcam); }
     } catch (e) { console.error(e); }
@@ -40550,10 +40732,10 @@ function hillStep(t, dt) {
 // 第 21 批：停在圓塔樓上的空格子裡（差一點點：自己開正再下車，車頭朝外）＝停進去（車子掛到格子上）；一樓沒有格子：停在哪就在哪
 function parkSpot(t) {
   const ob = orbaySpot(t); if (ob) return ob; // 第 6 批：越野車停進越野車車庫的格子
-  if (!TWR || GV.on || !GAR.floor || !liftOK(cur)) return null; // 第 23 批：朋友家的格子不能停
-  const q = garLocal(t.x, t.z), h = wrapPi(t.heading - garLot().heading);
+  if (!TWR || !GAR.floor || !liftOK(cur)) return null; // 第 23 批：朋友家的格子不能停 → 第 32 批：可以了（停在他家空的格子，只有這一趟；回家、被請出去、走遠了車就到門口外面）
+  const q = garLocal(t.x, t.z), h = wrapPi(t.heading - garLot().heading), TW = twrNow();
   for (const b of TOWER_BAYS) {
-    if (b.f !== GAR.floor || b.road || TWR[b.id] || Math.abs(wrapPi(h - b.heading)) > 0.6) continue; // 歪太多（橫著停、倒車停進去）不算；第 24 批：斜坡的路不能停
+    if (b.f !== GAR.floor || b.road || TW[b.id] || Math.abs(wrapPi(h - b.heading)) > 0.6) continue; // 歪太多（橫著停、倒車停進去）不算；第 24 批：斜坡的路不能停
     const ca = Math.cos(b.a), sa = Math.sin(b.a), u = q.x * ca + q.z * sa - TOWER.RB, v = q.z * ca - q.x * sa; // 格子的本地：u 往外、v 往旁邊
     if (u < -2.4 || u > 2.6 || Math.abs(v) > 1.5) continue; // 開到底（車頭碰到玻璃）、還在電梯口都算，parkAt 會擺正
     const w = garWorld(b);
@@ -40577,8 +40759,9 @@ function outAt(spot) {
   tripPose[cur] = { x: car.x, z: car.z, heading: car.heading, f: floorAt(car.x, car.z) };
   dvoice?.dispose(); dvoice = null; // 熄火（上車再發動）
   tripS?.cabin?.userData.setGauges(0, 0); tripS?.cabin?.userData.setSteer?.(0);
-  if (spot?.tw != null && liftOK(cur) && !TWR[spot.tw]) { // 停進格子：車子掛到格子上；開車的收掉（上車再做一個：車子要從格子拿下來）
-    dropDrv(); TWR[spot.tw] = cur; tripPose[cur] = towerPose(spot.tw);
+  const TW = twrNow(); // 第 32 批：在朋友家＝他的格子（GV.want）
+  if (spot?.tw != null && liftOK(cur) && !TW[spot.tw]) { // 停進格子：車子掛到格子上；開車的收掉（上車再做一個：車子要從格子拿下來）
+    dropDrv(); TW[spot.tw] = cur; tripPose[cur] = towerPose(spot.tw); if (GV.on) GV.mine = spot.tw;
     const b = TOWER_BAYS[spot.tw];
     walker.toast(`${CARS[cur].btn[0]} 停好了：${towerFlTxt(b.f)} ${b.i + 1} 號`, 2200);
   } else if (spot?.bay != null) walker.toast(`${CARS[cur].btn[0]} 停好了：越野車車庫 ${spot.bay + 1} 號格`, 2200); // 第 6 批
@@ -40590,7 +40773,7 @@ function dropDrv() { drv.dispose(); drv = null; home.open = null; obDoor.drv = n
 function offTower(k) {
   const p = tripPose?.[k]; if (!p || p.tw == null) return null;
   const i = p.tw, pose = { x: p.x, z: p.z, heading: p.heading, f: TOWER_BAYS[i].f };
-  TWR[i] = null; tripPose[k] = pose;
+  twrNow()[i] = null; tripPose[k] = pose; if (GV.on && i === GV.mine) GV.mine = -1; // 第 32 批：在朋友家＝他的格子
   if (GAR.cars[i]) GAR.take(i);
   if (GAR.tk) GAR.tk[i] = null;
   keepPark();
@@ -40803,7 +40986,7 @@ async function warmHouses() {
 //   電梯不在你這層：電梯井旁邊按「叫電梯」（圓台上停著的車一起下來）
 const EL_R = 1.4; // 車子中心離圓台中心多近才算開上電梯（按了樓層：差一點點自己開到正中間）
 const EL_CALL = { label: '叫電梯', icon: 'lift', onClick: () => elCall() };
-const elFree = (f) => { let n = 0; for (const b of TOWER_BAYS) if (b.f === f && !b.road && !TWR?.[b.id]) n++; return n; }; // 第 f 層還有幾格空的（第 24 批：每層 7 格，口那一格是路）
+const elFree = (f) => { const TW = twrNow(); let n = 0; for (const b of TOWER_BAYS) if (b.f === f && !b.road && !TW?.[b.id]) n++; return n; }; // 第 f 層還有幾格空的（第 24 批：每層 7 格，口那一格是路）
 const elGuest = (f) => { let n = 0; for (const b of TOWER_BAYS) if (b.f === f && GV.want?.[b.id]) n++; return n; }; // 第 23 批：朋友家第 f 層停了幾台
 // 現在可以按樓層嗎：0 不行；1 開車停在圓台上；2 開車停在圓台上、可是這台不能坐電梯（大車、借來的）；3 走路站在圓台上
 function elWho() {
@@ -40811,7 +40994,7 @@ function elWho() {
   if (drv && walker?.mode === 'off') {
     const t = drv.telemetry(); if (t.paused || t.auto || Math.abs(t.v) > 1) return 0;
     const q = garLocal(t.x, t.z); if (Math.hypot(q.x, q.z) > EL_R) return 0;
-    return liftOK(cur) && !BORROW_K && !GV.on ? 1 : 2; // 第 23 批：朋友家：你的車只能停一樓
+    return liftOK(cur) && !BORROW_K ? 1 : 2; // 第 23 批：朋友家：你的車只能停一樓 → 第 32 批：朋友家也可以開車坐電梯、停他空的格子
   }
   if (walker?.mode === 'walk') { const t = walker.telemetry(), q = garLocal(t.x, t.z); return Math.hypot(q.x, q.z) < TOWER.RP - 0.35 ? 3 : 0; }
   return 0;
@@ -40841,8 +41024,7 @@ function elPanelStep() {
 // 按了樓層（F）或 ◀ ▶（turn＝轉多少；F＝這一層）
 function elGo(F, turn) {
   const w = elWho(); if (!w) return;
-  if (w === 2) { drv.toast(GV.on ? '你的車只能停在一樓：下車走路，坐電梯去看他的車' : BORROW_K ? '借來的車不能停在你家' : '這台太大了，不能坐電梯', 2600); return; }
-  if (GV.on && padCars(GAR.floor, null).length) { walker.toast('你的車停在電梯上：先開下來（你的車只能停一樓）', 2600); return; } // 第 23 批
+  if (w === 2) { drv.toast(BORROW_K ? '借來的車不能停在你家' : '這台太大了，不能坐電梯', 2600); return; }
   if (F === GAR.floor && turn == null) { (w === 3 ? walker : drv).toast(`這裡就是 ${towerFlTxt(F)}`, 1600); return; }
   const big = padCars(GAR.floor, w === 1 ? cur : null).find((k) => !liftOK(k)); // 越野車停在圓台上：電梯載不動（不然會被載上樓）
   if (big) { (w === 3 ? walker : drv).toast(`${CARS[big].btn[0]}太大了，電梯載不動：先開走`, 2400); return; }
@@ -40860,7 +41042,7 @@ function elRide(F, turn, me) {
   let dr = turn ?? 0;
   if (driving && turn == null) {
     const hl = wrapPi(drv.telemetry().heading - LH); // 車頭（塔的本地）
-    if (F > 0) { let best = null; for (const b of TOWER_BAYS) if (b.f === F && !b.road && !TWR[b.id]) { const d = wrapPi(b.heading - hl); if (best === null || Math.abs(d) < Math.abs(best)) best = d; } dr = best ?? 0; }
+    if (F > 0) { const TW = twrNow(); let best = null; for (const b of TOWER_BAYS) if (b.f === F && !b.road && !TW[b.id]) { const d = wrapPi(b.heading - hl); if (best === null || Math.abs(d) < Math.abs(best)) best = d; } dr = best ?? 0; }
     else dr = wrapPi(-hl);
   }
   if (me && !driving && drv && !BORROW_K) { dropDrv(); parkFull(); arrangeCars(); } // 下了車走去坐電梯：剛下來那台照停好的樣子停著（到別層 walk.js 不會再當它在旁邊；在圓台上就一起坐）
@@ -41025,7 +41207,7 @@ function doorStep() {
 //   碰撞：開在斜坡上、在樓上＝'ramp'（矮牆、護欄；這一層的口開著）；地上看（village.js）：低的那半圈實心（rcol）、起點橫的一道（mcol：不能開上去的時候擋）：開在斜坡上、在樓上的時候 off（塔蓋在這裡的那座）
 //   不能開上去：怪獸卡車（電梯也不能坐）、借來的車、在朋友家；走路也不行；在斜坡上不能下車
 const TRAMP = { on: false, u: 0, lu: 1, cols: -2, cd: null, cg: -1, call: -1, warnT: 0 };
-const rampOK = () => liftOK(cur) && !BORROW_K && !GV.on;
+const rampOK = () => liftOK(cur) && !BORROW_K; // 第 32 批：朋友家的斜坡也開得上去
 const rampRef = () => (TRAMP.on ? TRAMP.u : GAR && towerUp(GAR.floor) ? GAR.floor * Math.PI : null); // 斜坡上的點照哪一圈算：開在斜坡上＝那一圈；在樓上＝那一層的口；一樓、地下室、外面＝null（地面）
 // 塔本地的點（lx, lz）在斜坡上多高（本地 y；ref 那一圈；起點前面＝null）
 function rampAtY(lx, lz, ref) { const u = ref + wrapPi(Math.atan2(lz, lx) - TOWER_RAMP.A0 - ref); return u < -0.02 ? null : towerRampY(Math.min(u, TOWER_RAMP.UEND)); }
@@ -42014,11 +42196,13 @@ function clockStep() {
 }
 // 環境聲（sound.js ambient）：出門就有，開車、走路都有：風（走路比較大聲）、白天的鳥、晚上的蟲（看 LOOK 的天色；順＝白天）、路上最近 3 台車的引擎（照距離、左右）；回車庫頁、進比賽就收掉
 let AMB = null; const AMB_S = { f: 0, wind: 1, birds: 1, crickets: 0, cars: [{ d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }] };
-function ambOff() { if (AMB) { AMB.dispose(); AMB = null; } }
+let MUS = null; // 第 34 批：背景音樂（sound.js music）：跟環境聲一起開、一起收；房子裡面小聲
+function ambOff() { if (AMB) { AMB.dispose(); AMB = null; } if (MUS) { MUS.dispose(); MUS = null; } }
 function ambStep() {
   if (!DRIVE.on || !engineAudio.input) { ambOff(); return; }
   if (AMB_S.f++ % 6) return;
   if (!AMB) { AMB = engineAudio.ambient(); if (!AMB.alive) { AMB = null; return; } }
+  if (!MUS && engineAudio.music) { MUS = engineAudio.music(); if (!MUS.alive) MUS = null; } if (MUS) MUS.set({ level: indoor ? 0.35 : 1 });
   let px, pz, hd; const walking = !!walker && walker.mode !== 'off';
   if (walking) { const w = walker.telemetry(); px = w.x; pz = w.z; hd = w.heading; } else if (drv) { const t = drv.telemetry(); px = t.x; pz = t.z; hd = t.heading; } else return;
   const night = LOOK && LOOK.level > 0 ? LOOK.night : 0, inK = indoor ? 0.3 : 1; // 順沒有日夜＝白天；房子裡面：外面的聲音小聲
@@ -43585,6 +43769,7 @@ function gvStart(uid, n, g) {
   if (tw) tw.forEach((k, j) => { if (j < want.length && !TOWER_BAYS[j].road && ok(k) && !seen.has(k)) { want[j] = k; seen.add(k); } });
   if (tw) tw.forEach((k, j) => { if (j < want.length && TOWER_BAYS[j].road && ok(k) && !seen.has(k)) { const f = twFree(want); if (f >= 0) { want[f] = k; seen.add(k); } } }); // 第 24 批：舊版（內容 17）停在變成路的那一格：換到空的格子
   else for (const k of Object.keys(cars)) if (ok(k) && k !== g?.cur && !seen.has(k)) { const j = twFree(want); if (j < 0) break; want[j] = k; seen.add(k); } // 舊版（內容 16）沒有送格子：照順序擺
+  if (g && ok(g.cur) && !seen.has(g.cur)) { const j = twFree(want); if (j >= 0) { want[j] = g.cur; seen.add(g.cur); } } // 第 32 批：他正在開的那台也擺進去（第一個空格；以前不會出現）
   Object.assign(GV, { on: true, uid, n: String(n || '朋友').slice(0, 12), slot: i, want, looks: cars, objs: {}, q: [...seen], tr: Math.max(0, Math.min(9, (g && g.tr) | 0)), lift0: { f: GAR.lift.floor, rot: GAR.lift.rot }, in: false, loading: false });
   GV.job++;
   stopLiftSnd(); GAR.liftSnap(0, 0); GAR.setFloor(0); GAR.door.t = 0;
@@ -43615,7 +43800,7 @@ function gvTick() {
   const t = walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : null;
   if (!t || indoor || RACE.on || EL.ride || garIn(t)) return;
   const D = garWorld({ x: TOWER.DX1 + 2, z: 0 }), p = tripPose[cur];
-  if (Math.hypot(t.x - D.x, t.z - D.z) > 25 && !(walker && walker.mode !== 'off' && p && p.tw == null && garIn(p))) gvEnd('left'); // 走遠了（車還停在他家裡面就不算）
+  if (Math.hypot(t.x - D.x, t.z - D.z) > 25 && !(walker && walker.mode !== 'off' && p && (p.tw != null || garIn(p)))) gvEnd('left'); // 走遠了（車還停在他家裡面、他的格子裡就不算；第 32 批）
 }
 // 還在他家裡面（他請你出去、他走了）：人、車送到門口外面（車頭朝外）
 function gvOut() {
@@ -43625,7 +43810,8 @@ function gvOut() {
   if (drv && walker && walker.mode === 'off') { const t = drv.telemetry(); if (garIn(t)) { const q = out(0); drv.teleport(q); tripPose[cur] = { ...q, f: 0 }; } return; }
   if (!walker || walker.mode === 'off') return;
   const p = tripPose[cur];
-  if (p && p.tw == null && garIn(p) && tripS) { if (drv) dropDrv(); tripPose[cur] = { ...out(0), f: 0 }; parkFull(); }
+  if (p && p.tw != null && GV.want && tripS) { const i = p.tw; GV.want[i] = null; if (GAR.cars[i]) GAR.take(i); if (GAR.tk) GAR.tk[i] = null; if (drv) dropDrv(); tripPose[cur] = { ...out(0), f: 0 }; parkFull(); } // 第 32 批：停在他格子裡的車也到門口外面
+  else if (p && p.tw == null && garIn(p) && tripS) { if (drv) dropDrv(); tripPose[cur] = { ...out(0), f: 0 }; parkFull(); }
   if (garIn(walker.telemetry())) walker.teleport(out(3.6), { keepCamera: false });
   if (riding) walker.resume();
 }
@@ -43634,7 +43820,7 @@ function gvEnd(why) {
   if (!GV.on) return;
   const n = GV.n, uid = GV.uid, L0 = GV.lift0, live = trip && tripPose && GAR;
   if (live && why !== 'home') gvOut();
-  GV.on = false; GV.in = false; GV.job++; GV.q.length = 0; GV.loading = false;
+  GV.on = false; GV.in = false; GV.job++; GV.q.length = 0; GV.loading = false; GV.mine = -1;
   if (GAR) {
     GAR.door.t = 0; if (!EL.ride) { GAR.setFloor(0); stopLiftSnd(); }
     homePlace(); // 塔搬回你家（你在外面）
@@ -43946,10 +44132,13 @@ $('lookBtn').addEventListener('click', () => openLook('page'));
   window.caridExitFullscreen = () => { if (LOOKP.isOpen) { LOOKP.cancel(); return true; } if (BIGMAP?.isOpen) { BIGMAP.close(); return true; } return exitFs(); }; // 大地圖打開的時候：先關地圖
 }
 
+let pageT = 0;
 renderer.setAnimationLoop((now) => {
   if (LOOKP.isOpen) return; // 自訂角色蓋滿整個畫面：後面不畫
   if (RACE.on) { RACE.frame(now); return; }
-  if (DRIVE.on) { DRIVE.frame(now); return; } // 開車出門：畫村子（車庫不畫）
+  if (DRIVE.on) { DRIVE.frame(now); pageT = 0; return; } // 開車出門：畫村子（車庫不畫）
+  const pdt = pageT ? Math.min(0.1, (now - pageT) / 1000) : 0; pageT = now;
+  if (room?.group.visible) { room.update(pdt); liftAnim?.step(pdt); } // 第 33 批：電梯載車（tower.js 的電梯動、兩台車滑）
   if (S && Math.abs(S.body.position.y - rideY) > 1e-4) S.body.position.y += (rideY - S.body.position.y) * 0.12;
   if (seat) {
     if (seat.key !== cur) { seat.key = cur; camera.fov = cabinFov(cur, camera.aspect); camera.updateProjectionMatrix(); } // 坐在車裡換車
@@ -43963,7 +44152,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 20; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 21; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
