@@ -585,7 +585,7 @@ body.fs.driving:not(.walking):not(.racing).moreopen:not(.sizeopen):not(.tiltopen
   background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 20px/1 var(--sans); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: margin-top .2s; }
 body.fs #drivebar .mustog[aria-pressed="false"] { filter: grayscale(1); opacity: 0.55; }
 @media (min-height: 561px) { body.fs.wanted #drivebar .moretog, body.fs.wanted #drivebar .sizetog, body.fs.wanted #drivebar .sizepop, body.fs.wanted #drivebar .tilttog, body.fs.wanted #drivebar .tiltpop, body.fs.wanted #drivebar .looktog, body.fs.wanted #drivebar .lookpop, body.fs.wanted #drivebar .mustog { margin-top: 46px; } }
-@media (max-height: 560px) { body.fs.driving:not(.walking):not(.racing).moreopen #stage .dv-act2 { right: 374px; } } /* 橫拿：「下車」在那一排的左邊，打開的時候再往左讓開（第 29 批多了 ✨：322 → 374） */
+@media (max-height: 560px) { body.fs.driving:not(.walking):not(.racing).moreopen #stage .dv-act2 { right: 426px; } body.fs.driving:not(.walking):not(.racing).moreopen:not(.sizeopen):not(.tiltopen):not(.lookopen) #drivebar .mustog { top: calc(var(--fs-t) + 142px); right: calc(var(--fs-r) + 374px); } } /* 第 35 批：橫拿 🎵 放在 ✨ 左邊（放下面會壓到油門），「下車」再往左 374 → 426 */ /* 橫拿：「下車」在那一排的左邊，打開的時候再往左讓開（第 29 批多了 ✨：322 → 374） */
 body.fs #dests button, body.fs #drivebar .minirow .ghost { white-space: nowrap; }
 /* 比賽：下面拉上來的一片（成績、開始比賽、選對手）；跑的時候（body.race-live，race.src.js）收起來 */
 body.fs #race { position: fixed; z-index: 51; left: 0; right: 0; bottom: 0; max-width: 560px; margin: 0 auto; max-height: min(60vh, 620px); max-height: min(60dvh, 620px); overflow-y: auto; overscroll-behavior: contain;
