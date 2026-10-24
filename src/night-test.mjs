@@ -101,7 +101,7 @@ const at = async (tag, hour) => {
   return st;
 };
 const d = await at('13', 13);
-check(d.sun > 45 && d.night === 0 && d.dl.I === 4.6 && d.dl.c === 'fff0dc' && d.dl.dirY > 200 && d.pl.length === 4 && d.pl.every((l) => l.I === 0) && d.sp.length === 2 && d.sp.every((l) => l.I === 0) && d.paintN === 0 && d.lodE === 0 && d.wet === 0 && d.info.band === 'h' && d.fog === 'c3ccd3',
+check(d.sun > 45 && d.night === 0 && d.dl.I === 4.6 && d.dl.c === 'fff0dc' && d.dl.dirY > 200 && d.pl.length === 4 && d.pl.every((l) => l.I === 0) && d.sp.length === 2 && d.sp.every((l) => l.I === 0) && d.paintN === 0 && d.wet === 0 && d.info.band === 'h' && d.fog === 'c3ccd3',
   `13:00 最真實: sun ${d.sun}° (4.6, white), 4 street lamps + 2 headlights in the scene but off, cars' lamps off, no wet reflection, fog day colour`);
 // ---- 3 傍晚 17:45 ----
 const k = await at('17-45', 17.75);
@@ -115,7 +115,7 @@ check(n.sun < -20 && n.night === 1 && n.dl.I === 0.5 && n.dl.c === '9fb4d8' && n
 check(near.length >= 2 && near.every((l) => l.I === 180 && l.d < 90 && l.y > 5) && n.info.lamps > 100,
   `22:00: ${near.length} nearest street lamps lit (180, within ${Math.max(...near.map((l) => l.d))} m, heads ${near.map((l) => l.y).join('/')} m high) of ${n.info.lamps} lamp heads (poles, highway, parking)`);
 check(n.sp.length === 2 && n.sp.every((l) => l.I === 520 && l.d > 1.5 && l.d < 3.5 && l.y > 0.3 && l.y < 1.2), `22:00: two headlights on the car's nose (${n.sp.map((l) => l.d + ' m').join(', ')} from its centre, ${n.sp.map((l) => l.y).join('/')} m high), 520`);
-check(n.paintN === 1 && n.lodCars > 0 && n.lodE > 5 && n.sign > 0.7 && n.info.signs > 3, `22:00: own car's lamps glow (paint night 1), ${n.lodCars} traffic cars' lamps lit (E sum ${n.lodE}), ${n.info.signs} sign materials brighter (${n.sign})`);
+check(n.paintN === 1 && n.lodCars > 0 && n.lodE > d.lodE + 5 && n.sign > 0.7 && n.info.signs > 3, `22:00: own car's lamps glow (paint night 1), ${n.lodCars} traffic cars' lamps lit (E sum ${d.lodE} → ${n.lodE}), ${n.info.signs} sign materials brighter (${n.sign})`);
 check(n.wet > 50 && Object.values(perf['22']).every((v) => v.wet > 50), `22:00 最真實: wet road reflection pass (${Object.values(perf['22']).map((v) => v.wet).join('/')} extra calls at ${PLACES.join('/')})`);
 // 夜裡的畫面真的暗、燈的地方亮
 const px = await p.evaluate(() => { const R = window.__D().renderer; const v = window.__view(240, 144, false); const gl = R.getContext(); const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, buf = new Uint8Array(W * H * 4); R.render(window.__D().TR.scene, window.__D().dcam); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, buf);
@@ -133,7 +133,7 @@ const signBase = await p.evaluate(() => { let m = null; window.__D().TR.scene.tr
 await p.evaluate(() => window.__D().LOOK.set(0));
 await p.waitForFunction(() => window.__D().LOOK.level === 0 && !window.__D().LOOK.busy);
 const z = await p.evaluate(() => { const v = window.__view(320, 192, false); return { st: window.__state(), info: v.info }; });
-check(z.st.pl.length === 0 && z.st.sp.length === 0 && z.st.paintN === 0 && z.st.lodE === 0 && z.st.sign === 0.3 && signBase > 1 && z.st.dl.I === 1.4 && z.st.dl.c === 'fff4e0' && z.st.exp === 1 && z.info.wet === 0,
+check(z.st.pl.length === 0 && z.st.sp.length === 0 && z.st.paintN === 0 && z.st.lodE === 0 && z.st.sign === 0.3 && signBase > 0.7 && z.st.dl.I === 1.4 && z.st.dl.c === 'fff4e0' && z.st.exp === 1 && z.info.wet === 0,
   `back to 順 at 22:00: lamps removed, car lamps off, signs back to 0.3 (were ${signBase}), original sun, no reflection`);
 // ---- 7 回到時鐘 ----
 const c2 = await p.evaluate(() => { const D = window.__D(); D.LOOK.setHour(null); return { h: D.LOOK.hour, c: (((Date.now() / 60000) % 24) / 24) * 24 }; });

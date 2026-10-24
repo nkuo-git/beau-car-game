@@ -720,7 +720,7 @@ function createLook(o) {
   }
   let lastT = 0;
   R.render = function (sc, cam) {
-    if (LV === 0 || sc !== scene) { if (carOn && sc.isScene && sc !== scene) carEnv(null); if (lampSent > 0 && sc.isScene) { lampSent = -1; nightCb(0); } R.toneMappingExposure = EXP0; st.wetCalls = 0; return r0(sc, cam); } // 車庫頁：車燈關掉（回世界再開） // 車庫頁、房子裡面：車漆換回來（後製的那幾道不是 Scene）
+    if (LV === 0 || sc !== scene) { if (carOn && sc.isScene && sc !== scene) carEnv(null); if (lampSent > 0 && sc.isScene) { lampSent = -1; nightCb(0); } R.toneMappingExposure = EXP0; if (sc.isScene) st.wetCalls = 0; return r0(sc, cam); } // 車庫頁：車燈關掉（回世界再開） // 車庫頁、房子裡面：車漆換回來（後製的那幾道不是 Scene）
     if (R.getRenderTarget() !== null) return r0(sc, cam); // 後照鏡：不重算影子、沒有後製
     const now = performance.now(), dt = lastT ? Math.min(0.1, (now - lastT) / 1000) : 0; lastT = now;
     frame(cam, dt);
