@@ -373,8 +373,10 @@ await p.addInitScript(() => {
   // 第 18 批：村子少了 21 棟房子，路上的人重新排過：有時候附近唯一的小孩坐在板凳上（坐 20～100 秒）→ 讓他的「坐著」時間到（照遊戲自己的 standup 站起來、走開），等他走起來
   X.kid = (x, z, maxD = 200) => {
     const k = X.person(x, z, 'kid', maxD); if (k) return k;
-    const s = P3().NPC.peds.people.filter((q) => q.age === 'kid' && q.mode === 'sit' && !q.gone && q.active !== false).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
-    if (!s) return null; s.timer = 0;
+    const s = P3().NPC.peds.people.filter((q) => q.age === 'kid' && (q.mode === 'sit' || q.mode === 'sitdown') && !q.gone && q.active !== false).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+    if (!s) return null;
+    for (let i = 0; i < 120 && s.mode === 'sitdown'; i++) X.step(1); // 正在坐下（1.1 秒）：等他坐好才叫得起來
+    s.timer = 0;
     for (let i = 0; i < 600; i++) { X.step(1); const q = X.person(x, z, 'kid', maxD); if (q) return q; }
     return null;
   };
@@ -703,7 +705,7 @@ const s6a = await ev(() => {
   X.step(30);
   // 小孩：5 公尺，瞄準肚子（往下打：沒打到就打在後面的地上）
   const t = w.telemetry(), kid = X.kid(t.x, t.z, 300);
-  if (!kid) return { ...a, err: 'no kid' };
+  if (!kid) { const pp = Q.NPC.peds.people; return { ...a, err: 'no kid', people: pp.length, kids: pp.filter((q) => q.age === 'kid').map((q) => `${q.mode}${q.gone ? ':gone' : ''}${q.active === false ? ':off' : ''}@${Math.hypot(q.x - t.x, q.z - t.z).toFixed(0)}`) }; }
   X.faceTo(kid, 5, (x, z) => X.lineClear(x, z, kid)); X.step(5); g.setAim(true); X.step(20);
   const k0 = g.telemetry().knocks, c0 = pol.telemetry().crimes.length, m0 = kid.mode; let shots = 0;
   const hits = []; for (let i = 0; i < 3; i++) {

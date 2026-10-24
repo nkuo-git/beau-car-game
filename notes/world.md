@@ -379,3 +379,9 @@ Nick: 「可以開進別人的車庫」. Rules unchanged (kind `bell` fits `matc
 - His current car: `gvStart` puts `g.cur` (the car he is driving, which was never shown) into the first free bay when `g.cars` has its look.
 - RTDB rules unchanged. world-test 9: B's garage now has 4 cars (his gc8 in bay 2 of 2F → panel 「2 台」), new 9d (ride back to 1F, get in,
   drive onto the lift, 3F, park in 3 樓 1 號, then the kick puts the car outside as before).
+- Fix (batch 34, 2026-10-24): when he owns the same model as the car you park in his bay (both bays carry the same key, e.g. `gc8`),
+  `syncTower`'s `objOf(k)` returned *his* LOD object for your bay too, so his car was pulled into your bay and yours stayed loose.
+  `GV.mine` now remembers which bay is yours (`outAt` sets it, `offTower` / `gvOut` clear it) and `objOf(k, i)` hands back
+  `tripS.car` for that bay; the bay collision list skips it (your full car's box comes from `walkCars`). world-test 9d also waits for
+  the 「停好了」 toast instead of the stale one, waits 0.5 s after the walk-mode lift ride before `getIn` (`activate` locks boarding
+  for 0.35 s), and expects the ◀ ▶ row only upstairs.

@@ -1150,7 +1150,7 @@ function gvEnd(why) {
   if (!GV.on) return;
   const n = GV.n, uid = GV.uid, L0 = GV.lift0, live = trip && tripPose && GAR;
   if (live && why !== 'home') gvOut();
-  GV.on = false; GV.in = false; GV.job++; GV.q.length = 0; GV.loading = false;
+  GV.on = false; GV.in = false; GV.job++; GV.q.length = 0; GV.loading = false; GV.mine = -1;
   if (GAR) {
     GAR.door.t = 0; if (!EL.ride) { GAR.setFloor(0); stopLiftSnd(); }
     homePlace(); // 塔搬回你家（你在外面）

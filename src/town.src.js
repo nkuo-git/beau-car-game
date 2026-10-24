@@ -52,7 +52,7 @@ let boarding = null; // 換車中（完整模型載入中）：回車庫頁了�
 let TWR = null; // 第 21 批：這一趟 TWR[i]＝圓塔第 i 格停哪台（40 格，TOWER_BAYS 的順序：二樓先）
 // 第 23 批：開進朋友的車庫（net.src.js gvStart／gvEnd）：塔（GAR）搬到他家、格子裡換成他的車（輕量車、他的樣子）；你家變成外殼、你的車照停（TWR、存檔都不動）
 //   on、uid、n（名字）、slot（他家的號碼）、want[40]（他的格子）、looks（他每台車的外觀）、objs（key → { lod, cx, cz, hx, hz }）、q（還沒做的車）、tr（他的獎盃）、lift0（你家的電梯原本在哪）、in（你在他家裡面）
-const GV = { on: false, uid: '', n: '', slot: -1, want: null, looks: {}, objs: {}, q: [], tr: 0, lift0: null, in: false, job: 0 };
+const GV = { on: false, uid: '', n: '', slot: -1, want: null, looks: {}, objs: {}, q: [], tr: 0, lift0: null, in: false, job: 0, mine: -1 }; // mine：第 34 批：你停進他哪一格（他也有同一款車的時候才分得出哪台是你的）
 const twrNow = () => (GV.on ? GV.want : TWR); // 塔的格子現在擺誰的車
 const EL = { ride: null, keys: new Set(), panel: null }; // 第 21 批：電梯（ride＝坐電梯中、keys＝掛在圓台上一起坐的車、panel＝按樓層的面板）
 let PW = null; // 第 21 批：開車、走路用的世界（VIL 包一層：塔裡面的地板高度＝現在那一層）
@@ -133,7 +133,7 @@ function syncTower(R, want, objOf) {
     if (ELA.on && R === room && i === ELA.on.i) continue; // 第 33 批：電梯正在載的那格不動
     const k = want?.[i] || null, have = R.cars[i];
     if (!k) { if (have || tk[i]) R.take(i); tk[i] = null; continue; }
-    const o = objOf(k);
+    const o = objOf(k, i);
     if (o) { if (have !== o || o.parent?.name !== 'towerBay' + (i + 1) || tk[i] !== k) R.put(i, o, CARS[k].btn[0]); }
     else if (tk[i] !== k || have?.isObject3D) { R.take(i); R.put(i, CARS[k].btn[0]); }
     tk[i] = k;
@@ -213,12 +213,12 @@ function arrangeCars() {
     w[0].add(lod.car); lod.car.position.set(w[1].x, w[1].y || 0, w[1].z); lod.car.rotation.set(0, w[1].heading || 0, 0); // 車店的轉盤比地面高一點（y）
     LODS[k].shadow.visible = w[2];
   }
-  if (R && want) syncTower(R, want, inTown && GV.on ? (k) => GV.objs[k]?.lod.car || (k === tripFull ? tripS.car : null) : (k) => (inTown && k === tripFull ? tripS.car : LODS[k]?.lod ? LODS[k].lod.car : null)); // 第 32 批：朋友家：你停進他格子的那台（完整的車）
+  if (R && want) syncTower(R, want, inTown && GV.on ? (k, i) => (i === GV.mine ? tripS.car : GV.objs[k]?.lod.car || null) : (k) => (inTown && k === tripFull ? tripS.car : LODS[k]?.lod ? LODS[k].lod.car : null)); // 第 32 批：朋友家：你停進他格子的那台（完整的車）
   if (inTown) { // 停著的車：開過去會撞到、走過去會擋到（第 21 批：跟你同一層的才擋：樓上的格子、你在樓上的時候外面的都不擋）
     const cols = [], padCols = [], fl = GAR.floor;
     for (const [k, w] of at) { const L = LODS[k], own = GAME.owned.has(k); if (L?.lod && w[3] && (!own || poseF(w[3]) === fl)) (own ? cols : padCols).push(carBox(L, w[3])); }
     const TW = twrNow();
-    for (let i = 0; i < TW.length; i++) { const k = TW[i], L = GV.on ? GV.objs[k] : k !== tripFull && LODS[k]; if (k && TOWER_BAYS[i].f === fl && L?.lod) cols.push(carBox(L, towerPose(i))); } // 第 23 批：朋友家的格子＝他的車
+    for (let i = 0; i < TW.length; i++) { const k = TW[i], L = GV.on ? i !== GV.mine && GV.objs[k] : k !== tripFull && LODS[k]; if (k && TOWER_BAYS[i].f === fl && L?.lod) cols.push(carBox(L, towerPose(i))); } // 第 23 批：朋友家的格子＝他的車
     for (const k in PFULL) { const p = tripPose[k]; if (p && k !== tripFull && poseF(p) === fl) cols.push(carBox(PFULL[k].box, p)); } // 第 4 批：停著的完整的車（大車換開別台）
     if (drv) { drv.removeColliders('parked'); drv.addColliders([...cols, ...padCols], 'parked'); }
     if (walker) { walker.removeColliders('pads'); walker.addColliders(padCols, 'pads'); walker.setCars(walkCars()); } // 你的車：走路那邊自己加碰撞（setCars）
@@ -705,7 +705,7 @@ function outAt(spot) {
   tripS?.cabin?.userData.setGauges(0, 0); tripS?.cabin?.userData.setSteer?.(0);
   const TW = twrNow(); // 第 32 批：在朋友家＝他的格子（GV.want）
   if (spot?.tw != null && liftOK(cur) && !TW[spot.tw]) { // 停進格子：車子掛到格子上；開車的收掉（上車再做一個：車子要從格子拿下來）
-    dropDrv(); TW[spot.tw] = cur; tripPose[cur] = towerPose(spot.tw);
+    dropDrv(); TW[spot.tw] = cur; tripPose[cur] = towerPose(spot.tw); if (GV.on) GV.mine = spot.tw;
     const b = TOWER_BAYS[spot.tw];
     walker.toast(`${CARS[cur].btn[0]} 停好了：${towerFlTxt(b.f)} ${b.i + 1} 號`, 2200);
   } else if (spot?.bay != null) walker.toast(`${CARS[cur].btn[0]} 停好了：越野車車庫 ${spot.bay + 1} 號格`, 2200); // 第 6 批
@@ -717,7 +717,7 @@ function dropDrv() { drv.dispose(); drv = null; home.open = null; obDoor.drv = n
 function offTower(k) {
   const p = tripPose?.[k]; if (!p || p.tw == null) return null;
   const i = p.tw, pose = { x: p.x, z: p.z, heading: p.heading, f: TOWER_BAYS[i].f };
-  twrNow()[i] = null; tripPose[k] = pose; // 第 32 批：在朋友家＝他的格子
+  twrNow()[i] = null; tripPose[k] = pose; if (GV.on && i === GV.mine) GV.mine = -1; // 第 32 批：在朋友家＝他的格子
   if (GAR.cars[i]) GAR.take(i);
   if (GAR.tk) GAR.tk[i] = null;
   keepPark();
