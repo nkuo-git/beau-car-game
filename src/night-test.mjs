@@ -172,7 +172,7 @@ const wk = await p.evaluate(() => { const D = window.__D(); D.LOOK.setHour(13); 
 await p.evaluate(() => window.__view(960, 576, false)); await p.screenshot({ path: `${prefix}-hud-walk.png` });
 check(wk.mode === 'walk' && wk.amb && wk.same && wk.last && wk.last.wind === 1 && wk.last.birds === 1 && wk.hidden === false && wk.txt === '☀ 13:00', `got out of the car (${wk.act2} → ${wk.mode}): ambient sound keeps running (wind ${wk.last && wk.last.wind}, birds), clock 「${wk.txt}」 on the walking minimap`);
 // ---- 7 回到時鐘 ----
-const c2 = await p.evaluate(() => { const D = window.__D(); D.LOOK.setHour(null); return { h: D.LOOK.hour, c: (((Date.now() / 60000) % 24) / 24) * 24 }; });
+const c2 = await p.evaluate(() => { const D = window.__D(); D.LOOK.setHour(null); return { h: D.LOOK.hour, c: (((Date.now() / 60000) % 12) / 12) * 24 }; });
 check(Math.abs(c2.h - c2.c) < 0.05, `setHour(null): back to the clock (${c2.h.toFixed(2)})`);
 // ---- 效能 ----
 console.log('perf', JSON.stringify(perf));
