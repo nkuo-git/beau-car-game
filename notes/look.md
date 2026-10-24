@@ -107,3 +107,14 @@ Nick's father: 「什麼時候會變晚上的街景?」; decision card → 「�
   `tRefl` uniform is nulled during that pass (feedback loop). Shadows are computed once per frame (the reflection pass consumes `needsUpdate`).
 - Tests: `night-test.mjs` (13:00 / 17:45 / 22:00 at dealer, shop, highway; lamps, headlights, signs, car lamps, wet pass, dark picture, 漂亮 has no
   reflection pass, back to 順 restores everything, clock). look-test pins 13:00.
+
+Cost (SwiftShader 960×576, night-test `perf`, 最真實 calls / tris, "+wet" = the reflection pass inside that total):
+
+| place | 13:00 | 22:00 (wet pass) | 22:00 漂亮 |
+|---|---|---|---|
+| dealer | 541 / 2.69M | 772 / 4.13M (+472) | 504 / 2.38M |
+| shop | 548 / 2.72M | 830 / 4.49M (+507) | 532 / 2.57M |
+| highway | 518 / 2.41M | 808 / 4.26M (+504) | 517 / 2.42M |
+
+So at dusk/night 最真實 roughly doubles the triangles (the mirrored scene); 漂亮 costs the same as by day (+4 point lights, +2 spot lights in every shader).
+Known gaps: no stars/moon disc, highway lamp pools are faint (heads 11 m up), house windows stay dark, police cars and traffic have no real light cones.
