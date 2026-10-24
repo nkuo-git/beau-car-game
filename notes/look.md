@@ -118,3 +118,29 @@ Cost (SwiftShader 960×576, night-test `perf`, 最真實 calls / tris, "+wet" = 
 
 So at dusk/night 最真實 roughly doubles the triangles (the mirrored scene); 漂亮 costs the same as by day (+4 point lights, +2 spot lights in every shader).
 Known gaps: no stars/moon disc, highway lamp pools are faint (heads 11 m up), house windows stay dark, police cars and traffic have no real light cones.
+
+## Batch 31 — smoother day/night, weaker dusk and headlights, a clock, ambient sound (trial v49, 2026-10-24)
+
+The parent's feedback on v48 from the phone: sky changes visibly stepped, the dusk sun was too strong, the headlights blew out the picture
+(a white blob in front of the car, worse on the wet road), there was no way to tell the game time, and getting out of the car left silence.
+
+- **Gradual transitions** (look.js): the PMREM reflection map is now cached per 5° of sun elevation (`TD.band` = `b0`…`b10` + `n`) instead of
+  5 coarse bands, so a band swap is barely visible (each map is built the first time it is needed, ~30 ms). The 4 pooled street lamps fade
+  with camera distance (`LAMP.fade0/fade1` = 50→88 m), so a lamp entering the nearest-4 set starts dark instead of popping on; the set is also
+  recomputed at once when the camera jumps > 6 m (teleport, respawn). Traffic/friend LOD car lamps follow the same 0–1 `lamp` factor
+  (`buildLodCar.night(k)` scales the emissive table; was a boolean at k > 0.5).
+- **Weaker dusk**: sun intensity × (1 − 0.6·warm) (`DUSK.sunK`; at 3.6° elevation 1.4 instead of 3.5), `DUSK.envI` 0.55→0.4, mie 0.006→0.004,
+  dusk exposure 0.5→0.45.
+- **Weaker headlights / reflections**: own headlights 520→150 cd with physical decay 2 and penumbra 0.7; night bloom 0.3→0.18, threshold 2.2→2.6;
+  wet-road base reflection 0.35→0.28.
+- **Clock**: a 12 px bar on top of the minimap (`.dv-mapt` in drive.js, `.wk-mapt` in walk.js; `drive.setClock(s)` / `walker.setClock(s)`),
+  fed by town.src.js `clockStep` every 15 frames with `☀`/`🌙` + HH:MM of `LOOK.hour`; hidden at level 0 (順 has no day and night).
+- **Ambient sound** (sound.js `ambient()`, town.src.js `ambStep` every 6 frames while `DRIVE.on`, disposed on returning to the garage page or
+  entering a race scene): wind = looped noise → 380 Hz low-pass with a 0.13 Hz swell (louder on foot: 1 vs 0.55 in the car, 0.3 indoors);
+  birds = 2–3-note sine chirps every 1.6–4 s by day; crickets = 4.3 kHz sine gated at 28 Hz by night (`LOOK.night`, 0 at level 0); up to 3
+  traffic voices (sawtooth + triangle sub → 320 Hz low-pass → stereo pan) for the nearest `NPC.traffic.cars` within 80 m, gain
+  0.26 / (1 + (d/15)²) × speed factor, pitch 48 + 3.1·v Hz. Everything goes through the engine audio master gain (mute/volume as before);
+  `S.rec.n` keeps the shared context awake while it runs. All parameters move with `setTargetAtTime`, so the 10 Hz update never clicks.
+- Tests: night-test.mjs now 18 checks (bands `b10`/`b0`/`n`, dusk sun 1–2, headlights 150, lamp fade past 55 m, traffic lamps part-way on
+  at 17:45, clock text at 22:00 and 13:00 on foot, ambient state driving / in 順 / after getting out; HUD screenshots `nt-hud-22.png`,
+  `nt-hud-walk.png`). Cost unchanged from batch 30 (same calls/tris; the audio graph is ~25 nodes).

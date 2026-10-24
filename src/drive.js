@@ -47,6 +47,7 @@
 //                          同一個 tag 可以加很多次，removeColliders(tag) 一次全部拿掉；回傳加了／拿掉幾個
 //   drive.setCamCeil(fn | null)   fn(x, z) → 鏡頭在這裡最高多高（Infinity＝不管）：追車鏡頭壓在屋頂下面（越野車車庫，大車的鏡頭拉高了會穿出去）
 //   drive.setMapTap({ label, onClick } | null)   點小地圖做什麼（大地圖、比賽看整個賽道）；label＝小地圖下面那一條字；drive.mapTap＝現在的字
+//   drive.setClock(字 | null)   小地圖上面一條字（第 31 批：遊戲的時間「☀ 13:05」；null 就收起來）
 //   drive.setMapView({ x0, z0, x1, z1 } | null)   小地圖改成看整個範圍（北朝上、你的箭頭照車頭轉）；null＝回到跟著你轉；drive.mapView
 //   drive.setMarkers(list | null, tag?)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝這幀不畫）, label（點上的字）, fg }]；tag＝另外一組（比賽的對手 'race'），null 拿掉；
 //                          只記住陣列本身，每一幀照裡面現在的值畫（陣列可以一直改，不用再叫）；地圖外面的貼在邊上；null＝不畫
@@ -144,6 +145,7 @@ const CSS = `
 .dv-map canvas{display:block;width:100%;height:100%}
 .dv-map.tap{pointer-events:auto;cursor:pointer;touch-action:manipulation;box-shadow:inset 0 0 0 1.5px rgba(255,106,31,0.8)}
 .dv-mapb{position:absolute;left:0;right:0;bottom:0;padding:4px 0 5px;background:rgba(14,15,18,0.8);font:700 11px/1 ${SANS};text-align:center;letter-spacing:.02em;white-space:nowrap}
+.dv-mapt{position:absolute;left:0;right:0;top:0;padding:4px 0 4px;background:rgba(14,15,18,0.8);font:700 12px/1 ${SANS};text-align:center;letter-spacing:.06em;white-space:nowrap;font-variant-numeric:tabular-nums}
 .dv-cam{top:142px;right:10px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(14,15,18,0.62);pointer-events:auto;cursor:pointer;touch-action:manipulation}
 .dv-cam svg{width:24px;height:24px;fill:none;stroke:#F2F3F5;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .dv-cam[aria-pressed="true"]{background:#FF6A1F}
@@ -812,7 +814,7 @@ function createDrive(o) {
   function buildHud() {
     if (!document.getElementById('dv-style')) { const s = document.createElement('style'); s.id = 'dv-style'; s.textContent = CSS; document.head.append(s); }
     const root = document.createElement('div'); root.className = 'dv';
-    root.innerHTML = `<div class="dv-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="dv-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="dv-map"><canvas></canvas><b class="dv-mapb" hidden></b></div>`
+    root.innerHTML = `<div class="dv-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="dv-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="dv-map"><canvas></canvas><b class="dv-mapt" hidden></b><b class="dv-mapb" hidden></b></div>`
       + `<b class="dv-cam" role="button" aria-label="換視角" aria-pressed="false">${ICON.cam}</b><button type="button" class="dv-act2" hidden><i></i><span></span></button><div class="dv-spd"><svg viewBox="0 0 100 100" aria-hidden="true"><path class="t" d="M20.3 79.7A42 42 0 1 1 79.7 79.7"/><path class="z" d="M91.87 53.3A42 42 0 0 1 79.7 79.7"/><path class="a" d="M20.3 79.7A42 42 0 1 1 79.7 79.7" pathLength="100" stroke-dasharray="0 100"/></svg><b>0</b><span>KM/H</span><em>1</em><i hidden>甩尾<span></span></i></div>`
       + `<div class="dv-steer"><b role="button" aria-label="左轉">${ICON.L}</b><b role="button" aria-label="右轉">${ICON.R}</b></div>`
       + `<div class="dv-tilt"><i aria-hidden="true"><svg viewBox="-30 -30 60 60"><g><circle r="24" stroke-width="6"/><path d="M-22 2L-7 5M22 2L7 5M0 9V22" stroke-width="5"/><circle r="6" fill="#F2F3F5" stroke="none"/><rect class="r" x="-3" y="-28" width="6" height="9" rx="1.5"/></g></svg></i><b role="button" aria-label="置中">置中</b></div>`
@@ -848,7 +850,7 @@ function createDrive(o) {
     on(H.pop, 'pointerdown', () => H.pop.classList.add('on')); // 跳燈：按下去縮一下，放開（click）才換；另一隻手指按著油門也按得到
     for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.pop, t, () => H.pop.classList.remove('on'));
     on(H.pop, 'click', (e) => { e.preventDefault(); doPop(); });
-    H.mapBox = q('.dv-map'); H.mapB = q('.dv-mapb'); on(H.mapBox, 'click', (e) => { if (mapTap) { e.preventDefault(); mapTap.onClick(); } }); // 點小地圖（setMapTap）：大地圖、比賽看整個賽道
+    H.mapBox = q('.dv-map'); H.mapB = q('.dv-mapb'); H.clk = q('.dv-mapt'); on(H.mapBox, 'click', (e) => { if (mapTap) { e.preventDefault(); mapTap.onClick(); } }); // 點小地圖（setMapTap）：大地圖、比賽看整個賽道
     // 大按鈕：按下去縮一下，放開（click）才做；另一隻手指按著油門也按得到
     on(H.act, 'pointerdown', () => H.act.classList.add('on'));
     for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.act, t, () => H.act.classList.remove('on'));
@@ -1141,6 +1143,7 @@ function createDrive(o) {
     removeColliders: (tag) => cw.remove(tag),
     setMarkers: (list, tag) => { const L = Array.isArray(list) ? list : null; if (tag == null) marks = L; else if (L) marksT[tag] = L; else delete marksT[tag]; }, // 第 3 批（b3-int）；tag：另外一組（比賽的對手）
     setMapTap: (t) => { mapTap = t && typeof t.onClick === 'function' ? { label: String(t.label || ''), onClick: t.onClick } : null; if (hud) { hud.mapBox.classList.toggle('tap', !!mapTap); hud.mapB.hidden = !mapTap || !mapTap.label; if (mapTap) hud.mapB.textContent = mapTap.label; } },
+    setClock: (s) => { if (!hud) return; const on = s != null && s !== ''; if (hud.clk.hidden !== !on) hud.clk.hidden = !on; if (on && hud.clk.textContent !== s) hud.clk.textContent = s; }, // 第 31 批：小地圖上面一條字（遊戲的時間；town.src.js 給）
     setMapView: (b) => { mapWhole = b && b.x1 > b.x0 && b.z1 > b.z0 ? { x0: +b.x0, z0: +b.z0, x1: +b.x1, z1: +b.z1 } : null; if (hud) hud.mapT = 0; },
     get mapTap() { return mapTap ? mapTap.label : null; }, get mapView() { return mapWhole; },
     setDamage: (p) => { dmgP.power = p && p.power > 0 ? Math.min(1, p.power) : 1; dmgP.top = p && p.top > 0 ? Math.min(1, p.top) : 1; dmgP.maxKmh = p && p.maxKmh > 0 ? p.maxKmh : Infinity; dmgP.steerPull = p ? clamp(+p.steerPull || 0, -1, 1) : 0; },

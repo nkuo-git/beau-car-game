@@ -39,11 +39,11 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const LT = { elev: 38, az: 233, turb: 6, ray: 1.3, mie: 0.004, exp: 0.45, sunI: 4.6, sunC: 0xfff0dc, envI: 0.3, hemiI: 0.12, hemiC: 0xdde6ef, hemiG: 0x474a3c, fog: 0xc3ccd3, gnd: 0x3c4235, cloud: 0.32, cden: 0.5 };
 const DAY_MIN = 24; // 第 30 批：遊戲裡一天＝真的 24 分鐘（照手機的時鐘：大家一樣）
 const SUN_MAX = 55; // 中午太陽多高（度）
-const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fog: 0xd8b49a, envI: 0.55, turb: 8, ray: 2.0, mie: 0.006, exp: 0.5 }; // 太陽低的時候（橘色、天空濁、霧暖色）
+const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fog: 0xd8b49a, envI: 0.4, turb: 8, ray: 2.0, mie: 0.004, exp: 0.45, sunK: 0.6 }; // 太陽低的時候（橘色、天空濁、霧暖色）；第 31 批：夕陽的光調弱（sunK＝最多少掉幾成）
 const NIGHT = { hemiI: 0.55, hemiC: 0x34405e, hemiG: 0x14161c, fog: 0x0a0d15, envI: 0.12, exp: 0.95 }; // 晚上：天空光藍藍的、暗
 const MOON = { elev: 48, az: 300, c: 0x9fb4d8, I: 0.5 }; // 月亮當太陽（有影子）
-const LAMP = { n: 4, c: 0xffd9a0, I: 180, dist: 46, headC: 0xfff0d0, headI: 520, bloom: 0.3, thr: 2.2, sign: 0.5 }; // 路燈（最近 4 支真的有光）、自己的車的大燈、晚上的光暈
-const WET = { dark: 0.62, pud: 0.55, rough: 0.3, pudRough: 0.04, base: 0.35, lod: 4.5 }; // 下過雨的路（最真實）：變暗、水窪更暗、粗糙度、倒影（水窪外面 35%、模糊）
+const LAMP = { n: 4, c: 0xffd9a0, I: 180, dist: 46, fade0: 50, fade1: 88, headC: 0xfff0d0, headI: 150, bloom: 0.18, thr: 2.6, sign: 0.5 }; // 路燈（最近 4 支真的有光；離鏡頭 50–88 公尺慢慢變暗＝換支的時候不跳）、自己的車的大燈（第 31 批：520 → 150，車前面不再一片白）、晚上的光暈
+const WET = { dark: 0.62, pud: 0.55, rough: 0.3, pudRough: 0.04, base: 0.28, lod: 4.5 }; // 下過雨的路（最真實）：變暗、水窪更暗、粗糙度、倒影（水窪外面 35%、模糊）
 const CAVE_I = 1.5, CAVE_C = 0xf4f1ea, CAVE_G = 0x8a8478; // 隧道裡面（hills.js 的 dimK 0.42）、圓塔裡面：天空光補到這麼多、顏色白一點（太陽被擋住了，不然一片黑、藍藍的）
 // 材質（範例 3 號、5 號）
 const MB = { desat: 0.9, grain: 0.08, grass: 0.38, patch: 0.3, fine2: 0.22, olive: 0.75, clump: 0.5, albedo: 0.78, leaf: 3.5, pk: 0.9, pn: 1.6, macro: 5 };
@@ -159,9 +159,9 @@ function createLook(o) {
     TD.envI = THREE.MathUtils.lerp(THREE.MathUtils.lerp(LT.envI, DUSK.envI, w), NIGHT.envI, n);
     TD.hemiI = THREE.MathUtils.lerp(THREE.MathUtils.lerp(LT.hemiI, DUSK.hemiI, w), NIGHT.hemiI, n);
     TD.fog.lerpColors(C_D.fog, C_K.fog, w).lerp(C_N.fog, n); TD.hemiC.lerpColors(C_D.hC, C_K.hC, w).lerp(C_N.hC, n); TD.hemiG.lerpColors(C_D.hG, C_K.hG, w).lerp(C_N.hG, n);
-    if (TD.day > 0.001) { dirOf(sun, elev, az); TD.sunC.lerpColors(C_D.sunC, C_K.sunC, w); TD.dlI = LT.sunI * TD.day; }
+    if (TD.day > 0.001) { dirOf(sun, elev, az); TD.sunC.lerpColors(C_D.sunC, C_K.sunC, w); TD.dlI = LT.sunI * TD.day * (1 - DUSK.sunK * w); } // 第 31 批：太陽低的時候光也弱（夕陽不刺眼）
     else { dirOf(sun, MOON.elev, MOON.az); TD.sunC.copy(C_N.moon); TD.dlI = MOON.I * TD.moon; }
-    TD.band = n > 0.5 ? 'n' : elev < 4 ? 'd' : elev < 16 ? 'l' : elev < 35 ? 'm' : 'h'; // 反射的圖分 5 段
+    TD.band = n > 0.5 ? 'n' : 'b' + Math.floor(clamp(elev, 0, SUN_MAX - 0.01) / 5); // 反射的圖每 5 度一段（第 31 批：以前 5 段，換段的時候反射看得出跳；現在 11 段＋晚上，每段差很少，第一次用到才做）
   }
   timeStep();
   const V3 = new THREE.Vector3(), V3b = new THREE.Vector3(), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0), S3 = new THREE.Vector3(), COL = new THREE.Color();
@@ -536,16 +536,17 @@ function createLook(o) {
   function lampsOn() {
     if (PL) return;
     PL = []; for (let i = 0; i < LAMP.n; i++) { const l = new THREE.PointLight(LAMP.c, 0, LAMP.dist, 2); l.name = 'lk-lamp'; l.position.set(0, -100, 0); scene.add(l); PL.push(l); }
-    HLT = []; for (let i = 0; i < 2; i++) { const l = new THREE.SpotLight(LAMP.headC, 0, 70, 0.5, 0.6, 1.5); l.name = 'lk-head'; l.position.set(0, -100, 0); scene.add(l); scene.add(l.target); HLT.push(l); }
+    HLT = []; for (let i = 0; i < 2; i++) { const l = new THREE.SpotLight(LAMP.headC, 0, 70, 0.5, 0.7, 2); l.name = 'lk-head'; l.position.set(0, -100, 0); scene.add(l); scene.add(l.target); HLT.push(l); }
     if (!lampPts) lampPts = lampList(); headCar = null; lampN = 0;
   }
   function lampsOff() { if (!PL) return; for (const l of PL) l.removeFromParent(); for (const l of HLT) { l.target.removeFromParent(); l.removeFromParent(); } PL = HLT = null; headCar = null; }
+  const lampPos = new THREE.Vector3(1e9, 0, 0);
   function lampStep(cam) {
     if (!PL) return; const k = TD.lamp;
-    if (k > 0.001 && lampN++ % 10 === 0) { // 鏡頭前面 12 公尺附近最近的 4 支
+    if (k > 0.001 && (lampN++ % 10 === 0 || cam.position.distanceToSquared(lampPos) > 36)) { lampPos.copy(cam.position); // 鏡頭前面 12 公尺附近最近的 4 支（每 10 格，鏡頭跳了 6 公尺以上馬上算）
       cam.getWorldDirection(V3b); const px = cam.position.x + V3b.x * 12, pz = cam.position.z + V3b.z * 12, P = lampPts, best = [1e18, 1e18, 1e18, 1e18], bi = [-1, -1, -1, -1];
       for (let i = 0; i < P.length; i += 3) { const d = (P[i] - px) * (P[i] - px) + (P[i + 2] - pz) * (P[i + 2] - pz); if (d >= best[3]) continue; let j = 3; while (j > 0 && best[j - 1] > d) { best[j] = best[j - 1]; bi[j] = bi[j - 1]; j--; } best[j] = d; bi[j] = i; }
-      for (let j = 0; j < LAMP.n; j++) { const l = PL[j], i = bi[j]; if (i < 0 || best[j] > 90 * 90) { l.intensity = 0; continue; } l.position.set(P[i], P[i + 1] - 0.3, P[i + 2]); l.intensity = LAMP.I * k; }
+      for (let j = 0; j < LAMP.n; j++) { const l = PL[j], i = bi[j]; if (i < 0 || best[j] > LAMP.fade1 * LAMP.fade1) { l.intensity = 0; continue; } l.position.set(P[i], P[i + 1] - 0.3, P[i + 2]); l.intensity = LAMP.I * k * (1 - ss(LAMP.fade0, LAMP.fade1, Math.hypot(P[i] - cam.position.x, P[i + 2] - cam.position.z))); } // 第 31 批：離鏡頭遠的慢慢暗（換支不跳）
     } else if (k <= 0.001) for (const l of PL) l.intensity = 0;
     const car = getCar();
     if (car !== headCar) { headCar = car; headDims = car ? carDims(car) : null; }

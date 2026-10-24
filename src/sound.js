@@ -948,6 +948,81 @@ export function createEngineAudio(opt = {}) {
     } catch (e) { warn(e); }
     return h;
   }
+  // ---- 第 31 批：環境聲（出門就有，下車走路也有）：風（低通雜訊，一陣一陣）、白天的鳥叫（兩三聲的啾啾）、晚上的蟲叫（4.3 kHz 一秒 28 下）、路上最近 3 台車的引擎（鋸齒波低通＋低八度，照距離變小、照左右分邊）----
+  // set({ wind, birds, crickets, cars: [{ d, pan, v }] })：每 0.1 秒叫一次就好；數字都用 setTargetAtTime 慢慢到（不會卡卡的）
+  const AMB_V = { n: 3, car: 0.26, carD: 15, wind: 0.045, birds: 0.035, cric: 0.011 };
+  function ambient() {
+    const h = { alive: false, last: null, set() {}, dispose() {} };
+    try {
+      if (S.gone) return h;
+      const ctx = ensureCtx(); if (!ctx) return h;
+      wake(); clearTimeout(S.idleT);
+      const t0 = ctx.currentTime + 0.01, keep = [], tgt = (p, v, T = 0.25) => p.setTargetAtTime(v, ctx.currentTime, T);
+      const out = ctx.createGain(); out.gain.setValueAtTime(0, t0); out.gain.setTargetAtTime(1, t0, 0.8); out.connect(S.inp); keep.push(out);
+      // 風
+      const ns = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), wg = ctx.createGain(), wl = ctx.createGain(); ns.buffer = noiseBuf(ctx); ns.loop = true; lp.type = 'lowpass'; lp.frequency.value = 380; lp.Q.value = 0.4;
+      wg.gain.value = 1; wl.gain.value = 0; ns.connect(lp); lp.connect(wg); wg.connect(wl); wl.connect(out); keep.push(ns, lp, wg, wl);
+      const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 0.13; lg.gain.value = 0.45; lfo.connect(lg); lg.connect(wg.gain); keep.push(lfo, lg); // 一陣一陣（0.55–1.45）
+      // 蟲（晚上）
+      const cr = ctx.createOscillator(), cg = ctx.createGain(), ct = ctx.createOscillator(), ctg = ctx.createGain(), cl = ctx.createGain();
+      cr.type = 'sine'; cr.frequency.value = 4300; ct.type = 'square'; ct.frequency.value = 28; cg.gain.value = 0.5; ctg.gain.value = 0.5; cl.gain.value = 0;
+      ct.connect(ctg); ctg.connect(cg.gain); cr.connect(cg); cg.connect(cl); cl.connect(out); keep.push(cr, cg, ct, ctg, cl); // 音量 0.5 ± 0.5 ＝ 嗶、嗶、嗶
+      // 車
+      const cars = [];
+      for (let i = 0; i < AMB_V.n; i++) {
+        const o = ctx.createOscillator(), o2 = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain(); let pn = null;
+        o.type = 'sawtooth'; o.frequency.value = 70; o2.type = 'triangle'; o2.frequency.value = 35; f.type = 'lowpass'; f.frequency.value = 320; f.Q.value = 0.7; g.gain.value = 0;
+        o.connect(f); o2.connect(f); f.connect(g);
+        try { pn = ctx.createStereoPanner(); g.connect(pn); pn.connect(out); } catch { g.connect(out); }
+        keep.push(o, o2, f, g); if (pn) keep.push(pn);
+        cars.push({ o, o2, g, pn });
+      }
+      for (const x of [ns, lfo, cr, ct]) x.start(t0); for (const c of cars) { c.o.start(t0); c.o2.start(t0); }
+      // 鳥：每 1.6–4 秒看一次要不要叫一聲（白天才叫；頁面藏起來不叫）
+      let birds = 0, bT = 0, done = false;
+      const chirp = () => {
+        if (done) return;
+        bT = setTimeout(chirp, 1600 + Math.random() * 2400);
+        if (birds < 0.05 || (typeof document !== 'undefined' && document.hidden)) return;
+        const t = ctx.currentTime + 0.02, n = 2 + Math.floor(Math.random() * 2), f0 = 2400 + Math.random() * 900, pan = Math.random() * 1.4 - 0.7;
+        const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; let pn = null; try { pn = ctx.createStereoPanner(); pn.pan.value = pan; } catch { /* 算了 */ }
+        g.gain.setValueAtTime(0.0001, t);
+        for (let i = 0; i < n; i++) { const a = t + i * 0.16; o.frequency.setValueAtTime(f0, a); o.frequency.exponentialRampToValueAtTime(f0 * 1.35, a + 0.05); o.frequency.exponentialRampToValueAtTime(f0 * 0.95, a + 0.11);
+          g.gain.exponentialRampToValueAtTime(AMB_V.birds * birds, a + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, a + 0.12); }
+        o.connect(g); if (pn) { g.connect(pn); pn.connect(out); } else g.connect(out); o.start(t); o.stop(t + n * 0.16 + 0.05);
+        o.onended = () => { try { o.disconnect(); g.disconnect(); pn?.disconnect(); } catch { /* 算了 */ } };
+      };
+      bT = setTimeout(chirp, 800);
+      if (S.rec) S.rec.n++;
+      h.alive = true;
+      h.set = (o = {}) => {
+        if (done) return; h.last = o; wake();
+        tgt(wl.gain, AMB_V.wind * Math.max(0, Math.min(1.5, num(o.wind, 1))), 0.6);
+        tgt(cl.gain, AMB_V.cric * Math.max(0, Math.min(1, num(o.crickets, 0))), 0.8);
+        birds = Math.max(0, Math.min(1, num(o.birds, 0)));
+        const L = Array.isArray(o.cars) ? o.cars : [];
+        for (let i = 0; i < cars.length; i++) {
+          const c = cars[i], s = L[i], d = s ? num(s.d, 1e9) : 1e9, v = s ? Math.abs(num(s.v, 0)) : 0;
+          const gain = d > 80 ? 0 : AMB_V.car / (1 + (d / AMB_V.carD) * (d / AMB_V.carD)) * (0.55 + Math.min(1, v / 18) * 0.45);
+          tgt(c.g.gain, gain, 0.2);
+          if (gain > 0) { const hz = 48 + Math.min(42, v) * 3.1; tgt(c.o.frequency, hz, 0.3); tgt(c.o2.frequency, hz / 2, 0.3); if (c.pn) tgt(c.pn.pan, Math.max(-1, Math.min(1, num(s.pan, 0))), 0.25); }
+        }
+      };
+      h.dispose = () => {
+        try {
+          if (done) return; done = true; h.alive = false; clearTimeout(bT);
+          const t1 = ctx.currentTime; out.gain.cancelScheduledValues(t1); out.gain.setTargetAtTime(0, t1, 0.12);
+          setTimeout(() => {
+            for (const x of [ns, lfo, cr, ct]) try { x.stop(); } catch { /* 算了 */ }
+            for (const c of cars) { try { c.o.stop(); c.o2.stop(); } catch { /* 算了 */ } }
+            for (const x of keep) try { x.disconnect(); } catch { /* 算了 */ }
+            if (S.rec) { S.rec.n = Math.max(0, S.rec.n - 1); idleCheck(); }
+          }, 600);
+        } catch (e) { warn(e); }
+      };
+    } catch (e) { warn(e); }
+    return h;
+  }
   // 撞車聲：金屬（4 種大小）＋玻璃（一種，音量看碎了多少）各算一次存起來（全部不到 1 MB）；同時最多 4 個
   //   第一次 resume() 之後在背景慢慢先算好（每 60 ms 算一個），撞的那一下就不用算
   const crashBuf = new Map(), crashes = [];
@@ -1071,7 +1146,7 @@ export function createEngineAudio(opt = {}) {
     } catch (e) { warn(e); }
   }
   return {
-    resume, voice, lift, crash, hiss, skid, setMuted, setVolume, dispose, // skid：第 3 批
+    resume, voice, lift, crash, hiss, skid, ambient, setMuted, setVolume, dispose, // skid：第 3 批；ambient：第 31 批（環境聲）
     get muted() { return S.muted; },
     get volume() { return S.vol; },
     get mode() { return S.mode; }, // 'worklet'｜'script'｜'off'

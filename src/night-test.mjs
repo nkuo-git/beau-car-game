@@ -11,7 +11,7 @@ const prefix = process.argv[2] || '../out/night/nt';
 fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const hook = 'window.__THREE = THREE; window.__PN = PAINT_NIGHT;'
-  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, tripS, TR, walker, renderer, LOOK, NPC, S });'
+  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, tripS, TR, walker, renderer, LOOK, NPC, S, AMB, AMB_S, engineAudio, leaveCar });'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -101,20 +101,26 @@ const at = async (tag, hour) => {
   return st;
 };
 const d = await at('13', 13);
-check(d.sun > 45 && d.night === 0 && d.dl.I === 4.6 && d.dl.c === 'fff0dc' && d.dl.dirY > 200 && d.pl.length === 4 && d.pl.every((l) => l.I === 0) && d.sp.length === 2 && d.sp.every((l) => l.I === 0) && d.paintN === 0 && d.wet === 0 && d.info.band === 'h' && d.fog === 'c3ccd3',
+check(d.sun > 45 && d.night === 0 && d.dl.I === 4.6 && d.dl.c === 'fff0dc' && d.dl.dirY > 200 && d.pl.length === 4 && d.pl.every((l) => l.I === 0) && d.sp.length === 2 && d.sp.every((l) => l.I === 0) && d.paintN === 0 && d.wet === 0 && d.info.band === 'b10' && d.fog === 'c3ccd3',
   `13:00 最真實: sun ${d.sun}° (4.6, white), 4 street lamps + 2 headlights in the scene but off, cars' lamps off, no wet reflection, fog day colour`);
 // ---- 3 傍晚 17:45 ----
 const k = await at('17-45', 17.75);
-check(k.sun > 0 && k.sun < 10 && k.night > 0.3 && k.night < 1 && k.dl.I < 4.6 && k.dl.I > 1 && k.dl.c !== 'fff0dc' && k.pl.some((l) => l.I > 0) && k.sp.every((l) => l.I > 0) && k.paintN > 0.3 && k.paintN < 1 && k.fog !== 'c3ccd3' && k.info.band === 'd',
-  `17:45: low orange sun ${k.sun}° (${k.dl.I}, #${k.dl.c}), lamps coming on (${k.night}), warm fog #${k.fog}, dusk reflection map`);
+check(k.sun > 0 && k.sun < 10 && k.night > 0.3 && k.night < 1 && k.dl.I < 2 && k.dl.I > 1 && k.dl.c !== 'fff0dc' && k.pl.some((l) => l.I > 0) && k.sp.every((l) => l.I > 0 && l.I < 150) && k.paintN > 0.3 && k.paintN < 1 && k.fog !== 'c3ccd3' && k.info.band === 'b0' && k.envI < 0.45,
+  `17:45: low orange sun ${k.sun}° weakened to ${k.dl.I} (#${k.dl.c}, env ${k.envI}), lamps coming on (${k.night}), warm fog #${k.fog}, lowest reflection band`);
 // ---- 4 晚上 22:00 ----
 const n = await at('22', 22);
 const near = n.pl.filter((l) => l.I > 0);
 check(n.sun < -20 && n.night === 1 && n.dl.I === 0.5 && n.dl.c === '9fb4d8' && n.dl.dirY > 150 && n.hemi.c === '34405e' && n.fog === '0a0d15' && n.info.band === 'n' && n.exp === 1,
   `22:00: sun ${n.sun}° (below), moon light 0.5 #${n.dl.c} with shadows, night hemi/fog, night reflection map`);
-check(near.length >= 2 && near.every((l) => l.I === 180 && l.d < 90 && l.y > 5) && n.info.lamps > 100,
-  `22:00: ${near.length} nearest street lamps lit (180, within ${Math.max(...near.map((l) => l.d))} m, heads ${near.map((l) => l.y).join('/')} m high) of ${n.info.lamps} lamp heads (poles, highway, parking)`);
-check(n.sp.length === 2 && n.sp.every((l) => l.I === 520 && l.d > 1.5 && l.d < 3.5 && l.y > 0.3 && l.y < 1.2), `22:00: two headlights on the car's nose (${n.sp.map((l) => l.d + ' m').join(', ')} from its centre, ${n.sp.map((l) => l.y).join('/')} m high), 520`);
+check(near.length >= 2 && near.every((l) => l.I > 0 && l.I <= 180 && l.d < 90 && l.y > 5) && near.some((l) => l.I === 180) && near.filter((l) => l.d > 55).every((l) => l.I < 180) && n.info.lamps > 100,
+  `22:00: ${near.length} nearest street lamps lit (${near.map((l) => l.I + '@' + l.d + 'm').join(', ')}: full near, fading past 50 m so a swap never pops; heads ${near.map((l) => l.y).join('/')} m high) of ${n.info.lamps} lamp heads (poles, highway, parking)`);
+check(n.sp.length === 2 && n.sp.every((l) => l.I === 150 && l.d > 1.5 && l.d < 3.5 && l.y > 0.3 && l.y < 1.2), `22:00: two headlights on the car's nose (${n.sp.map((l) => l.d + ' m').join(', ')} from its centre, ${n.sp.map((l) => l.y).join('/')} m high), 150 (was 520: blew out the road)`);
+check(k.lodE > d.lodE + 0.5 && k.lodE < n.lodE - 0.5 && k.paintN > 0.3 && k.paintN < 0.6, `17:45: traffic cars' lamps part-way on (E sum ${d.lodE} → ${k.lodE} → ${n.lodE}), own car's lamps at ${k.paintN}: lights come on gradually, not with a switch`);
+// 第 31 批：角落的時間、環境聲
+const clk = await p.evaluate(() => { const D = window.__D(), e = document.querySelector('#stage .dv-mapt'), A = D.AMB; return { hidden: e ? e.hidden : null, txt: e ? e.textContent : null, amb: !!(A && A.alive), last: A && A.last ? { wind: A.last.wind, birds: A.last.birds, crickets: A.last.crickets, cars: A.last.cars.map((c) => +c.d.toFixed(0)) } : null, voices: D.engineAudio.input ? 1 : 0 }; });
+await p.evaluate(() => window.__view(960, 576, false)); await p.screenshot({ path: `${prefix}-hud-22.png` }); // 給人看的：HUD 上的時間
+check(clk.hidden === false && clk.txt === '🌙 22:00', `clock above the minimap reads 「${clk.txt}」 at 22:00`);
+check(clk.amb && clk.last && clk.last.crickets === 1 && clk.last.birds === 0 && clk.last.wind > 0 && clk.last.cars.length === 3, `ambient sound running while driving: crickets at night, no birds, wind ${clk.last && clk.last.wind}, 3 traffic voices (nearest ${clk.last && clk.last.cars.join('/')} m)`);
 check(n.paintN === 1 && n.lodCars > 0 && n.lodE > d.lodE + 5 && n.sign > 0.7 && n.info.signs > 3, `22:00: own car's lamps glow (paint night 1), ${n.lodCars} traffic cars' lamps lit (E sum ${d.lodE} → ${n.lodE}), ${n.info.signs} sign materials brighter (${n.sign})`);
 check(n.wet > 50 && Object.values(perf['22']).every((v) => v.wet > 50), `22:00 最真實: wet road reflection pass (${Object.values(perf['22']).map((v) => v.wet).join('/')} extra calls at ${PLACES.join('/')})`);
 // 夜裡的畫面真的暗、燈的地方亮
@@ -126,7 +132,7 @@ check(px.mean < 90 && px.max > 200, `22:00 picture is dark on average (${px.mean
 await p.evaluate(() => window.__D().LOOK.set(1));
 await p.waitForFunction(() => window.__D().LOOK.level === 1 && !window.__D().LOOK.busy);
 const b1 = await at('22-b', 22);
-check(b1.night === 1 && b1.pl.some((l) => l.I === 180) && b1.sp.every((l) => l.I === 520) && b1.paintN === 1 && Object.values(perf['22-b']).every((v) => v.wet === 0) && b1.dl.I === 0.5,
+check(b1.night === 1 && b1.pl.some((l) => l.I > 0) && b1.sp.every((l) => l.I === 150) && b1.paintN === 1 && Object.values(perf['22-b']).every((v) => v.wet === 0) && b1.dl.I === 0.5,
   `漂亮 at 22:00: lamps, headlights, car lamps, moon light; no wet reflection pass`);
 // ---- 6 換回順：燈拿掉、招牌、車燈回去 ----
 const signBase = await p.evaluate(() => { let m = null; window.__D().TR.scene.traverse((o) => { if (!m && o.isMesh && o.material && o.material.emissiveMap && /sign/.test(o.name)) m = o.material; }); return m ? m.emissiveIntensity : null; });
@@ -135,6 +141,15 @@ await p.waitForFunction(() => window.__D().LOOK.level === 0 && !window.__D().LOO
 const z = await p.evaluate(() => { const v = window.__view(320, 192, false); return { st: window.__state(), info: v.info }; });
 check(z.st.pl.length === 0 && z.st.sp.length === 0 && z.st.paintN === 0 && z.st.lodE === 0 && z.st.sign === 0.3 && signBase > 0.7 && z.st.dl.I === 1.4 && z.st.dl.c === 'fff4e0' && z.st.exp === 1 && z.info.wet === 0,
   `back to 順 at 22:00: lamps removed, car lamps off, signs back to 0.3 (were ${signBase}), original sun, no reflection`);
+const z2 = await p.evaluate(() => { window.__dstep(20); const D = window.__D(), e = document.querySelector('#stage .dv-mapt'), A = D.AMB; return { hidden: e.hidden, last: A && A.last ? { birds: A.last.birds, crickets: A.last.crickets } : null }; });
+check(z2.hidden === true && z2.last && z2.last.birds === 1 && z2.last.crickets === 0, `順: no clock (no day and night), ambient sound is daytime (birds, no crickets)`);
+// 下車走路：環境聲還在（風大一點）、時間照樣顯示在走路的小地圖上面
+await p.evaluate(() => window.__D().LOOK.set(2));
+await p.waitForFunction(() => window.__D().LOOK.level === 2 && !window.__D().LOOK.busy);
+const wk = await p.evaluate(() => { const D = window.__D(); D.LOOK.setHour(13); window.__go('dealer', 0); D.drv.setInput({ throttle: 0, brake: 0, steer: 0, handbrake: 1 }); window.__dstep(90); D.drv.setInput(null); window.__dstep(2); const a0 = D.AMB; const t0 = D.drv.telemetry(), act2 = JSON.stringify({ act2: D.drv.action2 && D.drv.action2.label, paused: t0.paused, auto: t0.auto, v: +t0.v.toFixed(2) }); D.leaveCar(); for (let i = 0; i < 300 && !(D.walker && D.walker.mode === 'walk'); i++) window.__dstep(1); window.__dstep(30);
+  const e = document.querySelector('#stage .wk-mapt'), A = D.AMB; return { act2, mode: D.walker.mode, same: A === a0, amb: !!(A && A.alive), last: A && A.last ? { wind: A.last.wind, birds: A.last.birds, crickets: A.last.crickets } : null, hidden: e ? e.hidden : null, txt: e ? e.textContent : null, dvHidden: document.querySelector('#stage .dv-mapt').hidden }; });
+await p.evaluate(() => window.__view(960, 576, false)); await p.screenshot({ path: `${prefix}-hud-walk.png` });
+check(wk.mode === 'walk' && wk.amb && wk.same && wk.last && wk.last.wind === 1 && wk.last.birds === 1 && wk.hidden === false && wk.txt === '☀ 13:00', `got out of the car (${wk.act2} → ${wk.mode}): ambient sound keeps running (wind ${wk.last && wk.last.wind}, birds), clock 「${wk.txt}」 on the walking minimap`);
 // ---- 7 回到時鐘 ----
 const c2 = await p.evaluate(() => { const D = window.__D(); D.LOOK.setHour(null); return { h: D.LOOK.hour, c: (((Date.now() / 60000) % 24) / 24) * 24 }; });
 check(Math.abs(c2.h - c2.c) < 0.05, `setHour(null): back to the clock (${c2.h.toFixed(2)})`);

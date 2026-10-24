@@ -524,7 +524,7 @@ async function lookSet(lv, tell) {
   if (tell) gtoast('畫質：' + LOOK_NAMES[got], 1400);
 }
 // 第 30 批（Nick 2026-10-24，卡片選「自動輪流」）：look.js 的一天（24 分鐘）；燈亮多少變了 → 完整的車（masks.js 的車漆 shader）、輕量車（路上的車、朋友的車）的大燈、尾燈一起亮
-function lookNight(k) { PAINT_NIGHT.value = k; buildLodCar.night(k > 0.5); }
+function lookNight(k) { PAINT_NIGHT.value = k; buildLodCar.night(k); } // 第 31 批：路上的車的燈也跟著 0–1 慢慢亮
 function lookOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); } if (bodyFlags.lookopen === on) return; bodyFlag('lookopen', on); $('lookTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 lookBtns(lookPref());
 $('lookTog').addEventListener('click', () => lookOpen(true));
@@ -1505,7 +1505,7 @@ function toRace() {
   stopLiftSnd();
   tripS?.dmg?.clearDebris(); // 掉在村子裡的零件、煙、嘶嘶聲收掉（車子還是凹的）
   drv.release(); // 車子放回原點、不轉、輪子歸零（carSize、putCar 要）
-  DRIVE.on = false; document.body.classList.remove('driving'); bodyWalking(false); driveBar.hidden = true; VIL.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
+  DRIVE.on = false; ambOff(); document.body.classList.remove('driving'); bodyWalking(false); driveBar.hidden = true; VIL.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
   townFog(false); npcShow(false); police?.setEnabled(false); bodyFlag('wanted', false); // 第 3 批：比賽的時候警察藏起來（星星留著）
   enterRace(); // 賽道已經蓋好了：不用等，這一行就進去了
   if (!RACE.on) resumeDrive(VIL.places.track.spawn, 'garage'); // 進不去（不會發生）：接著開
@@ -1628,7 +1628,7 @@ function leaveDrive() {
   netBorrowEnd('home'); netLendHome(); // 第 19 批：開借來的車回車庫頁＝還車；借給朋友的拿回來
   gvEnd('home'); // 第 23 批：在朋友家：塔搬回你家
   const P = tripPose && TWR ? { mid: padCars(0, null)[0] || null, tower: TWR.slice() } : null; // 第 21 批：坐電梯中的那幾台不在裡面（normPark 再找一格）
-  trip = false; DRIVE.on = false; boarding = null; VIL?.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
+  trip = false; DRIVE.on = false; boarding = null; ambOff(); VIL?.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
   panelClose(); driveBar.hidden = true;
   document.body.classList.remove('driving'); bodyWalking(false);
   dvoice?.dispose(); dvoice = null;
@@ -2084,8 +2084,35 @@ function driveStep(dt) {
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
   netStep(dt); // 一起開車（net.src.js）：朋友的車、人、名字、表情、一起比賽
+  clockStep(); ambStep(); // 第 31 批：角落的時間（小地圖上面）、環境聲（風、鳥、蟲、路上的車；下車走路也有）
   mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）
+}
+// ==== 第 31 批：角落的時間＋環境聲 ====
+// 時間：漂亮、最真實（有日夜）才顯示，在小地圖上面一條「☀ 13:05」／「🌙 22:40」（開車、走路的 HUD 都有；順沒有日夜就不顯示）
+const CLK = { f: 0, s: null };
+function clockTxt(h) { const m = Math.floor(h * 60) % 1440, hh = Math.floor(m / 60), mm = m % 60; return `${LOOK.sun > 0 ? '☀' : '🌙'} ${hh < 10 ? '0' : ''}${hh}:${mm < 10 ? '0' : ''}${mm}`; }
+function clockStep() {
+  if (CLK.f++ % 15) return;
+  const s = DRIVE.on && LOOK && LOOK.level > 0 ? clockTxt(LOOK.hour) : null;
+  drv?.setClock(s); walker?.setClock(s);
+}
+// 環境聲（sound.js ambient）：出門就有，開車、走路都有：風（走路比較大聲）、白天的鳥、晚上的蟲（看 LOOK 的天色；順＝白天）、路上最近 3 台車的引擎（照距離、左右）；回車庫頁、進比賽就收掉
+let AMB = null; const AMB_S = { f: 0, wind: 1, birds: 1, crickets: 0, cars: [{ d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }] };
+function ambOff() { if (AMB) { AMB.dispose(); AMB = null; } }
+function ambStep() {
+  if (!DRIVE.on || !engineAudio.input) { ambOff(); return; }
+  if (AMB_S.f++ % 6) return;
+  if (!AMB) { AMB = engineAudio.ambient(); if (!AMB.alive) { AMB = null; return; } }
+  let px, pz, hd; const walking = !!walker && walker.mode !== 'off';
+  if (walking) { const w = walker.telemetry(); px = w.x; pz = w.z; hd = w.heading; } else if (drv) { const t = drv.telemetry(); px = t.x; pz = t.z; hd = t.heading; } else return;
+  const night = LOOK && LOOK.level > 0 ? LOOK.night : 0, inK = indoor ? 0.3 : 1; // 順沒有日夜＝白天；房子裡面：外面的聲音小聲
+  AMB_S.wind = (walking ? 1 : 0.55) * inK; AMB_S.crickets = night * inK; AMB_S.birds = (1 - night) * inK;
+  const L = AMB_S.cars; for (const c of L) c.d = 1e9;
+  const cars = NPC?.traffic?.cars; if (cars && !indoor) { const rx = Math.sin(hd), rz = Math.cos(hd); // 右手邊（heading：x = cos, z = −sin）
+    for (let i = 0; i < cars.length; i++) { const c = cars[i], dx = c.x - px, dz = c.z - pz, d = Math.hypot(dx, dz); if (d > 80 || d >= L[2].d) continue;
+      let j = 2; while (j > 0 && L[j - 1].d > d) { const t = L[j]; L[j] = L[j - 1]; L[j - 1] = t; j--; } const s = L[j]; s.d = d; s.v = c.v || 0; s.pan = d > 0.5 ? (dx * rx + dz * rz) / d : 0; } }
+  AMB.set(AMB_S);
 }
 // ==== 第 27 批：山、隧道、海邊（hills.js）====
 // 玩家多高 → 在隧道的哪一層（開在山上＝上面：山的地面、洞口上面的欄杆擋；隧道裡＝下面：路、隧道的牆擋）；鏡頭在隧道裡面：太陽、天空光暗一點
