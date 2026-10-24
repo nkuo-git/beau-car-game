@@ -11,7 +11,7 @@ const prefix = process.argv[2] || '../out/night/nt';
 fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const hook = 'window.__THREE = THREE; window.__PN = PAINT_NIGHT;'
-  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, tripS, TR, walker, renderer, LOOK, NPC, S, AMB, AMB_S, engineAudio, leaveCar, police, buildLodCar });'
+  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, tripS, TR, walker, renderer, LOOK, NPC, S, AMB, AMB_S, MUS, engineAudio, leaveCar, police, buildLodCar });'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -71,7 +71,7 @@ const helpers = () => p.evaluate(() => {
     const ns = NS ? { stars: NS.stars.geometry.attributes.position.count, starsOp: +NS.stars.material.opacity.toFixed(2), moonOp: +NS.moon.material.opacity.toFixed(2), moonY: +new THREE.Vector3().setFromMatrixPosition(NS.moon.matrixWorld).sub(cp).normalize().y.toFixed(2), winN: NS.lit, winOp: +NS.win.material.opacity.toFixed(2), winVis: NS.win.visible, pools: NS.pool.count, poolOp: +NS.pool.material.opacity.toFixed(3), poolVis: NS.pool.visible, pol: +NS.pol.intensity.toFixed(1), polC: NS.pol.color.getHexString(), polY: +NS.pol.position.y.toFixed(2) } : null;
     return { info: D.LOOK.info(), hour: +D.LOOK.hour.toFixed(2), sun: +D.LOOK.sun.toFixed(1), night: +D.LOOK.night.toFixed(2), exp: R.toneMappingExposure, ns, nearCars: Math.min(12, near.length), pool0,
       dl: { I: +dl.intensity.toFixed(3), c: dl.color.getHexString(), y: +dl.position.y.toFixed(0), dirY: +(dl.position.y - dl.target.position.y).toFixed(0) }, hemi: { I: +hemi.intensity.toFixed(3), c: hemi.color.getHexString() }, fog: sc.fog ? sc.fog.color.getHexString() : null, envI: +sc.environmentIntensity.toFixed(3),
-      pl: pl.map((l) => ({ I: +l.intensity.toFixed(1), d: +Math.hypot(l.position.x - cp.x, l.position.z - cp.z).toFixed(0), y: +l.position.y.toFixed(1) })), sp: sp.map((l) => ({ I: +l.intensity.toFixed(0), d: cx ? +l.position.distanceTo(cx).toFixed(2) : null, y: +l.position.y.toFixed(2) })),
+      pl: pl.map((l) => ({ I: +l.intensity.toFixed(1), d: +Math.hypot(l.position.x - cp.x, l.position.z - cp.z).toFixed(0), y: +l.position.y.toFixed(1) })), sp: sp.map((l) => ({ I: +l.intensity.toFixed(0), d: cx ? +l.position.distanceTo(cx).toFixed(2) : null, y: +l.position.y.toFixed(2), decay: l.decay, distance: l.distance, aim: +l.position.distanceTo(l.target.position).toFixed(1) })),
       paintN: window.__PN.value, sign: signM ? +signM.emissiveIntensity.toFixed(2) : null, lodE: +lodE.toFixed(2), lodK: D.buildLodCar.nightK(), lodCars: D.NPC?.traffic?.cars?.length || 0, wet: D.LOOK.stats.wetCalls || 0 }; };
 });
 
@@ -82,10 +82,10 @@ console.log('out', el(), JSON.stringify(g1));
 await p.evaluate(() => { window.__hold = true; window.__noDraw = true; });
 await helpers();
 // ---- 1 順：時間照時鐘，但什麼都不動 ----
-const s0 = await p.evaluate(() => { const D = window.__D(); const h0 = D.LOOK.hour, h1 = (((Date.now() / 60000) % 24) / 24) * 24; return { lv: D.LOOK.level, hour: h0, clock: h1, st: window.__state() }; });
+const s0 = await p.evaluate(() => { const D = window.__D(); const h0 = D.LOOK.hour, h1 = (((Date.now() / 60000) % 12) / 12) * 24; return { lv: D.LOOK.level, hour: h0, clock: h1, st: window.__state() }; });
 console.log('1 順', JSON.stringify(s0));
 check(s0.lv === 0 && s0.hour >= 0 && s0.hour < 24 && Math.abs(s0.hour - s0.clock) < 0.05 && s0.st.pl.length === 0 && s0.st.sp.length === 0 && s0.st.paintN === 0 && s0.st.dl.I === 1.4,
-  `順: clock hour ${s0.hour.toFixed(2)} (= (minutes % 24) / 24 × 24), nothing changes (no lamps, sun 1.4, paint night 0)`);
+  `順: clock hour ${s0.hour.toFixed(2)} (= (minutes % 12) / 12 × 24: a 12-minute day, 第 34 批), nothing changes (no lamps, sun 1.4, paint night 0)`);
 await p.evaluate(() => window.__D().LOOK.setHour(22));
 const s0n = await p.evaluate(() => window.__state());
 check(s0n.hour === 22 && s0n.dl.I === 1.4 && s0n.pl.length === 0 && s0n.paintN === 0 && s0n.lodE === 0, `順 at 22:00: still daytime look (sun 1.4, no lamps, LOD car lamps off)`);
@@ -132,12 +132,13 @@ const pol = await p.evaluate(async () => { const D = window.__D(), PC = D.police
 console.log('   police light', JSON.stringify(pol));
 check(pol.before === 0 && pol.I === 70 && pol.y > 1.8 && pol.y < 2.3 && pol.d < 0.6 && Math.abs(pol.polD - pol.camD) < 0.11 && pol.colors.length === 2 && pol.colors.includes('ff2a1a') && pol.colors.includes('2a60ff') && pol.after === 0, `police light: off with no chase; a police car with its lights on 10 m away → one light on its roof flashing red/blue (${pol.colors.join('/')}), 70; off again when it leaves`);
 check(pol.pools === n2.nearCars + 1 && pol.poolD < 0.3 && pol.poolY > 0 && pol.poolY < 0.2 && pol.poolsAfter === n2.nearCars, `headlight pool: the police car gets one on the road in front of its nose (${pol.pools} pools, ${pol.poolD} m off, ${pol.poolY} m up); gone when it leaves`);
-check(n.sp.length === 2 && n.sp.every((l) => l.I === 150 && l.d > 1.5 && l.d < 3.5 && l.y > 0.3 && l.y < 1.2), `22:00: two headlights on the car's nose (${n.sp.map((l) => l.d + ' m').join(', ')} from its centre, ${n.sp.map((l) => l.y).join('/')} m high), 150 (was 520: blew out the road)`);
+check(n.sp.length === 2 && n.sp.every((l) => l.I === 18 && l.decay === 0.6 && l.distance === 150 && l.d > 1.5 && l.d < 3.5 && l.y > 0.3 && l.y < 1.2 && l.aim > 55 && l.aim < 65), `22:00: two headlights on the car's nose (${n.sp.map((l) => l.d + ' m').join(', ')} from its centre, ${n.sp.map((l) => l.y).join('/')} m high), 18 with decay 0.6 to 150 m aimed ${n.sp.map((l) => l.aim).join('/')} m ahead (第 34 批: lights the road far ahead; was 150 / decay 2: dark past 25 m)`);
 check(k.lodE > d.lodE + 0.5 && k.lodE < n.lodE - 0.5 && k.paintN > 0.3 && k.paintN < 0.6, `17:45: traffic cars' lamps part-way on (E sum ${d.lodE} → ${k.lodE} → ${n.lodE}), own car's lamps at ${k.paintN}: lights come on gradually, not with a switch`);
 // 第 31 批：角落的時間、環境聲
-const clk = await p.evaluate(() => { const D = window.__D(), e = document.querySelector('#stage .dv-mapt'), A = D.AMB; return { hidden: e ? e.hidden : null, txt: e ? e.textContent : null, amb: !!(A && A.alive), last: A && A.last ? { wind: A.last.wind, birds: A.last.birds, crickets: A.last.crickets, cars: A.last.cars.map((c) => +c.d.toFixed(0)) } : null, voices: D.engineAudio.input ? 1 : 0 }; });
+const clk = await p.evaluate(() => { const D = window.__D(), e = document.querySelector('#stage .dv-mapt'), A = D.AMB; return { hidden: e ? e.hidden : null, txt: e ? e.textContent : null, amb: !!(A && A.alive), mus: !!(D.MUS && D.MUS.alive), musBar: D.MUS ? D.MUS.bar : -1, last: A && A.last ? { wind: A.last.wind, birds: A.last.birds, crickets: A.last.crickets, cars: A.last.cars.map((c) => +c.d.toFixed(0)) } : null, voices: D.engineAudio.input ? 1 : 0 }; });
 await p.evaluate(() => window.__view(960, 576, false)); await p.screenshot({ path: `${prefix}-hud-22.png` }); // 給人看的：HUD 上的時間
 check(clk.hidden === false && clk.txt === '🌙 22:00', `clock above the minimap reads 「${clk.txt}」 at 22:00`);
+check(clk.mus && clk.musBar >= 2, `第 34 批: background music is playing (bar ${clk.musBar}; program-made, starts with the ambient sound)`);
 check(clk.amb && clk.last && clk.last.crickets === 1 && clk.last.birds === 0 && clk.last.wind > 0 && clk.last.cars.length === 3, `ambient sound running while driving: crickets at night, no birds, wind ${clk.last && clk.last.wind}, 3 traffic voices (nearest ${clk.last && clk.last.cars.join('/')} m)`);
 check(n.paintN === 1 && n.lodCars > 0 && n.lodE > d.lodE + 5 && n.sign > 0.7 && n.info.signs > 3, `22:00: own car's lamps glow (paint night 1), ${n.lodCars} traffic cars' lamps lit (E sum ${d.lodE} → ${n.lodE}), ${n.info.signs} sign materials brighter (${n.sign})`);
 check(n.wet > 50 && Object.values(perf['22']).every((v) => v.wet > 50), `22:00 最真實: wet road reflection pass (${Object.values(perf['22']).map((v) => v.wet).join('/')} extra calls at ${PLACES.join('/')})`);

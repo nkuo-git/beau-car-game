@@ -7,7 +7,7 @@
 // 每種都換得回去：原本的天空、霧、燈、反射、材質（onBeforeCompile）、法線、顏色、樹冠的三角形、內湖的樹都記著
 // 只改開車出門的世界（scene）：車庫頁、房子裡面、警察局、槍店照舊；畫到別的地方（後照鏡）不做後製、不重算影子（用這一格的）
 // 第 30 批（Nick 2026-10-24「什麼時候會變晚上的街景」，卡片選「自動輪流」）：一天的時間（只有漂亮、最真實）
-//   遊戲裡 24 分鐘＝一天（照手機的時鐘算：(現在的分鐘 % 24) / 24 × 24 小時，大家不用連線就一樣）；6 點太陽從東邊出來、12 點南邊最高（55 度）、18 點西邊下山
+//   遊戲裡 12 分鐘＝一天（第 34 批起；以前 24）（照手機的時鐘算：(現在的分鐘 % 12) / 12 × 24 小時，大家不用連線就一樣）；6 點太陽從東邊出來、12 點南邊最高（55 度）、18 點西邊下山
 //   天空、太陽（顏色、亮度、影子的方向）、天空光、霧的顏色、反射的圖（照太陽高度分 5 段，第一次用到才做）、曝光都跟著時間變；晚上月亮當太陽（藍藍的、暗、有影子）
 //   傍晚起（太陽 6 度以下）：路燈（最近的 4 支真的有光，其他只有亮的燈頭）、招牌亮（emissiveMap 的材質）、大家的車燈亮（masks.js PAINT_NIGHT、carlod.js buildLodCar.night：town.src.js 的 night 回呼）、
 //   自己的車兩盞大燈真的照路（SpotLight 跟著車）、光暈（最真實）；最真實：路面像下過雨（濕、暗、水窪，倒影＝把世界倒過來再畫一次到半張大小的圖；只有路面高度附近的地面）
@@ -38,12 +38,12 @@ const LOOK_NAMES = ['順', '漂亮', '最真實'];
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // 光線（範例 2 號以後都一樣）
 const LT = { elev: 38, az: 233, turb: 6, ray: 1.3, mie: 0.004, exp: 0.45, sunI: 4.6, sunC: 0xfff0dc, envI: 0.3, hemiI: 0.12, hemiC: 0xdde6ef, hemiG: 0x474a3c, fog: 0xc3ccd3, gnd: 0x3c4235, cloud: 0.32, cden: 0.5 };
-const DAY_MIN = 24; // 第 30 批：遊戲裡一天＝真的 24 分鐘（照手機的時鐘：大家一樣）
+const DAY_MIN = 12; // 第 30 批：遊戲裡一天＝真的 24 分鐘（照手機的時鐘：大家一樣）；第 34 批：Nick「一天時間改成12分鐘」→ 12 分鐘
 const SUN_MAX = 55; // 中午太陽多高（度）
 const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fog: 0xd8b49a, envI: 0.4, turb: 8, ray: 2.0, mie: 0.004, exp: 0.45, sunK: 0.6 }; // 太陽低的時候（橘色、天空濁、霧暖色）；第 31 批：夕陽的光調弱（sunK＝最多少掉幾成）
 const NIGHT = { hemiI: 0.55, hemiC: 0x34405e, hemiG: 0x14161c, fog: 0x0a0d15, envI: 0.12, exp: 0.95 }; // 晚上：天空光藍藍的、暗
 const MOON = { elev: 48, az: 300, c: 0x9fb4d8, I: 0.5 }; // 月亮當太陽（有影子）
-const LAMP = { n: 4, c: 0xffd9a0, I: 180, dist: 46, fade0: 50, fade1: 88, headC: 0xfff0d0, headI: 150, bloom: 0.18, thr: 2.6, sign: 0.5 }; // 路燈（最近 4 支真的有光；離鏡頭 50–88 公尺慢慢變暗＝換支的時候不跳）、自己的車的大燈（第 31 批：520 → 150，車前面不再一片白）、晚上的光暈
+const LAMP = { n: 4, c: 0xffd9a0, I: 180, dist: 46, fade0: 50, fade1: 88, headC: 0xfff0d0, headI: 18, headDecay: 0.6, headDist: 150, headAim: 60, bloom: 0.18, thr: 2.6, sign: 0.5 }; // 路燈（最近 4 支真的有光；離鏡頭 50–88 公尺慢慢變暗＝換支的時候不跳）、自己的車的大燈（第 31 批：520 → 150，車前面不再一片白；第 34 批：Nick「晚上車燈可以照遠一點嗎」：衰減改成 1／距離^0.6（以前 1／距離²）、強度 18、照到 150 公尺、對準前面 60 公尺——車前面一樣亮（5 公尺 6.8），30 公尺 2.3、60 公尺 1.5（以前 0.17、0.04））、晚上的光暈
 const NSKY = { stars: 900, starR: 870, starSz: 2.4, moonR: 24, moonD: 860, moonC: 0xe9eef7, winC: [1.9, 1.45, 0.85], shopC: [1.5, 1.55, 1.45], winP: 0.6, shopP: 0.85, polI: 70, polD: 34, polT: 0.8, poolN: 12, poolI: 0.34, poolL: 9.5, poolW: 4.4, hwK: 2.2, parkK: 1.4 }; // 第 32 批：晚上的天空（星星、月亮的圓盤）、透天厝一樓窗戶、店面的燈（幾成亮）、警車的紅藍燈（最近一台）、路上車子的大燈照在路上（最近 12 台）、快速道路／停車場的路燈比電線桿的亮（燈頭比較高）
 const WET = { dark: 0.62, pud: 0.55, rough: 0.3, pudRough: 0.04, base: 0.28, lod: 4.5 }; // 下過雨的路（最真實）：變暗、水窪更暗、粗糙度、倒影（水窪外面 35%、模糊）
 const CAVE_I = 1.5, CAVE_C = 0xf4f1ea, CAVE_G = 0x8a8478; // 隧道裡面（hills.js 的 dimK 0.42）、圓塔裡面：天空光補到這麼多、顏色白一點（太陽被擋住了，不然一片黑、藍藍的）
@@ -539,7 +539,7 @@ function createLook(o) {
   function lampsOn() {
     if (PL) return;
     PL = []; for (let i = 0; i < LAMP.n; i++) { const l = new THREE.PointLight(LAMP.c, 0, LAMP.dist, 2); l.name = 'lk-lamp'; l.position.set(0, -100, 0); scene.add(l); PL.push(l); }
-    HLT = []; for (let i = 0; i < 2; i++) { const l = new THREE.SpotLight(LAMP.headC, 0, 70, 0.5, 0.7, 2); l.name = 'lk-head'; l.position.set(0, -100, 0); scene.add(l); scene.add(l.target); HLT.push(l); }
+    HLT = []; for (let i = 0; i < 2; i++) { const l = new THREE.SpotLight(LAMP.headC, 0, LAMP.headDist, 0.5, 0.7, LAMP.headDecay); l.name = 'lk-head'; l.position.set(0, -100, 0); scene.add(l); scene.add(l.target); HLT.push(l); }
     if (!lampPts) lampPts = lampList(); headCar = null; lampN = 0;
     nightOn(); // 第 32 批
   }
@@ -555,7 +555,7 @@ function createLook(o) {
     const car = getCar();
     if (car !== headCar) { headCar = car; headDims = car ? carDims(car) : null; }
     if (car && headDims && k > 0.001) { const D = headDims, xf = D.cx + D.hx - 0.15; car.updateMatrixWorld();
-      for (let i = 0; i < 2; i++) { const sz = (i ? -1 : 1) * D.hz * 0.62, l = HLT[i]; HEAD[i].set(xf, 0.62, sz).applyMatrix4(car.matrixWorld); HTGT[i].set(xf + 30, -0.3, sz * 1.6).applyMatrix4(car.matrixWorld);
+      for (let i = 0; i < 2; i++) { const sz = (i ? -1 : 1) * D.hz * 0.62, l = HLT[i]; HEAD[i].set(xf, 0.62, sz).applyMatrix4(car.matrixWorld); HTGT[i].set(xf + LAMP.headAim, -0.3, sz * 1.6).applyMatrix4(car.matrixWorld);
         l.position.copy(HEAD[i]); l.target.position.copy(HTGT[i]); l.target.updateMatrixWorld(); l.intensity = LAMP.headI * k; } }
     else for (const l of HLT) l.intensity = 0;
     nightStep(cam, k);
@@ -689,7 +689,7 @@ function createLook(o) {
     WU.wetK.value = TD.lamp; if (TD.lamp > 0.01) wetRender(cam); else st.wetCalls = 0;
     R.setRenderTarget(PP.a); MASKU.value = 1; r0(scene, cam); MASKU.value = 0;
     PP.ao.camera = cam; PP.ao.render(R, PP.b, PP.a);
-    PP.bloom.strength = THREE.MathUtils.lerp(POST.bloom, LAMP.bloom, TD.lamp); PP.bloom.threshold = THREE.MathUtils.lerp(POST.thr, LAMP.thr, TD.lamp); PP.q.material.uniforms.toneMappingExposure.value = TD.exp;
+    PP.bloom.strength = THREE.MathUtils.lerp(POST.bloom, LAMP.bloom, TD.night); PP.bloom.threshold = THREE.MathUtils.lerp(POST.thr, LAMP.thr, TD.night); // 第 34 批：光暈照「晚上」不照「燈亮」：傍晚太陽還在的時候不會把天空暈成一片白 PP.q.material.uniforms.toneMappingExposure.value = TD.exp;
     PP.bloom.render(R, null, PP.b, 0, false);
     PP.q.material.uniforms.tDiffuse.value = PP.b.texture; R.setRenderTarget(null); PP.q.render(R);
     R.info.autoReset = true;
@@ -809,7 +809,7 @@ function createLook(o) {
     get hour() { return hourNow(); }, setHour(h) { hourOv = h == null ? null : clamp(+h, 0, 24) % 24; timeStep(); lampN = 0; }, get night() { return TD.lamp; }, get sun() { return TD.elev; }, // 第 30 批：一天的時間
     _tex: () => TEX, _td: () => TD,
     info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band, stars: NS ? +NS.stars.material.opacity.toFixed(2) : null, moon: NS ? +NS.moon.material.opacity.toFixed(2) : null, win: NS ? NS.lit : 0, winK: NS ? +NS.win.material.opacity.toFixed(2) : 0, pools: NS ? NS.pools : 0, pol: NS ? +NS.pol.intensity.toFixed(1) : 0, polD: NS && NS.polCar ? +NS.polD.toFixed(1) : null }),
-    _ns: () => NS,
+    _ns: () => NS, _az: () => TD.az,
   };
   return API;
 }

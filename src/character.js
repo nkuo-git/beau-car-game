@@ -2192,7 +2192,7 @@ function gaitStep(S, M, dt, speed, run) {
     } else { // 在空中
       if (!ft.air) liftOff(M, ft);
       ft.s = (ph - beta) / (1 - beta);
-      ft.lift = run ? (0.1 + 0.2 * Math.min(vh, 1.8)) * Lg : (0.03 + 0.05 * vh) * Lg * sstep(0, 0.3, step);
+      ft.lift = run ? (0.1 + 0.2 * Math.min(vh, 1.8)) * Lg : (0.07 + 0.09 * vh) * Lg * sstep(0, 0.3, step); // 第 34 批：走路腳抬高一點（膝蓋才會彎、不會像在滑）
     }
   }
 }
@@ -2225,7 +2225,7 @@ function footTarget(M, ft, run, outA, outQ) {
   const s = ft.s;
   ankleOf(M, ft.x1, ft.z1, ft.yaw1, ft.th1, V_C);
   const e = run ? sstep(0.12, 1, s) : s * s * s * (10 - 15 * s + 6 * s * s);
-  const h = ft.lift * (run ? Math.pow(Math.sin(PI * Math.pow(s, 0.7)), 1.2) : Math.sin(PI * Math.pow(s, 0.8)));
+  const h = ft.lift * (run ? Math.pow(Math.sin(PI * Math.pow(s, 0.7)), 1.2) : Math.sin(PI * Math.pow(s, 0.6))); // 走路：剛離地就抬最高（腳跟往上踢），再往前伸直落地
   outA.set(lerp(ft.ax, V_C.x, e), lerp(ft.ay, V_C.y, e) + h, lerp(ft.az, V_C.z, e));
   const yaw = lerp(ft.ayaw, ft.yaw1, e);
   footQ(yaw, lerp(ft.ath, ft.th1, sstep(0, run ? 0.9 : 0.6, s)), outQ);
@@ -2281,10 +2281,10 @@ function gaitBody(S, M, P, speed) {
     P[CI.hw] += -aw * c2; P[CI.cw] += 1.5 * aw * c2;
     P[CI.hr] += 0.035 * (M.fem ? 1.5 : 1) * amp * Math.cos(TAU * (ph - 0.3));
     P[CI.hp] += -0.02 - 0.03 * vh; P[CI.sp] += -0.02 - 0.04 * vh;
-    const A = (0.12 + 0.3 * vh) * amp * (M.kid ? 1.2 : M.eld ? 0.55 : 1) * (M.fem ? 0.9 : 1);
+    const A = (0.15 + 0.35 * vh) * amp * (M.kid ? 1.2 : M.eld ? 0.55 : 1) * (M.fem ? 0.9 : 1); // 第 34 批：手擺大一點
     for (let k = 0; k < 2; k++) {
       const o = SO[k], sw = (k ? 1 : -1) * A * Math.cos(TAU * (ph - 0.05)); // 右手跟左腳一起往前
-      P[o + X_SF] += sw + 0.02; P[o + X_EL] += 0.08 * vh + 0.5 * Math.max(0, sw); P[o + X_SA] += 0.02 * vh; P[o + X_WF] += 0.1 * Math.max(0, -sw);
+      P[o + X_SF] += sw + 0.02; P[o + X_EL] += 0.1 + 0.1 * vh + 0.6 * Math.max(0, sw); P[o + X_SA] += 0.02 * vh; P[o + X_WF] += 0.1 * Math.max(0, -sw);
     }
   } else {
     P[CI.hy] += -(0.035 + 0.02 * vh) * s - 0.025 * s * Math.cos(2 * TAU * (ph - b / 2));

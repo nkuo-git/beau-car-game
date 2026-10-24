@@ -630,7 +630,9 @@ function placeholderOfficer() {
 }
 
 // ---- 警笛：台灣警車的兩段音（高、低交替、中間滑過去）；每台一個聲音，照距離變大聲、變悶、左右、都卜勒 ----
-// 振盪器（鋸齒波＋方波高八度）→ 帶通 → 音量 → 低通（遠的悶）→ 左右 → 輸出；兩段音＝方波的 LFO 過低通（滑音）× 深度 → 振盪器的頻率
+// 振盪器（三角波＋正弦波高八度）→ 帶通 → 音量 → 低通（遠的悶）→ 左右 → 輸出；兩段音＝方波的 LFO 過低通（滑音）× 深度 → 振盪器的頻率
+// 第 34 批（試做頁 v50）：Nick「警車警鈴改成溫和一點沒這麼吵的」：鋸齒波、方波換成三角波、正弦波（沒有那麼刺）、高低音差小一點、滑得慢一點、整體小聲一半、高音少一點
+const SIREN_VOL = 0.5; // 第 34 批：警笛整體音量（1 ＝ 以前的）
 function makeSiren(ctx, out, seed) {
   try {
     const t = ctx.currentTime;
@@ -638,13 +640,13 @@ function makeSiren(ctx, out, seed) {
     const mix2 = ctx.createGain(), bp = ctx.createBiquadFilter(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
     let pan = null; try { pan = ctx.createStereoPanner(); } catch { pan = null; }
     const base = 760 + seed * 25; // 每台差一點點（三台一起叫會一前一後）
-    osc.type = 'sawtooth'; osc.frequency.value = base; osc2.type = 'square'; osc2.frequency.value = base * 2;
-    lfo.type = 'square'; lfo.frequency.value = 0.78 + seed * 0.06; // 一高一低一輪約 1.3 秒
-    lfoLp.type = 'lowpass'; lfoLp.frequency.value = 5; lfoLp.Q.value = 0.5; // 滑過去（不是跳過去）
-    depth.gain.value = 170; depth2.gain.value = 340;
+    osc.type = 'triangle'; osc.frequency.value = base; osc2.type = 'sine'; osc2.frequency.value = base * 2;
+    lfo.type = 'square'; lfo.frequency.value = 0.6 + seed * 0.05; // 一高一低一輪約 1.7 秒
+    lfoLp.type = 'lowpass'; lfoLp.frequency.value = 2.5; lfoLp.Q.value = 0.5; // 滑過去（不是跳過去）
+    depth.gain.value = 120; depth2.gain.value = 240;
     lfo.connect(lfoLp); lfoLp.connect(depth); lfoLp.connect(depth2); depth.connect(osc.frequency); depth2.connect(osc2.frequency);
-    mix2.gain.value = 0.18;
-    bp.type = 'bandpass'; bp.frequency.value = 1150; bp.Q.value = 0.9;
+    mix2.gain.value = 0.1;
+    bp.type = 'bandpass'; bp.frequency.value = 950; bp.Q.value = 0.6;
     lp.type = 'lowpass'; lp.frequency.value = 2000; lp.Q.value = 0.3;
     g.gain.value = 0;
     osc.connect(bp); osc2.connect(mix2); mix2.connect(bp); bp.connect(g); g.connect(lp);
@@ -1562,11 +1564,11 @@ function createPolice(o = {}) {
       if (!want) { if (c.siren) { c.siren.stop(); c.siren = null; } continue; }
       if (!c.siren) c.siren = makeSiren(ctx, SND.out || ctx.destination, c.id);
       if (!c.siren) continue;
-      const d = Math.hypot(c.x - P.cx, c.z - P.cz), near = clamp(1 - d / 320, 0, 1), gain = base * near * near * (state === 'caught' ? 0.6 : 1);
+      const d = Math.hypot(c.x - P.cx, c.z - P.cz), near = clamp(1 - d / 320, 0, 1), gain = base * SIREN_VOL * near * near * (state === 'caught' ? 0.6 : 1);
       const ang = Math.atan2(-(c.z - P.cz), c.x - P.cx) - P.th, pan = clamp(-Math.sin(ang) * 0.75, -0.8, 0.8);
       const ux = d > 1e-3 ? (c.x - P.cx) / d : 0, uz = d > 1e-3 ? (c.z - P.cz) / d : 0;
       const vr = (Math.cos(c.th) * c.v - P.vx) * ux + (-Math.sin(c.th) * c.v - P.vz) * uz; // 正的＝離你越來越遠
-      c.siren.set(gain, 900 + 6500 * near, pan, clamp(-1200 * Math.log2(1 + vr / 343), -260, 260));
+      c.siren.set(gain, 800 + 2400 * near, pan, clamp(-1200 * Math.log2(1 + vr / 343), -260, 260));
     }
   }
 

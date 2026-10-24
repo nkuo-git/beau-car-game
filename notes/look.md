@@ -167,3 +167,12 @@ Everything lives in the scene all the time at 漂亮/最真實 and is transparen
   the highway lamps are 396 and actually light the road (the parent said they looked dim).
 - Tests: night-test.mjs +6 checks (night objects present but off at 13:00, windows part-way at 17:45, stars/moon/windows at 22:00, highway
   lamps 396 vs village 180, pool count = cars within 110 m and the nearest pool's position, a faked police car → red/blue roof light).
+
+## Batch 34 — longer headlights, 12-minute day, bloom only at night (trial v50, 2026-10-24)
+
+Nick (2026-10-24): 「第一人稱晚上車燈可以照遠一點嗎 不然看不清楚路」, 「一天時間改成12分鐘」, 「面像太陽的時候光線還是有點太亮 至少要讓我看得到前方的景物」.
+
+- **Headlights** (`LAMP.headI/headDecay/headDist/headAim`): the two SpotLights now use decay 0.6 (was the physical 2), intensity 18 (was 150), distance 150 m (was 70) and aim 60 m ahead (was 30). Falloff 18 / d^0.6: 5 m → 6.8 (same as before, so the bumper is not blown out again), 30 m → 2.3 (was 0.17), 60 m → 1.5 (was 0.04). night-test checks the four numbers and the aim distance.
+- **12-minute day**: `DAY_MIN = 12` (was 24); `hourNow()` is unchanged otherwise, so everybody still shares the time from the phone clock. night-test's 順 check computes the clock with % 12.
+- **Bloom** strength/threshold now lerp with `TD.night` instead of `TD.lamp`: at dusk the lamps come on while the sun is still up, and with the low threshold (2.6) the sky around the sun bloomed into a white sheet. Now the glow only grows after dark. The dusk sun itself was already weakened in batch 31 (`DUSK.sunK`).
+- Test hook: `LOOK._az()` returns the sun azimuth (degrees) so a probe can point the car at the sun.

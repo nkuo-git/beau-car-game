@@ -179,7 +179,7 @@ async function phone(key, uid, name) {
   }, { uid, name });
   const p = await ctx.newPage();
   p.setDefaultTimeout(300000);
-  p.on('pageerror', (e) => { errs.push(`${key}: ${e.message}`); console.log('pageerror', key, e.message); });
+  p.on('pageerror', (e) => { errs.push(`${key}: ${e.message}`); if (errs.length <= 6) console.log('pageerror', key, e.message, '\n   ', String(e.stack || '').split('\n').slice(1, 4).join('\n    ')); });
   p.on('console', (m) => { if (m.type() === 'error' && !/ERR_|404|GPU stall|AudioContext|fonts\.g|net::/.test(m.text())) console.log('console', key, m.text().slice(0, 240)); });
   pages[key] = p;
   await p.goto(URL0, { waitUntil: 'domcontentloaded' });

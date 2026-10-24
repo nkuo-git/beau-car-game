@@ -1023,6 +1023,59 @@ export function createEngineAudio(opt = {}) {
     } catch (e) { warn(e); }
     return h;
   }
+  // ---- 第 34 批：背景音樂（Nick 2026-10-24「可以有點背景音樂嗎?」）：程式自己彈的，沒有用任何音樂檔（沒有版權問題）
+  //   92 BPM、C 大調，8 小節一段的和弦（C G Am F C G F G）：墊底的和弦（三角波過低通，慢慢進慢慢出）、貝斯（正弦，1、3 拍）、
+  //   五聲音階的小旋律（正弦＋三角波的撥弦，每 16 小節換一段，照種子亂數走：每次聽到的不太一樣）、很輕的踩鈸（高通雜訊，反拍）
+  //   出門就放（開車、走路），跟引擎聲同一條總輸出（靜音、音量一起）；頁面藏起來就先不排音符；set({ level })：房子裡面小聲一點
+  const MUS = { bpm: 92, vol: 0.085, pad: 0.055, bass: 0.1, pluck: 0.075, hat: 0.02, look: 0.45 };
+  const MUS_CH = [[60, 64, 67], [59, 62, 67], [57, 60, 64], [57, 60, 65], [60, 64, 67], [59, 62, 67], [57, 60, 65], [59, 62, 67]], MUS_ROOT = [36, 43, 45, 41, 36, 43, 41, 43], MUS_PENT = [60, 62, 64, 67, 69, 72, 74, 76, 79, 81];
+  const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  function music() {
+    const h = { alive: false, set() {}, dispose() {}, get bar() { return bar; } };
+    let bar = 0;
+    try {
+      if (S.gone) return h;
+      const ctx = ensureCtx(); if (!ctx) return h;
+      wake(); clearTimeout(S.idleT);
+      const t0 = ctx.currentTime + 0.05, keep = [], beat = 60 / MUS.bpm;
+      const out = ctx.createGain(); out.gain.setValueAtTime(0, t0); out.gain.setTargetAtTime(MUS.vol, t0, 1.2); out.connect(S.inp); keep.push(out);
+      const padLp = ctx.createBiquadFilter(); padLp.type = 'lowpass'; padLp.frequency.value = 900; padLp.Q.value = 0.3; padLp.connect(out); keep.push(padLp);
+      const plLp = ctx.createBiquadFilter(); plLp.type = 'lowpass'; plLp.frequency.value = 2600; plLp.Q.value = 0.2; plLp.connect(out); keep.push(plLp);
+      const hatHp = ctx.createBiquadFilter(); hatHp.type = 'highpass'; hatHp.frequency.value = 6500; hatHp.connect(out); keep.push(hatHp);
+      let rng = 1, seed = 7; const rnd = () => { rng = (rng * 1664525 + 1013904223) >>> 0; return rng / 4294967296; };
+      let mel = null; // 這 16 小節的旋律：每小節 8 個半拍 [音（MIDI）或 null]
+      const makeMel = () => { rng = seed * 2654435761 >>> 0; seed++; mel = []; let i = 3;
+        for (let b = 0; b < 16; b++) { const row = [], ch = MUS_CH[b % 8]; for (let k = 0; k < 8; k++) {
+          const rest = k % 2 ? rnd() < 0.55 : rnd() < 0.2; if (rest) { row.push(null); continue; }
+          i += rnd() < 0.5 ? -1 : 1; if (rnd() < 0.25) i += rnd() < 0.5 ? -1 : 1; i = Math.max(1, Math.min(MUS_PENT.length - 2, i)); let n = MUS_PENT[i];
+          if (k === 0 || k === 4) { let best = n, bd = 99; for (const c of ch) for (const o of [0, 12]) { const d = Math.abs(c + o - n); if (d < bd) { bd = d; best = c + o; } } n = best; i = Math.max(0, MUS_PENT.indexOf(n)); if (i < 0) i = 3; } // 重拍落在和弦音上
+          row.push(n); } mel.push(row); } };
+      makeMel();
+      const tone = (type, f, t, a, dur, dest, g0, rel) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(g0, t + a); g.gain.setTargetAtTime(0.0001, t + dur, rel); o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + rel * 6); o.onended = () => { try { o.disconnect(); g.disconnect(); } catch { /* 算了 */ } }; };
+      const schedBar = (b, t) => { // 第 b 小節從 t 秒開始
+        const ch = MUS_CH[b % 8], root = MUS_ROOT[b % 8], L = 4 * beat;
+        for (const m of ch) tone('triangle', hz(m), t, 0.35, L - 0.1, padLp, MUS.pad, 0.25); // 墊底
+        for (const k of [0, 2]) tone('sine', hz(root), t + k * beat, 0.01, beat * 0.9, out, MUS.bass, 0.08); // 貝斯
+        if (b % 16 === 0 && b > 0) makeMel();
+        const row = mel[b % 16]; for (let k = 0; k < 8; k++) { const m = row[k]; if (m == null) continue; const tt = t + k * beat * 0.5; tone('sine', hz(m), tt, 0.008, 0.05, plLp, MUS.pluck, 0.11); tone('triangle', hz(m) * 2, tt, 0.008, 0.03, plLp, MUS.pluck * 0.18, 0.05); } // 撥弦
+        for (let k = 0; k < 4; k++) { const tt = t + (k + 0.5) * beat, n = ctx.createBufferSource(), g = ctx.createGain(); n.buffer = noiseBuf(ctx); g.gain.setValueAtTime(MUS.hat, tt); g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.045); n.connect(g); g.connect(hatHp); n.start(tt); n.stop(tt + 0.06); n.onended = () => { try { n.disconnect(); g.disconnect(); } catch { /* 算了 */ } }; } // 踩鈸（反拍）
+      };
+      let next = t0 + 0.2, done = false, level = 1;
+      const tick = () => { if (done) return; const now = ctx.currentTime; if (typeof document !== 'undefined' && document.hidden) { next = Math.max(next, now + 0.2); return; } if (next < now - 0.5) next = now + 0.1; while (next < now + 0.6) { schedBar(bar, next); bar++; next += 4 * beat; } };
+      const iv = setInterval(tick, 150); tick();
+      if (S.rec) S.rec.n++;
+      h.alive = true;
+      h.set = (o = {}) => { if (done) return; const v = Math.max(0, Math.min(1, num(o.level, 1))); if (v !== level) { level = v; out.gain.setTargetAtTime(MUS.vol * v, ctx.currentTime, 0.5); } };
+      h.dispose = () => {
+        try {
+          if (done) return; done = true; h.alive = false; clearInterval(iv);
+          const t1 = ctx.currentTime; out.gain.cancelScheduledValues(t1); out.gain.setTargetAtTime(0, t1, 0.25);
+          setTimeout(() => { for (const x of keep) try { x.disconnect(); } catch { /* 算了 */ } if (S.rec) { S.rec.n = Math.max(0, S.rec.n - 1); idleCheck(); } }, 1500);
+        } catch (e) { warn(e); }
+      };
+    } catch (e) { warn(e); }
+    return h;
+  }
   // 撞車聲：金屬（4 種大小）＋玻璃（一種，音量看碎了多少）各算一次存起來（全部不到 1 MB）；同時最多 4 個
   //   第一次 resume() 之後在背景慢慢先算好（每 60 ms 算一個），撞的那一下就不用算
   const crashBuf = new Map(), crashes = [];
@@ -1146,7 +1199,7 @@ export function createEngineAudio(opt = {}) {
     } catch (e) { warn(e); }
   }
   return {
-    resume, voice, lift, crash, hiss, skid, ambient, setMuted, setVolume, dispose, // skid：第 3 批；ambient：第 31 批（環境聲）
+    resume, voice, lift, crash, hiss, skid, ambient, music, setMuted, setVolume, dispose, // skid：第 3 批；ambient：第 31 批（環境聲）；music：第 34 批（背景音樂）
     get muted() { return S.muted; },
     get volume() { return S.vol; },
     get mode() { return S.mode; }, // 'worklet'｜'script'｜'off'

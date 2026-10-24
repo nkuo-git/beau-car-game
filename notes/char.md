@@ -11,3 +11,6 @@ Integration: swap stub import for character.js (check PLAYER_LOOK name clash); p
 Perf: tris avg 3.9k (max 4.4k), 2 draw calls/char (skinned body + blob shadow); build min-of-3 median 4.2 ms, single-shot ~12 ms (max 55, one 451 ms); update ~0.03 ms/char. No LOD. Phones likely 3–5× slower → prebuild + spread.
 Known: build time > 5 ms goal; tris slightly > 4k; faint jagged crotch/seat outline; torso textures mirrored L/R; kid collar jagged; perm/curly hair helmet-like, long hair sheets; untucked shirts flare at back; fingers move together; 213 KB unminified.
 Character editor UI (自訂角色 screen) not built yet → integration builds it from CHARACTER_OPTIONS (preview first = Nick's mock).
+
+## Batch 34 — more natural walk (trial v50, 2026-10-24)
+Nick: 「人走路腳的姿勢可以再自然一點嗎?」. The swing foot barely lifted (ankle peak ≈ 11 cm at 1.3 m/s) so the knee hardly bent and the walk read as a stiff shuffle. `gaitStep`: walk lift (0.03 + 0.05·vh)·Lg → (0.07 + 0.09·vh)·Lg; `footTarget`: walk swing curve sin(π·s^0.8) → sin(π·s^0.6) (peaks at s ≈ 0.3, right after toe-off, like a real heel kick-up, then the foot reaches forward and lands). `gaitBody`: arm swing (0.12 + 0.3·vh) → (0.15 + 0.35·vh), elbows bend a little more (+0.1 base, 0.6·forward swing). Run untouched. Strips: out/walk/walk-before.png vs walk-after.png (scratch probe, not in the repo).
