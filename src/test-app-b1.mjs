@@ -18,7 +18,7 @@ const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '
 const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () => S; window.__snd = () => snd; window.__room = () => room; window.__scene = () => scene; window.__controls = () => controls;'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
   + ' window.__money = (n) => { GAME.money = n; save(true); renderWallet(); renderOptions(); refreshCarBtns(); };'
-  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, home, bayLock, snooze, TR, LODS, camGo, cur, built, walker, tripPose, tripFull, boarding,'
+  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, home, bayLock, snooze, TR, LODS, camGo, cur, built, walker, tripPose, tripFull, boarding, room, liftAnim,'
   + '   TWR, EL, PW, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE, setDest, CARS, PERF, TOWER_BAYS, towerFy, TOWER });'
   + ' window.__HOME = () => HOME; window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
   + ' window.__pol = () => (typeof police !== "undefined" ? police : null);' // 第 3 批（b3-int）：警察（撞人的測試以後把星星清掉：警察的部分在 test-b3.mjs）
@@ -1299,11 +1299,14 @@ const orb = await p.evaluate(async () => {
 });
 console.log('  orbit:', JSON.stringify(orb));
 check(orb.maxR < 10.65 && orb.maxY < orb.ceil - 0.3 && orb.maxD > 4, `orbiting all the way round at full zoom-out (${orb.n} positions): the camera stays inside the glass (r ≤ ${orb.maxR} m) and under the 2F floor (y ≤ ${orb.maxY} m)`);
-// 選停在樓上的車（SP3，2 樓 5 號）：電梯送下來（說一聲），GC8 停去 SP3 那格
-const pk11 = await p.evaluate(async () => { document.querySelector('#cars button[data-car="sp3"]').click(); await new Promise((r) => setTimeout(r, 600)); const G = window.__G(); return { cur: window.__D().cur, toast: document.getElementById('gtoast').textContent, mid: G.park.mid, t4: G.park.tower[4] }; });
-await p.waitForFunction(() => window.__D().LODS.gc8?.lod?.car.parent?.name === 'towerBay5', null, { timeout: 60000 });
-console.log('  pick SP3 upstairs:', JSON.stringify(pk11));
-check(pk11.cur === 'sp3' && /SP3 坐電梯從 2 樓下來了/.test(pk11.toast) && pk11.mid === 'sp3' && pk11.t4 === 'gc8', `picking SP3 (parked upstairs) on the garage page: 「${pk11.toast}」, and GC8 takes SP3's spot (2 樓 5 號)`);
+// 選停在樓上的車（SP3，2 樓 5 號）：電梯真的去載（第 33 批：GC8 坐上去停進 SP3 那格，SP3 坐下來；這段時間格子照舊），做完 GC8 在 SP3 那格
+const pk11 = await p.evaluate(async () => { document.querySelector('#cars button[data-car="sp3"]').click(); await new Promise((r) => setTimeout(r, 600)); const G = window.__G(), D = window.__D(); return { cur: D.cur, toast: document.getElementById('gtoast').textContent, anim: D.liftAnim.state(), busy: D.room.lift.busy, mid: G.park.mid, t4: G.park.tower[4], gc8vis: D.built.gc8.car.visible, sp3vis: !!D.built.sp3?.car.visible }; });
+await p.waitForFunction(() => !window.__D().liftAnim.on && window.__D().LODS.gc8?.lod?.car.parent?.name === 'towerBay5' && !!window.__D().built.sp3, null, { timeout: 60000 });
+const pk11b = await p.evaluate(() => { const G = window.__G(), D = window.__D(); return { mid: G.park.mid, t4: G.park.tower[4], lf: D.room.lift.floor, y: +D.room.lift.y.toFixed(2), gc8vis: D.built.gc8.car.visible, gc8At: D.built.gc8.car.parent === D.built.sp3.car.parent, sp3vis: D.built.sp3.car.visible, lodAt: D.LODS.sp3?.lod?.car.parent?.name || null }; });
+console.log('  pick SP3 upstairs:', JSON.stringify(pk11), JSON.stringify(pk11b));
+check(pk11.cur === 'sp3' && /SP3 坐電梯從 2 樓下來⋯/.test(pk11.toast) && pk11.anim && pk11.anim.ph === 'up' && pk11.anim.lodAt === 'towerBay5' && pk11.anim.wasAt === 'towerLift' && pk11.busy && pk11.mid === 'gc8' && pk11.t4 === 'sp3' && pk11.gc8vis && !pk11.sp3vis,
+  `picking SP3 (parked upstairs) on the garage page: 「${pk11.toast}」, the lift goes up with GC8 on it (SP3 still in its spot, not shown yet)`);
+check(pk11b.mid === 'sp3' && pk11b.t4 === 'gc8' && pk11b.lf === 0 && pk11b.y === 0 && pk11b.sp3vis && !pk11b.gc8vis && pk11b.gc8At && pk11b.lodAt == null, `lift back at 1F: SP3 shown, GC8 hidden at the origin again, GC8 (light car) takes SP3's spot (2 樓 5 號)`);
 await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(1500);
 await p.screenshot({ path: `${prefix}-31-page-tower.png` }); console.log('  shot', `${prefix}-31-page-tower.png`, el());
 

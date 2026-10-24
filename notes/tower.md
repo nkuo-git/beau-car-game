@@ -88,3 +88,17 @@ Nick: 「看可以的話加在地下室然後地下室有幾樓樓上就剪掉�
 - `elCall` decides 「電梯上來了／下來了」 by height (basement indices are bigger).
 - Tests: `under-test.mjs` (new; numbers, old save, panel, stencil, ride down and see the basement, park on B1, walls, walk to B2, call the lift up, outside view, draw calls). ramp-test, test-b1 and test-app-b1 updated for 37 bays and 2F–4F. world-test section 9 also rides B's lift down to B1.
 - Performance (SwiftShader): 1F at the panel 208 calls / 1.26M tris, riding down 192 / 1.26M, B1 224 / 1.40M, B2 77 / 0.33M, looking down the shaft from 1F 55 / 0.31M.
+
+## Batch 33 — the garage page's lift really fetches the car (trial v50, 2026-10-24)
+
+Picking a car parked upstairs / in the basement on the garage page used to swap instantly with a toast. Now (`town.src.js` `ELA`,
+hooked into `garage.src.html` through `liftAnim`): the car that was on the platform (full model) rides up/down to that floor and slides
+into the picked car's bay (bay-local x −RB → 0, 1.1 s smoothstep), the picked car's light model slides from the bay onto the platform,
+the platform returns to 1F with rotation 0, and only then the full model of the picked car becomes visible (`liftAnim.vis` keeps the old
+car visible and the new one hidden meanwhile). During the ride `arrangeCars` uses the old bay list (`ELA.on.want`) and `syncTower` skips
+that bay, so nothing jumps; at the end a normal `arrangeCars()` → `normPark()` writes the swapped save. `room.update(dt)` is now called
+from the page loop (it never was: `liftSnap` only). The lift motor sound uses `room.onLift` → `engineAudio.lift()` (`liftSnd.page`).
+Picking another car, going out (`enterDrive`) or hiding the room cancels: `liftSnap(0, 0)` and the same finish. Timing: 2F ≈ 1.9 s each
+way + 1.1 s, B2 ≈ 2.5 s each way. Toast now ends with 「⋯」 while it rides.
+Tests: under-test 0b (pick the B1 YARIS: up/swap/down phases, positions, visibility, save; pick GC8 back), test-b1 / test-app-b1 pk11
+updated (toast 「⋯」, animation state, final state).

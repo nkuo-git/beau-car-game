@@ -16,7 +16,8 @@
 // 【API】
 //   const look = createLook({ renderer, scene, world: V, getCar: () => 現在開的車（Object3D）或 null,
 //     plain: () => 不要加地面紋路的那一棟（圓塔：大理石、玻璃是設計好的）, indoor: (cam) => 鏡頭在屋頂底下（圓塔裡面）→ 補光,
-//     night: (k) => 燈亮多少變了（0–1；車燈：PAINT_NIGHT、buildLodCar.night）, carDims: (car) => { hx, hz, cx }（車身長方形：大燈放在車頭兩邊） })
+//     night: (k) => 燈亮多少變了（0–1；車燈：PAINT_NIGHT、buildLodCar.night）, carDims: (car) => { hx, hz, cx }（車身長方形：大燈放在車頭兩邊）,
+//     police: () => 警車 [{ x, z, heading, lights }]（第 32 批：紅藍燈）, traffic: () => 路上的車 [{ x, z, heading, hx, active, kind, crushed }]（第 32 批：大燈照在路上） })
 //   await look.set(lv)      換畫質；第一次 1、2 要先找樹冠、算法線（約 0.5–1 秒），第一次 2 要先畫材質貼圖（time-slice）
 //   look.level              現在的；look.can.post＝這支手機畫得了最真實嗎（半精度的畫面）；look.half＝半精度的畫面（後照鏡用）
 //   look.treeK(j, k)        crush.js：輾扁的樹（j.grp 裡每棵樹 2 公尺內的葉子卡片跟著扁，k＝高度倍數，1＝長回來）
@@ -43,6 +44,7 @@ const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fo
 const NIGHT = { hemiI: 0.55, hemiC: 0x34405e, hemiG: 0x14161c, fog: 0x0a0d15, envI: 0.12, exp: 0.95 }; // 晚上：天空光藍藍的、暗
 const MOON = { elev: 48, az: 300, c: 0x9fb4d8, I: 0.5 }; // 月亮當太陽（有影子）
 const LAMP = { n: 4, c: 0xffd9a0, I: 180, dist: 46, fade0: 50, fade1: 88, headC: 0xfff0d0, headI: 150, bloom: 0.18, thr: 2.6, sign: 0.5 }; // 路燈（最近 4 支真的有光；離鏡頭 50–88 公尺慢慢變暗＝換支的時候不跳）、自己的車的大燈（第 31 批：520 → 150，車前面不再一片白）、晚上的光暈
+const NSKY = { stars: 900, starR: 870, starSz: 2.4, moonR: 24, moonD: 860, moonC: 0xe9eef7, winC: [1.9, 1.45, 0.85], shopC: [1.5, 1.55, 1.45], winP: 0.6, shopP: 0.85, polI: 70, polD: 34, polT: 0.8, poolN: 12, poolI: 0.34, poolL: 9.5, poolW: 4.4, hwK: 2.2, parkK: 1.4 }; // 第 32 批：晚上的天空（星星、月亮的圓盤）、透天厝一樓窗戶、店面的燈（幾成亮）、警車的紅藍燈（最近一台）、路上車子的大燈照在路上（最近 12 台）、快速道路／停車場的路燈比電線桿的亮（燈頭比較高）
 const WET = { dark: 0.62, pud: 0.55, rough: 0.3, pudRough: 0.04, base: 0.28, lod: 4.5 }; // 下過雨的路（最真實）：變暗、水窪更暗、粗糙度、倒影（水窪外面 35%、模糊）
 const CAVE_I = 1.5, CAVE_C = 0xf4f1ea, CAVE_G = 0x8a8478; // 隧道裡面（hills.js 的 dimK 0.42）、圓塔裡面：天空光補到這麼多、顏色白一點（太陽被擋住了，不然一片黑、藍藍的）
 // 材質（範例 3 號、5 號）
@@ -524,13 +526,14 @@ function createLook(o) {
   function grassReset() { if (!GR) return; GR.slot.clear(); GR.ci = GR.cj = 1e9; }
 
   // ==== 第 30 批：晚上的燈（路燈最近 4 支＋自己的車的大燈；漂亮、最真實都有；白天亮度 0，一直留在場景裡，shader 不用重編）====
-  let PL = null, HLT = null, lampPts = null, headCar = null, headDims = null, lampN = 0; const HEAD = [new THREE.Vector3(), new THREE.Vector3()], HTGT = [new THREE.Vector3(), new THREE.Vector3()];
-  function lampList() { // 所有路燈的燈頭：村子的電線桿（有路燈的）、快速道路（中間護欄上 60 公尺一支、兩邊）、大停車場 5 支
-    const P = [];
-    for (const p of V.poles || []) if (p.lamp) P.push(p.x + p.fx * 2.2, 7.6, p.z + p.fz * 2.2);
+  let PL = null, HLT = null, lampPts = null, lampKs = null, headCar = null, headDims = null, lampN = 0; const HEAD = [new THREE.Vector3(), new THREE.Vector3()], HTGT = [new THREE.Vector3(), new THREE.Vector3()];
+  function lampList() { // 所有路燈的燈頭：村子的電線桿（有路燈的）、快速道路（中間護欄上 60 公尺一支、兩邊）、大停車場 5 支；第 32 批：每支多一個亮度倍數（快速道路、停車場的燈頭高，光要強一點才照得到路）
+    const P = [], K = [];
+    for (const p of V.poles || []) if (p.lamp) { P.push(p.x + p.fx * 2.2, 7.6, p.z + p.fz * 2.2); K.push(1); }
     const H = V.highway; if (H && H.center && H.center.length > 1) { const C = H.center; let s = 0, next = 30; for (let i = 1; i < C.length; i++) { const dx = C[i][0] - C[i - 1][0], dz = C[i][1] - C[i - 1][1], L = Math.hypot(dx, dz); if (L < 1e-6) continue;
-      while (next <= s + L && next <= H.len - 25) { const t = (next - s) / L, x = C[i - 1][0] + dx * t, z = C[i - 1][1] + dz * t, nx = -dz / L, nz = dx / L; if (!(V.hills && V.hills.inTunnel && V.hills.inTunnel(x, z, 3))) { P.push(x + nx * 2.65, 11.0, z + nz * 2.65, x - nx * 2.65, 11.0, z - nz * 2.65); } next += 60; } s += L; } }
-    const K = V.parking; if (K) { const X0 = K.x - K.hx, X1 = K.x + K.hx, Z0 = K.z - K.hz, Z1 = K.z + K.hz, zm = (Z0 + Z1) / 2; for (const [x, z] of [[X0 + 17.1, Z0 + 1.5], [X0 + 17.1, zm], [X0 + 17.1, Z1 - 1.5], [X0 + 2.2, zm], [X1 - 2.2, zm]]) P.push(x, 6.3, z); }
+      while (next <= s + L && next <= H.len - 25) { const t = (next - s) / L, x = C[i - 1][0] + dx * t, z = C[i - 1][1] + dz * t, nx = -dz / L, nz = dx / L; if (!(V.hills && V.hills.inTunnel && V.hills.inTunnel(x, z, 3))) { P.push(x + nx * 2.65, 11.0, z + nz * 2.65, x - nx * 2.65, 11.0, z - nz * 2.65); K.push(NSKY.hwK, NSKY.hwK); } next += 60; } s += L; } }
+    const Kp = V.parking; if (Kp) { const X0 = Kp.x - Kp.hx, X1 = Kp.x + Kp.hx, Z0 = Kp.z - Kp.hz, Z1 = Kp.z + Kp.hz, zm = (Z0 + Z1) / 2; for (const [x, z] of [[X0 + 17.1, Z0 + 1.5], [X0 + 17.1, zm], [X0 + 17.1, Z1 - 1.5], [X0 + 2.2, zm], [X1 - 2.2, zm]]) { P.push(x, 6.3, z); K.push(NSKY.parkK); } }
+    lampKs = new Float32Array(K);
     return new Float32Array(P);
   }
   function lampsOn() {
@@ -538,15 +541,16 @@ function createLook(o) {
     PL = []; for (let i = 0; i < LAMP.n; i++) { const l = new THREE.PointLight(LAMP.c, 0, LAMP.dist, 2); l.name = 'lk-lamp'; l.position.set(0, -100, 0); scene.add(l); PL.push(l); }
     HLT = []; for (let i = 0; i < 2; i++) { const l = new THREE.SpotLight(LAMP.headC, 0, 70, 0.5, 0.7, 2); l.name = 'lk-head'; l.position.set(0, -100, 0); scene.add(l); scene.add(l.target); HLT.push(l); }
     if (!lampPts) lampPts = lampList(); headCar = null; lampN = 0;
+    nightOn(); // 第 32 批
   }
-  function lampsOff() { if (!PL) return; for (const l of PL) l.removeFromParent(); for (const l of HLT) { l.target.removeFromParent(); l.removeFromParent(); } PL = HLT = null; headCar = null; }
+  function lampsOff() { if (!PL) return; for (const l of PL) l.removeFromParent(); for (const l of HLT) { l.target.removeFromParent(); l.removeFromParent(); } PL = HLT = null; headCar = null; nightOff(); }
   const lampPos = new THREE.Vector3(1e9, 0, 0);
   function lampStep(cam) {
     if (!PL) return; const k = TD.lamp;
     if (k > 0.001 && (lampN++ % 10 === 0 || cam.position.distanceToSquared(lampPos) > 36)) { lampPos.copy(cam.position); // 鏡頭前面 12 公尺附近最近的 4 支（每 10 格，鏡頭跳了 6 公尺以上馬上算）
       cam.getWorldDirection(V3b); const px = cam.position.x + V3b.x * 12, pz = cam.position.z + V3b.z * 12, P = lampPts, best = [1e18, 1e18, 1e18, 1e18], bi = [-1, -1, -1, -1];
       for (let i = 0; i < P.length; i += 3) { const d = (P[i] - px) * (P[i] - px) + (P[i + 2] - pz) * (P[i + 2] - pz); if (d >= best[3]) continue; let j = 3; while (j > 0 && best[j - 1] > d) { best[j] = best[j - 1]; bi[j] = bi[j - 1]; j--; } best[j] = d; bi[j] = i; }
-      for (let j = 0; j < LAMP.n; j++) { const l = PL[j], i = bi[j]; if (i < 0 || best[j] > LAMP.fade1 * LAMP.fade1) { l.intensity = 0; continue; } l.position.set(P[i], P[i + 1] - 0.3, P[i + 2]); l.intensity = LAMP.I * k * (1 - ss(LAMP.fade0, LAMP.fade1, Math.hypot(P[i] - cam.position.x, P[i + 2] - cam.position.z))); } // 第 31 批：離鏡頭遠的慢慢暗（換支不跳）
+      for (let j = 0; j < LAMP.n; j++) { const l = PL[j], i = bi[j]; if (i < 0 || best[j] > LAMP.fade1 * LAMP.fade1) { l.intensity = 0; continue; } l.position.set(P[i], P[i + 1] - 0.3, P[i + 2]); l.intensity = LAMP.I * lampKs[i / 3] * k * (1 - ss(LAMP.fade0, LAMP.fade1, Math.hypot(P[i] - cam.position.x, P[i + 2] - cam.position.z))); } // 第 31 批：離鏡頭遠的慢慢暗（換支不跳）；第 32 批：每支自己的倍數
     } else if (k <= 0.001) for (const l of PL) l.intensity = 0;
     const car = getCar();
     if (car !== headCar) { headCar = car; headDims = car ? carDims(car) : null; }
@@ -554,8 +558,73 @@ function createLook(o) {
       for (let i = 0; i < 2; i++) { const sz = (i ? -1 : 1) * D.hz * 0.62, l = HLT[i]; HEAD[i].set(xf, 0.62, sz).applyMatrix4(car.matrixWorld); HTGT[i].set(xf + 30, -0.3, sz * 1.6).applyMatrix4(car.matrixWorld);
         l.position.copy(HEAD[i]); l.target.position.copy(HTGT[i]); l.target.updateMatrixWorld(); l.intensity = LAMP.headI * k; } }
     else for (const l of HLT) l.intensity = 0;
+    nightStep(cam, k);
     signsK(k);
     if (Math.abs(k - lampSent) > 0.02 || (k === 0) !== (lampSent === 0)) { lampSent = k; nightCb(k); }
+  }
+
+  // ==== 第 32 批：晚上的天空和燈：星星（跟著鏡頭的點）、月亮的圓盤（光本來就是月亮：方向一樣）、透天厝一樓的窗戶和店面（加亮的面，蓋在原本的窗戶上）、警車的紅藍燈（最近一台、一顆燈換顏色）、路上車子的大燈照在路上（加亮的橢圓，最近 12 台）；白天透明度 0，都留在場景裡 ====
+  let NS = null; const MD = new THREE.Vector3(), POOLC = []; const policeOf = o.police || (() => null), trafficOf = o.traffic || (() => null);
+  function nightOn() {
+    if (NS) return;
+    let sd = 20261024; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    // 星星
+    const n = NSKY.stars, sp = new Float32Array(n * 3), sc = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { let x, y, z; do { x = rnd() * 2 - 1; y = rnd(); z = rnd() * 2 - 1; } while (x * x + y * y + z * z > 1 || y < 0.06); const L = Math.hypot(x, y, z) / NSKY.starR; sp[i * 3] = x / L; sp[i * 3 + 1] = y / L; sp[i * 3 + 2] = z / L;
+      const b = 0.35 + rnd() * rnd() * 1.1, t = rnd(); sc[i * 3] = b * (t < 0.2 ? 1.0 : 0.85); sc[i * 3 + 1] = b * 0.9; sc[i * 3 + 2] = b * (t < 0.2 ? 0.75 : 1.0); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3)); sg.setAttribute('color', new THREE.BufferAttribute(sc, 3));
+    const stars = new THREE.Points(sg, new THREE.PointsMaterial({ size: NSKY.starSz, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false, toneMapped: false }));
+    stars.name = 'lk-stars'; stars.frustumCulled = false; stars.renderOrder = -999; stars.matrixAutoUpdate = false;
+    stars.onBeforeRender = (r, s2, c) => { const e = c.matrixWorld.elements; stars.matrixWorld.makeTranslation(e[12], e[13], e[14]); };
+    // 月亮
+    const moon = new THREE.Mesh(new THREE.CircleGeometry(NSKY.moonR, 24), new THREE.MeshBasicMaterial({ color: NSKY.moonC, transparent: true, opacity: 0, depthWrite: false, fog: false, toneMapped: false }));
+    moon.name = 'lk-moon'; moon.frustumCulled = false; moon.renderOrder = -998; moon.matrixAutoUpdate = false; dirOf(MD, MOON.elev, MOON.az);
+    moon.onBeforeRender = (r, s2, c) => { V3b.setFromMatrixPosition(c.matrixWorld); V3.copy(V3b).addScaledVector(MD, NSKY.moonD); M4.lookAt(V3b, V3, UP); moon.matrixWorld.copy(M4).setPosition(V3); };
+    // 透天厝的窗戶、店面（village.js 的 houses：一樓 kind 'door' 兩邊的窗、'shop' 的店面；鐵捲門的沒有燈）
+    const wp = [], wc = [], wi = []; let lit = 0;
+    const quad = (h, x0, x1, y0, y1, col) => { const c = Math.cos(h.ry), sn = Math.sin(h.ry), z = 0.06, b = wp.length / 3;
+      for (const [lx, ly] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]) { wp.push(h.x + lx * c + z * sn, ly, h.z - lx * sn + z * c); wc.push(col[0], col[1], col[2]); }
+      wi.push(b, b + 1, b + 2, b, b + 2, b + 3); lit++; };
+    for (const h of V.houses || []) { const r = rnd(), w = h.w;
+      if (h.kind === 'shop') { if (r < NSKY.shopP) quad(h, -w / 2 + 0.2, w / 2 - 0.2, 0.1, 2.7, NSKY.shopC); }
+      else if (h.kind === 'door' && w >= 4.6 && r < NSKY.winP) { const warm = 0.85 + rnd() * 0.3, col = [NSKY.winC[0] * warm, NSKY.winC[1] * warm, NSKY.winC[2] * (1.3 - warm * 0.3)]; quad(h, -w / 2 + 0.35, -1.05, 0.9, 2.4, col); if (rnd() < 0.75) quad(h, 1.05, w / 2 - 0.35, 0.9, 2.4, col); } }
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3)); wg.setIndex(wi);
+    const win = new THREE.Mesh(wg, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); win.name = 'lk-win'; win.visible = false;
+    // 警車的紅藍燈：一顆燈，0.8 秒紅藍換
+    const pol = new THREE.PointLight(0xff2a1a, 0, NSKY.polD, 2); pol.name = 'lk-pol'; pol.position.set(0, -100, 0);
+    // 大燈照在路上：橢圓的光斑（貼圖畫一次）
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'), gr = g.createRadialGradient(22, 64, 0, 22, 64, 104);
+    gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.3, 'rgba(255,255,255,0.5)'); gr.addColorStop(0.7, 'rgba(255,255,255,0.12)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    const pt = new THREE.CanvasTexture(cv); pt.colorSpace = THREE.SRGBColorSpace;
+    const pg = new THREE.PlaneGeometry(NSKY.poolL, NSKY.poolW); pg.rotateX(-Math.PI / 2); pg.translate(NSKY.poolL / 2, 0, 0);
+    const pool = new THREE.InstancedMesh(pg, new THREE.MeshBasicMaterial({ map: pt, color: LAMP.headC, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }), NSKY.poolN);
+    pool.name = 'lk-pool'; pool.frustumCulled = false; pool.count = 0; pool.instanceMatrix.setUsage(THREE.DynamicDrawUsage); pool.visible = false; pool.renderOrder = 3;
+    scene.add(stars, moon, win, pol, pool);
+    NS = { stars, moon, win, pol, pool, lit, polCar: null, polD: 1e9, pools: 0 };
+  }
+  function nightOff() { if (!NS) return; for (const k of ['stars', 'moon', 'win', 'pol', 'pool']) { const x = NS[k]; x.removeFromParent(); x.geometry?.dispose(); if (x.material) { x.material.map?.dispose(); x.material.dispose(); } } NS = null; }
+  function nightStep(cam, k) {
+    if (!NS) return;
+    const nk = TD.night * TD.night * (1 - cave); NS.stars.material.opacity = nk; NS.moon.material.opacity = TD.moon * (1 - cave); // 隧道、塔裡面看不到天
+    NS.win.material.opacity = k; if (NS.win.visible !== (k > 0.001 && NS.lit > 0)) NS.win.visible = k > 0.001 && NS.lit > 0;
+    // 警車：最近的、燈在閃的那台
+    const PC = k > 0.001 ? policeOf() : null; let best = 70 * 70, bc = null;
+    if (PC) for (let i = 0; i < PC.length; i++) { const c = PC[i]; if (!c.lights || c.x > 1e5) continue; const d = (c.x - cam.position.x) * (c.x - cam.position.x) + (c.z - cam.position.z) * (c.z - cam.position.z); if (d < best) { best = d; bc = c; } }
+    NS.polCar = bc; NS.polD = bc ? Math.sqrt(best) : 1e9;
+    if (bc) { const ph = ((performance.now() / 1000) % NSKY.polT) / NSKY.polT, red = ph < 0.5, h = bc.heading, side = red ? 0.45 : -0.45, gy = V.heightAt ? V.heightAt(bc.x, bc.z) : 0;
+      NS.pol.color.setHex(red ? 0xff2a1a : 0x2a60ff); NS.pol.position.set(bc.x + Math.sin(h) * side, gy + 2.0, bc.z + Math.cos(h) * side); NS.pol.intensity = NSKY.polI * k * (1 - ss(45, 70, NS.polD)); }
+    else NS.pol.intensity = 0;
+    // 路上車子的大燈：最近 12 台（路上的車、警車）車頭前面的光斑
+    const pool = NS.pool; let n = 0;
+    if (k > 0.001) { const L = POOLC; L.length = 0; const cx = cam.position.x, cz = cam.position.z, R2 = 110 * 110;
+      const TC = trafficOf(); if (TC) for (let i = 0; i < TC.length; i++) { const c = TC[i]; if (!c.active || c.kind !== 'car' || c.crushed) continue; const d = (c.x - cx) * (c.x - cx) + (c.z - cz) * (c.z - cz); if (d < R2) L.push(d, c); }
+      if (PC) for (let i = 0; i < PC.length; i++) { const c = PC[i]; if (c.x > 1e5) continue; const d = (c.x - cx) * (c.x - cx) + (c.z - cz) * (c.z - cz); if (d < R2) L.push(d, c); }
+      const m = L.length / 2; // 近的先（選擇排序：最多 12 個）
+      for (let a = 0; a < m && a < NSKY.poolN; a++) { let bi = a; for (let b = a + 1; b < m; b++) if (L[b * 2] < L[bi * 2]) bi = b; if (bi !== a) { const d0 = L[a * 2], c0 = L[a * 2 + 1]; L[a * 2] = L[bi * 2]; L[a * 2 + 1] = L[bi * 2 + 1]; L[bi * 2] = d0; L[bi * 2 + 1] = c0; }
+        const c = L[a * 2 + 1], h = c.heading, fx = Math.cos(h), fz = -Math.sin(h), hx = c.hx || 2.2, x = c.x + fx * (hx + 0.3), z = c.z + fz * (hx + 0.3), gy = V.heightAt ? V.heightAt(x, z) : 0;
+        Q.setFromAxisAngle(UP, h); M4.compose(V3.set(x, gy + 0.05, z), Q, S3.set(1, 1, 1)); pool.setMatrixAt(n++, M4); }
+      if (n) pool.instanceMatrix.needsUpdate = true; }
+    pool.count = n; NS.pools = n; pool.material.opacity = NSKY.poolI * k; if (pool.visible !== n > 0) pool.visible = n > 0;
   }
 
   // ==== 第 30 批：濕的路的倒影（最真實、燈亮的時候）：把世界從路面倒過來再畫一次到半張大小的圖（地上的東西不畫、鏡頭在路面下面、路面以上才畫）====
@@ -739,7 +808,8 @@ function createLook(o) {
     set, treeK, stats: st,
     get hour() { return hourNow(); }, setHour(h) { hourOv = h == null ? null : clamp(+h, 0, 24) % 24; timeStep(); lampN = 0; }, get night() { return TD.lamp; }, get sun() { return TD.elev; }, // 第 30 批：一天的時間
     _tex: () => TEX, _td: () => TD,
-    info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band }),
+    info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band, stars: NS ? +NS.stars.material.opacity.toFixed(2) : null, moon: NS ? +NS.moon.material.opacity.toFixed(2) : null, win: NS ? NS.lit : 0, winK: NS ? +NS.win.material.opacity.toFixed(2) : 0, pools: NS ? NS.pools : 0, pol: NS ? +NS.pol.intensity.toFixed(1) : 0, polD: NS && NS.polCar ? +NS.polD.toFixed(1) : null }),
+    _ns: () => NS,
   };
   return API;
 }

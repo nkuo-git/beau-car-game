@@ -14,7 +14,7 @@ if (path.dirname(prefix) !== '.') fs.mkdirSync(path.dirname(prefix), { recursive
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const hook = 'window.__THREE = THREE; window.__G = () => GAME; window.__room = () => room;'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
-  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, trip, tripS, TR, LODS, cur, walker, tripPose, TWR, EL, elWho, elFree, padCars, normPark, TOWER_BAYS, towerFy, towerUnder, towerFlName, TOWER, TOWER_RAMP, towerRampY, TRAMP, garLot, HOME, leaveCar, liftChanged, elCallAct, elCall, shaftCut, SHAFT });'
+  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, trip, tripS, TR, LODS, cur, walker, tripPose, TWR, EL, room, liftAnim, built, elWho, elFree, padCars, normPark, TOWER_BAYS, towerFy, towerUnder, towerFlName, TOWER, TOWER_RAMP, towerRampY, TRAMP, garLot, HOME, leaveCar, liftChanged, elCallAct, elCall, shaftCut, SHAFT });'
   + ' window.__frame = (noHole, w, h) => { GAR.cull(dcam); if (noHole && GAR.hole) GAR.hole.visible = false; renderer.setRenderTarget(null); renderer.render(TR.scene, dcam); const info = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles }, c = renderer.domElement, url = c.toDataURL(), gl = renderer.getContext(), px = new Uint8Array(w * h * 4); gl.readPixels((c.width - w) >> 1, (c.height - h) >> 1, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return { url, px: Array.from(px), info }; };'
   + ' window.__N = () => NPC;'
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
@@ -116,6 +116,29 @@ check(st0.ne === 3 && st0.rampTop === 0 && JSON.stringify(st0.roads) === '[5,9,2
 check(st0.free === 37 && st0.under.length === 16 && st0.under[0] === 24 && st0.under[15] === 39, `37 parking spots (B1 = spots 25–32, B2 = 33–40: the old 5F, 6F)`);
 const tw0 = st0.park.tower;
 check(tw0[0] === 'gtr' && tw0[24] === 'yaris' && tw0[37] === 'supra' && tw0.filter(Boolean).length === 3, `old save: the car on 5F is now on B1, the one on 6F (spot 38, a ramp road in the last trial) is on B2; none moved, none lost`);
+
+// ---- 0b 車庫頁選停在 B1 的 YARIS（第 33 批）：電梯真的下去載：GC8 坐下去、滑進 YARIS 那格，YARIS 滑到圓台上、坐上來；到了才換成完整的 YARIS；再選 GC8 換回來 ----
+const phaseOf = (ph) => p.evaluate((ph) => new Promise((res) => { const D = window.__D(), t0 = performance.now(); const tick = () => { const s = D.liftAnim.state(); const L = D.room.lift;
+  if (!s || s.ph === ph || performance.now() - t0 > 30000) res({ st: s, lf: L.floor, y: +L.y.toFixed(2), busy: L.busy, gc8vis: D.built.gc8.car.visible, yarisVis: !!D.built.yaris?.car.visible, lodX: s ? +s.lodX.toFixed(2) : null, wasX: s ? +s.wasX.toFixed(2) : null, t: +(performance.now() - t0).toFixed(0) }); else requestAnimationFrame(tick); }; tick(); }), ph);
+const pick0 = await p.evaluate(async () => { document.querySelector('#cars button[data-car="yaris"]').click(); await new Promise((r) => setTimeout(r, 200)); const D = window.__D(); return { st: D.liftAnim.state(), busy: D.room.lift.busy, toast: document.getElementById('gtoast').textContent, gc8vis: D.built.gc8.car.visible, cur: D.cur, mid: window.__G().park.mid }; });
+const swap0 = await phaseOf('swap'), down0 = await phaseOf('down');
+await p.waitForFunction(() => !window.__D().liftAnim.on && !!window.__D().built.yaris, null, { timeout: 60000 });
+const done0 = await p.evaluate(() => { const D = window.__D(), G = window.__G(); return { lf: D.room.lift.floor, y: +D.room.lift.y.toFixed(2), rot: +D.room.lift.rot.toFixed(3), cur: D.cur, mid: G.park.mid, t24: G.park.tower[24], n: G.park.tower.filter(Boolean).length, yarisVis: D.built.yaris.car.visible, gc8vis: D.built.gc8.car.visible, gc8Par: D.built.gc8.car.parent?.type, lodGc8: D.LODS.gc8?.lod?.car.parent?.name || null, lodYaris: D.LODS.yaris?.lod?.car.parent?.name || null }; });
+console.log('0b', el(), JSON.stringify(pick0), JSON.stringify(swap0), JSON.stringify(down0), JSON.stringify(done0));
+check(pick0.cur === 'yaris' && pick0.st && pick0.st.ph === 'up' && pick0.st.key === 'yaris' && pick0.st.was === 'gc8' && pick0.st.i === 24 && pick0.st.lodAt === 'towerBay25' && pick0.st.wasAt === 'towerLift' && pick0.busy && pick0.gc8vis && /YARIS 坐電梯從 B1 上來⋯/.test(pick0.toast) && pick0.mid === 'gc8',
+  `garage page: picked the YARIS parked on B1 → 「${pick0.toast}」: the lift goes down with the GC8 on it (YARIS still in spot 25, spots unchanged meanwhile)`);
+check(swap0.st && swap0.st.ph === 'swap' && swap0.lf === 4 && swap0.y === -3.2 && !swap0.busy && swap0.st.wasAt === 'towerBay25' && swap0.st.lodAt === 'towerLift' && swap0.wasX < -2 && swap0.lodX > 2 && swap0.gc8vis && !swap0.yarisVis,
+  `lift at B1 (−3.2 m): GC8 slides into spot 25 (x ${swap0.wasX} → 0), the light YARIS slides onto the lift (x ${swap0.lodX} → 0)`);
+check(down0.st && down0.st.ph === 'down' && down0.busy && down0.st.lodAt === 'towerLift' && down0.lodX === 0 && down0.wasX === 0 && !down0.yarisVis, `then the lift comes back up with the light YARIS (full YARIS not shown yet)`);
+check(done0.lf === 0 && done0.y === 0 && done0.rot === 0 && done0.cur === 'yaris' && done0.mid === 'yaris' && done0.t24 === 'gc8' && done0.n === 3 && done0.yarisVis && !done0.gc8vis && done0.gc8Par === 'Scene' && done0.lodGc8 === 'towerBay25' && done0.lodYaris == null,
+  `back at 1F, facing forward: full YARIS shown, GC8 hidden at the origin, light GC8 parked in spot 25 (save: mid yaris, spot 25 gc8)`);
+// 再選 GC8：換回來（後面的測試照舊：GC8 在一樓、YARIS 在 B1）
+await p.evaluate(() => document.querySelector('#cars button[data-car="gc8"]').click());
+await p.waitForFunction(() => { const D = window.__D(); return D.liftAnim.on && D.liftAnim.on.ph === 'up'; }, null, { timeout: 10000 });
+await p.waitForFunction(() => !window.__D().liftAnim.on, null, { timeout: 60000 });
+const back0 = await p.evaluate(() => { const D = window.__D(), G = window.__G(); return { lf: D.room.lift.floor, cur: D.cur, mid: G.park.mid, t24: G.park.tower[24], gc8vis: D.built.gc8.car.visible, yarisVis: D.built.yaris.car.visible, lodYaris: D.LODS.yaris?.lod?.car.parent?.name || null }; });
+console.log('   back', JSON.stringify(back0));
+check(back0.lf === 0 && back0.cur === 'gc8' && back0.mid === 'gc8' && back0.t24 === 'yaris' && back0.gc8vis && !back0.yarisVis && back0.lodYaris === 'towerBay25', 'picked GC8 again: the lift fetches it back, YARIS returns to spot 25');
 
 // ---- 1 出門：上 GC8（停在電梯上）→ 面板：2F 3F 4F／B2 B1 1F（地下室藍色），每層空幾格 ----
 await p.evaluate(() => { window.scrollTo(0, 0); document.getElementById('driveOut').click(); });

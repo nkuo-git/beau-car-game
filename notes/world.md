@@ -365,3 +365,17 @@ Nick: 「可以開進別人的車庫」. Rules unchanged (kind `bell` fits `matc
 - The visit ends when: kicked (「X請你出去了」), B leaves the world / the match disappears (「X離開了，你從他家出來了」), A walks or drives more than 25 m from the door with the car outside (「離開X的家了」; B sees 「X離開你的車庫了」), A goes home / leaves the world. `gvEnd` moves GAR back, restores the sign, trophies and lift, and disposes B's LODs.
 - Not done (simplifications): the elevator in a friend's tower is on foot only; B's current car (the one B is driving) is not in the tower; an old phone without `tw` fills B's cars into bays in order.
 - world-test 9 covers it (doorbell, card, 好, lobby, ride to 3F, 請他出去, 不要, walking away). 3F inside B's tower: 98–103 calls / 0.34–0.37M tris.
+
+## Batch 32 — driving the lift in a friend's tower; his current car (trial v50, 2026-10-24)
+
+- `twrNow()` (his `GV.want` while visiting, your `TWR` at home) is now used by `parkSpot`, `outAt`, `offTower`, `elFree` and `elRide`'s
+  bay choice, so inside a friend's tower you can drive onto the platform, pick a floor (the panel's ◀ ▶ row too), ride up, drive into one
+  of his empty bays and get out: the car hangs in his bay for this visit only (`GV.want[i] = cur`, `tripPose[cur].tw = i`; `keepPark` is
+  still skipped while visiting, so your save and your own bays never change). `elWho` no longer returns 2 for visiting, the 「只能停一樓」
+  toasts are gone, `rampOK` allows his ramp. `arrangeCars`' guest `objOf` returns `tripS.car` for `tripFull` so `syncTower` hangs it.
+- Leaving (`gvOut`: kicked, he left, you walked away, left the world): a car parked in his bay is taken out of the bay (`GV.want[i] = null`,
+  `GAR.take`, `tk`), put outside his door (DX1 + 7) with `parkFull`. `gvTick` counts a car in his bay as "still inside" (you can walk
+  around outside without ending the visit). 回車庫頁 (`gvEnd('home')`) works as before (`leaveDrive` re-adds the car to the page scene).
+- His current car: `gvStart` puts `g.cur` (the car he is driving, which was never shown) into the first free bay when `g.cars` has its look.
+- RTDB rules unchanged. world-test 9: B's garage now has 4 cars (his gc8 in bay 2 of 2F → panel 「2 台」), new 9d (ride back to 1F, get in,
+  drive onto the lift, 3F, park in 3 樓 1 號, then the kick puts the car outside as before).

@@ -11,7 +11,7 @@ const prefix = process.argv[2] || '../out/night/nt';
 fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const hook = 'window.__THREE = THREE; window.__PN = PAINT_NIGHT;'
-  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, tripS, TR, walker, renderer, LOOK, NPC, S, AMB, AMB_S, engineAudio, leaveCar });'
+  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, tripS, TR, walker, renderer, LOOK, NPC, S, AMB, AMB_S, engineAudio, leaveCar, police });'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -65,7 +65,11 @@ const helpers = () => p.evaluate(() => {
       if (!signM && o.isMesh && o.material && o.material.emissiveMap && o.material.emissiveMap === o.material.map && /sign/.test(o.name)) signM = o.material; });
     const cp = D.dcam.position, cx = car ? new THREE.Vector3().setFromMatrixPosition(car.matrixWorld) : null;
     const tr = D.NPC?.traffic?.cars?.find((c) => c.lod && c.lod._E) || null; let lodE = 0; if (tr) for (const v of tr.lod._E) lodE += v;
-    return { info: D.LOOK.info(), hour: +D.LOOK.hour.toFixed(2), sun: +D.LOOK.sun.toFixed(1), night: +D.LOOK.night.toFixed(2), exp: R.toneMappingExposure,
+    const NS = D.LOOK._ns ? D.LOOK._ns() : null, TC = (D.NPC?.traffic?.cars || []).filter((c) => c.active && c.kind === 'car' && !c.crushed), PC = (D.police?.npcCars || []).filter((c) => c.x < 1e5); // 第 32 批：大燈照路的光斑：鏡頭 110 公尺內的車（路上的、警車）
+    const near = [...TC, ...PC].map((c) => ({ c, d: Math.hypot(c.x - cp.x, c.z - cp.z) })).filter((o) => o.d < 110).sort((a, b) => a.d - b.d); let pool0 = null;
+    if (NS && NS.pool.count && near.length) { const m = new THREE.Matrix4(), v = new THREE.Vector3(); NS.pool.getMatrixAt(0, m); v.setFromMatrixPosition(m); const c = near[0].c, hx = c.hx || 2.2; pool0 = { d: +Math.hypot(v.x - (c.x + Math.cos(c.heading) * (hx + 0.3)), v.z - (c.z - Math.sin(c.heading) * (hx + 0.3))).toFixed(2), y: +v.y.toFixed(2) }; }
+    const ns = NS ? { stars: NS.stars.geometry.attributes.position.count, starsOp: +NS.stars.material.opacity.toFixed(2), moonOp: +NS.moon.material.opacity.toFixed(2), moonY: +new THREE.Vector3().setFromMatrixPosition(NS.moon.matrixWorld).sub(cp).normalize().y.toFixed(2), winN: NS.lit, winOp: +NS.win.material.opacity.toFixed(2), winVis: NS.win.visible, pools: NS.pool.count, poolOp: +NS.pool.material.opacity.toFixed(3), poolVis: NS.pool.visible, pol: +NS.pol.intensity.toFixed(1), polC: NS.pol.color.getHexString(), polY: +NS.pol.position.y.toFixed(2) } : null;
+    return { info: D.LOOK.info(), hour: +D.LOOK.hour.toFixed(2), sun: +D.LOOK.sun.toFixed(1), night: +D.LOOK.night.toFixed(2), exp: R.toneMappingExposure, ns, nearCars: Math.min(12, near.length), pool0,
       dl: { I: +dl.intensity.toFixed(3), c: dl.color.getHexString(), y: +dl.position.y.toFixed(0), dirY: +(dl.position.y - dl.target.position.y).toFixed(0) }, hemi: { I: +hemi.intensity.toFixed(3), c: hemi.color.getHexString() }, fog: sc.fog ? sc.fog.color.getHexString() : null, envI: +sc.environmentIntensity.toFixed(3),
       pl: pl.map((l) => ({ I: +l.intensity.toFixed(1), d: +Math.hypot(l.position.x - cp.x, l.position.z - cp.z).toFixed(0), y: +l.position.y.toFixed(1) })), sp: sp.map((l) => ({ I: +l.intensity.toFixed(0), d: cx ? +l.position.distanceTo(cx).toFixed(2) : null, y: +l.position.y.toFixed(2) })),
       paintN: window.__PN.value, sign: signM ? +signM.emissiveIntensity.toFixed(2) : null, lodE: +lodE.toFixed(2), lodCars: D.NPC?.traffic?.cars?.length || 0, wet: D.LOOK.stats.wetCalls || 0 }; };
@@ -103,17 +107,30 @@ const at = async (tag, hour) => {
 const d = await at('13', 13);
 check(d.sun > 45 && d.night === 0 && d.dl.I === 4.6 && d.dl.c === 'fff0dc' && d.dl.dirY > 200 && d.pl.length === 4 && d.pl.every((l) => l.I === 0) && d.sp.length === 2 && d.sp.every((l) => l.I === 0) && d.paintN === 0 && d.wet === 0 && d.info.band === 'b10' && d.fog === 'c3ccd3',
   `13:00 最真實: sun ${d.sun}° (4.6, white), 4 street lamps + 2 headlights in the scene but off, cars' lamps off, no wet reflection, fog day colour`);
+check(d.ns && d.ns.stars === 900 && d.ns.starsOp === 0 && d.ns.moonOp === 0 && d.ns.winN > 30 && d.ns.winOp === 0 && !d.ns.winVis && d.ns.pools === 0 && !d.ns.poolVis && d.ns.pol === 0, `13:00: stars (${d.ns && d.ns.stars}), moon, ${d.ns && d.ns.winN} lit windows/shop fronts, headlight pools and the police light are in the scene but all off by day`);
 // ---- 3 傍晚 17:45 ----
 const k = await at('17-45', 17.75);
 check(k.sun > 0 && k.sun < 10 && k.night > 0.3 && k.night < 1 && k.dl.I < 2 && k.dl.I > 1 && k.dl.c !== 'fff0dc' && k.pl.some((l) => l.I > 0) && k.sp.every((l) => l.I > 0 && l.I < 150) && k.paintN > 0.3 && k.paintN < 1 && k.fog !== 'c3ccd3' && k.info.band === 'b0' && k.envI < 0.45,
   `17:45: low orange sun ${k.sun}° weakened to ${k.dl.I} (#${k.dl.c}, env ${k.envI}), lamps coming on (${k.night}), warm fog #${k.fog}, lowest reflection band`);
+check(k.ns.starsOp === 0 && k.ns.moonOp === 0 && k.ns.winVis && k.ns.winOp > 0.3 && k.ns.winOp < 1 && Math.abs(k.ns.winOp - k.night) < 0.02, `17:45: windows coming on with the lamps (${k.ns.winOp}), no stars or moon yet`);
 // ---- 4 晚上 22:00 ----
 const n = await at('22', 22);
 const near = n.pl.filter((l) => l.I > 0);
 check(n.sun < -20 && n.night === 1 && n.dl.I === 0.5 && n.dl.c === '9fb4d8' && n.dl.dirY > 150 && n.hemi.c === '34405e' && n.fog === '0a0d15' && n.info.band === 'n' && n.exp === 1,
   `22:00: sun ${n.sun}° (below), moon light 0.5 #${n.dl.c} with shadows, night hemi/fog, night reflection map`);
-check(near.length >= 2 && near.every((l) => l.I > 0 && l.I <= 180 && l.d < 90 && l.y > 5) && near.some((l) => l.I === 180) && near.filter((l) => l.d > 55).every((l) => l.I < 180) && n.info.lamps > 100,
-  `22:00: ${near.length} nearest street lamps lit (${near.map((l) => l.I + '@' + l.d + 'm').join(', ')}: full near, fading past 50 m so a swap never pops; heads ${near.map((l) => l.y).join('/')} m high) of ${n.info.lamps} lamp heads (poles, highway, parking)`);
+check(near.length >= 2 && near.every((l) => l.I > 0 && l.I <= 396 && l.d < 90 && l.y > 5) && near.some((l) => l.I === 396 && l.y > 10) && near.filter((l) => l.d > 55).every((l) => l.I < 396) && n.info.lamps > 100,
+  `22:00 highway: ${near.length} nearest street lamps lit (${near.map((l) => l.I + '@' + l.d + 'm').join(', ')}: 180 × 2.2 = 396 on the 11 m highway heads so the road is lit like the village, fading past 50 m so a swap never pops) of ${n.info.lamps} lamp heads (poles, highway, parking)`);
+check(n.ns.starsOp === 1 && n.ns.moonOp === 1 && n.ns.moonY > 0.6 && n.ns.moonY < 0.85 && n.ns.winVis && n.ns.winOp === 1, `22:00: stars and the moon disc are out (moon high in the sky, y ${n.ns.moonY} ≈ sin 48°), lit windows at full`);
+const n2 = await p.evaluate(() => { window.__go('dealer', 1); return window.__state(); }); // 村子：電線桿的路燈 180、窗戶、路上的車的大燈照路
+const near2 = n2.pl.filter((l) => l.I > 0);
+check(near2.some((l) => l.I === 180 && l.y < 8) && near2.every((l) => l.I <= 252 && l.y < 8), `22:00 village: pole lamps at 180, parking-lot lamps at most 252 (${near2.map((l) => l.I + '@' + l.d + 'm').join(', ')})`);
+check(n2.ns.pools === n2.nearCars && n2.ns.poolVis === n2.nearCars > 0 && n2.ns.poolOp > 0.3 && n2.ns.poolOp < 0.4 && (!n2.pool0 || (n2.pool0.d < 0.3 && n2.pool0.y > 0 && n2.pool0.y < 0.2)), `22:00 village: a headlight pool on the road in front of each of the ${n2.nearCars} cars within 110 m (${n2.ns.pools} pools${n2.pool0 ? ', the nearest ' + n2.pool0.d + ' m off its spot, ' + n2.pool0.y + ' m up' : ''})`);
+// 警車的紅藍燈：沒有警車在追＝0；假裝一台警車開著燈停在 10 公尺外 → 一顆燈紅／藍輪流、在車頂
+const pol = await p.evaluate(async () => { const D = window.__D(), PC = D.police.npcCars, t = D.drv.telemetry(), c = PC[0], was = { x: c.x, z: c.z, lights: c.lights }; const out = { before: D.LOOK._ns().pol.intensity };
+  c.x = t.x + 10; c.z = t.z; c.heading = 0; c.lights = true; const seen = new Set(); for (let i = 0; i < 12; i++) { window.__view(320, 192, false); const N = D.LOOK._ns(); seen.add(N.pol.color.getHexString()); out.I = +N.pol.intensity.toFixed(1); out.y = +N.pol.position.y.toFixed(2); out.d = +Math.hypot(N.pol.position.x - c.x, N.pol.position.z - c.z).toFixed(2); out.polD = D.LOOK.info().polD; out.camD = +Math.hypot(c.x - D.dcam.position.x, c.z - D.dcam.position.z).toFixed(1); await new Promise((r) => setTimeout(r, 90)); }
+  out.colors = [...seen].sort(); c.x = was.x; c.z = was.z; c.lights = was.lights; window.__view(320, 192, false); out.after = D.LOOK._ns().pol.intensity; return out; });
+console.log('   police light', JSON.stringify(pol));
+check(pol.before === 0 && pol.I === 70 && pol.y > 1.8 && pol.y < 2.3 && pol.d < 0.6 && Math.abs(pol.polD - pol.camD) < 0.11 && pol.colors.length === 2 && pol.colors.includes('ff2a1a') && pol.colors.includes('2a60ff') && pol.after === 0, `police light: off with no chase; a police car with its lights on 10 m away → one light on its roof flashing red/blue (${pol.colors.join('/')}), 70; off again when it leaves`);
 check(n.sp.length === 2 && n.sp.every((l) => l.I === 150 && l.d > 1.5 && l.d < 3.5 && l.y > 0.3 && l.y < 1.2), `22:00: two headlights on the car's nose (${n.sp.map((l) => l.d + ' m').join(', ')} from its centre, ${n.sp.map((l) => l.y).join('/')} m high), 150 (was 520: blew out the road)`);
 check(k.lodE > d.lodE + 0.5 && k.lodE < n.lodE - 0.5 && k.paintN > 0.3 && k.paintN < 0.6, `17:45: traffic cars' lamps part-way on (E sum ${d.lodE} → ${k.lodE} → ${n.lodE}), own car's lamps at ${k.paintN}: lights come on gradually, not with a switch`);
 // 第 31 批：角落的時間、環境聲

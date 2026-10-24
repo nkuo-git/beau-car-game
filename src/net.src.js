@@ -1099,6 +1099,7 @@ function gvStart(uid, n, g) {
   if (tw) tw.forEach((k, j) => { if (j < want.length && !TOWER_BAYS[j].road && ok(k) && !seen.has(k)) { want[j] = k; seen.add(k); } });
   if (tw) tw.forEach((k, j) => { if (j < want.length && TOWER_BAYS[j].road && ok(k) && !seen.has(k)) { const f = twFree(want); if (f >= 0) { want[f] = k; seen.add(k); } } }); // 第 24 批：舊版（內容 17）停在變成路的那一格：換到空的格子
   else for (const k of Object.keys(cars)) if (ok(k) && k !== g?.cur && !seen.has(k)) { const j = twFree(want); if (j < 0) break; want[j] = k; seen.add(k); } // 舊版（內容 16）沒有送格子：照順序擺
+  if (g && ok(g.cur) && !seen.has(g.cur)) { const j = twFree(want); if (j >= 0) { want[j] = g.cur; seen.add(g.cur); } } // 第 32 批：他正在開的那台也擺進去（第一個空格；以前不會出現）
   Object.assign(GV, { on: true, uid, n: String(n || '朋友').slice(0, 12), slot: i, want, looks: cars, objs: {}, q: [...seen], tr: Math.max(0, Math.min(9, (g && g.tr) | 0)), lift0: { f: GAR.lift.floor, rot: GAR.lift.rot }, in: false, loading: false });
   GV.job++;
   stopLiftSnd(); GAR.liftSnap(0, 0); GAR.setFloor(0); GAR.door.t = 0;
@@ -1129,7 +1130,7 @@ function gvTick() {
   const t = walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : null;
   if (!t || indoor || RACE.on || EL.ride || garIn(t)) return;
   const D = garWorld({ x: TOWER.DX1 + 2, z: 0 }), p = tripPose[cur];
-  if (Math.hypot(t.x - D.x, t.z - D.z) > 25 && !(walker && walker.mode !== 'off' && p && p.tw == null && garIn(p))) gvEnd('left'); // 走遠了（車還停在他家裡面就不算）
+  if (Math.hypot(t.x - D.x, t.z - D.z) > 25 && !(walker && walker.mode !== 'off' && p && (p.tw != null || garIn(p)))) gvEnd('left'); // 走遠了（車還停在他家裡面、他的格子裡就不算；第 32 批）
 }
 // 還在他家裡面（他請你出去、他走了）：人、車送到門口外面（車頭朝外）
 function gvOut() {
@@ -1139,7 +1140,8 @@ function gvOut() {
   if (drv && walker && walker.mode === 'off') { const t = drv.telemetry(); if (garIn(t)) { const q = out(0); drv.teleport(q); tripPose[cur] = { ...q, f: 0 }; } return; }
   if (!walker || walker.mode === 'off') return;
   const p = tripPose[cur];
-  if (p && p.tw == null && garIn(p) && tripS) { if (drv) dropDrv(); tripPose[cur] = { ...out(0), f: 0 }; parkFull(); }
+  if (p && p.tw != null && GV.want && tripS) { const i = p.tw; GV.want[i] = null; if (GAR.cars[i]) GAR.take(i); if (GAR.tk) GAR.tk[i] = null; if (drv) dropDrv(); tripPose[cur] = { ...out(0), f: 0 }; parkFull(); } // 第 32 批：停在他格子裡的車也到門口外面
+  else if (p && p.tw == null && garIn(p) && tripS) { if (drv) dropDrv(); tripPose[cur] = { ...out(0), f: 0 }; parkFull(); }
   if (garIn(walker.telemetry())) walker.teleport(out(3.6), { keepCamera: false });
   if (riding) walker.resume();
 }

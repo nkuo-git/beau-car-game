@@ -166,6 +166,7 @@ let seat = null; // 坐在車裡（cabin.js）：{ 原本的鏡頭, yaw, pitch }
 const ROOMQ_KEY = 'carid.roomq';
 let room = null, roomQ = (() => { try { return localStorage.getItem(ROOMQ_KEY) === 'low' ? 'low' : 'high'; } catch { return 'high'; } })();
 let onCars = null; // town.src.js：換車、買車、車庫重蓋的時候把你其他的車停到車位（輕量車）
+let liftAnim = null; // 第 33 批（town.src.js）：選了樓上的車，電梯真的去載：{ start(key, was, twI), step(dt), cancel(), vis(k, key) }
 function makeRoom() {
   room = buildRoom(renderer, { quality: roomQ }); scene.add(room.group); room.resize();
   if (roomQ === 'high' && window.__roomWatch !== false) watchRoom(room);
@@ -559,16 +560,18 @@ function dmgOf(car, key) {
 
 const carsEl = document.getElementById('cars');
 async function showCar(key) {
-  const was = cur, twI = was !== key && Array.isArray(GAME.park?.tower) ? GAME.park.tower.indexOf(key) : -1; // 第 21 批：選了停在圓塔樓上的車：電梯把它送下來（說一聲）
+  liftAnim?.cancel(); // 第 33 批：上一台還在坐電梯：馬上做完
+  const was = cur, twI = was !== key && Array.isArray(GAME.park?.tower) ? GAME.park.tower.indexOf(key) : -1; // 第 21 批：選了停在圓塔樓上的車：電梯把它送下來（第 33 批：真的去載）
+  const anim = twI >= 0 && !!liftAnim?.start(key, was, twI);
   cur = key; save();
-  if (twI >= 0 && room?.group.visible && typeof TOWER_BAYS !== 'undefined') gtoast(`${CARS[key].btn[0]} 坐電梯從 ${towerFlTxt(TOWER_BAYS[twI].f)}${towerUnder(TOWER_BAYS[twI].f) ? ' 上來' : '下來'}了`, 2000); // 第 26 批：地下室上來
+  if (twI >= 0 && room?.group.visible && typeof TOWER_BAYS !== 'undefined') gtoast(`${CARS[key].btn[0]} 坐電梯從 ${towerFlTxt(TOWER_BAYS[twI].f)}${towerUnder(TOWER_BAYS[twI].f) ? ' 上來' : '下來'}${anim ? '⋯' : '了'}`, anim ? 3500 : 2000); // 第 26 批：地下室上來
   const bc = PERF[key].big ? 1.55 : 1; // 第 4 批：大車（怪獸卡車）鏡頭拉遠、看高一點、影子放大
   if (bc !== bigCam) { bigCam = bc; controls.target.y = bc > 1 ? 1.45 : 0.55; sh.scale.set(bc > 1 ? 1.25 : 1, bc > 1 ? 1.7 : 1, 1); if (!seat) { resize(); view(38); } }
   carsEl.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.car === key)));
   document.getElementById('carName').textContent = CARS[key].name;
   document.getElementById('carSub').textContent = CARS[key].sub;
   renderOptions(); onCars?.();
-  for (const [k, c] of Object.entries(built)) c.car.visible = k === key;
+  for (const [k, c] of Object.entries(built)) c.car.visible = liftAnim ? liftAnim.vis(k, key) : k === key; // 第 33 批：電梯載車中：原本那台還看得到（在電梯上），要的那台到了才出來
   const ri = recent.indexOf(key); if (ri >= 0) recent.splice(ri, 1); recent.push(key);
   while (recent.length > 3) dispose(recent.shift());
   S = built[key] || null;
@@ -580,7 +583,7 @@ async function showCar(key) {
       built[key] = car; scene.add(car.car);
       if (!recent.includes(key)) { dispose(key); return; } // 載入中已經被換掉很多台了
       if (GAME.dmg[key]) dmgOf(car, key); // 撞壞的車：車庫裡也是凹的
-      car.car.visible = cur === key;
+      car.car.visible = cur === key && !(liftAnim?.on && liftAnim.on.key === key); // 第 33 批：還在坐電梯：到了才出來
       if (cur === key) S = car;
     } catch (err) {
       msg.textContent = '車子沒載入成功，重新整理再試一次'; prog.parentElement.hidden = true; console.error(err);
@@ -953,10 +956,13 @@ $('lookBtn').addEventListener('click', () => openLook('page'));
   window.caridExitFullscreen = () => { if (LOOKP.isOpen) { LOOKP.cancel(); return true; } if (BIGMAP?.isOpen) { BIGMAP.close(); return true; } return exitFs(); }; // 大地圖打開的時候：先關地圖
 }
 
+let pageT = 0;
 renderer.setAnimationLoop((now) => {
   if (LOOKP.isOpen) return; // 自訂角色蓋滿整個畫面：後面不畫
   if (RACE.on) { RACE.frame(now); return; }
-  if (DRIVE.on) { DRIVE.frame(now); return; } // 開車出門：畫村子（車庫不畫）
+  if (DRIVE.on) { DRIVE.frame(now); pageT = 0; return; } // 開車出門：畫村子（車庫不畫）
+  const pdt = pageT ? Math.min(0.1, (now - pageT) / 1000) : 0; pageT = now;
+  if (room?.group.visible) { room.update(pdt); liftAnim?.step(pdt); } // 第 33 批：電梯載車（tower.js 的電梯動、兩台車滑）
   if (S && Math.abs(S.body.position.y - rideY) > 1e-4) S.body.position.y += (rideY - S.body.position.y) * 0.12;
   if (seat) {
     if (seat.key !== cur) { seat.key = cur; camera.fov = cabinFov(cur, camera.aspect); camera.updateProjectionMatrix(); } // 坐在車裡換車

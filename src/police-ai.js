@@ -801,7 +801,7 @@ function createPolice(o = {}) {
   const colOut = [], colPool = [];
   const movers = []; for (let i = 0; i < MAXC; i++) movers.push({ t: 'box', x: 0, z: 0, hx: 0, hz: 0, rot: 0, h: 1.6, police: true });
   for (let i = 0; i < MAXC; i++) movers.push({ t: 'circle', x: 0, z: 0, r: 0, h: 1.8, police: true });
-  const npcCars = []; for (let i = 0; i < MAXC; i++) npcCars.push({ id: 'police' + i, x: 1e6, z: 1e6, heading: 0, v: 0, hx: 2.3, hz: 0.9, ai: true, police: true }); // npc.js 的車的格式（沒出來的放很遠）
+  const npcCars = []; for (let i = 0; i < MAXC; i++) npcCars.push({ id: 'police' + i, x: 1e6, z: 1e6, heading: 0, v: 0, hx: 2.3, hz: 0.9, ai: true, police: true, lights: false }); // npc.js 的車的格式（沒出來的放很遠）
   const markers = []; for (let i = 0; i < MAXC; i++) markers.push({ x: 0, z: 0, fill: '#FF3B30', ring: '#FFFFFF', r: 5, on: false });
   const markerList = []; // 現在有的（drive.setMarkers／walker.setMarkers 讀這個陣列）
 
@@ -1732,7 +1732,7 @@ function createPolice(o = {}) {
     markerList.length = 0;
     for (let i = 0; i < MAXC; i++) {
       const c = cars[i], m = movers[i], mk = markers[i];
-      const nc = npcCars[i]; if (c.on) { nc.x = c.x; nc.z = c.z; nc.heading = c.th; nc.v = c.v; nc.hx = c.hl; nc.hz = c.hw; } else { nc.x = 1e6; nc.z = 1e6; nc.v = 0; }
+      const nc = npcCars[i]; if (c.on) { nc.x = c.x; nc.z = c.z; nc.heading = c.th; nc.v = c.v; nc.hx = c.hl; nc.hz = c.hw; nc.lights = c.lights; } else { nc.x = 1e6; nc.z = 1e6; nc.v = 0; nc.lights = false; } // 第 32 批：lights（紅藍燈在閃）給 look.js 的警車燈
       if (c.on) { m.x = c.x; m.z = c.z; m.hx = c.hl; m.hz = c.hw; m.rot = c.th; mk.x = c.x; mk.z = c.z; mk.fill = c.mode === 'home' || c.wreckT > 0 ? '#8A9099' : Math.floor(T0 * 4 + i) % 2 ? '#2F7BFF' : '#FF3B30'; mk.on = true; markerList.push(mk); }
       else { m.hx = 0; m.hz = 0; mk.on = false; }
       const f = offs[i], mo = movers[MAXC + i];

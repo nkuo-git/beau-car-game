@@ -144,3 +144,26 @@ The parent's feedback on v48 from the phone: sky changes visibly stepped, the du
 - Tests: night-test.mjs now 18 checks (bands `b10`/`b0`/`n`, dusk sun 1–2, headlights 150, lamp fade past 55 m, traffic lamps part-way on
   at 17:45, clock text at 22:00 and 13:00 on foot, ambient state driving / in 順 / after getting out; HUD screenshots `nt-hud-22.png`,
   `nt-hud-walk.png`). Cost unchanged from batch 30 (same calls/tris; the audio graph is ~25 nodes).
+
+## Batch 32 — night sky, lit windows, police light, headlight pools, brighter highway lamps (trial v50, 2026-10-24)
+
+The parent asked for the first three items of the "not done" list; this is the night part (`src/look.js`, NSKY constants).
+Everything lives in the scene all the time at 漂亮/最真實 and is transparent / intensity 0 by day, so nothing recompiles when night comes.
+- Stars: one `Points` (900 points on a 870 m hemisphere, `sizeAttenuation: false`, vertex colours, `toneMapped: false`), re-centred on the
+  camera in `onBeforeRender` like the sky dome; opacity = night² × (1 − cave) (none in the tunnel / tower). Moon: a 24 m `CircleGeometry`
+  860 m away in the moon-light direction (`MOON.elev/az`, the same light that casts the night shadows), facing the camera; opacity = `TD.moon`.
+- Windows: village.js now exports `houses` (the `stHouses` list street.js already had). One additive mesh of quads 6 cm in front of the
+  façade: 'door' houses ≥ 4.6 m wide get their two ground-floor windows (60 % of houses, warm HDR colour, the second window 75 %),
+  shops get the whole front (85 %, whitish). Opacity = `TD.lamp`. Shuttered houses have no light. Neihu's façades are a texture atlas, so
+  Neihu has none (its signs were already emissive).
+- Police: police-ai `syncOut` copies `c.lights` onto `npcCars[i].lights`; town passes `police: () => police.npcCars` and
+  `traffic: () => NPC.traffic.cars` to `createLook`. One PointLight (70, 34 m, decay 2) sits on the roof of the nearest police car that
+  has its lights on (≤ 70 m, fading 45–70), colour red / blue every 0.4 s (0.8 s cycle like the light bar). One light, not two, so the
+  material shaders see 5 point lights instead of 6.
+- Headlight pools: an `InstancedMesh` of 12 additive 9.5 × 4.4 m ground quads with a radial-gradient canvas texture, one in front of
+  each of the 12 nearest traffic cars (`active`, `kind 'car'`, not crushed) and police cars within 110 m; opacity 0.34 × lamp k.
+  Recomputed every frame (a selection sort over ~40 cars, no allocation; `POOLC` reused).
+- Lamp factor: `lampList` now also fills `lampKs` (1 for poles, 2.2 for the 11 m highway heads, 1.4 for the 6.3 m parking-lot heads), so
+  the highway lamps are 396 and actually light the road (the parent said they looked dim).
+- Tests: night-test.mjs +6 checks (night objects present but off at 13:00, windows part-way at 17:45, stars/moon/windows at 22:00, highway
+  lamps 396 vs village 180, pool count = cars within 110 m and the nearest pool's position, a faked police car → red/blue roof light).
