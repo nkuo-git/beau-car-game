@@ -403,6 +403,7 @@ export const { buildLodCar, LOD_CARS } = (() => {
 
   // ---- 材質 ----
   // 車身（也給輪胎＋煞車用）：MeshPhysical＋類別表；背面＝車內（暗的）；珍珠只上在車漆
+  const LIVE = new Set(), NIGHT = { on: false }; // 第 30 批：活著的輕量車（晚上一起開燈）
   function bodyMaterial(tab) {
     const m = new THREE.MeshPhysicalMaterial({ roughness: 0.5, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03, side: THREE.DoubleSide });
     m.onBeforeCompile = (sh) => {
@@ -515,8 +516,9 @@ export const { buildLodCar, LOD_CARS } = (() => {
     function lights() {
       tab.E.fill(0);
       for (const [i, c] of d.customs.entries()) tab.E.set([c.emi.r, c.emi.g, c.emi.b], (CUSTOM0 + i) * 3);
-      if (cur.lights) { tab.E.set([2.2, 2.1, 1.9], R.lamp * 3); tab.E.set([1.6, 1.55, 1.45], R.lens * 3); } // 低的鍍鉻（chrome）不亮
-      const red = cur.brake ? 3.2 : cur.lights ? 1.2 : 0;
+      const on = cur.lights || NIGHT.on; // 第 30 批：晚上（look.js）大家的燈都亮
+      if (on) { tab.E.set([2.2, 2.1, 1.9], R.lamp * 3); tab.E.set([1.6, 1.55, 1.45], R.lens * 3); } // 低的鍍鉻（chrome）不亮
+      const red = cur.brake ? 3.2 : on ? 1.2 : 0;
       if (red) { tab.E.set([red, red * 0.03, red * 0.02], R.red * 3); d.customs.forEach((c, j) => { if (c.red) tab.E.set([red * 0.8, red * 0.02, red * 0.01], (CUSTOM0 + j) * 3); }); }
     }
     function rimLook() {
@@ -583,7 +585,7 @@ export const { buildLodCar, LOD_CARS } = (() => {
       },
       get draws() { return (rimMesh.visible ? 4 : 3) + (glow && glow.visible ? 1 : 0) + (pop && pop.mesh.visible ? 1 : 0); },
       dispose() {
-        car.removeFromParent();
+        LIVE.delete(api); car.removeFromParent();
         if (geo) releaseGeo(d, geo); geo = null;
         if (wgeo) releaseWheel(wgeo); wgeo = null;
         if (rimMesh.geometry) rimMesh.geometry.dispose();
@@ -592,9 +594,11 @@ export const { buildLodCar, LOD_CARS } = (() => {
         bm.dispose(); gm.dispose(); rm.dispose(); // 輪框圖是大家共用的（不放掉：7 台 × 7 種樣式也才幾 MB）
       },
     };
+    LIVE.add(api); api._lights = lights; api._E = tab.E; // 測試：燈的 emissive 表
     setLook();
     if (POP_LAMPS[key]) { pop = popLamps(key, paintCol, bodyMesh.geometry); body.add(pop.mesh); } // 跳燈：燈蓋的顏色＝這台的車漆（同一個 Color）
     return api;
   }
-  return { buildLodCar, LOD_CARS };
+  buildLodCar.night = (on) => { on = !!on; if (NIGHT.on === on) return; NIGHT.on = on; for (const a of LIVE) a._lights(); }; // 第 30 批：晚上（look.js 叫）：大燈、尾燈亮
+return { buildLodCar, LOD_CARS };
 })();

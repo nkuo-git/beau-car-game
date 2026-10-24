@@ -2023,6 +2023,7 @@ function buildVillage(opts = {}) {
   return {
     group, places, colliders, surfaceAt, route, homeAt, wrapHome() { homeRouteWrap(this); }, homeSites: HOME_SITES, // 第 17 批：homeAt(n, places.garage)＝搬到車庫街第 n 間
     parking: PARK, // 第 18 批：大停車場 { name, x, z, hx, hz, stalls, lamps }
+    poles: stPoles, // 第 30 批：電線桿 { x, z, fx, fz, lamp }（look.js 晚上：有路燈的桿子，燈頭在 (x + fx·2.2, 7.8, z + fz·2.2)）
     roads: roads.filter((r) => !HWK.has(r.kind) && r.kind !== 'link').map((r) => ({ pts: r.pts, w: Array.isArray(r.w) ? Math.max(...r.w) : r.w, kind: r.kind }))
       .concat([{ pts: hc.map((p) => [p.x, p.z]), w: HW.half * 2, kind: 'highway' }]),
     bounds: { x0: -1090, x1: 12, z0: -530, z1: 530 }, areas: { paddy: paddies, pave: paved }, buildings,

@@ -322,7 +322,8 @@ async function enterDrive() {
     try { await warmPolice(); } catch (e) { console.error(e); }
     // 第 29 批（Nick 2026-10-23「就用5號的真實度」）：畫質；第一次「漂亮／最真實」要先找樹冠、畫材質貼圖、編 shader（在這裡做，開出去不會頓）
     try {
-      LOOK = createLook({ renderer, scene: TR.scene, world: VIL, getCar: lookCar, plain: () => GAR?.group || null, indoor: (c) => !!GAR && !!TWR && inTower(c.position.x, c.position.z) });
+      LOOK = createLook({ renderer, scene: TR.scene, world: VIL, getCar: lookCar, plain: () => GAR?.group || null, indoor: (c) => !!GAR && !!TWR && inTower(c.position.x, c.position.z),
+        night: lookNight, carDims: (car) => (tripS && car === tripS.car ? fullBox(tripS) : null) }); // 第 30 批：晚上（車燈）、自己的車的大燈放哪裡
       const lv = lookPref(); lookBtns(lv);
       if (lv > 0) { msg.textContent = '畫面準備中⋯'; await new Promise((r) => setTimeout(r, 30)); await lookSet(lv, false); renderer.compile(TR.scene, dcam); }
     } catch (e) { console.error(e); }
@@ -522,6 +523,8 @@ async function lookSet(lv, tell) {
   lookBtns(got); if (MIR.on) mirrorSet(true); // 後照鏡的圖換精度
   if (tell) gtoast('畫質：' + LOOK_NAMES[got], 1400);
 }
+// 第 30 批（Nick 2026-10-24，卡片選「自動輪流」）：look.js 的一天（24 分鐘）；燈亮多少變了 → 完整的車（masks.js 的車漆 shader）、輕量車（路上的車、朋友的車）的大燈、尾燈一起亮
+function lookNight(k) { PAINT_NIGHT.value = k; buildLodCar.night(k > 0.5); }
 function lookOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); } if (bodyFlags.lookopen === on) return; bodyFlag('lookopen', on); $('lookTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 lookBtns(lookPref());
 $('lookTog').addEventListener('click', () => lookOpen(true));
