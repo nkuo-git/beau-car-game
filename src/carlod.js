@@ -599,6 +599,7 @@ export const { buildLodCar, LOD_CARS } = (() => {
     if (POP_LAMPS[key]) { pop = popLamps(key, paintCol, bodyMesh.geometry); body.add(pop.mesh); } // 跳燈：燈蓋的顏色＝這台的車漆（同一個 Color）
     return api;
   }
+  buildLodCar.nightK = () => NIGHT.k; // 測試：現在燈亮多少
   buildLodCar.night = (k) => { k = Math.max(0, Math.min(1, +k || 0)); if (k === NIGHT.k || (Math.abs(k - NIGHT.k) < 0.04 && k > 0 && NIGHT.k > 0)) return; NIGHT.k = k; for (const a of LIVE) a._lights(); }; // 第 30 批：晚上（look.js 叫）：大燈、尾燈亮；第 31 批：0–1 慢慢亮
 return { buildLodCar, LOD_CARS };
 })();

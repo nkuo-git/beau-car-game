@@ -11,7 +11,7 @@ const prefix = process.argv[2] || '../out/night/nt';
 fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const hook = 'window.__THREE = THREE; window.__PN = PAINT_NIGHT;'
-  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, tripS, TR, walker, renderer, LOOK, NPC, S, AMB, AMB_S, engineAudio, leaveCar, police });'
+  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, tripS, TR, walker, renderer, LOOK, NPC, S, AMB, AMB_S, engineAudio, leaveCar, police, buildLodCar });'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -72,7 +72,7 @@ const helpers = () => p.evaluate(() => {
     return { info: D.LOOK.info(), hour: +D.LOOK.hour.toFixed(2), sun: +D.LOOK.sun.toFixed(1), night: +D.LOOK.night.toFixed(2), exp: R.toneMappingExposure, ns, nearCars: Math.min(12, near.length), pool0,
       dl: { I: +dl.intensity.toFixed(3), c: dl.color.getHexString(), y: +dl.position.y.toFixed(0), dirY: +(dl.position.y - dl.target.position.y).toFixed(0) }, hemi: { I: +hemi.intensity.toFixed(3), c: hemi.color.getHexString() }, fog: sc.fog ? sc.fog.color.getHexString() : null, envI: +sc.environmentIntensity.toFixed(3),
       pl: pl.map((l) => ({ I: +l.intensity.toFixed(1), d: +Math.hypot(l.position.x - cp.x, l.position.z - cp.z).toFixed(0), y: +l.position.y.toFixed(1) })), sp: sp.map((l) => ({ I: +l.intensity.toFixed(0), d: cx ? +l.position.distanceTo(cx).toFixed(2) : null, y: +l.position.y.toFixed(2) })),
-      paintN: window.__PN.value, sign: signM ? +signM.emissiveIntensity.toFixed(2) : null, lodE: +lodE.toFixed(2), lodCars: D.NPC?.traffic?.cars?.length || 0, wet: D.LOOK.stats.wetCalls || 0 }; };
+      paintN: window.__PN.value, sign: signM ? +signM.emissiveIntensity.toFixed(2) : null, lodE: +lodE.toFixed(2), lodK: D.buildLodCar.nightK(), lodCars: D.NPC?.traffic?.cars?.length || 0, wet: D.LOOK.stats.wetCalls || 0 }; };
 });
 
 await p.goto(base, { waitUntil: 'domcontentloaded' });
@@ -158,8 +158,8 @@ await p.evaluate(() => window.__D().LOOK.set(0));
 await p.waitForFunction(() => window.__D().LOOK.level === 0 && !window.__D().LOOK.busy);
 const z = await p.evaluate(() => { const v = window.__view(320, 192, false); return { st: window.__state(), info: v.info }; });
 console.log('6 順', JSON.stringify(z));
-check(z.st.pl.length === 0 && z.st.sp.length === 0 && z.st.paintN === 0 && z.st.lodE === 0 && z.st.sign === 0.3 && signBase > 0.7 && z.st.dl.I === 1.4 && z.st.dl.c === 'fff4e0' && z.st.exp === 1 && z.info.wet === 0,
-  `back to 順 at 22:00: lamps removed, car lamps off, signs back to 0.3 (were ${signBase}), original sun, no reflection`);
+check(z.st.pl.length === 0 && z.st.sp.length === 0 && z.st.paintN === 0 && z.st.lodK === 0 && z.st.lodE < n.lodE - 5 && z.st.sign === 0.3 && signBase > 0.7 && z.st.dl.I === 1.4 && z.st.dl.c === 'fff4e0' && z.st.exp === 1 && z.info.wet === 0,
+  `back to 順 at 22:00: lamps removed, car lamps off (night 0; E ${z.st.lodE}, brake lights may stay), signs back to 0.3 (were ${signBase}), original sun, no reflection`);
 const z2 = await p.evaluate(() => { window.__dstep(20); const D = window.__D(), e = document.querySelector('#stage .dv-mapt'), A = D.AMB; return { hidden: e.hidden, last: A && A.last ? { birds: A.last.birds, crickets: A.last.crickets } : null }; });
 check(z2.hidden === true && z2.last && z2.last.birds === 1 && z2.last.crickets === 0, `順: no clock (no day and night), ambient sound is daytime (birds, no crickets)`);
 // 下車走路：環境聲還在（風大一點）、時間照樣顯示在走路的小地圖上面
