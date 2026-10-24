@@ -77,3 +77,6 @@ by home 4 177 / 1.14M. `HL.update` ~0.0002 ms a frame; one `heightAt` ~0.0002 ms
 - Grass colour seams where the island grass meets the Neihu ring and at some hill feet.
 - Where two hills overlap the valley is a V (a car's centre sits ~0.9 m above the lowest point there).
 - The style change (realistic look) is a separate decision; see the style mock.
+
+## Batch 34 fix (2026-10-24): NaN position crashed `hillsMax`
+world-test (two phones, 400 m together) threw `Cannot read properties of undefined (reading 'length')` every frame from `surfaceAt → lift → hillsMax`: the bucket lookup `near(x, z)` compared `i < 0 || i >= nx` and NaN passes both, so `BUCK[NaN]` is undefined. The friend's car has no position until its first packet arrives, and proxyWorld asks the ground height for it. `near` now returns `EMPTY` unless the index is in range (NaN included), which gives the same NaN height the pre-hills world gave, without throwing. Found because world-test had not been run since the hills shipped (content 19).

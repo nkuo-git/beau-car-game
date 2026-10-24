@@ -207,7 +207,7 @@ function buildHills(V, opts = {}) {
   const BK = { x0: -2100, z0: -1600, s: 250, nx: 22, nz: 19 }, BUCK = Array.from({ length: BK.nx * BK.nz }, () => []);
   for (const H of HS) for (let j = Math.max(0, Math.floor((H.bz0 - BK.z0) / BK.s)); j <= Math.min(BK.nz - 1, Math.floor((H.bz1 - BK.z0) / BK.s)); j++) for (let i = Math.max(0, Math.floor((H.bx0 - BK.x0) / BK.s)); i <= Math.min(BK.nx - 1, Math.floor((H.bx1 - BK.x0) / BK.s)); i++) BUCK[j * BK.nx + i].push(H);
   const EMPTY = [];
-  const near = (x, z) => { const i = Math.floor((x - BK.x0) / BK.s), j = Math.floor((z - BK.z0) / BK.s); return i < 0 || j < 0 || i >= BK.nx || j >= BK.nz ? EMPTY : BUCK[j * BK.nx + i]; };
+  const near = (x, z) => { const i = Math.floor((x - BK.x0) / BK.s), j = Math.floor((z - BK.z0) / BK.s); return i >= 0 && j >= 0 && i < BK.nx && j < BK.nz ? BUCK[j * BK.nx + i] : EMPTY; }; // 第 34 批：x、z 是 NaN（一起比 400 公尺，朋友的車還沒有位置）以前拿到 undefined 就爆（每一格 pageerror、比賽開不起來）；現在跟沒有山的時候一樣算 NaN 不爆
   // 隧道的範圍：tunAt＝隧道那段（下面那層是路）、corrAt＝整段（隧道＋挖開的路）
   const tunAt = (x, z) => { for (let k = 0; k < TS.length; k++) { const t = TS[k]; if (x > t.x0 && x < t.x1 && z > t.z0 && z < t.z1) return k; } return -1; };
   const corrAt = (x, z) => { for (let k = 0; k < TS.length; k++) { const t = TS[k]; if (x > t.x0 && x < t.x1 && z > t.cz0 && z < t.cz1) return k; } return -1; };
