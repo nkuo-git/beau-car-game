@@ -4,6 +4,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { Sky } from 'three/addons/objects/Sky.js'; // 第 29 批：畫質（look.js）
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 // ---- masks.js ----
 // 3D Supra 的表面細節：從側面、正面、後面、上面四個方向「投影」到車身上的貼圖。
 // 車窗、黑色飾條、車門縫、車燈、水箱罩、引擎蓋通風口、拉花都畫在這些平面圖上，
@@ -513,9 +517,11 @@ function makeMaskTextures(look = SUPRA_LOOK) {
 
 // ---- shader ----
 const VERT_DECL = 'varying vec3 vP; varying vec3 vN;\n';
+// 第 30 批（look.js 的晚上）：所有完整的車共用一個「燈亮多少」（0 白天、1 晚上）：大燈（lamp）、尾燈（red）自己發光；車庫頁、白天是 0 ＝ 跟以前一樣
+const PAINT_NIGHT = { value: 0 };
 const MASK_FN = `
 uniform sampler2D tSide, tFront, tRear, tTop, tLivR, tLivL, tLivF;
-uniform float uXr, uXf, uLiv, uGlassY;
+uniform float uXr, uXf, uLiv, uGlassY, uNight;
 uniform vec2 uFx, uRx; uniform vec3 uWell, uWellR;
 varying vec3 vP; varying vec3 vN;
 vec2 uvSide(vec3 p) { return vec2((p.x + 2.35) / 4.7, p.y / 1.4); }
@@ -538,8 +544,11 @@ function inject(shader, tex) {
 // 車漆那一層：玻璃的地方挖掉，其他依照投影圖改顏色、粗糙度、金屬感
 function patchPaint(mat, tex) {
   mat.onBeforeCompile = (shader) => {
-    inject(shader, tex);
+    inject(shader, tex); shader.uniforms.uNight = PAINT_NIGHT;
     shader.fragmentShader = shader.fragmentShader
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  totalEmissiveRadiance += uNight * (vec3(2.4, 2.3, 2.0) * lamp * (1.0 - 0.5 * lens) + vec3(1.3, 0.04, 0.02) * red);
+`)
       .replace('#include <color_fragment>', `#include <color_fragment>
   vec4 S = texture2D(tSide, uvSide(vP));
   vec4 Tp = texture2D(tTop, uvTop(vP));
@@ -6668,6 +6677,561 @@ function buildPoliceInterior(opts = {}) {
 return { buildPoliceStation, buildPoliceInterior, makePoliceCar, POLICE_LOOK, POLICE_TEXT };
 })();
 
+// ---- hills.js ----
+// ---- 山、隧道、海邊（第 27 批）：每座山都開得上去、兩條隧道、拿掉看不到的牆以後地圖最外面一圈是沙灘和海 ----
+// Nick 2026-10-23「每座山都可開／要有隧道／往內湖的那個車庫會被山擋住／不要空氣屏障」；草稿 https://claude.ai/artifact/NZ8YUwjuVLyJ4EPExuh7YZ ，地圖的邊 Nick 選「海邊」
+// 以前的山（village.js 的 hill()：快速道路一圈裡面兩座、遠的一圈 12 座、村子南邊 3＋2 座；race.src.js 賽車場北邊 3 個半球）只是畫上去的，車子會穿過去：
+//   現在全部照這裡的清單（HILL_LIST）長成真的地形：每座山自己一張格子（3.5–13 公尺一格），heightAt 跟畫出來的三角形一模一樣（對角線 00–11，跟 mountain.js 一樣）
+//   山變矮一點（高 ÷ 半徑 ≈ 0.33，最陡大約 30°，不超過 35°）：一般的車開得上去（草地限速 50），陡的地方慢慢爬；山上的樹有碰撞（怪獸卡車輾得扁，跟山上的樹一樣）
+//   4 號家（往內湖的聯外道路西邊）旁邊那座 (−214, 182) 往西搬到 (−262, 196)：塔外面的斜坡露出來
+// 隧道（都是沿著 z 的直路）：快速道路西邊直線（x −1030，雙孔：中間護欄那裡一道牆）穿過新的山 (−1012, −140)；往內湖的聯外道路（x −112）穿過新的山 (−122, 243)（橫的長圓）
+//   山比路高 9.4 公尺以上的那段＝隧道（拱頂 7.4）；山腳到洞口＝挖開的路（兩邊擋土牆，牆頂多 0.8 公尺當欄杆）；洞口一面水泥牆＋名牌
+//   兩層：開在路上（下面）＝隧道的牆擋、地面＝路；開到山上（上面）＝山的地面、洞口上面的欄杆擋。誰在哪一層：只有玩家（town.src.js 的 proxyWorld 問 high）；
+//   車流、警察、路人用 V.heightAt（隧道那段永遠是路）
+//   隧道裡面：牆、拱頂不打光（MeshBasic），燈一排一排，路面蓋一層黑（暗一點）；鏡頭在隧道裡面，太陽、天空光變暗（update）
+// 海邊：島＝圓角長方形（水邊 x −1830…2560、z −1280…2380，圓角 320）；水邊往裡 70 公尺是沙灘（從 0 慢慢低到海面 −0.55），往外海底越來越深
+//   村子、內湖外面一圈的山（neihu.js 的格子）以外沒有地的地方鋪草地（40 公尺一格，跟沙灘、海底同一張）；海面一大片（中間挖掉陸地）
+//   路面（surfaceAt）：7 沙、9 淺水（限速 12）、10 深水（開不動，倒車出得來）；走路走不進深水（walkable）；第一次開進深水「前面是海」（town.src.js）
+// 400 公尺直線加速的盡頭（x 761）本來是看不到的牆：拿掉了，後面接一段沙地（x 760…1000）慢慢停下來
+// 座標跟 village.js 一樣：x 往東、y 往上、z 往南
+// 【API】
+//   await hillsFonts();                    隧道名牌的字
+//   const HL = buildHills(V, { renderer })  V＝buildVillage()（buildMountain 之後）；山、隧道、海加進 V.group、V.colliders；V.heightAt、normalAt、terrainAt、surfaceAt、mapDraw 包一層
+//   V.hills＝HL：{ tunAt(x, z)（在隧道那段的範圍裡：第幾條，不然 −1）, topAt(x, z)（山的地面：上面那一層）, high（玩家在上面那層）, level(y)（每幀：玩家多高 → 換層、換碰撞）,
+//                  inside(x, z, y)（在隧道裡面、下面那層：鏡頭天花板、變暗）, ceil, depth(x, z)（水多深）, walkable(x, z), update(dt, camera, scene), info }
+//   HILL_LIST、hillH(x, z)（山比地面高多少：放東西前看一下）、inTunnel(x, z, pad)（隧道那段，village.js 的路燈、牌子不要放）、COAST、coastD(x, z)
+// 效能：山 6 個網格（照位置分）、樹 1 個、隧道 3 個（牆＋洞口、燈、路面的黑）、島 1 個、海 1 個、名牌 1 個；碰撞都是一般的盒子、圓
+
+const { buildHills, hillsFonts, HILL_TEXT, HILL_LIST, hillH, inTunnel, tunnels, COAST, coastD, coastY } = (() => {
+const TAU = Math.PI * 2;
+const SANS = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", "WenQuanYi Zen Hei", sans-serif';
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const ss = (e0, e1, v) => { const t = clamp((v - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+const lerp = (a, b, t) => a + (b - a) * t;
+function rng(seed) { // 固定種子的亂數（每次蓋出來都一樣）
+  let s = seed >>> 0;
+  return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const hash2 = (a, b) => { let h = Math.imul(a | 0, 374761393) ^ Math.imul((b | 0) + 7, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+function vnoise(x, z, f, seed) { // −1…1
+  const X = x * f, Z = z * f, i = Math.floor(X), j = Math.floor(Z), u = X - i, v = Z - j, su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
+  const a = hash2(i + seed, j), b = hash2(i + 1 + seed, j), c = hash2(i + seed, j + 1), d = hash2(i + 1 + seed, j + 1);
+  return lerp(lerp(a, b, su), lerp(c, d, su), sv) * 2 - 1;
+}
+const CC = new Map();
+const C = (hex) => { let v = CC.get(hex); if (!v) { const c = new THREE.Color(hex); v = [c.r, c.g, c.b]; CC.set(hex, v); } return v; }; // 線性顏色
+const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+// ---- 山的清單：中心、半徑、高、種子、樹幾棵（t）、隧道（tun：TUN 的第幾條）----
+const HILL_LIST = [
+  { x: -800, z: -165, r: 135, h: 46, s: 21, t: 20 }, { x: -805, z: 185, r: 145, h: 48, s: 22, t: 22 }, // 快速道路一圈裡面（原本 72、80 公尺高）
+  { x: -1330, z: -890, r: 270, h: 88, s: 29 }, { x: -990, z: -930, r: 260, h: 84, s: 33 }, { x: -660, z: -910, r: 250, h: 80, s: 34 }, { x: -420, z: -935, r: 210, h: 70, s: 35 }, // 遠的一圈：北（最東邊那座往北挪：不要蓋到山（mountain.js）山腳的樹）
+  { x: -1480, z: -560, r: 250, h: 82, s: 31 }, { x: -1470, z: -170, r: 250, h: 80, s: 39 }, { x: -1480, z: 220, r: 260, h: 86, s: 32 }, { x: -1470, z: 600, r: 240, h: 78, s: 40 }, // 西
+  { x: -1330, z: 890, r: 270, h: 88, s: 30 }, { x: -990, z: 930, r: 250, h: 80, s: 36 }, { x: -660, z: 910, r: 260, h: 84, s: 37 }, { x: -400, z: 880, r: 220, h: 70, s: 38 }, // 南
+  { x: -430, z: 184, r: 76, h: 25, s: 15, t: 14 }, { x: -330, z: 192, r: 86, h: 28, s: 16, t: 18 }, { x: -262, z: 196, r: 86, h: 28, s: 17, t: 16 }, // 村子南邊（東邊那座本來在 (−214, 182)：蓋到 4 號家的斜坡；另外兩座往南一點：不要碰到村子南邊的路燈、樹）
+  { x: -300, z: 540, r: 210, h: 70, s: 27 }, { x: -230, z: 680, r: 190, h: 62, s: 28 }, // 村子南邊遠的（第一座本來在 (−320, 500) 半徑 230：蓋到快速道路旁邊的透天厝、鐵皮工廠）
+  { x: 120, z: -985, r: 150, h: 42, s: 41 }, { x: 560, z: -1010, r: 170, h: 48, s: 42 }, { x: 1000, z: -975, r: 140, h: 39, s: 43 }, // 賽車場北邊（race.src.js 本來的半球；往北挪一點，不要蓋到賽車場的樹）
+  { x: -1012, z: -140, r: 105, h: 36, s: 51, t: 14, tun: 0 }, // 快速道路隧道的山
+  { x: -122, z: 243, r: 82, rx: 82, rz: 54, h: 22, s: 52, t: 9, tun: 1 }, // 內湖隧道的山（橫的長圓：北邊不要碰到 4 號家，南邊不要蓋到聯外道路轉彎的地方）
+];
+const KOUT = 1.12; // 山的邊最多凸出去多少（外形不是正圓）
+// 山比地面高多少（≤ 0：不在山上）；外形：(1 − u²)^1.5（最陡在半山腰）×（1 ± 5% 大雜訊）＋ 0.15 公尺小起伏；邊上歪歪的（不是正圓）；rx、rz：長圓的山（沒有就是 r）
+const RX = (H) => H.rx || H.r, RZ = (H) => H.rz || H.r;
+function shapeH(H, x, z) {
+  const dx = (x - H.x) / RX(H), dz = (z - H.z) / RZ(H), d2 = dx * dx + dz * dz;
+  if (d2 >= KOUT * KOUT) return -1;
+  const a = Math.atan2(-dz, dx), k = 1 + 0.07 * Math.sin(3 * a + H.s) + 0.04 * Math.sin(5 * a + H.s * 1.7), u = Math.sqrt(d2) / k;
+  if (u >= 1) return -1;
+  const w = 1 - u * u, n1 = vnoise(x, z, 1 / Math.max(60, H.r * 0.5), H.s * 13), n2 = vnoise(x, z, 1 / 24, H.s * 7 + 3);
+  return H.h * Math.pow(w, 1.5) * (1 + 0.05 * n1) + 0.15 * n2 * w * Math.min(1, u * 4); // 起伏不要太陡太密：下坡開 50 公里不會一直彈起來
+}
+function hillH(x, z) { let m = -1; for (const H of HILL_LIST) { const v = shapeH(H, x, z); if (v > m) m = v; } return m; }
+
+// ---- 島：水邊（圓角長方形）、沙灘、海底 ----
+const COAST = { x0: -1830, x1: 2560, z0: -1280, z1: 2380, r: 320, beach: 70, sl: -0.55 };
+function coastD(x, z) { // 離水邊多遠（陸地負的、海裡正的）
+  const cx = (COAST.x0 + COAST.x1) / 2, cz = (COAST.z0 + COAST.z1) / 2, hx = (COAST.x1 - COAST.x0) / 2 - COAST.r, hz = (COAST.z1 - COAST.z0) / 2 - COAST.r;
+  const qx = Math.abs(x - cx) - hx, qz = Math.abs(z - cz) - hz;
+  return Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - COAST.r;
+}
+function coastY(d) { // 地面多高：沙灘從 0 慢慢低到海面，海裡越來越深
+  if (d <= -COAST.beach) return 0;
+  if (d <= 0) return COAST.sl * Math.pow((d + COAST.beach) / COAST.beach, 1.4);
+  return Math.max(-10, COAST.sl - 0.028 * Math.min(d, 40) - 0.08 * Math.max(0, d - 40));
+}
+// 本來就有地的地方（village.js 的草地、賽道的草地；內湖外面那圈山的格子 neihu.js 自己鋪）：島的格子不要再鋪
+const groundAt = (x, z) => (x >= -1450 && x <= -62 && Math.abs(z) <= 880) || (x > -62 && x <= 1300 && Math.abs(z) <= 1150);
+const RING0 = [-600, -520, 2456, 2281]; // neihu.js 山的格子（buildHills 的時候照 V.neihu.ringBox 改）
+
+// ---- 隧道 ----
+const TOP = 7.4, WALL_H = 5.0, CLR = 9.4; // 拱頂、直的牆多高；山比路高 CLR 以上才算隧道
+const TUN = [
+  { name: '快速道路隧道', x: -1030, hw: 14.5, bores: [[-14.5, -0.6], [0.6, 14.5]], hill: 22 },
+  { name: '內湖隧道', x: -112, hw: 9.6, bores: [[-9.6, 9.6]], hill: 23 },
+];
+let TP = null;
+function tunnels() { // 洞口在哪（照山的外形算：整個寬度都比路高 CLR 以上的那段）；z0…z1＝隧道、cz0…cz1＝挖開的路（山的範圍）
+  if (TP) return TP;
+  TP = TUN.map((t, k) => {
+    const H = HILL_LIST[t.hill], xs = [-4, 0, 0.25, 0.5, 0.75, 1, 4].map((f, i) => (i === 0 ? t.x - t.hw - 4 : i === 6 ? t.x + t.hw + 4 : t.x - t.hw + 2 * t.hw * f));
+    let best = null, cur = null;
+    for (let z = Math.ceil(H.z - RZ(H) * KOUT); z <= H.z + RZ(H) * KOUT; z += 0.5) {
+      let m = Infinity; for (const x of xs) m = Math.min(m, shapeH(H, x, z));
+      if (m >= CLR) { if (!cur) cur = [z, z]; cur[1] = z; } else if (cur) { if (!best || cur[1] - cur[0] > best[1] - best[0]) best = cur; cur = null; }
+    }
+    if (cur && (!best || cur[1] - cur[0] > best[1] - best[0])) best = cur;
+    if (!best) best = [H.z, H.z];
+    return { ...t, k, z0: best[0], z1: best[1], cz0: H.z - RZ(H) * KOUT, cz1: H.z + RZ(H) * KOUT, x0: t.x - t.hw, x1: t.x + t.hw };
+  });
+  return TP;
+}
+function inTunnel(x, z, pad = 0) { for (const t of tunnels()) if (Math.abs(x - t.x) < t.hw + pad && z > t.z0 - pad && z < t.z1 + pad) return true; return false; }
+const HILL_TEXT = TUN.map((t) => t.name).join('');
+function hillsFonts(ms = 1500) {
+  const f = typeof document !== 'undefined' && document.fonts;
+  if (!f || !f.load) return Promise.resolve();
+  const all = Promise.all([f.load(`700 64px ${SANS}`, HILL_TEXT)]).catch(() => {});
+  return Promise.race([all, new Promise((r) => setTimeout(r, ms))]);
+}
+
+// ---- 格子：xs、zs（可以不等距）、高度 Y；heightAt＝三角形內插（對角線 00–11） ----
+function seg(a, v) { let lo = 0, hi = a.length - 2; if (v <= a[0]) return 0; if (v >= a[hi]) return hi; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (a[m] <= v) lo = m; else hi = m - 1; } return lo; }
+function axis(a0, a1, step, extra) { // a0…a1 每 step 一條，再加上 extra（太近的那條換掉）
+  const out = [], n = Math.max(1, Math.round((a1 - a0) / step));
+  for (let i = 0; i <= n; i++) out.push(a0 + ((a1 - a0) * i) / n);
+  for (const e of extra) { if (e <= a0 || e >= a1) continue; let bi = 0; for (let i = 1; i < out.length; i++) if (Math.abs(out[i] - e) < Math.abs(out[bi] - e)) bi = i; if (Math.abs(out[bi] - e) < step * 0.3 && bi > 0 && bi < out.length - 1) out[bi] = e; else out.push(e); }
+  return Float64Array.from(out.sort((p, q) => p - q));
+}
+const GN = [0, 1, 0];
+function gridAt(G, x, z) { // 不在格子裡：NaN
+  const xs = G.xs, zs = G.zs;
+  if (!(x >= xs[0] && x <= xs[xs.length - 1] && z >= zs[0] && z <= zs[zs.length - 1])) return NaN;
+  const i = seg(xs, x), j = seg(zs, z), u = (x - xs[i]) / (xs[i + 1] - xs[i]), v = (z - zs[j]) / (zs[j + 1] - zs[j]), W1 = xs.length, k = j * W1 + i, Y = G.Y;
+  const h00 = Y[k], h10 = Y[k + 1], h01 = Y[k + W1], h11 = Y[k + W1 + 1];
+  return u >= v ? h00 + u * (h10 - h00) + v * (h11 - h10) : h00 + u * (h11 - h01) + v * (h01 - h00);
+}
+function gridN(G, x, z, out) { // 那個三角形的法線
+  const xs = G.xs, zs = G.zs, i = seg(xs, x), j = seg(zs, z), dx = xs[i + 1] - xs[i], dz = zs[j + 1] - zs[j], u = (x - xs[i]) / dx, v = (z - zs[j]) / dz, W1 = xs.length, k = j * W1 + i, Y = G.Y;
+  const h00 = Y[k], h10 = Y[k + 1], h01 = Y[k + W1], h11 = Y[k + W1 + 1];
+  const gx = (u >= v ? h10 - h00 : h11 - h01) / dx, gz = (u >= v ? h11 - h10 : h01 - h00) / dz, l = Math.sqrt(gx * gx + gz * gz + 1);
+  out[0] = -gx / l; out[1] = 1 / l; out[2] = -gz / l; return out;
+}
+function gridMesh(G, keep, col, extra) { // 留下 keep(i, j) 的格子；頂點色 col(x, z, y, ny) → [r, g, b]；extra(x, z, y) → 另外的屬性（沙）
+  const xs = G.xs, zs = G.zs, W1 = xs.length, H1 = zs.length, Y = G.Y, NV = W1 * H1;
+  const used = new Uint8Array(NV), I = [];
+  for (let j = 0; j < H1 - 1; j++) for (let i = 0; i < W1 - 1; i++) {
+    if (!keep(i, j)) continue;
+    const a = j * W1 + i, b = a + 1, d = a + W1, c = d + 1;
+    I.push(a, c, b, a, d, c); used[a] = used[b] = used[c] = used[d] = 1;
+  }
+  if (!I.length) return null;
+  const map = new Int32Array(NV).fill(-1); let n = 0; for (let v = 0; v < NV; v++) if (used[v]) map[v] = n++;
+  const P = new Float32Array(n * 3), N = new Float32Array(n * 3), CL = new Float32Array(n * 3), UV = new Float32Array(n * 2), EX = extra ? new Float32Array(n) : null;
+  const yAt = (i, j) => Y[clamp(j, 0, H1 - 1) * W1 + clamp(i, 0, W1 - 1)], xAt = (i) => xs[clamp(i, 0, W1 - 1)], zAt = (j) => zs[clamp(j, 0, H1 - 1)];
+  for (let j = 0; j < H1; j++) for (let i = 0; i < W1; i++) {
+    const v = j * W1 + i, q = map[v]; if (q < 0) continue;
+    const x = xs[i], z = zs[j], y = Y[v];
+    const gx = (yAt(i + 1, j) - yAt(i - 1, j)) / Math.max(1e-6, xAt(i + 1) - xAt(i - 1)), gz = (yAt(i, j + 1) - yAt(i, j - 1)) / Math.max(1e-6, zAt(j + 1) - zAt(j - 1)), l = Math.sqrt(gx * gx + gz * gz + 1);
+    P[q * 3] = x; P[q * 3 + 1] = y; P[q * 3 + 2] = z; N[q * 3] = -gx / l; N[q * 3 + 1] = 1 / l; N[q * 3 + 2] = -gz / l;
+    UV[q * 2] = x / 6; UV[q * 2 + 1] = -z / 6;
+    const c = col(x, z, y, 1 / l); CL[q * 3] = c[0]; CL[q * 3 + 1] = c[1]; CL[q * 3 + 2] = c[2];
+    if (EX) EX[q] = extra(x, z, y);
+  }
+  const idx = new Uint32Array(I.length); for (let k = 0; k < I.length; k++) idx[k] = map[I[k]];
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(N, 3)); geo.setAttribute('color', new THREE.BufferAttribute(CL, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(UV, 2));
+  if (EX) geo.setAttribute('sand', new THREE.BufferAttribute(EX, 1));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1)); geo.computeBoundingSphere();
+  return { geo, tris: I.length / 3 };
+}
+const ICO = (() => { // 二十面體（樹冠）
+  const t = (1 + Math.sqrt(5)) / 2, v = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map((p) => { const l = Math.hypot(...p); return p.map((q) => q / l); });
+  const f = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+  return { v, f };
+})();
+function cv(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
+function fitFont(g, text, maxW, px) { let s = px; for (; s > 8; s -= 2) { g.font = `700 ${s}px ${SANS}`; if (g.measureText(text).width <= maxW) break; } return s; }
+
+function buildHills(V, opts = {}) {
+  const T0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const group = new THREE.Group(); group.name = 'hills';
+  const colliders = [], lowCols = [], highCols = [];
+  const TS = tunnels();
+  const ring = V.neihu && typeof V.neihu.ringAt === 'function' ? V.neihu : null, RB = (ring && ring.ringBox) || RING0;
+  const covered = (x, z) => groundAt(x, z) || (x >= RB[0] && x <= RB[2] && z >= RB[1] && z <= RB[3]);
+  const vg = V.group && V.group.getObjectByName('ground');
+  const terrMat = vg && vg.material ? vg.material.clone() : new THREE.MeshStandardMaterial({ color: 0x6f9a4a, roughness: 1 });
+  terrMat.vertexColors = true; terrMat.polygonOffset = true; terrMat.polygonOffsetFactor = 1; terrMat.polygonOffsetUnits = 2;
+  let tris = 0, meshes = 0;
+
+  // 6 個家（塔、外面的斜坡、門口）四周是平的：山腳靠近家的地方壓到 0（內湖隧道的山東南角碰到 5 號家的後面）
+  const HOMES = (V.homeSites || []).map((q) => [q.x, q.z]), HK0 = TOWER_RAMP.R1 + 8, HK1 = TOWER_RAMP.R1 + 22;
+  const homeKeep = (x, z) => { let m = 1; for (const [hx, hz] of HOMES) { const d = Math.hypot(x - hx, z - hz); if (d < HK1) m = Math.min(m, ss(HK0, HK1, d)); } return m; };
+  // 1) 每座山一張格子
+  const HS = HILL_LIST.map((H, hi) => {
+    const cs = clamp(Math.min(RX(H), RZ(H)) / 14, 3.5, 13), ex = [], ez = [];
+    const T = H.tun != null ? TS[H.tun] : null;
+    if (T) { ex.push(T.x0, T.x1); ez.push(T.z0, T.z1); }
+    const xs = axis(H.x - RX(H) * KOUT, H.x + RX(H) * KOUT, cs, ex), zs = axis(H.z - RZ(H) * KOUT, H.z + RZ(H) * KOUT, cs, ez), W1 = xs.length, Y = new Float32Array(W1 * zs.length), S = new Float32Array(W1 * zs.length);
+    for (let j = 0; j < zs.length; j++) for (let i = 0; i < W1; i++) {
+      const x = xs[i], z = zs[j], s0 = shapeH(H, x, z), s = s0 > 0 ? s0 * homeKeep(x, z) : s0, b = coastY(coastD(x, z)); let y = s > 0 ? b + s : b - 0.15;
+      if (T && x > T.x0 - 4.5 && x < T.x1 + 4.5 && z >= T.z0 - 0.01 && z <= T.z1 + 0.01) y = Math.max(y, TOP + 1.6); // 隧道上面：山一定蓋得住拱頂
+      Y[j * W1 + i] = y; S[j * W1 + i] = s;
+    }
+    return { ...H, hi, T, G: { xs, zs, Y }, S, bx0: xs[0], bx1: xs[W1 - 1], bz0: zs[0], bz1: zs[zs.length - 1] };
+  });
+  // 找山：250 公尺一格的桶
+  const BK = { x0: -2100, z0: -1600, s: 250, nx: 22, nz: 19 }, BUCK = Array.from({ length: BK.nx * BK.nz }, () => []);
+  for (const H of HS) for (let j = Math.max(0, Math.floor((H.bz0 - BK.z0) / BK.s)); j <= Math.min(BK.nz - 1, Math.floor((H.bz1 - BK.z0) / BK.s)); j++) for (let i = Math.max(0, Math.floor((H.bx0 - BK.x0) / BK.s)); i <= Math.min(BK.nx - 1, Math.floor((H.bx1 - BK.x0) / BK.s)); i++) BUCK[j * BK.nx + i].push(H);
+  const EMPTY = [];
+  const near = (x, z) => { const i = Math.floor((x - BK.x0) / BK.s), j = Math.floor((z - BK.z0) / BK.s); return i < 0 || j < 0 || i >= BK.nx || j >= BK.nz ? EMPTY : BUCK[j * BK.nx + i]; };
+  // 隧道的範圍：tunAt＝隧道那段（下面那層是路）、corrAt＝整段（隧道＋挖開的路）
+  const tunAt = (x, z) => { for (let k = 0; k < TS.length; k++) { const t = TS[k]; if (x > t.x0 && x < t.x1 && z > t.z0 && z < t.z1) return k; } return -1; };
+  const corrAt = (x, z) => { for (let k = 0; k < TS.length; k++) { const t = TS[k]; if (x > t.x0 && x < t.x1 && z > t.cz0 && z < t.cz1) return k; } return -1; };
+
+  // 2) 島的格子（沙灘、海底、沒有地的地方鋪草地）：40 公尺一格，邊對齊本來的地
+  const IS = (() => {
+    const X0 = COAST.x0 - 160, X1 = COAST.x1 + 160, Z0 = COAST.z0 - 160, Z1 = COAST.z1 + 160;
+    const xs = axis(X0, X1, 40, [-1450, -62, 1300, RB[0], RB[2]]), zs = axis(Z0, Z1, 40, [-1150, -880, 880, 1150, RB[1], RB[3]]), W1 = xs.length, Y = new Float32Array(W1 * zs.length);
+    for (let j = 0; j < zs.length; j++) for (let i = 0; i < W1; i++) Y[j * W1 + i] = coastY(coastD(xs[i], zs[j]));
+    const cell = new Uint8Array((W1 - 1) * (zs.length - 1));
+    for (let j = 0; j < zs.length - 1; j++) for (let i = 0; i < W1 - 1; i++) cell[j * (W1 - 1) + i] = covered((xs[i] + xs[i + 1]) / 2, (zs[j] + zs[j + 1]) / 2) ? 0 : 1;
+    return { G: { xs, zs, Y }, cell, W: W1 - 1 };
+  })();
+  const isAt = (x, z) => { // 島的格子：在本來沒有地的地方才算（NaN＝不算）
+    const G = IS.G; if (!(x >= G.xs[0] && x <= G.xs[G.xs.length - 1] && z >= G.zs[0] && z <= G.zs[G.zs.length - 1])) return coastY(coastD(x, z));
+    const i = seg(G.xs, x), j = seg(G.zs, z); return IS.cell[j * IS.W + i] ? gridAt(G, x, z) : NaN;
+  };
+  const RUN = { x0: 760, x1: 1000, hz: 16 }; // 400 公尺後面的沙地（盡頭圓的）
+  const inRun = (x, z) => x >= RUN.x0 && (x <= RUN.x1 ? Math.abs(z) <= RUN.hz : (x - RUN.x1) ** 2 + z * z <= RUN.hz * RUN.hz);
+
+  // 3) 高度、法線、地形、路面（包一層；隧道那段：V.heightAt 永遠是路，玩家在上面那層 topAt）
+  const h0 = V.heightAt || (() => 0), n0 = V.normalAt || null, t0 = V.terrainAt || (() => false), s0 = V.surfaceAt || (() => 0);
+  const SRC = { g: null, ring: false }; // 最後是誰（法線用）
+  function baseH(x, z) { const v = isAt(x, z); if (v === v) { SRC.g = IS.G; return v; } SRC.g = null; return h0(x, z); }
+  function hillsMax(x, z, h, skipCorr) {
+    const L = near(x, z);
+    for (let k = 0; k < L.length; k++) {
+      const H = L[k]; if (x < H.bx0 || x > H.bx1 || z < H.bz0 || z > H.bz1) continue;
+      if (skipCorr && H.T && x > H.T.x0 && x < H.T.x1) continue; // 挖開的路、隧道：這座山不算（下面那層）
+      const v = gridAt(H.G, x, z); if (v > h) { h = v; SRC.g = H.G; SRC.ring = false; }
+    }
+    if (ring && x >= RB[0] && x <= RB[2] && z >= RB[1] && z <= RB[3]) { const v = ring.ringAt(x, z); if (v > h) { h = v; SRC.g = null; SRC.ring = true; } }
+    return h;
+  }
+  const heightAt = (x, z) => { SRC.ring = false; return hillsMax(x, z, baseH(x, z), corrAt(x, z) >= 0); };
+  const topAt = (x, z) => { SRC.ring = false; return hillsMax(x, z, baseH(x, z), false); }; // 上面那層（隧道上面的山）
+  const NRM = [0, 1, 0];
+  function normalAt(x, z) {
+    SRC.ring = false; hillsMax(x, z, baseH(x, z), corrAt(x, z) >= 0);
+    if (SRC.ring) return ring.ringN(x, z, NRM);
+    if (SRC.g) return gridN(SRC.g, x, z, NRM);
+    if (n0) return n0(x, z); NRM[0] = 0; NRM[1] = 1; NRM[2] = 0; return NRM;
+  }
+  function topN(x, z) { SRC.ring = false; hillsMax(x, z, baseH(x, z), false); if (SRC.ring) return ring.ringN(x, z, NRM); if (SRC.g) return gridN(SRC.g, x, z, NRM); if (n0) return n0(x, z); NRM[0] = 0; NRM[1] = 1; NRM[2] = 0; return NRM; }
+  const lift = (x, z) => { // 山（或內湖外面的山）比底下的地高多少
+    const b = baseH(x, z); return hillsMax(x, z, b, corrAt(x, z) >= 0) - b;
+  };
+  function terrainAt(x, z) { // 不平的地方（terrain.js 照三角形算）：原本的、沙灘和海、山、內湖外面的山
+    if (t0(x, z) || coastD(x, z) > -COAST.beach - 4 || inRun(x, z)) return true; // 沙地也算（terrain.js 的沙：慢下來）
+    const L = near(x, z);
+    for (let k = 0; k < L.length; k++) { const H = L[k]; if (x >= H.bx0 && x <= H.bx1 && z >= H.bz0 && z <= H.bz1 && gridAt(H.G, x, z) > 0.02) return true; }
+    return !!ring && x >= RB[0] && x <= RB[2] && z >= RB[1] && z <= RB[3] && ring.ringAt(x, z) > 0.05;
+  }
+  const depth = (x, z) => { const d = coastD(x, z); return d <= -COAST.beach ? 0 : Math.max(0, COAST.sl - heightAt(x, z)); };
+  function surfaceAt(x, z) {
+    const s = s0(x, z);
+    if (inRun(x, z)) return 7;
+    const d = coastD(x, z);
+    if (d > -COAST.beach - 2 && lift(x, z) < 0.3) { const w = COAST.sl - heightAt(x, z); return w > 0.4 ? 10 : w > 0.02 ? 9 : 7; } // 沙灘、淺水、深水
+    if (corrAt(x, z) < 0 && lift(x, z) > 0.3) return 1; // 山上：草地
+    return s;
+  }
+  V.heightAt = heightAt; V.normalAt = normalAt; V.terrainAt = terrainAt; V.surfaceAt = surfaceAt;
+
+  // 沙：另外一個屬性，shader 裡把草地的貼圖換成沙（山、島、400 公尺後面的沙地）
+  const sandMat = (f, u) => { const m = terrMat.clone(); m.polygonOffsetFactor = f; m.polygonOffsetUnits = u; m.onBeforeCompile = sandShader; m.customProgramCacheKey = () => 'hl-sand'; return m; };
+  const sandShader = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float sand;\nvarying float vSand;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvSand = sand;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSand;').replace('#include <map_fragment>', [
+      '#ifdef USE_MAP',
+      '  vec4 sampledDiffuseColor = texture2D( map, vMapUv );',
+      '  float gl = dot( sampledDiffuseColor.rgb, vec3( 0.3, 0.55, 0.15 ) );',
+      '  vec3 sandC = vec3( 0.62, 0.47, 0.24 ) * ( 0.6 + 2.6 * gl );',
+      '  diffuseColor *= vec4( mix( sampledDiffuseColor.rgb, sandC, vSand ), 1.0 );',
+      '#endif',
+    ].join('\n'));
+  };
+  const hillMat = sandMat(1, 2);
+  // 4) 山的網格：照位置分 6 組（看不到的整組不畫）；顏色跟 mountain.js 一樣（高的地方深一點、陡的地方黃一點、山腳跟草地一樣）
+  const HI = [0.84, 0.93, 0.8], DRY = [1.16, 1.02, 0.8];
+  const hillCol = (H) => (x, z, y, ny) => {
+    const b = coastY(coastD(x, z)), h = y - b;
+    let c = mix([1, 1, 1], HI, ss(4, 45, h) * (0.7 + 0.3 * vnoise(x, z, 1 / 70, 41)));
+    c = mix(c, DRY, (1 - ss(0.62, 0.86, ny)) * 0.85);
+    const nk = 1 + vnoise(x, z, 1 / 31, 7 + H.s) * 0.07 + vnoise(x, z, 1 / 9, 9) * 0.04;
+    return mix([1, 1, 1], mul(c, nk), ss(0, 6, h));
+  };
+  const GROUPS = [[-1e9, -1100, -1e9, -350], [-1100, -1e9, -1e9, -350], [-1e9, -1100, -350, 1e9], [-1100, 0, -350, 1e9], [0, 1e9, -1e9, 1e9]]; // x0, x1, z0, z1（中心）
+  const hillGeos = GROUPS.map(() => []);
+  const hillSand = (x, z, y) => { const d = coastD(x, z); return d < -COAST.beach - 18 ? 0 : ss(-COAST.beach - 18, -COAST.beach + 12, d) * (1 - ss(2, 9, y - coastY(d))); }; // 海邊的山腳是沙
+  for (const H of HS) {
+    const xs = H.G.xs, zs = H.G.zs, W1 = xs.length, T = H.T;
+    const m = gridMesh(H.G, (i, j) => {
+      const s = H.S; if (s[j * W1 + i] <= 0 && s[j * W1 + i + 1] <= 0 && s[(j + 1) * W1 + i] <= 0 && s[(j + 1) * W1 + i + 1] <= 0) return false; // 整格都在山外面
+      if (T) { const mx = (xs[i] + xs[i + 1]) / 2, mz = (zs[j] + zs[j + 1]) / 2; if (mx > T.x0 && mx < T.x1 && (mz < T.z0 || mz > T.z1)) return false; } // 挖開的路
+      return true;
+    }, hillCol(H), hillSand);
+    if (!m) continue;
+    const gi = GROUPS.findIndex(([x0, x1, z0, z1]) => H.x >= x0 && H.x < x1 && H.z >= z0 && H.z < z1);
+    hillGeos[gi < 0 ? 0 : gi].push(m.geo); tris += m.tris;
+  }
+  hillGeos.forEach((L, gi) => {
+    if (!L.length) return;
+    const geo = L.length === 1 ? L[0] : mergeGeos(L);
+    const mesh = new THREE.Mesh(geo, hillMat); mesh.name = 'hl-hill-' + gi; mesh.matrixAutoUpdate = false; group.add(mesh); meshes++;
+  });
+
+  // 5) 島：草地＋沙灘＋海底（同一張）
+  const islandMat = sandMat(2, 6), runMat = sandMat(-1, -2); // 島跟村子的草地一樣往後推；400 公尺後面的沙地蓋在賽道的草地上面（斜斜看過去才不會被草地蓋掉）
+  {
+    const m = gridMesh(IS.G, (i, j) => IS.cell[j * IS.W + i] === 1, (x, z, y) => { const d = coastD(x, z), w = ss(0, 90, d); return mix([1, 1, 1], [0.55, 0.62, 0.66], w); }, (x, z) => ss(-COAST.beach - 18, -COAST.beach + 12, coastD(x, z)));
+    if (m) { const mesh = new THREE.Mesh(m.geo, islandMat); mesh.name = 'hl-ground-island'; mesh.matrixAutoUpdate = false; group.add(mesh); meshes++; tris += m.tris; }
+  }
+  { // 400 公尺後面的沙地：長方形＋半圓
+    const P = [], I = [], n = 10, y = 0.012, push = (x, z) => { P.push(x, y, z); return P.length / 3 - 1; };
+    const a = push(RUN.x0, -RUN.hz), b = push(RUN.x0, RUN.hz), c = push(RUN.x1, RUN.hz), d = push(RUN.x1, -RUN.hz), o = push(RUN.x1, 0);
+    I.push(a, b, c, a, c, d);
+    let prev = c; for (let k = 1; k <= n; k++) { const t = Math.PI / 2 - (k / n) * Math.PI, q = push(RUN.x1 + Math.cos(t) * RUN.hz, Math.sin(t) * RUN.hz); I.push(o, prev, q); prev = q; }
+    const geo = new THREE.BufferGeometry(), nv = P.length / 3, UV = [], N = [], CL = [], SD = [];
+    for (let k = 0; k < nv; k++) { UV.push(P[k * 3] / 6, -P[k * 3 + 2] / 6); N.push(0, 1, 0); CL.push(1, 1, 1); SD.push(1); }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); geo.setAttribute('color', new THREE.Float32BufferAttribute(CL, 3)); geo.setAttribute('sand', new THREE.Float32BufferAttribute(SD, 1));
+    geo.setIndex(I); fixWinding(geo); geo.computeBoundingSphere();
+    const mesh = new THREE.Mesh(geo, runMat); mesh.name = 'hl-ground-runoff'; mesh.matrixAutoUpdate = false; group.add(mesh); meshes++; tris += I.length / 3;
+  }
+
+  // 6) 海：一大片（中間沙灘裡面那圈挖掉），淡淡透明、慢慢動的小波浪（法線貼圖）
+  let water = null, waterTex = null;
+  {
+    const hx = (COAST.x1 - COAST.x0) / 2, hz = (COAST.z1 - COAST.z0) / 2, cx = COAST.x0 + hx, cz = COAST.z0 + hz, ins = COAST.beach - 4, R = COAST.r - ins;
+    const shape = new THREE.Shape(); const E = 9000;
+    shape.moveTo(cx - E, -(cz - E)); shape.lineTo(cx + E, -(cz - E)); shape.lineTo(cx + E, -(cz + E)); shape.lineTo(cx - E, -(cz + E)); shape.lineTo(cx - E, -(cz - E));
+    const hole = new THREE.Path(), ax = hx - ins - R, az = hz - ins - R, pts = [];
+    for (const [sx, sz, a0] of [[1, 1, 0], [-1, 1, Math.PI / 2], [-1, -1, Math.PI], [1, -1, (3 * Math.PI) / 2]]) for (let k = 0; k <= 8; k++) { const a = a0 + (k / 8) * (Math.PI / 2); pts.push([cx + sx * ax + Math.cos(a) * R, cz + sz * az + Math.sin(a) * R]); }
+    pts.forEach(([x, z], k) => (k ? hole.lineTo(x, -z) : hole.moveTo(x, -z)));
+    shape.holes.push(hole);
+    const geo = new THREE.ShapeGeometry(shape); geo.rotateX(-Math.PI / 2); // shape 的 y＝−z
+    const p = geo.attributes.position, uv = geo.attributes.uv; for (let k = 0; k < p.count; k++) { p.setY(k, COAST.sl); uv.setXY(k, p.getX(k) / 24, p.getZ(k) / 24); }
+    geo.computeVertexNormals(); geo.computeBoundingSphere();
+    if (typeof document !== 'undefined') { // 小波浪：法線貼圖（可以接起來的雜訊）
+      const S = 128, [c, g] = cv(S, S), im = g.createImageData(S, S), hh = (i, j) => { let v = 0; for (const [f, a, s] of [[4, 1, 3], [8, 0.5, 5], [16, 0.25, 7]]) v += a * Math.sin((TAU * f * (i + 0.37 * j)) / S + s) * Math.cos((TAU * f * 0.5 * (j - 0.21 * i)) / S + s * 1.3); return v; };
+      for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const gx = hh(i + 1, j) - hh(i - 1, j), gz = hh(i, j + 1) - hh(i, j - 1), l = Math.hypot(gx, gz, 1.2), k = (j * S + i) * 4; im.data[k] = 128 + (-gx / l) * 127; im.data[k + 1] = 128 + (-gz / l) * 127; im.data[k + 2] = 128 + (1.2 / l) * 127; im.data[k + 3] = 255; }
+      g.putImageData(im, 0, 0); waterTex = new THREE.CanvasTexture(c); waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping;
+    }
+    const wm = new THREE.MeshStandardMaterial({ color: 0x2f7396, roughness: 0.16, metalness: 0.08, transparent: true, opacity: 0.84, normalMap: waterTex, normalScale: new THREE.Vector2(0.45, 0.45) });
+    water = new THREE.Mesh(geo, wm); water.name = 'hl-water'; water.matrixAutoUpdate = false; water.renderOrder = 2; group.add(water); meshes++; tris += geo.index ? geo.index.count / 3 : p.count / 3;
+  }
+
+  // 7) 隧道：擋土牆（挖開的路兩邊、牆頂高出 0.8 公尺當欄杆）、洞口、裡面的牆和拱頂（不打光）、燈、路面的黑
+  const TW = { P: [], C: [] }, TL = { P: [], C: [] }, TD = { P: [], C: [] }; // 牆（打光的水泥）、燈（亮的）、路面的黑（透明）
+  const IN = { P: [], C: [] }; // 裡面（不打光）
+  const quad = (L, a, b, c, d, col) => { L.P.push(...a, ...b, ...c, ...a, ...c, ...d); for (let k = 0; k < 6; k++) L.C.push(...col); };
+  const CONC = C('#c4c1b8'), CONC2 = C('#a9a69e'), CAP = C('#d6d3cb'), INW = C('#7c7a74'), INB = C('#4f4e4a'), INC = C('#5d5c58'), LAMP = C('#fff2c4');
+  const plates = [];
+  for (const T of TS) {
+    const H = HS[T.hill], xs = H.G.xs, zs = H.G.zs, W1 = xs.length, Y = H.G.Y;
+    const iL = xs.indexOf(T.x0), iR = xs.indexOf(T.x1);
+    // 擋土牆：挖開的路（z 在洞口外面、山比地高的地方）
+    for (const [ii, sd] of [[iL, -1], [iR, 1]]) {
+      const x = xs[ii], xo = x + sd * 0.35; let run = null;
+      const flush = () => { if (!run) return; const zc = (run.z0 + run.z1) / 2, c = { t: 'box', x: x + sd * 0.3, z: zc, hx: 0.3, hz: (run.z1 - run.z0) / 2, rot: 0, h: run.h + 0.8, noCrush: true, hl: 'wall' }; colliders.push(c); run = null; };
+      for (let j = 0; j < zs.length - 1; j++) {
+        const za = zs[j], zb = zs[j + 1]; if (!(zb <= T.z0 + 0.01 || za >= T.z1 - 0.01)) { flush(); continue; } // 隧道那段：裡面的牆
+        const ya = Y[j * W1 + ii], yb = Y[(j + 1) * W1 + ii], ha = ya - coastY(coastD(x, za)), hb = yb - coastY(coastD(x, zb));
+        if (ha < 0.25 && hb < 0.25) { flush(); continue; }
+        const pa = 0.8 * ss(0.25, 1.5, ha), pb = 0.8 * ss(0.25, 1.5, hb), ta = ya + pa, tb = yb + pb;
+        // 對著路那面、上面、山那面（高出地面那段）
+        if (sd < 0) { quad(TW, [x, -0.3, zb], [x, -0.3, za], [x, ta, za], [x, tb, zb], CONC); quad(TW, [x, ta, za], [xo, ta, za], [xo, tb, zb], [x, tb, zb], CAP); quad(TW, [xo, ya - 0.3, za], [xo, yb - 0.3, zb], [xo, tb, zb], [xo, ta, za], CONC2); }
+        else { quad(TW, [x, -0.3, za], [x, -0.3, zb], [x, tb, zb], [x, ta, za], CONC); quad(TW, [x, ta, za], [x, tb, zb], [xo, tb, zb], [xo, ta, za], CAP); quad(TW, [xo, yb - 0.3, zb], [xo, ya - 0.3, za], [xo, ta, za], [xo, tb, zb], CONC2); }
+        if (Math.max(ha, hb) > 0.8) { if (!run) run = { z0: za, z1: zb, h: Math.max(ya, yb) }; else { run.z1 = zb; run.h = Math.max(run.h, ya, yb); } if (run.z1 - run.z0 > 18) flush(); } else flush();
+      }
+      flush();
+    }
+    // 裡面：每一孔的剖面（直牆 → 半橢圓的拱），每 4 公尺一段；從洞口外面 0.5 公尺開始（接洞口的牆）
+    const prof = (a, b) => { const c = (a + b) / 2, r = (b - a) / 2, out = [[a, 0], [a, WALL_H]]; for (let k = 1; k < 12; k++) { const th = Math.PI - (k / 12) * Math.PI; out.push([c + r * Math.cos(th), WALL_H + (TOP - WALL_H) * Math.sin(th)]); } out.push([b, WALL_H], [b, 0]); return out; };
+    const zA = T.z0 - 0.6, zB = T.z1 + 0.6, nz = Math.max(1, Math.ceil((zB - zA) / 4));
+    for (const [a, b] of T.bores) {
+      const pr = prof(a, b);
+      for (let q = 0; q < nz; q++) {
+        const z0 = zA + ((zB - zA) * q) / nz, z1 = zA + ((zB - zA) * (q + 1)) / nz;
+        for (let k = 0; k < pr.length - 1; k++) { const [u0, y0] = pr[k], [u1, y1] = pr[k + 1], col = y0 < 1.1 && y1 < 1.1 ? INB : y0 >= WALL_H && y1 >= WALL_H ? INC : INW; quad(IN, [T.x + u0, y0, z0], [T.x + u1, y1, z0], [T.x + u1, y1, z1], [T.x + u0, y0, z1], col); }
+      }
+      // 燈：拱的兩邊各一排（6 公尺一盞）
+      for (let z = T.z0 + 3; z < T.z1 - 1; z += 6) for (const f of [0.2, 0.8]) {
+        const th = Math.PI - f * Math.PI, c = (a + b) / 2, r = (b - a) / 2 - 0.12, u = c + r * Math.cos(th), y = WALL_H + (TOP - WALL_H - 0.12) * Math.sin(th);
+        quad(TL, [T.x + u, y - 0.05, z - 0.9], [T.x + u, y - 0.05, z + 0.9], [T.x + u + (c - u) * 0.06, y - 0.2, z + 0.9], [T.x + u + (c - u) * 0.06, y - 0.2, z - 0.9], LAMP);
+      }
+    }
+    // 中間的牆（雙孔：兩孔中間到拱腳那麼高，上面接山）
+    if (T.bores.length > 1) for (let q = 0; q < nz; q++) { const z0 = zA + ((zB - zA) * q) / nz, z1 = zA + ((zB - zA) * (q + 1)) / nz, a = T.bores[0][1], b = T.bores[1][0]; quad(IN, [T.x + a, 0, z0], [T.x + b, 0, z0], [T.x + b, 0, z1], [T.x + a, 0, z1], INB); }
+    // 路面的黑（洞口進來 14 公尺慢慢變黑）
+    { const n = Math.max(2, Math.ceil((T.z1 - T.z0) / 7)), al = (z) => 0.5 * Math.min(ss(T.z0 - 0.5, T.z0 + 14, z), 1 - ss(T.z1 - 14, T.z1 + 0.5, z));
+      for (let q = 0; q < n; q++) { const z0 = T.z0 - 0.6 + ((T.z1 - T.z0 + 1.2) * q) / n, z1 = T.z0 - 0.6 + ((T.z1 - T.z0 + 1.2) * (q + 1)) / n, y = 0.09; TD.P.push(T.x0, y, z0, T.x0, y, z1, T.x1, y, z1, T.x0, y, z0, T.x1, y, z1, T.x1, y, z0); for (const z of [z0, z1, z1, z0, z1, z0]) TD.C.push(0, 0, 0, al(z)); } }
+    // 洞口：一面水泥牆（剖面挖空）、上面一圈、名牌；牆頂的欄杆（上面那層擋）
+    const W = T.hw + 4;
+    for (const [zp, sd] of [[T.z0 - 0.6, -1], [T.z1 + 0.6, 1]]) {
+      let Hf = TOP + 2.2; for (let i = 0; i < W1; i++) if (xs[i] >= T.x - W && xs[i] <= T.x + W) Hf = Math.max(Hf, gridAt(H.G, xs[i], zp - sd * 1.2) + 1.0);
+      const cont = [[-W, 0]]; for (const [a, b] of T.bores) for (const p of prof(a, b)) cont.push(p); cont.push([W, 0], [W, Hf], [-W, Hf]);
+      const tr = THREE.ShapeUtils.triangulateShape(cont.map(([u, y]) => new THREE.Vector2(u, y)), []);
+      const P3 = (u, y, z) => [T.x + u, y, z];
+      for (const [i0, i1, i2] of tr) {
+        const A = cont[i0], B = cont[i1], Cc = cont[i2], ccw = (B[0] - A[0]) * (Cc[1] - A[1]) - (B[1] - A[1]) * (Cc[0] - A[0]) > 0, fwd = sd > 0 ? ccw : !ccw; // 朝外（−z 或 +z）
+        const k = (A[1] + B[1] + Cc[1]) / 3 > TOP + 0.4 ? 0.9 : 1, col = mul(CONC, k);
+        if (fwd) { TW.P.push(...P3(A[0], A[1], zp), ...P3(B[0], B[1], zp), ...P3(Cc[0], Cc[1], zp)); } else { TW.P.push(...P3(A[0], A[1], zp), ...P3(Cc[0], Cc[1], zp), ...P3(B[0], B[1], zp)); }
+        for (let q = 0; q < 3; q++) TW.C.push(...col);
+      }
+      const zb = zp - sd * 1.6; // 牆的厚度：上面、兩邊
+      if (sd < 0) { quad(TW, [T.x - W, Hf, zp], [T.x + W, Hf, zp], [T.x + W, Hf, zb], [T.x - W, Hf, zb], CAP); quad(TW, [T.x - W, 0, zb], [T.x - W, 0, zp], [T.x - W, Hf, zp], [T.x - W, Hf, zb], CONC2); quad(TW, [T.x + W, 0, zp], [T.x + W, 0, zb], [T.x + W, Hf, zb], [T.x + W, Hf, zp], CONC2); }
+      else { quad(TW, [T.x - W, Hf, zb], [T.x + W, Hf, zb], [T.x + W, Hf, zp], [T.x - W, Hf, zp], CAP); quad(TW, [T.x - W, 0, zp], [T.x - W, 0, zb], [T.x - W, Hf, zb], [T.x - W, Hf, zp], CONC2); quad(TW, [T.x + W, 0, zb], [T.x + W, 0, zp], [T.x + W, Hf, zp], [T.x + W, Hf, zb], CONC2); }
+      // 洞口上面的帶子（深一點）＋名牌
+      const yb0 = TOP + 0.35, yb1 = Math.min(Hf - 0.3, TOP + 1.95), pw = Math.min(2 * T.hw - 4, 16), zq = zp + sd * 0.03;
+      quad(TW, sd < 0 ? [T.x - W, yb0 - 0.2, zq] : [T.x + W, yb0 - 0.2, zq], sd < 0 ? [T.x + W, yb0 - 0.2, zq] : [T.x - W, yb0 - 0.2, zq], sd < 0 ? [T.x + W, yb0 - 0.05, zq] : [T.x - W, yb0 - 0.05, zq], sd < 0 ? [T.x - W, yb0 - 0.05, zq] : [T.x + W, yb0 - 0.05, zq], C('#8b2f28'));
+      plates.push({ T, x0: sd < 0 ? T.x + pw / 2 : T.x - pw / 2, x1: sd < 0 ? T.x - pw / 2 : T.x + pw / 2, y0: yb0, y1: yb1, z: zp + sd * 0.05 }); // 字的左邊：北邊的洞口（往南看）在東邊
+      // 牆頂的欄杆：柱子＋兩根橫桿（上面那層才擋：玩家在山上）
+      const ry = Hf;
+      for (let u = -W; u <= W + 0.01; u += 2) quad(TW, [T.x + u - 0.06, ry, zp - sd * 0.25], [T.x + u + 0.06, ry, zp - sd * 0.25], [T.x + u + 0.06, ry + 1.05, zp - sd * 0.25], [T.x + u - 0.06, ry + 1.05, zp - sd * 0.25], C('#9aa0a6'));
+      for (const yy of [0.55, 1.0]) quad(TW, [T.x - W, ry + yy, zp - sd * 0.22], [T.x + W, ry + yy, zp - sd * 0.22], [T.x + W, ry + yy + 0.09, zp - sd * 0.22], [T.x - W, ry + yy + 0.09, zp - sd * 0.22], C('#c9ccd0'));
+      highCols.push({ t: 'box', x: T.x, z: zp - sd * 0.25, hx: W, hz: 0.3, rot: 0, h: ry + 1.1, noCrush: true, hl: 'portal', off: true });
+    }
+    // 裡面的牆（下面那層才擋）：兩邊＋雙孔中間
+    const zc = (T.z0 + T.z1) / 2, hz = (T.z1 - T.z0) / 2 + 0.6;
+    for (const x of [T.x0 - 0.3, T.x1 + 0.3]) lowCols.push({ t: 'box', x, z: zc, hx: 0.3, hz, rot: 0, h: TOP, noCrush: true, hl: 'tunnel' });
+    if (T.bores.length > 1) lowCols.push({ t: 'box', x: T.x, z: zc, hx: 0.6, hz, rot: 0, h: TOP, noCrush: true, hl: 'tunnel' });
+  }
+  const listMesh = (L, mat, name) => {
+    if (!L.P.length) return null;
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(L.P, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(L.C, L.C.length / (L.P.length / 3)));
+    if (!mat.isMeshBasicMaterial) geo.computeVertexNormals(); geo.computeBoundingSphere();
+    const m = new THREE.Mesh(geo, mat); m.name = name; m.matrixAutoUpdate = false; group.add(m); meshes++; tris += L.P.length / 9; return m;
+  };
+  listMesh(TW, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), 'hl-tunnel');
+  listMesh(IN, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }), 'hl-tunnel-in');
+  listMesh(TL, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }), 'hl-tunnel-lamps');
+  const dark = listMesh(TD, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 'hl-road-dark');
+  if (dark) dark.renderOrder = 1;
+  // 名牌（一張貼圖：每條隧道一列）
+  if (typeof document !== 'undefined' && plates.length) {
+    const RW = 512, RH = 96, [c, g] = cv(RW, RH * TS.length);
+    TS.forEach((T, k) => { g.fillStyle = '#1f5f3a'; g.fillRect(0, k * RH, RW, RH); g.strokeStyle = '#f2f3f5'; g.lineWidth = 5; g.strokeRect(6, k * RH + 6, RW - 12, RH - 12); g.fillStyle = '#f2f3f5'; fitFont(g, T.name, RW - 60, 60); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(T.name, RW / 2, k * RH + RH / 2 + 3); });
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const P = [], UV = [];
+    for (const p of plates) { const k = p.T.k, v0 = 1 - (k + 1) / TS.length, v1 = 1 - k / TS.length; P.push(p.x0, p.y0, p.z, p.x1, p.y0, p.z, p.x1, p.y1, p.z, p.x0, p.y0, p.z, p.x1, p.y1, p.z, p.x0, p.y1, p.z); UV.push(0, v0, 1, v0, 1, v1, 0, v0, 1, v1, 0, v1); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); geo.computeBoundingSphere();
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })); m.name = 'hl-tunnel-names'; m.matrixAutoUpdate = false; group.add(m); meshes++; tris += P.length / 9;
+  }
+
+  // 8) 山上的樹（有碰撞；怪獸卡車輾得扁）：圓的、尖的（杉樹）；隧道、家旁邊不種
+  const TR = { P: [], C: [] }, R = rng(20261023), GREENS = [C('#4f8a3a'), C('#5e9a42'), C('#447f37'), C('#6aa04a')], PINES = [C('#2f6a3a'), C('#3c7a44'), C('#356f3c')], TRUNK = C('#6b4a2f');
+  const homes = (V.places?.garst?.slots || []).map((q) => [q.x, q.z]);
+  const tri3 = (a, b, c, col) => { TR.P.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) TR.C.push(...col); };
+  const tcyl = (x, y, z, y0, y1, r0, r1, n, col, rot) => {
+    const P = (a, r, yy) => [x + Math.cos(a + rot) * r, y + yy, z - Math.sin(a + rot) * r];
+    for (let i = 0; i < n; i++) { const a = (i / n) * TAU, b = ((i + 1) / n) * TAU; if (r1 > 0) { tri3(P(a, r0, y0), P(b, r0, y0), P(b, r1, y1), col); tri3(P(a, r0, y0), P(b, r1, y1), P(a, r1, y1), col); } else tri3(P(a, r0, y0), P(b, r0, y0), [x, y + y1, z], mul(col, 0.92 + 0.12 * ((i % 3) / 2))); }
+  };
+  const tblob = (cx, cy, cz, rx, ry, rz, col, seed) => {
+    const Pp = ICO.v.map((p, i) => { const k = 1 + (hash2(seed, i) - 0.5) * 0.44; return [cx + p[0] * rx * k, cy + p[1] * ry * k, cz + p[2] * rz * k]; });
+    ICO.f.forEach(([a, b, c], i) => { const ny = (ICO.v[a][1] + ICO.v[b][1] + ICO.v[c][1]) / 3, k = 0.88 + ny * 0.14 + (hash2(seed + 9, i) - 0.5) * 0.16; tri3(Pp[a], Pp[b], Pp[c], mul(col, k)); });
+  };
+  let trees = 0;
+  for (const H of HS) {
+    if (!H.t) continue;
+    for (let n = 0, tries = 0; n < H.t && tries < H.t * 12; tries++) {
+      const a = R() * TAU, u = 0.14 + R() * 0.58, x = H.x + Math.cos(a) * RX(H) * u, z = H.z - Math.sin(a) * RZ(H) * u;
+      if (H.T && Math.abs(x - H.T.x) < H.T.hw + 9) continue; // 隧道、挖開的路上面不種（洞口上面也不要）
+      if (homes.some(([hx, hz]) => Math.hypot(x - hx, z - hz) < 30)) continue;
+      const y = gridAt(H.G, x, z) - 0.15, sz = 1.25 + R() * 0.9, kind = R(), seed = (R() * 1e6) | 0;
+      if (!(y > 0.5)) continue;
+      if (kind < 0.45) { tcyl(x, y, z, 0, 2.2 * sz, 0.2 * sz, 0.14 * sz, 5, TRUNK, 0); tblob(x, y + 3.1 * sz, z, 1.9 * sz, 1.6 * sz, 1.9 * sz, GREENS[(R() * GREENS.length) | 0], seed); colliders.push({ t: 'circle', x, z, r: 0.48, h: 5 * sz, hl: 'tree' }); }
+      else { const rot = R() * TAU; tcyl(x, y, z, -0.3, 1.2 * sz, 0.18 * sz, 0.13 * sz, 5, TRUNK, rot); tcyl(x, y, z, 1.0 * sz, 6.4 * sz, 1.6 * sz, 0, 7, PINES[(R() * PINES.length) | 0], rot); colliders.push({ t: 'circle', x, z, r: 0.48, h: 6.4 * sz, hl: 'tree' }); }
+      n++; trees++;
+    }
+  }
+  listMesh(TR, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, flatShading: true }), 'hl-trees');
+
+  // 隧道那段原本就有的碰撞（快速道路的護欄、聯外道路的護欄：都在路面上）：玩家開到上面那層（山上）的時候關掉（不然山上會撞到看不到的護欄）
+  const tunVil = V.colliders.filter((c) => tunAt(c.x, c.z) >= 0);
+  for (const c of colliders) V.colliders.push(c);
+  V.group.add(group);
+
+  // 9) 小地圖：山（越高越深）、隧道、海、沙灘、400 公尺後面的沙地
+  const prevDraw = V.mapDraw;
+  V.mapDraw = (g) => {
+    if (prevDraw) prevDraw(g);
+    g.save();
+    for (const H of HS) { g.save(); g.translate(H.x, H.z); g.scale(RX(H) / H.r, RZ(H) / H.r); const gr = g.createRadialGradient(0, 0, 0, 0, 0, H.r); gr.addColorStop(0, `rgba(70,112,62,${0.28 + Math.min(0.2, H.h / 400)})`); gr.addColorStop(1, 'rgba(70,112,62,0)'); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, H.r, 0, TAU); g.fill(); g.restore(); }
+    g.fillStyle = 'rgba(214,196,150,0.75)'; g.fillRect(RUN.x0, -RUN.hz, RUN.x1 - RUN.x0, RUN.hz * 2); g.beginPath(); g.arc(RUN.x1, 0, RUN.hz, -Math.PI / 2, Math.PI / 2); g.fill();
+    g.fillStyle = 'rgba(40,40,44,0.55)'; for (const T of TS) g.fillRect(T.x0, T.z0, T.x1 - T.x0, T.z1 - T.z0);
+    const hx = (COAST.x1 - COAST.x0) / 2, hz = (COAST.z1 - COAST.z0) / 2, cx = COAST.x0 + hx, cz = COAST.z0 + hz;
+    const rr = (ins) => { const R2 = COAST.r - ins, ax = hx - ins - R2, az = hz - ins - R2; g.beginPath(); g.moveTo(cx + ax + R2, cz - az); g.arc(cx + ax, cz + az, R2, 0, Math.PI / 2); g.arc(cx - ax, cz + az, R2, Math.PI / 2, Math.PI); g.arc(cx - ax, cz - az, R2, Math.PI, 1.5 * Math.PI); g.arc(cx + ax, cz - az, R2, 1.5 * Math.PI, 2 * Math.PI); g.closePath(); };
+    g.fillStyle = 'rgba(214,196,150,0.8)'; rr(-6); g.rect(cx - 9000, cz - 9000, 18000, 18000); rr(COAST.beach); g.fill('evenodd'); // 沙灘（水邊往裡 70 公尺）
+    g.fillStyle = '#5b8fbf'; g.beginPath(); g.rect(cx - 9000, cz - 9000, 18000, 18000); rr(0); g.fill('evenodd'); // 海
+    g.restore();
+  };
+
+  // 10) 玩家在哪一層（隧道）：每幀 level(y)；換層的時候換碰撞（下面：裡面的牆擋；上面：洞口上面的欄杆擋）
+  //     這兩種碰撞只給玩家（layerCols：town.src.js 給開車、走路的）：車流、警察在隧道那段永遠是下面那層（快速道路、聯外道路自己的護欄擋）
+  const walkable = (x, z) => depth(x, z) < 0.55;
+  V.walkable = walkable;
+  const API = {
+    group, tunnels: TS, list: HS, high: false, ceil: TOP - 0.6, coast: COAST,
+    tunAt, corrAt, topAt, topN, depth, walkable, lift, layerCols: [...lowCols, ...highCols],
+    walkBounds: { x0: COAST.x0 - 120, x1: COAST.x1 + 120, z0: COAST.z0 - 120, z1: COAST.z1 + 120 }, // 走得到的範圍（走路的 bounds：本來到快速道路外面一點就是看不到的牆）
+    level(y) {
+      const hi = y > 4.5;
+      if (hi === API.high) return;
+      API.high = hi;
+      for (const c of lowCols) c.off = hi;
+      for (const c of tunVil) c.off = hi;
+      for (const c of highCols) c.off = !hi;
+    },
+    inside: (x, z, y) => tunAt(x, z) >= 0 && y < TOP,
+    dimK: 1,
+    update(dt, cam, scene) { // 海的小波浪；鏡頭在隧道裡面：太陽、天空光變暗
+      if (waterTex) { waterTex.offset.x = (waterTex.offset.x + dt * 0.006) % 1; waterTex.offset.y = (waterTex.offset.y + dt * 0.0041) % 1; }
+      if (!cam || !scene) { if (API.lights && API.dimK !== 1) { API.dimK = 1; for (const [o, i0] of API.lights) o.intensity = i0; } return; } // 沒有鏡頭（回車庫頁、去比賽、在房子裡）：光調回來
+      if (!API.lights) { API.lights = []; scene.traverse((o) => { if (o.isLight && (o.isDirectionalLight || o.isHemisphereLight)) API.lights.push([o, o.intensity]); }); }
+      const want = API.inside(cam.position.x, cam.position.z, cam.position.y) && !API.high ? 0.42 : 1, k = API.dimK + (want - API.dimK) * (1 - Math.exp(-dt * 5));
+      if (Math.abs(k - API.dimK) < 1e-4 && k === want) return;
+      API.dimK = Math.abs(k - want) < 0.002 ? want : k;
+      for (const [o, i0] of API.lights) o.intensity = i0 * API.dimK;
+    },
+    info: null,
+  };
+  const ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - T0;
+  API.info = { meshes, tris, hills: HS.length, trees, tunCols: tunVil.length, tunnels: TS.map((T) => ({ name: T.name, x: T.x, z0: T.z0, z1: T.z1, len: +(T.z1 - T.z0).toFixed(1) })), ms: +ms.toFixed(1) };
+  if (V.info) V.info.hills = API.info;
+  V.hills = API;
+  return API;
+}
+function fixWinding(geo) { // 平的東西：三角形都朝上
+  const p = geo.attributes.position, I = geo.index.array;
+  for (let k = 0; k < I.length; k += 3) {
+    const a = I[k], b = I[k + 1], c = I[k + 2], ux = p.getX(b) - p.getX(a), uz = p.getZ(b) - p.getZ(a), vx = p.getX(c) - p.getX(a), vz = p.getZ(c) - p.getZ(a);
+    if (uz * vx - ux * vz < 0) { I[k + 1] = c; I[k + 2] = b; }
+  }
+}
+function mergeGeos(L) { // 同樣屬性的幾個（有 index）併成一個
+  let nv = 0, ni = 0; for (const g of L) { nv += g.attributes.position.count; ni += g.index.count; }
+  const out = new THREE.BufferGeometry(), names = Object.keys(L[0].attributes);
+  for (const nm of names) { const isz = L[0].attributes[nm].itemSize, A = new Float32Array(nv * isz); let o = 0; for (const g of L) { A.set(g.attributes[nm].array, o); o += g.attributes[nm].array.length; } out.setAttribute(nm, new THREE.BufferAttribute(A, isz)); }
+  const I = new Uint32Array(ni); let o = 0, base = 0; for (const g of L) { const src = g.index.array; for (let k = 0; k < src.length; k++) I[o++] = src[k] + base; base += g.attributes.position.count; }
+  out.setIndex(new THREE.BufferAttribute(I, 1)); out.computeBoundingSphere(); return out;
+}
+
+return { buildHills, hillsFonts, HILL_TEXT, HILL_LIST, hillH, inTunnel, tunnels, COAST, coastD, coastY };
+})();
+
 // ---- village.js ----
 // ---- 小村莊（改車遊戲）：台灣鄉下的小村子＋快速道路，自己開車從你的車庫去改車廠、車店、賽道、上快速道路 ----
 // Nick 2026-09-27：「有小村莊有改車廠要比賽要自己開去小村莊裡的賽道」
@@ -7512,7 +8076,7 @@ function stripColliders() {
   for (let k = 0; k < 14; k++) for (const s of [1, -1]) out.push({ t: 'circle', x: -30 + 60 * k, z: s * 8, r: 0.22, h: 9 });
   out.push({ t: 'circle', x: 3.2, z: 0, r: 0.35, h: 2.6 });
   for (const s of [1, -1]) out.push({ t: 'box', x: 400, z: s * 6.9, hx: 0.23, hz: 0.23, rot: 0, h: 6.4 });
-  out.push({ t: 'box', x: 761, z: 0, hx: 1, hz: 7, rot: 0, h: 1 }); // 柏油東邊的盡頭（看不到的牆，不要開出去）
+  // 第 27 批：柏油東邊的盡頭（x 761）本來有一道看不到的牆：拿掉了，後面是沙地（hills.js），慢慢停下來
   for (const c of out) c.noCrush = true; // 第 9 批（路變大）：賽道的東西越野車也輾不到（照舊）
   return out;
 }
@@ -8461,20 +9025,7 @@ function buildVillage(opts = {}) {
     buildings.push({ kind: 'dealer', name: '阿財車行', x: -450, z: -38, hx: 22, hz: 12, rot: 0, h: 8.3, door: { x: -437.4, z: -25.2, ry: 0 } });
   }
 
-  // ---- 山：近的綠色小山（碰不到）、遠的藍綠色大山（霧裡）----
-  const hill = (cx, cz, R0, H, col, seed, trees = 0) => {
-    B.at(cx, cz); const nr = 7, ns = 20, rnd = rng(seed);
-    const pt = (i, j) => { const r = i / nr, a = (j / ns) * TAU + (i % 2) * (Math.PI / ns), k = 1 + (hash2(seed + i, j % ns) - 0.5) * 0.18 * r; const h = H * Math.pow(Math.max(0, 1 - r * r), 1.5) * (1 + (hash2(seed + 31, i * 7 + (j % ns)) - 0.5) * 0.12) - 0.6 * r; return [cx + Math.cos(a) * R0 * r * k, h, cz - Math.sin(a) * R0 * r * k]; };
-    for (let i = 0; i < nr; i++) for (let j = 0; j < ns; j++) {
-      const a = pt(i, j), b = pt(i + 1, j), c = pt(i + 1, j + 1), d = pt(i, j + 1), k1 = 0.9 + hash2(seed + 3, i * 40 + j) * 0.2, k2 = 0.9 + hash2(seed + 5, i * 40 + j) * 0.2;
-      const cc = mix(col, C('#8fa860'), i / nr * 0.5);
-      if (i === 0) { B.tri('main', a, b, c, WD, WD, WD, mul(cc, k1)); continue; }
-      B.tri('main', a, b, c, WD, WD, WD, mul(cc, k1)); B.tri('main', a, c, d, WD, WD, WD, mul(cc, k2));
-    }
-    for (let t = 0; t < trees; t++) { const r = 0.15 + rnd() * 0.6, a = rnd() * TAU, x = cx + Math.cos(a) * R0 * r, z = cz - Math.sin(a) * R0 * r, h = H * Math.pow(1 - r * r, 1.5) - 0.8; cone(x, h, z, 1.6 + rnd() * 1.2, rnd); }
-  };
-  // 第 14 批：村子北邊的三座小山拿掉了（那裡現在是開得上去的山：mountain.js）
-  hill(-430, 178, 76, 28, C('#618d48'), 15, 14); hill(-330, 184, 90, 28, C('#5f8b46'), 16, 18); hill(-214, 182, 86, 30, C('#648f4a'), 17, 16); // 南邊（東邊那座本來在 (−190, 182)、半徑 90：往西挪，不要蓋到往內湖的聯外道路 x −112）
+  // ---- 山：第 27 批起全部在 hills.js（開得上去、有樹、兩條隧道）；這裡畫的假山（碰不到）拿掉了 ----
 
   // ---- 快速道路：路面（兩邊各兩線＋路肩）、中間紐澤西護欄、兩邊鋼板護欄、路燈、門架指示牌、彎道箭頭牌、看板；碰撞（護欄）----
   B = HB; // 這一段畫到快速道路的網格（500 公尺一格）
@@ -8530,12 +9081,13 @@ function buildVillage(opts = {}) {
   // 碰撞：兩邊護欄（內面在 ±12）、中間護欄（±0.3）；直線併成一個長方塊，彎道 3 度（最多 20 公尺）一段
   { const hc3 = hwyPath(20, 3);
     const rb = (a, b, o, hz) => { const A = hwyOff(a, o), Bq = hwyOff(b, o), L2 = Math.hypot(Bq[0] - A[0], Bq[1] - A[1]); addBox((A[0] + Bq[0]) / 2, (A[1] + Bq[1]) / 2, L2 / 2 + 0.3, hz, Math.atan2(-(Bq[1] - A[1]), Bq[0] - A[0]), 0.9); };
+    const tunOf = (a, b) => inTunnel((a.x + b.x) / 2, (a.z + b.z) / 2); // 第 27 批：隧道裡那段另外一個盒子（開到隧道上面的山上，hills.js 把它關掉）
     for (const [o, hz, g] of [[HW.rail + 0.6, 0.6, HW.gapE], [-(HW.rail + 0.6), 0.6, HW.gapI], [0, 0.3, HW.gapM]]) {
       let run = null; const flush = () => { if (run) rb(run.a, run.b, o, hz); run = null; };
       for (let i = 0; i < hc3.length - 1; i++) {
         const a = hc3[i], b = hc3[i + 1];
         if (g && inGap(a, b, g)) { flush(); continue; }
-        if (run && run.b === a && a.k === 0 && b.k === 0 && Math.abs(run.a.th - b.th) < 1e-9) run.b = b; else { flush(); run = { a, b }; }
+        if (run && run.b === a && a.k === 0 && b.k === 0 && Math.abs(run.a.th - b.th) < 1e-9 && tunOf(a, b) === run.tun) run.b = b; else { flush(); run = { a, b, tun: tunOf(a, b) }; }
       }
       flush();
     }
@@ -8543,6 +9095,7 @@ function buildVillage(opts = {}) {
   // 路燈：中間護欄上，60 公尺一支，兩邊各一個燈頭（路口前後 25 公尺不要）；跟別的東西併在同一個網格（不多 draw call）
   for (let s = 30; s <= HL - 25; s += 60) {
     const p = hwyAt(s), T = frame(p.x, 0, p.z, p.th); B.at(p.x, p.z); // 本地 +x 沿路、+z 往右
+    if (inTunnel(p.x, p.z, 3)) continue; // 第 27 批：隧道裡面不要（燈比拱頂高；隧道有自己的燈）
     cyl('main', T, 0, 0, 0.82, 11.2, 0.13, 0.09, 6, GREY, null, true);
     for (const sd of [1, -1]) {
       tube('main', T.p(0, 10.75, 0), T.p(0, 11.2, sd * 2.35), 0.06, 0.05, 4, GREY);
@@ -8583,6 +9136,7 @@ function buildVillage(opts = {}) {
   const kept = (x, z, m) => keep.some((k) => (k.r != null ? Math.hypot(x - k.x, z - k.z) < k.r + m : inRect({ ...k, hx: k.hx + m, hz: k.hz + m }, x, z)));
   for (const [s, dir, reg] of [[640, 1, S2.ad1], [1800, 1, S2.ad3], [1100, -1, S2.ad2], [1900, -1, S2.ad1], [560, -1, S2.ad3]]) { // 路邊的大看板（半圓外側給往前開的、裡面給反方向的）
     const T = hpose(s, dir * 34, dir); B.at(T.x, T.z);
+    if (hillH(T.x, T.z) > 0.3 || inTunnel(T.x, T.z, 6)) continue; // 第 27 批：山上（快速道路隧道的山）不要
     for (const x of [-3, 3]) cyl('main', T, x, -0.3, 0, 7.3, 0.28, 0.24, 8, GREY, null, true);
     box('main', T, [-5.2, 7.0, -0.45, 5.2, 7.2, 0.2], GREY); box('sign2', T, [-5, 7.2, -0.18, 5, 11.5, 0.12], C('#7d8288'), { pz: reg, _: S2W });
     keepR(T.x, T.z, 5.5, 1, T.ry);
@@ -8593,7 +9147,7 @@ function buildVillage(opts = {}) {
     const paddy = (x0, z0, x1, z1, nx, nz) => { paddyArea(x0, z0, x1, z1, nx, nz, rnd); keepR((x0 + x1) / 2, (z0 + z1) / 2, (x1 - x0) / 2, (z1 - z0) / 2); };
     paddy(-645, -220, -590, -120, 2, 3); paddy(-645, 100, -590, 220, 2, 4); // 快速道路裡面：東邊直線旁邊（中間是路口、兩間鐵皮工廠）
     paddy(-860, -405, -700, -350, 3, 2); paddy(-860, 355, -700, 400, 3, 2); // 半圓裡面
-    paddy(-1135, -330, -1080, -45, 2, 7); paddy(-1135, 45, -1080, 330, 2, 7); // 西邊外面（中間一排透天厝）
+    paddy(-1190, -330, -1140, -45, 2, 7); paddy(-1135, 45, -1080, 330, 2, 7); // 西邊外面（中間一排透天厝）；北邊那塊第 27 批往西挪（快速道路隧道的山）
     paddy(-900, -600, -680, -535, 4, 2); paddy(-900, 535, -680, 600, 4, 2); // 半圓外面（北、南）
     const shed = (x, z, ry, w, d, h, wc, rc) => { // 鐵皮工廠：浪板牆、斜屋頂
       B.at(x, z); const T = frame(x, 0, z, ry); box('main', T, [-w / 2, 0, -d / 2, w / 2, h, d / 2], wc, { _: U.corr, py: false });
@@ -8608,13 +9162,8 @@ function buildVillage(opts = {}) {
     grove(-712, 322, 14, 4); grove(-968, -9, 10, 3); grove(-1112, -10, 10, 3); // 南邊半圓裡面、西邊直線裡面（兩座山中間）、西邊外面（透天厝後面）
     const houses = (ax, az, bx, bz, nx, nz, seed, o) => { row(ax, az, bx, bz, nx, nz, seed, o); const L = Math.hypot(bx - ax, bz - az); keepR((ax + bx) / 2 - nx * 5.5, (az + bz) / 2 - nz * 5.5, L / 2 + 1, 8, Math.atan2(nx, nz)); }; // 房子深 12.5、前面 1.5 公尺水泥地
     houses(-1072, -30, -1072, 30, 1, 0, 131, { gaps: true }); houses(-500, 356, -500, 386, -1, 0, 132, { gaps: false }); // 快速道路旁邊的透天厝：西邊外面（面向快速道路）、東南（村子南邊）
-    // 山：一圈裡面兩座（有樹）；遠的一圈（藍綠色，跨在草地的邊上 x −1450、z ±880）；村子南北的山、遠的山（上面蓋的）也不要種樹
-    const HILLS_IN = [[-800, -165, 135, 72, '#5f8a50', 21, 20], [-805, 185, 145, 80, '#5c874c', 22, 22]];
-    const HILLS_FAR = [[-1330, -890, 270, 140, 29], [-990, -930, 260, 125, 33], [-660, -910, 250, 120, 34], [-400, -880, 220, 105, 35], // 北
-      [-1480, -560, 250, 130, 31], [-1470, -170, 250, 120, 39], [-1480, 220, 260, 135, 32], [-1470, 600, 240, 115, 40], // 西
-      [-1330, 890, 270, 140, 30], [-990, 930, 250, 120, 36], [-660, 910, 260, 130, 37], [-400, 880, 220, 100, 38]]; // 南
-    for (const [x, z, r, h, col, seed, n] of HILLS_IN) { hill(x, z, r, h, C(col), seed, n); keepC(x, z, r); }
-    for (const [x, z, r, h, seed] of HILLS_FAR) { hill(x, z, r, h, C('#5f7f6e'), seed, 0); keepC(x, z, r); }
+    // 山（hills.js 的，第 27 批起開得上去）、山（mountain.js）上面也不要種樹
+    for (const H of HILL_LIST) keepC(H.x, H.z, H.r * 1.1);
     for (const [x, z, r] of [[-420, -205, 80], [-430, 178, 76], [-250, -430, 230], [-260, 430, 230], [-60, -430, 180], [-90, 390, 190]]) keepC(x, z, r);
     for (let s = 40; s < HL - 40; s += 24 + rnd() * 28) for (const sd of [1, -1]) { // 路邊的樹（離中線 17–47 公尺）
       if (rnd() < 0.3) continue;
@@ -8623,7 +9172,6 @@ function buildVillage(opts = {}) {
       if (rnd() < 0.55) lowTree(q[0], q[1], 0.9 + rnd() * 0.5, rnd); else cone(q[0], 0, q[1], 1.3 + rnd() * 0.9, rnd);
     }
   }
-  /* 第 14 批：北邊兩座遠山拿掉（mountain.js 的山在那裡） */ hill(-320, 500, 230, 110, C('#5f7f6e'), 27, 0); hill(-230, 680, 190, 80, C('#5f7f6e'), 28, 0); // 遠的（村子南北）；南邊兩座本來在 (−260, 430)、(−90, 390)：會蓋到往內湖的聯外道路（x −112 往南）：往西南移
   B = VB;
 
   // ---- 地方：你的車庫、改車廠、車店、賽道、快速道路 ----
@@ -8655,9 +9203,7 @@ function buildVillage(opts = {}) {
     },
   };
 
-  // ---- 邊界：村子北邊、南邊的山腳（西邊是快速道路的護欄、東邊是賽道外面的圍籬）----
-  addBox(-387, -114.5, 131, 1.5, 0, 3); // 北邊界 x −518…−256（第 21 批：塔都在裡面了，不用繞）
-  addBox(-149, -114.5, 95, 1.5, 0, 3); /* 第 14 批：x −256…−244 開一個口（上山的路）*/ addBox(-318, 94, 200, 1.5, 0, 3); addBox(-80, 94, 26, 1.5, 0, 3); // ==== 第 4 批：南邊邊界 x −118…−106 開一個口（往越野車場的水泥路）====
+  // ---- 邊界：第 27 批起沒有了（Nick「不要空氣屏障」）：村子北邊、南邊本來各有一道看不到的牆；現在開得出去（山、草地，最外面是海：hills.js）----
 
   // ==== 第 3 批（b3-city）：警察局（police.js）、街景＋槍店的店面（street.js）：碰撞、水泥地、地方、房子都登記進來（路面種類要在下面算）====
   const PS = buildPoliceStation({ renderer: opts.renderer });
@@ -8707,6 +9253,7 @@ function buildVillage(opts = {}) {
   return {
     group, places, colliders, surfaceAt, route, homeAt, wrapHome() { homeRouteWrap(this); }, homeSites: HOME_SITES, // 第 17 批：homeAt(n, places.garage)＝搬到車庫街第 n 間
     parking: PARK, // 第 18 批：大停車場 { name, x, z, hx, hz, stalls, lamps }
+    poles: stPoles, // 第 30 批：電線桿 { x, z, fx, fz, lamp }（look.js 晚上：有路燈的桿子，燈頭在 (x + fx·2.2, 7.8, z + fz·2.2)）
     roads: roads.filter((r) => !HWK.has(r.kind) && r.kind !== 'link').map((r) => ({ pts: r.pts, w: Array.isArray(r.w) ? Math.max(...r.w) : r.w, kind: r.kind }))
       .concat([{ pts: hc.map((p) => [p.x, p.z]), w: HW.half * 2, kind: 'highway' }]),
     bounds: { x0: -1090, x1: 12, z0: -530, z1: 530 }, areas: { paddy: paddies, pave: paved }, buildings,
@@ -11194,10 +11741,10 @@ function createRide(o) {
     if (Math.abs(R.p) > 0.75) { R.p = clamp(R.p, -0.75, 0.75); R.pv = 0; }
     if (Math.abs(R.r) > 0.6) { R.r = clamp(R.r, -0.6, 0.6); R.rv = 0; }
     { // 還壓在地面下面的（傾到最多了、推兩次還不夠）：整台直接抬上來，輪子不會陷進石頭裡、底盤不會穿過地面
-      const sp3 = Math.sin(R.p), sr3 = Math.sin(R.r); let lift = 0;
-      for (let i = 0; i < 4; i++) { const e = G4[i] - (R.y + (X[i] - xc) * sp3 - Z[i] * sr3) - C.up; if (e > lift) lift = e; }
-      for (let j = 0; j < CH.length; j++) { const [x, zz, cl0] = CH[j], e = CG[j] - (R.y + (x - xc) * sp3 - zz * sr3 + cl0); if (e > lift) lift = e; }
-      if (lift > 0) { R.y += lift; if (R.vy < 0) R.vy = 0; }
+      const sp3 = Math.sin(R.p), sr3 = Math.sin(R.r); let lift = 0, lv = 0;
+      for (let i = 0; i < 4; i++) { const e = G4[i] - (R.y + (X[i] - xc) * sp3 - Z[i] * sr3) - C.up; if (e > lift) { lift = e; lv = GD[i]; } }
+      for (let j = 0; j < CH.length; j++) { const [x, zz, cl0] = CH[j], e = CG[j] - (R.y + (x - xc) * sp3 - zz * sr3 + cl0); if (e > lift) { lift = e; lv = CGd[j]; } }
+      if (lift > 0) { R.y += lift; const fl = Math.min(0, lv); if (R.vy < fl) R.vy = fl; } // 第 27 批：下坡的時候跟著地面往下（本來停在 0：陡的下坡會一直彈起來飛出去）
     }
     nW = nw; nC = nc;
     // 4) 飛、落地
@@ -11395,9 +11942,11 @@ const ease = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 const smooth01 = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const inRect = (r, x, z, m = 0) => { const dx = x - r.x, dz = z - r.z, c = Math.cos(r.rot || 0), s = Math.sin(r.rot || 0); return Math.abs(dx * c - dz * s) <= r.hx + m && Math.abs(dx * s + dz * c) <= r.hz + m; };
 // 路面（world.surfaceAt）：0 大路、1 草地、2 稻田、3 村子的小路、4 快速道路；cap＝限速 m/s、drag＝多的阻力 m/s²、over＝比限速快的時候怎麼慢下來 [每 m/s, 最多 m/s²]
+// （5 泥土路、6 泥巴、7 沙、8 石頭在 terrain.js）；第 27 批：9 淺水（慢慢開）、10 深水（往前開不動，倒車出得來：drag 要比倒車的力 2.8 小）
 const SURF = [{ cap: Infinity, drag: 0 }, { cap: 50 / 3.6, drag: 1, over: [1.6, 6] }, { cap: 16 / 3.6, drag: 2.2, over: [3, 9] }, { cap: Infinity, drag: 0 }, { cap: Infinity, drag: 0 }];
+SURF[9] = { cap: 12 / 3.6, drag: 1.5, over: [3, 9] }; SURF[10] = { cap: 0, drag: 2.0, over: [4, 12] };
 // 第 3 批（甩尾）：路面多好甩（0 大路…8 石頭：草地、稻田、泥土、泥巴、沙比較滑）；sat：軟軟的飽和（輪胎的側向力）
-const SLIDE = [1, 1.5, 1.7, 1, 1, 1.4, 1.6, 1.5, 1.1], sat = (x) => x / Math.sqrt(1 + x * x);
+const SLIDE = [1, 1.5, 1.7, 1, 1, 1.4, 1.6, 1.5, 1.1, 1.6, 1.6], sat = (x) => x / Math.sqrt(1 + x * x);
 const DEST = {
   garage: { label: '回車庫', icon: '家', bg: '#1d1f23', fg: '#FF6A1F' }, shop: { label: '去改車廠', icon: '改', bg: '#2F6FD6', fg: '#FFFFFF' },
   track: { label: '去賽道', icon: '賽', bg: '#FF6A1F', fg: '#1A0F07' }, dealer: { label: '去車店', icon: '車', bg: '#F2C230', fg: '#1A0F07' },
@@ -11565,12 +12114,13 @@ function colGrid() {
 // ---- 第 3 批（甩尾）：地上的胎痕、輪胎的煙：同一個場景共用一套（換車、下車再上車，地上的胎痕還在）；全部先配好，每幀不 new 東西 ----
 // 胎痕：640 段（一段＝一個四邊形），環狀：滿了蓋掉最舊的；慢慢淡掉（shader 照「畫上去的時間」算，不用每幀改）；這一幀寫的那幾段才上傳
 // 煙：96 團（一個 draw call：instanced 的四邊形永遠面向鏡頭），自己往上飄、變大、淡掉（shader 算）；沒有胎痕、沒有煙的時候整個藏起來（0 個 draw call）
-const SKID = { NS: 640, NP: 96, life: 18, kind: [0, 1, 2, 0, 0, 2, 2, 3, 0], // 路面 → 樣子
+const SKID = { NS: 640, NP: 96, life: 18, kind: [0, 1, 2, 0, 0, 2, 2, 3, 0, 4, 4], // 路面 → 樣子
   look: [ // 胎痕的顏色（線性 rgb＋不透明度）、煙的顏色、煙多大
     { m: [0.03, 0.03, 0.034, 0.55], s: [0.8, 0.8, 0.84, 0.34], z: 1 }, // 柏油：黑黑的胎痕、白煙
     { m: [0.05, 0.08, 0.02, 0.5], s: [0.42, 0.38, 0.26, 0.24], z: 0.85 }, // 草地：深綠的痕、一點點土
     { m: [0.12, 0.075, 0.03, 0.55], s: [0.46, 0.33, 0.2, 0.4], z: 1.15 }, // 稻田、泥土、泥巴：咖啡色的痕、黃土煙
     { m: [0.3, 0.22, 0.12, 0.42], s: [0.66, 0.55, 0.38, 0.38], z: 1.25 }, // 沙
+    { m: [0, 0, 0, 0], s: [0.85, 0.9, 0.95, 0.42], z: 1.3 }, // 第 27 批：水：沒有胎痕、白白的水花
   ] };
 const SKID_FX = new WeakMap();
 function skidFx(scene) {
@@ -14811,6 +15361,7 @@ function inPoly(P, x, z) { let c = false; for (let i = 0, j = P.length - 1; i < 
 const rotOf = (ux, uz) => Math.atan2(-uz, ux); // rotation.y：本地 +x 轉到 (ux, uz)
 
 // ---- 店的招牌字（一般的店名，沒有牌子）----
+const NH_VARIETY = true; // 第 28 批（Nick 2026-10-23「內湖的房子都要不一樣」）：每間房子不一樣（12 種一樓住家、側牆、更多店面、女兒牆、水塔、太陽能、加蓋、斜屋頂、遮雨棚、冷氣）；Nick 2026-10-23 看過範例說「照這樣做」（試做頁 v47）
 const SHOPS = ['早餐', '豆漿', '麵店', '便當', '小吃', '水餃', '飲料', '咖啡', '藥局', '診所', '牙醫', '眼鏡', '文具', '書局', '洗衣', '美髮', '水電', '五金', '機車行', '寵物', '花店', '麵包', '鍋貼', '滷味', '火鍋', '補習班', '房屋', '冰店', '牛肉麵', '自助餐'];
 const BOARD = ['道路施工', '請改道', '內湖', '港墘', '往', '越野車場', '村子', '站'];
 const D = NEIHU_DATA;
@@ -14847,7 +15398,7 @@ function readData() {
         core = [[P[0][0] + vx * 3.2, P[0][1] + vz * 3.2], [P[1][0] + vx * 3.2, P[1][1] + vz * 3.2], P[2], P[3]];
         col = [[cx + vx * 1.6, cz + vz * 1.6, hx, hz - 1.6, rot]];
       } else if (e[0] === 2) e[0] = 1;
-      bld.push({ P, f, h, st, back, e, core, col, rect: [cx, cz, hx, hz, rot] });
+      bld.push({ P, f, h, st, back, e, core, col, rect: [cx, cz, hx, hz, rot], gen: true }); // gen：補的長方形（第 0 邊＝靠路那邊）
     } else {
       const n = S[k++], P = []; for (let i = 0; i < n; i++) P.push(W(S[k++], S[k++]));
       const e = []; for (let i = 0; i < n; i += 8) { const v = S[k++] & 0xffff; for (let j = 0; j < 8 && i + j < n; j++) e.push((v >> (2 * j)) & 3); }
@@ -14880,7 +15431,7 @@ function readData() {
 const GROUND_OF = [15, 15, 15, 15, 16, 16, 17, 15, 15, 22, 23];
 const CELL = (i) => [i % 8, Math.floor(i / 8)];
 function facadeAtlas(aniso) {
-  const W = 2048, H = 1024, CS = 256, IN = 248, [c, g] = cv(W, H);
+  const W = 2048, H = NH_VARIETY ? 2048 : 1024, CS = 256, IN = 248, [c, g] = cv(W, H);
   const R = rng(20261004);
   const [tc, tg] = cv(IN, IN);
   const put = (i, draw) => { // 畫一格（248×248，左右上下會重複），四周 4 像素照重複的樣子補（mipmap 不會滲別格的顏色）
@@ -14943,8 +15494,61 @@ function facadeAtlas(aniso) {
   put(25, (g2, w, h) => { tiles(g2, w, h, '#dfe2e3', 'rgba(130,135,138,0.35)', 4); noise(g2, w, h, 500, ['#d6dadc', '#e8ebec'], 2);
     for (let by = 0; by < 2; by++) { g2.fillStyle = '#c6cacb'; g2.fillRect(0, by * 124 + 18, w, 4); win(g2, 6, by * 124 + 24, 110, 58, { frame: '#e8eaea', g1: '#6b7d87', g2: '#44555f' }); win(g2, 130, by * 124 + 24, 110, 58, { frame: '#e8eaea', g1: '#6b7d87', g2: '#44555f' }); g2.fillStyle = '#cfd3d4'; g2.fillRect(0, by * 124 + 92, w, 30); } });
   put(23, (g2, w, h) => { g2.fillStyle = '#b9bdc1'; g2.fillRect(0, 0, w, h); g2.fillStyle = '#9da2a7'; g2.fillRect(20, 40, 200, h - 40); g2.fillStyle = '#b0b5ba'; for (let y = 44; y < h; y += 8) g2.fillRect(20, y, 200, 3); });
+  if (NH_VARIETY) { // 第 28 批：26–31、44–49 側牆，32–43 十二種一樓住家（一格＝兩間 × 一層樓：6 公尺 × 3.6 公尺，橫的 41 px／公尺、直的 69 px／公尺），50–59 店面，60 紅瓦、61 灰瓦、62 白鐵皮、63 條紋遮雨棚
+    const brickW = (g2, w, h, base) => { g2.fillStyle = base; g2.fillRect(0, 0, w, h); noise(g2, w, h, 500, ['rgba(120,50,30,0.5)', 'rgba(190,110,80,0.5)']); g2.fillStyle = 'rgba(225,215,200,0.75)'; for (let y = 0; y < h; y += 9) { g2.fillRect(0, y, w, 1.5); for (let x = (y / 9) % 2 ? 0 : 11; x < w; x += 22) g2.fillRect(x, y, 1.5, 9); } };
+    const terr = (g2, w, h, base) => { g2.fillStyle = base; g2.fillRect(0, 0, w, h); noise(g2, w, h, 2600, ['#a19e96', '#cfccc4', '#8f8c85', '#d9d6cf'], 2); };
+    const paint = (g2, w, h, base) => { g2.fillStyle = base; g2.fillRect(0, 0, w, h); noise(g2, w, h, 300, ['rgba(0,0,0,0.04)', 'rgba(255,255,255,0.06)'], 6); streaks(g2, w, h, 0.07); };
+    const corr = (g2, w, h, base, hi) => { g2.fillStyle = base; g2.fillRect(0, 0, w, h); g2.fillStyle = hi; for (let x = 0; x < w; x += 10) g2.fillRect(x, 0, 4, h); g2.fillStyle = 'rgba(0,0,0,0.16)'; for (let x = 7; x < w; x += 10) g2.fillRect(x, 0, 2, h); };
+    // [牆, 門的種類, 門的顏色, 鐵窗的顏色（null＝沒有）]
+    const FAM = [
+      [(g2, w, h) => tiles(g2, w, h, '#ecebe6', 'rgba(150,150,150,0.3)', 5), 'iron', '#a8322a', '#f4f4f0'], // 白磁磚＋紅鐵門
+      [(g2, w, h) => tiles(g2, w, h, '#dcc9a4', 'rgba(150,130,100,0.35)', 6), 'iron', '#2f6b45', '#2f3530'], // 米色磁磚＋綠鐵門
+      [(g2, w, h) => brickW(g2, w, h, '#a65a3f'), 'wood', '#6b4426', '#3b3f3a'], // 紅磚＋木門
+      [(g2, w, h) => terr(g2, w, h, '#b9b6ae'), 'roll', '#3f6ea8', null], // 洗石子＋藍鐵捲門
+      [(g2, w, h) => tiles(g2, w, h, '#e2b4aa', 'rgba(140,90,80,0.3)', 6), 'roll', '#e9e9e4', '#f0efe9'], // 粉紅磁磚＋白鐵捲門
+      [(g2, w, h) => tiles(g2, w, h, '#b5cdb0', 'rgba(80,110,80,0.3)', 6), 'glass', '#c9d3d6', null], // 淺綠磁磚＋鋁門
+      [(g2, w, h) => paint(g2, w, h, '#efe3c4'), 'iron', '#6b4a33', '#5a4636'], // 奶油色油漆＋咖啡色鐵門
+      [(g2, w, h) => { paint(g2, w, h, '#a7a49b'); noise(g2, w, h, 900, ['#9a978e', '#b5b2a9', '#8e8b83']); streaks(g2, w, h, 0.3); }, 'roll', '#8a6a4a', '#6d5a48'], // 舊水泥＋生鏽的鐵捲門
+      [(g2, w, h) => corr(g2, w, h, '#5f88b0', '#7da3cb'), 'iron', '#e8e8e4', null], // 藍色鐵皮屋＋白門
+      [(g2, w, h) => paint(g2, w, h, '#f2f1ec'), 'wood', '#3e2a1c', null], // 白油漆＋深色木門
+      [(g2, w, h) => tiles(g2, w, h, '#9a7a5e', 'rgba(60,40,30,0.35)', 5), 'roll', '#9097a0', '#e8e6df'], // 咖啡色磁磚＋灰鐵捲門
+      [(g2, w, h) => tiles(g2, w, h, '#ecdca0', 'rgba(150,130,80,0.3)', 6), 'couplet', '#b8322a', '#f2f2ee'], // 淺黃磁磚＋紅門貼春聯
+    ];
+    const door = (g2, x, kind, colr) => { // 門（1 公尺寬、2.2 公尺高；下面貼地）
+      const w = kind === 'glass' ? 62 : 44, hd = 152, y = 248 - hd;
+      g2.fillStyle = 'rgba(0,0,0,0.28)'; g2.fillRect(x - 4, y - 4, w + 8, hd + 4);
+      if (kind === 'glass') { g2.fillStyle = '#c9d3d6'; g2.fillRect(x, y, w, hd); const gr = g2.createLinearGradient(x, y, x + w, y + hd); gr.addColorStop(0, '#5d7484'); gr.addColorStop(1, '#2d3d49'); g2.fillStyle = gr; g2.fillRect(x + 4, y + 4, w / 2 - 6, hd - 8); g2.fillRect(x + w / 2 + 2, y + 4, w / 2 - 6, hd - 8); g2.fillStyle = 'rgba(255,255,255,0.18)'; g2.fillRect(x + 6, y + 8, 6, hd - 20); return; }
+      if (kind === 'wood') { g2.fillStyle = colr; g2.fillRect(x, y, w, hd); g2.fillStyle = 'rgba(0,0,0,0.22)'; for (let k = 8; k < w; k += 9) g2.fillRect(x + k, y, 1.5, hd); g2.fillStyle = '#d8c068'; g2.fillRect(x + w - 9, y + 80, 4, 8); return; }
+      g2.fillStyle = colr; g2.fillRect(x, y, w, hd); g2.fillStyle = 'rgba(0,0,0,0.2)'; for (let k = y + 10; k < y + hd; k += 18) g2.fillRect(x + 4, k, w - 8, 2); g2.fillStyle = '#d8c068'; g2.fillRect(x + w - 9, y + 80, 4, 9);
+      if (kind === 'couplet') { g2.fillStyle = '#c8261f'; g2.fillRect(x - 14, y + 4, 9, 128); g2.fillRect(x + w + 5, y + 4, 9, 128); g2.fillRect(x - 8, y - 16, w + 16, 11); g2.fillStyle = '#e8c45a'; for (let k = 0; k < 6; k++) { g2.fillRect(x - 12, y + 12 + k * 20, 5, 8); g2.fillRect(x + w + 7, y + 12 + k * 20, 5, 8); }
+        g2.save(); g2.translate(x + w / 2, y + 40); g2.rotate(Math.PI / 4); g2.fillStyle = '#d42a22'; g2.fillRect(-11, -11, 22, 22); g2.restore(); g2.fillStyle = '#1b1b1b'; g2.font = `900 16px ${SANS}`; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillText('福', x + w / 2, y + 41); }
+    };
+    const roll = (g2, x, w, colr) => { const hd = 176, y = 248 - hd; g2.fillStyle = 'rgba(0,0,0,0.3)'; g2.fillRect(x - 3, y - 14, w + 6, hd + 14); g2.fillStyle = colr; g2.fillRect(x, y, w, hd); g2.fillStyle = 'rgba(0,0,0,0.16)'; for (let k = y + 3; k < y + hd; k += 6) g2.fillRect(x, k, w, 2); g2.fillStyle = 'rgba(255,255,255,0.12)'; for (let k = y + 1; k < y + hd; k += 6) g2.fillRect(x, k, w, 1); g2.fillStyle = 'rgba(0,0,0,0.35)'; g2.fillRect(x, y + hd - 6, w, 6); g2.fillRect(x + w / 2 - 6, y + hd - 16, 12, 4); };
+    const plate = (g2, x, y, nmb) => { g2.fillStyle = '#1f4f9c'; g2.fillRect(x, y, 26, 13); g2.fillStyle = '#fff'; g2.font = `700 10px ${SANS}`; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillText(nmb + '號', x + 13, y + 7); }; // 門牌
+    const meter = (g2, x, y) => { g2.fillStyle = '#9da3a6'; g2.fillRect(x, y, 14, 18); g2.fillStyle = '#e8ece8'; g2.beginPath(); g2.arc(x + 7, y + 7, 4, 0, 6.283); g2.fill(); };
+    const pots = (g2, x, R2) => { for (let k = 0; k < 3; k++) { const px = x + k * 15; g2.fillStyle = '#9a5a3a'; g2.fillRect(px, 232, 11, 16); g2.fillStyle = ['#3e6b34', '#4f7f3c', '#2f5a2a'][(R2() * 3) | 0]; g2.beginPath(); g2.arc(px + 5.5, 226, 8 + R2() * 4, 0, 6.283); g2.fill(); } };
+    const winO = (gc, R2) => ({ grille: gc || undefined, ac: false, curtain: R2() < 0.5 ? 'rgba(230,220,200,0.55)' : null });
+    FAM.forEach(([wall, dk, dc, gc], f) => {
+      put(32 + f, (g2, w, h) => { const R2 = rng(500 + f); wall(g2, w, h);
+        // 左邊那間：鐵捲門（車庫）或 門＋窗；右邊那間：門＋窗
+        if (dk === 'roll' || R2() < 0.55) roll(g2, 9, 106, dk === 'roll' ? dc : ['#9aa0a6', '#c9cdd0', '#7f8a94'][(R2() * 3) | 0]); else { door(g2, 14, dk, dc); win(g2, 66, 103, 50, 74, winO(gc, R2)); }
+        door(g2, 124 + 12, dk === 'roll' ? 'iron' : dk, dk === 'roll' ? '#7b2a22' : dc); win(g2, 124 + 70, 103, 46, 74, winO(gc, R2));
+        plate(g2, 124 + 64, 84, 1 + ((R2() * 98) | 0)); if (R2() < 0.7) meter(g2, 124 + 104, 186);
+        if (f === 4 || f === 9 || f === 11 || R2() < 0.25) pots(g2, 124 + 66, R2);
+        g2.fillStyle = 'rgba(0,0,0,0.12)'; g2.fillRect(0, 238, w, 10); // 牆腳髒一點
+      });
+      put(f < 6 ? 26 + f : 38 + f, (g2, w, h) => { const R2 = rng(700 + f); wall(g2, w, h); // 側牆：一個小窗（浴室）、水管
+        win(g2, 40 + R2() * 120, 60, 34, 30, { grille: gc || undefined }); g2.fillStyle = 'rgba(120,120,120,0.8)'; g2.fillRect(20 + R2() * 200, 0, 4, h); g2.fillStyle = 'rgba(0,0,0,0.12)'; g2.fillRect(0, 238, w, 10); });
+    });
+    const FREE = SHOPS.map((_, i) => i).filter((i) => ![3, 5, 7, 11, 18, 25].includes(i)); // 12–14 格已經用掉的店名不要再用（剩 24 個，10 格 × 2 家都不一樣）
+    for (let s2 = 0; s2 < 10; s2++) put(50 + s2, (g2, w, h) => { const R2 = rng(900 + s2); shopFront(g2, 0, 124, h, SHOPS[FREE[s2 * 2]], R2); shopFront(g2, 124, 124, h, SHOPS[FREE[(s2 * 2 + 11) % FREE.length]], R2); });
+    put(60, (g2, w, h) => { g2.fillStyle = '#a8492f'; g2.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 16) { g2.fillStyle = 'rgba(0,0,0,0.28)'; g2.fillRect(0, y + 12, w, 4); for (let x = 0; x < w; x += 14) { g2.fillStyle = 'rgba(255,190,150,0.22)'; g2.fillRect(x + 2, y, 5, 12); } } noise(g2, w, h, 500, ['rgba(60,30,20,0.3)', 'rgba(200,120,90,0.3)'], 3); });
+    put(61, (g2, w, h) => { g2.fillStyle = '#5b5f63'; g2.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 14) { g2.fillStyle = 'rgba(0,0,0,0.3)'; g2.fillRect(0, y + 11, w, 3); for (let x = (y / 14) % 2 ? 0 : 10; x < w; x += 20) { g2.fillStyle = 'rgba(0,0,0,0.18)'; g2.fillRect(x, y, 1.5, 11); } } noise(g2, w, h, 600, ['rgba(255,255,255,0.08)', 'rgba(0,0,0,0.12)'], 3); });
+    put(62, (g2, w, h) => corr(g2, w, h, '#d9dde0', '#eef0f2'));
+    put(63, (g2, w, h) => { for (let x = 0; x < w; x += 31) { g2.fillStyle = '#2e7d4a'; g2.fillRect(x, 0, 16, h); g2.fillStyle = '#f2f2ee'; g2.fillRect(x + 16, 0, 15, h); } });
+  }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = aniso;
-  const cells = []; for (let i = 0; i < 32; i++) { const [cx, cy] = CELL(i); cells.push(new THREE.Vector4((cx * CS + 4) / W, 1 - (cy * CS + 4 + IN) / H, IN / W, IN / H)); }
+  const cells = []; for (let i = 0; i < (NH_VARIETY ? 64 : 32); i++) { const [cx, cy] = CELL(i); cells.push(new THREE.Vector4((cx * CS + 4) / W, 1 - (cy * CS + 4 + IN) / H, IN / W, IN / H)); }
   return { tex: t, cells };
 }
 // 路名牌、直立招牌、車站、公園學校的牌子、施工欄杆：一張 1024×1536
@@ -15086,7 +15690,7 @@ function buildNeihu(V, opt = {}) {
   // 牆的材質：貼圖格子在著色器裡重複（fract），每個頂點一個「格子編號」→ uniform 陣列裡的 [u0, v0, du, dv]
   mats.wall.onBeforeCompile = (sh) => {
     sh.uniforms.nhCells = { value: FA.cells };
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float cell;\nuniform vec4 nhCells[32];\nvarying vec4 vTile;')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float cell;\nuniform vec4 nhCells[' + (NH_VARIETY ? 64 : 32) + '];\nvarying vec4 vTile;')
       .replace('#include <uv_vertex>', '#include <uv_vertex>\nvTile = nhCells[int(cell + 0.5)];');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vTile;')
       .replace('#include <map_fragment>', 'vec2 nhUv = vTile.xy + fract(vMapUv) * vTile.zw;\nvec4 sampledDiffuseColor = textureGrad(map, nhUv, dFdx(vMapUv) * vTile.zw, dFdy(vMapUv) * vTile.zw);\ndiffuseColor *= sampledDiffuseColor;');
@@ -15100,7 +15704,8 @@ function buildNeihu(V, opt = {}) {
   const WHITE = [255, 255, 255];
   // 直立的面（牆）：從 a 到 b、y0..y1，正面朝 (a→b) 的右手邊（從上面看、z 往下：順時針的多邊形的外面）
   function wallQ(g, ax, az, bx, bz, y0, y1, u0, u1, v0, v1, cell, c0, c1 = c0) {
-    g.grow(4, 6); const k = g.vert(ax, y0, az, u0, v0, c0[0], c0[1], c0[2], cell); g.vert(bx, y0, bz, u1, v0, c0[0], c0[1], c0[2], cell); g.vert(bx, y1, bz, u1, v1, c1[0], c1[1], c1[2], cell); g.vert(ax, y1, az, u0, v1, c1[0], c1[1], c1[2], cell);
+    // 第 28 批：從外面看 a 在右邊、b 在左邊，貼圖的 u 要從左邊（b）開始，不然招牌的字是反的
+    g.grow(4, 6); const k = g.vert(ax, y0, az, u1, v0, c0[0], c0[1], c0[2], cell); g.vert(bx, y0, bz, u0, v0, c0[0], c0[1], c0[2], cell); g.vert(bx, y1, bz, u0, v1, c1[0], c1[1], c1[2], cell); g.vert(ax, y1, az, u1, v1, c1[0], c1[1], c1[2], cell);
     g.tri(k, k + 2, k + 1); g.tri(k, k + 3, k + 2); // 外面看過去逆時針
   }
   function quad3(g, P, uv, cell, c) { g.grow(4, 6); const k = g.v; for (let i = 0; i < 4; i++) g.vert(P[i][0], P[i][1], P[i][2], uv[i][0], uv[i][1], c[0], c[1], c[2], cell); g.tri(k, k + 1, k + 2); g.tri(k, k + 2, k + 3); }
@@ -15121,6 +15726,65 @@ function buildNeihu(V, opt = {}) {
     for (const [a, b, d] of tri) { if (!down) g.tri(k + a, k + d, k + b); else g.tri(k + a, k + b, k + d); } // 反過來接＝朝上（x-z 平面上「逆時針」的三角形法線朝下）
   }
 
+  // 第 28 批：房子的小東西（遮雨棚、水塔、太陽能、加蓋、斜屋頂、女兒牆）
+  const SHOP_CELLS = [12, 13, 14, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59];
+  const ROOF_COL = [[235, 233, 228], [150, 172, 150], [160, 170, 182]];
+  const AWN = [[46, 125, 70], [196, 58, 48], [40, 92, 170], [226, 178, 40], [230, 230, 226], [120, 72, 40]];
+  function quadUp(g, P, uv, cell, c) { // 四邊形，朝上的那面看得到（順序反了就倒過來）
+    const ax = P[1][0] - P[0][0], ay = P[1][1] - P[0][1], az = P[1][2] - P[0][2], bx = P[2][0] - P[0][0], by = P[2][1] - P[0][1], bz = P[2][2] - P[0][2];
+    if (az * bx - ax * bz >= 0) quad3(g, P, uv, cell, c); else quad3(g, [P[0], P[3], P[2], P[1]], [uv[0], uv[3], uv[2], uv[1]], cell, c); void ay; void by;
+  }
+  function triBoth(g, A, B, Cc, cell, c) { g.grow(6, 6); const k = g.v; for (const p of [A, B, Cc, A, Cc, B]) g.vert(p[0], p[1], p[2], 0.5 + p[0] / 6, p[1] / 3.6, c[0], c[1], c[2], cell); g.tri(k, k + 1, k + 2); g.tri(k + 3, k + 4, k + 5); }
+  function cylG(g, x, z, r, y0, y1, c, sides = 8) { // 圓柱（水塔）
+    const P = []; for (let k = 0; k < sides; k++) { const a = (k / sides) * Math.PI * 2; P.push([x + Math.cos(a) * r, z + Math.sin(a) * r]); }
+    for (let k = 0; k < sides; k++) { const p = P[k], q = P[(k + 1) % sides]; wallQ(g, p[0], p[1], q[0], q[1], y0, y1, 0.3, 0.7, 0.3, 0.7, 20, shade(c, 0.78 + 0.28 * Math.max(0, Math.cos(((k + 0.5) / sides) * 6.283 - 0.8))), c); }
+    flatPoly(g, P, y1, 1, shade(c, 1.06), 20);
+  }
+  function awning(g, a, c, L, ux, uz, ox, oz, dep, k1, k2) { // 店門口的遮雨棚：牆上 2.95 公尺往外斜下來，條紋的或一個顏色
+    const m = Math.min(0.3, L * 0.05), y0 = 2.95, y1 = y0 - 0.38, x0 = a[0] + ux * m, z0 = a[1] + uz * m, x1 = c[0] - ux * m, z1 = c[1] - uz * m, U = (L - 2 * m) / 3;
+    const striped = k1 < 0.3, ac = striped ? [255, 255, 255] : AWN[Math.floor(k2 * AWN.length)], cl = striped ? 63 : 20;
+    const Pt = [[x0, y0, z0], [x1, y0, z1], [x1 + ox * dep, y1, z1 + oz * dep], [x0 + ox * dep, y1, z0 + oz * dep]];
+    quad3(g, Pt, [[0, 0], [U, 0], [U, 0.6], [0, 0.6]], cl, ac);
+    quad3(g, [Pt[0], Pt[3], Pt[2], Pt[1]], [[0, 0], [0, 0.6], [U, 0.6], [U, 0]], cl, shade(ac, 0.72));
+    wallQ(g, Pt[3][0], Pt[3][2], Pt[2][0], Pt[2][2], y1 - 0.22, y1, 0, U, 0, 0.15, cl, ac, ac);
+  }
+  function roofBits(g, b, bi, P, n, rc, top, col, sCell, anyE) {
+    const rk = hh(bi, 72);
+    if (rc && b.gen && !anyE && rk < 0.14 && Math.max(rc[2], rc[3]) <= 12) { // 斜屋頂（紅瓦、灰瓦）
+      const [rx, rz, hx, hz, rot] = rc, ux = Math.cos(rot), uz = -Math.sin(rot), vx = -uz, vz = ux, alongU = hx >= hz;
+      const A = (alongU ? hx : hz) + 0.3, Bw = (alongU ? hz : hx) + 0.35, ax = alongU ? ux : vx, az = alongU ? uz : vz, bx = alongU ? vx : ux, bz = alongU ? vz : uz;
+      const rh = 1.2 + 0.7 * hh(bi, 76), tc = hh(bi, 77) < 0.6 ? 60 : 61, ye = top - 0.12, yr = top + rh;
+      const E00 = [rx - ax * A - bx * Bw, ye, rz - az * A - bz * Bw], E10 = [rx + ax * A - bx * Bw, ye, rz + az * A - bz * Bw], E01 = [rx - ax * A + bx * Bw, ye, rz - az * A + bz * Bw], E11 = [rx + ax * A + bx * Bw, ye, rz + az * A + bz * Bw];
+      const R0 = [rx - ax * A, yr, rz - az * A], R1 = [rx + ax * A, yr, rz + az * A], U = (2 * A) / 3, Vv = Math.hypot(Bw, rh) / 3;
+      quadUp(g, [E00, E10, R1, R0], [[0, 0], [U, 0], [U, Vv], [0, Vv]], tc, [255, 255, 255]);
+      quadUp(g, [E11, E01, R0, R1], [[0, 0], [U, 0], [U, Vv], [0, Vv]], tc, [255, 255, 255]);
+      triBoth(g, E00, E01, R0, sCell, col); triBoth(g, E10, E11, R1, sCell, col);
+      return;
+    }
+    if (hh(bi, 73) < 0.55) { const ph = 0.6 + 0.5 * hh(bi, 74); // 女兒牆
+      for (let i = 0; i < n; i++) { const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
+        wallQ(g, a[0], a[1], c[0], c[1], top, top + ph, 0, L / 6, 0.5, 0.5 + ph / 3.6, sCell, col, col); wallQ(g, c[0], c[1], a[0], a[1], top, top + ph, 0, L / 6, 0.5, 0.5 + ph / 3.6, sCell, shade(col, 0.8), shade(col, 0.8)); } }
+    if (!rc) return;
+    const [rx, rz, hx, hz, rot] = rc, ux = Math.cos(rot), uz = -Math.sin(rot), vx = -uz, vz = ux;
+    if (rk >= 0.14 && rk < 0.26 && hx > 3 && hz > 3) { // 頂樓加蓋（藍色、白色鐵皮）
+      nShed++; const sx = hx * (0.5 + hh(bi, 5) * 0.3), sz = hz * (0.5 + hh(bi, 6) * 0.3), ox = (hh(bi, 7) - 0.5) * (hx - sx), oz = (0.5 + 0.5 * hh(bi, 8)) * (hz - sz), x = rx + ux * ox + vx * oz, z = rz + uz * ox + vz * oz;
+      const Q = boxG(g, x, z, sx, sz, rot, top, top + 2.5, [255, 255, 255], hh(bi, 84) < 0.55 ? 11 : 62, false);
+      quad3(g, [[Q[0][0], top + 2.5, Q[0][1]], [Q[3][0], top + 2.8, Q[3][1]], [Q[2][0], top + 2.8, Q[2][1]], [Q[1][0], top + 2.5, Q[1][1]]], [[0, 0], [0, sz / 3], [sx / 3, sz / 3], [sx / 3, 0]], 19, [255, 255, 255]);
+      return;
+    }
+    if (hh(bi, 9) < 0.55 && hx > 1.6 && hz > 1.6) { // 水塔：不鏽鋼、藍色塑膠、舊的水泥
+      const k = hh(bi, 78), x = rx + ux * hx * (0.55 - hh(bi, 85) * 0.3) + vx * hz * 0.55, z = rz + uz * hx * (0.55 - hh(bi, 85) * 0.3) + vz * hz * 0.55;
+      if (k < 0.45) { boxG(g, x, z, 0.5, 0.5, rot, top, top + 0.35, [90, 92, 96]); cylG(g, x, z, 0.55, top + 0.35, top + 1.55, [206, 210, 214]); }
+      else if (k < 0.75) cylG(g, x, z, 0.6, top, top + 1.25, [52, 104, 186]);
+      else boxG(g, x, z, 0.7, 0.7, rot, top, top + 1.5, [222, 226, 230]);
+    }
+    if (hh(bi, 79) < 0.16 && hx > 1.6 && hz > 2.2) { // 太陽能熱水器：斜的黑藍色板子＋白色的桶子
+      const x = rx - ux * hx * 0.35 + vx * hz * 0.1, z = rz - uz * hx * 0.35 + vz * hz * 0.1, w = 0.9, d = 0.55;
+      const p0 = [x - ux * w - vx * d, top + 0.25, z - uz * w - vz * d], p1 = [x + ux * w - vx * d, top + 0.25, z + uz * w - vz * d], p2 = [x + ux * w + vx * d, top + 1.05, z + uz * w + vz * d], p3 = [x - ux * w + vx * d, top + 1.05, z - uz * w + vz * d];
+      quadUp(g, [p0, p1, p2, p3], [[0.3, 0.3], [0.7, 0.3], [0.7, 0.7], [0.3, 0.7]], 20, [36, 50, 88]);
+      boxG(g, x + vx * (d + 0.2), z + vz * (d + 0.2), w, 0.22, rot, top + 0.9, top + 1.35, [236, 236, 232]);
+    }
+  }
   // ==== 房子 ====
   const STY_COL = [[236, 226, 208], [240, 240, 236], [230, 214, 206], [240, 222, 216], [222, 226, 230], [220, 226, 234], [242, 240, 232], [214, 212, 206], [226, 236, 222], [240, 220, 210], [226, 228, 230]];
   const resSt = new Set([0, 1, 2, 3, 7, 8]);
@@ -15128,23 +15792,49 @@ function buildNeihu(V, opt = {}) {
   const LISHAN = N.lm && N.lm.lishan ? N.lm.lishan.p : null; // 麗山國中校地裡的房子：白磁磚＋紅磚飾帶的牆（格子 24，照參考照片）
   const NH_MAX_FL = 1; // 第 10 批：內湖一般的房子最多幾層（地標不變）；第 18 批（Nick 2026-10-14「對 把房子變矮」）：1 層
   const GB = 1e6; // 第 9 批：房子的編號（碰撞物的 g；村子的房子沒有 g）
+  const roadAtH = NH_VARIETY ? mkRoadGrid() : null; // 第 28 批：哪一面牆對著路（那一面畫門、窗；其他畫側牆）
   N.bld.forEach((b, bi) => {
     if (b.lm) return; // 地標的房子（西湖圖書館、湖光教會）：下面自己做
     const P = b.P, n = P.length; let cx = 0, cz = 0; for (const p of P) { cx += p[0]; cz += p[1]; } cx /= n; cz /= n;
     const g = bank('wall', cx, cz, TB);
+    const VAR = NH_VARIETY && resSt.has(b.st) && !(LISHAN && inPoly(LISHAN, cx, cz)); // 第 28 批：住宅的樣子才換（學校、廟、工廠、辦公大樓照舊）
     const gh = b.e.includes(2) ? 4.2 : 3.6, top0 = b.h > 2 ? b.h : b.f <= 1 ? 3.8 + hh(bi, 1) * 0.8 : gh + (b.f - 1) * 3.2;
-    const bf = Math.min(b.f, NH_MAX_FL), top = Math.min(top0, gh + (NH_MAX_FL - 1) * 3.2); // 第 10 批（Nick「所有房子變矮」）：最多 2 層樓高
-    const st = b.st, base = STY_COL[st] || WHITE, tint = 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, 0.78), gcell = GROUND_OF[st] ?? 15;
+    const bf = Math.min(b.f, NH_MAX_FL), top = VAR ? (b.e.includes(2) ? gh : gh * (0.94 + 0.16 * hh(bi, 71))) : Math.min(top0, gh + (NH_MAX_FL - 1) * 3.2); // 第 10 批（Nick「所有房子變矮」）：最多 2 層樓高；第 28 批：高高低低一點
+    const st = b.st, base = VAR ? WHITE : STY_COL[st] || WHITE, tint = VAR ? 0.92 + hh(bi, 2) * 0.12 : 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, VAR ? 0.86 : 0.78), gcell = GROUND_OF[st] ?? 15;
+    const fam = Math.floor(hh(bi, 70) * 12), fCell = 32 + fam, sCell = fam < 6 ? 26 + fam : 38 + fam, anyE = b.e.some((x) => x); // 第 28 批：12 種一樓住家（前面）＋同一種的側牆
+    let faceR = null; // 第 28 批：每一面牆往外 3 公尺是不是路（人行道）；都不是的話，最靠近路的那一面（8 公尺內）
+    if (VAR) { faceR = []; let bestI = -1, bestD = Infinity;
+      for (let i = 0; i < n; i++) { const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); let f = false;
+        if (L >= 2) { const ux = (c[0] - a[0]) / L, uz = (c[1] - a[1]) / L, r = roadAtH((a[0] + c[0]) / 2 + uz * 3, (a[1] + c[1]) / 2 - ux * 3); if (r) { const over = r.d - (r.r.w / 2 + r.r.sw + 2.5); if (over < 0) f = true; if (over < bestD) { bestD = over; bestI = i; } } }
+        faceR.push(f); }
+      if (!faceR.some((x) => x)) { if (bestI >= 0 && bestD < 8) faceR[bestI] = true; else faceR = null; } }
     const C = b.core || P;
     for (let i = 0; i < n; i++) {
       const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 0.05) continue;
       const ca = C[i], cc = C[(i + 1) % n], Lc = Math.hypot(cc[0] - ca[0], cc[1] - ca[1]), e = b.e[i] || 0;
-      const shopCell = 12 + Math.floor(hh(bi, 10 + i) * 3);
-      if (b.f <= 1 && b.h <= 2) { wallQ(g, a[0], a[1], c[0], c[1], 0, top, 0, L / 6, 0, 1, e ? shopCell : gcell, low, col); continue; }
-      // 一樓（騎樓的話退到裡面那條線）
-      wallQ(g, ca[0], ca[1], cc[0], cc[1], 0, gh, 0, Math.max(1, Math.round(Lc / 6)), 0, 1, e ? shopCell : gcell, low, col);
-      // 樓上
-      wallQ(g, a[0], a[1], c[0], c[1], gh, top, 0, Math.max(1, Math.round(L / 6)), 0, (top - gh) / 6.4, LISHAN && inPoly(LISHAN, cx, cz) ? 24 : st, col, col);
+      const front = e > 0 || (faceR ? faceR[i] : b.gen ? i === 0 : !anyE);
+      const shopCell = VAR ? SHOP_CELLS[Math.floor(hh(bi, 10 + i) * SHOP_CELLS.length)] : 12 + Math.floor(hh(bi, 10 + i) * 3), wcell = e ? shopCell : !VAR ? gcell : front ? fCell : sCell;
+      // 第 28 批：長的店面、長的一排住家，每 6 公尺換一家（不然整排都是同一家店）
+      const gWall = (x0, z0, x1, z1, y1, Lw, u1) => {
+        if (!VAR || !(e || front) || Lw < 7) { wallQ(g, x0, z0, x1, z1, 0, y1, 0, u1, 0, 1, wcell, low, col); return; }
+        const k = Math.max(1, Math.round(Lw / 6));
+        for (let j = 0; j < k; j++) { const t0 = j / k, t1 = (j + 1) / k, r = hh(bi, 100 + i * 17 + j), cl = e ? SHOP_CELLS[Math.floor(r * SHOP_CELLS.length)] : r < 0.5 ? fCell : 32 + Math.floor(hh(bi, 140 + i * 17 + j) * 12);
+          wallQ(g, x0 + (x1 - x0) * t0, z0 + (z1 - z0) * t0, x0 + (x1 - x0) * t1, z0 + (z1 - z0) * t1, 0, y1, 0, 1, 0, 1, cl, low, col); }
+      };
+      if (b.f <= 1 && b.h <= 2) gWall(a[0], a[1], c[0], c[1], top, L, L / 6);
+      else {
+        const gw = VAR && !(e === 2 && b.core) ? top : gh; // 第 28 批：一層樓的房子，一樓的牆直接到屋頂
+        // 一樓（騎樓的話退到裡面那條線）
+        gWall(ca[0], ca[1], cc[0], cc[1], gw, Lc, Math.max(1, Math.round(Lc / 6)));
+        // 樓上
+        if (top > gw + 0.01) wallQ(g, a[0], a[1], c[0], c[1], gw, top, 0, Math.max(1, Math.round(L / 6)), 0, (top - gw) / 6.4, LISHAN && inPoly(LISHAN, cx, cz) ? 24 : st, col, col);
+      }
+      if (VAR) { // 第 28 批：店門口的遮雨棚、牆上的冷氣
+        const ux = (c[0] - a[0]) / L, uz = (c[1] - a[1]) / L, ox = uz, oz = -ux; // 往外
+        if (e === 1 && L >= 2.5 && hh(bi, 80 + i) < 0.72) awning(g, a, c, L, ux, uz, ox, oz, 1.1 + 0.5 * hh(bi, 81 + i), hh(bi, 82 + i), hh(bi, 83 + i));
+        if (!e && L >= 2.5 && hh(bi, 90 + i) < (front ? 0.5 : 0.3)) { const t = 0.2 + 0.6 * hh(bi, 91 + i); boxG(g, a[0] + (c[0] - a[0]) * t + ox * 0.2, a[1] + (c[1] - a[1]) * t + oz * 0.2, 0.42, 0.17, rotOf(ux, uz), 2.2, 2.75, [226, 224, 216], 20); }
+      }
+      if (b.f <= 1 && b.h <= 2) continue;
       if (e === 2 && b.core) { // 騎樓：天花板、柱子
         nArc++;
         quad3(g, [[a[0], gh, a[1]], [ca[0], gh, ca[1]], [cc[0], gh, cc[1]], [c[0], gh, c[1]]], [[0.3, 0.3], [0.3, 0.7], [0.7, 0.7], [0.7, 0.3]], 20, [214, 210, 200]);
@@ -15160,11 +15850,12 @@ function buildNeihu(V, opt = {}) {
         const m = Math.min(3, Math.floor(L / 7)); for (let j = 0; j < m; j++) { const t = (j + 0.5) / m, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L; vSigns.push({ x: a[0] + (c[0] - a[0]) * t, z: a[1] + (c[1] - a[1]) * t, ox, oz, y0: gh + 0.4, h: Math.min(top - gh - 0.6, 3 + hh(bi, 50 + j) * 2.6), s: Math.floor(hh(bi, 60 + i * 3 + j) * 16) }); }
       }
     }
-    // 屋頂
-    flatPoly(g, P, top, 6, shade([235, 233, 228], 0.9 + hh(bi, 3) * 0.15), 18);
+    // 屋頂（第 28 批：灰的、綠的防水漆、藍灰的）
+    flatPoly(g, P, top, 6, VAR ? shade(ROOF_COL[hh(bi, 3) < 0.6 ? 0 : hh(bi, 3) < 0.85 ? 1 : 2], 0.92 + hh(bi, 4) * 0.1) : shade([235, 233, 228], 0.9 + hh(bi, 3) * 0.15), 18);
     // 一樓的頂點顏色暗一點已經有了；頂樓加蓋、水塔、樓梯間
     const rc = b.rect;
-    if (rc && !b.back && bf >= 3) {
+    if (VAR) roofBits(g, b, bi, P, n, rc, top, col, sCell, anyE);
+    if (rc && !b.back && bf >= 3 && !VAR) {
       const [rx, rz, hx, hz, rot] = rc, ux = Math.cos(rot), uz = -Math.sin(rot), vx = -uz, vz = ux;
       if (resSt.has(st) && bf <= 8 && hh(bi, 4) < 0.45 && hx > 3 && hz > 3) { // 頂樓加蓋（鐵皮屋）
         nShed++; const sx = hx * (0.55 + hh(bi, 5) * 0.3), sz = hz * (0.55 + hh(bi, 6) * 0.3), ox = (hh(bi, 7) - 0.5) * (hx - sx), oz = (hh(bi, 8) - 0.5) * (hz - sz), x = rx + ux * ox + vx * oz, z = rz + uz * ox + vz * oz;
@@ -15200,6 +15891,8 @@ function buildNeihu(V, opt = {}) {
   // ==== 山：範圍外面一圈（北邊：越野車場、賽道那邊一道矮山脊，賽車場的草地（x 1250）東邊才是高的金面山；東邊也高；南邊矮；西邊（村子那邊）照聯外道路留一個山谷）====
   // 邊外 12 公尺以內是平的（路、施工欄杆、綠籬）；高度場 hillH(x, z)：範圍裡、邊外 12 公尺 → −0.02（跟地面一樣高）
   const HM = 12;
+  const RING = [BX0 - 600, BZ0 - 850, BX1 + 700, BZ1 + 600], RING_FADE = 320; // 山的格子的範圍（x0, z0, x1, z1）
+  const HOME_K0 = TOWER_RAMP.R1 + 40, HOME_K1 = TOWER_RAMP.R1 + 100;
   const hillH = (x, z) => {
     const ox = x < BX0 ? BX0 - x : x > BX1 ? x - BX1 : 0, oz = z < BZ0 ? BZ0 - z : z > BZ1 ? z - BZ1 : 0; if (ox <= HM && oz <= HM) return -0.02;
     const lx = x - AX, lz = z - AZ, n = Math.sin(lx * 0.0061 + 1.3) * 0.5 + Math.sin(lx * 0.013 + lz * 0.007) * 0.3 + Math.sin(lz * 0.011 - lx * 0.004 + 2) * 0.2; // −1…1
@@ -15214,6 +15907,8 @@ function buildNeihu(V, opt = {}) {
     if (x > BX1) h = Math.max(h, rise(ox, 150, 230) * (0.8 + 0.35 * n)); // 東
     if (x < BX0) h = Math.max(h, 50 * (0.8 + 0.35 * n) * (1 - Math.exp(-Math.max(0, ox - HM) / 110)) * ss(N.entP[1] + 40, N.entP[1] + 140, z)); // 西：入口南邊才有山（北邊是聯外道路、村子）
     if (x < BX0 + 40 && h > 0) { const L = linkDist(x, z); h *= ss(L.w / 2 + 30, L.w / 2 + 110, L.d); } // 聯外道路的山谷（底是平的：網格 25 公尺，三角形不要戳到路面）
+    h *= ss(0, RING_FADE, x - RING[0]) * ss(0, RING_FADE, RING[2] - x) * ss(0, RING_FADE, z - RING[1]) * ss(0, RING_FADE, RING[3] - z); // 第 27 批：格子的邊慢慢低到 0（外面接 hills.js 的草地、沙灘：開得過去，不是一面斷崖）
+    if (h > 0) for (const q of HOME_SITES) { const d = Math.hypot(x - q.x, z - q.z); if (d < HOME_K1) h *= ss(HOME_K0, HOME_K1, d); } // 第 27 批：家（5 號在入口旁邊）四周是平的（格子 25 公尺：平的範圍要大一點，三角形才不會蓋到斜坡）
     return h - 0.02;
   };
 
@@ -15434,27 +16129,31 @@ function buildNeihu(V, opt = {}) {
     }
   }
   // 公園、學校、球場、水池⋯（地上的多邊形）
+  const areaOut = (a) => a.P.some((p) => p[0] < RING[0] || p[0] > RING[2] || p[1] < RING[1] || p[1] > RING[3]);
   const AC = { park: col255('#7fa35c'), school: [214, 206, 188], pitch: col255('#5f9a48'), track: col255('#b55a40'), court: col255('#4c8a78'), water: col255('#5b8fbf'), play: col255('#cbb48c'), parking: [150, 152, 156], plaza: [214, 208, 196], site: col255('#a48e6c') };
   const AY = { school: 0.006, park: 0.008, parking: 0.009, plaza: 0.009, site: 0.008, pitch: 0.011, play: 0.011, court: 0.012, track: 0.012, water: 0.013 };
   const LMSKIP = []; // 地標自己畫的那幾塊（碧湖的湖、國小的操場、游泳池⋯）：一般的地面不要再鋪一次（高度差幾公釐會閃）
   for (const L of Object.values(N.lm || {})) for (const [k, P] of Object.entries(L)) { if (k === 'nm' || k === 'sign' || k === 'p' || k === 'bridge') continue; let x = 0, z = 0; for (const q of P) { x += q[0]; z += q[1]; } LMSKIP.push([x / P.length, z / P.length]); }
   for (const a of N.areas.slice().sort((p, q) => (AY[p.t] || 0) - (AY[q.t] || 0))) { let cx = 0, cz = 0; for (const p of a.P) { cx += p[0]; cz += p[1]; } cx /= a.P.length; cz /= a.P.length;
+    if (areaOut(a)) continue; // 第 27 批：跑出山的格子外面的（河濱公園一路到 x −2664）：外面是海，不鋪
     if (LMSKIP.some((q) => Math.hypot(q[0] - cx, q[1] - cz) < 2.5)) continue;
     flatPoly(bank('area', cx, cz, TG), a.P, AY[a.t] || 0.01, 4, AC[a.t] || WHITE); }
 
   // ==== 山的網格：x 西邊 600、東邊 700 公尺外，z 北邊 850、南邊 600 公尺外；格線對齊「邊外 12 公尺」那一圈（裡面不要）；
   //      世界本來的草地上（worldGround）平的格子不畫（草地已經有了），山腳平的點壓低 6 公分（草地蓋過去，不會閃）====
   let hillTris = 0, hillMesh;
+  const RG = { xs: null, zs: null, Y: null }; // 第 27 批：山的格子（高度跟畫出來的三角形一樣：hills.js 拿去當開得上去的地形）
   {
     const S = 25, axis = (a, b, c, d) => { const o = []; const n1 = Math.max(1, Math.round((b - a) / S)); for (let i = 0; i < n1; i++) o.push(a + ((b - a) * i) / n1); const n2 = Math.max(1, Math.round((c - b) / S)); for (let i = 0; i < n2; i++) o.push(b + ((c - b) * i) / n2); const n3 = Math.max(1, Math.round((d - c) / S)); for (let i = 0; i <= n3; i++) o.push(c + ((d - c) * i) / n3); return o; };
-    const xs = axis(BX0 - 600, BX0 - HM, BX1 + HM, BX1 + 700), zs = axis(BZ0 - 850, BZ0 - HM, BZ1 + HM, BZ1 + 600), nI = xs.length, nJ = zs.length;
+    const xs = axis(RING[0], BX0 - HM, BX1 + HM, RING[2]), zs = axis(RING[1], BZ0 - HM, BZ1 + HM, RING[3]), nI = xs.length, nJ = zs.length;
+    RG.xs = Float64Array.from(xs); RG.zs = Float64Array.from(zs); RG.Y = new Float32Array(nI * nJ);
     const g = new Geo(false), R2 = rng(5), G1 = col255('#55703f'), G2 = col255('#6f8a4a'), G3 = col255('#7d8f62'), GF = col255('#8d9a6b');
     const idx = new Int32Array(nI * nJ);
     for (let j = 0; j < nJ; j++) for (let i = 0; i < nI; i++) {
       const x = xs[i], z = zs[j], h = hillH(x, z), t = clamp(h / 220, 0, 1), r = R2(), f = ss(0, 6, h); // 山腳：跟草地一樣的顏色
       const c = [G1[0] + (G3[0] - G1[0]) * t + (G2[0] - G1[0]) * r * 0.5, G1[1] + (G3[1] - G1[1]) * t + (G2[1] - G1[1]) * r * 0.5, G1[2] + (G3[2] - G1[2]) * t];
       const y = h <= 0 && worldGround(x, z) && !inBox(x, z, -HM - 0.5) ? -0.06 : h;
-      g.grow(1, 0); idx[j * nI + i] = g.vert(x, y, z, 0, 0, GF[0] + (c[0] - GF[0]) * f, GF[1] + (c[1] - GF[1]) * f, GF[2] + (c[2] - GF[2]) * f, 0);
+      g.grow(1, 0); idx[j * nI + i] = g.vert(x, y, z, 0, 0, GF[0] + (c[0] - GF[0]) * f, GF[1] + (c[1] - GF[1]) * f, GF[2] + (c[2] - GF[2]) * f, 0); RG.Y[j * nI + i] = y;
     }
     for (let j = 0; j < nJ - 1; j++) for (let i = 0; i < nI - 1; i++) {
       const mx = (xs[i] + xs[i + 1]) / 2, mz = (zs[j] + zs[j + 1]) / 2; if (mx > BX0 - HM && mx < BX1 + HM && mz > BZ0 - HM && mz < BZ1 + HM) continue; // 範圍裡（地面自己鋪）
@@ -15464,6 +16163,21 @@ function buildNeihu(V, opt = {}) {
     }
     hillMesh = new THREE.Mesh(g.geometry(), mats.hill); hillMesh.name = 'nh-hill'; hillMesh.matrixAutoUpdate = false;
   }
+  // 第 27 批：山的格子的高度、法線（三角形：對角線 00–11，跟上面 g.tri(a, d, c)、g.tri(a, c, b) 一樣）；範圍裡（邊外 12 公尺以內）沒有山：−Infinity
+  const rseg = (a, v) => { let lo = 0, hi = a.length - 2; if (v <= a[0]) return 0; if (v >= a[hi]) return hi; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (a[m] <= v) lo = m; else hi = m - 1; } return lo; };
+  const ringIn = (x, z) => x >= RING[0] && x <= RING[2] && z >= RING[1] && z <= RING[3] && !(x > BX0 - HM && x < BX1 + HM && z > BZ0 - HM && z < BZ1 + HM);
+  const ringAt = (x, z) => {
+    if (!ringIn(x, z)) return -Infinity;
+    const xs = RG.xs, zs = RG.zs, W1 = xs.length, i = rseg(xs, x), j = rseg(zs, z), u = (x - xs[i]) / (xs[i + 1] - xs[i]), v = (z - zs[j]) / (zs[j + 1] - zs[j]), k = j * W1 + i, Y = RG.Y;
+    const h00 = Y[k], h10 = Y[k + 1], h01 = Y[k + W1], h11 = Y[k + W1 + 1];
+    return u >= v ? h00 + u * (h10 - h00) + v * (h11 - h10) : h00 + u * (h11 - h01) + v * (h01 - h00);
+  };
+  const ringN = (x, z, out) => {
+    const xs = RG.xs, zs = RG.zs, W1 = xs.length, i = rseg(xs, x), j = rseg(zs, z), dx = xs[i + 1] - xs[i], dz = zs[j + 1] - zs[j], u = (x - xs[i]) / dx, v = (z - zs[j]) / dz, k = j * W1 + i, Y = RG.Y;
+    const h00 = Y[k], h10 = Y[k + 1], h01 = Y[k + W1], h11 = Y[k + W1 + 1];
+    const gx = (u >= v ? h10 - h00 : h11 - h01) / dx, gz = (u >= v ? h11 - h10 : h01 - h00) / dz, l = Math.sqrt(gx * gx + gz * gz + 1);
+    out[0] = -gx / l; out[1] = 1 / l; out[2] = -gz / l; return out;
+  };
   // 範圍的邊：一圈綠籬（矮）＋碰撞；路開出去的地方空著（施工欄杆擋）、西邊的入口（聯外道路）開口
   {
     const E = N.entP, half = LK.wEnd / 2 + 3, C = [[BX0, BZ0], [BX1, BZ0], [BX1, BZ1], [BX0, BZ1]];
@@ -15824,7 +16538,8 @@ function buildNeihu(V, opt = {}) {
     const R3 = rng(8); let n = 0;
     for (let tries = 0; n < 2600 && tries < 40000; tries++) {
       const x = BX0 - 550 + R3() * (BX1 + 650 - BX0 + 550), z = BZ0 - 800 + R3() * (BZ1 - BZ0 + 1350), d = boxD(x, z); if (d < 16 || R3() > 1.25 - d / 600) continue;
-      const h = hillH(x, z); if (h < 4) continue; addTree(x, h - 0.3, z, 1.8 + R3() * 1.6, true); n++;
+      const h = hillH(x, z); if (h < 4) continue; const s = 1.8 + R3() * 1.6; addTree(x, ringAt(x, z) - 0.3, z, s, true); n++;
+      const c = { t: 'circle', x, z, r: 0.55, h: 4.9 * s, tk: 'hill', ti: treeTiles.get('hill').length / 4 - 1 }; colliders.push(c); treeCols.push(c); // 第 27 批：山開得上去了，樹要擋（怪獸卡車輾得扁）
     }
   }
   const treeMeshes = [];
@@ -15965,7 +16680,7 @@ function buildNeihu(V, opt = {}) {
   function mapBuild() {
     if (mapReady || typeof Path2D === 'undefined') return; mapReady = true;
     for (const b of N.bld) { if (b.back) continue; const t = mt(b.P[0][0], b.P[0][1]); if (!t.bld) t.bld = new Path2D(); b.P.forEach((p, i) => (i ? t.bld.lineTo(p[0], p[1]) : t.bld.moveTo(p[0], p[1]))); t.bld.closePath(); }
-    for (const a of N.areas) { if (a.t !== 'park' && a.t !== 'pitch' && a.t !== 'water') continue; const t = mt(a.P[0][0], a.P[0][1]); const key = a.t === 'water' ? 'water' : 'park'; if (!t[key]) t[key] = new Path2D(); a.P.forEach((p, i) => (i ? t[key].lineTo(p[0], p[1]) : t[key].moveTo(p[0], p[1]))); t[key].closePath(); }
+    for (const a of N.areas) { if ((a.t !== 'park' && a.t !== 'pitch' && a.t !== 'water') || areaOut(a)) continue; const t = mt(a.P[0][0], a.P[0][1]); const key = a.t === 'water' ? 'water' : 'park'; if (!t[key]) t[key] = new Path2D(); a.P.forEach((p, i) => (i ? t[key].lineTo(p[0], p[1]) : t[key].moveTo(p[0], p[1]))); t[key].closePath(); }
     for (const r of N.roads) for (let k = 1; k < r.n.length; k++) { const a = r.n[k - 1], b = r.n[k], t = mt((nx(a) + nx(b)) / 2, (nz(a) + nz(b)) / 2), wk = Math.max(5, Math.round(r.w * 0.95)) + (r.cls <= 2 ? 100 : 0); let p = t.roads.get(wk); if (!p) t.roads.set(wk, (p = new Path2D())); p.moveTo(nx(a), nz(a)); p.lineTo(nx(b), nz(b)); }
   }
   V.mapLive = (g, cx, cz, span) => { // drive.js／walk.js 的小地圖：底圖畫完、路線畫之前叫（g 已經轉成世界座標）
@@ -16044,6 +16759,7 @@ function buildNeihu(V, opt = {}) {
   if (V.info) V.info.neihu = info;
   const P = {
     group, info, inside, update, uncull, place, routeTo, roadName, bigSigns, names: D.names, link: LK, destNode, pathTo: (x, z) => pathTo(x, z, destNode), data: N, hillH, inBox,
+    ringAt, ringN, ringBox: RING.slice(), // 第 27 批：外面那圈山的地形（hills.js 包進 V.heightAt）
     dispose() {
       uncull(); uncarve(); group.removeFromParent(); group.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
       for (const m of Object.values(mats)) m.dispose(); for (const t of [FA.tex, SA.tex, tAsph, tPave, tGround]) t.dispose();
@@ -19133,6 +19849,7 @@ function createWalker(o) {
     for (let i = 0; i < n; i++) {
       const px = st.x, pz = st.z; st.x += st.vx * h; st.z += st.vz * h;
       if (!collide() && freeAt(px, pz, R - 0.004, true)) { st.x = px; st.z = pz; st.vx *= 0.5; st.vz *= 0.5; break; }
+      if (world.walkable && !world.walkable(st.x, st.z) && world.walkable(px, pz)) { st.x = px; st.z = pz; st.vx = st.vz = 0; break; } // 第 27 批：海裡太深走不進去（hills.js）
     }
     st.x = clamp(st.x, wb.x0, wb.x1); st.z = clamp(st.z, wb.z0, wb.z1);
     st.speed = Math.hypot(st.x - x0, st.z - z0) / dt;
@@ -29379,6 +30096,7 @@ const { buildLodCar, LOD_CARS } = (() => {
 
   // ---- 材質 ----
   // 車身（也給輪胎＋煞車用）：MeshPhysical＋類別表；背面＝車內（暗的）；珍珠只上在車漆
+  const LIVE = new Set(), NIGHT = { on: false }; // 第 30 批：活著的輕量車（晚上一起開燈）
   function bodyMaterial(tab) {
     const m = new THREE.MeshPhysicalMaterial({ roughness: 0.5, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03, side: THREE.DoubleSide });
     m.onBeforeCompile = (sh) => {
@@ -29491,8 +30209,9 @@ const { buildLodCar, LOD_CARS } = (() => {
     function lights() {
       tab.E.fill(0);
       for (const [i, c] of d.customs.entries()) tab.E.set([c.emi.r, c.emi.g, c.emi.b], (CUSTOM0 + i) * 3);
-      if (cur.lights) { tab.E.set([2.2, 2.1, 1.9], R.lamp * 3); tab.E.set([1.6, 1.55, 1.45], R.lens * 3); } // 低的鍍鉻（chrome）不亮
-      const red = cur.brake ? 3.2 : cur.lights ? 1.2 : 0;
+      const on = cur.lights || NIGHT.on; // 第 30 批：晚上（look.js）大家的燈都亮
+      if (on) { tab.E.set([2.2, 2.1, 1.9], R.lamp * 3); tab.E.set([1.6, 1.55, 1.45], R.lens * 3); } // 低的鍍鉻（chrome）不亮
+      const red = cur.brake ? 3.2 : on ? 1.2 : 0;
       if (red) { tab.E.set([red, red * 0.03, red * 0.02], R.red * 3); d.customs.forEach((c, j) => { if (c.red) tab.E.set([red * 0.8, red * 0.02, red * 0.01], (CUSTOM0 + j) * 3); }); }
     }
     function rimLook() {
@@ -29559,7 +30278,7 @@ const { buildLodCar, LOD_CARS } = (() => {
       },
       get draws() { return (rimMesh.visible ? 4 : 3) + (glow && glow.visible ? 1 : 0) + (pop && pop.mesh.visible ? 1 : 0); },
       dispose() {
-        car.removeFromParent();
+        LIVE.delete(api); car.removeFromParent();
         if (geo) releaseGeo(d, geo); geo = null;
         if (wgeo) releaseWheel(wgeo); wgeo = null;
         if (rimMesh.geometry) rimMesh.geometry.dispose();
@@ -29568,11 +30287,13 @@ const { buildLodCar, LOD_CARS } = (() => {
         bm.dispose(); gm.dispose(); rm.dispose(); // 輪框圖是大家共用的（不放掉：7 台 × 7 種樣式也才幾 MB）
       },
     };
+    LIVE.add(api); api._lights = lights; api._E = tab.E; // 測試：燈的 emissive 表
     setLook();
     if (POP_LAMPS[key]) { pop = popLamps(key, paintCol, bodyMesh.geometry); body.add(pop.mesh); } // 跳燈：燈蓋的顏色＝這台的車漆（同一個 Color）
     return api;
   }
-  return { buildLodCar, LOD_CARS };
+  buildLodCar.night = (on) => { on = !!on; if (NIGHT.on === on) return; NIGHT.on = on; for (const a of LIVE) a._lights(); }; // 第 30 批：晚上（look.js 叫）：大燈、尾燈亮
+return { buildLodCar, LOD_CARS };
 })();
 
 // ---- ghost.js ----
@@ -31866,6 +32587,7 @@ return { createTraffic, createPedestrians, npcGraphs };
 //   壓扁的東西（大的、路邊的小東西都一樣）：扁了 20 秒、你離它 15 公尺以上就 0.8 秒慢慢長回來（頂點的 y 原本是多少記著）；回車庫頁、重新載入也會回來（修 8，2026-10-10）
 //   電線桿扁了：接在它上面的電線垂到地上，長回來的時候拉回去（修 9）
 //   o.any() → 現在開的是不是越野車；o.protect(x, z) → 這裡不能輾；o.copWreck(i, x, z) → police-ai 的 wreck（回傳 { x, z, th, hl, hw } 或 null）
+//   第 29 批：o.treeK(j, k) → 樹（j.tree）壓扁／長回來的每一下（k＝高度倍數，1＝原本的）：畫質的樹葉卡片（look.js treeK）跟著扁
 // 【效能】每幀只跑現在的墊子（最多 16 個）：約 0.01 ms，不配置記憶體；壓扁的頂點是輾到的那一下做一次（一台／一個東西 0.2–3 ms，只傳改到的那一段）
 
 const { createCrush } = (() => {
@@ -32230,6 +32952,7 @@ function createCrush(o = {}) {
       const f = j.kf < 1 ? clamp((1 - k) / (1 - j.kf), 0, 1) : 1;
       for (const w of j.wires) { const P = w.A.array, I = w.idx, Y = w.y0, F = w.yf; for (let i = 0; i < I.length; i++) P[I[i] * 3 + 1] = Y[i] + (F[i] - Y[i]) * f; upd(w.A, w.R, w.lo * 3, (w.hi - w.lo + 1) * 3); }
     }
+    if (j.tree && o.treeK) o.treeK(j, k); // 第 29 批：畫質「漂亮」「最真實」的樹葉卡片（look.js）跟著扁
     if (j.inst) { // 內湖的樹：矩陣的 y 軸縮下去、x z 放大一點（扁扁的一片）
       const A = j.inst.m.instanceMatrix, E = A.array, o16 = j.inst.i * 16, e = j.inst.e, kk = Math.max(k, 0.06), w = 1 + (1 - kk) * 0.35;
       for (let r = 0; r < 16; r++) E[o16 + r] = e[r] * (r < 3 || (r >= 8 && r < 11) ? w : r >= 4 && r < 7 ? kk : 1);
@@ -36990,6 +37713,749 @@ function openGunShop(parent, GAME, onBuy, opts = {}) {
 return { buildGunShopInterior, openGunShop, gunShopFonts, GUNSHOP_TEXT };
 })();
 
+// ---- look.js ----
+// ---- 畫質（第 29 批）：Nick 2026-10-23「就用5號的真實度」（範例 https://claude.ai/artifact/4qQroLLTQSbopBgVqoHeHv 的 5 號「最真實」）----
+// 三種（全螢幕開車「⋯」→「✨」→ 畫質 最真實／漂亮／順；每支手機自己記 carid.look，不在存檔裡）：
+//   0 順：原本的樣子（卡通、亮的顏色、沒有影子）
+//   1 漂亮＝範例 3 號：真的天空（雲）、太陽的影子、遠的地方有一點霧；地面細細的紋路、草地深淺、顏色淡一點；山和樹變圓；樹冠換成一片一片的葉子卡片
+//   2 最真實＝範例 5 號：1 號的全部＋路、草、水泥的材質貼圖（顏色＋凹凸）、山和草地的起伏、車漆反射天空、草地上一叢一叢的草、樹葉更密、
+//     角落陰影（GTAO，半張大小）、一點點光暈、四角暗一點；自己畫：場景（半精度、4 倍多重取樣）→ AO → 光暈 → 色調＋四角 → 畫面
+// 每種都換得回去：原本的天空、霧、燈、反射、材質（onBeforeCompile）、法線、顏色、樹冠的三角形、內湖的樹都記著
+// 只改開車出門的世界（scene）：車庫頁、房子裡面、警察局、槍店照舊；畫到別的地方（後照鏡）不做後製、不重算影子（用這一格的）
+// 第 30 批（Nick 2026-10-24「什麼時候會變晚上的街景」，卡片選「自動輪流」）：一天的時間（只有漂亮、最真實）
+//   遊戲裡 24 分鐘＝一天（照手機的時鐘算：(現在的分鐘 % 24) / 24 × 24 小時，大家不用連線就一樣）；6 點太陽從東邊出來、12 點南邊最高（55 度）、18 點西邊下山
+//   天空、太陽（顏色、亮度、影子的方向）、天空光、霧的顏色、反射的圖（照太陽高度分 5 段，第一次用到才做）、曝光都跟著時間變；晚上月亮當太陽（藍藍的、暗、有影子）
+//   傍晚起（太陽 6 度以下）：路燈（最近的 4 支真的有光，其他只有亮的燈頭）、招牌亮（emissiveMap 的材質）、大家的車燈亮（masks.js PAINT_NIGHT、carlod.js buildLodCar.night：town.src.js 的 night 回呼）、
+//   自己的車兩盞大燈真的照路（SpotLight 跟著車）、光暈（最真實）；最真實：路面像下過雨（濕、暗、水窪，倒影＝把世界倒過來再畫一次到半張大小的圖；只有路面高度附近的地面）
+//   look.hour＝現在幾點、look.setHour(h)（測試、試做頁；null＝照時鐘）、look.night＝燈亮多少（0–1）
+// 座標跟 village.js 一樣：x 往東、y 往上、z 往南
+// 【API】
+//   const look = createLook({ renderer, scene, world: V, getCar: () => 現在開的車（Object3D）或 null,
+//     plain: () => 不要加地面紋路的那一棟（圓塔：大理石、玻璃是設計好的）, indoor: (cam) => 鏡頭在屋頂底下（圓塔裡面）→ 補光,
+//     night: (k) => 燈亮多少變了（0–1；車燈：PAINT_NIGHT、buildLodCar.night）, carDims: (car) => { hx, hz, cx }（車身長方形：大燈放在車頭兩邊） })
+//   await look.set(lv)      換畫質；第一次 1、2 要先找樹冠、算法線（約 0.5–1 秒），第一次 2 要先畫材質貼圖（time-slice）
+//   look.level              現在的；look.can.post＝這支手機畫得了最真實嗎（半精度的畫面）；look.half＝半精度的畫面（後照鏡用）
+//   look.treeK(j, k)        crush.js：輾扁的樹（j.grp 裡每棵樹 2 公尺內的葉子卡片跟著扁，k＝高度倍數，1＝長回來）
+//   look.stats              { calls, tris, ms, maxMs, crowns, cells, grass, mats, smooth, prepMs, texMs }
+//   renderer.render 包起來：畫 scene 到畫面的時候（level > 0）先 frame()：影子跟著鏡頭、遠近換樹、草、車漆、隧道裡面補光、新的東西加影子
+//   影子：反射、天空光的那張圖不要太陽本身（不然影子裡面也被照到）；車身是一片一片的殼：車的材質兩面都算影子（shadowSide）
+//   草、樹葉卡片：兩面用同一個法線（背面不翻成朝下）；最真實的時候 alpha 寫 0，AO 不蓋在它們上面（密密的草葉自己的深度會弄得很黑）
+// 【效能】影子 2048（120 公尺見方，跟著鏡頭前面 35 公尺）；樹 200 公尺一格（看不到的不畫、遠的換 36 張卡片的）；
+//   草 16 公尺一格 7×7 格（每格 900 叢、換格每幀最多 2 格）；AO 用場景的深度（不用多畫一次場景）、半張大小
+
+const { createLook, LOOK_NAMES } = (() => {
+const LOOK_NAMES = ['順', '漂亮', '最真實'];
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+// 光線（範例 2 號以後都一樣）
+const LT = { elev: 38, az: 233, turb: 6, ray: 1.3, mie: 0.004, exp: 0.45, sunI: 4.6, sunC: 0xfff0dc, envI: 0.3, hemiI: 0.12, hemiC: 0xdde6ef, hemiG: 0x474a3c, fog: 0xc3ccd3, gnd: 0x3c4235, cloud: 0.32, cden: 0.5 };
+const DAY_MIN = 24; // 第 30 批：遊戲裡一天＝真的 24 分鐘（照手機的時鐘：大家一樣）
+const SUN_MAX = 55; // 中午太陽多高（度）
+const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fog: 0xd8b49a, envI: 0.55, turb: 8, ray: 2.0, mie: 0.006, exp: 0.5 }; // 太陽低的時候（橘色、天空濁、霧暖色）
+const NIGHT = { hemiI: 0.55, hemiC: 0x34405e, hemiG: 0x14161c, fog: 0x0a0d15, envI: 0.12, exp: 0.95 }; // 晚上：天空光藍藍的、暗
+const MOON = { elev: 48, az: 300, c: 0x9fb4d8, I: 0.5 }; // 月亮當太陽（有影子）
+const LAMP = { n: 4, c: 0xffd9a0, I: 180, dist: 46, headC: 0xfff0d0, headI: 520, bloom: 0.3, thr: 2.2, sign: 0.5 }; // 路燈（最近 4 支真的有光）、自己的車的大燈、晚上的光暈
+const WET = { dark: 0.62, pud: 0.55, rough: 0.3, pudRough: 0.04, base: 0.35, lod: 4.5 }; // 下過雨的路（最真實）：變暗、水窪更暗、粗糙度、倒影（水窪外面 35%、模糊）
+const CAVE_I = 1.5, CAVE_C = 0xf4f1ea, CAVE_G = 0x8a8478; // 隧道裡面（hills.js 的 dimK 0.42）、圓塔裡面：天空光補到這麼多、顏色白一點（太陽被擋住了，不然一片黑、藍藍的）
+// 材質（範例 3 號、5 號）
+const MB = { desat: 0.9, grain: 0.08, grass: 0.38, patch: 0.3, fine2: 0.22, olive: 0.75, clump: 0.5, albedo: 0.78, leaf: 3.5, pk: 0.9, pn: 1.6, macro: 5 };
+const TREE = [null, { cards: 110, cone: 8 }, { cards: 230, cone: 14 }], TREE_FAR = { cards: 36, cone: 4 }, TREE_NEAR = 190, CELL = 200;
+const SHADOW = 2048, SH_R = 60, SH_AHEAD = 35;
+const GC = 16, GN = 7, GPER = 900; // 草：一格幾公尺、幾格見方、一格最多幾叢
+const POST = { bloom: 0.07, bRad: 0.35, thr: 10, aoR: 2.2, aoS: 2.2, vig: 0.55, carEnv: 0.7 };
+const GROUND = /(^|[-_|])(ground|area|walk|road|paint|grass|paddy|water|asph|line|lane|trail|sea|sand|island|shadow)\b/i; // 地上的：只接影子，不投影子（省）
+const f3 = (v) => v.toFixed(3);
+const NOISE = `
+  float bhash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+  float bnoise(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(bhash(i), bhash(i + vec3(1,0,0)), f.x), mix(bhash(i + vec3(0,1,0)), bhash(i + vec3(1,1,0)), f.x), f.y),
+               mix(mix(bhash(i + vec3(0,0,1)), bhash(i + vec3(1,0,1)), f.x), mix(bhash(i + vec3(0,1,1)), bhash(i + vec3(1,1,1)), f.x), f.y), f.z); }
+  vec3 bN() { vec3 n = vBN; if (dot(n, n) < 0.25) { n = cross(dFdx(vBW), dFdy(vBW)); if (dot(n, cameraPosition - vBW) < 0.0) n = -n; } return normalize(n); }`; // 沒有法線的網格（內湖）：用畫面上的斜率算
+const PBRH = `
+  uniform sampler2D tAsA, tAsN, tGrA, tGrN, tCoA, tCoN; float bUp = 0.0, bG = 0.0, bA = 0.0;
+  vec3 bDet(sampler2D t, vec2 w, float s) { return texture(t, w / s).rgb + texture(t, w / (s * 5.3) + vec2(0.37, 0.71)).rgb; }`;
+// 顏色：灰的（柏油、水泥）細顆粒；綠的（草、樹、山）一塊一塊深淺、黃綠、偏橄欖綠；樹冠一叢一叢；很亮的灰暗一點；彎很大的綠色邊邊挖成葉子
+const COLOR = (pbr) => `#include <color_fragment>
+  { vec3 c = diffuseColor.rgb; float l = dot(c, vec3(0.299, 0.587, 0.114)), mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)), sat = (mx - mn) / max(mx, 1e-3);
+    float nr = smoothstep(140.0, 15.0, vBD), mid = smoothstep(500.0, 60.0, vBD);
+    float fine = 0.5, med = 0.5, pch = 0.5;
+    if (nr > 0.0) fine = bnoise(vBW * 11.0) * 0.5 + bnoise(vBW * 31.0) * 0.5;
+    if (mid > 0.0) { med = bnoise(vBW * 1.3); pch = bnoise(vBW * 0.11) * 0.65 + bnoise(vBW * 0.035) * 0.35; }
+    float green = step(mn, c.b) * smoothstep(0.08, 0.3, sat) * step(c.r, c.g) * step(c.b, c.g);
+    c = mix(vec3(l), c, ${f3(MB.desat)});
+    float gr = 1.0 - green;
+    c *= 1.0 + gr * (${f3(MB.grain)} * (fine - 0.5) * nr + 0.03 * (med - 0.5) * mid);
+    c *= 1.0 + green * (${f3(MB.grass)} * (pch - 0.5) * mid + ${f3(MB.fine2)} * (fine - 0.5) * nr);
+    c = mix(c, c * vec3(1.12, 1.02, 0.72), green * ${f3(MB.patch)} * smoothstep(0.45, 0.8, pch));
+    c = mix(c, c * vec3(${f3(MB.olive)}, ${f3(MB.olive * 1.06)}, ${f3(MB.olive * 0.82)}), green);
+    vec3 nn = bN();
+    if (green > 0.0 && mid > 0.0) { float side = 1.0 - smoothstep(0.8, 0.97, nn.y), cl = bnoise(vBW * 1.8) * 0.6 + bnoise(vBW * 4.5) * 0.4; c *= 1.0 + green * side * ${f3(MB.clump)} * (cl - 0.5) * mid; }
+    c *= mix(1.0, ${f3(MB.albedo)}, smoothstep(0.35, 0.75, l) * (1.0 - smoothstep(0.05, 0.25, sat)));
+    if (green > 0.5 && vBD < 90.0) { float curv = length(fwidth(nn)) / max(length(fwidth(vBW)), 1e-4), crown = green * smoothstep(0.12, 0.3, curv) * smoothstep(90.0, 30.0, vBD);
+      if (crown > 0.0) { vec3 vd = normalize(cameraPosition - vBW); float rim = 1.0 - abs(dot(nn, vd)), lf = bnoise(vBW * ${MB.leaf.toFixed(2)}) * 0.65 + bnoise(vBW * ${(MB.leaf * 2.7).toFixed(2)}) * 0.35;
+        if (crown > 0.5 && lf < (rim - 0.45) * 2.2) discard;
+        c *= 1.0 + crown * 0.55 * (lf - 0.5); } }
+    ${pbr ? `{ bUp = smoothstep(0.6, 0.85, nn.y); bG = green; bA = (1.0 - green) * (1.0 - smoothstep(0.1, 0.22, l));
+      float near = smoothstep(260.0, 25.0, vBD);
+      if (bUp * near > 0.0) { vec3 d = mix(mix(bDet(tCoA, vBW.xz, 2.2), bDet(tAsA, vBW.xz, 2.6), bA), bDet(tGrA, vBW.xz, 1.6), bG);
+        c *= mix(vec3(1.0), vec3(1.0) + (d - 1.0) * ${f3(MB.pk)}, bUp * near); } }` : ''}
+    diffuseColor.rgb = c; }`;
+// 5 號：地面（朝上的面）的凹凸＋山和草地大大小小的起伏
+const PBRN = `#include <normal_fragment_maps>
+  { vec3 N = bN(); float k = bUp * smoothstep(120.0, 15.0, vBD);
+    if (k > 0.01) { vec3 tn = mix(mix(texture(tCoN, vBW.xz / 2.2).xyz, texture(tAsN, vBW.xz / 2.6).xyz, bA), texture(tGrN, vBW.xz / 1.6).xyz, bG) * 2.0 - 1.0;
+      vec3 Tx = normalize(vec3(1.0, 0.0, 0.0) - N * N.x), Tz = normalize(vec3(0.0, 0.0, 1.0) - N * N.z);
+      vec3 wn = normalize(N + (Tx * tn.x + Tz * tn.y) * ${f3(MB.pn)});
+      normal = normalize(mix(normal, normalize((viewMatrix * vec4(wn, 0.0)).xyz), k)); }
+    float kg = bG * smoothstep(0.25, 0.55, N.y) * smoothstep(1600.0, 250.0, vBD);
+    if (kg > 0.01) { vec2 q = vBW.xz; const float e = 1.5;
+      #define BMH(p) (bnoise(vec3((p) * 0.04, 1.0)) + 0.5 * bnoise(vec3((p) * 0.1, 7.0)) + 0.25 * bnoise(vec3((p) * 0.26, 3.0)))
+      float h0 = BMH(q), hx = BMH(q + vec2(e, 0.0)) - h0, hz = BMH(q + vec2(0.0, e)) - h0;
+      vec3 Tx = normalize(vec3(1.0, 0.0, 0.0) - N * N.x), Tz = normalize(vec3(0.0, 0.0, 1.0) - N * N.z);
+      vec3 wn = normalize(N - (Tx * hx + Tz * hz) * (${MB.macro.toFixed(2)} / e));
+      normal = normalize(mix(normal, normalize((viewMatrix * vec4(wn, 0.0)).xyz), kg)); } }`;
+// 第 30 批：濕的路（最真實）：朝上、不是草的地面：變暗、水窪、粗糙度變小；路面高度（wetY）1 公尺內的地方混上倒影（tRefl：倒過來畫的世界，reflM 把世界座標投到那張圖上）
+const WETH = 'uniform sampler2D tRefl; uniform mat4 reflM; uniform float wetK, wetY; float wWet = 0.0, wPud = 0.0;';
+const WETR = `#include <roughnessmap_fragment>
+  if (wetK > 0.0) { wWet = wetK * bUp * (1.0 - bG) * smoothstep(400.0, 60.0, vBD); if (wWet > 0.0) { float pn = bnoise(vBW * 0.45) * 0.6 + bnoise(vBW * 1.9) * 0.4; wPud = wWet * smoothstep(0.56, 0.63, pn);
+    diffuseColor.rgb *= mix(1.0, ${f3(WET.dark)}, wWet) * mix(1.0, ${f3(WET.pud)}, wPud); roughnessFactor = mix(roughnessFactor, mix(${f3(WET.rough)}, ${f3(WET.pudRough)}, wPud), wWet); } }`;
+const WETO = `if (wWet > 0.0 && abs(vBW.y - wetY) < 1.0) { vec4 rp = reflM * vec4(vBW, 1.0); vec2 ruv = rp.xy / rp.w;
+    if (rp.w > 0.0 && ruv.x > 0.0 && ruv.x < 1.0 && ruv.y > 0.0 && ruv.y < 1.0) { vec3 vd = normalize(cameraPosition - vBW); float ct = max(dot(vd, vec3(0.0, 1.0, 0.0)), 0.0), F = 0.04 + 0.96 * pow(1.0 - ct, 5.0);
+      vec3 rc = textureLod(tRefl, ruv, mix(${f3(WET.lod)}, 0.0, wPud)).rgb; outgoingLight = mix(outgoingLight, rc * mix(0.6, 1.0, wPud), clamp(F * 1.3, 0.0, 1.0) * wWet * (1.0 - smoothstep(0.7, 1.0, abs(vBW.y - wetY))) * mix(${f3(WET.base)}, 1.0, wPud)); } }
+  #include <opaque_fragment>`;
+const VDECL = 'varying vec3 vBW; varying float vBD; varying vec3 vBN;';
+const VPOS = `#include <project_vertex>
+  { vec4 w4 = vec4(transformed, 1.0);
+  #ifdef USE_INSTANCING
+    w4 = instanceMatrix * w4;
+  #endif
+    vBW = (modelMatrix * w4).xyz; vBD = -mvPosition.z; vBN = normalize(mat3(modelMatrix) * objectNormal); }`;
+// 最後一道：曝光、色調（ACES）、sRGB、四角暗一點（跟 OutputPass＋VignetteShader 一樣）
+const FINAL = {
+  uniforms: { tDiffuse: { value: null }, toneMappingExposure: { value: LT.exp }, offset: { value: 0.7 }, darkness: { value: POST.vig } },
+  vertexShader: `precision highp float; uniform mat4 modelViewMatrix; uniform mat4 projectionMatrix; attribute vec3 position; attribute vec2 uv; varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `precision highp float; uniform sampler2D tDiffuse; uniform float offset, darkness;
+    #define ACES_FILMIC_TONE_MAPPING
+    #define SRGB_TRANSFER
+    #include <tonemapping_pars_fragment>
+    #include <colorspace_pars_fragment>
+    varying vec2 vUv;
+    void main() { vec4 c = texture2D(tDiffuse, vUv); c.rgb = ACESFilmicToneMapping(c.rgb); c = sRGBTransferOETF(c);
+      vec2 u = (vUv - vec2(0.5)) * vec2(offset); gl_FragColor = vec4(mix(c.rgb, vec3(1.0 - darkness), dot(u, u)), 1.0); }`,
+};
+
+function createLook(o) {
+  const R = o.renderer, scene = o.scene, V = o.world, getCar = o.getCar || (() => null), plainOf = o.plain || (() => null), indoor = o.indoor || (() => false), nightCb = o.night || (() => {}), carDims = o.carDims || (() => null);
+  const gl = R.getContext();
+  const st = { calls: 0, tris: 0, ms: 0, maxMs: 0, crowns: 0, cells: 0, grass: 0, mats: 0, smooth: 0, prepMs: 0, texMs: 0, sets: 0 };
+  const half = R.extensions.has('EXT_color_buffer_float') || R.extensions.has('EXT_color_buffer_half_float');
+  const soft = (() => { try { const x = gl.getExtension('WEBGL_debug_renderer_info'); return /swiftshader|llvmpipe|software/i.test(String(gl.getParameter(x ? x.UNMASKED_RENDERER_WEBGL : gl.RENDERER))); } catch { return false; } })();
+  let LV = 0, busy = null, S0 = null, prepped = false;
+  let dl = null, hemi = null; for (const c of scene.children) { if (!dl && c.isDirectionalLight) dl = c; if (!hemi && c.isHemisphereLight) hemi = c; }
+  const skyM = scene.getObjectByName('sky');
+  const sun = new THREE.Vector3(), EXP0 = R.toneMappingExposure;
+  // ==== 第 30 批：一天的時間 ====
+  let hourOv = null; // 測試、試做頁：固定幾點（null＝照時鐘）
+  const hourNow = () => (hourOv != null ? hourOv : (((Date.now() / 60000) % DAY_MIN) / DAY_MIN) * 24);
+  const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const TD = { h: 12, elev: SUN_MAX, az: 270, day: 1, warm: 0, night: 0, lamp: 0, moon: 0, exp: LT.exp, envI: LT.envI, hemiI: LT.hemiI, sunI: LT.sunI, dlI: LT.sunI, fog: new THREE.Color(LT.fog), hemiC: new THREE.Color(LT.hemiC), hemiG: new THREE.Color(LT.hemiG), sunC: new THREE.Color(LT.sunC), band: '' };
+  const C_D = { sunC: new THREE.Color(LT.sunC), fog: new THREE.Color(LT.fog), hC: new THREE.Color(LT.hemiC), hG: new THREE.Color(LT.hemiG) }, C_K = { sunC: new THREE.Color(DUSK.sunC), fog: new THREE.Color(DUSK.fog), hC: new THREE.Color(DUSK.hemiC), hG: new THREE.Color(DUSK.hemiG) }, C_N = { fog: new THREE.Color(NIGHT.fog), hC: new THREE.Color(NIGHT.hemiC), hG: new THREE.Color(NIGHT.hemiG), moon: new THREE.Color(MOON.c) };
+  const dirOf = (out, elev, az) => { const e = THREE.MathUtils.degToRad(elev), a = THREE.MathUtils.degToRad(az); return out.set(Math.cos(e) * Math.cos(a), Math.sin(e), -Math.cos(e) * Math.sin(a)).normalize(); };
+  function timeStep() { // 現在幾點 → 太陽在哪、多亮、多暖、晚上多深、燈亮多少、各種顏色（每一格算，都很便宜）
+    const h = hourNow(), t = (((h - 6) / 12) % 2 + 2) % 2, elev = SUN_MAX * Math.sin(Math.PI * t), az = ((360 - (h - 6) * 15) % 360 + 360) % 360;
+    TD.h = h; TD.elev = elev; TD.az = az;
+    TD.day = ss(-6, 8, elev); TD.warm = 1 - ss(3, 22, elev); TD.night = 1 - ss(-10, -1, elev); TD.lamp = 1 - ss(-2, 8, elev); TD.moon = 1 - ss(-9, -6, elev);
+    const w = TD.warm, n = TD.night;
+    TD.exp = THREE.MathUtils.lerp(THREE.MathUtils.lerp(LT.exp, DUSK.exp, w), NIGHT.exp, n);
+    TD.envI = THREE.MathUtils.lerp(THREE.MathUtils.lerp(LT.envI, DUSK.envI, w), NIGHT.envI, n);
+    TD.hemiI = THREE.MathUtils.lerp(THREE.MathUtils.lerp(LT.hemiI, DUSK.hemiI, w), NIGHT.hemiI, n);
+    TD.fog.lerpColors(C_D.fog, C_K.fog, w).lerp(C_N.fog, n); TD.hemiC.lerpColors(C_D.hC, C_K.hC, w).lerp(C_N.hC, n); TD.hemiG.lerpColors(C_D.hG, C_K.hG, w).lerp(C_N.hG, n);
+    if (TD.day > 0.001) { dirOf(sun, elev, az); TD.sunC.lerpColors(C_D.sunC, C_K.sunC, w); TD.dlI = LT.sunI * TD.day; }
+    else { dirOf(sun, MOON.elev, MOON.az); TD.sunC.copy(C_N.moon); TD.dlI = MOON.I * TD.moon; }
+    TD.band = n > 0.5 ? 'n' : elev < 4 ? 'd' : elev < 16 ? 'l' : elev < 35 ? 'm' : 'h'; // 反射的圖分 5 段
+  }
+  timeStep();
+  const V3 = new THREE.Vector3(), V3b = new THREE.Vector3(), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0), S3 = new THREE.Vector3(), COL = new THREE.Color();
+  // 影子相機的軸（對齊影子的格子，鏡頭動的時候影子邊邊不會閃）；太陽會動：每一格重算
+  const LX = new THREE.Vector3(), LY = new THREE.Vector3(), TEXEL = (SH_R * 2) / SHADOW;
+  const own = (m, k) => Object.prototype.hasOwnProperty.call(m, k);
+  const hl = () => V.hills || null;
+  function setBase(light, v) { // 換燈的亮度：hills.js 隧道裡面變暗用的原本亮度也一起換
+    const H = hl(); let k = 1;
+    if (H && H.lights) for (const e of H.lights) if (e[0] === light) { e[1] = v; k = H.dimK ?? 1; }
+    light.intensity = v * k;
+  }
+
+  // ==== 天空、反射 ====
+  let skyMat = null, envTex = null; const ENVS = new Map(); let envBand = '';
+  const skyUni = (u) => { const w = TD.warm; u.turbidity.value = THREE.MathUtils.lerp(LT.turb, DUSK.turb, w); u.rayleigh.value = THREE.MathUtils.lerp(LT.ray, DUSK.ray, w); u.mieCoefficient.value = THREE.MathUtils.lerp(LT.mie, DUSK.mie, w); u.mieDirectionalG.value = 0.8;
+    if (TD.day > 0.001) u.sunPosition.value.copy(sun); else dirOf(u.sunPosition.value, TD.elev, TD.az); // 晚上：天空照（地平線下的）太陽算＝黑的；月亮只當燈
+    if (u.cloudCoverage) { u.cloudCoverage.value = LT.cloud; u.cloudDensity.value = LT.cden; } };
+  function skyOf(scale) { const k = new Sky(); skyUni(k.material.uniforms); k.scale.setScalar(scale); return k; }
+  function makeSky() {
+    if (!skyMat) { const k = skyOf(1); skyMat = k.material; skyMat.depthWrite = false; k.geometry.dispose(); }
+    skyUni(skyMat.uniforms);
+    const band = TD.band; if (band === envBand && envTex) return; envBand = band;
+    let tex = ENVS.get(band);
+    if (!tex) { // 這一段太陽高度的反射圖（第一次用到才做，之後換來換去不用再做）
+      const es = new THREE.Scene(), k2 = skyOf(100); es.add(k2); if (k2.material.uniforms.showSunDisc) k2.material.uniforms.showSunDisc.value = 0; // 反射、天空光不要太陽本身（不然影子裡面也被太陽照到，影子很淡）
+      const gnd = new THREE.Mesh(new THREE.CircleGeometry(90, 32), new THREE.MeshBasicMaterial({ color: LT.gnd })); gnd.rotation.x = -Math.PI / 2; gnd.position.y = -2; es.add(gnd);
+      const pm = new THREE.PMREMGenerator(R); tex = pm.fromScene(es, 0.03).texture; pm.dispose(); ENVS.set(band, tex);
+      k2.geometry.dispose(); k2.material.dispose(); gnd.geometry.dispose(); gnd.material.dispose();
+    }
+    envTex = tex; if (LV > 0) { scene.environment = envTex; for (const c of CARM) if (c[0].envMap) { c[0].envMap = envTex; } }
+  }
+
+  // ==== 影子、材質（新的東西慢慢找：每幀最多 300 個）====
+  const SHAD = new Set(), MATS = new Set(), SSIDE = new Set(), HIDE = [], GND = new Set(); let SEEN = new WeakSet(); // 開了影子的、改了的材質、看過的東西、藏起來的（地上畫的假影子）、地上的（倒影不畫）
+  let grassMat = null, leafMat = null, TEX = null;
+  const MASKU = { value: 0 }; // 5 號：草、樹葉卡片在場景圖的 alpha 寫 0 → AO 不蓋在它們上面（不然密密的草葉被自己的深度弄得很黑）
+  const maskObc = (sh) => { sh.uniforms.lkMask = MASKU; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float lkMask;').replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  gl_FragColor.a *= 1.0 - lkMask;')
+    .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n  #ifndef FLAT_SHADED\n  normal = normalize(vNormal);\n  #endif'); }; // 卡片兩面都用同一個法線（背面不要翻成朝下：一半的草葉、葉子會黑黑的）
+  const pbrOk = (m) => LV === 2 && !!TEX && !m.transparent && !(m.alphaTest > 0);
+  const WU = { tRefl: { value: null }, reflM: { value: new THREE.Matrix4() }, wetK: { value: 0 }, wetY: { value: 0 } }; // 濕路：所有材質共用
+  const SIGNS = new Map(); // 第 30 批：招牌（emissiveMap＝map 的材質）→ 原本的 emissiveIntensity；晚上加亮
+  let lampSent = -1, signK = -1;
+  let PLAINR = null; const PLAINM = new Set(); // 圓塔（plain）的材質：別的家的外殼也用同一個，所以記材質不是記東西
+  function plainMats() { const r = plainOf(); if (r === PLAINR) return; PLAINR = r; PLAINM.clear(); if (r) r.traverse((x) => { if (x.material) for (const m of [].concat(x.material)) PLAINM.add(m); }); }
+  function patchMat(m) {
+    if (!m || MATS.has(m) || !m.isMeshStandardMaterial || m.isMeshPhysicalMaterial || m === grassMat || m.isShaderMaterial || PLAINM.has(m)) return;
+    MATS.add(m);
+    const ud = m.userData; if (!ud.lk) ud.lk = { obc: own(m, 'onBeforeCompile') ? m.onBeforeCompile : null, key: own(m, 'customProgramCacheKey') ? m.customProgramCacheKey : null };
+    const obc0 = ud.lk.obc, key0 = ud.lk.key;
+    m.onBeforeCompile = function (sh, r) {
+      if (obc0) obc0.call(this, sh, r);
+      if (LV === 0) return;
+      const pbr = pbrOk(this);
+      if (pbr) { const T = TEX; Object.assign(sh.uniforms, { tAsA: { value: T.asA }, tAsN: { value: T.asN }, tGrA: { value: T.grA }, tGrN: { value: T.grN }, tCoA: { value: T.coA }, tCoN: { value: T.coN } }, WU); }
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VDECL).replace('#include <project_vertex>', VPOS);
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + VDECL + NOISE + (pbr ? PBRH + WETH : ''))
+        .replace('#include <color_fragment>', COLOR(pbr))
+        .replace('#include <normal_fragment_maps>', pbr ? PBRN : '#include <normal_fragment_maps>')
+        .replace('#include <roughnessmap_fragment>', (pbr ? WETR : '#include <roughnessmap_fragment>') + '\nroughnessFactor = clamp(roughnessFactor * (0.85 + 0.3 * bnoise(vBW * 5.0)), 0.04, 1.0);')
+        .replace('#include <opaque_fragment>', pbr ? WETO : '#include <opaque_fragment>');
+    };
+    m.customProgramCacheKey = function () { return (key0 ? key0.call(this) : obc0 ? obc0.toString() : '') + '|lk' + LV + (pbrOk(this) ? 'p' : ''); };
+    m.needsUpdate = true; st.mats = MATS.size;
+    if (m.emissiveMap && m.emissiveMap === m.map && m.emissiveIntensity < 0.5 && !SIGNS.has(m)) { SIGNS.set(m, m.emissiveIntensity); signK = -1; } // 招牌：晚上加亮
+  }
+  function signsK(k) { if (Math.abs(k - signK) < 0.02) return; signK = k; for (const [m, b] of SIGNS) m.emissiveIntensity = b + LAMP.sign * k; }
+  function unpatchAll() {
+    for (const [m, b] of SIGNS) m.emissiveIntensity = b; SIGNS.clear(); signK = -1;
+    for (const m of MATS) { const lk = m.userData.lk; if (lk.obc) m.onBeforeCompile = lk.obc; else delete m.onBeforeCompile; if (lk.key) m.customProgramCacheKey = lk.key; else delete m.customProgramCacheKey; delete m.userData.lk; m.needsUpdate = true; }
+    MATS.clear(); st.mats = 0;
+  }
+  function visit(x, car) { // 一個東西：開影子、改材質（車子的材質不改：車漆另外弄）
+    if (x === skyM || SEEN.has(x)) return; SEEN.add(x);
+    if (x.name === 'st-shadow' && x.visible) { x.visible = false; HIDE.push(x); return; } // 村子地上畫的假影子：有真的了
+    if (!x.isMesh || x.isSprite) return;
+    const m0 = Array.isArray(x.material) ? x.material[0] : x.material; if (!m0 || m0.isMeshBasicMaterial || m0.transparent || m0.isShaderMaterial) return;
+    if (GROUND.test(x.name) || x.name === 'ground' || x.name === 'lk-grass') GND.add(x);
+    if (!x.castShadow || !x.receiveShadow) { const cast = !GROUND.test(x.name) && m0 !== grassMat; if (cast !== x.castShadow || !x.receiveShadow) { SHAD.add(x); x.castShadow = cast; x.receiveShadow = true; } }
+    if (!car) for (const m of [].concat(x.material)) patchMat(m);
+    else if (car === 1) for (const m of [].concat(x.material)) if (m && m.shadowSide === null && !SSIDE.has(m)) { SSIDE.add(m); m.shadowSide = THREE.DoubleSide; } // 車身是一片一片的殼（底下沒封起來）：兩面都算影子，不然只剩一圈邊
+  }
+  const SCAN = { stack: [], wait: 0 };
+  function scanStep(n, dt) { // 新的東西（路上的車、警察、朋友、換開的車）：慢慢找
+    const st2 = SCAN.stack, car = getCar(), plain = plainOf();
+    if (!st2.length) { if ((SCAN.wait -= dt) > 0) return; SCAN.wait = 1.5; st2.push(scene, 0); plainMats(); }
+    while (n-- > 0 && st2.length) { const isCar = st2.pop(), x = st2.pop(); const c = isCar || (x === car ? 1 : x === plain ? 2 : 0); visit(x, c); const ch = x.children; for (let i = ch.length - 1; i >= 0; i--) st2.push(ch[i], c); }
+  }
+  function scanAll() { SCAN.stack.length = 0; SCAN.wait = 0; plainMats(); const car = getCar(), plain = plainOf(); const go = (x, c) => { c = c || (x === car ? 1 : x === plain ? 2 : 0); visit(x, c); for (const ch of x.children) go(ch, c); }; go(scene, false); }
+
+  // ==== 樹冠、圓滑（第一次 1、2 做；之後換來換去只改回去／改過來）====
+  const TRK = []; // 樹冠縮成一點：{ A（position）, tri（三角形）, old（另外兩個頂點原本的位置） }
+  const SMO = []; // 綠色的三角形變圓滑：{ N, C, idx, n0, n1, c0, c1 }
+  const CELLS = new Map(); // 卡片的樹：'i,j' → { meshes: [闊葉, 松樹], pts: [[x, y, z, 地面]…] × 2, cx, cz }
+  let NHT = []; // 內湖的樹（InstancedMesh）：{ m, geo, mat, hill, c }
+  const GEO = new Map();
+  function leafAtlas() { // 左邊一叢闊葉、中間一枝松針、右上角一小塊樹皮
+    let sd = 7; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 512; const g = cv.getContext('2d');
+    const leafCol = () => `hsl(${80 + rnd() * 30},${32 + rnd() * 22}%,${24 + rnd() * 20}%)`;
+    for (let i = 0; i < 3400; i++) {
+      const a = rnd() * Math.PI * 2, r = Math.pow(rnd(), 0.6) * 236; if (r > 200 && rnd() < 0.6) continue;
+      const x = 256 + Math.cos(a) * r, y = 256 + Math.sin(a) * r, L = 9 + rnd() * 9, W = L * (0.38 + rnd() * 0.2);
+      g.save(); g.translate(x, y); g.rotate(rnd() * Math.PI * 2); g.fillStyle = leafCol(); g.beginPath(); g.ellipse(0, 0, L, W, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,220,0.10)'; g.beginPath(); g.ellipse(-L * 0.2, -W * 0.25, L * 0.6, W * 0.4, 0, 0, Math.PI * 2); g.fill(); g.restore();
+    }
+    { const x0 = 520, x1 = 1000, yc = 256; g.strokeStyle = '#3a2e22'; g.lineWidth = 5; g.beginPath(); g.moveTo(x0, yc); g.lineTo(x1, yc); g.stroke();
+      for (let i = 0; i < 1500; i++) { const t = rnd(), x = x0 + t * (x1 - x0), w = (1 - t * 0.85) * 210, side = rnd() < 0.5 ? -1 : 1, d = rnd() * w, y = yc + side * d, L = 14 + rnd() * 16;
+        g.strokeStyle = `hsl(${120 + rnd() * 30},${25 + rnd() * 25}%,${12 + rnd() * 18}%)`; g.lineWidth = 2 + rnd() * 1.5; g.beginPath(); g.moveTo(x, y); g.lineTo(x + L * 0.8, y + side * L * 0.5); g.stroke(); } }
+    g.fillStyle = '#5a4634'; g.fillRect(1000, 0, 24, 24);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = Math.min(4, R.capabilities.getMaxAnisotropy());
+    const m = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true, roughness: 0.82, metalness: 0 }); m.onBeforeCompile = maskObc; m.customProgramCacheKey = () => 'lk-leaf'; return m;
+  }
+  const UVL = [0, 0, 0.5, 1], UVN = [0.5, 0, 0.975, 1], UVB = [0.979, 0.955, 0.998, 0.999];
+  function cardGeo(kind, P) { // kind：b 闊葉、c 松樹、n 內湖（樹幹＋樹冠）、h 內湖山上的
+    const key = kind + P.cards + '/' + P.cone; let g = GEO.get(key); if (g) return g;
+    let sd = 7 + kind.charCodeAt(0); const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    const pos = [], nor = [], uv = [], col = [], idx = [], tmp = new THREE.Vector3(), tA = new THREE.Vector3(), tB = new THREE.Vector3(), tC = new THREE.Vector3();
+    const card = (c, ax, ay, uvr, nrm, shade) => { const k = pos.length / 3, [u0, v0, u1, v1] = uvr;
+      for (const [sx, sy, u, v] of [[-1, -1, u0, v0], [1, -1, u1, v0], [1, 1, u1, v1], [-1, 1, u0, v1]]) { pos.push(c[0] + ax[0] * sx + ay[0] * sy, c[1] + ax[1] * sx + ay[1] * sy, c[2] + ax[2] * sx + ay[2] * sy); nor.push(nrm[0], nrm[1], nrm[2]); uv.push(u, v); col.push(shade, shade, shade); }
+      idx.push(k, k + 1, k + 2, k, k + 2, k + 3); };
+    const broad = (cy = 0, sx = 1, sy = 1) => { // 單位樹冠（半徑 1，中心 (0, cy, 0)）：很多張「一叢葉子」的卡片，法線從中間往外（光才會像一團）
+      for (let i = 0; i < P.cards; i++) {
+        const u = rnd() * 2 - 1, a = rnd() * Math.PI * 2, r = 0.3 + 0.62 * Math.pow(rnd(), 0.45), q = Math.sqrt(1 - u * u), c = [Math.cos(a) * q * r * sx, cy + u * r * sy * 0.9, Math.sin(a) * q * r * sx];
+        tmp.set(c[0] / sx, (c[1] - cy) / sy, c[2] / sx).normalize(); tmp.set(tmp.x, tmp.y * 0.8 + 0.2, tmp.z).normalize();
+        tA.set(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize(); tC.set(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5); tB.crossVectors(tA, tC).normalize(); tA.crossVectors(tB, tA).normalize();
+        const h = (0.32 + rnd() * 0.12) * Math.min(sx, 1.4) * (P.cards < 60 ? 1.5 : 1), shade = 0.72 + 0.18 * (u * 0.5 + 0.5) + 0.18 * r; // 遠的（卡片少）：每張大一點，樹冠一樣滿
+        card(c, [tA.x * h, tA.y * h, tA.z * h], [tB.x * h, tB.y * h, tB.z * h], UVL, [tmp.x, tmp.y, tmp.z], shade);
+      } };
+    const conif = () => { // 單位松樹：底下半徑 1 在 y 0、尖在 y 1
+      const tiers = P.cone < 6 ? 5 : 9;
+      for (let t = 0; t < tiers; t++) { const y = 0.04 + (t / tiers) * 0.86, Rr = (1 - y) * 1.05 + 0.04, n = P.cone;
+        for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + t * 0.7 + rnd() * 0.3, dx = Math.cos(a), dz = Math.sin(a), droop = 0.22 * Rr, w = Rr * (P.cone < 6 ? 0.7 : 0.42);
+          card([dx * Rr * 0.5, y - droop * 0.5, dz * Rr * 0.5], [dx * Rr * 0.5, -droop * 0.5, dz * Rr * 0.5], [-dz * w, 0.05, dx * w], UVN, [dx * 0.7, 0.7, dz * 0.7], 0.55 + 0.45 * (y * 0.7 + 0.3)); } }
+      card([0, 0.55, 0], [0, 0.45, 0], [0.04, 0, 0], UVB, [0, 1, 0], 0.6); };
+    const trunk = () => { card([0, 1.4, 0], [0.16, 0, 0], [0, 1.4, 0], UVB, [1, 0, 0], 0.7); card([0, 1.4, 0], [0, 0, 0.16], [0, 1.4, 0], UVB, [0, 0, 1], 0.7); };
+    if (kind === 'b') broad(); else if (kind === 'c') conif(); else if (kind === 'n') { trunk(); broad(3.6, 2.3, 1.7); } else broad(2.2, 1.9, 1.6);
+    g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx); g.computeBoundingSphere();
+    GEO.set(key, g); return g;
+  }
+  function prep() { // 找樹冠（綠色、連在一起、小小一團）、算圓滑的法線；做卡片的樹（藏著）
+    const T0 = performance.now();
+    const meshes = [], car = getCar();
+    scene.traverse((x) => {
+      if (!x.isMesh || x.isInstancedMesh || x.isSkinnedMesh) return;
+      for (let p = x; p; p = p.parent) if (p === car) return;
+      const m0 = [].concat(x.material)[0]; if (!m0 || !m0.isMeshStandardMaterial || m0.isMeshPhysicalMaterial || !m0.vertexColors || m0.transparent) return;
+      const g = x.geometry; if (g.index || !g.attributes.color || !g.attributes.normal || g.attributes.position.count < 30) return;
+      meshes.push(x);
+    });
+    const crowns = [];
+    for (const x of meshes) {
+      const g = x.geometry, P = g.attributes.position, N = g.attributes.normal, C = g.attributes.color, PA = P.array, NA = N.array, CA = C.array, nt = P.count / 3;
+      x.updateWorldMatrix(true, false); const E = x.matrixWorld.elements, ox = E[12], oy = E[13], oz = E[14], plain = Math.abs(E[0] - 1) + Math.abs(E[5] - 1) + Math.abs(E[10] - 1) + Math.abs(E[4]) + Math.abs(E[8]) < 1e-4;
+      const green = new Uint8Array(nt);
+      for (let t = 0; t < nt; t++) { let ok = 1; for (let k = 0; k < 3; k++) { const i = (t * 3 + k) * 3, r = CA[i], gg = CA[i + 1], b = CA[i + 2]; if (!(gg > r && gg > b && gg - Math.min(r, b) > 0.03)) { ok = 0; break; } } green[t] = ok; }
+      // 1. 樹冠：同一個位置（2 公分）連在一起的綠色三角形
+      const kq = (i, s) => (Math.round(PA[i * 3] * s) + 200000) + (Math.round(PA[i * 3 + 1] * s) + 20000) * 400001 + (Math.round(PA[i * 3 + 2] * s) + 200000) * 400001 * 40001; // 數字當 key（不超過 2^53）
+      const par = new Int32Array(nt); for (let t = 0; t < nt; t++) par[t] = t;
+      const find = (i) => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+      { const first = new Map(); for (let t = 0; t < nt; t++) if (green[t]) for (let k = 0; k < 3; k++) { const kk = kq(t * 3 + k, 50), f = first.get(kk); if (f === undefined) first.set(kk, t); else { const a = find(f), b = find(t); if (a !== b) par[a] = b; } } }
+      const comp = new Map();
+      for (let t = 0; t < nt; t++) if (green[t]) { const r = find(t); let c = comp.get(r); if (!c) comp.set(r, (c = { n: 0, t0: t, b: [1e9, 1e9, 1e9, -1e9, -1e9, -1e9] })); c.n++; for (let k = 0; k < 3; k++) { const i = (t * 3 + k) * 3; for (let d = 0; d < 3; d++) { if (PA[i + d] < c.b[d]) c.b[d] = PA[i + d]; if (PA[i + d] > c.b[d + 3]) c.b[d + 3] = PA[i + d]; } } }
+      const isCrown = new Map();
+      for (const [r, c] of comp) { const dx = c.b[3] - c.b[0], dy = c.b[4] - c.b[1], dz = c.b[5] - c.b[2], w = Math.max(dx, dz), cone = dy > w * 1.15;
+        if (c.n < (cone ? 6 : 16) || c.n > (cone ? 40 : 200) || w > 9 || dy > 14 || w < 0.8 || !plain) continue;
+        isCrown.set(r, 1); crowns.push({ x: (c.b[0] + c.b[3]) / 2 + ox, y: (cone ? c.b[1] : (c.b[1] + c.b[4]) / 2) + oy, z: (c.b[2] + c.b[5]) / 2 + oz, rx: w / 2, ry: cone ? dy : dy / 2, cone }); }
+      if (isCrown.size) { let n = 0; for (let t = 0; t < nt; t++) if (green[t] && isCrown.has(find(t))) n++;
+        const tri = new Int32Array(n), old = new Float32Array(n * 6); let j = 0;
+        for (let t = 0; t < nt; t++) if (green[t] && isCrown.has(find(t))) { tri[j] = t; for (let d = 0; d < 6; d++) old[j * 6 + d] = PA[t * 9 + 3 + d]; green[t] = 0; j++; }
+        TRK.push({ A: P, tri, old }); }
+      // 2. 圓滑：剩下的綠色三角形，同一個位置（12 公分）、方向差不到 60 度的平均法線；顏色平均
+      let ns = 0; for (let t = 0; t < nt; t++) ns += green[t]; if (ns < 12) continue;
+      const at = new Map(); for (let t = 0; t < nt; t++) if (green[t]) for (let k = 0; k < 3; k++) { const kk = kq(t * 3 + k, 8); const l = at.get(kk); if (l) l.push(t); else at.set(kk, [t]); }
+      const idx = new Int32Array(ns * 3), n0 = new Float32Array(ns * 9), n1 = new Float32Array(ns * 9), c0 = new Float32Array(ns * 9), c1 = new Float32Array(ns * 9); let j = 0;
+      for (let t = 0; t < nt; t++) if (green[t]) for (let k = 0; k < 3; k++) {
+        const v = t * 3 + k, kv = kq(v, 8), l = at.get(kv), fx = NA[t * 9], fy = NA[t * 9 + 1], fz = NA[t * 9 + 2]; let sx = 0, sy = 0, sz = 0, r = 0, gg = 0, b = 0, cn = 0;
+        for (const u of l) { const ux = NA[u * 9], uy = NA[u * 9 + 1], uz = NA[u * 9 + 2]; if (fx * ux + fy * uy + fz * uz > 0.5) { sx += ux; sy += uy; sz += uz; }
+          for (let q = 0; q < 3; q++) { const w = u * 3 + q; if (kq(w, 8) === kv) { r += CA[w * 3]; gg += CA[w * 3 + 1]; b += CA[w * 3 + 2]; cn++; } } }
+        const ll = Math.hypot(sx, sy, sz) || 1; idx[j] = v;
+        for (let d = 0; d < 3; d++) { n0[j * 3 + d] = NA[v * 3 + d]; c0[j * 3 + d] = CA[v * 3 + d]; }
+        n1[j * 3] = sx / ll; n1[j * 3 + 1] = sy / ll; n1[j * 3 + 2] = sz / ll; c1[j * 3] = r / cn; c1[j * 3 + 1] = gg / cn; c1[j * 3 + 2] = b / cn; j++;
+      }
+      SMO.push({ N, C, idx, n0, n1, c0, c1 }); st.smooth += ns;
+    }
+    st.crowns = crowns.length;
+    // 3. 卡片的樹：200 公尺一格，闊葉、松樹各一個 InstancedMesh（看不到的格子不畫；遠的換少的卡片）
+    leafMat = leafAtlas();
+    let sd = 11; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    const byCell = new Map();
+    for (const c of crowns) { const k = Math.floor(c.x / CELL) + ',' + Math.floor(c.z / CELL); let L = byCell.get(k); if (!L) byCell.set(k, (L = [[], []])); L[c.cone ? 1 : 0].push(c); }
+    for (const [k, L] of byCell) {
+      const cell = { meshes: [null, null], pts: [[], []], cx: 0, cz: 0, n: 0 };
+      for (let s = 0; s < 2; s++) { const list = L[s]; if (!list.length) continue;
+        const m = new THREE.InstancedMesh(cardGeo(s ? 'c' : 'b', TREE_FAR), leafMat, list.length); m.name = 'lk-trees-' + k + (s ? 'c' : 'b'); m.visible = false; m.castShadow = true; m.receiveShadow = true;
+        list.forEach((c, i) => { Q.setFromAxisAngle(UP, rnd() * Math.PI * 2); if (c.cone) M4.compose(V3.set(c.x, c.y, c.z), Q, S3.set(c.rx * 1.1, c.ry * 1.05, c.rx * 1.1)); else M4.compose(V3.set(c.x, c.y, c.z), Q, S3.set(c.rx * 1.15, c.ry * 1.25, c.rx * 1.15));
+          m.setMatrixAt(i, M4); COL.setRGB(0.85 + rnd() * 0.3, 0.88 + rnd() * 0.2, 0.8 + rnd() * 0.25); m.setColorAt(i, COL);
+          cell.pts[s].push(c.x, c.y, c.z, V.heightAt ? V.heightAt(c.x, c.z) : 0); cell.cx += c.x; cell.cz += c.z; cell.n++; });
+        m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); scene.add(m); cell.meshes[s] = m; }
+      cell.cx /= cell.n; cell.cz /= cell.n; cell.lod = 0; CELLS.set(k, cell);
+    }
+    st.cells = CELLS.size;
+    scene.traverse((x) => { if (x.isInstancedMesh && /^nh-trees-/.test(x.name)) NHT.push({ m: x, geo: x.geometry, mat: x.material, hill: !!x.userData.hill, c: x.userData.c || [0, 0], lod: 0 }); });
+    prepped = true; st.prepMs = Math.round(performance.now() - T0);
+  }
+  function crownsOn(on) {
+    for (const r of TRK) { const PA = r.A.array, T = r.tri, O = r.old;
+      for (let j = 0; j < T.length; j++) { const b = T[j] * 9; if (on) for (let d = 0; d < 6; d++) PA[b + 3 + d] = PA[b + (d % 3)]; else for (let d = 0; d < 6; d++) PA[b + 3 + d] = O[j * 6 + d]; }
+      r.A.needsUpdate = true; }
+    for (const s of SMO) { const NA = s.N.array, CA = s.C.array, I = s.idx, Nn = on ? s.n1 : s.n0, Cc = on ? s.c1 : s.c0;
+      for (let j = 0; j < I.length; j++) for (let d = 0; d < 3; d++) { NA[I[j] * 3 + d] = Nn[j * 3 + d]; CA[I[j] * 3 + d] = Cc[j * 3 + d]; }
+      s.N.needsUpdate = true; s.C.needsUpdate = true; }
+    for (const c of CELLS.values()) for (const m of c.meshes) if (m) m.visible = on;
+    // 內湖的樹：原本的網格沒有法線，不能跟卡片的材質一起畫（會編成 FLAT_SHADED，其他的樹也跟著用那個）→ 馬上換成卡片
+    for (const t of NHT) { if (on) { t.m.geometry = cardGeo(t.hill ? 'h' : 'n', TREE_FAR); t.m.material = leafMat; t.m.castShadow = true; t.m.receiveShadow = true; t.lod = 2; } else { t.m.geometry = t.geo; t.m.material = t.mat; t.m.castShadow = t.m.receiveShadow = false; } }
+    for (const c of CELLS.values()) c.lod = -1;
+  }
+  let lodN = 0;
+  function lodStep(cam, force) { // 遠近換樹（每 10 幀看一次）
+    if (!force && ++lodN % 10) return;
+    const P = TREE[LV], px = cam.position.x, pz = cam.position.z;
+    for (const c of CELLS.values()) { const d = Math.hypot(c.cx - px, c.cz - pz) - CELL * 0.72, want = d < TREE_NEAR ? 1 : 2; if (want === c.lod) continue; c.lod = want;
+      const Pp = want === 1 ? P : TREE_FAR; if (c.meshes[0]) c.meshes[0].geometry = cardGeo('b', Pp); if (c.meshes[1]) c.meshes[1].geometry = cardGeo('c', Pp); }
+    for (const t of NHT) { const want = !t.hill && Math.hypot(t.c[0] - px, t.c[1] - pz) < TREE_NEAR + 125 ? 1 : 2; if (want === t.lod) continue; t.lod = want; t.m.geometry = cardGeo(t.hill ? 'h' : 'n', want === 1 ? P : TREE_FAR); }
+  }
+  // crush.js：輾扁的樹，葉子卡片跟著扁（樹幹那棵 2 公尺內的；往地面壓）
+  function treeK(j, k) {
+    if (!prepped) return;
+    if (!j.lk) { j.lk = [];
+      for (const g of j.grp) { if (g.t !== 'circle') continue;
+        for (const c of CELLS.values()) { if (Math.abs(c.cx - g.x) > CELL * 1.5 || Math.abs(c.cz - g.z) > CELL * 1.5) continue;
+          for (let s = 0; s < 2; s++) { const m = c.meshes[s], p = c.pts[s]; if (!m) continue;
+            for (let i = 0; i < p.length; i += 4) if (Math.abs(p[i] - g.x) < 2 && Math.abs(p[i + 2] - g.z) < 2) { const e = m.instanceMatrix.array.slice((i / 4) * 16, (i / 4) * 16 + 16); j.lk.push({ m, i: i / 4, e, gy: p[i + 3] }); } } } } }
+    for (const q of j.lk) { const A = q.m.instanceMatrix, E = A.array, o16 = q.i * 16, e = q.e, kk = Math.max(k, 0.04), w = 1 + (1 - kk) * 0.35;
+      for (let r = 0; r < 12; r++) E[o16 + r] = e[r] * (r < 3 || (r >= 8 && r < 11) ? w : r >= 4 && r < 7 ? kk : 1);
+      E[o16 + 12] = e[12]; E[o16 + 13] = q.gy + (e[13] - q.gy) * kk; E[o16 + 14] = e[14]; E[o16 + 15] = e[15]; A.needsUpdate = true; }
+    if (k >= 1) j.lk = null;
+  }
+
+  // ==== 5 號：材質貼圖（程式畫的柏油碎石、草、水泥：顏色＋凹凸；512 見方，分幾幀畫）====
+  async function makeTex() {
+    const N = 512, T0 = performance.now(); let tq = performance.now();
+    const breath = async () => { if (performance.now() - tq > 12) { await new Promise((r) => setTimeout(r, 0)); tq = performance.now(); } };
+    const hsh = (i, j, s) => { let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263) + Math.imul(s, 1442695041)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+    const md = (a, p) => ((a % p) + p) % p;
+    const vn = (x, y, p, s) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+      const a = hsh(md(i, p), md(j, p), s), b = hsh(md(i + 1, p), md(j, p), s), c = hsh(md(i, p), md(j + 1, p), s), d = hsh(md(i + 1, p), md(j + 1, p), s); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; };
+    const fbm = (u, v, p0, oct, s) => { let t = 0, a = 0.5, w = 0; for (let k = 0; k < oct; k++) { const p = p0 << k; t += a * vn(u * p, v * p, p, s + k * 17); w += a; a *= 0.5; } return t / w; };
+    const WOR = [0, 0];
+    const wor = (u, v, p, s) => { const X = u * p, Y = v * p, i0 = Math.floor(X), j0 = Math.floor(Y); let d1 = 9, id = 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const i = i0 + di, j = j0 + dj, ii = md(i, p), jj = md(j, p), d = Math.hypot(X - i - hsh(ii, jj, s), Y - j - hsh(ii, jj, s + 1)); if (d < d1) { d1 = d; id = hsh(ii, jj, s + 2); } }
+      WOR[0] = d1; WOR[1] = id; return WOR; };
+    const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+    const tx = (cv) => { const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = R.capabilities.getMaxAnisotropy(); t.colorSpace = THREE.NoColorSpace; t.needsUpdate = true; return t; };
+    // 一張：fill(C, H, y) 一行一行填顏色、高度 → 顏色每個頻道除以平均（乘在原本的顏色上，不改色調）＋法線
+    const make = async (fill, bump) => {
+      const C = new Float32Array(N * N * 3), H = new Float32Array(N * N), m = [0, 0, 0];
+      for (let y = 0; y < N; y++) { fill(C, H, y); await breath(); }
+      for (let i = 0; i < N * N; i++) for (let k = 0; k < 3; k++) m[k] += C[i * 3 + k] / (N * N);
+      const cvA = document.createElement('canvas'), cvN = document.createElement('canvas'); cvA.width = cvA.height = cvN.width = cvN.height = N;
+      const ia = new ImageData(N, N), inn = new ImageData(N, N);
+      for (let y = 0; y < N; y++) { for (let x = 0; x < N; x++) { const i = y * N + x;
+        for (let k = 0; k < 3; k++) ia.data[i * 4 + k] = clamp(Math.round((C[i * 3 + k] / m[k]) * 0.5 * 255), 0, 255); ia.data[i * 4 + 3] = 255;
+        const hx = H[y * N + md(x + 1, N)] - H[y * N + md(x - 1, N)], hy = H[md(y + 1, N) * N + x] - H[md(y - 1, N) * N + x];
+        let nx = -hx * bump, ny = -hy * bump, nz = 1; const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+        inn.data[i * 4] = Math.round((nx * 0.5 + 0.5) * 255); inn.data[i * 4 + 1] = Math.round((ny * 0.5 + 0.5) * 255); inn.data[i * 4 + 2] = Math.round((nz * 0.5 + 0.5) * 255); inn.data[i * 4 + 3] = 255; }
+        if ((y & 31) === 31) await breath(); }
+      cvA.getContext('2d').putImageData(ia, 0, 0); cvN.getContext('2d').putImageData(inn, 0, 0);
+      return [tx(cvA), tx(cvN)];
+    };
+    // 柏油：一顆一顆的碎石（亮暗不一樣）＋黑色的瀝青＋大塊的深淺
+    const [asA, asN] = await make((C, H, y) => { for (let x = 0; x < N; x++) { const u = x / N, v = y / N, i = y * N + x;
+      const w1 = wor(u, v, 150, 11), f = w1[0], id = w1[1], w2 = wor(u, v, 330, 21), f2 = w2[0], id2 = w2[1], s1 = id > 0.25 ? 1 - ss(0.26, 0.42, f) : 0, s2 = id2 > 0.5 ? 1 - ss(0.2, 0.36, f2) : 0;
+      const fine = fbm(u, v, 96, 2, 5), big = fbm(u, v, 3, 3, 9);
+      const L = Math.max(0.03, 0.2 + 0.06 * fine + s1 * (0.07 + 0.16 * (id - 0.25)) + s2 * 0.07 * (id2 - 0.3) + (big - 0.5) * 0.08), w = (id - 0.5) * 0.04 * s1;
+      C[i * 3] = L * (1 + w); C[i * 3 + 1] = L; C[i * 3 + 2] = L * (1 - w + 0.02); H[i] = s1 * (0.6 + 0.4 * id) + s2 * 0.4 + 0.25 * fine; } }, 1.6 * 0.5);
+    // 草：很多短短的草葉（各種方向、黃綠深綠，下面深上面亮），下面一點泥土；自己一點一點畫進陣列（canvas 畫 4 萬條線手機要好幾秒）
+    const tA = performance.now(), SR = new Float32Array(N * N * 3);
+    { let sd = 99; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647), S = N / 1024;
+      const hsl = (h, sa, l, o, k) => { h = ((h % 360) + 360) % 360 / 60; sa /= 100; l /= 100; const c = (1 - Math.abs(2 * l - 1)) * sa, x = c * (1 - Math.abs((h % 2) - 1)), m = l - c / 2;
+        const [r, g, b] = h < 1 ? [c, x, 0] : h < 2 ? [x, c, 0] : h < 3 ? [0, c, x] : h < 4 ? [0, x, c] : h < 5 ? [x, 0, c] : [c, 0, x]; o[k] = r + m; o[k + 1] = g + m; o[k + 2] = b + m; };
+      const put = (x, y, r, g, b, a) => { const i = md(x, N) + md(y, N) * N; if (a >= 1) { SR[i * 3] = r; SR[i * 3 + 1] = g; SR[i * 3 + 2] = b; return; } SR[i * 3] += (r - SR[i * 3]) * a; SR[i * 3 + 1] += (g - SR[i * 3 + 1]) * a; SR[i * 3 + 2] += (b - SR[i * 3 + 2]) * a; };
+      const splat = (x, y, r, g, b, a) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j; put(i, j, r, g, b, a * (1 - fx) * (1 - fy)); put(i + 1, j, r, g, b, a * fx * (1 - fy)); put(i, j + 1, r, g, b, a * (1 - fx) * fy); put(i + 1, j + 1, r, g, b, a * fx * fy); };
+      for (let i = 0; i < N * N; i++) { SR[i * 3] = 0x3f / 255; SR[i * 3 + 1] = 0x4a / 255; SR[i * 3 + 2] = 0x26 / 255; }
+      for (let i = 0; i < 2600; i++) { const r = (90 + rnd() * 40) / 255, g = (70 + rnd() * 30) / 255, b = (40 + rnd() * 20) / 255, x = rnd() * N, y = rnd() * N, rr = (1 + rnd() * 4) * S;
+        for (let dy = -Math.ceil(rr); dy <= Math.ceil(rr); dy++) for (let dx = -Math.ceil(rr); dx <= Math.ceil(rr); dx++) { const a = clamp(rr + 0.5 - Math.hypot(dx + 0.5 - (x % 1), dy + 0.5 - (y % 1)), 0, 1) * 0.5; if (a > 0) put(Math.floor(x) + dx, Math.floor(y) + dy, r, g, b, a); } }
+      const NB = 42000, c0 = [0, 0, 0], c1 = [0, 0, 0];
+      for (let i = 0; i < NB; i++) { const x = rnd() * N, y = rnd() * N, a = rnd() * 6.283, L = (7 + rnd() * 16) * S, w = Math.max(0.8, (1.2 + rnd() * 1.8) * S), h = 62 + rnd() * 48, sa = 30 + rnd() * 35, l = 14 + rnd() * 34 + (i / NB) * 12;
+        const ex = x + Math.cos(a) * L, ey = y + Math.sin(a) * L, bx = x + Math.cos(a + 0.5) * L * 0.5, by = y + Math.sin(a + 0.5) * L * 0.5;
+        hsl(h, sa, l * 0.6, c0, 0); hsl(h - 6, sa + 8, l * 1.15, c1, 0);
+        const n = Math.ceil(L * 2), side = (w - 1) * 0.5, nx = -Math.sin(a), ny = Math.cos(a);
+        for (let k = 0; k <= n; k++) { const t = k / n, u = 1 - t, px = u * u * x + 2 * u * t * bx + t * t * ex, py = u * u * y + 2 * u * t * by + t * t * ey;
+          const r = c0[0] + (c1[0] - c0[0]) * t, g = c0[1] + (c1[1] - c0[1]) * t, b = c0[2] + (c1[2] - c0[2]) * t;
+          if (side > 0.05) { splat(px + nx * side, py + ny * side, r, g, b, 0.85); splat(px - nx * side, py - ny * side, r, g, b, 0.85); } else splat(px, py, r, g, b, Math.min(1, w) * 0.95); }
+        if ((i & 4095) === 4095) await breath(); } }
+    const tB = performance.now();
+    const [grA, grN] = await make((C, H, y) => { for (let x = 0; x < N; x++) { const i = y * N + x, r = clamp(SR[i * 3], 0, 1), gg = clamp(SR[i * 3 + 1], 0, 1), b = clamp(SR[i * 3 + 2], 0, 1); C[i * 3] = Math.pow(r, 2.2); C[i * 3 + 1] = Math.pow(gg, 2.2); C[i * 3 + 2] = Math.pow(b, 2.2); H[i] = (r * 0.3 + gg * 0.6 + b * 0.1) * 1.6; } }, 2.2 * 0.5);
+    const tC = performance.now();
+    // 水泥：細細的砂＋一塊一塊的污漬＋小洞
+    const [coA, coN] = await make((C, H, y) => { for (let x = 0; x < N; x++) { const u = x / N, v = y / N, i = y * N + x;
+      const fine = fbm(u, v, 128, 2, 31), mid = fbm(u, v, 16, 3, 41), big = fbm(u, v, 2, 3, 51), w1 = wor(u, v, 200, 61), pore = w1[1] > 0.85 ? 1 - ss(0.08, 0.2, w1[0]) : 0;
+      const L = Math.max(0.05, 0.5 + 0.08 * (fine - 0.5) + 0.07 * (mid - 0.5) + 0.12 * (big - 0.5) - 0.25 * pore); C[i * 3] = L * 1.01; C[i * 3 + 1] = L; C[i * 3 + 2] = L * 0.97; H[i] = 0.3 * fine + 0.1 * mid - 0.5 * pore; } }, 1.2 * 0.5);
+    TEX = { asA, asN, grA, grN, coA, coN }; st.texMs = Math.round(performance.now() - T0); st.texParts = [tA - T0, tB - tA, tC - tB, performance.now() - tC].map(Math.round);
+  }
+
+  // ==== 5 號：草地上一叢一叢的草（鏡頭附近 7×7 格；遠的在 shader 裡變小，跟草地貼圖接起來）====
+  let GR = null;
+  function makeGrass() {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256; const g = cv.getContext('2d'); let sd = 5; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 140; i++) { const x = 8 + rnd() * 240, h = 120 + rnd() * 130, lean = (rnd() - 0.5) * 70, w = 2.5 + rnd() * 3, l = 30 + rnd() * 20;
+      const gr = g.createLinearGradient(0, 256, 0, 256 - h); gr.addColorStop(0, `hsl(${76 + rnd() * 14},38%,${l * 0.62}%)`); gr.addColorStop(1, `hsl(${66 + rnd() * 22},${34 + rnd() * 20}%,${l * 0.95}%)`); g.fillStyle = gr;
+      g.beginPath(); g.moveTo(x - w, 256); g.quadraticCurveTo(x + lean * 0.3, 256 - h * 0.6, x + lean, 256 - h); g.quadraticCurveTo(x + lean * 0.3 + w * 0.4, 256 - h * 0.6, x + w, 256); g.closePath(); g.fill(); }
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = Math.min(4, R.capabilities.getMaxAnisotropy());
+    grassMat = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.9, vertexColors: true });
+    grassMat.onBeforeCompile = (sh) => { maskObc(sh); sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      #ifdef USE_INSTANCING
+        { float gd = distance(vec2(instanceMatrix[3][0], instanceMatrix[3][2]), cameraPosition.xz); transformed *= 1.0 - 0.85 * clamp((gd - 22.0) / 26.0, 0.0, 1.0); }
+      #endif`); };
+    grassMat.customProgramCacheKey = () => 'lk-grass';
+    const pos = [], nor = [], uv = [], col = [], idx = [];
+    for (let k = 0; k < 3; k++) { const a = (k / 3) * Math.PI, cx = Math.cos(a) * 0.32, cz = Math.sin(a) * 0.32, b = pos.length / 3;
+      for (const [sx, sy] of [[-1, 0], [1, 0], [1, 1], [-1, 1]]) { pos.push(cx * sx * 0.8, sy * 0.34, cz * sx * 0.8); nor.push(0, 1, 0); uv.push(sx * 0.5 + 0.5, sy); const sh = 0.8 + 0.2 * sy; col.push(sh, sh, sh); }
+      idx.push(b, b + 1, b + 2, b, b + 2, b + 3); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setIndex(idx);
+    const MAX = GN * GN * GPER, im = new THREE.InstancedMesh(geo, grassMat, MAX); im.name = 'lk-grass'; im.frustumCulled = false; im.receiveShadow = true; im.castShadow = false; im.visible = false;
+    M4.makeScale(0, 0, 0); for (let i = 0; i < MAX; i++) im.setMatrixAt(i, M4); im.setColorAt(0, COL.setRGB(1, 1, 1)); im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(im);
+    // 擋路的東西（樹幹、柱子、牆）：32 公尺一格先分好（每叢草只看那一格）
+    const cg = new Map(); for (const c of V.colliders || []) { const r = c.t === 'circle' ? c.r : Math.hypot(c.hx, c.hz); if (r > 30) continue; for (let i = Math.floor((c.x - r) / 32); i <= Math.floor((c.x + r) / 32); i++) for (let j = Math.floor((c.z - r) / 32); j <= Math.floor((c.z + r) / 32); j++) { const k = i * 100003 + j; let L = cg.get(k); if (!L) cg.set(k, (L = [])); L.push(c); } }
+    GR = { im, cg, slot: new Map(), want: [], wi: 0, ci: 1e9, cj: 1e9, R: [], RC: [] };
+    for (let s = 0; s < GN * GN; s++) { GR.R.push({ start: 0, count: 0 }); GR.RC.push({ start: 0, count: 0 }); }
+  }
+  const upd = (A, Rr, start, count) => { if (A.updateRanges.indexOf(Rr) < 0) { Rr.start = start; Rr.count = count; A.updateRanges.push(Rr); } A.needsUpdate = true; };
+  function grassCell(ci, cj) { // 一格：撒草（同一格每次都一樣）
+    const s = (((ci % GN) + GN) % GN) * GN + (((cj % GN) + GN) % GN), A = GR.im.instanceMatrix, CA = GR.im.instanceColor, base = s * GPER;
+    let sd = ((Math.imul(ci, 73856093) ^ Math.imul(cj, 19349663)) >>> 0) % 2147483646 + 1; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    let n = 0;
+    for (let t = 0; t < GPER * 1.4 && n < GPER; t++) {
+      const x = (ci + rnd()) * GC, z = (cj + rnd()) * GC, sc = 0.7 + rnd() * 0.6, sy = 0.7 + rnd() * 0.6, rot = rnd() * Math.PI, cr = rnd(), cgg = rnd(), cb = rnd();
+      if (V.surfaceAt(x, z) !== 1) continue;
+      const L = GR.cg.get(Math.floor(x / 32) * 100003 + Math.floor(z / 32)); let hit = false;
+      if (L) for (const c of L) { if (c.t === 'circle') { if ((x - c.x) * (x - c.x) + (z - c.z) * (z - c.z) < (c.r + 0.3) * (c.r + 0.3)) { hit = true; break; } } else { const co = Math.cos(c.rot || 0), si = Math.sin(c.rot || 0), dx = x - c.x, dz = z - c.z, u = dx * co - dz * si, w = dx * si + dz * co; if (Math.abs(u) < c.hx + 0.3 && Math.abs(w) < c.hz + 0.3) { hit = true; break; } } }
+      if (hit) continue;
+      Q.setFromAxisAngle(UP, rot); M4.compose(V3.set(x, (V.heightAt ? V.heightAt(x, z) : 0) - 0.03, z), Q, S3.set(sc, sc * sy, sc)); M4.toArray(A.array, (base + n) * 16);
+      CA.array[(base + n) * 3] = 0.9 + cr * 0.25; CA.array[(base + n) * 3 + 1] = 0.92 + cgg * 0.2; CA.array[(base + n) * 3 + 2] = 0.8 + cb * 0.2; n++;
+    }
+    for (let i = n; i < GPER; i++) { const o16 = (base + i) * 16; for (let k = 0; k < 16; k++) A.array[o16 + k] = 0; }
+    upd(A, GR.R[s], base * 16, GPER * 16); upd(CA, GR.RC[s], base * 3, GPER * 3); // 只上傳這一格（three.js 合併範圍的時候會改 start、count：每次重新放）
+    GR.slot.set(s, ci * 100003 + cj); return n;
+  }
+  function grassStep(cam) { // 鏡頭換格：要的格子排隊，每幀最多做 2 格
+    const ci = Math.floor(cam.position.x / GC), cj = Math.floor(cam.position.z / GC), h = GN >> 1;
+    if (ci !== GR.ci || cj !== GR.cj) { GR.ci = ci; GR.cj = cj; GR.want.length = 0;
+      for (let di = -h; di <= h; di++) for (let dj = -h; dj <= h; dj++) { const i = ci + di, j = cj + dj, s = (((i % GN) + GN) % GN) * GN + (((j % GN) + GN) % GN); if (GR.slot.get(s) !== i * 100003 + j) GR.want.push(i, j, Math.abs(di) + Math.abs(dj)); }
+      for (let a = 0; a < GR.want.length; a += 3) for (let b = a + 3; b < GR.want.length; b += 3) if (GR.want[b + 2] < GR.want[a + 2]) for (let k = 0; k < 3; k++) { const t = GR.want[a + k]; GR.want[a + k] = GR.want[b + k]; GR.want[b + k] = t; } // 近的先
+      GR.wi = 0; }
+    for (let k = 0; k < 2 && GR.wi < GR.want.length; k++, GR.wi += 3) st.grass = grassCell(GR.want[GR.wi], GR.want[GR.wi + 1]);
+  }
+  function grassReset() { if (!GR) return; GR.slot.clear(); GR.ci = GR.cj = 1e9; }
+
+  // ==== 第 30 批：晚上的燈（路燈最近 4 支＋自己的車的大燈；漂亮、最真實都有；白天亮度 0，一直留在場景裡，shader 不用重編）====
+  let PL = null, HLT = null, lampPts = null, headCar = null, headDims = null, lampN = 0; const HEAD = [new THREE.Vector3(), new THREE.Vector3()], HTGT = [new THREE.Vector3(), new THREE.Vector3()];
+  function lampList() { // 所有路燈的燈頭：村子的電線桿（有路燈的）、快速道路（中間護欄上 60 公尺一支、兩邊）、大停車場 5 支
+    const P = [];
+    for (const p of V.poles || []) if (p.lamp) P.push(p.x + p.fx * 2.2, 7.6, p.z + p.fz * 2.2);
+    const H = V.highway; if (H && H.center && H.center.length > 1) { const C = H.center; let s = 0, next = 30; for (let i = 1; i < C.length; i++) { const dx = C[i][0] - C[i - 1][0], dz = C[i][1] - C[i - 1][1], L = Math.hypot(dx, dz); if (L < 1e-6) continue;
+      while (next <= s + L && next <= H.len - 25) { const t = (next - s) / L, x = C[i - 1][0] + dx * t, z = C[i - 1][1] + dz * t, nx = -dz / L, nz = dx / L; if (!(V.hills && V.hills.inTunnel && V.hills.inTunnel(x, z, 3))) { P.push(x + nx * 2.65, 11.0, z + nz * 2.65, x - nx * 2.65, 11.0, z - nz * 2.65); } next += 60; } s += L; } }
+    const K = V.parking; if (K) { const X0 = K.x - K.hx, X1 = K.x + K.hx, Z0 = K.z - K.hz, Z1 = K.z + K.hz, zm = (Z0 + Z1) / 2; for (const [x, z] of [[X0 + 17.1, Z0 + 1.5], [X0 + 17.1, zm], [X0 + 17.1, Z1 - 1.5], [X0 + 2.2, zm], [X1 - 2.2, zm]]) P.push(x, 6.3, z); }
+    return new Float32Array(P);
+  }
+  function lampsOn() {
+    if (PL) return;
+    PL = []; for (let i = 0; i < LAMP.n; i++) { const l = new THREE.PointLight(LAMP.c, 0, LAMP.dist, 2); l.name = 'lk-lamp'; l.position.set(0, -100, 0); scene.add(l); PL.push(l); }
+    HLT = []; for (let i = 0; i < 2; i++) { const l = new THREE.SpotLight(LAMP.headC, 0, 70, 0.5, 0.6, 1.5); l.name = 'lk-head'; l.position.set(0, -100, 0); scene.add(l); scene.add(l.target); HLT.push(l); }
+    if (!lampPts) lampPts = lampList(); headCar = null; lampN = 0;
+  }
+  function lampsOff() { if (!PL) return; for (const l of PL) l.removeFromParent(); for (const l of HLT) { l.target.removeFromParent(); l.removeFromParent(); } PL = HLT = null; headCar = null; }
+  function lampStep(cam) {
+    if (!PL) return; const k = TD.lamp;
+    if (k > 0.001 && lampN++ % 10 === 0) { // 鏡頭前面 12 公尺附近最近的 4 支
+      cam.getWorldDirection(V3b); const px = cam.position.x + V3b.x * 12, pz = cam.position.z + V3b.z * 12, P = lampPts, best = [1e18, 1e18, 1e18, 1e18], bi = [-1, -1, -1, -1];
+      for (let i = 0; i < P.length; i += 3) { const d = (P[i] - px) * (P[i] - px) + (P[i + 2] - pz) * (P[i + 2] - pz); if (d >= best[3]) continue; let j = 3; while (j > 0 && best[j - 1] > d) { best[j] = best[j - 1]; bi[j] = bi[j - 1]; j--; } best[j] = d; bi[j] = i; }
+      for (let j = 0; j < LAMP.n; j++) { const l = PL[j], i = bi[j]; if (i < 0 || best[j] > 90 * 90) { l.intensity = 0; continue; } l.position.set(P[i], P[i + 1] - 0.3, P[i + 2]); l.intensity = LAMP.I * k; }
+    } else if (k <= 0.001) for (const l of PL) l.intensity = 0;
+    const car = getCar();
+    if (car !== headCar) { headCar = car; headDims = car ? carDims(car) : null; }
+    if (car && headDims && k > 0.001) { const D = headDims, xf = D.cx + D.hx - 0.15; car.updateMatrixWorld();
+      for (let i = 0; i < 2; i++) { const sz = (i ? -1 : 1) * D.hz * 0.62, l = HLT[i]; HEAD[i].set(xf, 0.62, sz).applyMatrix4(car.matrixWorld); HTGT[i].set(xf + 30, -0.3, sz * 1.6).applyMatrix4(car.matrixWorld);
+        l.position.copy(HEAD[i]); l.target.position.copy(HTGT[i]); l.target.updateMatrixWorld(); l.intensity = LAMP.headI * k; } }
+    else for (const l of HLT) l.intensity = 0;
+    signsK(k);
+    if (Math.abs(k - lampSent) > 0.02 || (k === 0) !== (lampSent === 0)) { lampSent = k; nightCb(k); }
+  }
+
+  // ==== 第 30 批：濕的路的倒影（最真實、燈亮的時候）：把世界從路面倒過來再畫一次到半張大小的圖（地上的東西不畫、鏡頭在路面下面、路面以上才畫）====
+  const WR = { rt: null, cam: new THREE.PerspectiveCamera(), hid: [], n: new THREE.Vector3(0, 1, 0), P0: new THREE.Vector3(), cp: new THREE.Vector3(), rot: new THREE.Matrix4(), view: new THREE.Vector3(), look: new THREE.Vector3(), tgt: new THREE.Vector3(), pl: new THREE.Plane(), cpl: new THREE.Vector4(), q: new THREE.Vector4(), w: 0, h: 0 };
+  function wetRender(cam) {
+    const W = WR; R.getDrawingBufferSize(SZ); const w = Math.max(64, (SZ.x | 0) >> 1), h = Math.max(64, (SZ.y | 0) >> 1);
+    if (!W.rt || W.w !== w || W.h !== h) { if (W.rt) W.rt.dispose(); W.rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter }); W.w = w; W.h = h; }
+    const rc = W.cam, n = W.n, yp = V.heightAt ? V.heightAt(cam.position.x, cam.position.z) : 0; W.P0.set(0, yp, 0); WU.wetY.value = yp;
+    W.cp.setFromMatrixPosition(cam.matrixWorld); W.rot.extractRotation(cam.matrixWorld);
+    W.view.subVectors(W.P0, W.cp).reflect(n).negate().add(W.P0);
+    W.look.set(0, 0, -1).applyMatrix4(W.rot).add(W.cp); W.tgt.subVectors(W.P0, W.look).reflect(n).negate().add(W.P0);
+    rc.position.copy(W.view); rc.up.set(0, 1, 0).applyMatrix4(W.rot).reflect(n); rc.lookAt(W.tgt); rc.fov = cam.fov; rc.aspect = cam.aspect; rc.near = cam.near; rc.far = Math.min(cam.far, 600); rc.updateProjectionMatrix(); rc.updateMatrixWorld();
+    WU.reflM.value.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(rc.projectionMatrix).multiply(rc.matrixWorldInverse);
+    { const pl = W.pl.setFromNormalAndCoplanarPoint(n, W.P0).applyMatrix4(rc.matrixWorldInverse), c = W.cpl.set(pl.normal.x, pl.normal.y, pl.normal.z, pl.constant), pm = rc.projectionMatrix, q = W.q; // 斜的近平面＝路面（路面下面的不畫）
+      q.x = (Math.sign(c.x) + pm.elements[8]) / pm.elements[0]; q.y = (Math.sign(c.y) + pm.elements[9]) / pm.elements[5]; q.z = -1; q.w = (1 + pm.elements[10]) / pm.elements[14]; c.multiplyScalar(2 / c.dot(q));
+      pm.elements[2] = c.x; pm.elements[6] = c.y; pm.elements[10] = c.z + 1; pm.elements[14] = c.w; }
+    const hid = W.hid; hid.length = 0; for (const x of GND) if (x.visible) { x.visible = false; hid.push(x); }
+    WU.tRefl.value = null; const c0 = R.info.render.calls; R.setRenderTarget(W.rt); R.clear(); r0(scene, rc); R.setRenderTarget(null); st.wetCalls = R.info.render.calls - c0;
+    for (const x of hid) x.visible = true; WU.tRefl.value = W.rt.texture;
+  }
+
+  // ==== 5 號：車漆反射天空、透明漆 ====
+  let carOn = null; const CARM = [];
+  function carEnv(car) {
+    if (car === carOn) return;
+    for (const [m, e, ei, cc, cr] of CARM) { m.envMap = e; m.envMapIntensity = ei; if (m.isMeshPhysicalMaterial) { m.clearcoat = cc; m.clearcoatRoughness = cr; } m.needsUpdate = true; }
+    CARM.length = 0; carOn = car; if (!car) return;
+    const seen = new Set();
+    car.traverse((x) => { if (!x.material) return; for (const m of [].concat(x.material)) { if (!m || seen.has(m) || !m.isMeshStandardMaterial || m.transparent) continue; seen.add(m);
+      CARM.push([m, m.envMap, m.envMapIntensity, m.clearcoat || 0, m.clearcoatRoughness || 0]); m.envMap = envTex; m.envMapIntensity = POST.carEnv;
+      if (m.isMeshPhysicalMaterial && m.metalness < 0.5) { m.clearcoat = Math.max(m.clearcoat || 0, 1); m.clearcoatRoughness = 0.05; } m.needsUpdate = true; } });
+  }
+
+  // ==== 5 號：後製（場景 → AO → 光暈 → 色調＋四角）====
+  let PP = null; const SZ = new THREE.Vector2();
+  function postSize() {
+    R.getDrawingBufferSize(SZ); const w = SZ.x | 0, h = SZ.y | 0;
+    if (PP && PP.w === w && PP.h === h) return;
+    if (!PP) {
+      PP = { w: 0, h: 0 };
+      PP.ao = new GTAOPass(scene, new THREE.PerspectiveCamera(), Math.max(1, w >> 1), Math.max(1, h >> 1));
+      PP.ao.updateGtaoMaterial({ radius: POST.aoR, distanceExponent: 1.0, distanceFallOff: 1.0, thickness: 4, scale: POST.aoS, samples: 16 });
+      PP.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 5, rings: 2, samples: 16 }); PP.ao.blendIntensity = 1;
+      PP.ao.gtaoMaterial.defines.FRAGMENT_OUTPUT = 'vec4(vec3(mix(ao, 1.0, smoothstep(70.0, 170.0, -viewPos.z))), 1.)'; // 遠的地方不算（深度不準會有黑影）
+      { const bm = PP.ao.blendMaterial; bm.uniforms.tMask = { value: null }; // 場景圖 alpha 0 的地方（草、樹葉）不蓋 AO
+        bm.fragmentShader = bm.fragmentShader.replace('uniform sampler2D tDiffuse;', 'uniform sampler2D tDiffuse, tMask;').replace('mix(vec3(1.), texel.rgb, intensity)', 'mix(vec3(1.), texel.rgb, intensity * texture2D(tMask, vUv).a)'); bm.needsUpdate = true; }
+      PP.bloom = new UnrealBloomPass(new THREE.Vector2(Math.max(1, w >> 1), Math.max(1, h >> 1)), POST.bloom, POST.bRad, POST.thr);
+      PP.q = new FullScreenQuad(new THREE.RawShaderMaterial({ ...FINAL, uniforms: THREE.UniformsUtils.clone(FINAL.uniforms), depthTest: false, depthWrite: false }));
+    } else { PP.a.dispose(); PP.b.dispose(); PP.a.depthTexture.dispose(); }
+    PP.w = w; PP.h = h;
+    const dt = new THREE.DepthTexture(w, h); dt.format = THREE.DepthStencilFormat; dt.type = THREE.UnsignedInt248Type;
+    PP.a = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: Math.min(4, R.capabilities.maxSamples || 0), depthBuffer: true, stencilBuffer: true, depthTexture: dt }); // stencil：圓塔電梯的洞（town.src.js shaftCut）
+    PP.a.resolveDepthBuffer = true; PP.a.resolveStencilBuffer = false; PP.ao.blendMaterial.uniforms.tMask.value = PP.a.texture;
+    PP.b = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthBuffer: false });
+    PP.ao.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1)); PP.ao.setGBuffer(dt); // 深度用場景的（法線從深度算），不用再畫一次場景
+    PP.ao.gtaoMaterial.defines.NORMAL_VECTOR_TYPE = 0; PP.ao.pdMaterial.defines.NORMAL_VECTOR_TYPE = 0; PP.ao.gtaoMaterial.needsUpdate = true; PP.ao.pdMaterial.needsUpdate = true;
+    PP.bloom.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1));
+  }
+  function postRender(cam) {
+    postSize();
+    R.info.autoReset = false; R.info.reset();
+    WU.wetK.value = TD.lamp; if (TD.lamp > 0.01) wetRender(cam); else st.wetCalls = 0;
+    R.setRenderTarget(PP.a); MASKU.value = 1; r0(scene, cam); MASKU.value = 0;
+    PP.ao.camera = cam; PP.ao.render(R, PP.b, PP.a);
+    PP.bloom.strength = THREE.MathUtils.lerp(POST.bloom, LAMP.bloom, TD.lamp); PP.bloom.threshold = THREE.MathUtils.lerp(POST.thr, LAMP.thr, TD.lamp); PP.q.material.uniforms.toneMappingExposure.value = TD.exp;
+    PP.bloom.render(R, null, PP.b, 0, false);
+    PP.q.material.uniforms.tDiffuse.value = PP.b.texture; R.setRenderTarget(null); PP.q.render(R);
+    R.info.autoReset = true;
+  }
+
+  // ==== 換畫質 ====
+  function capture() {
+    if (S0) return;
+    const H = hl(); const base = (l) => { if (H && H.lights) for (const e of H.lights) if (e[0] === l) return e[1]; return l.intensity; };
+    S0 = { dlC: dl && dl.color.getHex(), dlI: dl && base(dl), dlP: dl && dl.position.clone(), dlT: dl && dl.target.position.clone(),
+      hemiI: hemi && base(hemi), hemiC: hemi && hemi.color.getHex(), hemiG: hemi && hemi.groundColor.getHex(), skyMat: skyM && skyM.material,
+      fogC: scene.fog && scene.fog.color.getHex(), env: scene.environment, envI: scene.environmentIntensity, sh: R.shadowMap.enabled, shT: R.shadowMap.type, shA: R.shadowMap.autoUpdate };
+  }
+  function lights(on) {
+    if (on) {
+      makeSky(); if (skyM) skyM.material = skyMat;
+      scene.environment = envTex; scene.environmentIntensity = LT.envI;
+      if (scene.fog) scene.fog.color.set(LT.fog);
+      R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFShadowMap; R.shadowMap.autoUpdate = false; R.shadowMap.needsUpdate = true;
+      if (dl) { dl.color.set(LT.sunC); setBase(dl, LT.sunI); dl.castShadow = true; dl.shadow.mapSize.set(SHADOW, SHADOW); if (dl.shadow.map) { dl.shadow.map.dispose(); dl.shadow.map = null; }
+        Object.assign(dl.shadow.camera, { left: -SH_R, right: SH_R, top: SH_R, bottom: -SH_R, near: 100, far: 500 }); dl.shadow.camera.updateProjectionMatrix(); dl.shadow.bias = -0.0001; dl.shadow.normalBias = 0.05; dl.shadow.radius = 2; }
+      if (hemi) { setBase(hemi, LT.hemiI); hemi.color.set(LT.hemiC); hemi.groundColor.set(LT.hemiG); }
+      lampsOn(); // 第 30 批：路燈、大燈（白天亮度 0）
+    } else if (S0) {
+      lampsOff(); signsK(0); if (lampSent !== 0) { lampSent = 0; nightCb(0); } WU.wetK.value = 0; if (WR.rt) { WR.rt.dispose(); WR.rt = null; WU.tRefl.value = null; }
+      if (skyM) skyM.material = S0.skyMat;
+      scene.environment = S0.env; scene.environmentIntensity = S0.envI;
+      if (scene.fog) scene.fog.color.set(S0.fogC);
+      R.shadowMap.enabled = S0.sh; R.shadowMap.type = S0.shT; R.shadowMap.autoUpdate = S0.shA;
+      if (dl) { dl.color.set(S0.dlC); setBase(dl, S0.dlI); dl.castShadow = false; dl.position.copy(S0.dlP); dl.target.position.copy(S0.dlT); dl.target.updateMatrixWorld(); dl.updateMatrixWorld(); if (dl.shadow.map) { dl.shadow.map.dispose(); dl.shadow.map = null; } }
+      if (hemi) { setBase(hemi, S0.hemiI); hemi.color.set(S0.hemiC); hemi.groundColor.set(S0.hemiG); }
+      R.toneMappingExposure = EXP0;
+    }
+  }
+  function apply(lv) {
+    const was = LV; LV = lv;
+    if (lv > 0) {
+      if (was === 0) { capture(); lights(true); crownsOn(true); }
+      scanAll(); // 影子、材質（換層級：材質重新編）
+      for (const m of MATS) m.needsUpdate = true;
+      if (leafMat) leafMat.needsUpdate = true;
+    } else {
+      lights(false); if (prepped) crownsOn(false);
+      for (const x of SHAD) { x.castShadow = false; x.receiveShadow = false; } SHAD.clear();
+      for (const x of HIDE) x.visible = true; HIDE.length = 0;
+      for (const m of SSIDE) m.shadowSide = null; SSIDE.clear(); PLAINR = null; PLAINM.clear();
+      unpatchAll();
+      SCAN.stack.length = 0;
+    }
+    if (GR) { GR.im.visible = lv === 2; if (lv !== 2) grassReset(); }
+    if (lv !== 2) carEnv(null);
+    for (const c of CELLS.values()) c.lod = -1; for (const t of NHT) t.lod = -1;
+    st.sets++;
+  }
+  async function set(lv) {
+    lv = clamp(lv | 0, 0, 2); if (lv === 2 && !half) lv = 1;
+    while (busy) await busy;
+    if (lv === LV) return LV;
+    busy = (async () => {
+      if (lv > 0 && !prepped) prep();
+      if (lv === 2 && !TEX) await makeTex();
+      if (lv === 2 && !GR) makeGrass();
+      reseen();
+      apply(lv);
+    })();
+    try { await busy; } finally { busy = null; }
+    return LV;
+  }
+  function reseen() { SEEN = new WeakSet(); SCAN.stack.length = 0; SCAN.wait = 0; } // 換了層級：所有東西重新看一次
+
+  // ==== 每一格（renderer.render 包起來）====
+  const r0 = R.render.bind(R);
+  let cave = 0, ind = 0; const CC = new THREE.Color(CAVE_C), CG = new THREE.Color(CAVE_G);
+  function frame(cam, dt) {
+    const t0 = performance.now();
+    timeStep(); makeSky(); // 第 30 批：現在幾點 → 太陽、天空、反射的圖
+    LX.crossVectors(sun, UP).normalize(); LY.crossVectors(LX, sun).normalize();
+    if (dl) { dl.color.copy(TD.sunC); setBase(dl, TD.dlI); }
+    if (scene.fog) scene.fog.color.copy(TD.fog);
+    // 影子：跟著鏡頭（前面 35 公尺），對齊影子的格子
+    if (dl) {
+      cam.getWorldDirection(V3b); V3b.y = 0; if (V3b.lengthSq() > 1e-6) V3b.normalize();
+      const H = hl(), gy = V.heightAt ? V.heightAt(cam.position.x + V3b.x * SH_AHEAD, cam.position.z + V3b.z * SH_AHEAD) : 0;
+      V3.set(cam.position.x + V3b.x * SH_AHEAD, H && H.inside && H.inside(cam.position.x, cam.position.z, cam.position.y) ? cam.position.y : gy, cam.position.z + V3b.z * SH_AHEAD);
+      const a = V3.dot(LX), b = V3.dot(LY), sa = Math.round(a / TEXEL) * TEXEL - a, sb = Math.round(b / TEXEL) * TEXEL - b;
+      V3.addScaledVector(LX, sa).addScaledVector(LY, sb);
+      dl.target.position.copy(V3); dl.position.copy(V3).addScaledVector(sun, 300); dl.target.updateMatrixWorld(); dl.updateMatrixWorld();
+    }
+    // 隧道裡面（hills.js 變暗）、圓塔裡面：太陽被擋住了，天空光補一點
+    { const H = hl(), k = H && H.dimK != null ? H.dimK : 1; ind += ((indoor(cam) ? 1 : 0) - ind) * (1 - Math.exp(-dt * 6)); cave = Math.max(clamp((1 - k) / 0.58, 0, 1), ind);
+      scene.environmentIntensity = TD.envI * k + cave * 0.3;
+      if (hemi) { hemi.intensity = TD.hemiI + (CAVE_I - TD.hemiI) * cave; hemi.color.lerpColors(TD.hemiC, CC, cave); hemi.groundColor.lerpColors(TD.hemiG, CG, cave); } }
+    lodStep(cam, false);
+    scanStep(300, dt);
+    lampStep(cam);
+    if (LV === 2) { if (GR) grassStep(cam); carEnv(getCar()); }
+    const ms = performance.now() - t0; st.ms = st.ms * 0.95 + ms * 0.05; if (ms > st.maxMs) st.maxMs = ms;
+  }
+  let lastT = 0;
+  R.render = function (sc, cam) {
+    if (LV === 0 || sc !== scene) { if (carOn && sc.isScene && sc !== scene) carEnv(null); if (lampSent > 0 && sc.isScene) { lampSent = -1; nightCb(0); } R.toneMappingExposure = EXP0; if (sc.isScene) st.wetCalls = 0; return r0(sc, cam); } // 車庫頁：車燈關掉（回世界再開） // 車庫頁、房子裡面：車漆換回來（後製的那幾道不是 Scene）
+    if (R.getRenderTarget() !== null) return r0(sc, cam); // 後照鏡：不重算影子、沒有後製
+    const now = performance.now(), dt = lastT ? Math.min(0.1, (now - lastT) / 1000) : 0; lastT = now;
+    frame(cam, dt);
+    R.shadowMap.needsUpdate = true;
+    if (LV === 2) { postRender(cam); st.calls = R.info.render.calls; st.tris = R.info.render.triangles; return; }
+    R.toneMappingExposure = TD.exp; st.wetCalls = 0; r0(sc, cam); R.toneMappingExposure = EXP0;
+    st.calls = R.info.render.calls; st.tris = R.info.render.triangles;
+  };
+  const API = {
+    get level() { return LV; },
+    get busy() { return !!busy; },
+    can: { post: half, soft },
+    half,
+    pref: soft ? 0 : half ? 2 : 1, // 沒有設定過：電腦模擬的（測試）＝順，畫得了半精度＝最真實
+    set, treeK, stats: st,
+    get hour() { return hourNow(); }, setHour(h) { hourOv = h == null ? null : clamp(+h, 0, 24) % 24; timeStep(); lampN = 0; }, get night() { return TD.lamp; }, get sun() { return TD.elev; }, // 第 30 批：一天的時間
+    _tex: () => TEX, _td: () => TD,
+    info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band }),
+  };
+  return API;
+}
+return { createLook, LOOK_NAMES };
+})();
+
 // ==== 第 4 批：越野車（offroad.js）：駕駛座視角、引擎聲接到車內（cabin.js）、引擎聲（sound.js）的表 ====
 Object.assign(CABIN_VIEW, OFFROAD_EYE); if (createEngineAudio.cars) Object.assign(createEngineAudio.cars, OFFROAD_SOUND);
 
@@ -37938,19 +39404,15 @@ function buildTrack() {
   const NT = 170, cone = new THREE.ConeGeometry(1.6, 5, 7); cone.translate(0, 4.2, 0);
   const trunk = new THREE.CylinderGeometry(0.18, 0.25, 1.8, 6); trunk.translate(0, 0.9, 0);
   const trees = new THREE.InstancedMesh(cone, mat({ color: 0x3f5a32, roughness: 1 }), NT), trunks = new THREE.InstancedMesh(trunk, mat({ color: 0x5a4332, roughness: 1 }), NT);
-  const q = new THREE.Quaternion(), sc = new THREE.Vector3(), pv = new THREE.Vector3();
+  const q = new THREE.Quaternion(), sc = new THREE.Vector3(), pv = new THREE.Vector3(), treeCols = []; // 第 27 批：樹有碰撞（以前開得過去；400 公尺盡頭的牆拿掉以後開得到這裡）
   for (let i = 0; i < NT; i++) {
     const s = i % 2 ? 1 : -1, k = 0.7 + Math.random() * 0.8; let x, z;
     do { x = -55 + Math.random() * (L1 + 80 + 55); z = s * (20 + Math.random() * 50); } while (CIRCUIT_KEEP.some(([a, b, c, d]) => x > a && x < c && z > b && z < d) || NEIHU_KEEP.some(([a, b, c, d]) => x > a && x < c && z > b && z < d)); // 內湖的聯外道路上也不種 // 賽車場的聯外道路上不種
     m4.compose(pv.set(x, 0, z), q, sc.set(k, k * (0.8 + Math.random() * 0.5), k)); trees.setMatrixAt(i, m4); trunks.setMatrixAt(i, m4);
+    treeCols.push({ t: 'circle', x, z, r: 0.3 * k, h: 6 * k, noCrush: true });
   }
   T.add(trees, trunks);
-  const hillMat = mat({ color: 0x7c8a78, roughness: 1 });
-  // 賽車場（circuit.js）：北邊三座本來在 (80, −300)、(420, −330)、(760, −280)，會蓋到賽車場：往北移到賽車場後面
-  // 南邊三座（(200, 365)、(600, 360)、(1000, 330)）拿掉：內湖（neihu.js）搬到越野車場南邊（z 330 以南），那邊是內湖北邊的山脊
-  for (const [x, z, r] of [[120, -940, 150], [560, -960, 170], [1000, -930, 140]]) {
-    const h = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 12), hillMat); h.scale.y = 0.28; h.position.set(x, -r * 0.05, z); T.add(h);
-  }
+  // 遠山：第 27 批起賽車場北邊那三座（半球）在 hills.js（開得上去的山）
   // 車子底下的影子（兩台）
   const shadows = [0, 1].map(() => { const m = new THREE.Mesh(new THREE.PlaneGeometry(4.9, 2.3), new THREE.MeshBasicMaterial({ map: sh.material.map, transparent: true, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.position.y = 0.006; T.add(m); return m; });
   // 氮氣的藍色火焰（車尾中間下面）
@@ -37962,7 +39424,7 @@ function buildTrack() {
     o.rotation.z = k.rotation.z = Math.PI / 2; o.position.x = -0.55; k.position.x = -0.3; // 尖端朝後
     f.add(o, k); f.visible = false; T.add(f); return f;
   });
-  return { scene: T, bulbs, shadows, flames };
+  return { scene: T, bulbs, shadows, flames, trees: treeCols };
 }
 
 // ---- 比賽狀態 ----
@@ -38442,6 +39904,7 @@ const SPAWN = { x: 3.6, z: -5.4, heading: Math.atan2(-5.4, -3.6) }; // 出門的
 let meChar = null; // 你自己（character.js）：第一次出門在「出門中⋯」的時候先做好（第一個人會先畫大家共用的貼圖，手機 0.1～0.5 秒）；樣子＝GAME.look（自訂角色）
 let NPC = null; // 路上的人和車（npc.js）：第一次出門做好就留著（回車庫頁藏起來、停住）；做不出來就沒有（不擋出門）
 let crushFx = null, junkVer = -1; // 第 7 批（輾扁，crush.js）：怪獸卡車開上去把東西壓扁；junkVer＝表演場的垃圾車碰撞換過幾次
+let LOOK = null; // 第 29 批：畫質（look.js）：順／漂亮／最真實；第一次出門做好（村子蓋好以後）
 let police = null, gunner = null; // 第 3 批（b3-int）：警察（police-ai.js：第一次出門的載入畫面做好就留著）、槍（guns.js：做走路的時候一起做）
 let PI = null, PSC = null; // 警察局一樓裡面（police.js 的 buildPoliceInterior，載入畫面蓋好一直留著：拘留室的鐵門跟著警察開關）、它自己的場景
 let GS = null, GSC = null, gsDesk = null, gsFov = 60; // 槍店裡面（gunshop.js：第一次走進去才蓋，蓋好留著）、它自己的場景、櫃台的買槍畫面、打開前的視角
@@ -38637,10 +40100,12 @@ function proxyWorld() {
     const y = rampAtY(lx, lz, ref);
     return y == null ? null : GAR.group.position.y + y;
   };
-  W.heightAt = (x, z) => { if (inT(x, z)) return base(); const h = rampH(x, z); return h != null ? h : VIL.heightAt ? VIL.heightAt(x, z) : 0; };
-  W.terrainAt = (x, z) => (inT(x, z) ? base() !== 0 : rampH(x, z) != null || (VIL.terrainAt ? VIL.terrainAt(x, z) : false));
-  W.normalAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? UP : VIL.normalAt ? VIL.normalAt(x, z) : UP);
-  W.surfaceAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? 0 : VIL.surfaceAt(x, z));
+  // 第 27 批：隧道那段（hills.js）：玩家在上面那層（開到山上了）＝山的地面；下面那層（隧道裡）＝VIL 的（路）
+  const HL = VIL.hills, top = (x, z) => !!HL && HL.high && HL.tunAt(x, z) >= 0;
+  W.heightAt = (x, z) => { if (inT(x, z)) return base(); const h = rampH(x, z); return h != null ? h : top(x, z) ? HL.topAt(x, z) : VIL.heightAt ? VIL.heightAt(x, z) : 0; };
+  W.terrainAt = (x, z) => (inT(x, z) ? base() !== 0 : rampH(x, z) != null || top(x, z) || (VIL.terrainAt ? VIL.terrainAt(x, z) : false));
+  W.normalAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? UP : top(x, z) ? HL.topN(x, z) : VIL.normalAt ? VIL.normalAt(x, z) : UP);
+  W.surfaceAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? 0 : top(x, z) ? 1 : VIL.surfaceAt(x, z));
   return W;
 }
 
@@ -38655,11 +40120,11 @@ async function enterDrive() {
   if (!VIL) {
     enterDrive.busy = true;
     status.hidden = false; msg.textContent = '出門中⋯'; prog.parentElement.hidden = true;
-    await Promise.race([Promise.all([document.fonts.load('700 58px "Noto Sans TC"', '終點').catch(() => {}), villageFonts(), offroadFonts(), circuitFonts(), neihuFonts(), mountainFonts(), orbayFonts()]), new Promise((r) => setTimeout(r, 1600))]);
+    await Promise.race([Promise.all([document.fonts.load('700 58px "Noto Sans TC"', '終點').catch(() => {}), villageFonts(), offroadFonts(), circuitFonts(), neihuFonts(), mountainFonts(), orbayFonts(), hillsFonts()]), new Promise((r) => setTimeout(r, 1600))]);
     await new Promise((r) => setTimeout(r, 30)); // 讓「出門中」先畫出來（蓋村子要一下子，這時候畫面不會動）
     try {
       if (!TR) TR = buildTrack();
-      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMountain(VIL, { renderer }); VIL.wrapHome(); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
+      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
       const L = VIL.places.garage.lot;
       GAR = buildRoom(renderer, { quality: 'low', exterior: true }); // 第 21 批：圓塔（tower.js）；村子裡看得到玻璃、名牌；地板不反射（省）
       GAR.group.position.set(L.x, VIL.places.garage.y || 0, L.z); GAR.group.rotation.y = L.heading; TR.scene.add(GAR.group);
@@ -38688,6 +40153,13 @@ async function enterDrive() {
     msg.textContent = '警察局、槍店準備中⋯';
     await new Promise((r) => setTimeout(r, 30));
     try { await warmPolice(); } catch (e) { console.error(e); }
+    // 第 29 批（Nick 2026-10-23「就用5號的真實度」）：畫質；第一次「漂亮／最真實」要先找樹冠、畫材質貼圖、編 shader（在這裡做，開出去不會頓）
+    try {
+      LOOK = createLook({ renderer, scene: TR.scene, world: VIL, getCar: lookCar, plain: () => GAR?.group || null, indoor: (c) => !!GAR && !!TWR && inTower(c.position.x, c.position.z),
+        night: lookNight, carDims: (car) => (tripS && car === tripS.car ? fullBox(tripS) : null) }); // 第 30 批：晚上（車燈）、自己的車的大燈放哪裡
+      const lv = lookPref(); lookBtns(lv);
+      if (lv > 0) { msg.textContent = '畫面準備中⋯'; await new Promise((r) => setTimeout(r, 30)); await lookSet(lv, false); renderer.compile(TR.scene, dcam); }
+    } catch (e) { console.error(e); }
     enterDrive.busy = false; status.hidden = true;
   }
   startDrive();
@@ -38699,9 +40171,11 @@ function townFog(on) {
   if (!FOG0) FOG0 = [f.near, f.far];
   [f.near, f.far] = on ? [150, 1500] : FOG0;
 }
+// 開車、走路另外要擋的：賽道的東西（stripColliders）、賽道兩邊的樹（buildTrack）；第 27 批：隧道的牆／洞口上面的欄杆（hills.js：照玩家在哪一層開關，只有玩家有）
+const meCols = () => [...stripColliders(), ...(TR?.trees || []), ...(VIL?.hills ? VIL.hills.layerCols : [])];
 // 走路的（walk.js）：第一次出門做（村子、你家蓋好以後），之後一直用同一個
 function makeWalker() {
-  walker = createWalker({ scene: TR.scene, camera: dcam, world: PW, colliders: stripColliders(), character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
+  walker = createWalker({ scene: TR.scene, camera: dcam, world: PW, colliders: meCols(), bounds: VIL.hills?.walkBounds, character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
   walker.setGarage(GAR); // 鐵捲門：碰撞跟著門、門口給「開鐵捲門」
   if (NPC) { walker.addColliders(NPC.peds.props.colliders, 'npc-props'); walker.setMovers(NPC.MOV); } // 板凳、椅子；路上的車、居民（npcStep 每一格換）
   makeGuns(); // 第 3 批（b3-int）：槍、「揍」的按鈕、警車和警察擋人、小地圖上的警車
@@ -38795,14 +40269,14 @@ function makeDrv(pose) {
   const eye = CABIN_VIEW[cur] ? { ...CABIN_VIEW[cur], fov: cabinFov(cur, dcam.aspect) } : undefined;
   dEye = eye;
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
-  drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur) }, world: PW, colliders: stripColliders(), hudParent: stage,
+  drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur) }, world: PW, colliders: meCols(), hudParent: stage,
     onZone: arrive, onShift: () => dvoice?.shift(), onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
     crush: crushFx && offK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
-  drv.setCamCeil((x, z) => { if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75; if (TRAMP.on) return rampCeil(x, z); const c = GAR.ceilingAt(x, z, true); return c < 50 ? GAR.group.position.y + c - 0.75 : Infinity; }); // 第 24 批：開在斜坡上＝上面那一圈的底下 // 第 21 批：圓塔現在這一層的天花板（一樓 4.2、樓上 2.9 公尺） // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
+  drv.setCamCeil((x, z) => { if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75; if (TRAMP.on) return rampCeil(x, z); if (VIL.hills && !VIL.hills.high && VIL.hills.tunAt(x, z) >= 0) return VIL.hills.ceil; const c = GAR.ceilingAt(x, z, true); return c < 50 ? GAR.group.position.y + c - 0.75 : Infinity; }); // 第 27 批：隧道裡面＝拱頂底下 // 第 24 批：開在斜坡上＝上面那一圈的底下 // 第 21 批：圓塔現在這一層的天花板（一樓 4.2、樓上 2.9 公尺） // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
   if (police) drv.setMarkers(police.markers); // 第 3 批（b3-int）：小地圖上的警車
   drv.teleport(pose);
   tripFull = cur; tripPose[cur] = { x: pose.x, z: pose.z, heading: pose.heading, f: floorAt(pose.x, pose.z) }; if (parkShadow) parkShadow.visible = false;
@@ -38831,7 +40305,7 @@ destBtns.forEach((b) => b.addEventListener('click', () => { if (DRIVE.on) setDes
 const FOLD = { destsopen: -1, moreopen: -1 };
 const foldStart = () => { const t = drv && DRIVE.on ? drv.telemetry() : null; return t && Math.abs(t.v) > 4 ? 8 : -1; };
 function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.destsopen = foldStart(); }
-function moreOpen(on) { if (!on) { sizeOpen(false); tiltOpen(false); } if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
+function moreOpen(on) { if (!on) { sizeOpen(false); tiltOpen(false); lookOpen(false); } if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
 // 按鈕大小（Nick 2026-10-10）：小 0.8、中 1（原本的）、大 1.15；每支手機自己記（carid.btnsize，不用搬家、不上雲端）
 const BTN_Z = { s: 0.8, m: 1, l: 1.15 }, BTN_KEY = 'carid.btnsize';
 // 「大」只放大到排得下：直拿看寬（390 寬剛好排滿＝1 倍）、橫拿看高（340 高＝1 倍）；小螢幕（或手機「顯示大小」調大）上「大」＝「中」
@@ -38845,7 +40319,7 @@ function btnSize(k, keep) {
   for (const b of document.querySelectorAll('#sizePop button')) b.setAttribute('aria-pressed', String(b.dataset.z === k));
   if (keep) try { localStorage.setItem(BTN_KEY, k); } catch {}
 }
-function sizeOpen(on) { if (on) tiltOpen(false); if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function sizeOpen(on) { if (on) { tiltOpen(false); lookOpen(false); } if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 try { btnSize(localStorage.getItem(BTN_KEY)); } catch { btnSize('m'); }
 $('sizeTog').addEventListener('click', () => sizeOpen(true));
 for (const b of document.querySelectorAll('#sizePop button')) b.addEventListener('click', () => { btnSize(b.dataset.z, true); sizeOpen(false); });
@@ -38860,13 +40334,37 @@ function tiltMode(k, keep) {
   if (keep) try { localStorage.setItem(TILT_KEY, tiltK); } catch {}
   if (drv) drv.setTilt(tiltK === 'tilt', tiltFail);
 }
-function tiltOpen(on) { if (on) sizeOpen(false); if (bodyFlags.tiltopen === on) return; bodyFlag('tiltopen', on); $('tiltTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function tiltOpen(on) { if (on) { sizeOpen(false); lookOpen(false); } if (bodyFlags.tiltopen === on) return; bodyFlag('tiltopen', on); $('tiltTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 try { tiltMode(localStorage.getItem(TILT_KEY)); } catch { tiltMode('btn'); }
 $('tiltTog').addEventListener('click', () => tiltOpen(true));
 for (const b of document.querySelectorAll('#tiltPop button')) b.addEventListener('click', () => {
   const k = b.dataset.t, ask = k === 'tilt' && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'; // iPhone：要先問可不可以用
   tiltOpen(false);
   if (ask) DeviceMotionEvent.requestPermission().then((r) => tiltMode(r === 'granted' ? 'tilt' : 'btn', true), tiltFail); else tiltMode(k, true);
+});
+// 畫質（第 29 批，Nick 2026-10-23「就用5號的真實度」）：「⋯」那一排多一顆「✨」（🎮 左邊）→「畫質 最真實／漂亮／順」（look.js）；
+//   每支手機自己記（carid.look，跟按鈕大小一樣不用搬家、不上雲端）；沒選過：電腦模擬的（測試）＝順，畫得了半精度＝最真實，不然＝漂亮
+const LOOK_KEY = 'carid.look';
+const lookCar = () => ((DRIVE.on || RACE.on) && tripS?.car) || (RACE.on && S?.car) || null; // 車漆反射天空（最真實）：現在開的這台
+function lookPref() { let v = null; try { v = localStorage.getItem(LOOK_KEY); } catch {} return v === '0' || v === '1' || v === '2' ? +v : LOOK ? LOOK.pref : 0; }
+function lookBtns(lv) { for (const b of document.querySelectorAll('#lookPop button')) b.setAttribute('aria-pressed', String(+b.dataset.l === lv)); }
+async function lookSet(lv, tell) {
+  if (!LOOK) return;
+  crushFx?.restoreAll(); // 壓扁的樹先長回來（樹冠的三角形換來換去，頂點原本的位置要對）
+  if (tell && lv === 2 && LOOK.level !== 2) gtoast('畫質：最真實（準備中⋯）', 2400);
+  const got = await LOOK.set(lv);
+  lookBtns(got); if (MIR.on) mirrorSet(true); // 後照鏡的圖換精度
+  if (tell) gtoast('畫質：' + LOOK_NAMES[got], 1400);
+}
+// 第 30 批（Nick 2026-10-24，卡片選「自動輪流」）：look.js 的一天（24 分鐘）；燈亮多少變了 → 完整的車（masks.js 的車漆 shader）、輕量車（路上的車、朋友的車）的大燈、尾燈一起亮
+function lookNight(k) { PAINT_NIGHT.value = k; buildLodCar.night(k > 0.5); }
+function lookOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); } if (bodyFlags.lookopen === on) return; bodyFlag('lookopen', on); $('lookTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+lookBtns(lookPref());
+$('lookTog').addEventListener('click', () => lookOpen(true));
+for (const b of document.querySelectorAll('#lookPop button')) b.addEventListener('click', () => {
+  const lv = +b.dataset.l; lookOpen(false); lookBtns(lv);
+  try { localStorage.setItem(LOOK_KEY, String(lv)); } catch {}
+  lookSet(lv, true);
 });
 // 跳燈（Nick 2026-10-17，草稿 https://claude.ai/artifact/NjStMe4AhSWuk9dBUELzde；popup.js）：86、R7 開車的時候「手煞車」旁邊多一顆「跳燈」（drive.js setPop）
 //   按一下燈蓋立起來、燈亮；再按一下收回去。每台車記在存檔 GAME.pop（{車: 1}）；借來的車不記（下次借又是關著的）。朋友看得到（netState 的 pl）
@@ -39840,7 +41338,7 @@ function toRace() {
   stopLiftSnd();
   tripS?.dmg?.clearDebris(); // 掉在村子裡的零件、煙、嘶嘶聲收掉（車子還是凹的）
   drv.release(); // 車子放回原點、不轉、輪子歸零（carSize、putCar 要）
-  DRIVE.on = false; document.body.classList.remove('driving'); bodyWalking(false); driveBar.hidden = true;
+  DRIVE.on = false; document.body.classList.remove('driving'); bodyWalking(false); driveBar.hidden = true; VIL.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
   townFog(false); npcShow(false); police?.setEnabled(false); bodyFlag('wanted', false); // 第 3 批：比賽的時候警察藏起來（星星留著）
   enterRace(); // 賽道已經蓋好了：不用等，這一行就進去了
   if (!RACE.on) resumeDrive(VIL.places.track.spawn, 'garage'); // 進不去（不會發生）：接著開
@@ -39963,7 +41461,7 @@ function leaveDrive() {
   netBorrowEnd('home'); netLendHome(); // 第 19 批：開借來的車回車庫頁＝還車；借給朋友的拿回來
   gvEnd('home'); // 第 23 批：在朋友家：塔搬回你家
   const P = tripPose && TWR ? { mid: padCars(0, null)[0] || null, tower: TWR.slice() } : null; // 第 21 批：坐電梯中的那幾台不在裡面（normPark 再找一格）
-  trip = false; DRIVE.on = false; boarding = null;
+  trip = false; DRIVE.on = false; boarding = null; VIL?.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
   panelClose(); driveBar.hidden = true;
   document.body.classList.remove('driving'); bodyWalking(false);
   dvoice?.dispose(); dvoice = null;
@@ -40147,6 +41645,7 @@ function makeCrush() {
     toast: (text) => { if (drv && DRIVE.on) drv.toast(text, 2000); },
     crime: (x, z) => { CRUSH_POS.x = x; CRUSH_POS.z = z; police?.crime('crush', CRUSH_POS); }, // 村子裡輾東西＝1★（越野車場裡面 crush.js 不叫）
     any: () => offK(cur), protect: crushSafe, // 第 9 批：越野車什麼都輾；輾不到的地方
+    treeK: (j, k) => LOOK?.treeK(j, k), // 第 29 批：畫質的樹葉卡片跟著扁
     copWreck: (i, x, z) => (police && police.wreck ? police.wreck(i, x, z) : null), // 第 9 批：警車扁掉、警察下車跑掉、+2★（police-ai.js）
   });
 }
@@ -40171,7 +41670,7 @@ const GS_DESK = { label: '買槍、子彈', icon: 'hand', onClick: () => openDes
 const jailed = () => !!police && (police.state === 'caught' || police.state === 'jail' || police.state === 'release'); // 被抓到、關著、放出來那一下：不能上車下車、開門、用槍
 async function warmPolice() {
   try { await Promise.race([gunShopFonts(VIL.places.gunshop?.name), new Promise((r) => setTimeout(r, 1600))]); } catch (e) { console.error(e); } // 槍店招牌、貼圖上的字
-  police = createPolice({ scene: TR.scene, world: VIL, colliders: stripColliders(), hudParent: stage,
+  police = createPolice({ scene: TR.scene, world: VIL, colliders: [...stripColliders(), ...(TR.trees || [])], hudParent: stage,
     obstacles: NPC ? (x, z, r) => NPC.traffic.colliders(x, z, r) : null, // 路上的車：警車會閃、會撞到
     sound: { ctx: () => engineAudio.context, get out() { return engineAudio.input; }, muted: () => engineAudio.muted, gain: 0.2 }, // 警笛：跟引擎聲同一條總輸出（音量、靜音）
     makePoliceCar, makeOfficer: () => buildCharacter(POLICE_LOOK),
@@ -40259,7 +41758,7 @@ function stationFolks() {
 function makeGuns() {
   if (police) { walker.setMarkers(police.markers); if (!NPC) walker.setMovers(police.movers); }
   try {
-    townWorld = { scene: TR.scene, colliders: [...VIL.colliders, ...stripColliders(), ...garCols(true)], crime: true, name: 'village' };
+    townWorld = { scene: TR.scene, colliders: [...VIL.colliders, ...stripColliders(), ...(TR.trees || []), ...garCols(true)], crime: true, name: 'village' };
     townTargets = [NPC && gunTargets.pedestrians(NPC.peds), NPC && gunTargets.traffic(NPC.traffic), police && gunTargets.police(police), gunTargets.boxes(gunParked, { kind: 'parked' })].filter(Boolean);
     gunner = createGunner({ scene: TR.scene, camera: dcam, renderer, walker, character: walker.character, GAME, hudParent: stage, keyboard: true, world: townWorld, targets: townTargets,
       audio: { muted: () => engineAudio.muted },
@@ -40382,6 +41881,7 @@ function driveStep(dt) {
   GAR.update(dt); // 門、升降機在動（開、關、升、降）每一格都要跟著（停好的時候 onLift 換碰撞）
   OB?.update(dt); // 第 6 批：越野車車庫的鐵捲門
   homeTick(); doorStep(); rampStep(); orbayStep(); elPanelStep(); // 第 17 批：換號碼就把你家搬過去；別人那幾間的外殼、碰撞；第 21 批：電梯的面板
+  hillsStep(dt); // 第 27 批：隧道的哪一層、海的波浪、隧道裡面暗一點、開進深水
   if (drv) {
     drv.update(dt); // 開進賽道、快速道路的事（arrive）在這裡面叫
     if (drv && DRIVE.on) orRace?.update(dt); // 第 4 批：越野賽（drive.update 之後）
@@ -40419,6 +41919,19 @@ function driveStep(dt) {
   netStep(dt); // 一起開車（net.src.js）：朋友的車、人、名字、表情、一起比賽
   mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）
+}
+// ==== 第 27 批：山、隧道、海邊（hills.js）====
+// 玩家多高 → 在隧道的哪一層（開在山上＝上面：山的地面、洞口上面的欄杆擋；隧道裡＝下面：路、隧道的牆擋）；鏡頭在隧道裡面：太陽、天空光暗一點
+// 開進深水（往前開不動）：「前面是海，倒車回去」（出來再進去會再說一次）
+const HLS = { sea: false };
+function hillsStep(dt) {
+  const H = VIL?.hills; if (!H || !DRIVE.on) return;
+  const wk = walker && walker.mode !== 'off' && walker.character, p = wk ? walker.character.group.position : tripS?.car?.position;
+  if (p) H.level(p.y);
+  H.update(dt, indoor ? null : dcam, TR.scene);
+  if (!p || wk || !drv) return;
+  const d = H.depth(p.x, p.z);
+  if (d > 0.4 && !HLS.sea) { HLS.sea = true; drv.toast('前面是海，倒車回去', 2600); } else if (d < 0.1) HLS.sea = false;
 }
 // ==== 大地圖（bigmap.js；Nick 2026-10-10「可以瀏覽完整地圖」「大地圖OK」，草稿 https://claude.ai/artifact/VF5wb2U1PpAnzBRyJsSSW6）====
 // 開車、走路：點右上角的小地圖（下面寫「🗺 大地圖」）→ 大地圖（車子自己慢慢停、走路的人站著）；點地方 →「去這裡」＝目的地（setDest）
@@ -40506,10 +42019,12 @@ function mirrorSet(on) {
   for (const e of MIR.list) { e.o.material = e.mat; if (e.cab) e.o.visible = false; } // 換回原本的
   MIR.list.length = 0; MIR.on = false; MIR.S = null;
   const S = tripS; if (!on || !S?.body) return;
+  const ty = LOOK?.level > 0 && LOOK.half ? THREE.HalfFloatType : THREE.UnsignedByteType; // 第 29 批：畫質「漂亮」「最真實」用半精度（太陽比較亮，畫到這裡不會白掉）
+  if (MIR.rt && MIR.rt.texture.type !== ty) { MIR.rt.dispose(); MIR.rt = null; }
   if (!MIR.rt) {
-    MIR.rt = new THREE.WebGLRenderTarget(MIR_W, MIR_H, { depthBuffer: true });
-    MIR.cam = new THREE.PerspectiveCamera((2 * Math.atan(MIR_TV) * 180) / Math.PI, MIR_W / MIR_H, 0.3, 200);
-    MIR.mat = new THREE.MeshBasicMaterial({ map: MIR.rt.texture, side: THREE.DoubleSide, fog: false });
+    MIR.rt = new THREE.WebGLRenderTarget(MIR_W, MIR_H, { depthBuffer: true, type: ty });
+    if (!MIR.cam) MIR.cam = new THREE.PerspectiveCamera((2 * Math.atan(MIR_TV) * 180) / Math.PI, MIR_W / MIR_H, 0.3, 200);
+    if (!MIR.mat) MIR.mat = new THREE.MeshBasicMaterial({ map: MIR.rt.texture, side: THREE.DoubleSide, fog: false }); else MIR.mat.map = MIR.rt.texture;
   }
   S.body.updateMatrixWorld(true);
   const cm = S.cabin?.userData.mirror;
@@ -42339,7 +43854,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 18; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 19; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
