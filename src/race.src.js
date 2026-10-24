@@ -99,13 +99,14 @@ function buildTrack() {
     for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(${40 + Math.random() * 40},${60 + Math.random() * 50},${25 + Math.random() * 25},0.35)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
   }, [190, 130]) }), 594, -0.02, 0, 22, 15);
   // 柏油：兩條車道、中間白線、兩邊白線（貼圖 16 公尺 × 12 公尺一格）
-  plane(LEN, 12, mat({ roughness: 0.92, map: canvasTex(512, 384, (g, w, h) => {
+  const asphP = plane(LEN, 12, mat({ roughness: 0.92, map: canvasTex(512, 384, (g, w, h) => {
     g.fillStyle = '#3a3c40'; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 5000; i++) { const k = 40 + Math.random() * 60; g.fillStyle = `rgba(${k},${k},${k + 4},0.5)`; g.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); }
     g.fillStyle = '#e9ebee';
     for (const zz of [-5.6, 5.6]) g.fillRect(0, (zz + 6) * 32 - 2.5, w, 5);
     g.fillRect(0, 6 * 32 - 2, w, 4);
   }, [LEN / 16, 1]) }), MID, 0, 0);
+  asphP.material.userData.role = 'road'; // 第 35 批：look.js 漂亮／最真實：標線磨損、裂縫
   // 起跑那段輪胎印（黑色，越往前越淡）
   const rub = plane(90, 12, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, map: canvasTex(512, 128, (g, w, h) => {
     for (const zz of [LANE - 0.78, LANE + 0.78, -LANE - 0.78, -LANE + 0.78]) {

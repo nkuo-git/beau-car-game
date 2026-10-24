@@ -299,7 +299,12 @@ body.fs.driving:not(.walking):not(.racing).moreopen.lookopen #drivebar .lookpop 
   background: rgba(14,15,18,0.72); color: #F2F3F5; font: 700 13px/1 var(--sans); white-space: nowrap; }
 @media (max-width: 379px) { body.fs.driving:not(.walking):not(.racing).moreopen:not(.sizeopen):not(.tiltopen):not(.lookopen) #drivebar .looktog { top: calc(var(--fs-t) + 194px); right: calc(var(--fs-r) + 270px); } } /* 很窄的手機（360 寬）：那一排放不下，✨ 放到 🎮 下面 */
 body.fs.driving:not(.walking):not(.racing).lookopen #drivebar .minirow .snd, body.fs.driving:not(.walking):not(.racing).lookopen #stage .fsbtn, body.fs.driving:not(.walking):not(.racing).lookopen #stage .dv-cam { display: none; }
-@media (min-height: 561px) { body.fs.wanted #drivebar .moretog, body.fs.wanted #drivebar .sizetog, body.fs.wanted #drivebar .sizepop, body.fs.wanted #drivebar .tilttog, body.fs.wanted #drivebar .tiltpop, body.fs.wanted #drivebar .looktog, body.fs.wanted #drivebar .lookpop { margin-top: 46px; } }
+/* 背景音樂開關（第 35 批，Nick 2026-10-24「做背景音樂開關 不用畫圖 直接做」）：「⋯」打開那一排的 ⋯ 正下方一顆「🎵」，按一下關（變灰）、再按開（town.src.js musSet；每支手機記在 carid.music） */
+.mustog { display: none; }
+body.fs.driving:not(.walking):not(.racing).moreopen:not(.sizeopen):not(.tiltopen):not(.lookopen) #drivebar .mustog { display: grid; place-items: center; position: fixed; top: calc(var(--fs-t) + 194px); right: calc(var(--fs-r) + 10px); width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 20px/1 var(--sans); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: margin-top .2s; }
+body.fs #drivebar .mustog[aria-pressed="false"] { filter: grayscale(1); opacity: 0.55; }
+@media (min-height: 561px) { body.fs.wanted #drivebar .moretog, body.fs.wanted #drivebar .sizetog, body.fs.wanted #drivebar .sizepop, body.fs.wanted #drivebar .tilttog, body.fs.wanted #drivebar .tiltpop, body.fs.wanted #drivebar .looktog, body.fs.wanted #drivebar .lookpop, body.fs.wanted #drivebar .mustog { margin-top: 46px; } }
 @media (max-height: 560px) { body.fs.driving:not(.walking):not(.racing).moreopen #stage .dv-act2 { right: 374px; } } /* 橫拿：「下車」在那一排的左邊，打開的時候再往左讓開（第 29 批多了 ✨：322 → 374） */
 body.fs #dests button, body.fs #drivebar .minirow .ghost { white-space: nowrap; }
 /* 比賽：下面拉上來的一片（成績、開始比賽、選對手）；跑的時候（body.race-live，race.src.js）收起來 */

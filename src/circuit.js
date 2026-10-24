@@ -349,6 +349,7 @@ function buildCircuit(V, opt = {}) {
     atlas: std({ map: AT.tex, vertexColors: true, roughness: 0.7 }),
     lamp: new THREE.MeshBasicMaterial({ vertexColors: true }),
   };
+  mats.asph.userData.role = 'road'; // 第 35 批：look.js 漂亮／最真實：裂縫、補丁
   const B = bank(), UV = AT.uv;
   const wuv = (s) => (x, z) => [x / s, z / s]; // 地面：世界座標的 uv（s 公尺一張）
   const Y = { grav: 0.012, asph: 0.03, paint: 0.045 };

@@ -92,13 +92,13 @@ const u0 = await ui();
 await p.evaluate(() => document.getElementById('moreTog').click()); await p.waitForTimeout(100);
 const u1 = await ui();
 // ✨ 不壓到別的按鈕（直拿、橫拿）
-const HUD = ['.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '#dests', '#driveHome', '#dSndBtn', '#fsBtn', '#moreTog', '#sizeTog', '#tiltTog', '#destTog'];
+const HUD = ['.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '#dests', '#driveHome', '#dSndBtn', '#fsBtn', '#moreTog', '#sizeTog', '#tiltTog', '#destTog', '#lookTog', '#musTog'];
 const overlaps = [];
 for (const [w, h] of [[844, 390], [390, 844], [360, 800], [915, 412], [800, 360]]) {
   await p.setViewportSize({ width: w, height: h }); await p.waitForTimeout(250); await p.screenshot({ path: `${prefix}-hud-${w}x${h}.png` });
-  const r = await p.evaluate((HUD) => { const t = document.getElementById('lookTog'); if (!t.getClientRects().length) return ['no ✨']; const a = t.getBoundingClientRect(), out = [];
-    if (a.left < 0 || a.top < 0 || a.right > innerWidth || a.bottom > innerHeight) out.push('✨ off screen');
-    for (const s of HUD) for (const e of document.querySelectorAll(s)) { if (e.closest('[hidden]') || !e.getClientRects().length || getComputedStyle(e).display === 'none' || getComputedStyle(e).visibility === 'hidden') continue; const q = e.getBoundingClientRect(); if (a.left < q.right - 0.5 && q.left < a.right - 0.5 && a.top < q.bottom - 0.5 && q.top < a.bottom - 0.5) out.push(s); }
+  const r = await p.evaluate((HUD) => { const out = []; for (const [id, ic] of [['lookTog', '✨'], ['musTog', '🎵']]) { const t = document.getElementById(id); if (!t.getClientRects().length) { out.push('no ' + ic); continue; } const a = t.getBoundingClientRect(); // 第 35 批：🎵 也不壓到別的
+    if (a.left < 0 || a.top < 0 || a.right > innerWidth || a.bottom > innerHeight) out.push(ic + ' off screen');
+    for (const s of HUD) for (const e of document.querySelectorAll(s)) { if (e.id === id || e.closest('[hidden]') || !e.getClientRects().length || getComputedStyle(e).display === 'none' || getComputedStyle(e).visibility === 'hidden') continue; const q = e.getBoundingClientRect(); if (a.left < q.right - 0.5 && q.left < a.right - 0.5 && a.top < q.bottom - 0.5 && q.top < a.bottom - 0.5) out.push(ic + s); } }
     return out; }, HUD);
   if (r.length) overlaps.push(`${w}x${h}: ${r.join(',')}`);
 }
@@ -107,7 +107,7 @@ await p.setViewportSize({ width: 844, height: 390 }); await p.waitForTimeout(250
 await p.evaluate(() => document.getElementById('lookTog').click()); await p.waitForTimeout(100);
 const u2 = await ui();
 check(!u0.tog && u1.tog && !u1.pop && u2.pop && !u2.tog && u2.btns === '最真實/漂亮/順', `fullscreen driving: ✨ only after ⋯; ✨ opens 「畫質 ${u2.btns}」`);
-check(!overlaps.length, `✨ is on screen and covers no other button (844×390, 390×844, 360×800, 915×412, 800×360${overlaps.length ? ': ' + overlaps.join(' / ') : ''})`);
+check(!overlaps.length, `✨ and 🎵 are on screen and cover no other button (844×390, 390×844, 360×800, 915×412, 800×360${overlaps.length ? ': ' + overlaps.join(' / ') : ''})`);
 const t2 = Date.now();
 await p.evaluate(() => window.__D().LOOK.setHour(13)); // 第 30 批：太陽會動（24 分鐘一天）：測試固定下午 1 點
 await p.evaluate(() => [...document.querySelectorAll('#lookPop button')].find((b) => b.dataset.l === '2').click());

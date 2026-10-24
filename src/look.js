@@ -65,7 +65,18 @@ const PBRH = `
   uniform sampler2D tAsA, tAsN, tGrA, tGrN, tCoA, tCoN; float bUp = 0.0, bG = 0.0, bA = 0.0;
   vec3 bDet(sampler2D t, vec2 w, float s) { return texture(t, w / s).rgb + texture(t, w / (s * 5.3) + vec2(0.37, 0.71)).rgb; }`;
 // 顏色：灰的（柏油、水泥）細顆粒；綠的（草、樹、山）一塊一塊深淺、黃綠、偏橄欖綠；樹冠一叢一叢；很亮的灰暗一點；彎很大的綠色邊邊挖成葉子
-const COLOR = (pbr) => `#include <color_fragment>
+// 第 35 批（內容 22，Nick「先把路跟房子做更真」）：柏油（材質 userData.role＝'road'）：標線磨損（露出柏油）、裂縫（只有某些區域有）、補丁、一塊一塊的深淺；concU＝貼圖 u 從這裡起是水泥農路（不動）
+const ROADX = (cu) => `{ float rn = smoothstep(170.0, 20.0, vBD) * ${cu >= 0 ? `(1.0 - step(${f3(cu)}, vMapUv.x))` : '1.0'};
+      if (rn > 0.0) {
+        float paint = clamp(smoothstep(0.42, 0.6, l) + smoothstep(0.18, 0.32, sat) * step(c.b, c.r), 0.0, 1.0);
+        float wear = smoothstep(0.5, 0.78, bnoise(vBW * 2.3) * 0.55 + bnoise(vBW * 7.0) * 0.45);
+        c = mix(c, vec3(0.045, 0.047, 0.05) * (0.8 + 0.4 * fine), paint * wear * 0.85 * rn);
+        float r1 = 1.0 - abs(2.0 * bnoise(vBW * 0.55 + vec3(3.1, 0.0, 7.7)) - 1.0), r2 = 1.0 - abs(2.0 * bnoise(vBW * 1.7 + vec3(9.0, 0.0, 1.0)) - 1.0);
+        float crack = smoothstep(0.90, 0.985, r1 * (0.7 + 0.3 * r2)) * step(0.55, bnoise(vBW * 0.05 + vec3(5.0)));
+        c *= 1.0 - (1.0 - paint) * crack * 0.55 * rn;
+        float pat = bnoise(vBW * 0.09 + vec3(11.0)); c *= 1.0 + (1.0 - paint) * (step(0.64, pat) * -0.1 + 0.07 * (bnoise(vBW * 0.25) - 0.5)) * rn;
+      } }`;
+const COLOR = (pbr, road) => `#include <color_fragment>
   { vec3 c = diffuseColor.rgb; float l = dot(c, vec3(0.299, 0.587, 0.114)), mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)), sat = (mx - mn) / max(mx, 1e-3);
     float nr = smoothstep(140.0, 15.0, vBD), mid = smoothstep(500.0, 60.0, vBD);
     float fine = 0.5, med = 0.5, pch = 0.5;
@@ -89,6 +100,7 @@ const COLOR = (pbr) => `#include <color_fragment>
       float near = smoothstep(260.0, 25.0, vBD);
       if (bUp * near > 0.0) { vec3 d = mix(mix(bDet(tCoA, vBW.xz, 2.2), bDet(tAsA, vBW.xz, 2.6), bA), bDet(tGrA, vBW.xz, 1.6), bG);
         c *= mix(vec3(1.0), vec3(1.0) + (d - 1.0) * ${f3(MB.pk)}, bUp * near); } }` : ''}
+    ${road != null ? ROADX(road) : ''}
     diffuseColor.rgb = c; }`;
 // 5 號：地面（朝上的面）的凹凸＋山和草地大大小小的起伏
 const PBRN = `#include <normal_fragment_maps>
@@ -205,6 +217,7 @@ function createLook(o) {
   const maskObc = (sh) => { sh.uniforms.lkMask = MASKU; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float lkMask;').replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  gl_FragColor.a *= 1.0 - lkMask;')
     .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n  #ifndef FLAT_SHADED\n  normal = normalize(vNormal);\n  #endif'); }; // 卡片兩面都用同一個法線（背面不要翻成朝下：一半的草葉、葉子會黑黑的）
   const pbrOk = (m) => LV === 2 && !!TEX && !m.transparent && !(m.alphaTest > 0);
+  const roadOf = (m) => (m.userData.role === 'road' && m.map ? (m.userData.concU ?? -1) : null); // 第 35 批：柏油的材質（village／neihu／circuit／race 標的）→ 水泥農路從 u 幾起（沒有＝−1）
   const WU = { tRefl: { value: null }, reflM: { value: new THREE.Matrix4() }, wetK: { value: 0 }, wetY: { value: 0 } }; // 濕路：所有材質共用
   const SIGNS = new Map(); // 第 30 批：招牌（emissiveMap＝map 的材質）→ 原本的 emissiveIntensity；晚上加亮
   let lampSent = -1, signK = -1;
@@ -218,16 +231,16 @@ function createLook(o) {
     m.onBeforeCompile = function (sh, r) {
       if (obc0) obc0.call(this, sh, r);
       if (LV === 0) return;
-      const pbr = pbrOk(this);
+      const pbr = pbrOk(this), road = roadOf(this);
       if (pbr) { const T = TEX; Object.assign(sh.uniforms, { tAsA: { value: T.asA }, tAsN: { value: T.asN }, tGrA: { value: T.grA }, tGrN: { value: T.grN }, tCoA: { value: T.coA }, tCoN: { value: T.coN } }, WU); }
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VDECL).replace('#include <project_vertex>', VPOS);
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + VDECL + NOISE + (pbr ? PBRH + WETH : ''))
-        .replace('#include <color_fragment>', COLOR(pbr))
+        .replace('#include <color_fragment>', COLOR(pbr, road))
         .replace('#include <normal_fragment_maps>', pbr ? PBRN : '#include <normal_fragment_maps>')
         .replace('#include <roughnessmap_fragment>', (pbr ? WETR : '#include <roughnessmap_fragment>') + '\nroughnessFactor = clamp(roughnessFactor * (0.85 + 0.3 * bnoise(vBW * 5.0)), 0.04, 1.0);')
         .replace('#include <opaque_fragment>', pbr ? WETO : '#include <opaque_fragment>');
     };
-    m.customProgramCacheKey = function () { return (key0 ? key0.call(this) : obc0 ? obc0.toString() : '') + '|lk' + LV + (pbrOk(this) ? 'p' : ''); };
+    m.customProgramCacheKey = function () { const rd = roadOf(this); return (key0 ? key0.call(this) : obc0 ? obc0.toString() : '') + '|lk' + LV + (pbrOk(this) ? 'p' : '') + (rd != null ? 'r' + rd : ''); };
     m.needsUpdate = true; st.mats = MATS.size;
     if (m.emissiveMap && m.emissiveMap === m.map && m.emissiveIntensity < 0.5 && !SIGNS.has(m)) { SIGNS.set(m, m.emissiveIntensity); signK = -1; } // 招牌：晚上加亮
   }

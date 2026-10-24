@@ -1066,6 +1066,7 @@ export function createEngineAudio(opt = {}) {
       if (S.rec) S.rec.n++;
       h.alive = true;
       h.set = (o = {}) => { if (done) return; const v = Math.max(0, Math.min(1, num(o.level, 1))); if (v !== level) { level = v; out.gain.setTargetAtTime(MUS.vol * v, ctx.currentTime, 0.5); } };
+      Object.defineProperty(h, 'level', { get: () => level }); // 0＝關（開關）、0.35 房子裡、1 外面
       h.dispose = () => {
         try {
           if (done) return; done = true; h.alive = false; clearInterval(iv);

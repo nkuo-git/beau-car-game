@@ -97,6 +97,7 @@ function vText(g, t, cx, y0, step, px, col) { g.fillStyle = col; g.textAlign = '
 
 // ---- 外牆的磁磚（四種，一種 512×512 一格、可以一直重複貼）：二丁掛、馬賽克、洗石子、粉光油漆；白底，頂點色上色 ----
 const FAC_M = [3.2, 2.4, 4.0, 4.0]; // 每一種一格是幾公尺
+const FAC_BUMP = 0.012; // 第 35 批：磁磚縫的凹凸（貼圖亮暗當高度）
 function facadeTex(R) {
   const [c, g] = cv(1024, 1024);
   const cell = (ox, oy, draw) => { g.save(); g.beginPath(); g.rect(ox, oy, 512, 512); g.clip(); g.translate(ox, oy); draw(); g.restore(); };
@@ -382,8 +383,9 @@ function makeMats(tex) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vEmis;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vEmis;');
   };
   st.customProgramCacheKey = () => 'street-st';
-  const fac = new THREE.MeshStandardMaterial({ map: tex.fac, vertexColors: true, roughness: 0.86, metalness: 0 });
+  const fac = new THREE.MeshStandardMaterial({ map: tex.fac, vertexColors: true, roughness: 0.86, metalness: 0, bumpMap: tex.fac, bumpScale: FAC_BUMP });
   fac.onBeforeCompile = (sh) => { // 外牆：磁磚一直重複（fract＋textureGrad：接縫不會有線）、乘上水漬、牆腳暗一點
+    // 第 35 批（內容 22，Nick「先把路跟房子做更真」）：磁磚的縫是凹的（用貼圖本身的亮暗當高度：bumpMap＝同一張，但要照重複的 uv 取樣）；磁磚、馬賽克比較亮滑、洗石子、粉光粗（每種一個粗糙度，縫比較粗）
     sh.uniforms.stainMap = { value: tex.stain };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 rect;\nattribute vec2 suv;\nvarying vec4 vRect;\nvarying vec2 vSuv;\nvarying vec2 vTuv;\nvarying float vY;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRect = rect; vSuv = suv; vTuv = uv; vY = position.y;');
@@ -394,6 +396,19 @@ function makeMats(tex) {
         'diffuseColor *= texelColor;',
         'diffuseColor.rgb *= texture2D( stainMap, vSuv ).rgb;',
         'diffuseColor.rgb *= mix( 0.7, 1.0, smoothstep( 0.02, 0.75, vY ) );', // 牆腳（貼地那一截）暗一點
+        'float facLum = texelColor.g;',
+      ].join('\n'))
+      .replace('#include <roughnessmap_fragment>', [
+        '#include <roughnessmap_fragment>',
+        'float facR = vRect.y > 0.25 ? (vRect.x > 0.25 ? 0.6 : 0.66) : (vRect.x > 0.25 ? 0.84 : 0.9);', // 貼圖集的格子：上排＝二丁掛、馬賽克；下排＝洗石子、粉光
+        'roughnessFactor *= mix(1.05, facR / 0.86, smoothstep(0.3, 0.6, facLum));', // 深的（縫）粗、亮的（磚面）照每種
+      ].join('\n'))
+      .replace('#include <normal_fragment_maps>', [ // 跟 three 的 bumpMap 一樣算，但 uv 用重複的那一個（fract 的接縫用隔壁一格的 uv 取樣，不會有一條線）
+        '{ vec2 dSTdx = dFdx( vTuv ), dSTdy = dFdy( vTuv );',
+        '  vec2 fuv0 = vRect.xy + fract( vTuv ) * vRect.zw, fuvx = vRect.xy + fract( vTuv + dSTdx ) * vRect.zw, fuvy = vRect.xy + fract( vTuv + dSTdy ) * vRect.zw;',
+        '  float Hll = bumpScale * textureGrad( bumpMap, fuv0, dFdx( tg ), dFdy( tg ) ).g;',
+        '  vec2 dHdxy = vec2( bumpScale * textureGrad( bumpMap, fuvx, dFdx( tg ), dFdy( tg ) ).g - Hll, bumpScale * textureGrad( bumpMap, fuvy, dFdx( tg ), dFdy( tg ) ).g - Hll );',
+        '  normal = perturbNormalArb( - vViewPosition, normal, dHdxy, faceDirection ); }',
       ].join('\n'));
   };
   fac.customProgramCacheKey = () => 'street-fac';

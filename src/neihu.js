@@ -362,6 +362,7 @@ function buildNeihu(V, opt = {}) {
     hill: std({ vertexColors: true, roughness: 1 }),
     tree: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }),
   };
+  mats.road.userData.role = 'road'; // 第 35 批：look.js 漂亮／最真實：裂縫、補丁
   // 牆的材質：貼圖格子在著色器裡重複（fract），每個頂點一個「格子編號」→ uniform 陣列裡的 [u0, v0, du, dv]
   mats.wall.onBeforeCompile = (sh) => {
     sh.uniforms.nhCells = { value: FA.cells };

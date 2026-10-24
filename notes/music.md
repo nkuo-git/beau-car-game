@@ -9,3 +9,7 @@ Nick: 「可以有點背景音樂嗎?」. No audio files (nothing downloaded, no
 - town.src.js: `MUS` is created in `ambStep` right after the ambient sound (so it plays when driving or walking) and dropped in `ambOff` (garage page, races). `engineAudio.music` is feature-checked.
 - night-test: `clk.mus && clk.musBar >= 2`.
 - Not done: a separate music switch (would be UI → mock first), music during races, more than one tune.
+
+## Music switch (batch 35, content 22, 2026-10-24)
+
+Nick: 「做背景音樂開關 不用畫圖 直接做」 (no mock needed). Full-screen driving: 「⋯」 opens the row and a 🎵 button sits under ✨ (garage.src.html `#musTog`, garage.css `.mustog`, 44 px, same fold rules as the other buttons; `aria-pressed="false"` greys it out). town.src.js: `musOn` / `musSet(on, keep)` / `musLevel()` — the level goes to `MUS.set({ level: off ? 0 : indoor ? 0.35 : 1 })`, so the music object keeps running (no gap when switched back on). Stored per phone in localStorage `carid.music` (`'on'` default / `'off'`; not in the save, not migrated). sound.js `music()` exposes a `level` getter for tests. night-test `msw` clicks it twice and checks pressed state, level and storage; look-test includes `#musTog` in the overlap check on the 5 phone sizes.
