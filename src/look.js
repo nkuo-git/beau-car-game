@@ -52,7 +52,7 @@ const MB = { desat: 0.9, grain: 0.08, grass: 0.38, patch: 0.3, fine2: 0.22, oliv
 const TREE = [null, { cards: 110, cone: 8 }, { cards: 230, cone: 14 }], TREE_FAR = { cards: 36, cone: 4 }, TREE_NEAR = 190, CELL = 200;
 const SHADOW = 2048, SH_R = 60, SH_AHEAD = 35;
 const GC = 16, GN = 7, GPER = 900; // 草：一格幾公尺、幾格見方、一格最多幾叢
-const POST = { bloom: 0.07, bRad: 0.35, thr: 10, aoR: 2.2, aoS: 2.2, vig: 0.55, carEnv: 0.7 };
+const POST = { bloom: 0.07, bRad: 0.35, thr: 10, aoR: 2.2, aoS: 2.2, vig: 0.55, carEnv: 0.7, skyMax: 6 }; // 第 34 批 skyMax：看得到的天空最亮到幾（太陽的圓盤在 shader 裡是幾千、幾萬：光暈一糊整個畫面都白；夾住就只是一顆白太陽）
 const GROUND = /(^|[-_|])(ground|area|walk|road|paint|grass|paddy|water|asph|line|lane|trail|sea|sand|island|shadow)\b/i; // 地上的：只接影子，不投影子（省）
 const f3 = (v) => v.toFixed(3);
 const NOISE = `
@@ -184,7 +184,8 @@ function createLook(o) {
     if (u.cloudCoverage) { u.cloudCoverage.value = LT.cloud; u.cloudDensity.value = LT.cden; } };
   function skyOf(scale) { const k = new Sky(); skyUni(k.material.uniforms); k.scale.setScalar(scale); return k; }
   function makeSky() {
-    if (!skyMat) { const k = skyOf(1); skyMat = k.material; skyMat.depthWrite = false; k.geometry.dispose(); }
+    if (!skyMat) { const k = skyOf(1); skyMat = k.material; skyMat.depthWrite = false; k.geometry.dispose();
+      const f0 = 'gl_FragColor = vec4( texColor, 1.0 );'; if (skyMat.fragmentShader.includes(f0)) { skyMat.fragmentShader = skyMat.fragmentShader.replace(f0, `gl_FragColor = vec4( min( texColor, vec3( ${POST.skyMax.toFixed(1)} ) ), 1.0 );`); skyMat.needsUpdate = true; } else console.warn('look: sky shader changed, no skyMax clamp'); } // 第 34 批：太陽那一點夾住（反射圖那個 skyOf(100) 不夾：本來就沒有太陽）
     skyUni(skyMat.uniforms);
     const band = TD.band; if (band === envBand && envTex) return; envBand = band;
     let tex = ENVS.get(band);
