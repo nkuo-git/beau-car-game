@@ -2144,7 +2144,8 @@ let MUS = null; // 第 34 批：背景音樂（sound.js music）：跟環境聲�
 // 第 35 批（Nick 2026-10-24「做背景音樂開關 不用畫圖 直接做」）：「⋯」打開那一排 ⋯ 下面多一顆「🎵」，按一下關（變灰）、再按開；每支手機自己記（carid.music，不搬家、不上雲端）；音樂還是跟著「聲音」總開關
 const MUS_KEY = 'carid.music';
 let musOn = true;
-function musLevel() { if (MUS) MUS.set({ level: !musOn ? 0 : indoor ? 0.35 : 1 }); }
+// 第 36 批（Nick 2026-10-25「開車跟走路音樂換一下」）：開車放賽車感的那首（'drive'）、走路（房子裡也是）放輕鬆的那首（'walk'）；換了在下一小節生效（sound.js）
+function musLevel() { if (MUS) MUS.set({ level: !musOn ? 0 : indoor ? 0.35 : 1, style: walker && walker.mode !== 'off' ? 'walk' : 'drive' }); }
 function musSet(on, keep) { musOn = !!on; $('musTog').setAttribute('aria-pressed', String(musOn)); if (keep) try { localStorage.setItem(MUS_KEY, musOn ? 'on' : 'off'); } catch {} musLevel(); }
 try { musSet(localStorage.getItem(MUS_KEY) !== 'off'); } catch { musSet(true); }
 $('musTog').addEventListener('click', () => { engineAudio.resume(); musSet(!musOn, true); FOLD.moreopen = foldStart(); });
@@ -2153,8 +2154,8 @@ function ambStep() {
   if (!DRIVE.on || !engineAudio.input) { ambOff(); return; }
   if (AMB_S.f++ % 6) return;
   if (!AMB) { AMB = engineAudio.ambient(); if (!AMB.alive) { AMB = null; return; } }
-  if (!MUS && engineAudio.music) { MUS = engineAudio.music(); if (!MUS.alive) MUS = null; } musLevel();
   let px, pz, hd; const walking = !!walker && walker.mode !== 'off';
+  if (!MUS && engineAudio.music) { MUS = engineAudio.music(walking ? 'walk' : 'drive'); if (!MUS.alive) MUS = null; } musLevel();
   if (walking) { const w = walker.telemetry(); px = w.x; pz = w.z; hd = w.heading; } else if (drv) { const t = drv.telemetry(); px = t.x; pz = t.z; hd = t.heading; } else return;
   const night = LOOK && LOOK.level > 0 ? LOOK.night : 0, inK = indoor ? 0.3 : 1; // 順沒有日夜＝白天；房子裡面：外面的聲音小聲
   AMB_S.wind = (walking ? 1 : 0.55) * inK; AMB_S.crickets = night * inK; AMB_S.birds = (1 - night) * inK;

@@ -1024,49 +1024,84 @@ export function createEngineAudio(opt = {}) {
     return h;
   }
   // ---- 第 34 批：背景音樂（Nick 2026-10-24「可以有點背景音樂嗎?」）：程式自己彈的，沒有用任何音樂檔（沒有版權問題）
-  //   92 BPM、C 大調，8 小節一段的和弦（C G Am F C G F G）：墊底的和弦（三角波過低通，慢慢進慢慢出）、貝斯（正弦，1、3 拍）、
-  //   五聲音階的小旋律（正弦＋三角波的撥弦，每 16 小節換一段，照種子亂數走：每次聽到的不太一樣）、很輕的踩鈸（高通雜訊，反拍）
   //   出門就放（開車、走路），跟引擎聲同一條總輸出（靜音、音量一起）；頁面藏起來就先不排音符；set({ level })：房子裡面小聲一點
-  const MUS = { bpm: 92, vol: 0.085, pad: 0.055, bass: 0.1, pluck: 0.075, hat: 0.02, look: 0.45 };
+  //   第 36 批（Nick 2026-10-25「音樂可以改成輕快一點 有賽車感的嗎 開車跟走路音樂換一下」）：兩首，set({ style }) 在下一小節換
+  //   走路 'walk'（原本那首）：92 BPM、C 大調，8 小節一段的和弦（C G Am F C G F G）：墊底的和弦（三角波過低通，慢慢進慢慢出）、貝斯（正弦，1、3 拍）、
+  //     五聲音階的小旋律（正弦＋三角波的撥弦，每 16 小節換一段，照種子亂數走：每次聽到的不太一樣）、很輕的踩鈸（高通雜訊，反拍）
+  //   開車 'drive'（賽車感）：128 BPM、A 小調（Am F C G ／ Am F G G）：大鼓每拍（正弦從 160 掉到 42 Hz）、小鼓 2、4 拍（雜訊過帶通＋一點 190 Hz）、
+  //     踩鈸每半拍（反拍重）、貝斯鋸齒波過低通跑八分音符（第 4、8 個半拍跳高八度）、和弦鋸齒波切分短音（2、4 拍的後半拍）、
+  //     十六分音符的琶音（方波過低通：和弦音上上下下＋小調五聲音階的過門，每 8 小節換一段）
+  const MUS = { vol: 0.085, look: 0.45,
+    walk: { bpm: 92, pad: 0.055, bass: 0.1, pluck: 0.075, hat: 0.02 },
+    drive: { bpm: 128, kick: 0.2, snare: 0.08, hat: 0.024, bass: 0.12, stab: 0.038, arp: 0.048 } }; // 開車那首的音大多很短，數字大一點才跟走路那首差不多大聲（量過 RMS）
   const MUS_CH = [[60, 64, 67], [59, 62, 67], [57, 60, 64], [57, 60, 65], [60, 64, 67], [59, 62, 67], [57, 60, 65], [59, 62, 67]], MUS_ROOT = [36, 43, 45, 41, 36, 43, 41, 43], MUS_PENT = [60, 62, 64, 67, 69, 72, 74, 76, 79, 81];
+  const DRV_CH = [[57, 60, 64], [53, 57, 60], [60, 64, 67], [55, 59, 62], [57, 60, 64], [53, 57, 60], [55, 59, 62], [55, 59, 62]], DRV_ROOT = [33, 29, 36, 31, 33, 29, 31, 31], DRV_PENT = [57, 60, 62, 64, 67, 69, 72, 74, 76, 79, 81, 84];
   const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
-  function music() {
+  function music(style0) {
     const h = { alive: false, set() {}, dispose() {}, get bar() { return bar; } };
-    let bar = 0;
+    let bar = 0, sb = 0, cur = style0 === 'drive' ? 'drive' : 'walk', want = cur; // bar：總共排了幾小節；sb：這首從頭數（換首歸 0，從和弦的第 1 小節開始）
     try {
       if (S.gone) return h;
       const ctx = ensureCtx(); if (!ctx) return h;
       wake(); clearTimeout(S.idleT);
-      const t0 = ctx.currentTime + 0.05, keep = [], beat = 60 / MUS.bpm;
+      const t0 = ctx.currentTime + 0.05, keep = [];
       const out = ctx.createGain(); out.gain.setValueAtTime(0, t0); out.gain.setTargetAtTime(MUS.vol, t0, 1.2); out.connect(S.inp); keep.push(out);
-      const padLp = ctx.createBiquadFilter(); padLp.type = 'lowpass'; padLp.frequency.value = 900; padLp.Q.value = 0.3; padLp.connect(out); keep.push(padLp);
-      const plLp = ctx.createBiquadFilter(); plLp.type = 'lowpass'; plLp.frequency.value = 2600; plLp.Q.value = 0.2; plLp.connect(out); keep.push(plLp);
+      const lp = (f, q, dest = out) => { const x = ctx.createBiquadFilter(); x.type = 'lowpass'; x.frequency.value = f; x.Q.value = q; x.connect(dest); keep.push(x); return x; };
+      const padLp = lp(900, 0.3), plLp = lp(2600, 0.2);
       const hatHp = ctx.createBiquadFilter(); hatHp.type = 'highpass'; hatHp.frequency.value = 6500; hatHp.connect(out); keep.push(hatHp);
+      const bassLp = lp(460, 3), stabLp = lp(1500, 0.6), arpLp = lp(2400, 0.4);
+      const snBp = ctx.createBiquadFilter(); snBp.type = 'bandpass'; snBp.frequency.value = 1900; snBp.Q.value = 0.7; snBp.connect(out); keep.push(snBp);
       let rng = 1, seed = 7; const rnd = () => { rng = (rng * 1664525 + 1013904223) >>> 0; return rng / 4294967296; };
-      let mel = null; // 這 16 小節的旋律：每小節 8 個半拍 [音（MIDI）或 null]
+      const drop = (n, g) => { n.onended = () => { try { n.disconnect(); g.disconnect(); } catch { /* 算了 */ } }; };
+      let mel = null; // 走路：這 16 小節的旋律：每小節 8 個半拍 [音（MIDI）或 null]
       const makeMel = () => { rng = seed * 2654435761 >>> 0; seed++; mel = []; let i = 3;
         for (let b = 0; b < 16; b++) { const row = [], ch = MUS_CH[b % 8]; for (let k = 0; k < 8; k++) {
           const rest = k % 2 ? rnd() < 0.55 : rnd() < 0.2; if (rest) { row.push(null); continue; }
           i += rnd() < 0.5 ? -1 : 1; if (rnd() < 0.25) i += rnd() < 0.5 ? -1 : 1; i = Math.max(1, Math.min(MUS_PENT.length - 2, i)); let n = MUS_PENT[i];
           if (k === 0 || k === 4) { let best = n, bd = 99; for (const c of ch) for (const o of [0, 12]) { const d = Math.abs(c + o - n); if (d < bd) { bd = d; best = c + o; } } n = best; i = Math.max(0, MUS_PENT.indexOf(n)); if (i < 0) i = 3; } // 重拍落在和弦音上
           row.push(n); } mel.push(row); } };
-      makeMel();
-      const tone = (type, f, t, a, dur, dest, g0, rel) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(g0, t + a); g.gain.setTargetAtTime(0.0001, t + dur, rel); o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + rel * 6); o.onended = () => { try { o.disconnect(); g.disconnect(); } catch { /* 算了 */ } }; };
-      const schedBar = (b, t) => { // 第 b 小節從 t 秒開始
-        const ch = MUS_CH[b % 8], root = MUS_ROOT[b % 8], L = 4 * beat;
-        for (const m of ch) tone('triangle', hz(m), t, 0.35, L - 0.1, padLp, MUS.pad, 0.25); // 墊底
-        for (const k of [0, 2]) tone('sine', hz(root), t + k * beat, 0.01, beat * 0.9, out, MUS.bass, 0.08); // 貝斯
+      let arp = null, dseed = 3; // 開車：這 8 小節的琶音：每小節 16 個十六分音符 [音或 null]
+      const makeArp = () => { rng = dseed * 2246822519 >>> 0; dseed++; arp = [];
+        for (let b = 0; b < 8; b++) { const ch = DRV_CH[b], tones = [ch[0] + 12, ch[1] + 12, ch[2] + 12, ch[0] + 24], up = rnd() < 0.6, row = []; let j = up ? 0 : 3;
+          for (let k = 0; k < 16; k++) {
+            if (k % 4 === 3 && rnd() < 0.35) { row.push(null); continue; } // 偶爾空一格（有呼吸）
+            if (k % 4 === 2 && rnd() < 0.3) { const p = DRV_PENT[Math.max(0, Math.min(DRV_PENT.length - 1, DRV_PENT.indexOf(tones[j]) + (rnd() < 0.5 ? -1 : 1)))]; row.push(p > 0 ? p : tones[j]); continue; } // 過門：五聲音階隔壁的音
+            row.push(tones[j]); j = up ? (j + 1) % 4 : (j + 3) % 4; if (k === 7 && rnd() < 0.5) j = up ? 3 : 0; }
+          arp.push(row); } };
+      makeMel(); makeArp();
+      const tone = (type, f, t, a, dur, dest, g0, rel) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(g0, t + a); g.gain.setTargetAtTime(0.0001, t + dur, rel); o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + rel * 6); drop(o, g); };
+      const hat = (t, g0, T = 0.045) => { const n = ctx.createBufferSource(), g = ctx.createGain(); n.buffer = noiseBuf(ctx); g.gain.setValueAtTime(g0, t); g.gain.exponentialRampToValueAtTime(0.0001, t + T); n.connect(g); g.connect(hatHp); n.start(t); n.stop(t + T + 0.02); drop(n, g); };
+      const kick = (t, g0) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.09); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(g0, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.32); drop(o, g); };
+      const snare = (t, g0) => { const n = ctx.createBufferSource(), g = ctx.createGain(); n.buffer = noiseBuf(ctx); g.gain.setValueAtTime(g0, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14); n.connect(g); g.connect(snBp); n.start(t); n.stop(t + 0.16); drop(n, g); tone('sine', 190, t, 0.002, 0.03, out, g0 * 0.8, 0.03); };
+      const walkBar = (b, t) => {
+        const beat = 60 / MUS.walk.bpm, W = MUS.walk, ch = MUS_CH[b % 8], root = MUS_ROOT[b % 8], L = 4 * beat;
+        for (const m of ch) tone('triangle', hz(m), t, 0.35, L - 0.1, padLp, W.pad, 0.25); // 墊底
+        for (const k of [0, 2]) tone('sine', hz(root), t + k * beat, 0.01, beat * 0.9, out, W.bass, 0.08); // 貝斯
         if (b % 16 === 0 && b > 0) makeMel();
-        const row = mel[b % 16]; for (let k = 0; k < 8; k++) { const m = row[k]; if (m == null) continue; const tt = t + k * beat * 0.5; tone('sine', hz(m), tt, 0.008, 0.05, plLp, MUS.pluck, 0.11); tone('triangle', hz(m) * 2, tt, 0.008, 0.03, plLp, MUS.pluck * 0.18, 0.05); } // 撥弦
-        for (let k = 0; k < 4; k++) { const tt = t + (k + 0.5) * beat, n = ctx.createBufferSource(), g = ctx.createGain(); n.buffer = noiseBuf(ctx); g.gain.setValueAtTime(MUS.hat, tt); g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.045); n.connect(g); g.connect(hatHp); n.start(tt); n.stop(tt + 0.06); n.onended = () => { try { n.disconnect(); g.disconnect(); } catch { /* 算了 */ } }; } // 踩鈸（反拍）
+        const row = mel[b % 16]; for (let k = 0; k < 8; k++) { const m = row[k]; if (m == null) continue; const tt = t + k * beat * 0.5; tone('sine', hz(m), tt, 0.008, 0.05, plLp, W.pluck, 0.11); tone('triangle', hz(m) * 2, tt, 0.008, 0.03, plLp, W.pluck * 0.18, 0.05); } // 撥弦
+        for (let k = 0; k < 4; k++) hat(t + (k + 0.5) * beat, W.hat); // 踩鈸（反拍）
+        return L;
+      };
+      const driveBar = (b, t) => {
+        const beat = 60 / MUS.drive.bpm, D = MUS.drive, i = b % 8, ch = DRV_CH[i], root = DRV_ROOT[i], L = 4 * beat, e = beat / 2, s = beat / 4;
+        for (let k = 0; k < 4; k++) kick(t + k * beat, D.kick); // 大鼓每拍
+        snare(t + beat, D.snare); snare(t + 3 * beat, D.snare); if (i === 7) snare(t + 3.5 * beat, D.snare * 0.6); // 小鼓 2、4 拍（第 8 小節多一下過門）
+        for (let k = 0; k < 8; k++) hat(t + k * e, k % 2 ? D.hat : D.hat * 0.5, k % 2 ? 0.06 : 0.03); // 踩鈸每半拍，反拍重
+        for (let k = 0; k < 8; k++) { const m = root + (k === 3 || k === 7 ? 12 : 0); tone('sawtooth', hz(m), t + k * e, 0.004, e * 0.55, bassLp, D.bass, 0.03); } // 貝斯八分音符
+        for (const k of [1.5, 3.5]) for (const m of ch) { tone('sawtooth', hz(m), t + k * beat, 0.004, e * 0.6, stabLp, D.stab, 0.04); tone('sawtooth', hz(m) * 1.004, t + k * beat, 0.004, e * 0.6, stabLp, D.stab * 0.6, 0.04); } // 和弦切分
+        if (i === 0 && b > 0) makeArp();
+        const row = arp[i]; for (let k = 0; k < 16; k++) { const m = row[k]; if (m == null) continue; tone('square', hz(m), t + k * s, 0.003, s * 0.5, arpLp, D.arp * (k % 4 ? 0.8 : 1), 0.03); } // 琶音
+        return L;
       };
       let next = t0 + 0.2, done = false, level = 1;
-      const tick = () => { if (done) return; const now = ctx.currentTime; if (typeof document !== 'undefined' && document.hidden) { next = Math.max(next, now + 0.2); return; } if (next < now - 0.5) next = now + 0.1; while (next < now + 0.6) { schedBar(bar, next); bar++; next += 4 * beat; } };
+      const tick = () => { if (done) return; const now = ctx.currentTime; if (typeof document !== 'undefined' && document.hidden) { next = Math.max(next, now + 0.2); return; } if (next < now - 0.5) next = now + 0.1;
+        while (next < now + 0.6) { if (want !== cur) { cur = want; sb = 0; } next += cur === 'drive' ? driveBar(sb, next) : walkBar(sb, next); bar++; sb++; } };
       const iv = setInterval(tick, 150); tick();
       if (S.rec) S.rec.n++;
       h.alive = true;
-      h.set = (o = {}) => { if (done) return; const v = Math.max(0, Math.min(1, num(o.level, 1))); if (v !== level) { level = v; out.gain.setTargetAtTime(MUS.vol * v, ctx.currentTime, 0.5); } };
+      h.set = (o = {}) => { if (done) return; const v = Math.max(0, Math.min(1, num(o.level, 1))); if (v !== level) { level = v; out.gain.setTargetAtTime(MUS.vol * v, ctx.currentTime, 0.5); } if (o.style === 'drive' || o.style === 'walk') want = o.style; };
       Object.defineProperty(h, 'level', { get: () => level }); // 0＝關（開關）、0.35 房子裡、1 外面
+      Object.defineProperty(h, 'style', { get: () => cur }); // 'walk'／'drive'（正在放的；換了在下一小節生效）
       h.dispose = () => {
         try {
           if (done) return; done = true; h.alive = false; clearInterval(iv);
