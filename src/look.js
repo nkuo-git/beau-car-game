@@ -689,9 +689,9 @@ function createLook(o) {
     if (!car) return;
     if (!CUBE.rt) { CUBE.rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType, generateMipmaps: false }); CUBE.cam = new THREE.CubeCamera(0.5, 450, CUBE.rt); CUBE.cam.coordinateSystem = R.coordinateSystem; CUBE.cam.updateCoordinateSystem(); }
     car.getWorldPosition(V3); CUBE.cam.position.set(V3.x, V3.y + 1.1, V3.z); CUBE.cam.updateMatrixWorld(true);
-    const prev = R.getRenderTarget(), vis = car.visible, gv = GR ? GR.im.visible : false, ar = R.autoClear, c0 = R.info.render.calls; car.visible = false; if (GR) GR.im.visible = false; R.autoClear = true;
-    for (let k = 0; k < CUBE.faces; k++) { const i = CUBE.face; R.setRenderTarget(CUBE.rt, i); r0(scene, CUBE.cam.children[i]); CUBE.face = (i + 1) % 6; if (CUBE.face === 0) { CUBE.rt.texture.needsPMREMUpdate = true; CUBE.n++; } }
-    R.setRenderTarget(prev); car.visible = vis; if (GR) GR.im.visible = gv; R.autoClear = ar; CUBE.calls = R.info.render.calls - c0;
+    const prev = R.getRenderTarget(), vis = car.visible, gv = GR ? GR.im.visible : false, ar = R.autoClear; let cs = 0; car.visible = false; if (GR) GR.im.visible = false; R.autoClear = true;
+    for (let k = 0; k < CUBE.faces; k++) { const i = CUBE.face; R.setRenderTarget(CUBE.rt, i); const a = R.info.render.calls; r0(scene, CUBE.cam.children[i]); const b = R.info.render.calls; cs += b >= a ? b - a : b; CUBE.face = (i + 1) % 6; if (CUBE.face === 0) { CUBE.rt.texture.needsPMREMUpdate = true; CUBE.n++; } }
+    R.setRenderTarget(prev); car.visible = vis; if (GR) GR.im.visible = gv; R.autoClear = ar; CUBE.calls = cs;
   }
   const carEnvTex = () => (LV === 2 && CUBE.rt && CUBE.n > 0 ? CUBE.rt.texture : envTex); // 方塊畫好一輪以前先用天空的
 
