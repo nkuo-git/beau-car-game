@@ -1099,7 +1099,7 @@ export function createEngineAudio(opt = {}) {
       const iv = setInterval(tick, 150); tick();
       if (S.rec) S.rec.n++;
       h.alive = true;
-      h.set = (o = {}) => { if (done) return; const v = Math.max(0, Math.min(1, num(o.level, 1))); if (v !== level) { level = v; out.gain.setTargetAtTime(MUS.vol * v, ctx.currentTime, 0.5); } if (o.style === 'drive' || o.style === 'walk') want = o.style; };
+      h.set = (o = {}) => { if (done) return; const v = Math.max(0, Math.min(2, num(o.level, 1))); if (v !== level) { level = v; out.gain.setTargetAtTime(MUS.vol * v, ctx.currentTime, 0.5); } if (o.style === 'drive' || o.style === 'walk') want = o.style; };
       Object.defineProperty(h, 'level', { get: () => level }); // 0＝關（開關）、0.35 房子裡、1 外面
       Object.defineProperty(h, 'style', { get: () => cur }); // 'walk'／'drive'（正在放的；換了在下一小節生效）
       h.dispose = () => {

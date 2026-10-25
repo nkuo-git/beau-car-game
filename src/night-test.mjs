@@ -10,7 +10,7 @@ const three = path.join(dir, '../node_modules/three');
 const prefix = process.argv[2] || '../out/night/nt';
 fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
-const hook = 'window.__THREE = THREE; window.__PN = PAINT_NIGHT; window.__pxLow = () => pxLow;'
+const hook = 'window.__THREE = THREE; window.__PN = PAINT_NIGHT; window.__pxLow = () => pxLow; window.__pxHigh = () => pxHigh;'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, tripS, TR, walker, renderer, LOOK, NPC, S, AMB, AMB_S, MUS, engineAudio, leaveCar, police, buildLodCar });'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
 const srv = http.createServer((req, res) => {
@@ -116,6 +116,9 @@ check(k.ns.starsOp === 0 && k.ns.moonOp === 0 && k.ns.winVis && k.ns.winOp > 0.3
 // ---- 4 晚上 22:00 ----
 const n = await at('22', 22);
 const near = n.pl.filter((l) => l.I > 0);
+// 第 39 批（Nick「做1234 只做在最真實」）：最真實畫兩倍再縮小、自己的車反射旁邊（方塊相機）
+const rx = await p.evaluate(() => { window.__dstep(1); const D = window.__D(), R = D.renderer, v = new window.__THREE.Vector2(); R.getDrawingBufferSize(v); return { pxHigh: window.__pxHigh(), px: v.x * v.y, css: innerWidth * innerHeight, info: D.LOOK.info() }; });
+check(rx.pxHigh && rx.px > rx.css * 1.9 && rx.info.cube > 0 && rx.info.carCube && rx.info.cubeCalls > 0, `第 39 批 最真實: drawn at ${(rx.px / rx.css).toFixed(1)}× the screen pixels (${rx.px}), own car reflects a live cube of the surroundings (${rx.info.cube} cycles, ${rx.info.cubeCalls} calls per face pair)`);
 check(n.sun < -20 && n.night === 1 && n.dl.I === 0.8 && n.dl.c === '9fb4d8' && n.dl.dirY > 150 && n.hemi.c === '46536f' && n.hemi.I === 0.95 && n.fog === '161c29' && n.info.band === 'n' && n.exp === 1,
   `22:00: sun ${n.sun}° (below), moon light 0.8 #${n.dl.c} with shadows, night hemi ${n.hemi.I}/fog (第 37 批: brighter night), night reflection map`);
 check(near.length >= 2 && near.every((l) => l.I > 0 && l.I <= 396 && l.d < 90 && l.y > 5) && near.some((l) => l.I === 396 && l.y > 10) && near.filter((l) => l.d > 55).every((l) => l.I < 396) && n.info.lamps > 100,
@@ -140,8 +143,10 @@ const clk = await p.evaluate(() => { const D = window.__D(), e = document.queryS
 await p.evaluate(() => window.__view(960, 576, false)); await p.screenshot({ path: `${prefix}-hud-22.png` }); // 給人看的：HUD 上的時間
 check(clk.hidden === false && clk.txt === '🌙 22:00', `clock above the minimap reads 「${clk.txt}」 at 22:00`);
 check(clk.mus && clk.musBar >= 2 && clk.musLv === 1 && clk.musSt === 'drive', `第 34 批: background music is playing (bar ${clk.musBar}, level ${clk.musLv}, style ${clk.musSt}; program-made, starts with the ambient sound; 第 36 批: driving = the racing tune)`);
-const msw = await p.evaluate(() => { const D = window.__D(), b = document.getElementById('musTog'); b.click(); const off = { pressed: b.getAttribute('aria-pressed'), lv: D.MUS.level, ls: localStorage.getItem('carid.music') }; b.click(); return { off, on: { pressed: b.getAttribute('aria-pressed'), lv: D.MUS.level, ls: localStorage.getItem('carid.music') } }; });
-check(msw.off.pressed === 'false' && msw.off.lv === 0 && msw.off.ls === 'off' && msw.on.pressed === 'true' && msw.on.lv === 1 && msw.on.ls === 'on', `第 35 批: 🎵 switch: off → level 0, saved 'off'; on again → level 1 (${JSON.stringify(msw)})`);
+const msw = await p.evaluate(() => { const D = window.__D(), b = document.getElementById('musTog'), pop = document.getElementById('musPop'), st = () => ({ pressed: b.getAttribute('aria-pressed'), lv: D.MUS.level, ls: localStorage.getItem('carid.music'), open: document.body.classList.contains('musopen'), on: [...pop.querySelectorAll('button[aria-pressed="true"]')].map((x) => x.textContent).join('') });
+  const pick = (t) => { b.click(); const o = document.body.classList.contains('musopen'); [...pop.querySelectorAll('button')].find((x) => x.textContent === t).click(); return { ...st(), opened: o }; };
+  return { start: st(), off: pick('關'), s: pick('小'), l: pick('大'), m: pick('中') }; });
+check(msw.start.on === '中' && msw.off.opened && !msw.off.open && msw.off.pressed === 'false' && msw.off.lv === 0 && msw.off.ls === 'off' && msw.s.lv === 0.45 && msw.s.ls === 's' && msw.s.pressed === 'true' && msw.l.lv === 1.6 && msw.l.ls === 'l' && msw.m.lv === 1 && msw.m.ls === 'm' && msw.m.on === '中', `第 39 批: 🎵 opens 背景音樂 關/小/中/大 (starts 中): 關 → level 0, 🎵 grey, saved 'off'; 小 0.45; 大 1.6; 中 1; picking closes it (${JSON.stringify(msw)})`);
 check(clk.amb && clk.last && clk.last.crickets === 1 && clk.last.birds === 0 && clk.last.wind > 0 && clk.last.cars.length === 3, `ambient sound running while driving: crickets at night, no birds, wind ${clk.last && clk.last.wind}, 3 traffic voices (nearest ${clk.last && clk.last.cars.join('/')} m)`);
 check(n.paintN === 1 && n.lodCars > 0 && n.lodE > d.lodE + 5 && n.sign > 0.7 && n.info.signs > 3, `22:00: own car's lamps glow (paint night 1), ${n.lodCars} traffic cars' lamps lit (E sum ${d.lodE} → ${n.lodE}), ${n.info.signs} sign materials brighter (${n.sign})`);
 check(n.wet > 50 && Object.values(perf['22']).every((v) => v.wet > 50), `22:00 最真實: wet road reflection pass (${Object.values(perf['22']).map((v) => v.wet).join('/')} extra calls at ${PLACES.join('/')})`);
@@ -156,9 +161,9 @@ await p.waitForFunction(() => window.__D().LOOK.level === 1 && !window.__D().LOO
 const b1 = await at('22-b', 22);
 check(b1.night === 1 && b1.pl.some((l) => l.I > 0) && b1.sp.every((l) => l.I === 18) && b1.paintN === 1 && Object.values(perf['22-b']).every((v) => v.wet === 0) && b1.dl.I === 0.8,
   `漂亮 at 22:00: lamps, headlights, car lamps, moon light; no wet reflection pass`);
-check(b1.pl.length === 2 && b1.sp.length === 1 && b1.ns.pol === null && !b1.info.polOn && b1.info.sh === 1024 && b1.info.shR === 40 && b1.ns.beamVis && n.info.sh === 2048 && n.info.shR === 60 && n.pl.length === 4 && n.sp.length === 2 && n.info.polOn,
+check(b1.pl.length === 2 && b1.sp.length === 1 && b1.ns.pol === null && !b1.info.polOn && b1.info.sh === 1024 && b1.info.shR === 40 && b1.ns.beamVis && n.info.sh === 4096 && n.info.shR === 110 && n.info.shRad === 3.5 && b1.info.shRad === 2 && n.pl.length === 4 && n.sp.length === 2 && n.info.polOn,
   `第 37 批 漂亮 is lighter: ${b1.pl.length} street lamps (最真實 ${n.pl.length}), ${b1.sp.length} headlight spot (最真實 ${n.sp.length}), no police roof light, shadow map ${b1.info.sh} / ${b1.info.shR} m (最真實 ${n.info.sh} / ${n.info.shR} m); the road beam stays`);
-const pxl = await p.evaluate(() => { window.__dstep(1); return window.__pxLow(); });
+const pxl = await p.evaluate(() => { window.__dstep(1); return window.__pxLow() && !window.__pxHigh(); });
 check(pxl === true, `第 37 批: driving at 漂亮 caps the drawing buffer at 0.7 M pixels (pxLow ${pxl})`);
 // ---- 6 換回順：燈拿掉、招牌、車燈回去 ----
 const signBase = await p.evaluate(() => { let m = null; window.__D().TR.scene.traverse((o) => { if (!m && o.isMesh && o.material && o.material.emissiveMap && /sign/.test(o.name)) m = o.material; }); return m ? m.emissiveIntensity : null; });

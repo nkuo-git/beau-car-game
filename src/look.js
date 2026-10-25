@@ -48,11 +48,12 @@ const NSKY = { stars: 900, starR: 870, starSz: 2.4, moonR: 24, moonD: 860, moonC
 const WET = { dark: 0.62, pud: 0.55, rough: 0.3, pudRough: 0.04, base: 0.28, lod: 4.5 }; // 下過雨的路（最真實）：變暗、水窪更暗、粗糙度、倒影（水窪外面 35%、模糊）
 const CAVE_I = 1.5, CAVE_C = 0xf4f1ea, CAVE_G = 0x8a8478; // 隧道裡面（hills.js 的 dimK 0.42）、圓塔裡面：天空光補到這麼多、顏色白一點（太陽被擋住了，不然一片黑、藍藍的）
 // 材質（範例 3 號、5 號）
-const MB = { desat: 0.9, grain: 0.08, grass: 0.38, patch: 0.3, fine2: 0.22, olive: 0.75, clump: 0.5, albedo: 0.78, leaf: 3.5, pk: 0.9, pn: 1.6, macro: 5 };
+const MB = { desat: 0.9, grain: 0.08, grass: 0.38, patch: 0.3, fine2: 0.22, olive: 0.75, clump: 0.5, albedo: 0.78, leaf: 3.5, pk: 0.9, pn: 1.6, macro: 5, wallS: 1.7, wallK: 0.75, streak: 0.16, wallN: 1.1 }; // 第 39 批：牆的材質（wall*：貼圖幾公尺一格、顏色多強、髒水痕、凹凸）
 const TREE = [null, { cards: 110, cone: 8 }, { cards: 230, cone: 14 }], TREE_FAR = { cards: 36, cone: 4 }, TREE_NEAR = 190, CELL = 200;
 const SHADOW = 2048, SH_R = 60, SH_AHEAD = 35;
 // 第 37 批（Nick 2026-10-25「漂亮那階不順 有些舊手機跑不太動」，選 1 2 3）：漂亮＝影子圖 1024、範圍 40 公尺（前面 22 公尺為中心）；最真實照舊
-const SHL = [null, { map: 1024, r: 40, ahead: 22 }, { map: SHADOW, r: SH_R, ahead: SH_AHEAD }];
+const SHL = [null, { map: 1024, r: 40, ahead: 22, rad: 2 }, { map: 4096, r: 110, ahead: 60, rad: 3.5 }];
+// 第 39 批（Nick 2026-10-25「做1234 只做在最真實」；最真實＝不管手機）：1 影子圖 4096、照 ±110 公尺（前面 60 公尺為中心）、邊邊柔一點（PCF 半徑 3.5）；手機畫不了 4096 就 2048
 const GC = 16, GN = 7, GPER = 900; // 草：一格幾公尺、幾格見方、一格最多幾叢
 const POST = { bloom: 0.07, bRad: 0.35, thr: 10, aoR: 2.2, aoS: 2.2, vig: 0.55, carEnv: 0.7, skyMax: 6 }; // 第 34 批 skyMax：看得到的天空最亮到幾（太陽的圓盤在 shader 裡是幾千、幾萬：光暈一糊整個畫面都白；夾住就只是一顆白太陽）
 const GROUND = /(^|[-_|])(ground|area|walk|road|paint|grass|paddy|water|asph|line|lane|trail|sea|sand|island|shadow)\b/i; // 地上的：只接影子，不投影子（省）
@@ -64,7 +65,7 @@ const NOISE = `
                mix(mix(bhash(i + vec3(0,0,1)), bhash(i + vec3(1,0,1)), f.x), mix(bhash(i + vec3(0,1,1)), bhash(i + vec3(1,1,1)), f.x), f.y), f.z); }
   vec3 bN() { vec3 n = vBN; if (dot(n, n) < 0.25) { n = cross(dFdx(vBW), dFdy(vBW)); if (dot(n, cameraPosition - vBW) < 0.0) n = -n; } return normalize(n); }`; // 沒有法線的網格（內湖）：用畫面上的斜率算
 const PBRH = `
-  uniform sampler2D tAsA, tAsN, tGrA, tGrN, tCoA, tCoN; float bUp = 0.0, bG = 0.0, bA = 0.0;
+  uniform sampler2D tAsA, tAsN, tGrA, tGrN, tCoA, tCoN; float bUp = 0.0, bG = 0.0, bA = 0.0, bW = 0.0; vec2 bWuv = vec2(0.0);
   vec3 bDet(sampler2D t, vec2 w, float s) { return texture(t, w / s).rgb + texture(t, w / (s * 5.3) + vec2(0.37, 0.71)).rgb; }`;
 // 顏色：灰的（柏油、水泥）細顆粒；綠的（草、樹、山）一塊一塊深淺、黃綠、偏橄欖綠；樹冠一叢一叢；很亮的灰暗一點；彎很大的綠色邊邊挖成葉子
 // 第 35 批（內容 22，Nick「先把路跟房子做更真」）：柏油（材質 userData.role＝'road'）：標線磨損（露出柏油）、裂縫（只有某些區域有）、補丁、一塊一塊的深淺；concU＝貼圖 u 從這裡起是水泥農路（不動）
@@ -101,7 +102,12 @@ const COLOR = (pbr, road) => `#include <color_fragment>
     ${pbr ? `{ bUp = smoothstep(0.6, 0.85, nn.y); bG = green; bA = (1.0 - green) * (1.0 - smoothstep(0.1, 0.22, l));
       float near = smoothstep(260.0, 25.0, vBD);
       if (bUp * near > 0.0) { vec3 d = mix(mix(bDet(tCoA, vBW.xz, 2.2), bDet(tAsA, vBW.xz, 2.6), bA), bDet(tGrA, vBW.xz, 1.6), bG);
-        c *= mix(vec3(1.0), vec3(1.0) + (d - 1.0) * ${f3(MB.pk)}, bUp * near); } }` : ''}
+        c *= mix(vec3(1.0), vec3(1.0) + (d - 1.0) * ${f3(MB.pk)}, bUp * near); }
+      bW = (1.0 - smoothstep(0.35, 0.7, abs(nn.y))) * (1.0 - green) * smoothstep(90.0, 8.0, vBD); // 第 39 批 4：牆（直的面）：水泥的顆粒＋直直的髒水痕
+      if (bW > 0.0) { bWuv = abs(nn.x) > abs(nn.z) ? vBW.zy : vBW.xy; vec3 d = bDet(tCoA, bWuv, ${f3(MB.wallS)});
+        c *= mix(vec3(1.0), vec3(1.0) + (d - 1.0) * ${f3(MB.wallK)}, bW);
+        float stk = bnoise(vec3(bWuv.x * 2.6, bWuv.y * 0.22, 3.7)) * 0.7 + bnoise(vec3(bWuv.x * 9.0, bWuv.y * 0.6, 1.3)) * 0.3;
+        c *= 1.0 - ${f3(MB.streak)} * bW * smoothstep(0.55, 0.85, stk); } }` : ''}
     ${road != null ? ROADX(road) : ''}
     diffuseColor.rgb = c; }`;
 // 5 號：地面（朝上的面）的凹凸＋山和草地大大小小的起伏
@@ -117,7 +123,10 @@ const PBRN = `#include <normal_fragment_maps>
       float h0 = BMH(q), hx = BMH(q + vec2(e, 0.0)) - h0, hz = BMH(q + vec2(0.0, e)) - h0;
       vec3 Tx = normalize(vec3(1.0, 0.0, 0.0) - N * N.x), Tz = normalize(vec3(0.0, 0.0, 1.0) - N * N.z);
       vec3 wn = normalize(N - (Tx * hx + Tz * hz) * (${MB.macro.toFixed(2)} / e));
-      normal = normalize(mix(normal, normalize((viewMatrix * vec4(wn, 0.0)).xyz), kg)); } }`;
+      normal = normalize(mix(normal, normalize((viewMatrix * vec4(wn, 0.0)).xyz), kg)); }
+    float kw = bW * smoothstep(60.0, 6.0, vBD); // 第 39 批 4：牆的凹凸（水泥）
+    if (kw > 0.01) { vec3 tn = texture(tCoN, bWuv / ${f3(MB.wallS)}).xyz * 2.0 - 1.0; vec3 T1 = abs(N.x) > abs(N.z) ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0); T1 = normalize(T1 - N * dot(N, T1)); vec3 T2 = normalize(cross(N, T1));
+      vec3 wn = normalize(N + (T1 * tn.x + T2 * tn.y) * ${f3(MB.wallN)}); normal = normalize(mix(normal, normalize((viewMatrix * vec4(wn, 0.0)).xyz), kw)); } }`;
 // 第 30 批：濕的路（最真實）：朝上、不是草的地面：變暗、水窪、粗糙度變小；路面高度（wetY）1 公尺內的地方混上倒影（tRefl：倒過來畫的世界，reflM 把世界座標投到那張圖上）
 const WETH = 'uniform sampler2D tRefl; uniform mat4 reflM; uniform float wetK, wetY; float wWet = 0.0, wPud = 0.0;';
 const WETR = `#include <roughnessmap_fragment>
@@ -154,6 +163,7 @@ function createLook(o) {
   const gl = R.getContext();
   const st = { calls: 0, tris: 0, ms: 0, maxMs: 0, crowns: 0, cells: 0, grass: 0, mats: 0, smooth: 0, prepMs: 0, texMs: 0, sets: 0 };
   const half = R.extensions.has('EXT_color_buffer_float') || R.extensions.has('EXT_color_buffer_half_float');
+  const mobile = (() => { try { const n = navigator, ua = String(n.userAgent || ''); return !!(n.userAgentData && n.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobile|BeauCarApp/i.test(ua) || (/Macintosh/.test(ua) && n.maxTouchPoints > 1); } catch { return false; } })(); // 第 39 批
   const soft = (() => { try { const x = gl.getExtension('WEBGL_debug_renderer_info'); return /swiftshader|llvmpipe|software/i.test(String(gl.getParameter(x ? x.UNMASKED_RENDERER_WEBGL : gl.RENDERER))); } catch { return false; } })();
   let LV = 0, busy = null, S0 = null, prepped = false;
   let dl = null, hemi = null; for (const c of scene.children) { if (!dl && c.isDirectionalLight) dl = c; if (!hemi && c.isHemisphereLight) hemi = c; }
@@ -209,7 +219,7 @@ function createLook(o) {
       const pm = new THREE.PMREMGenerator(R); tex = pm.fromScene(es, 0.03).texture; pm.dispose(); ENVS.set(band, tex);
       k2.geometry.dispose(); k2.material.dispose(); gnd.geometry.dispose(); gnd.material.dispose();
     }
-    envTex = tex; if (LV > 0) { scene.environment = envTex; for (const c of CARM) if (c[0].envMap) { c[0].envMap = envTex; } }
+    envTex = tex; if (LV > 0) { scene.environment = envTex; const ce = carEnvTex(); for (const c of CARM) if (c[0].envMap) { c[0].envMap = ce; } }
   }
 
   // ==== 影子、材質（新的東西慢慢找：每幀最多 300 個）====
@@ -673,6 +683,18 @@ function createLook(o) {
     for (const x of hid) x.visible = true; WU.tRefl.value = W.rt.texture;
   }
 
+  // ==== 第 39 批 2：自己的車真的反射周圍（最真實）：車子上面一顆 256 的方塊相機，每格畫 2 面（3 格一輪），畫完一輪重新做模糊的反射圖；車子、草不畫進去 ====
+  const CUBE = { rt: null, cam: null, face: 0, n: 0, faces: 2, calls: 0 };
+  function cubeStep(car) {
+    if (!car) return;
+    if (!CUBE.rt) { CUBE.rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType, generateMipmaps: false }); CUBE.cam = new THREE.CubeCamera(0.5, 450, CUBE.rt); CUBE.cam.coordinateSystem = R.coordinateSystem; CUBE.cam.updateCoordinateSystem(); }
+    car.getWorldPosition(V3); CUBE.cam.position.set(V3.x, V3.y + 1.1, V3.z); CUBE.cam.updateMatrixWorld(true);
+    const prev = R.getRenderTarget(), vis = car.visible, gv = GR ? GR.im.visible : false, ar = R.autoClear, c0 = R.info.render.calls; car.visible = false; if (GR) GR.im.visible = false; R.autoClear = true;
+    for (let k = 0; k < CUBE.faces; k++) { const i = CUBE.face; R.setRenderTarget(CUBE.rt, i); r0(scene, CUBE.cam.children[i]); CUBE.face = (i + 1) % 6; if (CUBE.face === 0) { CUBE.rt.texture.needsPMREMUpdate = true; CUBE.n++; } }
+    R.setRenderTarget(prev); car.visible = vis; if (GR) GR.im.visible = gv; R.autoClear = ar; CUBE.calls = R.info.render.calls - c0;
+  }
+  const carEnvTex = () => (LV === 2 && CUBE.rt && CUBE.n > 0 ? CUBE.rt.texture : envTex); // 方塊畫好一輪以前先用天空的
+
   // ==== 5 號：車漆反射天空、透明漆 ====
   let carOn = null; const CARM = [];
   function carEnv(car) {
@@ -681,7 +703,7 @@ function createLook(o) {
     CARM.length = 0; carOn = car; if (!car) return;
     const seen = new Set();
     car.traverse((x) => { if (!x.material) return; for (const m of [].concat(x.material)) { if (!m || seen.has(m) || !m.isMeshStandardMaterial || m.transparent) continue; seen.add(m);
-      CARM.push([m, m.envMap, m.envMapIntensity, m.clearcoat || 0, m.clearcoatRoughness || 0]); m.envMap = envTex; m.envMapIntensity = POST.carEnv;
+      CARM.push([m, m.envMap, m.envMapIntensity, m.clearcoat || 0, m.clearcoatRoughness || 0]); m.envMap = carEnvTex(); m.envMapIntensity = POST.carEnv;
       if (m.isMeshPhysicalMaterial && m.metalness < 0.5) { m.clearcoat = Math.max(m.clearcoat || 0, 1); m.clearcoatRoughness = 0.05; } m.needsUpdate = true; } });
   }
 
@@ -736,7 +758,7 @@ function createLook(o) {
       scene.environment = envTex; scene.environmentIntensity = LT.envI;
       if (scene.fog) scene.fog.color.set(LT.fog);
       R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFShadowMap; R.shadowMap.autoUpdate = false; R.shadowMap.needsUpdate = true;
-      if (dl) { dl.color.set(LT.sunC); setBase(dl, LT.sunI); dl.castShadow = true; shadowCfg(LV); dl.shadow.bias = -0.0001; dl.shadow.normalBias = 0.05; dl.shadow.radius = 2; }
+      if (dl) { dl.color.set(LT.sunC); setBase(dl, LT.sunI); dl.castShadow = true; dl.shadow.bias = -0.0001; dl.shadow.normalBias = 0.05; shadowCfg(LV); }
       if (hemi) { setBase(hemi, LT.hemiI); hemi.color.set(LT.hemiC); hemi.groundColor.set(LT.hemiG); }
       lampsOn(); // 第 30 批：路燈、大燈（白天亮度 0）
     } else if (S0) {
@@ -751,7 +773,7 @@ function createLook(o) {
     }
   }
   function shadowCfg(lv) { // 第 37 批：影子圖多大、照多遠（漂亮小一點）；圖大小變了要重做
-    SH = SHL[lv] || SHL[2]; TEXEL = (SH.r * 2) / SH.map; if (!dl) return;
+    SH = SHL[lv] || SHL[2]; if (SH.map > R.capabilities.maxTextureSize) SH = { ...SH, map: Math.min(SH.map, R.capabilities.maxTextureSize) }; TEXEL = (SH.r * 2) / SH.map; if (!dl) return; dl.shadow.radius = SH.rad;
     if (dl.shadow.mapSize.x !== SH.map) { dl.shadow.mapSize.set(SH.map, SH.map); if (dl.shadow.map) { dl.shadow.map.dispose(); dl.shadow.map = null; } }
     Object.assign(dl.shadow.camera, { left: -SH.r, right: SH.r, top: SH.r, bottom: -SH.r, near: 100, far: 500 }); dl.shadow.camera.updateProjectionMatrix();
   }
@@ -817,7 +839,7 @@ function createLook(o) {
     lodStep(cam, false);
     scanStep(300, dt);
     lampStep(cam);
-    if (LV === 2) { if (GR) grassStep(cam); carEnv(getCar()); }
+    if (LV === 2) { if (GR) grassStep(cam); const car = getCar(); carEnv(car); if (car) { cubeStep(car); const ce = carEnvTex(); for (const c of CARM) if (c[0].envMap !== ce) c[0].envMap = ce; } } // 第 39 批：方塊反射
     const ms = performance.now() - t0; st.ms = st.ms * 0.95 + ms * 0.05; if (ms > st.maxMs) st.maxMs = ms;
   }
   let lastT = 0;
@@ -836,11 +858,11 @@ function createLook(o) {
     get busy() { return !!busy; },
     can: { post: half, soft },
     half,
-    pref: soft ? 0 : half ? 2 : 1, // 沒有設定過：電腦模擬的（測試）＝順，畫得了半精度＝最真實
+    pref: soft ? 0 : mobile ? 1 : half ? 2 : 1, // 沒有設定過：電腦模擬的（測試）＝順，手機＝漂亮（第 39 批：最真實不管手機，太重），電腦畫得了半精度＝最真實
     set, treeK, stats: st,
     get hour() { return hourNow(); }, setHour(h) { hourOv = h == null ? null : clamp(+h, 0, 24) % 24; timeStep(); lampN = 0; }, get night() { return TD.lamp; }, get sun() { return TD.elev; }, // 第 30 批：一天的時間
     _tex: () => TEX, _td: () => TD,
-    info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band, stars: NS ? +NS.stars.material.opacity.toFixed(2) : null, moon: NS ? +NS.moon.material.opacity.toFixed(2) : null, win: NS ? NS.lit : 0, winK: NS ? +NS.win.material.opacity.toFixed(2) : 0, pools: NS ? NS.pools : 0, pol: NS && NS.pol ? +NS.pol.intensity.toFixed(1) : 0, polD: NS && NS.polCar ? +NS.polD.toFixed(1) : null, sh: LV ? SH.map : 0, shR: LV ? SH.r : 0, nLamp: PL ? PL.length : 0, nHead: HLT ? HLT.length : 0, polOn: !!(NS && NS.pol) }), // 第 37 批：影子大小、燈幾盞
+    info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band, stars: NS ? +NS.stars.material.opacity.toFixed(2) : null, moon: NS ? +NS.moon.material.opacity.toFixed(2) : null, win: NS ? NS.lit : 0, winK: NS ? +NS.win.material.opacity.toFixed(2) : 0, pools: NS ? NS.pools : 0, pol: NS && NS.pol ? +NS.pol.intensity.toFixed(1) : 0, polD: NS && NS.polCar ? +NS.polD.toFixed(1) : null, sh: LV ? SH.map : 0, shR: LV ? SH.r : 0, shRad: dl ? dl.shadow.radius : 0, cube: CUBE.n, cubeCalls: CUBE.calls, carCube: !!(CARM.length && CUBE.rt && CARM[0][0].envMap === CUBE.rt.texture), nLamp: PL ? PL.length : 0, nHead: HLT ? HLT.length : 0, polOn: !!(NS && NS.pol) }), // 第 37 批：影子大小、燈幾盞
     _ns: () => NS, _az: () => TD.az,
   };
   return API;

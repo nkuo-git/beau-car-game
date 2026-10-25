@@ -201,3 +201,13 @@ Nick: 「漂亮那階不順 有些舊手機跑不太動」 (first said 順, corr
 - **Brighter night (both tiers):** `NIGHT` hemi 0.55 → 0.95, colour #34405e → #46536f, ground #14161c → #1c1f27, fog #0a0d15 → #161c29, env 0.12 → 0.18, exposure 0.95 → 1.15; moon 0.5 → 0.8. night-test's 22:00 picture mean 24.6 → 31.6 / 255.
 - **Headlights (both tiers):** road beam quad 70 → 100 m long, 18 → 30 m wide, opacity 0.65 → 0.8, texture wider near the car (half-width 0.32 + 0.68u) and slower fall-off ((1−u)^1.6); SpotLight distance 150 → 200 m, aim 60 → 70 m, cone 0.5 → 0.72 rad.
 - `info()` adds `sh`, `shR`, `nLamp`, `nHead`, `polOn`. night-test checks them (漂亮 2 / 1 / no police light / 1024 / 40 m vs 最真實 4 / 2 / yes / 2048 / 60 m) and `pxLow` on at 漂亮, off at 順.
+
+## Batch 39 — 最真實 goes further (trial v54, 2026-10-25)
+
+Nick: 「最真實還能怎麼讓他跟真實(以後最真實就是不管手機 能做多好就做多好)」 → offered 4, he said 「好 做1234 只做在最真實」. Only LV 2 changes; 漂亮 and 順 are untouched.
+1. **Shadows:** `SHL[2]` 2048² / ±60 m → 4096² (clamped to `maxTextureSize`) over ±110 m centred 60 m ahead, `shadow.radius` 3.5 (漂亮 2) — softer PCF edge, shadows reach much farther.
+2. **Own car reflects its surroundings:** `CUBE` — a 256² half-float `WebGLCubeRenderTarget` + `CubeCamera(0.5, 450)` 1.1 m above the car; `cubeStep()` renders 2 faces per frame (a full cube every 3 frames) with the car and the grass hidden, then sets `texture.needsPMREMUpdate` so three rebuilds the blurred env. `carEnvTex()` hands the car paint the cube after the first full cycle (sky env before that). Costs roughly 2 extra scene passes per frame.
+3. **Supersampling:** garage.src.html `pxHigh` — while driving/walking at 最真實 the pixel ratio is 2 × DPR, capped at 8.3 M drawing-buffer pixels; town.src.js `pxStep()` flips it like `pxLow`.
+4. **Walls:** the pbr branch of `COLOR` adds concrete detail on vertical, non-green faces within 90 m (triplanar `tCoA`, `MB.wallS`/`wallK`) plus vertical rain streaks (`MB.streak`); `PBRN` adds the concrete normal within 60 m (`MB.wallN`). The house facade material (street.js `fac`) replaces `normal_fragment_maps` itself, so it gets the colour detail only.
+- Default for phones that never chose: `pref` → 漂亮 (`mobile` UA check); desktop with half-float still → 最真實; swiftshader → 順.
+- `info()` adds `shRad`, `cube`, `cubeCalls`, `carCube`. night-test checks 4096 / 110 m / radius 3.5, the 2× buffer and the live cube.

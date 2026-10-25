@@ -26,3 +26,7 @@ Nick: 「音樂可以改成輕快一點 有賽車感的嗎 開車跟走路音樂
 ## Batch 38 — fewer birds (2026-10-25, for trial v54)
 
 Nick: 「鳥叫聲太多了」. sound.js `ambient()` birds: `AMB_V.birds` 0.035 → 0.022, one call every 5–14 s (`bird0`/`bird1`; was 1.6–4 s), 1–3 chirps per call (was 2–3), first one after 3 s. Same day he asked for a music volume control (mock https://claude.ai/artifact/SfnUXBwYL8PEH6Nm9PZiVP: 🎵 opens 「背景音樂 關／小／中／大」, waiting for his OK) and for 最真實 ideas with no phone limits (8 options offered, recommended 1 shadows + 2 real car reflections + 3 2× supersampling + 4 wall materials).
+
+## Batch 39 — music volume (trial v54, 2026-10-25)
+
+Nick: 「背景音樂可以調音量」, mock https://claude.ai/artifact/SfnUXBwYL8PEH6Nm9PZiVP approved. Tapping 🎵 (in the 「⋯」 row) swaps the row for 「背景音樂 關 小 中 大」 (`#musPop`, town.src.js `musOpen`, like 畫質). Levels `MUS_LV` = 0 / 0.45 / 1 / 1.6 (× 0.35 indoors); sound.js `set({ level })` now clamps to 0..2. `carid.music` stores `off`/`s`/`m`/`l`; the old `on` reads as 中. 關 greys 🎵.

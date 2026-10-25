@@ -513,7 +513,7 @@ destBtns.forEach((b) => b.addEventListener('click', () => { if (DRIVE.on) setDes
 const FOLD = { destsopen: -1, moreopen: -1 };
 const foldStart = () => { const t = drv && DRIVE.on ? drv.telemetry() : null; return t && Math.abs(t.v) > 4 ? 8 : -1; };
 function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.destsopen = foldStart(); }
-function moreOpen(on) { if (!on) { sizeOpen(false); tiltOpen(false); lookOpen(false); } if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
+function moreOpen(on) { if (!on) { sizeOpen(false); tiltOpen(false); lookOpen(false); musOpen(false); } if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
 // 按鈕大小（Nick 2026-10-10）：小 0.8、中 1（原本的）、大 1.15；每支手機自己記（carid.btnsize，不用搬家、不上雲端）
 const BTN_Z = { s: 0.8, m: 1, l: 1.15 }, BTN_KEY = 'carid.btnsize';
 // 「大」只放大到排得下：直拿看寬（390 寬剛好排滿＝1 倍）、橫拿看高（340 高＝1 倍）；小螢幕（或手機「顯示大小」調大）上「大」＝「中」
@@ -527,7 +527,7 @@ function btnSize(k, keep) {
   for (const b of document.querySelectorAll('#sizePop button')) b.setAttribute('aria-pressed', String(b.dataset.z === k));
   if (keep) try { localStorage.setItem(BTN_KEY, k); } catch {}
 }
-function sizeOpen(on) { if (on) { tiltOpen(false); lookOpen(false); } if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function sizeOpen(on) { if (on) { tiltOpen(false); lookOpen(false); musOpen(false); } if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 try { btnSize(localStorage.getItem(BTN_KEY)); } catch { btnSize('m'); }
 $('sizeTog').addEventListener('click', () => sizeOpen(true));
 for (const b of document.querySelectorAll('#sizePop button')) b.addEventListener('click', () => { btnSize(b.dataset.z, true); sizeOpen(false); });
@@ -542,7 +542,7 @@ function tiltMode(k, keep) {
   if (keep) try { localStorage.setItem(TILT_KEY, tiltK); } catch {}
   if (drv) drv.setTilt(tiltK === 'tilt', tiltFail);
 }
-function tiltOpen(on) { if (on) { sizeOpen(false); lookOpen(false); } if (bodyFlags.tiltopen === on) return; bodyFlag('tiltopen', on); $('tiltTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function tiltOpen(on) { if (on) { sizeOpen(false); lookOpen(false); musOpen(false); } if (bodyFlags.tiltopen === on) return; bodyFlag('tiltopen', on); $('tiltTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 try { tiltMode(localStorage.getItem(TILT_KEY)); } catch { tiltMode('btn'); }
 $('tiltTog').addEventListener('click', () => tiltOpen(true));
 for (const b of document.querySelectorAll('#tiltPop button')) b.addEventListener('click', () => {
@@ -566,9 +566,10 @@ async function lookSet(lv, tell) {
 }
 // 第 30 批（Nick 2026-10-24，卡片選「自動輪流」）：look.js 的一天（24 分鐘）；燈亮多少變了 → 完整的車（masks.js 的車漆 shader）、輕量車（路上的車、朋友的車）的大燈、尾燈一起亮
 // 第 37 批（Nick 2026-10-25「漂亮那階不順」，選 1 2 3）：出門＋漂亮＝畫的像素最多 70 萬（garage.src.html pxLow）；回車庫頁、換別的畫質就換回來
-function pxStep() { const low = DRIVE.on && !!LOOK && LOOK.level === 1; if (low !== pxLow) { pxLow = low; resize(); } }
+// 第 39 批：出門＋最真實＝畫 2 倍細再縮小（garage.src.html pxHigh）
+function pxStep() { const lv = DRIVE.on && LOOK ? LOOK.level : 0, low = lv === 1, high = lv === 2; if (low !== pxLow || high !== pxHigh) { pxLow = low; pxHigh = high; resize(); } }
 function lookNight(k) { PAINT_NIGHT.value = k; buildLodCar.night(k); } // 第 31 批：路上的車的燈也跟著 0–1 慢慢亮
-function lookOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); } if (bodyFlags.lookopen === on) return; bodyFlag('lookopen', on); $('lookTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function lookOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); musOpen(false); } if (bodyFlags.lookopen === on) return; bodyFlag('lookopen', on); $('lookTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 lookBtns(lookPref());
 $('lookTog').addEventListener('click', () => lookOpen(true));
 for (const b of document.querySelectorAll('#lookPop button')) b.addEventListener('click', () => {
@@ -2145,12 +2146,16 @@ let AMB = null; const AMB_S = { f: 0, wind: 1, birds: 1, crickets: 0, cars: [{ d
 let MUS = null; // 第 34 批：背景音樂（sound.js music）：跟環境聲一起開、一起收；房子裡面小聲
 // 第 35 批（Nick 2026-10-24「做背景音樂開關 不用畫圖 直接做」）：「⋯」打開那一排 ⋯ 下面多一顆「🎵」，按一下關（變灰）、再按開；每支手機自己記（carid.music，不搬家、不上雲端）；音樂還是跟著「聲音」總開關
 const MUS_KEY = 'carid.music';
-let musOn = true;
+// 第 39 批（Nick 2026-10-25「背景音樂可以調音量」，草稿說好）：按 🎵 出現「背景音樂 關 小 中 大」；中＝原本的音量，小一半，大 1.6 倍；舊的 'on'＝中
+const MUS_LV = { off: 0, s: 0.45, m: 1, l: 1.6 };
+let musV = 'm';
 // 第 36 批（Nick 2026-10-25「開車跟走路音樂換一下」）：開車放賽車感的那首（'drive'）、走路（房子裡也是）放輕鬆的那首（'walk'）；換了在下一小節生效（sound.js）
-function musLevel() { if (MUS) MUS.set({ level: !musOn ? 0 : indoor ? 0.35 : 1, style: walker && walker.mode !== 'off' ? 'walk' : 'drive' }); }
-function musSet(on, keep) { musOn = !!on; $('musTog').setAttribute('aria-pressed', String(musOn)); if (keep) try { localStorage.setItem(MUS_KEY, musOn ? 'on' : 'off'); } catch {} musLevel(); }
-try { musSet(localStorage.getItem(MUS_KEY) !== 'off'); } catch { musSet(true); }
-$('musTog').addEventListener('click', () => { engineAudio.resume(); musSet(!musOn, true); FOLD.moreopen = foldStart(); });
+function musLevel() { if (MUS) MUS.set({ level: MUS_LV[musV] * (indoor ? 0.35 : 1), style: walker && walker.mode !== 'off' ? 'walk' : 'drive' }); }
+function musSet(v, keep) { musV = MUS_LV[v] !== undefined ? v : v === 'off' ? 'off' : 'm'; $('musTog').setAttribute('aria-pressed', String(musV !== 'off')); for (const b of $('musPop').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === musV)); if (keep) try { localStorage.setItem(MUS_KEY, musV); } catch {} musLevel(); }
+function musOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); lookOpen(false); } if (bodyFlags.musopen === on) return; bodyFlag('musopen', on); $('musTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+try { musSet(localStorage.getItem(MUS_KEY)); } catch { musSet('m'); }
+$('musTog').addEventListener('click', () => { engineAudio.resume(); musOpen(!bodyFlags.musopen); });
+$('musPop').addEventListener('click', (e) => { const b = e.target.closest('button[data-v]'); if (!b) return; engineAudio.resume(); musSet(b.dataset.v, true); musOpen(false); FOLD.moreopen = foldStart(); });
 function ambOff() { if (AMB) { AMB.dispose(); AMB = null; } if (MUS) { MUS.dispose(); MUS = null; } }
 function ambStep() {
   if (!DRIVE.on || !engineAudio.input) { ambOff(); return; }
