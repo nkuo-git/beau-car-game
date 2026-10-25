@@ -30,3 +30,10 @@ Nick: 「鳥叫聲太多了」. sound.js `ambient()` birds: `AMB_V.birds` 0.035 
 ## Batch 39 — music volume (trial v54, 2026-10-25)
 
 Nick: 「背景音樂可以調音量」, mock https://claude.ai/artifact/SfnUXBwYL8PEH6Nm9PZiVP approved. Tapping 🎵 (in the 「⋯」 row) swaps the row for 「背景音樂 關 小 中 大」 (`#musPop`, town.src.js `musOpen`, like 畫質). Levels `MUS_LV` = 0 / 0.45 / 1 / 1.6 (× 0.35 indoors); sound.js `set({ level })` now clamps to 0..2. `carid.music` stores `off`/`s`/`m`/`l`; the old `on` reads as 中. 關 greys 🎵.
+
+## Batch 41 — cleaner and louder music (trial v56, 2026-10-25)
+
+Nick: 「音樂很破」 and 「音樂把直接全部往上升一級 所以仍然只有小中大就好」.
+- Music has its own bus `S.mus` → a light limiter (threshold −4 dB, ratio 12) → output, instead of sharing the engine's compressor (−14 dB, ratio 8) and soft clipper, which squashed and clipped it under the engine. Volume and mute drive both buses.
+- Phones open the AudioContext with `latencyHint: 'balanced'` (was 'interactive') so a busy phone has a bigger buffer and fewer dropouts.
+- Levels one step up: `MUS_LV` 小 1 / 中 1.6 / 大 2.4 (was 0.45 / 1 / 1.6); `set({ level })` clamps to 0..3. Still 關 小 中 大 (the 超大 mock was dropped).

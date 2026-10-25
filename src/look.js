@@ -34,7 +34,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 export const { createLook, LOOK_NAMES } = (() => {
-const LOOK_NAMES = ['順', '漂亮', '最真實'];
+const LOOK_NAMES = ['普通', '高', '超高']; // 第 41 批：Nick「畫質直接改成 超高、高、普通」（以前 順／漂亮／最真實）
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // 光線（範例 2 號以後都一樣）
 const LT = { elev: 38, az: 233, turb: 6, ray: 1.3, mie: 0.004, exp: 0.45, sunI: 4.6, sunC: 0xfff0dc, envI: 0.3, hemiI: 0.12, hemiC: 0xdde6ef, hemiG: 0x474a3c, fog: 0xc3ccd3, gnd: 0x3c4235, cloud: 0.32, cden: 0.5 };
@@ -81,9 +81,9 @@ const ROADX = (cu) => `{ float rn = smoothstep(170.0, 20.0, vBD) * ${cu >= 0 ? `
         c *= 1.0 - (1.0 - paint) * crack * 0.55 * rn;
         float pat = bnoise(vBW * 0.09 + vec3(11.0)); c *= 1.0 + (1.0 - paint) * (step(0.64, pat) * -0.1 + 0.07 * (bnoise(vBW * 0.25) - 0.5)) * rn;
       } }`;
-const COLOR = (pbr, road, wall) => `#include <color_fragment>
+const COLOR = (pbr, road, wall, lite) => `#include <color_fragment>
   { vec3 c = diffuseColor.rgb; float l = dot(c, vec3(0.299, 0.587, 0.114)), mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)), sat = (mx - mn) / max(mx, 1e-3);
-    float nr = smoothstep(140.0, 15.0, vBD), mid = smoothstep(500.0, 60.0, vBD);
+    float nr = ${lite ? '0.0' : 'smoothstep(140.0, 15.0, vBD)'}, mid = ${lite ? '0.0' : 'smoothstep(500.0, 60.0, vBD)'}; // 第 41 批：「高」不算地面的細花紋（手機省一點）
     float fine = 0.5, med = 0.5, pch = 0.5;
     if (nr > 0.0) fine = bnoise(vBW * 11.0) * 0.5 + bnoise(vBW * 31.0) * 0.5;
     if (mid > 0.0) { med = bnoise(vBW * 1.3); pch = bnoise(vBW * 0.11) * 0.65 + bnoise(vBW * 0.035) * 0.35; }
@@ -253,9 +253,9 @@ function createLook(o) {
       if (pbr) { const T = TEX; Object.assign(sh.uniforms, { tAsA: { value: T.asA }, tAsN: { value: T.asN }, tGrA: { value: T.grA }, tGrN: { value: T.grN }, tCoA: { value: T.coA }, tCoN: { value: T.coN } }, WU); }
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VDECL).replace('#include <project_vertex>', VPOS);
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + VDECL + NOISE + (pbr ? PBRH + WETH : ''))
-        .replace('#include <color_fragment>', COLOR(pbr, road, pbr && MAX))
+        .replace('#include <color_fragment>', COLOR(pbr, road, pbr && MAX, LV === 1))
         .replace('#include <normal_fragment_maps>', pbr ? PBRN : '#include <normal_fragment_maps>')
-        .replace('#include <roughnessmap_fragment>', (pbr ? WETR : '#include <roughnessmap_fragment>') + '\nroughnessFactor = clamp(roughnessFactor * (0.85 + 0.3 * bnoise(vBW * 5.0)), 0.04, 1.0);')
+        .replace('#include <roughnessmap_fragment>', (pbr ? WETR : '#include <roughnessmap_fragment>') + (LV === 1 ? '' : '\nroughnessFactor = clamp(roughnessFactor * (0.85 + 0.3 * bnoise(vBW * 5.0)), 0.04, 1.0);'))
         .replace('#include <opaque_fragment>', pbr ? WETO : '#include <opaque_fragment>');
     };
     m.customProgramCacheKey = function () { const rd = roadOf(this); return (key0 ? key0.call(this) : obc0 ? obc0.toString() : '') + '|lk' + LV + (pbrOk(this) ? (MAX ? 'px' : 'p') : '') + (rd != null ? 'r' + rd : ''); };

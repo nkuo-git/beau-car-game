@@ -118,7 +118,7 @@ await p.waitForTimeout(200);
 const s2 = await p.evaluate(() => { const D = window.__D(), st = D.LOOK.stats; let leaf = 0, grass = null, cards = 0; D.TR.scene.traverse((o) => { if (/^lk-trees-/.test(o.name)) cards++; if (o.name === 'lk-grass') grass = o; });
   return { lv: D.LOOK.level, key: localStorage.getItem('carid.look'), toast: document.getElementById('gtoast')?.textContent || '', pressed: [...document.querySelectorAll('#lookPop button')].map((b) => b.dataset.l + ':' + b.getAttribute('aria-pressed')).join(','), L: window.__lights(), info: D.LOOK.info(), st: { prepMs: st.prepMs, texMs: st.texMs }, cards, grassVis: grass && grass.visible, pop: getComputedStyle(document.getElementById('lookPop')).display }; });
 console.log('2', el(), `${setMs} ms`, JSON.stringify(s2));
-check(s2.lv === 2 && s2.key === '2' && /最真實/.test(toastA) && /最真實/.test(s2.toast) && s2.pressed === '2:true,1:false,0:false' && s2.pop === 'none',
+check(s2.lv === 2 && s2.key === '2' && /超高/.test(toastA) && /超高/.test(s2.toast) && s2.pressed === '2:true,1:false,0:false' && s2.pop === 'none',
   `tap 最真實: level 2, saved carid.look=2, toast 「${toastA}」 → 「${s2.toast}」, menu closes (${setMs} ms; textures ${s2.st.texMs} ms, trees ${s2.st.prepMs} ms)`);
 check(s2.L.sh && s2.L.dlCast && s2.L.dl === 4.6 && s2.L.env && s2.L.sky === 'ShaderMaterial' && s2.info.mats > 30 && s2.info.crowns > 1000 && s2.cards > 30 && s2.info.grass > 10000 && s2.grassVis,
   `最真實 is on: sun shadows, sky + reflections, ${s2.info.mats} materials with detail, ${s2.info.crowns} old tree crowns → ${s2.cards} leaf-card meshes, ${s2.info.grass} grass tufts`);
@@ -193,7 +193,7 @@ const perf1 = {};
 for (const [k, w] of Object.entries(PLACES)) { const r = await p.evaluate((w) => window.__go(w), w); save('1-' + k, r.url); perf1[k] = r.info; }
 const s8 = await p.evaluate(() => { const D = window.__D(); let grass = null; D.TR.scene.traverse((o) => { if (o.name === 'lk-grass') grass = o; }); return { key: localStorage.getItem('carid.look'), L: window.__lights(), grassVis: grass && grass.visible, toast: document.getElementById('gtoast')?.textContent || '', bad: window.__badProgs() }; });
 console.log('8 漂亮', el(), JSON.stringify(perf1), JSON.stringify(s8));
-check(s8.key === '1' && s8.L.sh && !s8.grassVis && /漂亮/.test(s8.toast) && !s8.bad.length && perf1.hwy.calls < perf2.hwy.calls, `漂亮: shadows + sky, no grass tufts or post-processing (highway ${perf1.hwy.calls} calls vs 最真實 ${perf2.hwy.calls}), saved carid.look=1`);
+check(s8.key === '1' && s8.L.sh && !s8.grassVis && /畫質：高/.test(s8.toast) && !s8.bad.length && perf1.hwy.calls < perf2.hwy.calls, `漂亮: shadows + sky, no grass tufts or post-processing (highway ${perf1.hwy.calls} calls vs 最真實 ${perf2.hwy.calls}), saved carid.look=1`);
 
 // ---- 9 順：全部回到原本的樣子 ----
 await p.evaluate(() => { if (!document.body.classList.contains('moreopen')) document.getElementById('moreTog').click(); }); await p.waitForTimeout(100);

@@ -58,7 +58,7 @@ body.fs .wrap > header { display: none; } /* 全螢幕（開車、比賽）：�
     <button type="button" class="tilttog" id="tiltTog" aria-expanded="false" aria-label="方向盤">🎮</button>
     <div class="tiltpop" id="tiltPop" role="group" aria-label="方向盤"><span>方向盤</span><button type="button" data-t="btn">按鈕 ⬅➡</button><button type="button" data-t="tilt">轉手機 📱</button></div>
     <button type="button" class="looktog" id="lookTog" aria-expanded="false" aria-label="畫質">✨</button>
-    <div class="lookpop" id="lookPop" role="group" aria-label="畫質"><span>畫質</span><button type="button" data-l="2">最真實</button><button type="button" data-l="1">漂亮</button><button type="button" data-l="0">順</button></div>
+    <div class="lookpop" id="lookPop" role="group" aria-label="畫質"><span>畫質</span><button type="button" data-l="2">超高</button><button type="button" data-l="1">高</button><button type="button" data-l="0">普通</button></div>
     <button type="button" class="mustog" id="musTog" aria-pressed="true" aria-expanded="false" aria-label="背景音樂">🎵</button>
     <div class="muspop" id="musPop" role="group" aria-label="背景音樂"><span>背景音樂</span><button type="button" data-v="off">關</button><button type="button" data-v="s">小</button><button type="button" data-v="m">中</button><button type="button" data-v="l">大</button></div>
     <div class="dests" id="dests" role="group" aria-label="要去哪裡"><button type="button" data-d="shop" aria-pressed="false">去改車廠</button><button type="button" data-d="dealer" aria-pressed="false">去車店</button><button type="button" data-d="circuit" aria-pressed="false">去賽車場</button><button type="button" data-d="highway" aria-pressed="false">去快速道路</button><button type="button" data-d="offroad" aria-pressed="false">去越野車場</button><button type="button" data-d="neihu" aria-pressed="false">去內湖</button><button type="button" data-d="mountain" aria-pressed="false">去山頂</button><button type="button" data-d="garage" aria-pressed="false">回車庫</button></div>
@@ -232,13 +232,13 @@ controls.target.set(0, 0.55, 0);
 
 let fitD = 7, bigCam = 1 /* 第 4 批：大車（怪獸卡車）鏡頭拉遠 bigCam 倍（showCar 設）*/;
 function camMax() { controls.maxDistance = fitD * 1.4; } // 鏡頭最遠（第 21 批：豪華車庫＝圓塔的大廳，鏡頭留在大廳裡面是 room.camClamp 管）
-let pxLow = false; // 第 37 批（Nick 2026-10-25「漂亮那階不順」）：出門、畫質「漂亮」＝畫的像素最多 70 萬（全螢幕、小畫面都是）；town.src.js pxStep 設、換了叫 resize()
+let pxLow = false; // 第 37 批（Nick 2026-10-25「漂亮那階不順」）：出門、畫質「漂亮」（第 41 批起叫「高」）＝畫的像素最多 50 萬（第 41 批：70 萬 → 50 萬）（全螢幕、小畫面都是）；town.src.js pxStep 設、換了叫 resize()
 let pxHigh = false; // 第 39 批（Nick「做1234 只做在最真實」3）：出門、畫質「最真實」＝畫 2 倍細（每邊 2 倍＝4 倍的點）再縮小給螢幕，最多 830 萬個點（4K）
 function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
   // 全螢幕（手機直拿 412×915 這種）：畫的像素最多大約 110 萬（以前開車 390×560 × 2 倍是 87 萬），不然手機畫不動；電腦的大視窗至少 1 倍
   if (pxHigh) renderer.setPixelRatio(Math.max(1, Math.min(2 * (window.devicePixelRatio || 1), Math.sqrt(8.3e6 / Math.max(1, w * h)))));
-  else renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1, pxLow ? Math.max(1, Math.sqrt(0.7e6 / Math.max(1, w * h))) : document.body.classList.contains('fs') ? Math.max(1, Math.sqrt(1.1e6 / Math.max(1, w * h))) : 2));
+  else renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1, pxLow ? Math.max(1, Math.sqrt(0.5e6 / Math.max(1, w * h))) : document.body.classList.contains('fs') ? Math.max(1, Math.sqrt(1.1e6 / Math.max(1, w * h))) : 2));
   renderer.setSize(w, h, false);
   if (room) room.resize();
   camera.aspect = w / h; camera.updateProjectionMatrix();

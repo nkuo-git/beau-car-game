@@ -222,3 +222,6 @@ Nick: 「你有用到硬體加速嗎／傍晚變晚上天色變黑的太快」.
 
 Nick: 「最真實好像超過我手機能耐了 看能怎樣改善或者回到前一版」. look.js `MAX = !mobile` (same `mobile` check as `pref`, includes the `BeauCarApp` UA): on phones 最真實 drops all four batch-39 additions — shadow `SHL_PHONE` 2048 / ±60 m / 35 m ahead / radius 1, no live cube (`cubeStep` skipped, `carEnvTex` = sky env), no 2× supersampling (town.src.js `pxStep` needs `LOOK.max`), no wall detail (`COLOR(pbr, road, wall)` with `wall = pbr && MAX`; program cache key gets `px`). Computers keep the full batch-39 tier. `LOOK.max` / `LOOK.setMax(on)` (re-runs `shadowCfg`, recompiles the patched materials) let night-test check both paths.
 Same batch: site.js checks GitHub for a new APK every 10 minutes instead of every hour (Nick waited for the in-app update bar).
+Also batch 41 (same afternoon, Nick 「漂亮的畫質可以再略降一點／畫質直接改成 超高、高、普通」):
+- Names: 順 / 漂亮 / 最真實 → **普通 / 高 / 超高** (look.js `LOOK_NAMES`, the ✨ menu buttons, the toast). Code and notes still say LV 0/1/2.
+- 高 (LV 1) lighter: pixel cap 0.7 M → 0.5 M (garage.src.html `pxLow`; never below 1 css px), and `COLOR(..., lite)` skips the fine/medium ground noise and the roughness noise at LV 1 (tint, desaturation and leaf cards stay).

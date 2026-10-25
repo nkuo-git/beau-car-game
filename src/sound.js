@@ -720,7 +720,8 @@ export function createEngineAudio(opt = {}) {
       else {
         const AC = g.AudioContext || g.webkitAudioContext;
         if (!AC) return null;
-        try { ctx = new AC({ latencyHint: 'interactive' }); } catch { ctx = new AC(); }
+        const mob = (() => { try { return /Android|iPhone|iPad|iPod|Mobile|BeauCarApp/i.test(String(g.navigator && g.navigator.userAgent || '')); } catch { return false; } })(); // 第 41 批：手機用大一點的聲音緩衝（太小的話手機忙的時候聲音會斷斷續續、破破的）
+        try { ctx = new AC({ latencyHint: mob ? 'balanced' : 'interactive' }); } catch { ctx = new AC(); }
         rec.ctx = ctx; rec.n = 0;
         // 切到背景就暫停，回來再繼續（手機省電，也不會在背景一直響）
         try {
@@ -740,7 +741,11 @@ export function createEngineAudio(opt = {}) {
     comp.threshold.value = -14; comp.knee.value = 10; comp.ratio.value = 8; comp.attack.value = 0.003; comp.release.value = 0.2;
     pre.gain.value = 0.5; ws.curve = SND_curve(); ws.oversample = 'none';
     inp.connect(hp); hp.connect(comp); comp.connect(pre); pre.connect(ws); ws.connect(opt.output || ctx.destination);
-    S.ctx = ctx; S.inp = inp; S.nodes = [inp, hp, comp, pre, ws];
+    // 第 41 批（Nick「音樂很破」）：背景音樂自己一條：不跟引擎一起進壓縮器、軟削波（以前引擎大聲的時候音樂被壓、被削，聽起來破），只有一個很輕的限幅；音量、靜音跟總輸出一樣
+    const mus = ctx.createGain(), mlim = ctx.createDynamicsCompressor();
+    mus.gain.value = S.muted ? 0 : S.vol; mlim.threshold.value = -4; mlim.knee.value = 4; mlim.ratio.value = 12; mlim.attack.value = 0.005; mlim.release.value = 0.25;
+    mus.connect(mlim); mlim.connect(opt.output || ctx.destination);
+    S.ctx = ctx; S.inp = inp; S.mus = mus; S.nodes = [inp, hp, comp, pre, ws, mus, mlim];
     if (S.rec) for (const v of S.voices) if (!v.live) { v.live = true; S.rec.n++; } // resume() 之前就建好的聲音
     return ctx;
   }
@@ -1045,7 +1050,7 @@ export function createEngineAudio(opt = {}) {
       const ctx = ensureCtx(); if (!ctx) return h;
       wake(); clearTimeout(S.idleT);
       const t0 = ctx.currentTime + 0.05, keep = [];
-      const out = ctx.createGain(); out.gain.setValueAtTime(0, t0); out.gain.setTargetAtTime(MUS.vol, t0, 1.2); out.connect(S.inp); keep.push(out);
+      const out = ctx.createGain(); out.gain.setValueAtTime(0, t0); out.gain.setTargetAtTime(MUS.vol, t0, 1.2); out.connect(S.mus || S.inp); keep.push(out);
       const lp = (f, q, dest = out) => { const x = ctx.createBiquadFilter(); x.type = 'lowpass'; x.frequency.value = f; x.Q.value = q; x.connect(dest); keep.push(x); return x; };
       const padLp = lp(900, 0.3), plLp = lp(2600, 0.2);
       const hatHp = ctx.createBiquadFilter(); hatHp.type = 'highpass'; hatHp.frequency.value = 6500; hatHp.connect(out); keep.push(hatHp);
@@ -1099,7 +1104,7 @@ export function createEngineAudio(opt = {}) {
       const iv = setInterval(tick, 150); tick();
       if (S.rec) S.rec.n++;
       h.alive = true;
-      h.set = (o = {}) => { if (done) return; const v = Math.max(0, Math.min(2, num(o.level, 1))); if (v !== level) { level = v; out.gain.setTargetAtTime(MUS.vol * v, ctx.currentTime, 0.5); } if (o.style === 'drive' || o.style === 'walk') want = o.style; };
+      h.set = (o = {}) => { if (done) return; const v = Math.max(0, Math.min(3, num(o.level, 1))); if (v !== level) { level = v; out.gain.setTargetAtTime(MUS.vol * v, ctx.currentTime, 0.5); } if (o.style === 'drive' || o.style === 'walk') want = o.style; };
       Object.defineProperty(h, 'level', { get: () => level }); // 0＝關（開關）、0.35 房子裡、1 外面
       Object.defineProperty(h, 'style', { get: () => cur }); // 'walk'／'drive'（正在放的；換了在下一小節生效）
       h.dispose = () => {
@@ -1213,14 +1218,14 @@ export function createEngineAudio(opt = {}) {
   function setMuted(m) {
     try {
       S.muted = !!m;
-      if (S.inp) { const t = S.ctx.currentTime; S.inp.gain.cancelScheduledValues(t); S.inp.gain.setTargetAtTime(S.muted ? 0 : S.vol, t, 0.04); }
+      if (S.inp) { const t = S.ctx.currentTime; for (const g of [S.inp.gain, S.mus.gain]) { g.cancelScheduledValues(t); g.setTargetAtTime(S.muted ? 0 : S.vol, t, 0.04); } }
       if (!S.muted) wake();
     } catch (e) { warn(e); }
   }
   function setVolume(x) {
     try {
       S.vol = Math.max(0, Math.min(1, num(x, S.vol)));
-      if (S.inp && !S.muted) { const t = S.ctx.currentTime; S.inp.gain.cancelScheduledValues(t); S.inp.gain.setTargetAtTime(S.vol, t, 0.04); }
+      if (S.inp && !S.muted) { const t = S.ctx.currentTime; for (const g of [S.inp.gain, S.mus.gain]) { g.cancelScheduledValues(t); g.setTargetAtTime(S.vol, t, 0.04); } }
     } catch (e) { warn(e); }
   }
   function dispose() {
