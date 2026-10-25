@@ -10,7 +10,7 @@ const three = path.join(dir, '../node_modules/three');
 const prefix = process.argv[2] || '../out/night/nt';
 fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
-const hook = 'window.__THREE = THREE; window.__PN = PAINT_NIGHT;'
+const hook = 'window.__THREE = THREE; window.__PN = PAINT_NIGHT; window.__pxLow = () => pxLow;'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, tripS, TR, walker, renderer, LOOK, NPC, S, AMB, AMB_S, MUS, engineAudio, leaveCar, police, buildLodCar });'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
 const srv = http.createServer((req, res) => {
@@ -68,7 +68,7 @@ const helpers = () => p.evaluate(() => {
     const NS = D.LOOK._ns ? D.LOOK._ns() : null, TC = (D.NPC?.traffic?.cars || []).filter((c) => c.active && c.kind === 'car' && !c.crushed), PC = (D.police?.npcCars || []).filter((c) => c.x < 1e5); // 第 32 批：大燈照路的光斑：鏡頭 110 公尺內的車（路上的、警車）
     const near = [...TC, ...PC].map((c) => ({ c, d: Math.hypot(c.x - cp.x, c.z - cp.z) })).filter((o) => o.d < 110).sort((a, b) => a.d - b.d); let pool0 = null;
     if (NS && NS.pool.count && near.length) { const m = new THREE.Matrix4(), v = new THREE.Vector3(); NS.pool.getMatrixAt(0, m); v.setFromMatrixPosition(m); const c = near[0].c, hx = c.hx || 2.2; pool0 = { d: +Math.hypot(v.x - (c.x + Math.cos(c.heading) * (hx + 0.3)), v.z - (c.z - Math.sin(c.heading) * (hx + 0.3))).toFixed(2), y: +v.y.toFixed(2) }; }
-    const ns = NS ? { stars: NS.stars.geometry.attributes.position.count, starsOp: +NS.stars.material.opacity.toFixed(2), moonOp: +NS.moon.material.opacity.toFixed(2), moonY: +new THREE.Vector3().setFromMatrixPosition(NS.moon.matrixWorld).sub(cp).normalize().y.toFixed(2), winN: NS.lit, winOp: +NS.win.material.opacity.toFixed(2), winVis: NS.win.visible, pools: NS.pool.count, beamVis: NS.beam.visible, beamOp: +NS.beam.material.opacity.toFixed(2), beamD: cx ? +NS.beam.position.distanceTo(cx).toFixed(2) : null, beamY: +NS.beam.position.y.toFixed(2), poolOp: +NS.pool.material.opacity.toFixed(3), poolVis: NS.pool.visible, pol: +NS.pol.intensity.toFixed(1), polC: NS.pol.color.getHexString(), polY: +NS.pol.position.y.toFixed(2) } : null;
+    const ns = NS ? { stars: NS.stars.geometry.attributes.position.count, starsOp: +NS.stars.material.opacity.toFixed(2), moonOp: +NS.moon.material.opacity.toFixed(2), moonY: +new THREE.Vector3().setFromMatrixPosition(NS.moon.matrixWorld).sub(cp).normalize().y.toFixed(2), winN: NS.lit, winOp: +NS.win.material.opacity.toFixed(2), winVis: NS.win.visible, pools: NS.pool.count, beamVis: NS.beam.visible, beamOp: +NS.beam.material.opacity.toFixed(2), beamD: cx ? +NS.beam.position.distanceTo(cx).toFixed(2) : null, beamY: +NS.beam.position.y.toFixed(2), poolOp: +NS.pool.material.opacity.toFixed(3), poolVis: NS.pool.visible, pol: NS.pol ? +NS.pol.intensity.toFixed(1) : null, polC: NS.pol ? NS.pol.color.getHexString() : null, polY: NS.pol ? +NS.pol.position.y.toFixed(2) : null } : null;
     return { info: D.LOOK.info(), hour: +D.LOOK.hour.toFixed(2), sun: +D.LOOK.sun.toFixed(1), night: +D.LOOK.night.toFixed(2), exp: R.toneMappingExposure, ns, nearCars: Math.min(12, near.length), pool0,
       dl: { I: +dl.intensity.toFixed(3), c: dl.color.getHexString(), y: +dl.position.y.toFixed(0), dirY: +(dl.position.y - dl.target.position.y).toFixed(0) }, hemi: { I: +hemi.intensity.toFixed(3), c: hemi.color.getHexString() }, fog: sc.fog ? sc.fog.color.getHexString() : null, envI: +sc.environmentIntensity.toFixed(3),
       pl: pl.map((l) => ({ I: +l.intensity.toFixed(1), d: +Math.hypot(l.position.x - cp.x, l.position.z - cp.z).toFixed(0), y: +l.position.y.toFixed(1) })), sp: sp.map((l) => ({ I: +l.intensity.toFixed(0), d: cx ? +l.position.distanceTo(cx).toFixed(2) : null, y: +l.position.y.toFixed(2), decay: l.decay, distance: l.distance, aim: +l.position.distanceTo(l.target.position).toFixed(1) })),
@@ -116,11 +116,11 @@ check(k.ns.starsOp === 0 && k.ns.moonOp === 0 && k.ns.winVis && k.ns.winOp > 0.3
 // ---- 4 晚上 22:00 ----
 const n = await at('22', 22);
 const near = n.pl.filter((l) => l.I > 0);
-check(n.sun < -20 && n.night === 1 && n.dl.I === 0.5 && n.dl.c === '9fb4d8' && n.dl.dirY > 150 && n.hemi.c === '34405e' && n.fog === '0a0d15' && n.info.band === 'n' && n.exp === 1,
-  `22:00: sun ${n.sun}° (below), moon light 0.5 #${n.dl.c} with shadows, night hemi/fog, night reflection map`);
+check(n.sun < -20 && n.night === 1 && n.dl.I === 0.8 && n.dl.c === '9fb4d8' && n.dl.dirY > 150 && n.hemi.c === '46536f' && n.hemi.I === 0.95 && n.fog === '161c29' && n.info.band === 'n' && n.exp === 1,
+  `22:00: sun ${n.sun}° (below), moon light 0.8 #${n.dl.c} with shadows, night hemi ${n.hemi.I}/fog (第 37 批: brighter night), night reflection map`);
 check(near.length >= 2 && near.every((l) => l.I > 0 && l.I <= 396 && l.d < 90 && l.y > 5) && near.some((l) => l.I === 396 && l.y > 10) && near.filter((l) => l.d > 55).every((l) => l.I < 396) && n.info.lamps > 100,
   `22:00 highway: ${near.length} nearest street lamps lit (${near.map((l) => l.I + '@' + l.d + 'm').join(', ')}: 180 × 2.2 = 396 on the 11 m highway heads so the road is lit like the village, fading past 50 m so a swap never pops) of ${n.info.lamps} lamp heads (poles, highway, parking)`);
-check(n.ns.beamVis && n.ns.beamOp === 0.65 && n.ns.beamD > 1.5 && n.ns.beamD < 3.5 && n.ns.beamY > -0.2 && n.ns.beamY < 0.4, `22:00: the own car's headlight beam patch lies on the road from its nose (${n.ns.beamD} m from the centre, y ${n.ns.beamY}), opacity ${n.ns.beamOp} (第 34 批: lights the road 0–70 m ahead; off by day)`);
+check(n.ns.beamVis && n.ns.beamOp === 0.8 && n.ns.beamD > 1.5 && n.ns.beamD < 3.5 && n.ns.beamY > -0.2 && n.ns.beamY < 0.4, `22:00: the own car's headlight beam patch lies on the road from its nose (${n.ns.beamD} m from the centre, y ${n.ns.beamY}), opacity ${n.ns.beamOp} (第 34 批: lights the road ahead; 第 37 批: 0–100 m, 30 m wide; off by day)`);
 check(n.ns.starsOp === 1 && n.ns.moonOp === 1 && n.ns.moonY > 0.6 && n.ns.moonY < 0.85 && n.ns.winVis && n.ns.winOp === 1, `22:00: stars and the moon disc are out (moon high in the sky, y ${n.ns.moonY} ≈ sin 48°), lit windows at full`);
 const n2 = await p.evaluate(() => { window.__go('dealer', 1); return window.__state(); }); // 村子：電線桿的路燈 180、窗戶、路上的車的大燈照路
 const near2 = n2.pl.filter((l) => l.I > 0);
@@ -133,7 +133,7 @@ const pol = await p.evaluate(async () => { const D = window.__D(), PC = D.police
 console.log('   police light', JSON.stringify(pol));
 check(pol.before === 0 && pol.I === 70 && pol.y > 1.8 && pol.y < 2.3 && pol.d < 0.6 && Math.abs(pol.polD - pol.camD) < 0.11 && pol.colors.length === 2 && pol.colors.includes('ff2a1a') && pol.colors.includes('2a60ff') && pol.after === 0, `police light: off with no chase; a police car with its lights on 10 m away → one light on its roof flashing red/blue (${pol.colors.join('/')}), 70; off again when it leaves`);
 check(pol.pools === n2.nearCars + 1 && pol.poolD < 0.3 && pol.poolY > 0 && pol.poolY < 0.2 && pol.poolsAfter === n2.nearCars, `headlight pool: the police car gets one on the road in front of its nose (${pol.pools} pools, ${pol.poolD} m off, ${pol.poolY} m up); gone when it leaves`);
-check(n.sp.length === 2 && n.sp.every((l) => l.I === 18 && l.decay === 0.6 && l.distance === 150 && l.d > 1.5 && l.d < 3.5 && l.y > 0.3 && l.y < 1.2 && l.aim > 55 && l.aim < 65), `22:00: two headlights on the car's nose (${n.sp.map((l) => l.d + ' m').join(', ')} from its centre, ${n.sp.map((l) => l.y).join('/')} m high), 18 with decay 0.6 to 150 m aimed ${n.sp.map((l) => l.aim).join('/')} m ahead (第 34 批: lights the road far ahead; was 150 / decay 2: dark past 25 m)`);
+check(n.sp.length === 2 && n.sp.every((l) => l.I === 18 && l.decay === 0.6 && l.distance === 200 && l.d > 1.5 && l.d < 3.5 && l.y > 0.3 && l.y < 1.2 && l.aim > 65 && l.aim < 75), `22:00: two headlights on the car's nose (${n.sp.map((l) => l.d + ' m').join(', ')} from its centre, ${n.sp.map((l) => l.y).join('/')} m high), 18 with decay 0.6 to 200 m aimed ${n.sp.map((l) => l.aim).join('/')} m ahead (第 34 批: lights the road far ahead; was 150 / decay 2: dark past 25 m; 第 37 批 Nick「車燈要能照廣照遠一點」: 150 → 200 m, aimed 60 → 70 m, wider cone)`);
 check(k.lodE > d.lodE + 0.5 && k.lodE < n.lodE - 0.5 && k.paintN > 0.3 && k.paintN < 0.6, `17:45: traffic cars' lamps part-way on (E sum ${d.lodE} → ${k.lodE} → ${n.lodE}), own car's lamps at ${k.paintN}: lights come on gradually, not with a switch`);
 // 第 31 批：角落的時間、環境聲
 const clk = await p.evaluate(() => { const D = window.__D(), e = document.querySelector('#stage .dv-mapt'), A = D.AMB; return { hidden: e ? e.hidden : null, txt: e ? e.textContent : null, amb: !!(A && A.alive), mus: !!(D.MUS && D.MUS.alive), musBar: D.MUS ? D.MUS.bar : -1, musLv: D.MUS ? D.MUS.level : null, musSt: D.MUS ? D.MUS.style : null, last: A && A.last ? { wind: A.last.wind, birds: A.last.birds, crickets: A.last.crickets, cars: A.last.cars.map((c) => +c.d.toFixed(0)) } : null, voices: D.engineAudio.input ? 1 : 0 }; });
@@ -154,15 +154,19 @@ check(px.mean < 90 && px.max > 200, `22:00 picture is dark on average (${px.mean
 await p.evaluate(() => window.__D().LOOK.set(1));
 await p.waitForFunction(() => window.__D().LOOK.level === 1 && !window.__D().LOOK.busy);
 const b1 = await at('22-b', 22);
-check(b1.night === 1 && b1.pl.some((l) => l.I > 0) && b1.sp.every((l) => l.I === 18) && b1.paintN === 1 && Object.values(perf['22-b']).every((v) => v.wet === 0) && b1.dl.I === 0.5,
+check(b1.night === 1 && b1.pl.some((l) => l.I > 0) && b1.sp.every((l) => l.I === 18) && b1.paintN === 1 && Object.values(perf['22-b']).every((v) => v.wet === 0) && b1.dl.I === 0.8,
   `漂亮 at 22:00: lamps, headlights, car lamps, moon light; no wet reflection pass`);
+check(b1.pl.length === 2 && b1.sp.length === 1 && b1.ns.pol === null && !b1.info.polOn && b1.info.sh === 1024 && b1.info.shR === 40 && b1.ns.beamVis && n.info.sh === 2048 && n.info.shR === 60 && n.pl.length === 4 && n.sp.length === 2 && n.info.polOn,
+  `第 37 批 漂亮 is lighter: ${b1.pl.length} street lamps (最真實 ${n.pl.length}), ${b1.sp.length} headlight spot (最真實 ${n.sp.length}), no police roof light, shadow map ${b1.info.sh} / ${b1.info.shR} m (最真實 ${n.info.sh} / ${n.info.shR} m); the road beam stays`);
+const pxl = await p.evaluate(() => { window.__dstep(1); return window.__pxLow(); });
+check(pxl === true, `第 37 批: driving at 漂亮 caps the drawing buffer at 0.7 M pixels (pxLow ${pxl})`);
 // ---- 6 換回順：燈拿掉、招牌、車燈回去 ----
 const signBase = await p.evaluate(() => { let m = null; window.__D().TR.scene.traverse((o) => { if (!m && o.isMesh && o.material && o.material.emissiveMap && /sign/.test(o.name)) m = o.material; }); return m ? m.emissiveIntensity : null; });
 await p.evaluate(() => window.__D().LOOK.set(0));
 await p.waitForFunction(() => window.__D().LOOK.level === 0 && !window.__D().LOOK.busy);
-const z = await p.evaluate(() => { const v = window.__view(320, 192, false); return { st: window.__state(), info: v.info }; });
+const z = await p.evaluate(() => { window.__dstep(1); const v = window.__view(320, 192, false); return { st: window.__state(), info: v.info, pxLow: window.__pxLow() }; });
 console.log('6 順', JSON.stringify(z));
-check(z.st.pl.length === 0 && z.st.sp.length === 0 && z.st.paintN === 0 && z.st.lodK === 0 && z.st.lodE < n.lodE - 5 && z.st.sign === 0.3 && signBase > 0.7 && z.st.dl.I === 1.4 && z.st.dl.c === 'fff4e0' && z.st.exp === 1 && z.info.wet === 0,
+check(z.st.pl.length === 0 && z.st.sp.length === 0 && z.st.paintN === 0 && z.st.lodK === 0 && z.st.lodE < n.lodE - 5 && z.st.sign === 0.3 && signBase > 0.7 && z.st.dl.I === 1.4 && z.st.dl.c === 'fff4e0' && z.st.exp === 1 && z.info.wet === 0 && z.pxLow === false,
   `back to 順 at 22:00: lamps removed, car lamps off (night 0; E ${z.st.lodE}, brake lights may stay), signs back to 0.3 (were ${signBase}), original sun, no reflection`);
 const z2 = await p.evaluate(() => { window.__dstep(20); const D = window.__D(), e = document.querySelector('#stage .dv-mapt'), A = D.AMB; return { hidden: e.hidden, last: A && A.last ? { birds: A.last.birds, crickets: A.last.crickets } : null }; });
 check(z2.hidden === true && z2.last && z2.last.birds === 1 && z2.last.crickets === 0, `順: no clock (no day and night), ambient sound is daytime (birds, no crickets)`);
