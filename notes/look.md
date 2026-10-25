@@ -217,3 +217,8 @@ Nick: 「最真實還能怎麼讓他跟真實(以後最真實就是不管手機 
 Nick: 「你有用到硬體加速嗎／傍晚變晚上天色變黑的太快」.
 - Hardware acceleration: yes — three.js draws with WebGL on the GPU; the APK's WebView is hardware accelerated by default (targetSdk 34, nothing turns it off). Added `powerPreference: 'high-performance'` to the renderer (only matters on machines with two GPUs).
 - Dusk: the day is still 12 real minutes with 6 of daylight, but the clock is warped: `hourAt(ms)` = u − `DAY_SLOW`·(6/π)·sin(π(u−6)/6) with `DAY_SLOW = 0.65`, so time runs at 0.35× around 06:00/18:00 and 1.65× around noon/midnight (6, 12, 18, 24 stay fixed). Sun 8° → full night (−10°) now takes ≈ 90 s of real time (was ≈ 37 s). The HUD clock shows the warped hour. night-test checks the clock formula, the dusk length and that daytime is still 6 min.
+
+## Batch 41 — phone 最真實 back to the pre-39 one (trial v56, 2026-10-25)
+
+Nick: 「最真實好像超過我手機能耐了 看能怎樣改善或者回到前一版」. look.js `MAX = !mobile` (same `mobile` check as `pref`, includes the `BeauCarApp` UA): on phones 最真實 drops all four batch-39 additions — shadow `SHL_PHONE` 2048 / ±60 m / 35 m ahead / radius 1, no live cube (`cubeStep` skipped, `carEnvTex` = sky env), no 2× supersampling (town.src.js `pxStep` needs `LOOK.max`), no wall detail (`COLOR(pbr, road, wall)` with `wall = pbr && MAX`; program cache key gets `px`). Computers keep the full batch-39 tier. `LOOK.max` / `LOOK.setMax(on)` (re-runs `shadowCfg`, recompiles the patched materials) let night-test check both paths.
+Same batch: site.js checks GitHub for a new APK every 10 minutes instead of every hour (Nick waited for the in-app update bar).

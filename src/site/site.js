@@ -56,7 +56,7 @@
   async function checkAppUpdate() {
     const mine = apkBuild();
     if (mine === null || apkAsking) return; // 不在 App 裡不用查
-    if (Date.now() - Number(lsGet(APK_SEEN) || 0) < 60 * 60 * 1000) return; // 一小時查一次（GitHub 的匿名 API 有次數限制）
+    if (Date.now() - Number(lsGet(APK_SEEN) || 0) < 10 * 60 * 1000) return; // 10 分鐘查一次（GitHub 的匿名 API 一小時 60 次；Nick 2026-10-25 等不到更新條，以前一小時）
     let latest;
     apkAsking = true;
     try {

@@ -54,6 +54,7 @@ const TREE = [null, { cards: 110, cone: 8 }, { cards: 230, cone: 14 }], TREE_FAR
 const SHADOW = 2048, SH_R = 60, SH_AHEAD = 35;
 // 第 37 批（Nick 2026-10-25「漂亮那階不順 有些舊手機跑不太動」，選 1 2 3）：漂亮＝影子圖 1024、範圍 40 公尺（前面 22 公尺為中心）；最真實照舊
 const SHL = [null, { map: 1024, r: 40, ahead: 22, rad: 2 }, { map: 4096, r: 110, ahead: 60, rad: 3.5 }];
+const SHL_PHONE = { map: 2048, r: 60, ahead: 35, rad: 1 }; // 第 41 批：手機的最真實（跟第 38 批以前一樣）
 // 第 39 批（Nick 2026-10-25「做1234 只做在最真實」；最真實＝不管手機）：1 影子圖 4096、照 ±110 公尺（前面 60 公尺為中心）、邊邊柔一點（PCF 半徑 3.5）；手機畫不了 4096 就 2048
 const GC = 16, GN = 7, GPER = 900; // 草：一格幾公尺、幾格見方、一格最多幾叢
 const POST = { bloom: 0.07, bRad: 0.35, thr: 10, aoR: 2.2, aoS: 2.2, vig: 0.55, carEnv: 0.7, skyMax: 6 }; // 第 34 批 skyMax：看得到的天空最亮到幾（太陽的圓盤在 shader 裡是幾千、幾萬：光暈一糊整個畫面都白；夾住就只是一顆白太陽）
@@ -80,7 +81,7 @@ const ROADX = (cu) => `{ float rn = smoothstep(170.0, 20.0, vBD) * ${cu >= 0 ? `
         c *= 1.0 - (1.0 - paint) * crack * 0.55 * rn;
         float pat = bnoise(vBW * 0.09 + vec3(11.0)); c *= 1.0 + (1.0 - paint) * (step(0.64, pat) * -0.1 + 0.07 * (bnoise(vBW * 0.25) - 0.5)) * rn;
       } }`;
-const COLOR = (pbr, road) => `#include <color_fragment>
+const COLOR = (pbr, road, wall) => `#include <color_fragment>
   { vec3 c = diffuseColor.rgb; float l = dot(c, vec3(0.299, 0.587, 0.114)), mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)), sat = (mx - mn) / max(mx, 1e-3);
     float nr = smoothstep(140.0, 15.0, vBD), mid = smoothstep(500.0, 60.0, vBD);
     float fine = 0.5, med = 0.5, pch = 0.5;
@@ -104,11 +105,11 @@ const COLOR = (pbr, road) => `#include <color_fragment>
       float near = smoothstep(260.0, 25.0, vBD);
       if (bUp * near > 0.0) { vec3 d = mix(mix(bDet(tCoA, vBW.xz, 2.2), bDet(tAsA, vBW.xz, 2.6), bA), bDet(tGrA, vBW.xz, 1.6), bG);
         c *= mix(vec3(1.0), vec3(1.0) + (d - 1.0) * ${f3(MB.pk)}, bUp * near); }
-      bW = (1.0 - smoothstep(0.35, 0.7, abs(nn.y))) * (1.0 - green) * smoothstep(90.0, 8.0, vBD); // 第 39 批 4：牆（直的面）：水泥的顆粒＋直直的髒水痕
+      ${wall ? `bW = (1.0 - smoothstep(0.35, 0.7, abs(nn.y))) * (1.0 - green) * smoothstep(90.0, 8.0, vBD); // 第 39 批 4：牆（直的面）：水泥的顆粒＋直直的髒水痕
       if (bW > 0.0) { bWuv = abs(nn.x) > abs(nn.z) ? vBW.zy : vBW.xy; vec3 d = bDet(tCoA, bWuv, ${f3(MB.wallS)});
         c *= mix(vec3(1.0), vec3(1.0) + (d - 1.0) * ${f3(MB.wallK)}, bW);
         float stk = bnoise(vec3(bWuv.x * 2.6, bWuv.y * 0.22, 3.7)) * 0.7 + bnoise(vec3(bWuv.x * 9.0, bWuv.y * 0.6, 1.3)) * 0.3;
-        c *= 1.0 - ${f3(MB.streak)} * bW * smoothstep(0.55, 0.85, stk); } }` : ''}
+        c *= 1.0 - ${f3(MB.streak)} * bW * smoothstep(0.55, 0.85, stk); }` : ''} }` : ''}
     ${road != null ? ROADX(road) : ''}
     diffuseColor.rgb = c; }`;
 // 5 號：地面（朝上的面）的凹凸＋山和草地大大小小的起伏
@@ -167,6 +168,8 @@ function createLook(o) {
   const mobile = (() => { try { const n = navigator, ua = String(n.userAgent || ''); return !!(n.userAgentData && n.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobile|BeauCarApp/i.test(ua) || (/Macintosh/.test(ua) && n.maxTouchPoints > 1); } catch { return false; } })(); // 第 39 批
   const soft = (() => { try { const x = gl.getExtension('WEBGL_debug_renderer_info'); return /swiftshader|llvmpipe|software/i.test(String(gl.getParameter(x ? x.UNMASKED_RENDERER_WEBGL : gl.RENDERER))); } catch { return false; } })();
   let LV = 0, busy = null, S0 = null, prepped = false;
+  // 第 41 批（Nick 2026-10-25「最真實好像超過我手機能耐了」）：最真實的第 39 批四樣（影子 4096、車子方塊反射、畫兩倍、牆的材質）只在電腦上；手機的最真實＝第 38 批以前的（影子 2048／60 公尺）
+  let MAX = !mobile;
   let dl = null, hemi = null; for (const c of scene.children) { if (!dl && c.isDirectionalLight) dl = c; if (!hemi && c.isHemisphereLight) hemi = c; }
   const skyM = scene.getObjectByName('sky');
   const sun = new THREE.Vector3(), EXP0 = R.toneMappingExposure;
@@ -250,12 +253,12 @@ function createLook(o) {
       if (pbr) { const T = TEX; Object.assign(sh.uniforms, { tAsA: { value: T.asA }, tAsN: { value: T.asN }, tGrA: { value: T.grA }, tGrN: { value: T.grN }, tCoA: { value: T.coA }, tCoN: { value: T.coN } }, WU); }
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VDECL).replace('#include <project_vertex>', VPOS);
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + VDECL + NOISE + (pbr ? PBRH + WETH : ''))
-        .replace('#include <color_fragment>', COLOR(pbr, road))
+        .replace('#include <color_fragment>', COLOR(pbr, road, pbr && MAX))
         .replace('#include <normal_fragment_maps>', pbr ? PBRN : '#include <normal_fragment_maps>')
         .replace('#include <roughnessmap_fragment>', (pbr ? WETR : '#include <roughnessmap_fragment>') + '\nroughnessFactor = clamp(roughnessFactor * (0.85 + 0.3 * bnoise(vBW * 5.0)), 0.04, 1.0);')
         .replace('#include <opaque_fragment>', pbr ? WETO : '#include <opaque_fragment>');
     };
-    m.customProgramCacheKey = function () { const rd = roadOf(this); return (key0 ? key0.call(this) : obc0 ? obc0.toString() : '') + '|lk' + LV + (pbrOk(this) ? 'p' : '') + (rd != null ? 'r' + rd : ''); };
+    m.customProgramCacheKey = function () { const rd = roadOf(this); return (key0 ? key0.call(this) : obc0 ? obc0.toString() : '') + '|lk' + LV + (pbrOk(this) ? (MAX ? 'px' : 'p') : '') + (rd != null ? 'r' + rd : ''); };
     m.needsUpdate = true; st.mats = MATS.size;
     if (m.emissiveMap && m.emissiveMap === m.map && m.emissiveIntensity < 0.5 && !SIGNS.has(m)) { SIGNS.set(m, m.emissiveIntensity); signK = -1; } // 招牌：晚上加亮
   }
@@ -696,7 +699,7 @@ function createLook(o) {
     for (let k = 0; k < CUBE.faces; k++) { const i = CUBE.face; R.setRenderTarget(CUBE.rt, i); const a = R.info.render.calls; r0(scene, CUBE.cam.children[i]); const b = R.info.render.calls; cs += b >= a ? b - a : b; CUBE.face = (i + 1) % 6; if (CUBE.face === 0) { CUBE.rt.texture.needsPMREMUpdate = true; CUBE.n++; } }
     R.setRenderTarget(prev); car.visible = vis; if (GR) GR.im.visible = gv; R.autoClear = ar; CUBE.calls = cs;
   }
-  const carEnvTex = () => (LV === 2 && CUBE.rt && CUBE.n > 0 ? CUBE.rt.texture : envTex); // 方塊畫好一輪以前先用天空的
+  const carEnvTex = () => (LV === 2 && MAX && CUBE.rt && CUBE.n > 0 ? CUBE.rt.texture : envTex); // 方塊畫好一輪以前先用天空的
 
   // ==== 5 號：車漆反射天空、透明漆 ====
   let carOn = null; const CARM = [];
@@ -776,7 +779,7 @@ function createLook(o) {
     }
   }
   function shadowCfg(lv) { // 第 37 批：影子圖多大、照多遠（漂亮小一點）；圖大小變了要重做
-    SH = SHL[lv] || SHL[2]; if (SH.map > R.capabilities.maxTextureSize) SH = { ...SH, map: Math.min(SH.map, R.capabilities.maxTextureSize) }; TEXEL = (SH.r * 2) / SH.map; if (!dl) return; dl.shadow.radius = SH.rad;
+    SH = lv === 2 && !MAX ? SHL_PHONE : SHL[lv] || SHL[2]; if (SH.map > R.capabilities.maxTextureSize) SH = { ...SH, map: Math.min(SH.map, R.capabilities.maxTextureSize) }; TEXEL = (SH.r * 2) / SH.map; if (!dl) return; dl.shadow.radius = SH.rad;
     if (dl.shadow.mapSize.x !== SH.map) { dl.shadow.mapSize.set(SH.map, SH.map); if (dl.shadow.map) { dl.shadow.map.dispose(); dl.shadow.map = null; } }
     Object.assign(dl.shadow.camera, { left: -SH.r, right: SH.r, top: SH.r, bottom: -SH.r, near: 100, far: 500 }); dl.shadow.camera.updateProjectionMatrix();
   }
@@ -842,7 +845,7 @@ function createLook(o) {
     lodStep(cam, false);
     scanStep(300, dt);
     lampStep(cam);
-    if (LV === 2) { if (GR) grassStep(cam); const car = getCar(); carEnv(car); if (car) { cubeStep(car); const ce = carEnvTex(); for (const c of CARM) if (c[0].envMap !== ce) c[0].envMap = ce; } } // 第 39 批：方塊反射
+    if (LV === 2) { if (GR) grassStep(cam); const car = getCar(); carEnv(car); if (car) { if (MAX) cubeStep(car); const ce = carEnvTex(); for (const c of CARM) if (c[0].envMap !== ce) c[0].envMap = ce; } } // 第 39 批：方塊反射
     const ms = performance.now() - t0; st.ms = st.ms * 0.95 + ms * 0.05; if (ms > st.maxMs) st.maxMs = ms;
   }
   let lastT = 0;
@@ -857,7 +860,7 @@ function createLook(o) {
     st.calls = R.info.render.calls; st.tris = R.info.render.triangles;
   };
   const API = {
-    get level() { return LV; },
+    get level() { return LV; }, get max() { return MAX; }, setMax(on) { MAX = !!on; shadowCfg(LV); for (const m of MATS) m.needsUpdate = true; }, // 第 41 批：最真實的重的四樣（電腦＝true、手機＝false；測試可以切）
     get busy() { return !!busy; },
     can: { post: half, soft },
     half,

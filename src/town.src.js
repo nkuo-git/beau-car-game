@@ -567,7 +567,7 @@ async function lookSet(lv, tell) {
 // 第 30 批（Nick 2026-10-24，卡片選「自動輪流」）：look.js 的一天（24 分鐘）；燈亮多少變了 → 完整的車（masks.js 的車漆 shader）、輕量車（路上的車、朋友的車）的大燈、尾燈一起亮
 // 第 37 批（Nick 2026-10-25「漂亮那階不順」，選 1 2 3）：出門＋漂亮＝畫的像素最多 70 萬（garage.src.html pxLow）；回車庫頁、換別的畫質就換回來
 // 第 39 批：出門＋最真實＝畫 2 倍細再縮小（garage.src.html pxHigh）
-function pxStep() { const lv = DRIVE.on && LOOK ? LOOK.level : 0, low = lv === 1, high = lv === 2; if (low !== pxLow || high !== pxHigh) { pxLow = low; pxHigh = high; resize(); } }
+function pxStep() { const lv = DRIVE.on && LOOK ? LOOK.level : 0, low = lv === 1, high = lv === 2 && LOOK.max; // 第 41 批：手機的最真實不畫兩倍 if (low !== pxLow || high !== pxHigh) { pxLow = low; pxHigh = high; resize(); } }
 function lookNight(k) { PAINT_NIGHT.value = k; buildLodCar.night(k); } // 第 31 批：路上的車的燈也跟著 0–1 慢慢亮
 function lookOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); musOpen(false); } if (bodyFlags.lookopen === on) return; bodyFlag('lookopen', on); $('lookTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 lookBtns(lookPref());
