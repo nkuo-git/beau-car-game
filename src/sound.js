@@ -950,7 +950,7 @@ export function createEngineAudio(opt = {}) {
   }
   // ---- 第 31 批：環境聲（出門就有，下車走路也有）：風（低通雜訊，一陣一陣）、白天的鳥叫（兩三聲的啾啾）、晚上的蟲叫（4.3 kHz 一秒 28 下）、路上最近 3 台車的引擎（鋸齒波低通＋低八度，照距離變小、照左右分邊）----
   // set({ wind, birds, crickets, cars: [{ d, pan, v }] })：每 0.1 秒叫一次就好；數字都用 setTargetAtTime 慢慢到（不會卡卡的）
-  const AMB_V = { n: 3, car: 0.26, carD: 15, wind: 0.045, birds: 0.035, cric: 0.011 };
+  const AMB_V = { n: 3, car: 0.26, carD: 15, wind: 0.045, birds: 0.022, cric: 0.011, bird0: 5, bird1: 14 }; // 第 38 批（Nick「鳥叫聲太多了」）：鳥 0.035 → 0.022，每 5–14 秒才叫一聲（以前 1.6–4 秒）
   function ambient() {
     const h = { alive: false, last: null, set() {}, dispose() {} };
     try {
@@ -978,13 +978,13 @@ export function createEngineAudio(opt = {}) {
         cars.push({ o, o2, g, pn });
       }
       for (const x of [ns, lfo, cr, ct]) x.start(t0); for (const c of cars) { c.o.start(t0); c.o2.start(t0); }
-      // 鳥：每 1.6–4 秒看一次要不要叫一聲（白天才叫；頁面藏起來不叫）
+      // 鳥：每 5–14 秒叫一聲（白天才叫；頁面藏起來不叫）；第 38 批：以前 1.6–4 秒，太多了
       let birds = 0, bT = 0, done = false;
       const chirp = () => {
         if (done) return;
-        bT = setTimeout(chirp, 1600 + Math.random() * 2400);
+        bT = setTimeout(chirp, (AMB_V.bird0 + Math.random() * (AMB_V.bird1 - AMB_V.bird0)) * 1000);
         if (birds < 0.05 || (typeof document !== 'undefined' && document.hidden)) return;
-        const t = ctx.currentTime + 0.02, n = 2 + Math.floor(Math.random() * 2), f0 = 2400 + Math.random() * 900, pan = Math.random() * 1.4 - 0.7;
+        const t = ctx.currentTime + 0.02, n = 1 + Math.floor(Math.random() * 2.5), f0 = 2400 + Math.random() * 900, pan = Math.random() * 1.4 - 0.7;
         const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; let pn = null; try { pn = ctx.createStereoPanner(); pn.pan.value = pan; } catch { /* 算了 */ }
         g.gain.setValueAtTime(0.0001, t);
         for (let i = 0; i < n; i++) { const a = t + i * 0.16; o.frequency.setValueAtTime(f0, a); o.frequency.exponentialRampToValueAtTime(f0 * 1.35, a + 0.05); o.frequency.exponentialRampToValueAtTime(f0 * 0.95, a + 0.11);
@@ -992,7 +992,7 @@ export function createEngineAudio(opt = {}) {
         o.connect(g); if (pn) { g.connect(pn); pn.connect(out); } else g.connect(out); o.start(t); o.stop(t + n * 0.16 + 0.05);
         o.onended = () => { try { o.disconnect(); g.disconnect(); pn?.disconnect(); } catch { /* 算了 */ } };
       };
-      bT = setTimeout(chirp, 800);
+      bT = setTimeout(chirp, 3000);
       if (S.rec) S.rec.n++;
       h.alive = true;
       h.set = (o = {}) => {
