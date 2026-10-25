@@ -59,6 +59,8 @@ jobs:
         run: |
           mkdir -p out
           cp android/app/build/outputs/apk/release/*.apk "out/beau-car-game-${{ github.run_number }}.apk"
+          # Nick 2026-10-25「我要固定名字的最新版」：多放一個固定名字的，https://github.com/nkuo-git/beau-car-game/releases/latest/download/beau-car-game.apk 永遠是最新版
+          cp "out/beau-car-game-${{ github.run_number }}.apk" out/beau-car-game.apk
 
       - uses: actions/upload-artifact@v4
         with:
