@@ -211,3 +211,9 @@ Nick: 「最真實還能怎麼讓他跟真實(以後最真實就是不管手機 
 4. **Walls:** the pbr branch of `COLOR` adds concrete detail on vertical, non-green faces within 90 m (triplanar `tCoA`, `MB.wallS`/`wallK`) plus vertical rain streaks (`MB.streak`); `PBRN` adds the concrete normal within 60 m (`MB.wallN`). The house facade material (street.js `fac`) replaces `normal_fragment_maps` itself, so it gets the colour detail only.
 - Default for phones that never chose: `pref` → 漂亮 (`mobile` UA check); desktop with half-float still → 最真實; swiftshader → 順.
 - `info()` adds `shRad`, `cube`, `cubeCalls`, `carCube`. night-test checks 4096 / 110 m / radius 3.5, the 2× buffer and the live cube.
+
+## Batch 40 — slower dusk (trial v55, 2026-10-25)
+
+Nick: 「你有用到硬體加速嗎／傍晚變晚上天色變黑的太快」.
+- Hardware acceleration: yes — three.js draws with WebGL on the GPU; the APK's WebView is hardware accelerated by default (targetSdk 34, nothing turns it off). Added `powerPreference: 'high-performance'` to the renderer (only matters on machines with two GPUs).
+- Dusk: the day is still 12 real minutes with 6 of daylight, but the clock is warped: `hourAt(ms)` = u − `DAY_SLOW`·(6/π)·sin(π(u−6)/6) with `DAY_SLOW = 0.65`, so time runs at 0.35× around 06:00/18:00 and 1.65× around noon/midnight (6, 12, 18, 24 stay fixed). Sun 8° → full night (−10°) now takes ≈ 90 s of real time (was ≈ 37 s). The HUD clock shows the warped hour. night-test checks the clock formula, the dusk length and that daytime is still 6 min.

@@ -82,10 +82,10 @@ console.log('out', el(), JSON.stringify(g1));
 await p.evaluate(() => { window.__hold = true; window.__noDraw = true; });
 await helpers();
 // ---- 1 順：時間照時鐘，但什麼都不動 ----
-const s0 = await p.evaluate(() => { const D = window.__D(); const h0 = D.LOOK.hour, h1 = (((Date.now() / 60000) % 12) / 12) * 24; return { lv: D.LOOK.level, hour: h0, clock: h1, st: window.__state() }; });
+const s0 = await p.evaluate(() => { const D = window.__D(); const h0 = D.LOOK.hour, h1 = (() => { const u = (((Date.now() / 60000) % 12) / 12) * 24, h = u - 0.65 * (6 / Math.PI) * Math.sin((Math.PI * (u - 6)) / 6); return ((h % 24) + 24) % 24; })(); return { lv: D.LOOK.level, hour: h0, clock: h1, st: window.__state() }; });
 console.log('1 順', JSON.stringify(s0));
 check(s0.lv === 0 && s0.hour >= 0 && s0.hour < 24 && Math.abs(s0.hour - s0.clock) < 0.05 && s0.st.pl.length === 0 && s0.st.sp.length === 0 && s0.st.paintN === 0 && s0.st.dl.I === 1.4,
-  `順: clock hour ${s0.hour.toFixed(2)} (= (minutes % 12) / 12 × 24: a 12-minute day, 第 34 批), nothing changes (no lamps, sun 1.4, paint night 0)`);
+  `順: clock hour ${s0.hour.toFixed(2)} (a 12-minute day, 第 34 批; 第 40 批: slower round sunrise/sunset), nothing changes (no lamps, sun 1.4, paint night 0)`);
 await p.evaluate(() => window.__D().LOOK.setHour(22));
 const s0n = await p.evaluate(() => window.__state());
 check(s0n.hour === 22 && s0n.dl.I === 1.4 && s0n.pl.length === 0 && s0n.paintN === 0 && s0n.lodE === 0, `順 at 22:00: still daytime look (sun 1.4, no lamps, LOD car lamps off)`);
@@ -184,8 +184,13 @@ await p.evaluate(() => window.__view(960, 576, false)); await p.screenshot({ pat
 wk.mus = await p.waitForFunction(() => window.__D().MUS && window.__D().MUS.style === 'walk', null, { timeout: 8000 }).then(() => 'walk').catch(() => p.evaluate(() => (window.__D().MUS ? window.__D().MUS.style : null))); // 第 36 批：走路換成輕鬆的那首（真的時間：下一小節，最多約 2.6 秒）
 check(wk.mode === 'walk' && wk.amb && wk.same && wk.last && wk.last.wind === 1 && wk.last.birds === 1 && wk.hidden === false && wk.txt === '☀ 13:00' && wk.mus === 'walk', `got out of the car (${wk.act2} → ${wk.mode}): ambient sound keeps running (wind ${wk.last && wk.last.wind}, birds), clock 「${wk.txt}」 on the walking minimap; 第 36 批: music switched to the walking tune (${wk.mus})`);
 // ---- 7 回到時鐘 ----
-const c2 = await p.evaluate(() => { const D = window.__D(); D.LOOK.setHour(null); return { h: D.LOOK.hour, c: (((Date.now() / 60000) % 12) / 12) * 24 }; });
+const c2 = await p.evaluate(() => { const D = window.__D(); D.LOOK.setHour(null); return { h: D.LOOK.hour, c: (() => { const u = (((Date.now() / 60000) % 12) / 12) * 24, h = u - 0.65 * (6 / Math.PI) * Math.sin((Math.PI * (u - 6)) / 6); return ((h % 24) + 24) % 24; })() }; });
 check(Math.abs(c2.h - c2.c) < 0.05, `setHour(null): back to the clock (${c2.h.toFixed(2)})`);
+// 第 40 批（Nick「傍晚變晚上天色變黑的太快」）：一天還是 12 分鐘、白天 6 分鐘，但日落那段走慢：太陽 8° → 晚上全黑（-10°）要多久
+const dk = await p.evaluate(() => { const L = window.__D().LOOK, el = (h) => 55 * Math.sin(Math.PI * ((((h - 6) / 12) % 2 + 2) % 2)); let a = null, b = null, day = 0;
+  for (let ms = 0; ms < 12 * 60000; ms += 250) { const h = L.hourAt(ms), e = el(h); if (h > 12 && h < 24 && a === null && e < 8) a = ms; if (h > 12 && a !== null && b === null && e < -10) b = ms; if (h >= 6 && h < 18) day += 250; }
+  return { dusk: (b - a) / 1000, day: day / 60000, h6: +L.hourAt(3 * 60000).toFixed(3), h18: +L.hourAt(9 * 60000).toFixed(3), h12: +L.hourAt(6 * 60000).toFixed(3) }; });
+check(dk.dusk > 80 && dk.dusk < 120 && Math.abs(dk.day - 6) < 0.02 && dk.h6 === 6 && dk.h18 === 18 && dk.h12 === 12, `第 40 批: dusk (sun 8° → full night) takes ${dk.dusk} s of real time (was ≈ 37 s); daytime still ${dk.day} min of the 12; 3/6/9 min = ${dk.h6}/${dk.h12}/${dk.h18} h`);
 // ---- 效能 ----
 console.log('perf', JSON.stringify(perf));
 console.log(`\n${ok} ok, ${bad} failed, ${errs.length} page errors${errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''}`);

@@ -129,7 +129,7 @@ const stage = document.getElementById('stage');
 const msg = document.getElementById('msg'), prog = document.getElementById('prog'), status = document.getElementById('status'), hint = document.getElementById('hint');
 let renderer;
 try {
-  renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true }); // stencil：第 26 批，圓塔一樓電梯的洞（往地下室看下去，地面不畫）
+  renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true, powerPreference: 'high-performance' }); // 第 40 批：有兩顆顯示晶片的機器用比較強的那顆 // stencil：第 26 批，圓塔一樓電梯的洞（往地下室看下去，地面不畫）
 } catch (e) {
   msg.textContent = '這支手機不支援 3D 畫面（WebGL）'; prog.parentElement.hidden = true;
   throw e;
