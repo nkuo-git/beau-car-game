@@ -4712,7 +4712,8 @@ function createEngineAudio(opt = {}) {
       else {
         const AC = g.AudioContext || g.webkitAudioContext;
         if (!AC) return null;
-        try { ctx = new AC({ latencyHint: 'interactive' }); } catch { ctx = new AC(); }
+        const mob = (() => { try { return /Android|iPhone|iPad|iPod|Mobile|BeauCarApp/i.test(String(g.navigator && g.navigator.userAgent || '')); } catch { return false; } })(); // 第 41 批：手機用大一點的聲音緩衝（太小的話手機忙的時候聲音會斷斷續續、破破的）
+        try { ctx = new AC({ latencyHint: mob ? 'balanced' : 'interactive' }); } catch { ctx = new AC(); }
         rec.ctx = ctx; rec.n = 0;
         // 切到背景就暫停，回來再繼續（手機省電，也不會在背景一直響）
         try {
@@ -4732,7 +4733,11 @@ function createEngineAudio(opt = {}) {
     comp.threshold.value = -14; comp.knee.value = 10; comp.ratio.value = 8; comp.attack.value = 0.003; comp.release.value = 0.2;
     pre.gain.value = 0.5; ws.curve = SND_curve(); ws.oversample = 'none';
     inp.connect(hp); hp.connect(comp); comp.connect(pre); pre.connect(ws); ws.connect(opt.output || ctx.destination);
-    S.ctx = ctx; S.inp = inp; S.nodes = [inp, hp, comp, pre, ws];
+    // 第 41 批（Nick「音樂很破」）：背景音樂自己一條：不跟引擎一起進壓縮器、軟削波（以前引擎大聲的時候音樂被壓、被削，聽起來破），只有一個很輕的限幅；音量、靜音跟總輸出一樣
+    const mus = ctx.createGain(), mlim = ctx.createDynamicsCompressor();
+    mus.gain.value = S.muted ? 0 : S.vol; mlim.threshold.value = -4; mlim.knee.value = 4; mlim.ratio.value = 12; mlim.attack.value = 0.005; mlim.release.value = 0.25;
+    mus.connect(mlim); mlim.connect(opt.output || ctx.destination);
+    S.ctx = ctx; S.inp = inp; S.mus = mus; S.nodes = [inp, hp, comp, pre, ws, mus, mlim];
     if (S.rec) for (const v of S.voices) if (!v.live) { v.live = true; S.rec.n++; } // resume() 之前就建好的聲音
     return ctx;
   }
@@ -5037,7 +5042,7 @@ function createEngineAudio(opt = {}) {
       const ctx = ensureCtx(); if (!ctx) return h;
       wake(); clearTimeout(S.idleT);
       const t0 = ctx.currentTime + 0.05, keep = [];
-      const out = ctx.createGain(); out.gain.setValueAtTime(0, t0); out.gain.setTargetAtTime(MUS.vol, t0, 1.2); out.connect(S.inp); keep.push(out);
+      const out = ctx.createGain(); out.gain.setValueAtTime(0, t0); out.gain.setTargetAtTime(MUS.vol, t0, 1.2); out.connect(S.mus || S.inp); keep.push(out);
       const lp = (f, q, dest = out) => { const x = ctx.createBiquadFilter(); x.type = 'lowpass'; x.frequency.value = f; x.Q.value = q; x.connect(dest); keep.push(x); return x; };
       const padLp = lp(900, 0.3), plLp = lp(2600, 0.2);
       const hatHp = ctx.createBiquadFilter(); hatHp.type = 'highpass'; hatHp.frequency.value = 6500; hatHp.connect(out); keep.push(hatHp);
@@ -5091,7 +5096,7 @@ function createEngineAudio(opt = {}) {
       const iv = setInterval(tick, 150); tick();
       if (S.rec) S.rec.n++;
       h.alive = true;
-      h.set = (o = {}) => { if (done) return; const v = Math.max(0, Math.min(2, num(o.level, 1))); if (v !== level) { level = v; out.gain.setTargetAtTime(MUS.vol * v, ctx.currentTime, 0.5); } if (o.style === 'drive' || o.style === 'walk') want = o.style; };
+      h.set = (o = {}) => { if (done) return; const v = Math.max(0, Math.min(3, num(o.level, 1))); if (v !== level) { level = v; out.gain.setTargetAtTime(MUS.vol * v, ctx.currentTime, 0.5); } if (o.style === 'drive' || o.style === 'walk') want = o.style; };
       Object.defineProperty(h, 'level', { get: () => level }); // 0＝關（開關）、0.35 房子裡、1 外面
       Object.defineProperty(h, 'style', { get: () => cur }); // 'walk'／'drive'（正在放的；換了在下一小節生效）
       h.dispose = () => {
@@ -5205,14 +5210,14 @@ function createEngineAudio(opt = {}) {
   function setMuted(m) {
     try {
       S.muted = !!m;
-      if (S.inp) { const t = S.ctx.currentTime; S.inp.gain.cancelScheduledValues(t); S.inp.gain.setTargetAtTime(S.muted ? 0 : S.vol, t, 0.04); }
+      if (S.inp) { const t = S.ctx.currentTime; for (const g of [S.inp.gain, S.mus.gain]) { g.cancelScheduledValues(t); g.setTargetAtTime(S.muted ? 0 : S.vol, t, 0.04); } }
       if (!S.muted) wake();
     } catch (e) { warn(e); }
   }
   function setVolume(x) {
     try {
       S.vol = Math.max(0, Math.min(1, num(x, S.vol)));
-      if (S.inp && !S.muted) { const t = S.ctx.currentTime; S.inp.gain.cancelScheduledValues(t); S.inp.gain.setTargetAtTime(S.vol, t, 0.04); }
+      if (S.inp && !S.muted) { const t = S.ctx.currentTime; for (const g of [S.inp.gain, S.mus.gain]) { g.cancelScheduledValues(t); g.setTargetAtTime(S.vol, t, 0.04); } }
     } catch (e) { warn(e); }
   }
   function dispose() {
@@ -38031,8 +38036,8 @@ return { buildGunShopInterior, openGunShop, gunShopFonts, GUNSHOP_TEXT };
 // 【效能】影子 2048（120 公尺見方，跟著鏡頭前面 35 公尺）；樹 200 公尺一格（看不到的不畫、遠的換 36 張卡片的）；
 //   草 16 公尺一格 7×7 格（每格 900 叢、換格每幀最多 2 格）；AO 用場景的深度（不用多畫一次場景）、半張大小
 
-const { createLook, LOOK_NAMES } = (() => {
-const LOOK_NAMES = ['順', '漂亮', '最真實'];
+const { createLook, LOOK_NAMES, lookCaps } = (() => {
+const LOOK_NAMES = ['普通', '高', '超高']; // 第 41 批：Nick「畫質直接改成 超高、高、普通」（以前 順／漂亮／最真實）
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // 光線（範例 2 號以後都一樣）
 const LT = { elev: 38, az: 233, turb: 6, ray: 1.3, mie: 0.004, exp: 0.45, sunI: 4.6, sunC: 0xfff0dc, envI: 0.3, hemiI: 0.12, hemiC: 0xdde6ef, hemiG: 0x474a3c, fog: 0xc3ccd3, gnd: 0x3c4235, cloud: 0.32, cden: 0.5 };
@@ -38052,6 +38057,7 @@ const TREE = [null, { cards: 110, cone: 8 }, { cards: 230, cone: 14 }], TREE_FAR
 const SHADOW = 2048, SH_R = 60, SH_AHEAD = 35;
 // 第 37 批（Nick 2026-10-25「漂亮那階不順 有些舊手機跑不太動」，選 1 2 3）：漂亮＝影子圖 1024、範圍 40 公尺（前面 22 公尺為中心）；最真實照舊
 const SHL = [null, { map: 1024, r: 40, ahead: 22, rad: 2 }, { map: 4096, r: 110, ahead: 60, rad: 3.5 }];
+const SHL_PHONE = { map: 2048, r: 60, ahead: 35, rad: 1 }; // 第 41 批：手機的最真實（跟第 38 批以前一樣）
 // 第 39 批（Nick 2026-10-25「做1234 只做在最真實」；最真實＝不管手機）：1 影子圖 4096、照 ±110 公尺（前面 60 公尺為中心）、邊邊柔一點（PCF 半徑 3.5）；手機畫不了 4096 就 2048
 const GC = 16, GN = 7, GPER = 900; // 草：一格幾公尺、幾格見方、一格最多幾叢
 const POST = { bloom: 0.07, bRad: 0.35, thr: 10, aoR: 2.2, aoS: 2.2, vig: 0.55, carEnv: 0.7, skyMax: 6 }; // 第 34 批 skyMax：看得到的天空最亮到幾（太陽的圓盤在 shader 裡是幾千、幾萬：光暈一糊整個畫面都白；夾住就只是一顆白太陽）
@@ -38078,9 +38084,9 @@ const ROADX = (cu) => `{ float rn = smoothstep(170.0, 20.0, vBD) * ${cu >= 0 ? `
         c *= 1.0 - (1.0 - paint) * crack * 0.55 * rn;
         float pat = bnoise(vBW * 0.09 + vec3(11.0)); c *= 1.0 + (1.0 - paint) * (step(0.64, pat) * -0.1 + 0.07 * (bnoise(vBW * 0.25) - 0.5)) * rn;
       } }`;
-const COLOR = (pbr, road) => `#include <color_fragment>
+const COLOR = (pbr, road, wall, lite) => `#include <color_fragment>
   { vec3 c = diffuseColor.rgb; float l = dot(c, vec3(0.299, 0.587, 0.114)), mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)), sat = (mx - mn) / max(mx, 1e-3);
-    float nr = smoothstep(140.0, 15.0, vBD), mid = smoothstep(500.0, 60.0, vBD);
+    float nr = ${lite ? '0.0' : 'smoothstep(140.0, 15.0, vBD)'}, mid = ${lite ? '0.0' : 'smoothstep(500.0, 60.0, vBD)'}; // 第 41 批：「高」不算地面的細花紋（手機省一點）
     float fine = 0.5, med = 0.5, pch = 0.5;
     if (nr > 0.0) fine = bnoise(vBW * 11.0) * 0.5 + bnoise(vBW * 31.0) * 0.5;
     if (mid > 0.0) { med = bnoise(vBW * 1.3); pch = bnoise(vBW * 0.11) * 0.65 + bnoise(vBW * 0.035) * 0.35; }
@@ -38102,11 +38108,11 @@ const COLOR = (pbr, road) => `#include <color_fragment>
       float near = smoothstep(260.0, 25.0, vBD);
       if (bUp * near > 0.0) { vec3 d = mix(mix(bDet(tCoA, vBW.xz, 2.2), bDet(tAsA, vBW.xz, 2.6), bA), bDet(tGrA, vBW.xz, 1.6), bG);
         c *= mix(vec3(1.0), vec3(1.0) + (d - 1.0) * ${f3(MB.pk)}, bUp * near); }
-      bW = (1.0 - smoothstep(0.35, 0.7, abs(nn.y))) * (1.0 - green) * smoothstep(90.0, 8.0, vBD); // 第 39 批 4：牆（直的面）：水泥的顆粒＋直直的髒水痕
+      ${wall ? `bW = (1.0 - smoothstep(0.35, 0.7, abs(nn.y))) * (1.0 - green) * smoothstep(90.0, 8.0, vBD); // 第 39 批 4：牆（直的面）：水泥的顆粒＋直直的髒水痕
       if (bW > 0.0) { bWuv = abs(nn.x) > abs(nn.z) ? vBW.zy : vBW.xy; vec3 d = bDet(tCoA, bWuv, ${f3(MB.wallS)});
         c *= mix(vec3(1.0), vec3(1.0) + (d - 1.0) * ${f3(MB.wallK)}, bW);
         float stk = bnoise(vec3(bWuv.x * 2.6, bWuv.y * 0.22, 3.7)) * 0.7 + bnoise(vec3(bWuv.x * 9.0, bWuv.y * 0.6, 1.3)) * 0.3;
-        c *= 1.0 - ${f3(MB.streak)} * bW * smoothstep(0.55, 0.85, stk); } }` : ''}
+        c *= 1.0 - ${f3(MB.streak)} * bW * smoothstep(0.55, 0.85, stk); }` : ''} }` : ''}
     ${road != null ? ROADX(road) : ''}
     diffuseColor.rgb = c; }`;
 // 5 號：地面（朝上的面）的凹凸＋山和草地大大小小的起伏
@@ -38157,14 +38163,23 @@ const FINAL = {
       vec2 u = (vUv - vec2(0.5)) * vec2(offset); gl_FragColor = vec4(mix(c.rgb, vec3(1.0 - darkness), dot(u, u)), 1.0); }`,
 };
 
+// 第 42 批（Nick 2026-10-25「在這個頁面就要可以改畫質」）：顯示晶片／手機的判斷搬出來：車庫頁（還沒做 createLook）也要知道沒選過的時候是哪一個
+function lookCaps(R) {
+  const gl = R.getContext();
+  const half = R.extensions.has('EXT_color_buffer_float') || R.extensions.has('EXT_color_buffer_half_float');
+  const mobile = (() => { try { const n = navigator, ua = String(n.userAgent || ''); return !!(n.userAgentData && n.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobile|BeauCarApp/i.test(ua) || (/Macintosh/.test(ua) && n.maxTouchPoints > 1); } catch { return false; } })(); // 第 39 批
+  const soft = (() => { try { const x = gl.getExtension('WEBGL_debug_renderer_info'); return /swiftshader|llvmpipe|software/i.test(String(gl.getParameter(x ? x.UNMASKED_RENDERER_WEBGL : gl.RENDERER))); } catch { return false; } })();
+  return { half, mobile, soft, pref: soft ? 0 : mobile ? 1 : half ? 2 : 1 };
+}
+
 function createLook(o) {
   const R = o.renderer, scene = o.scene, V = o.world, getCar = o.getCar || (() => null), plainOf = o.plain || (() => null), indoor = o.indoor || (() => false), nightCb = o.night || (() => {}), carDims = o.carDims || (() => null);
   const gl = R.getContext();
   const st = { calls: 0, tris: 0, ms: 0, maxMs: 0, crowns: 0, cells: 0, grass: 0, mats: 0, smooth: 0, prepMs: 0, texMs: 0, sets: 0 };
-  const half = R.extensions.has('EXT_color_buffer_float') || R.extensions.has('EXT_color_buffer_half_float');
-  const mobile = (() => { try { const n = navigator, ua = String(n.userAgent || ''); return !!(n.userAgentData && n.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobile|BeauCarApp/i.test(ua) || (/Macintosh/.test(ua) && n.maxTouchPoints > 1); } catch { return false; } })(); // 第 39 批
-  const soft = (() => { try { const x = gl.getExtension('WEBGL_debug_renderer_info'); return /swiftshader|llvmpipe|software/i.test(String(gl.getParameter(x ? x.UNMASKED_RENDERER_WEBGL : gl.RENDERER))); } catch { return false; } })();
+  const { half, mobile, soft } = lookCaps(R); // 第 42 批：搬到外面（車庫頁還沒出門也要知道沒選過的畫質）
   let LV = 0, busy = null, S0 = null, prepped = false;
+  // 第 41 批（Nick 2026-10-25「最真實好像超過我手機能耐了」）：最真實的第 39 批四樣（影子 4096、車子方塊反射、畫兩倍、牆的材質）只在電腦上；手機的最真實＝第 38 批以前的（影子 2048／60 公尺）
+  let MAX = !mobile;
   let dl = null, hemi = null; for (const c of scene.children) { if (!dl && c.isDirectionalLight) dl = c; if (!hemi && c.isHemisphereLight) hemi = c; }
   const skyM = scene.getObjectByName('sky');
   const sun = new THREE.Vector3(), EXP0 = R.toneMappingExposure;
@@ -38248,12 +38263,12 @@ function createLook(o) {
       if (pbr) { const T = TEX; Object.assign(sh.uniforms, { tAsA: { value: T.asA }, tAsN: { value: T.asN }, tGrA: { value: T.grA }, tGrN: { value: T.grN }, tCoA: { value: T.coA }, tCoN: { value: T.coN } }, WU); }
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VDECL).replace('#include <project_vertex>', VPOS);
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + VDECL + NOISE + (pbr ? PBRH + WETH : ''))
-        .replace('#include <color_fragment>', COLOR(pbr, road))
+        .replace('#include <color_fragment>', COLOR(pbr, road, pbr && MAX, LV === 1))
         .replace('#include <normal_fragment_maps>', pbr ? PBRN : '#include <normal_fragment_maps>')
-        .replace('#include <roughnessmap_fragment>', (pbr ? WETR : '#include <roughnessmap_fragment>') + '\nroughnessFactor = clamp(roughnessFactor * (0.85 + 0.3 * bnoise(vBW * 5.0)), 0.04, 1.0);')
+        .replace('#include <roughnessmap_fragment>', (pbr ? WETR : '#include <roughnessmap_fragment>') + (LV === 1 ? '' : '\nroughnessFactor = clamp(roughnessFactor * (0.85 + 0.3 * bnoise(vBW * 5.0)), 0.04, 1.0);'))
         .replace('#include <opaque_fragment>', pbr ? WETO : '#include <opaque_fragment>');
     };
-    m.customProgramCacheKey = function () { const rd = roadOf(this); return (key0 ? key0.call(this) : obc0 ? obc0.toString() : '') + '|lk' + LV + (pbrOk(this) ? 'p' : '') + (rd != null ? 'r' + rd : ''); };
+    m.customProgramCacheKey = function () { const rd = roadOf(this); return (key0 ? key0.call(this) : obc0 ? obc0.toString() : '') + '|lk' + LV + (pbrOk(this) ? (MAX ? 'px' : 'p') : '') + (rd != null ? 'r' + rd : ''); };
     m.needsUpdate = true; st.mats = MATS.size;
     if (m.emissiveMap && m.emissiveMap === m.map && m.emissiveIntensity < 0.5 && !SIGNS.has(m)) { SIGNS.set(m, m.emissiveIntensity); signK = -1; } // 招牌：晚上加亮
   }
@@ -38694,7 +38709,7 @@ function createLook(o) {
     for (let k = 0; k < CUBE.faces; k++) { const i = CUBE.face; R.setRenderTarget(CUBE.rt, i); const a = R.info.render.calls; r0(scene, CUBE.cam.children[i]); const b = R.info.render.calls; cs += b >= a ? b - a : b; CUBE.face = (i + 1) % 6; if (CUBE.face === 0) { CUBE.rt.texture.needsPMREMUpdate = true; CUBE.n++; } }
     R.setRenderTarget(prev); car.visible = vis; if (GR) GR.im.visible = gv; R.autoClear = ar; CUBE.calls = cs;
   }
-  const carEnvTex = () => (LV === 2 && CUBE.rt && CUBE.n > 0 ? CUBE.rt.texture : envTex); // 方塊畫好一輪以前先用天空的
+  const carEnvTex = () => (LV === 2 && MAX && CUBE.rt && CUBE.n > 0 ? CUBE.rt.texture : envTex); // 方塊畫好一輪以前先用天空的
 
   // ==== 5 號：車漆反射天空、透明漆 ====
   let carOn = null; const CARM = [];
@@ -38774,7 +38789,7 @@ function createLook(o) {
     }
   }
   function shadowCfg(lv) { // 第 37 批：影子圖多大、照多遠（漂亮小一點）；圖大小變了要重做
-    SH = SHL[lv] || SHL[2]; if (SH.map > R.capabilities.maxTextureSize) SH = { ...SH, map: Math.min(SH.map, R.capabilities.maxTextureSize) }; TEXEL = (SH.r * 2) / SH.map; if (!dl) return; dl.shadow.radius = SH.rad;
+    SH = lv === 2 && !MAX ? SHL_PHONE : SHL[lv] || SHL[2]; if (SH.map > R.capabilities.maxTextureSize) SH = { ...SH, map: Math.min(SH.map, R.capabilities.maxTextureSize) }; TEXEL = (SH.r * 2) / SH.map; if (!dl) return; dl.shadow.radius = SH.rad;
     if (dl.shadow.mapSize.x !== SH.map) { dl.shadow.mapSize.set(SH.map, SH.map); if (dl.shadow.map) { dl.shadow.map.dispose(); dl.shadow.map = null; } }
     Object.assign(dl.shadow.camera, { left: -SH.r, right: SH.r, top: SH.r, bottom: -SH.r, near: 100, far: 500 }); dl.shadow.camera.updateProjectionMatrix();
   }
@@ -38840,7 +38855,7 @@ function createLook(o) {
     lodStep(cam, false);
     scanStep(300, dt);
     lampStep(cam);
-    if (LV === 2) { if (GR) grassStep(cam); const car = getCar(); carEnv(car); if (car) { cubeStep(car); const ce = carEnvTex(); for (const c of CARM) if (c[0].envMap !== ce) c[0].envMap = ce; } } // 第 39 批：方塊反射
+    if (LV === 2) { if (GR) grassStep(cam); const car = getCar(); carEnv(car); if (car) { if (MAX) cubeStep(car); const ce = carEnvTex(); for (const c of CARM) if (c[0].envMap !== ce) c[0].envMap = ce; } } // 第 39 批：方塊反射
     const ms = performance.now() - t0; st.ms = st.ms * 0.95 + ms * 0.05; if (ms > st.maxMs) st.maxMs = ms;
   }
   let lastT = 0;
@@ -38855,11 +38870,11 @@ function createLook(o) {
     st.calls = R.info.render.calls; st.tris = R.info.render.triangles;
   };
   const API = {
-    get level() { return LV; },
+    get level() { return LV; }, get max() { return MAX; }, setMax(on) { MAX = !!on; shadowCfg(LV); for (const m of MATS) m.needsUpdate = true; }, // 第 41 批：最真實的重的四樣（電腦＝true、手機＝false；測試可以切）
     get busy() { return !!busy; },
     can: { post: half, soft },
     half,
-    pref: soft ? 0 : mobile ? 1 : half ? 2 : 1, // 沒有設定過：電腦模擬的（測試）＝順，手機＝漂亮（第 39 批：最真實不管手機，太重），電腦畫得了半精度＝最真實
+    pref: lookCaps(R).pref, // 沒有設定過：電腦模擬的（測試）＝順，手機＝漂亮（第 39 批：最真實不管手機，太重），電腦畫得了半精度＝最真實
     set, treeK, stats: st,
     get hour() { return hourNow(); }, hourAt, setHour(h) { hourOv = h == null ? null : clamp(+h, 0, 24) % 24; timeStep(); lampN = 0; }, get night() { return TD.lamp; }, get sun() { return TD.elev; }, // 第 30 批：一天的時間
     _tex: () => TEX, _td: () => TD,
@@ -38868,7 +38883,7 @@ function createLook(o) {
   };
   return API;
 }
-return { createLook, LOOK_NAMES };
+return { createLook, LOOK_NAMES, lookCaps };
 })();
 
 // ==== 第 4 批：越野車（offroad.js）：駕駛座視角、引擎聲接到車內（cabin.js）、引擎聲（sound.js）的表 ====
@@ -38981,13 +38996,13 @@ controls.target.set(0, 0.55, 0);
 
 let fitD = 7, bigCam = 1 /* 第 4 批：大車（怪獸卡車）鏡頭拉遠 bigCam 倍（showCar 設）*/;
 function camMax() { controls.maxDistance = fitD * 1.4; } // 鏡頭最遠（第 21 批：豪華車庫＝圓塔的大廳，鏡頭留在大廳裡面是 room.camClamp 管）
-let pxLow = false; // 第 37 批（Nick 2026-10-25「漂亮那階不順」）：出門、畫質「漂亮」＝畫的像素最多 70 萬（全螢幕、小畫面都是）；town.src.js pxStep 設、換了叫 resize()
+let pxLow = false; // 第 37 批（Nick 2026-10-25「漂亮那階不順」）：出門、畫質「漂亮」（第 41 批起叫「高」）＝畫的像素最多 50 萬（第 41 批：70 萬 → 50 萬）（全螢幕、小畫面都是）；town.src.js pxStep 設、換了叫 resize()
 let pxHigh = false; // 第 39 批（Nick「做1234 只做在最真實」3）：出門、畫質「最真實」＝畫 2 倍細（每邊 2 倍＝4 倍的點）再縮小給螢幕，最多 830 萬個點（4K）
 function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
   // 全螢幕（手機直拿 412×915 這種）：畫的像素最多大約 110 萬（以前開車 390×560 × 2 倍是 87 萬），不然手機畫不動；電腦的大視窗至少 1 倍
   if (pxHigh) renderer.setPixelRatio(Math.max(1, Math.min(2 * (window.devicePixelRatio || 1), Math.sqrt(8.3e6 / Math.max(1, w * h)))));
-  else renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1, pxLow ? Math.max(1, Math.sqrt(0.7e6 / Math.max(1, w * h))) : document.body.classList.contains('fs') ? Math.max(1, Math.sqrt(1.1e6 / Math.max(1, w * h))) : 2));
+  else renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1, pxLow ? Math.max(1, Math.sqrt(0.5e6 / Math.max(1, w * h))) : document.body.classList.contains('fs') ? Math.max(1, Math.sqrt(1.1e6 / Math.max(1, w * h))) : 2));
   renderer.setSize(w, h, false);
   if (room) room.resize();
   camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -40809,20 +40824,22 @@ for (const b of document.querySelectorAll('#tiltPop button')) b.addEventListener
 //   每支手機自己記（carid.look，跟按鈕大小一樣不用搬家、不上雲端）；沒選過：電腦模擬的（測試）＝順，畫得了半精度＝最真實，不然＝漂亮
 const LOOK_KEY = 'carid.look';
 const lookCar = () => ((DRIVE.on || RACE.on) && tripS?.car) || (RACE.on && S?.car) || null; // 車漆反射天空（最真實）：現在開的這台
-function lookPref() { let v = null; try { v = localStorage.getItem(LOOK_KEY); } catch {} return v === '0' || v === '1' || v === '2' ? +v : LOOK ? LOOK.pref : 0; }
-function lookBtns(lv) { for (const b of document.querySelectorAll('#lookPop button')) b.setAttribute('aria-pressed', String(+b.dataset.l === lv)); }
+// 第 42 批：還沒出門（LOOK 還沒做）也照 look.js 的判斷（lookCaps）給沒選過的畫質；車庫頁「出門」下面那一格（#lookRow）跟「⋯ → ✨」一起亮
+const LOOK_TIP = ['最順，舊手機也跑得動。', '漂亮，比較順。', '最漂亮，手機可能會卡。'];
+function lookPref() { let v = null; try { v = localStorage.getItem(LOOK_KEY); } catch {} if (v === '0' || v === '1' || v === '2') return +v; if (LOOK) return LOOK.pref; try { return lookCaps(renderer).pref; } catch { return 0; } }
+function lookBtns(lv) { for (const b of document.querySelectorAll('#lookPop button, #lookRow button')) b.setAttribute('aria-pressed', String(+b.dataset.l === lv)); $('lookTip').textContent = LOOK_TIP[lv] || ''; }
 async function lookSet(lv, tell) {
   if (!LOOK) return;
   crushFx?.restoreAll(); // 壓扁的樹先長回來（樹冠的三角形換來換去，頂點原本的位置要對）
-  if (tell && lv === 2 && LOOK.level !== 2) gtoast('畫質：最真實（準備中⋯）', 2400);
+  if (tell && lv === 2 && LOOK.level !== 2) gtoast('畫質：超高（準備中⋯）', 2400);
   const got = await LOOK.set(lv);
   lookBtns(got); if (MIR.on) mirrorSet(true); // 後照鏡的圖換精度
   if (tell) gtoast('畫質：' + LOOK_NAMES[got], 1400);
 }
 // 第 30 批（Nick 2026-10-24，卡片選「自動輪流」）：look.js 的一天（24 分鐘）；燈亮多少變了 → 完整的車（masks.js 的車漆 shader）、輕量車（路上的車、朋友的車）的大燈、尾燈一起亮
 // 第 37 批（Nick 2026-10-25「漂亮那階不順」，選 1 2 3）：出門＋漂亮＝畫的像素最多 70 萬（garage.src.html pxLow）；回車庫頁、換別的畫質就換回來
-// 第 39 批：出門＋最真實＝畫 2 倍細再縮小（garage.src.html pxHigh）
-function pxStep() { const lv = DRIVE.on && LOOK ? LOOK.level : 0, low = lv === 1, high = lv === 2; if (low !== pxLow || high !== pxHigh) { pxLow = low; pxHigh = high; resize(); } }
+// 第 39 批：出門＋最真實＝畫 2 倍細再縮小（garage.src.html pxHigh）；第 41 批：手機的超高不畫兩倍（LOOK.max）
+function pxStep() { const lv = DRIVE.on && LOOK ? LOOK.level : 0, low = lv === 1, high = lv === 2 && LOOK.max; if (low !== pxLow || high !== pxHigh) { pxLow = low; pxHigh = high; resize(); } }
 function lookNight(k) { PAINT_NIGHT.value = k; buildLodCar.night(k); } // 第 31 批：路上的車的燈也跟著 0–1 慢慢亮
 function lookOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); musOpen(false); } if (bodyFlags.lookopen === on) return; bodyFlag('lookopen', on); $('lookTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 lookBtns(lookPref());
@@ -40831,6 +40848,12 @@ for (const b of document.querySelectorAll('#lookPop button')) b.addEventListener
   const lv = +b.dataset.l; lookOpen(false); lookBtns(lv);
   try { localStorage.setItem(LOOK_KEY, String(lv)); } catch {}
   lookSet(lv, true);
+});
+// 第 42 批（Nick 2026-10-25「在這個頁面就要可以改畫質 剛剛開太高 結果現在可能跑不動 根本進不去遊戲」）：車庫頁就能換；還沒出門過＝記下來，出門的時候照這個做
+for (const b of document.querySelectorAll('#lookRow button')) b.addEventListener('click', () => {
+  const lv = +b.dataset.l; lookBtns(lv);
+  try { localStorage.setItem(LOOK_KEY, String(lv)); } catch {}
+  if (LOOK) lookSet(lv, true); else gtoast('畫質：' + LOOK_NAMES[lv], 1400);
 });
 // 跳燈（Nick 2026-10-17，草稿 https://claude.ai/artifact/NjStMe4AhSWuk9dBUELzde；popup.js）：86、R7 開車的時候「手煞車」旁邊多一顆「跳燈」（drive.js setPop）
 //   按一下燈蓋立起來、燈亮；再按一下收回去。每台車記在存檔 GAME.pop（{車: 1}）；借來的車不記（下次借又是關著的）。朋友看得到（netState 的 pl）
@@ -42402,7 +42425,7 @@ let MUS = null; // 第 34 批：背景音樂（sound.js music）：跟環境聲�
 // 第 35 批（Nick 2026-10-24「做背景音樂開關 不用畫圖 直接做」）：「⋯」打開那一排 ⋯ 下面多一顆「🎵」，按一下關（變灰）、再按開；每支手機自己記（carid.music，不搬家、不上雲端）；音樂還是跟著「聲音」總開關
 const MUS_KEY = 'carid.music';
 // 第 39 批（Nick 2026-10-25「背景音樂可以調音量」，草稿說好）：按 🎵 出現「背景音樂 關 小 中 大」；中＝原本的音量，小一半，大 1.6 倍；舊的 'on'＝中
-const MUS_LV = { off: 0, s: 0.45, m: 1, l: 1.6 };
+const MUS_LV = { off: 0, s: 1, m: 1.6, l: 2.4 }; // 第 41 批（Nick「音樂把直接全部往上升一級」）：小＝以前的中、中＝以前的大、大更大聲（以前 0.45／1／1.6）
 let musV = 'm';
 // 第 36 批（Nick 2026-10-25「開車跟走路音樂換一下」）：開車放賽車感的那首（'drive'）、走路（房子裡也是）放輕鬆的那首（'walk'）；換了在下一小節生效（sound.js）
 function musLevel() { if (MUS) MUS.set({ level: MUS_LV[musV] * (indoor ? 0.35 : 1), style: walker && walker.mode !== 'off' ? 'walk' : 'drive' }); }
@@ -44366,7 +44389,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 23; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 24; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -44420,7 +44443,7 @@ renderer.setAnimationLoop((now) => {
   async function checkAppUpdate() {
     const mine = apkBuild();
     if (mine === null || apkAsking) return; // 不在 App 裡不用查
-    if (Date.now() - Number(lsGet(APK_SEEN) || 0) < 60 * 60 * 1000) return; // 一小時查一次（GitHub 的匿名 API 有次數限制）
+    if (Date.now() - Number(lsGet(APK_SEEN) || 0) < 10 * 60 * 1000) return; // 10 分鐘查一次（GitHub 的匿名 API 一小時 60 次；Nick 2026-10-25 等不到更新條，以前一小時）
     let latest;
     apkAsking = true;
     try {

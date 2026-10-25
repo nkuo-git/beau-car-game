@@ -33,7 +33,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="./game.css?v=23">
+<link rel="stylesheet" href="./game.css?v=24">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"}}</script>
 </head>
 <body>
@@ -97,7 +97,7 @@
       <button type="button" class="tilttog" id="tiltTog" aria-expanded="false" aria-label="方向盤">🎮</button>
       <div class="tiltpop" id="tiltPop" role="group" aria-label="方向盤"><span>方向盤</span><button type="button" data-t="btn">按鈕 ⬅➡</button><button type="button" data-t="tilt">轉手機 📱</button></div>
       <button type="button" class="looktog" id="lookTog" aria-expanded="false" aria-label="畫質">✨</button>
-      <div class="lookpop" id="lookPop" role="group" aria-label="畫質"><span>畫質</span><button type="button" data-l="2">最真實</button><button type="button" data-l="1">漂亮</button><button type="button" data-l="0">順</button></div>
+      <div class="lookpop" id="lookPop" role="group" aria-label="畫質"><span>畫質</span><button type="button" data-l="2">超高</button><button type="button" data-l="1">高</button><button type="button" data-l="0">普通</button></div>
       <button type="button" class="mustog" id="musTog" aria-pressed="true" aria-expanded="false" aria-label="背景音樂">🎵</button>
       <div class="muspop" id="musPop" role="group" aria-label="背景音樂"><span>背景音樂</span><button type="button" data-v="off">關</button><button type="button" data-v="s">小</button><button type="button" data-v="m">中</button><button type="button" data-v="l">大</button></div>
       <div class="dests" id="dests" role="group" aria-label="要去哪裡"><button type="button" data-d="shop" aria-pressed="false">去改車廠</button><button type="button" data-d="dealer" aria-pressed="false">去車店</button><button type="button" data-d="circuit" aria-pressed="false">去賽車場</button><button type="button" data-d="highway" aria-pressed="false">去快速道路</button><button type="button" data-d="offroad" aria-pressed="false">去越野車場</button><button type="button" data-d="neihu" aria-pressed="false">去內湖</button><button type="button" data-d="mountain" aria-pressed="false">去山頂</button><button type="button" data-d="garage" aria-pressed="false">回車庫</button></div>
@@ -124,6 +124,7 @@
     <div class="name"><b id="carName">Toyota Supra</b><span id="carSub">玩命關頭那台 · 3D 試做版</span></div>
     <p class="spec" id="carSpec"></p>
     <button type="button" class="cta" id="driveOut"><b>出門</b><span>走去坐上車，開鐵捲門開出去：改車廠、車店、賽車場、快速道路、越野車場</span></button>
+    <div class="lookrow" id="lookRow"><div class="lr-top"><b>畫質</b><span>出門的畫面</span></div><div class="lr-seg" role="group" aria-label="畫質"><button type="button" data-l="2" aria-pressed="false">超高</button><button type="button" data-l="1" aria-pressed="false">高</button><button type="button" data-l="0" aria-pressed="false">普通</button></div><p class="lr-tip" id="lookTip"></p></div>
     <button type="button" class="cta alt" id="lookBtn"><b>自訂角色</b><span>你自己的樣子：性別、髮型、衣服、帽子⋯ 出門走路就是這個樣子</span></button>
     <button type="button" class="cta buy" id="buyCar" hidden><b id="buyHead">買這台</b><span id="buyNote"></span></button>
     <p class="locknote" id="lockNote" hidden>這台還不是你的：買了才能改裝、開出門。</p>
@@ -274,6 +275,6 @@
   </div>
 </div>
 
-<script type="module" src="./game.js?v=23"></script>
+<script type="module" src="./game.js?v=24"></script>
 </body>
 </html>
