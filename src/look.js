@@ -33,7 +33,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
-export const { createLook, LOOK_NAMES } = (() => {
+export const { createLook, LOOK_NAMES, lookCaps } = (() => {
 const LOOK_NAMES = ['普通', '高', '超高']; // 第 41 批：Nick「畫質直接改成 超高、高、普通」（以前 順／漂亮／最真實）
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // 光線（範例 2 號以後都一樣）
@@ -160,13 +160,20 @@ const FINAL = {
       vec2 u = (vUv - vec2(0.5)) * vec2(offset); gl_FragColor = vec4(mix(c.rgb, vec3(1.0 - darkness), dot(u, u)), 1.0); }`,
 };
 
+// 第 42 批（Nick 2026-10-25「在這個頁面就要可以改畫質」）：顯示晶片／手機的判斷搬出來：車庫頁（還沒做 createLook）也要知道沒選過的時候是哪一個
+function lookCaps(R) {
+  const gl = R.getContext();
+  const half = R.extensions.has('EXT_color_buffer_float') || R.extensions.has('EXT_color_buffer_half_float');
+  const mobile = (() => { try { const n = navigator, ua = String(n.userAgent || ''); return !!(n.userAgentData && n.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobile|BeauCarApp/i.test(ua) || (/Macintosh/.test(ua) && n.maxTouchPoints > 1); } catch { return false; } })(); // 第 39 批
+  const soft = (() => { try { const x = gl.getExtension('WEBGL_debug_renderer_info'); return /swiftshader|llvmpipe|software/i.test(String(gl.getParameter(x ? x.UNMASKED_RENDERER_WEBGL : gl.RENDERER))); } catch { return false; } })();
+  return { half, mobile, soft, pref: soft ? 0 : mobile ? 1 : half ? 2 : 1 };
+}
+
 function createLook(o) {
   const R = o.renderer, scene = o.scene, V = o.world, getCar = o.getCar || (() => null), plainOf = o.plain || (() => null), indoor = o.indoor || (() => false), nightCb = o.night || (() => {}), carDims = o.carDims || (() => null);
   const gl = R.getContext();
   const st = { calls: 0, tris: 0, ms: 0, maxMs: 0, crowns: 0, cells: 0, grass: 0, mats: 0, smooth: 0, prepMs: 0, texMs: 0, sets: 0 };
-  const half = R.extensions.has('EXT_color_buffer_float') || R.extensions.has('EXT_color_buffer_half_float');
-  const mobile = (() => { try { const n = navigator, ua = String(n.userAgent || ''); return !!(n.userAgentData && n.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobile|BeauCarApp/i.test(ua) || (/Macintosh/.test(ua) && n.maxTouchPoints > 1); } catch { return false; } })(); // 第 39 批
-  const soft = (() => { try { const x = gl.getExtension('WEBGL_debug_renderer_info'); return /swiftshader|llvmpipe|software/i.test(String(gl.getParameter(x ? x.UNMASKED_RENDERER_WEBGL : gl.RENDERER))); } catch { return false; } })();
+  const { half, mobile, soft } = lookCaps(R); // 第 42 批：搬到外面（車庫頁還沒出門也要知道沒選過的畫質）
   let LV = 0, busy = null, S0 = null, prepped = false;
   // 第 41 批（Nick 2026-10-25「最真實好像超過我手機能耐了」）：最真實的第 39 批四樣（影子 4096、車子方塊反射、畫兩倍、牆的材質）只在電腦上；手機的最真實＝第 38 批以前的（影子 2048／60 公尺）
   let MAX = !mobile;
@@ -864,7 +871,7 @@ function createLook(o) {
     get busy() { return !!busy; },
     can: { post: half, soft },
     half,
-    pref: soft ? 0 : mobile ? 1 : half ? 2 : 1, // 沒有設定過：電腦模擬的（測試）＝順，手機＝漂亮（第 39 批：最真實不管手機，太重），電腦畫得了半精度＝最真實
+    pref: lookCaps(R).pref, // 沒有設定過：電腦模擬的（測試）＝順，手機＝漂亮（第 39 批：最真實不管手機，太重），電腦畫得了半精度＝最真實
     set, treeK, stats: st,
     get hour() { return hourNow(); }, hourAt, setHour(h) { hourOv = h == null ? null : clamp(+h, 0, 24) % 24; timeStep(); lampN = 0; }, get night() { return TD.lamp; }, get sun() { return TD.elev; }, // 第 30 批：一天的時間
     _tex: () => TEX, _td: () => TD,
@@ -873,5 +880,5 @@ function createLook(o) {
   };
   return API;
 }
-return { createLook, LOOK_NAMES };
+return { createLook, LOOK_NAMES, lookCaps };
 })();

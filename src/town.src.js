@@ -554,8 +554,10 @@ for (const b of document.querySelectorAll('#tiltPop button')) b.addEventListener
 //   每支手機自己記（carid.look，跟按鈕大小一樣不用搬家、不上雲端）；沒選過：電腦模擬的（測試）＝順，畫得了半精度＝最真實，不然＝漂亮
 const LOOK_KEY = 'carid.look';
 const lookCar = () => ((DRIVE.on || RACE.on) && tripS?.car) || (RACE.on && S?.car) || null; // 車漆反射天空（最真實）：現在開的這台
-function lookPref() { let v = null; try { v = localStorage.getItem(LOOK_KEY); } catch {} return v === '0' || v === '1' || v === '2' ? +v : LOOK ? LOOK.pref : 0; }
-function lookBtns(lv) { for (const b of document.querySelectorAll('#lookPop button')) b.setAttribute('aria-pressed', String(+b.dataset.l === lv)); }
+// 第 42 批：還沒出門（LOOK 還沒做）也照 look.js 的判斷（lookCaps）給沒選過的畫質；車庫頁「出門」下面那一格（#lookRow）跟「⋯ → ✨」一起亮
+const LOOK_TIP = ['最順，舊手機也跑得動。', '漂亮，比較順。', '最漂亮，手機可能會卡。'];
+function lookPref() { let v = null; try { v = localStorage.getItem(LOOK_KEY); } catch {} if (v === '0' || v === '1' || v === '2') return +v; if (LOOK) return LOOK.pref; try { return lookCaps(renderer).pref; } catch { return 0; } }
+function lookBtns(lv) { for (const b of document.querySelectorAll('#lookPop button, #lookRow button')) b.setAttribute('aria-pressed', String(+b.dataset.l === lv)); $('lookTip').textContent = LOOK_TIP[lv] || ''; }
 async function lookSet(lv, tell) {
   if (!LOOK) return;
   crushFx?.restoreAll(); // 壓扁的樹先長回來（樹冠的三角形換來換去，頂點原本的位置要對）
@@ -576,6 +578,12 @@ for (const b of document.querySelectorAll('#lookPop button')) b.addEventListener
   const lv = +b.dataset.l; lookOpen(false); lookBtns(lv);
   try { localStorage.setItem(LOOK_KEY, String(lv)); } catch {}
   lookSet(lv, true);
+});
+// 第 42 批（Nick 2026-10-25「在這個頁面就要可以改畫質 剛剛開太高 結果現在可能跑不動 根本進不去遊戲」）：車庫頁就能換；還沒出門過＝記下來，出門的時候照這個做
+for (const b of document.querySelectorAll('#lookRow button')) b.addEventListener('click', () => {
+  const lv = +b.dataset.l; lookBtns(lv);
+  try { localStorage.setItem(LOOK_KEY, String(lv)); } catch {}
+  if (LOOK) lookSet(lv, true); else gtoast('畫質：' + LOOK_NAMES[lv], 1400);
 });
 // 跳燈（Nick 2026-10-17，草稿 https://claude.ai/artifact/NjStMe4AhSWuk9dBUELzde；popup.js）：86、R7 開車的時候「手煞車」旁邊多一顆「跳燈」（drive.js setPop）
 //   按一下燈蓋立起來、燈亮；再按一下收回去。每台車記在存檔 GAME.pop（{車: 1}）；借來的車不記（下次借又是關著的）。朋友看得到（netState 的 pl）

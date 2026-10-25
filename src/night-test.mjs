@@ -77,7 +77,20 @@ const helpers = () => p.evaluate(() => {
 
 await p.goto(base, { waitUntil: 'domcontentloaded' });
 await ready();
+// ---- 0 第 42 批（Nick「在這個頁面就要可以改畫質」）：車庫頁「出門」下面那一格：還沒出門就能選（記下來，出門照這個做）----
+const rowSt = () => p.evaluate(() => { const r = document.getElementById('lookRow'), q = (s) => [...document.querySelectorAll(s + ' button')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.dataset.l).join(',');
+  let v = null; try { v = localStorage.getItem('carid.look'); } catch {} return { vis: !!r && r.offsetParent !== null && r.getBoundingClientRect().height > 40, row: q('#lookRow'), pop: q('#lookPop'), tip: document.getElementById('lookTip').textContent, v, toast: document.getElementById('gtoast').textContent, look: !!window.__D().LOOK }; });
+const r0 = await rowSt();
+await p.evaluate(() => document.querySelector('#lookRow button[data-l="1"]').click());
+const r1 = await rowSt();
+await p.evaluate(() => document.querySelector('#lookRow button[data-l="0"]').click());
+const r2 = await rowSt();
+console.log('0 lookRow', JSON.stringify({ r0, r1, r2 }));
+check(r0.vis && !r0.look && r0.row === '0' && r0.pop === '0' && r0.v === null && /最順/.test(r0.tip) && r1.row === '1' && r1.pop === '1' && r1.v === '1' && /高/.test(r1.toast) && /漂亮/.test(r1.tip) && r2.row === '0' && r2.v === '0',
+  `第 42 批: the garage page shows 畫質 超高／高／普通 before going out (never chosen on a software GPU = 普通 ${r0.row}); tapping 高 saves ${r1.v} and lights both rows; back to 普通 saves ${r2.v}`);
 const g1 = await goOut();
+const r3 = await rowSt();
+check(!r3.vis && r3.look && r3.row === '0' && r3.pop === '0', `第 42 批: the garage-page 畫質 row is hidden while out, the trip used the saved choice (LOOK built, level row ${r3.row})`);
 console.log('out', el(), JSON.stringify(g1));
 await p.evaluate(() => { window.__hold = true; window.__noDraw = true; });
 await helpers();
@@ -196,6 +209,14 @@ const dk = await p.evaluate(() => { const L = window.__D().LOOK, el = (h) => 55 
   for (let ms = 0; ms < 12 * 60000; ms += 250) { const h = L.hourAt(ms), e = el(h); if (h > 12 && h < 24 && a === null && e < 8) a = ms; if (h > 12 && a !== null && b === null && e < -10) b = ms; if (h >= 6 && h < 18) day += 250; }
   return { dusk: (b - a) / 1000, day: day / 60000, h6: +L.hourAt(3 * 60000).toFixed(3), h18: +L.hourAt(9 * 60000).toFixed(3), h12: +L.hourAt(6 * 60000).toFixed(3) }; });
 check(dk.dusk > 80 && dk.dusk < 120 && Math.abs(dk.day - 6) < 0.02 && dk.h6 === 6 && dk.h18 === 18 && dk.h12 === 12, `第 40 批: dusk (sun 8° → full night) takes ${dk.dusk} s of real time (was ≈ 37 s); daytime still ${dk.day} min of the 12; 3/6/9 min = ${dk.h6}/${dk.h12}/${dk.h18} h`);
+// ---- 8 第 42 批：回車庫頁（畫質已經做好了）再從那一格換：馬上換，出門就是那個 ----
+await p.evaluate(() => { window.__hold = false; window.__noDraw = false; document.getElementById('driveHome').click(); });
+await p.waitForFunction(() => !window.__D().on && document.getElementById('lookRow').offsetParent !== null, null, { timeout: 60000 });
+await p.evaluate(() => document.querySelector('#lookRow button[data-l="1"]').click());
+await p.waitForFunction(() => window.__D().LOOK.level === 1 && !window.__D().LOOK.busy, null, { timeout: 120000 });
+const r4 = await rowSt();
+console.log('8 lookRow home', JSON.stringify(r4));
+check(r4.vis && r4.row === '1' && r4.pop === '1' && r4.v === '1', `第 42 批: back on the garage page the row switches the built look right away (level 1, saved ${r4.v}, ✨ row matches)`);
 // ---- 效能 ----
 console.log('perf', JSON.stringify(perf));
 console.log(`\n${ok} ok, ${bad} failed, ${errs.length} page errors${errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''}`);

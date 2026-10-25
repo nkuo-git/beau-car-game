@@ -225,3 +225,13 @@ Same batch: site.js checks GitHub for a new APK every 10 minutes instead of ever
 Also batch 41 (same afternoon, Nick 「漂亮的畫質可以再略降一點／畫質直接改成 超高、高、普通」):
 - Names: 順 / 漂亮 / 最真實 → **普通 / 高 / 超高** (look.js `LOOK_NAMES`, the ✨ menu buttons, the toast). Code and notes still say LV 0/1/2.
 - 高 (LV 1) lighter: pixel cap 0.7 M → 0.5 M (garage.src.html `pxLow`; never below 1 css px), and `COLOR(..., lite)` skips the fine/medium ground noise and the roughness noise at LV 1 (tint, desaturation and leaf cards stay).
+
+## Batch 42 (2026-10-25, trial v56): pick 畫質 on the garage page
+
+Nick: 「在這個頁面就要可以改畫質 剛剛開太高 結果現在可能跑不動 根本進不去遊戲」 (screenshot of the garage page). Mock https://claude.ai/artifact/TLQFrSZLr8ANofjVMfnZsT.
+
+- garage.src.html `#lookRow` under 出門: 畫質 超高／高／普通 + one tip line (`#lookTip`); hidden while driving or racing (garage.css).
+- Same setting as ⋯ → ✨ (`carid.look`); `lookBtns` lights both rows.
+- Before the first trip LOOK does not exist yet: the tap only saves the choice, and the trip builds that level. The never-chosen default comes from `lookCaps(renderer).pref` (look.js; the GPU and phone detection moved out of `createLook`).
+- After a trip LOOK exists: the tap calls `lookSet(lv, true)` straight away.
+- night-test sections 0 and 8 cover it.
