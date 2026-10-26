@@ -13,7 +13,7 @@
 //   10 參觀車庫（名單上 🚗）
 //   11 離開世界、斷線（自己再進去）、滿了（16 個人）、斷線沒收好的人被清掉、重新打開遊戲自己進去
 //   7c 第 22 批：A 開車撞追 B 的警車（B 那邊那台被撞開、暈一下，B 看到「💥 …撞開了追你的警車！」，A 不會被通緝）；B 被關 → A 走進警察局看得到 B 關在拘留室（鐵門關著），走出來看得到 B 的車停在警察局的停車場
-//   8b 借車（第 19 批）：A 下車車停著（B 看得到）→ B「🔑 借車」打錯密碼、錯 3 次鎖 30 秒、A 改密碼 → 對了上車開 A 的車（A 的顏色）→ 下車＝還車（停在新的地方）；再借、A 按「拿回來」；存檔還是 B 自己的
+//   8b 借車（第 19 批）：A 下車車停著（B 看得到）→ B「🔑 借車」打錯密碼、錯 3 次鎖 30 秒、A 改密碼 → 對了上車開 A 的車（A 的顏色）→ 下車＝還車（停在新的地方）；再借、A 回車庫頁＝拿回來（第 45 批：上面那一條拿掉了）；存檔還是 B 自己的
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -606,11 +606,11 @@ await click(B, '.nt-key');
 await pad(B, '4821');
 const on8 = await waitFor(B, () => { const b = window.beauGame.net.info.bor; return b.on && b.on.uid === 'u1' && window.__D().drv && window.__D().walker.mode === 'off'; }, null, 120000);
 if (!on8) console.log('   borrow failed', await diag(), JSON.stringify(getAt('borrow')));
-const b8 = await B.evaluate(() => { const D = window.__D(); window.beauGame.net.setKey(window.beauGame.net.key()); /* 存一次檔 */ return { cur: D.cur, paint: window.__CARS()[D.cur].state.paint, bar: window.beauGame.net.info.bor.bar, btn: document.querySelector('.nt-bor button').textContent, saved: JSON.parse(localStorage.getItem('carid.tune')) }; });
-const a8 = await waitFor(A, () => { const b = window.beauGame.net.info.bor; return b.lent && b.lent.uid === 'u2'; }, null, 10000) && await A.evaluate(() => ({ LENT: window.__TOWN().LENT_K, bar: window.beauGame.net.info.bor.bar, btn: document.querySelector('.nt-bor button').textContent, pk: window.beauGame.net.state().pk }));
+const b8 = await B.evaluate(() => { const D = window.__D(); window.beauGame.net.setKey(window.beauGame.net.key()); /* 存一次檔 */ return { cur: D.cur, paint: window.__CARS()[D.cur].state.paint, bars: document.querySelectorAll('.nt-bor').length, toast: document.querySelector('#stage .dv-toast.show')?.textContent || '', saved: JSON.parse(localStorage.getItem('carid.tune')) }; });
+const a8 = await waitFor(A, () => { const b = window.beauGame.net.info.bor; return b.lent && b.lent.uid === 'u2'; }, null, 10000) && await A.evaluate(() => ({ LENT: window.__TOWN().LENT_K, bars: document.querySelectorAll('.nt-bor').length, toast: [...document.querySelectorAll('#stage .wk-toast, #stage .dv-toast')].map((e) => e.textContent).join(' | '), pk: window.beauGame.net.state().pk }));
 console.log('   borrowed', on8, JSON.stringify({ ...b8, saved: undefined }), JSON.stringify(a8));
-check(on8 && b8.cur === k8 && b8.paint === paint8.p && /^🔑 借來的車 · 大便龍車神的 /.test(b8.bar) && b8.btn === '還車', `right code → B walks to the door, gets in and drives A’s car in A’s colour (${b8.paint}); bar 「${b8.bar}」 + 還車`);
-check(a8 && a8.LENT === k8 && /^🔑 阿明快車手在開你的 /.test(a8.bar) && a8.btn === '拿回來' && !a8.pk, `A: the car is hidden and lent: 「${a8 && a8.bar}」 + 拿回來`);
+check(on8 && b8.cur === k8 && b8.paint === paint8.p && b8.bars === 0 && /開大便龍車神的 .*：下車就還給他/.test(b8.toast), `right code → B walks to the door, gets in and drives A’s car in A’s colour (${b8.paint}); 「${b8.toast}」, no bar on top (第 45 批)`);
+check(a8 && a8.LENT === k8 && a8.bars === 0 && /🔑 阿明快車手借走你的 .* 了（回車庫就拿回來）/.test(a8.toast) && !a8.pk, `A: the car is hidden and lent: 「${a8 && a8.toast}」, no bar on top (第 45 批)`);
 check(b8.saved.cur === bOwn.saved.cur && JSON.stringify(b8.saved.cars) === JSON.stringify(bOwn.saved.cars) && JSON.stringify(b8.saved.parts) === JSON.stringify(bOwn.saved.parts), 'B’s save still has B’s own car, colours and parts (borrowed car not saved)');
 await shot(B, `${prefix}-8b-driving.png`);
 const seen8 = await waitFor(A, (p) => { const q = window.beauGame.net.info.peers.find((x) => x.uid === 'u2'); return q && q.car && q.vis && q.paint === p; }, paint8.p, 30000);
@@ -622,14 +622,14 @@ await closeDlg(B);
 const drove = await B.evaluate(() => { const D = window.__D(), t0 = D.drv.telemetry(); D.drv.setInput({ throttle: 0.6, brake: 0, steer: 0.2 }); for (let i = 0; i < 150; i++) window.__dstep(1); D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); for (let i = 0; i < 300 && Math.abs(D.drv.telemetry().v) > 0.3; i++) window.__dstep(1); D.drv.setInput(null); const t = D.drv.telemetry(); return { d: Math.hypot(t.x - t0.x, t.z - t0.z), x: t.x, z: t.z, h: t.heading }; });
 await B.evaluate(() => { window.__TOWN().leaveCar(); for (let i = 0; i < 150 && window.__D().walker.mode !== 'walk'; i++) window.__dstep(1); window.__dstep(3); });
 const back8 = await waitFor(A, () => !window.beauGame.net.info.bor.lent && !window.__TOWN().LENT_K, null, 15000);
-const r8 = await A.evaluate(() => { const T = window.__TOWN(), p = T.tripPose[window.__D().cur]; return { p, bar: window.beauGame.net.info.bor.bar }; });
+const r8 = await A.evaluate(() => { const T = window.__TOWN(), p = T.tripPose[window.__D().cur]; return { p }; });
 const bb8 = await B.evaluate(() => { const D = window.__D(); return { on: window.beauGame.net.info.bor.on, cur: D.cur, gc8: window.__CARS().gc8.state.paint, paint: window.__CARS()[D.cur].state.paint, mode: D.walker.mode, BK: window.__TOWN().BORROW_K, parts: JSON.stringify(window.__GAME().parts) }; });
 console.log('   returned', JSON.stringify(drove), JSON.stringify(r8), JSON.stringify(bb8));
-check(drove.d > 5 && back8 && Math.hypot(r8.p.x - drove.x, r8.p.z - drove.z) < 1.5 && !r8.bar, `B drove ${drove.d.toFixed(0)} m and got out = returned: A’s car is parked where B left it`);
+check(drove.d > 5 && back8 && Math.hypot(r8.p.x - drove.x, r8.p.z - drove.z) < 1.5, `B drove ${drove.d.toFixed(0)} m and got out = returned: A’s car is parked where B left it`);
 check(!bb8.on && !bb8.BK && bb8.mode === 'walk' && bb8.cur === bOwn.cur && bb8.gc8 === bOwn.gc8 && bb8.parts === bOwn.parts, 'B is back to B’s own car (own colour, parts)');
 const again8 = await waitFor(B, () => { const q = window.beauGame.net.info.peers.find((x) => x.uid === 'u1'); return q && q.park; }, null, 15000);
 check(again8, 'B sees A’s car parked at the new place');
-// 再借一次，A 按「拿回來」
+// 再借一次，A 回車庫頁＝拿回來（第 45 批：上面那條「拿回來」拿掉了）
 // B 還站在剛剛下車的地方（車門旁邊；另一邊可能靠著牆）
 await waitFor(B, () => window.beauGame.net.info.bor.near === 'u1', null, 15000);
 await click(B, '.nt-key'); await pad(B, '4821');
@@ -640,17 +640,24 @@ await B.evaluate(() => { const D = window.__D(); D.drv.setInput({ throttle: 0.5,
 await A.waitForTimeout(1500);
 const bPos = await B.evaluate(() => { const t = window.__D().drv.telemetry(); return { x: t.x, z: t.z }; });
 await waitFor(A, () => window.beauGame.net.info.bor.lent, null, 10000);
-await click(A, '.nt-bor button');
+await A.evaluate(() => document.getElementById('driveHome').click());
+const home8 = await waitFor(A, () => !window.__D().trip && document.getElementById('status').hidden, null, 30000);
 const took = await waitFor(B, () => !window.beauGame.net.info.bor.on && window.__D().walker.mode === 'walk', null, 15000);
-const tk = await B.evaluate(() => ({ toast: document.querySelector('#stage .wk-toast, #stage .dv-toast.show')?.textContent || '', cur: window.__D().cur, t: window.__D().walker.telemetry() }));
-const ap = await A.evaluate(() => ({ lent: window.beauGame.net.info.bor.lent, p: window.__TOWN().tripPose[window.__D().cur] }));
-console.log('   took back', took, JSON.stringify(tk), JSON.stringify(ap), JSON.stringify(bPos));
-check(took && !ap.lent && Math.hypot(ap.p.x - bPos.x, ap.p.z - bPos.z) < 3 && Math.hypot(tk.t.x - bPos.x, tk.t.z - bPos.z) < 4, '拿回來 while B drives: B is put on the street next to the car, A’s car stays where B stopped');
-// A 把車開回來（後面的測試要 A 在開車）
+const tk = await B.evaluate(() => ({ toast: [...document.querySelectorAll('#stage .wk-toast, #stage .dv-toast')].map((e) => e.textContent).join(' | '), cur: window.__D().cur, t: window.__D().walker.telemetry() }));
+const ap = await A.evaluate(() => ({ lent: window.beauGame.net.info.bor.lent, LENT: window.__TOWN().LENT_K }));
+console.log('   took back', home8, took, JSON.stringify(tk), JSON.stringify(ap), JSON.stringify(bPos));
+check(home8 && took && !ap.lent && !ap.LENT && Math.hypot(tk.t.x - bPos.x, tk.t.z - bPos.z) < 4 && /大便龍車神把車拿回去了/.test(tk.toast), `A goes home while B drives = takes it back: B is put on the street next to the car (「${tk.toast}」)`);
+// A 再出門、坐上車（後面的測試要 A 在開車）
 await A.evaluate((o) => { window.__CARS()[window.__D().cur].state.paint = o; }, paint8.old);
-const reA = await A.evaluate(() => { const D = window.__D(), p = window.__TOWN().tripPose[D.cur]; D.walker.teleport({ x: p.x + Math.sin(p.heading) * 2.3, z: p.z + Math.cos(p.heading) * 2.3, heading: p.heading }); window.__dstep(2); return D.walker.getIn(); });
+await click(A, '#driveOut');
+const out8 = await waitFor(A, () => window.__D().trip && window.__D().on && window.__D().walker, null, 240000);
+// 車停在圓塔一樓的電梯圓台上：站到車門旁邊（看得到「上車」那一邊）再上車
+const reA = out8 && await A.evaluate(() => { const D = window.__D(), W = D.walker, q = window.__TOWN().tripPose[D.cur], s = Math.cos(q.heading), c = -Math.sin(q.heading); window.__dstep(20); let a = null;
+  for (const d of [2.0, 2.6, 1.5, 3.2]) { for (const sd of [1, -1]) { W.teleport({ x: q.x + s * d * sd, z: q.z + c * d * sd, heading: q.heading + sd * Math.PI / 2 }); window.__dstep(12); a = W.action; if (a && a.indexOf('上車') === 0) break; a = null; } if (a) break; }
+  const ok = W.getIn(); return ok ? true : { a, mode: W.mode, q, t: W.telemetry() }; });
+if (reA !== true) console.log('   A get-in failed', out8, JSON.stringify(reA));
 const drA = await waitFor(A, () => window.__D().drv && window.__D().walker.mode === 'off' && !window.__D().drv.telemetry().paused, null, 120000);
-check(reA && drA, 'A gets back in and drives on');
+check(reA === true && drA, 'A gets back in and drives on');
 
 // ---- 9 車庫街：名牌；開進朋友的車庫（第 23 批：Nick 2026-10-18「可以開進別人的車庫」，卡片選「按門鈴」）----
 const st9 = await info(A);

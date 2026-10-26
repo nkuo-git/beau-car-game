@@ -790,8 +790,9 @@ function netDragDrop(Rc) { // exitRace：朋友的車收掉
 // 借的人：走到朋友停著的車旁邊 →「🔑 借車 · 小明的 GT-R」→ 數字鍵盤打 4 個數字 → 網站送給車主的手機，車主那邊對密碼（錯 3 次要等 30 秒）
 //   → 對了：車主那邊把車藏起來，回車子的樣子、零件、輪胎、停的位置 → 走去車門坐進去（walk.js getIn）→ 開的是朋友的車（他的顏色、零件）
 //   存檔還是你自己的（saveFix）；不能改裝、不能在車行買車、不能比直線加速、不能找人比賽（town.src.js 看 BORROW_K、網站看 borrowing()）
-//   下車＝還車（停在你下車的地方）；車主按「拿回來」、車主離開世界、你回車庫頁：也還（你在開的話，人站到車子旁邊）
-// 車主那邊：借出去的那台藏起來、不能上（LENT_K）；上面一條「🔑 阿龍在開你的 GT-R  拿回來」；還回來＝停在他下車的地方（輕量車，上車照常換成完整的）
+//   下車＝還車（停在你下車的地方）；車主回車庫頁、車主離開世界、你回車庫頁：也還（你在開的話，人站到車子旁邊）
+// 車主那邊：借出去的那台藏起來、不能上（LENT_K）；跳一下「🔑 阿龍借走你的 GT-R 了」；還回來＝停在他下車的地方（輕量車，上車照常換成完整的）
+// 第 45 批（Nick 2026-10-26「借還車的時候他會有一個橫著的文字顯示要不要把車拿回來那個可以把它弄掉／借車的人也有一個」）：上面那一條（車主「拿回來」、借的人「還車」）拿掉了；拿回來＝回車庫頁，還車＝下車
 // 網站（site/world.js）送：borrow/q（密碼）→ borrow/a（回答、拿回來）→ borrow/r（還車：停在哪裡）
 const BOR = { near: null, pad: null, want: null, on: null, lent: null, loading: null, ui: null, nearSig: '', locks: {} }; // loading：坐進去了、車子載入中（want 那一筆）
 const BOR_TRY = 3; // 錯幾次要等（車主那邊算；這邊只是顯示）
@@ -820,11 +821,7 @@ function borUi() {
 .nt-keys{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
 .nt-keys button{min-height:46px;border:0;border-radius:12px;background:#2a2d33;color:#F2F3F5;font:800 20px/1 "Barlow Condensed","Arial Narrow",sans-serif;cursor:pointer;touch-action:manipulation;font-variant-numeric:tabular-nums}
 .nt-keys button.sm{font:700 14px "Noto Sans TC",sans-serif}
-.nt-keys button:disabled{opacity:.4}
-.nt-bor{position:absolute;z-index:7;left:50%;top:calc(var(--fs-t,0px) + 112px);transform:translateX(-50%);max-width:calc(100% - 20px);display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;border-radius:999px;background:rgba(20,21,24,0.9);border:2px solid #ffcc33;color:#F2F3F5;font:700 14px "Noto Sans TC",sans-serif;pointer-events:auto}
-.nt-bor[hidden],body:not(.driving) .nt-bor,body.bigmap .nt-bor,body.shopping .nt-bor{display:none}
-.nt-bor span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nt-bor button{flex:none;min-height:34px;padding:0 14px;border:0;border-radius:999px;background:#ffcc33;color:#1a1405;font:800 14px "Noto Sans TC",sans-serif;cursor:pointer;touch-action:manipulation}`;
+.nt-keys button:disabled{opacity:.4}`;
   document.head.appendChild(st);
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const near = mk('button', 'nt-key'); near.type = 'button'; near.hidden = true; near.addEventListener('click', () => { if (BOR.near) borPadOpen(BOR.near); });
@@ -836,10 +833,8 @@ function borUi() {
     b.addEventListener('click', () => borPadKey(d)); keys.append(b); btns.push(b);
   }
   box.append(title, dots, msg, keys); pad.append(box); pad.hidden = true;
-  const bar = mk('div', 'nt-bor'), barT = mk('span'), barB = mk('button'); barB.type = 'button'; bar.append(barT, barB); bar.hidden = true;
-  barB.addEventListener('click', () => { if (BOR.on) leaveCar(); else if (BOR.lent) netEv('takeback', { uid: BOR.lent.uid }); });
-  stage.append(near, pad, bar);
-  return (BOR.ui = { near, pad, title, dots, msg, btns, bar, barT, barB });
+  stage.append(near, pad);
+  return (BOR.ui = { near, pad, title, dots, msg, btns });
 }
 // ---- 借的人：數字鍵盤 ----
 function borPadOpen(P) {
@@ -983,7 +978,6 @@ function netBorrowEnd(why) {
     walker.setCars([], { keepParked: false });
     arrangeCars();
   }
-  borUi().bar.hidden = true;
   if (pose && why !== 'back' && why !== 'gone') netEv('return', { uid: B.uid, x: pose.x, z: pose.z, h: pose.heading });
   if (why === 'out') netToast(`還給${B.n}了`);
   else if (why === 'back') netToast(`${B.n}把車拿回去了`);
@@ -1020,27 +1014,24 @@ function borLend(uid, n) { // 借出去了：開車的收掉、車子藏起來�
   tripPose[k] = { x: t.x, z: t.z, heading: t.heading };
   BOR.lent = { uid, n: String(n || '朋友').slice(0, 12), k }; LENT_K = k;
   walker.setCars([], { keepParked: false }); arrangeCars();
-  const U = borUi(); U.barT.textContent = `🔑 ${BOR.lent.n}在開你的 ${borCarName(k)}`; U.barB.textContent = '拿回來'; U.bar.hidden = false;
-  netToast(`🔑 ${BOR.lent.n}借走你的 ${borCarName(k)} 了`);
+  netToast(`🔑 ${BOR.lent.n}借走你的 ${borCarName(k)} 了（回車庫就拿回來）`); // 第 45 批：上面那一條拿掉了，跟他說怎麼拿回來
   return true;
 }
 function borUnlend(pose) { // 還回來了（停在他下車的地方；沒有位置＝原本停的地方）
   const L = BOR.lent; if (!L) return;
   BOR.lent = null; LENT_K = null;
-  if (BOR.ui) BOR.ui.bar.hidden = true;
   if (!trip || !tripPose) return;
   if (pose && [pose.x, pose.z, pose.heading].every(Number.isFinite)) tripPose[L.k] = { x: pose.x, z: pose.z, heading: pose.heading };
   arrangeCars();
   netToast(`${L.n}把 ${borCarName(L.k)} 還給你了`);
 }
-function netLendHome() { if (BOR.lent) { netEv('takeback', { uid: BOR.lent.uid }); BOR.lent = null; LENT_K = null; if (BOR.ui) BOR.ui.bar.hidden = true; } } // 回車庫頁：借出去的拿回來
-// 每一格（netStep）：旁邊有朋友停著的車＝「🔑 借車」；開借來的車＝上面那一條；下車了＝還車
+function netLendHome() { if (BOR.lent) { netEv('takeback', { uid: BOR.lent.uid }); BOR.lent = null; LENT_K = null; } } // 回車庫頁：借出去的拿回來
+// 每一格（netStep）：旁邊有朋友停著的車＝「🔑 借車」；下車了＝還車
 function borTick(me, show, race) {
   const U = borUi();
   borPadTick();
   if (BOR.on && trip && DRIVE.on && (!drv || cur !== BOR.on.k || (walker && walker.mode !== 'off' && walker.mode !== 'out'))) netBorrowEnd('out'); // 下車（走出來以後）＝還車
   if (BOR.want && walker && walker.mode === 'walk' && performance.now() - BOR.want.t > 600) borWantOff(); // 走去車門的時候推搖桿取消了
-  if (BOR.on) { const t = `🔑 借來的車 · ${BOR.on.n}的 ${borCarName(BOR.on.k)}`; if (U.barT.textContent !== t) { U.barT.textContent = t; U.barB.textContent = '還車'; } U.bar.hidden = false; }
   let best = null;
   if (show && !race && !BOR.on && !BOR.want && !BOR.pad && me && walker && walker.mode === 'walk') {
     let bd = 2.4;
@@ -1062,7 +1053,7 @@ function borOff() { // 離開世界：借來的還、借出去的拿回來（網
   borPadClose();
   if (BOR.lent) borUnlend(null);
   BOR.near = null; BOR.nearSig = '';
-  if (BOR.ui) { BOR.ui.near.hidden = true; BOR.ui.bar.hidden = true; }
+  if (BOR.ui) BOR.ui.near.hidden = true;
 }
 
 // ==== 第 23 批：開進朋友的車庫（Nick 2026-10-18「可以開進別人的車庫」；草稿 https://claude.ai/artifact/RUhVB6G34nJk9SBLt1rm6q，卡片選「按門鈴」）====
@@ -1172,7 +1163,6 @@ function gstUi() {
   const st = document.createElement('style');
   st.textContent = `.nt-gst{position:absolute;z-index:7;left:50%;top:calc(var(--fs-t,0px) + 112px);transform:translateX(-50%);max-width:calc(100% - 20px);display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;border-radius:999px;background:rgba(20,21,24,0.9);border:2px solid #FF6A1F;color:#F2F3F5;font:700 14px "Noto Sans TC",sans-serif;pointer-events:auto;box-sizing:border-box}
 .nt-gst[hidden],body.bigmap .nt-gst,body.shopping .nt-gst{display:none}
-.nt-gst.low{top:calc(var(--fs-t,0px) + 160px)}
 .nt-gst span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nt-gst button{flex:none;min-height:34px;padding:0 14px;border:0;border-radius:999px;background:#FF6A1F;color:#1a0d05;font:800 14px "Noto Sans TC",sans-serif;cursor:pointer;touch-action:manipulation}`;
   document.head.appendChild(st);
@@ -1183,7 +1173,7 @@ function gstUi() {
   return (GUEST.ui = { bar, t, b });
 }
 function netGuest(g, why) {
-  if (g && g.uid) { const U = gstUi(); GUEST.uid = String(g.uid); GUEST.n = String(g.n || '朋友').slice(0, 12); U.t.textContent = `🏠 ${GUEST.n}在你的車庫裡`; U.bar.classList.toggle('low', !!(BOR.ui && !BOR.ui.bar.hidden)); U.bar.hidden = false; return; }
+  if (g && g.uid) { const U = gstUi(); GUEST.uid = String(g.uid); GUEST.n = String(g.n || '朋友').slice(0, 12); U.t.textContent = `🏠 ${GUEST.n}在你的車庫裡`; U.bar.hidden = false; return; }
   const n = GUEST.n; GUEST.uid = ''; GUEST.n = '';
   if (GUEST.ui) GUEST.ui.bar.hidden = true;
   if (why === 'left' && n) netToast(`${n}離開你的車庫了`);
@@ -1385,7 +1375,7 @@ Object.assign(window.beauGame, {
     guest: netGuest, // 朋友在我的車庫裡（null＝走了）
     place: netPlace,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
-    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, pv: P.cur.pv ? P.cur.pv[0] : null, park: !!P.pkOn, carVis: !!(P.obj && P.obj.car.visible), inPol: !!(P.chr && P.chr.group.visible && PSC && P.chr.group.parent === PSC), car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, polHits: NET_POL.hits, phSent: NET_PH.sent, bumped: NET.bumped, cellShut: NET.cellShut, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '', bar: BOR.ui && !BOR.ui.bar.hidden ? BOR.ui.barT.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at,
+    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, pv: P.cur.pv ? P.cur.pv[0] : null, park: !!P.pkOn, carVis: !!(P.obj && P.obj.car.visible), inPol: !!(P.chr && P.chr.group.visible && PSC && P.chr.group.parent === PSC), car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, polHits: NET_POL.hits, phSent: NET_PH.sent, bumped: NET.bumped, cellShut: NET.cellShut, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at,
       gstBtn: NET.hud && !NET.hud.gar.hidden ? NET.hud.gar.textContent : '', bell: BELL.uid || null, guest: GUEST.uid || null, guestBar: GUEST.ui && !GUEST.ui.bar.hidden ? GUEST.ui.t.textContent : '',
       gv: GV.on ? { uid: GV.uid, n: GV.n, slot: GV.slot, in: GV.in, want: GV.want.filter(Boolean).length, made: Object.keys(GV.objs).length, gs: HOME.gs, home: HOME.slot } : null }; },
   },

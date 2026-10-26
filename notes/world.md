@@ -385,3 +385,14 @@ Nick: 「可以開進別人的車庫」. Rules unchanged (kind `bell` fits `matc
   `tripS.car` for that bay; the bay collision list skips it (your full car's box comes from `walkCars`). world-test 9d also waits for
   the 「停好了」 toast instead of the stale one, waits 0.5 s after the walk-mode lift ride before `getIn` (`activate` locks boarding
   for 0.35 s), and expects the ◀ ▶ row only upstairs.
+
+## Batch 45 — no borrow bars (trial v59, 2026-10-26)
+Nick: 「借還車的時候他會有一個橫著的文字顯示要不要把車拿回來那個可以把它弄掉」 + 「借車的人也有一個」.
+- The horizontal `.nt-bor` bar is gone on both phones (owner 「🔑 X在開你的 Y 拿回來」, borrower 「🔑 借來的車 · X的 Y 還車」), and with it
+  the GUEST `low` shift that kept the guest bar under it.
+- Taking back = going back to the garage page (`netLendHome` already sent `takeback`); returning = getting out (the `borTick` watchdog).
+  Leaving the world still returns too.
+- Instead of the bar: the owner gets one toast 「🔑 X借走你的 Y 了（回車庫就拿回來）」 when lending; the borrower keeps the
+  boarding toast 「開X的 Y：下車就還給他」.
+- world-test 8b: no `.nt-bor` on either phone, both toasts, and the second borrow is ended by A pressing 回車庫 (B is put next to the car,
+  「…把車拿回去了」); A then goes out again and boards from the tower lift (tries both sides of the car like hills-test).
