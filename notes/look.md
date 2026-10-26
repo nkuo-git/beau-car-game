@@ -249,3 +249,20 @@ Nick: 「畫質"高"再降低一點 能降什麼」. I offered six options and h
   - look-test section 8 has a new check; section 11 switches 高 → 超高 → 高; the button labels check now expects 超高/高/普通 (it was still on the old names).
   - night-test: 高 shadow map 0; the pixel cap is 0.35 M plus a 1280×720 check that the ratio goes below 1.
 - look-test 18 ok: 高 highway 262 calls / 1.33 M tris (was ~500; 普通 260).
+
+## Batch 44 (2026-10-26, content 25): headlights wider and farther, street lamps fade in
+
+Nick: 「車燈可以再廣再遠一點 路燈照到的時候要漸漸的變亮 不要突然變亮 弄好就可以上線」.
+
+- **Why lamps popped:** every recalculation (each 10 frames or after a 6 m camera jump) moved the PointLights straight onto the nearest n lamps at full strength. The camera-distance fade (50–88 m) did not help, because a lamp often joined the nearest n while it was already well inside 50–88 m (on the highway the next pair joins at about 72 m, roughly 150 of 396 at once; at 高 there are only 2 lights, so it was worse).
+- **Fix (look.js `lampPick` / `lampStep`):**
+  - Each light keeps its lamp while that lamp is still in the nearest n. The (n+1)-th is also kept when it is less than about 14 % farther (squared distance × 1.3), so two lamps at a tie do not swap back and forth.
+  - Changing lamp: the light fades out over `LAMP.down` 0.5 s, moves, then fades in over `LAMP.up` 1.2 s (smoothstep). A free light prefers a slot that is still on the same lamp, otherwise the dimmest.
+  - A camera jump over 20 m in one frame (去這裡, going home, lamps just switched on) snaps every light to its place, since the whole picture changed anyway.
+  - The camera-distance fade is now computed every frame (it used to step every 10 frames).
+- **Headlights (`LAMP`, `NSKY`):**
+  - SpotLight decay 0.6 → 0.5, distance 200 → 280 m, aimed 70 → 90 m ahead, cone 0.72 → 0.95 rad. Intensity stays 18, so the front of the car is only slightly brighter (5 m: 6.8 → 8.0), while at 100 m it is about 1.7× (1.0 → 1.74 after three.js's distance window) and at 150 m about 3× (0.42 → 1.24).
+  - Road beam patch 100 → 150 m long, 30 → 40 m wide, and the texture fades more slowly along its length (`(1-u)^1.1` instead of `^1.6`).
+- **Tests:** night-test `__lampDrive` drives about 60 m up the highway, recording every street lamp light frame by frame. It checks that at least one lamp came on along the way and that no lamp rose by more than 99 (of 396) between frames, at 超高 (4 lights) and at 高 (2 lights). The headlight and beam checks moved to the new numbers.
+  - Against the old look.js the same drive rose by 244 (超高) and 396 (高) in one frame, so the check really catches the pop. With the fix: 51.5 and 49.
+  - The drive ends with a 1-pixel `readPixels`: swiftshader had about 14 s of queued frames after it, so the next check (1280×720 window) saw no ResizeObserver frame in time. The resize check now waits until the drawing buffer really changes instead of a fixed 300 ms.

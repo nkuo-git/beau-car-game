@@ -44,8 +44,8 @@ const SUN_MAX = 55; // 中午太陽多高（度）
 const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fog: 0xd8b49a, envI: 0.4, turb: 6, ray: 2.0, mie: 0.002, g: 0.7, exp: 0.38, sunK: 0.6 }; // 太陽低的時候（橘色、天空濁、霧暖色）；第 31 批：夕陽的光調弱（sunK＝最多少掉幾成）；第 34 批：Nick「面像太陽的時候光線還是有點太亮」：太陽的光暈小一點（turb 8 → 6、mie 0.004 → 0.002、g 0.8 → 0.7）、曝光 0.45 → 0.38
 const NIGHT = { hemiI: 0.95, hemiC: 0x46536f, hemiG: 0x1c1f27, fog: 0x161c29, envI: 0.18, exp: 1.15 }; // 晚上：天空光藍藍的、暗；第 37 批（Nick「晚上整體的光線不要太過黑 開車看不太到」）：天空光 0.55 → 0.95、顏色亮一點、霧不要全黑、曝光 0.95 → 1.15
 const MOON = { elev: 48, az: 300, c: 0x9fb4d8, I: 0.8 }; // 月亮當太陽（有影子）；第 37 批 0.5 → 0.8
-const LAMP = { n: 4, nLow: 2, c: 0xffd9a0, I: 180, dist: 46, fade0: 50, fade1: 88, headC: 0xfff0d0, headI: 18, headDecay: 0.6, headDist: 200, headAim: 70, headAng: 0.72, bloom: 0.18, thr: 2.6, sign: 0.5 }; // 路燈（最近 4 支真的有光；離鏡頭 50–88 公尺慢慢變暗＝換支的時候不跳）、自己的車的大燈（第 31 批：520 → 150，車前面不再一片白；第 34 批：Nick「晚上車燈可以照遠一點嗎」：衰減改成 1／距離^0.6（以前 1／距離²）、強度 18、照到 150 公尺、對準前面 60 公尺——車前面一樣亮（5 公尺 6.8），30 公尺 2.3、60 公尺 1.5（以前 0.17、0.04））、晚上的光暈
-const NSKY = { stars: 900, starR: 870, starSz: 2.4, moonR: 24, moonD: 860, moonC: 0xe9eef7, winC: [1.9, 1.45, 0.85], shopC: [1.5, 1.55, 1.45], winP: 0.6, shopP: 0.85, polI: 70, polD: 34, polT: 0.8, poolN: 12, poolI: 0.34, poolL: 9.5, poolW: 4.4, hwK: 2.2, parkK: 1.4, beamL: 100, beamW: 30, beamI: 0.8 }; // 第 37 批（Nick「車燈要能照廣照遠一點」）：自己的大燈在路上的光斑 70 → 100 公尺、18 → 30 公尺寬、0.65 → 0.8；SpotLight 照到 200 公尺、角度 0.5 → 0.72 // 第 32 批：晚上的天空（星星、月亮的圓盤）、透天厝一樓窗戶、店面的燈（幾成亮）、警車的紅藍燈（最近一台）、路上車子的大燈照在路上（最近 12 台）、快速道路／停車場的路燈比電線桿的亮（燈頭比較高）
+const LAMP = { n: 4, nLow: 2, c: 0xffd9a0, I: 180, dist: 46, fade0: 50, fade1: 88, headC: 0xfff0d0, headI: 18, headDecay: 0.5, headDist: 280, headAim: 90, headAng: 0.95, bloom: 0.18, thr: 2.6, sign: 0.5, up: 1.2, down: 0.5 }; // 路燈（最近 4 支真的有光；離鏡頭 50–88 公尺慢慢變暗＝換支的時候不跳）、自己的車的大燈（第 31 批：520 → 150，車前面不再一片白；第 34 批：Nick「晚上車燈可以照遠一點嗎」：衰減改成 1／距離^0.6（以前 1／距離²）、強度 18、照到 150 公尺、對準前面 60 公尺——車前面一樣亮（5 公尺 6.8），30 公尺 2.3、60 公尺 1.5（以前 0.17、0.04））、晚上的光暈；第 44 批（Nick「車燈可以再廣再遠一點 路燈照到的時候要漸漸的變亮 不要突然變亮」）：大燈 1／距離^0.5、照到 280 公尺、對準前面 90 公尺、角度 0.72 → 0.95；路燈換支的時候慢慢亮（up 1.2 秒）、慢慢暗（down 0.5 秒）
+const NSKY = { stars: 900, starR: 870, starSz: 2.4, moonR: 24, moonD: 860, moonC: 0xe9eef7, winC: [1.9, 1.45, 0.85], shopC: [1.5, 1.55, 1.45], winP: 0.6, shopP: 0.85, polI: 70, polD: 34, polT: 0.8, poolN: 12, poolI: 0.34, poolL: 9.5, poolW: 4.4, hwK: 2.2, parkK: 1.4, beamL: 150, beamW: 40, beamI: 0.8 }; // 第 37 批（Nick「車燈要能照廣照遠一點」）：自己的大燈在路上的光斑 70 → 100 公尺、18 → 30 公尺寬、0.65 → 0.8；SpotLight 照到 200 公尺、角度 0.5 → 0.72 // 第 32 批：晚上的天空（星星、月亮的圓盤）、透天厝一樓窗戶、店面的燈（幾成亮）、警車的紅藍燈（最近一台）、路上車子的大燈照在路上（最近 12 台）、快速道路／停車場的路燈比電線桿的亮（燈頭比較高） // 第 44 批：光斑 100 → 150 公尺長、30 → 40 公尺寬，越遠淡得慢一點
 const WET = { dark: 0.62, pud: 0.55, rough: 0.3, pudRough: 0.04, base: 0.28, lod: 4.5 }; // 下過雨的路（最真實）：變暗、水窪更暗、粗糙度、倒影（水窪外面 35%、模糊）
 const CAVE_I = 1.5, CAVE_C = 0xf4f1ea, CAVE_G = 0x8a8478; // 隧道裡面（hills.js 的 dimK 0.42）、圓塔裡面：天空光補到這麼多、顏色白一點（太陽被擋住了，不然一片黑、藍藍的）
 // 材質（範例 3 號、5 號）
@@ -569,7 +569,7 @@ function createLook(o) {
   function grassReset() { if (!GR) return; GR.slot.clear(); GR.ci = GR.cj = 1e9; }
 
   // ==== 第 30 批：晚上的燈（路燈最近 4 支＋自己的車的大燈；漂亮、最真實都有；白天亮度 0，一直留在場景裡，shader 不用重編）====
-  let PL = null, HLT = null, lampPts = null, lampKs = null, headCar = null, headDims = null, lampN = 0; const HEAD = [new THREE.Vector3(), new THREE.Vector3()], HTGT = [new THREE.Vector3(), new THREE.Vector3()];
+  let PL = null, HLT = null, lampPts = null, lampKs = null, headCar = null, headDims = null, lampN = 0, SL = null, SW = null, SA = null, lampSnap = true; const HEAD = [new THREE.Vector3(), new THREE.Vector3()], HTGT = [new THREE.Vector3(), new THREE.Vector3()]; // 第 44 批：每一盞燈現在在哪支（SL）、要去哪支（SW）、亮到幾成（SA）
   function lampList() { // 所有路燈的燈頭：村子的電線桿（有路燈的）、快速道路（中間護欄上 60 公尺一支、兩邊）、大停車場 5 支；第 32 批：每支多一個亮度倍數（快速道路、停車場的燈頭高，光要強一點才照得到路）
     const P = [], K = [];
     for (const p of V.poles || []) if (p.lamp) { P.push(p.x + p.fx * 2.2, 7.6, p.z + p.fz * 2.2); K.push(1); }
@@ -584,19 +584,35 @@ function createLook(o) {
     // 第 37 批（漂亮省一點）：每一盞燈每個東西都要多算一次（亮度 0 也算）：漂亮＝路燈最近 2 支、大燈一盞在車頭中間（最真實 4 支、左右兩盞）、警車的紅藍燈沒有（nightOn）
     const low = LV === 1;
     PL = []; for (let i = 0; i < (low ? LAMP.nLow : LAMP.n); i++) { const l = new THREE.PointLight(LAMP.c, 0, LAMP.dist, 2); l.name = 'lk-lamp'; l.position.set(0, -100, 0); scene.add(l); PL.push(l); }
+    SL = new Int32Array(PL.length).fill(-1); SW = new Int32Array(PL.length).fill(-1); SA = new Float32Array(PL.length); lampSnap = true;
     HLT = []; for (let i = 0; i < (low ? 1 : 2); i++) { const l = new THREE.SpotLight(LAMP.headC, 0, LAMP.headDist, LAMP.headAng, 0.7, LAMP.headDecay); l.name = 'lk-head'; l.position.set(0, -100, 0); scene.add(l); scene.add(l.target); HLT.push(l); }
     if (!lampPts) lampPts = lampList(); headCar = null; lampN = 0;
     nightOn(); // 第 32 批
   }
   function lampsOff() { if (!PL) return; for (const l of PL) l.removeFromParent(); for (const l of HLT) { l.target.removeFromParent(); l.removeFromParent(); } PL = HLT = null; headCar = null; nightOff(); }
-  const lampPos = new THREE.Vector3(1e9, 0, 0);
-  function lampStep(cam) {
-    if (!PL) return; const k = TD.lamp;
-    if (k > 0.001 && (lampN++ % 10 === 0 || cam.position.distanceToSquared(lampPos) > 36)) { lampPos.copy(cam.position); // 鏡頭前面 12 公尺附近最近的 4 支（每 10 格，鏡頭跳了 6 公尺以上馬上算）
-      cam.getWorldDirection(V3b); const px = cam.position.x + V3b.x * 12, pz = cam.position.z + V3b.z * 12, P = lampPts, best = [1e18, 1e18, 1e18, 1e18], bi = [-1, -1, -1, -1];
-      for (let i = 0; i < P.length; i += 3) { const d = (P[i] - px) * (P[i] - px) + (P[i + 2] - pz) * (P[i + 2] - pz); if (d >= best[3]) continue; let j = 3; while (j > 0 && best[j - 1] > d) { best[j] = best[j - 1]; bi[j] = bi[j - 1]; j--; } best[j] = d; bi[j] = i; }
-      for (let j = 0; j < PL.length; j++) { const l = PL[j], i = bi[j]; if (i < 0 || best[j] > LAMP.fade1 * LAMP.fade1) { l.intensity = 0; continue; } l.position.set(P[i], P[i + 1] - 0.3, P[i + 2]); l.intensity = LAMP.I * lampKs[i / 3] * k * (1 - ss(LAMP.fade0, LAMP.fade1, Math.hypot(P[i] - cam.position.x, P[i + 2] - cam.position.z))); } // 第 31 批：離鏡頭遠的慢慢暗（換支不跳）；第 32 批：每支自己的倍數
-    } else if (k <= 0.001) for (const l of PL) l.intensity = 0;
+  const lampPos = new THREE.Vector3(1e9, 0, 0), lampCam = new THREE.Vector3(1e9, 0, 0), LB = [0, 0, 0, 0, 0], LI = [0, 0, 0, 0, 0];
+  // 第 44 批（Nick「路燈照到的時候要漸漸的變亮 不要突然變亮」）：以前每次重算就把燈直接搬到最近的幾支、馬上全亮（剛進前幾名的那支一下子亮起來）。
+  // 現在每一盞燈守著自己那支（還在前幾名就不換；第 n+1 名、沒有遠很多也先留著＝不會兩支來回跳），要換的時候先慢慢暗（0.5 秒）再搬過去慢慢亮（1.2 秒）
+  function lampPick(cam) {
+    cam.getWorldDirection(V3b); const px = cam.position.x + V3b.x * 12, pz = cam.position.z + V3b.z * 12, P = lampPts, n = PL.length, m = n + 1; // 鏡頭前面 12 公尺附近最近的 n＋1 支
+    for (let j = 0; j < m; j++) { LB[j] = 1e18; LI[j] = -1; }
+    for (let i = 0; i < P.length; i += 3) { const d = (P[i] - px) * (P[i] - px) + (P[i + 2] - pz) * (P[i + 2] - pz); if (d >= LB[m - 1]) continue; let j = m - 1; while (j > 0 && LB[j - 1] > d) { LB[j] = LB[j - 1]; LI[j] = LI[j - 1]; j--; } LB[j] = d; LI[j] = i; }
+    let held = 0; for (let j = 0; j < n; j++) { const w = SW[j]; let keep = false; if (w >= 0) { for (let r = 0; r < n; r++) if (LI[r] === w) keep = true; if (!keep && w === LI[n] && LB[n] < LB[n - 1] * 1.3) keep = true; } if (!keep) SW[j] = -1; else held++; }
+    for (let r = 0; r < n && held < n; r++) { const e = LI[r]; if (e < 0) break; let got = false; for (let j = 0; j < n; j++) if (SW[j] === e) got = true; if (got) continue;
+      let f = -1; for (let j = 0; j < n; j++) if (SW[j] < 0 && (f < 0 || SL[j] === e || (SL[f] !== e && SA[j] < SA[f]))) f = j; // 空的燈：本來就在這支的最好，不然挑最暗的
+      if (f < 0) break; SW[f] = e; held++; }
+  }
+  function lampStep(cam, dt) {
+    if (!PL) return; const k = TD.lamp, P = lampPts;
+    if (k > 0.001) { const snap = lampSnap || cam.position.distanceToSquared(lampCam) > 400; lampCam.copy(cam.position); lampSnap = false; // 一格跳 20 公尺以上（去這裡、回家、剛開燈）＝畫面換了，直接到位
+      if (snap || lampN++ % 10 === 0 || cam.position.distanceToSquared(lampPos) > 36) { lampPos.copy(cam.position); lampPick(cam); } // 每 10 格，鏡頭跳了 6 公尺以上馬上算
+      const up = dt / LAMP.up, dn = dt / LAMP.down;
+      for (let j = 0; j < PL.length; j++) { const l = PL[j];
+        if (SL[j] !== SW[j]) { SA[j] = snap ? 0 : Math.max(0, SA[j] - dn); if (SA[j] <= 0) { SL[j] = SW[j]; const i = SL[j]; if (i >= 0) l.position.set(P[i], P[i + 1] - 0.3, P[i + 2]); } }
+        const i = SL[j]; if (i < 0) { l.intensity = 0; continue; }
+        if (SW[j] === i) SA[j] = snap ? 1 : Math.min(1, SA[j] + up);
+        const a = SA[j]; l.intensity = LAMP.I * lampKs[i / 3] * k * a * a * (3 - 2 * a) * (1 - ss(LAMP.fade0, LAMP.fade1, Math.hypot(P[i] - cam.position.x, P[i + 2] - cam.position.z))); } // 第 31 批：離鏡頭遠的慢慢暗；第 32 批：每支自己的倍數
+    } else { for (const l of PL) l.intensity = 0; lampSnap = true; }
     const car = getCar();
     if (car !== headCar) { headCar = car; headDims = car ? carDims(car) : null; }
     if (car && headDims && k > 0.001) { const D = headDims, xf = D.cx + D.hx - 0.15; car.updateMatrixWorld();
@@ -648,7 +664,7 @@ function createLook(o) {
     // 第 34 批：自己的車的大燈照在路上（Nick「晚上車燈可以照遠一點嗎 不然看不清楚路」）：SpotLight 打在路面是掠射（0.6 公尺高照 30 公尺外＝1 度），Lambert 幾乎是 0，再亮也只照亮樹和護欄；
     // 所以路面用一片加亮的長光斑（車頭前面 0–70 公尺、越遠越寬越淡；貼圖算一次），跟著車（含坡度）；SpotLight 留著照前面的東西
     const bc = document.createElement('canvas'); bc.width = 256; bc.height = 64; const bg = bc.getContext('2d'), im = bg.createImageData(256, 64), px = im.data;
-    for (let j = 0; j < 64; j++) for (let i = 0; i < 256; i++) { const u = (i + 0.5) / 256, v = ((j + 0.5) / 64) * 2 - 1, hw = 0.32 + 0.68 * u, lat = Math.exp(-(v / hw) * (v / hw) * 2.0), lon = Math.pow(1 - u, 1.6) * (1 - Math.exp(-u * 40)), a = Math.max(0, Math.min(1, lat * lon * 1.15)); const o = (j * 256 + i) * 4; px[o] = px[o + 1] = px[o + 2] = 255; px[o + 3] = Math.round(a * 255); }
+    for (let j = 0; j < 64; j++) for (let i = 0; i < 256; i++) { const u = (i + 0.5) / 256, v = ((j + 0.5) / 64) * 2 - 1, hw = 0.3 + 0.7 * u, lat = Math.exp(-(v / hw) * (v / hw) * 2.0), lon = Math.pow(1 - u, 1.1) * (1 - Math.exp(-u * 60)), a = Math.max(0, Math.min(1, lat * lon * 1.15)); const o = (j * 256 + i) * 4; px[o] = px[o + 1] = px[o + 2] = 255; px[o + 3] = Math.round(a * 255); }
     bg.putImageData(im, 0, 0); const bt = new THREE.CanvasTexture(bc); bt.colorSpace = THREE.SRGBColorSpace;
     const bgm = new THREE.PlaneGeometry(NSKY.beamL, NSKY.beamW); bgm.rotateX(-Math.PI / 2); bgm.translate(NSKY.beamL / 2, 0, 0);
     const beam = new THREE.Mesh(bgm, new THREE.MeshBasicMaterial({ map: bt, color: LAMP.headC, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
@@ -858,7 +874,7 @@ function createLook(o) {
       if (hemi) { hemi.intensity = TD.hemiI + (CAVE_I - TD.hemiI) * cave; hemi.color.lerpColors(TD.hemiC, CC, cave); hemi.groundColor.lerpColors(TD.hemiG, CG, cave); } }
     lodStep(cam, false);
     scanStep(300, dt);
-    lampStep(cam);
+    lampStep(cam, dt);
     if (LV === 2) { if (GR) grassStep(cam); const car = getCar(); carEnv(car); if (car) { if (MAX) cubeStep(car); const ce = carEnvTex(); for (const c of CARM) if (c[0].envMap !== ce) c[0].envMap = ce; } } // 第 39 批：方塊反射
     const ms = performance.now() - t0; st.ms = st.ms * 0.95 + ms * 0.05; if (ms > st.maxMs) st.maxMs = ms;
   }
