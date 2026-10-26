@@ -64,6 +64,7 @@ const helpers = () => p.evaluate(() => {
   window.__go = (w, n = 3) => { if (Array.isArray(w)) window.__place(w[0], w[1], w[2]); else if (w) { const sp = D.VIL.places[w].spawn; window.__place(sp.x, sp.z, sp.heading); } for (let i = 0; i < n; i++) window.__view(320, 192, false); return window.__view(); };
   window.__lights = () => { const sc = D.TR.scene; let dl = null, hemi = null; for (const c of sc.children) { if (!dl && c.isDirectionalLight) dl = c; if (!hemi && c.isHemisphereLight) hemi = c; }
     return { dl: +dl.intensity.toFixed(3), dlC: dl.color.getHexString(), dlCast: dl.castShadow, hemi: +hemi.intensity.toFixed(3), hemiC: hemi.color.getHexString(), env: !!sc.environment, envI: +sc.environmentIntensity.toFixed(3), fog: sc.fog && sc.fog.color.getHexString(), sky: sc.getObjectByName('sky')?.material?.type, sh: R.shadowMap.enabled, exp: R.toneMappingExposure }; };
+  window.__posSum = () => { let s = 0; D.VIL.group.traverse((o) => { if (!o.isMesh || !o.geometry.attributes.position) return; const a = o.geometry.attributes.position.array; for (let i = 0; i < a.length; i += 97) s += a[i] * ((i % 7) + 1); }); return +s.toFixed(1); }; // 第 43 批：只看位置（樹冠縮了沒）
   window.__badProgs = () => (R.info.programs || []).filter((pr) => pr.diagnostics && pr.diagnostics.runnable === false).map((pr) => pr.name || pr.cacheKey.slice(0, 40));
   window.__geoSum = () => { let s = 0, n = 0; D.VIL.group.traverse((o) => { if (!o.isMesh || !o.geometry.attributes.position) return; const a = o.geometry.attributes.position.array; for (let i = 0; i < a.length; i += 97) s += a[i] * ((i % 7) + 1); const nn = o.geometry.attributes.normal; if (nn) { const q = nn.array; for (let i = 0; i < q.length; i += 89) s += q[i] * 3; } n++; }); return [n, +s.toFixed(1)]; };
 });
@@ -75,7 +76,7 @@ const g1 = await goOut();
 console.log('1 out', el(), JSON.stringify(g1));
 await p.evaluate(() => { window.__hold = true; window.__noDraw = true; window.__npcPause(true); });
 await helpers();
-const s1 = await p.evaluate(() => { const D = window.__D(); return { lv: D.LOOK.level, pref: D.LOOK.pref, can: D.LOOK.can, half: D.LOOK.half, key: localStorage.getItem('carid.look'), L: window.__lights(), geo: window.__geoSum(), pressed: [...document.querySelectorAll('#lookPop button')].map((b) => b.dataset.l + ':' + b.getAttribute('aria-pressed')).join(','), mats: D.LOOK.info().mats }; });
+const s1 = await p.evaluate(() => { const D = window.__D(); return { lv: D.LOOK.level, pref: D.LOOK.pref, can: D.LOOK.can, half: D.LOOK.half, key: localStorage.getItem('carid.look'), L: window.__lights(), geo: window.__geoSum(), pressed: [...document.querySelectorAll('#lookPop button')].map((b) => b.dataset.l + ':' + b.getAttribute('aria-pressed')).join(','), mats: D.LOOK.info().mats, pos: window.__posSum() }; });
 console.log('1', JSON.stringify(s1));
 check(s1.lv === 0 && s1.pref === 0 && s1.can.soft && s1.key === null && !s1.L.sh && s1.mats === 0 && s1.pressed === '2:false,1:false,0:true',
   `software GPU, never picked: starts on 順 (level 0, no shadows, no materials touched; ✨ menu shows 順 pressed: ${s1.pressed})`);
@@ -106,7 +107,7 @@ if (process.env.HUD_ONLY) { console.log('hud', overlaps.join(' / ') || 'ok'); aw
 await p.setViewportSize({ width: 844, height: 390 }); await p.waitForTimeout(250);
 await p.evaluate(() => document.getElementById('lookTog').click()); await p.waitForTimeout(100);
 const u2 = await ui();
-check(!u0.tog && u1.tog && !u1.pop && u2.pop && !u2.tog && u2.btns === '最真實/漂亮/順', `fullscreen driving: ✨ only after ⋯; ✨ opens 「畫質 ${u2.btns}」`);
+check(!u0.tog && u1.tog && !u1.pop && u2.pop && !u2.tog && u2.btns === '超高/高/普通', `fullscreen driving: ✨ only after ⋯; ✨ opens 「畫質 ${u2.btns}」`);
 check(!overlaps.length, `✨ and 🎵 are on screen and cover no other button (844×390, 390×844, 360×800, 915×412, 800×360${overlaps.length ? ': ' + overlaps.join(' / ') : ''})`);
 const t2 = Date.now();
 await p.evaluate(() => window.__D().LOOK.setHour(13)); // 第 30 批：太陽會動（24 分鐘一天）：測試固定下午 1 點
@@ -184,16 +185,19 @@ check(g7.ok && lobby.L.hemi > 1.0 && lobby.L.envI > 0.35, `out again on 最真�
 const fr = await p.evaluate(() => { const D = window.__D(), st = D.LOOK.stats; window.__place(-200, 0, 0, 10); st.ms = 0; st.maxMs = 0; D.drv.setInput({ throttle: 1, brake: 0, steer: 0.15 }); for (let i = 0; i < 150; i++) { window.__dstep(1); window.__view(160, 96, false); } D.drv.setInput(null); return { ms: +st.ms.toFixed(2), max: +st.maxMs.toFixed(1) }; });
 console.log('  frame JS while driving', JSON.stringify(fr));
 
-// ---- 8 漂亮（沒有後製、沒有草）----
+// ---- 8 漂亮＝「高」（沒有後製、沒有草；第 43 批：沒有太陽的影子、樹跟順一樣）----
 await p.evaluate(() => { if (!document.body.classList.contains('moreopen')) document.getElementById('moreTog').click(); }); await p.waitForTimeout(100);
 await p.evaluate(() => document.getElementById('lookTog').click()); await p.waitForTimeout(100);
 await p.evaluate(() => [...document.querySelectorAll('#lookPop button')].find((b) => b.dataset.l === '1').click());
 await p.waitForFunction(() => window.__D().LOOK.level === 1 && !window.__D().LOOK.busy, null, { timeout: 60000 });
 const perf1 = {};
 for (const [k, w] of Object.entries(PLACES)) { const r = await p.evaluate((w) => window.__go(w), w); save('1-' + k, r.url); perf1[k] = r.info; }
-const s8 = await p.evaluate(() => { const D = window.__D(); let grass = null; D.TR.scene.traverse((o) => { if (o.name === 'lk-grass') grass = o; }); return { key: localStorage.getItem('carid.look'), L: window.__lights(), grassVis: grass && grass.visible, toast: document.getElementById('gtoast')?.textContent || '', bad: window.__badProgs() }; });
+const s8 = await p.evaluate(() => { const D = window.__D(); let grass = null, cards = 0, hid = 0, painted = 0; D.TR.scene.traverse((o) => { if (o.name === 'lk-grass') grass = o; if (/^lk-trees-/.test(o.name) && o.visible) cards++; if (o.name === 'st-shadow') { painted++; if (!o.visible) hid++; } });
+  return { key: localStorage.getItem('carid.look'), L: window.__lights(), info: D.LOOK.info(), grassVis: grass && grass.visible, cards, hid, painted, pos: window.__posSum(), toast: document.getElementById('gtoast')?.textContent || '', bad: window.__badProgs() }; });
 console.log('8 漂亮', el(), JSON.stringify(perf1), JSON.stringify(s8));
-check(s8.key === '1' && s8.L.sh && !s8.grassVis && /畫質：高/.test(s8.toast) && !s8.bad.length && perf1.hwy.calls < perf2.hwy.calls, `漂亮: shadows + sky, no grass tufts or post-processing (highway ${perf1.hwy.calls} calls vs 最真實 ${perf2.hwy.calls}), saved carid.look=1`);
+check(s8.key === '1' && s8.L.sky === 'ShaderMaterial' && s8.L.env && !s8.grassVis && /畫質：高/.test(s8.toast) && !s8.bad.length && perf1.hwy.calls < perf2.hwy.calls, `漂亮（高）: sky + reflections, no grass tufts or post-processing (highway ${perf1.hwy.calls} calls vs 最真實 ${perf2.hwy.calls}), saved carid.look=1`);
+check(!s8.L.sh && !s8.L.dlCast && s8.info.sh === 0 && s8.cards === 0 && s8.pos === s1.pos && s8.painted > 0 && s8.hid === 0,
+  `第 43 批 高 is lighter: no sun shadows (shadow map off), trees are the 普通 ones (no leaf cards, crowns not squashed: ${s8.pos} = ${s1.pos}), the ${s8.painted} painted ground shadows are back`);
 
 // ---- 9 順：全部回到原本的樣子 ----
 await p.evaluate(() => { if (!document.body.classList.contains('moreopen')) document.getElementById('moreTog').click(); }); await p.waitForTimeout(100);
@@ -219,7 +223,15 @@ const s10 = await p.evaluate(() => { const D = window.__D(); return { lv: D.LOOK
 const g10 = await goOut();
 await helpers();
 const s10b = await p.evaluate(() => { const D = window.__D(); D.renderer.render(D.TR.scene, D.dcam); return { lv: D.LOOK.level, sh: D.renderer.shadowMap.enabled, bad: window.__badProgs() }; });
-check(s10.lv === null && s10.pressed === '2:false,1:true,0:false' && g10.ok && s10b.lv === 1 && s10b.sh && !s10b.bad.length && !errs.length, `reload with 漂亮 saved: the game starts on 漂亮 (menu shows it) and drives out fine${errs.length ? ' — errors: ' + errs.slice(0, 2).join(' | ') : ''}`);
+check(s10.lv === null && s10.pressed === '2:false,1:true,0:false' && g10.ok && s10b.lv === 1 && !s10b.sh && !s10b.bad.length && !errs.length, `reload with 漂亮 saved: the game starts on 漂亮 (menu shows it; 第 43 批: no shadow map) and drives out fine${errs.length ? ' — errors: ' + errs.slice(0, 2).join(' | ') : ''}`);
+
+// ---- 11 第 43 批：高 → 超高 → 高：影子、卡片的樹、地上畫的影子跟著換 ----
+const tr = await p.evaluate(async () => { const D = window.__D(), L = D.LOOK, R = D.renderer;
+  const st = () => { let cards = 0, hid = 0; D.TR.scene.traverse((o) => { if (/^lk-trees-/.test(o.name) && o.visible) cards++; if (o.name === 'st-shadow' && !o.visible) hid++; }); R.render(D.TR.scene, D.dcam); return { lv: L.level, sh: R.shadowMap.enabled, sm: L.info().sh, cards, hid, pos: window.__posSum() }; };
+  await L.set(2); const a = st(); await L.set(1); const b = st(); return { a, b, bad: window.__badProgs() }; });
+console.log('11 高↔超高', JSON.stringify(tr));
+check(tr.a.lv === 2 && tr.a.sh && tr.a.sm > 0 && tr.a.cards > 30 && tr.a.hid > 0 && tr.a.pos !== s1.pos && tr.b.lv === 1 && !tr.b.sh && tr.b.sm === 0 && tr.b.cards === 0 && tr.b.hid === 0 && tr.b.pos === s1.pos && !tr.bad.length,
+  `第 43 批: 高 → 超高 turns on shadows (${tr.a.sm}), ${tr.a.cards} leaf-card meshes, hides painted shadows; back to 高 turns them all off again and the crowns are exactly back`);
 
 console.log('perf', JSON.stringify({ 順: v0.info, 最真實: perf2, 漂亮: perf1, lobby: lobby.r.info }));
 console.log(`${ok} ok, ${bad} failed`);

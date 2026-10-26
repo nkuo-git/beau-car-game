@@ -277,7 +277,7 @@ function createLook(o) {
   }
   function visit(x, car) { // 一個東西：開影子、改材質（車子的材質不改：車漆另外弄）
     if (x === skyM || SEEN.has(x)) return; SEEN.add(x);
-    if (x.name === 'st-shadow' && x.visible) { x.visible = false; HIDE.push(x); return; } // 村子地上畫的假影子：有真的了
+    if (x.name === 'st-shadow' && x.visible && LV === 2) { x.visible = false; HIDE.push(x); return; } // 村子地上畫的假影子：有真的了（第 43 批：「高」沒有真的影子，假的留著）
     if (!x.isMesh || x.isSprite) return;
     const m0 = Array.isArray(x.material) ? x.material[0] : x.material; if (!m0 || m0.isMeshBasicMaterial || m0.transparent || m0.isShaderMaterial) return;
     if (GROUND.test(x.name) || x.name === 'ground' || x.name === 'lk-grass') GND.add(x);
@@ -409,21 +409,25 @@ function createLook(o) {
     scene.traverse((x) => { if (x.isInstancedMesh && /^nh-trees-/.test(x.name)) NHT.push({ m: x, geo: x.geometry, mat: x.material, hill: !!x.userData.hill, c: x.userData.c || [0, 0], lod: 0 }); });
     prepped = true; st.prepMs = Math.round(performance.now() - T0);
   }
-  function crownsOn(on) {
-    for (const r of TRK) { const PA = r.A.array, T = r.tri, O = r.old;
-      for (let j = 0; j < T.length; j++) { const b = T[j] * 9; if (on) for (let d = 0; d < 6; d++) PA[b + 3 + d] = PA[b + (d % 3)]; else for (let d = 0; d < 6; d++) PA[b + 3 + d] = O[j * 6 + d]; }
-      r.A.needsUpdate = true; }
+  let CARDS = false; // 第 43 批：樹冠換成卡片的樹了沒（只有「超高」換；「高」跟普通一樣的樹）
+  function crownsOn(on, cards = on) {
+    cards = on && cards;
+    if (cards !== CARDS) { CARDS = cards;
+      for (const r of TRK) { const PA = r.A.array, T = r.tri, O = r.old;
+        for (let j = 0; j < T.length; j++) { const b = T[j] * 9; if (cards) for (let d = 0; d < 6; d++) PA[b + 3 + d] = PA[b + (d % 3)]; else for (let d = 0; d < 6; d++) PA[b + 3 + d] = O[j * 6 + d]; }
+        r.A.needsUpdate = true; }
+      for (const c of CELLS.values()) for (const m of c.meshes) if (m) m.visible = cards;
+      // 內湖的樹：原本的網格沒有法線，不能跟卡片的材質一起畫（會編成 FLAT_SHADED，其他的樹也跟著用那個）→ 馬上換成卡片
+      for (const t of NHT) { if (cards) { t.m.geometry = cardGeo(t.hill ? 'h' : 'n', TREE_FAR); t.m.material = leafMat; t.m.castShadow = true; t.m.receiveShadow = true; t.lod = 2; } else { t.m.geometry = t.geo; t.m.material = t.mat; t.m.castShadow = t.m.receiveShadow = false; } }
+    }
     for (const s of SMO) { const NA = s.N.array, CA = s.C.array, I = s.idx, Nn = on ? s.n1 : s.n0, Cc = on ? s.c1 : s.c0;
       for (let j = 0; j < I.length; j++) for (let d = 0; d < 3; d++) { NA[I[j] * 3 + d] = Nn[j * 3 + d]; CA[I[j] * 3 + d] = Cc[j * 3 + d]; }
       s.N.needsUpdate = true; s.C.needsUpdate = true; }
-    for (const c of CELLS.values()) for (const m of c.meshes) if (m) m.visible = on;
-    // 內湖的樹：原本的網格沒有法線，不能跟卡片的材質一起畫（會編成 FLAT_SHADED，其他的樹也跟著用那個）→ 馬上換成卡片
-    for (const t of NHT) { if (on) { t.m.geometry = cardGeo(t.hill ? 'h' : 'n', TREE_FAR); t.m.material = leafMat; t.m.castShadow = true; t.m.receiveShadow = true; t.lod = 2; } else { t.m.geometry = t.geo; t.m.material = t.mat; t.m.castShadow = t.m.receiveShadow = false; } }
     for (const c of CELLS.values()) c.lod = -1;
   }
   let lodN = 0;
   function lodStep(cam, force) { // 遠近換樹（每 10 幀看一次）
-    if (!force && ++lodN % 10) return;
+    if (!CARDS || (!force && ++lodN % 10)) return; // 第 43 批：「高」沒有卡片的樹
     const P = TREE[LV], px = cam.position.x, pz = cam.position.z;
     for (const c of CELLS.values()) { const d = Math.hypot(c.cx - px, c.cz - pz) - CELL * 0.72, want = d < TREE_NEAR ? 1 : 2; if (want === c.lod) continue; c.lod = want;
       const Pp = want === 1 ? P : TREE_FAR; if (c.meshes[0]) c.meshes[0].geometry = cardGeo('b', Pp); if (c.meshes[1]) c.meshes[1].geometry = cardGeo('c', Pp); }
@@ -786,15 +790,18 @@ function createLook(o) {
     }
   }
   function shadowCfg(lv) { // 第 37 批：影子圖多大、照多遠（漂亮小一點）；圖大小變了要重做
-    SH = lv === 2 && !MAX ? SHL_PHONE : SHL[lv] || SHL[2]; if (SH.map > R.capabilities.maxTextureSize) SH = { ...SH, map: Math.min(SH.map, R.capabilities.maxTextureSize) }; TEXEL = (SH.r * 2) / SH.map; if (!dl) return; dl.shadow.radius = SH.rad;
+    SH = lv === 2 && !MAX ? SHL_PHONE : SHL[lv] || SHL[2]; if (SH.map > R.capabilities.maxTextureSize) SH = { ...SH, map: Math.min(SH.map, R.capabilities.maxTextureSize) }; TEXEL = (SH.r * 2) / SH.map;
+    if (LV > 0) { const on = lv !== 1; R.shadowMap.enabled = on; if (dl) { dl.castShadow = on; if (!on && dl.shadow.map) { dl.shadow.map.dispose(); dl.shadow.map = null; } } } // 第 43 批（Nick「高再降低一點」選 1）：「高」沒有太陽的影子（影子要每格多畫一次）
+    if (!dl) return; dl.shadow.radius = SH.rad;
     if (dl.shadow.mapSize.x !== SH.map) { dl.shadow.mapSize.set(SH.map, SH.map); if (dl.shadow.map) { dl.shadow.map.dispose(); dl.shadow.map = null; } }
     Object.assign(dl.shadow.camera, { left: -SH.r, right: SH.r, top: SH.r, bottom: -SH.r, near: 100, far: 500 }); dl.shadow.camera.updateProjectionMatrix();
   }
   function apply(lv) {
     const was = LV; LV = lv;
     if (lv > 0) {
-      if (was === 0) { capture(); lights(true); crownsOn(true); }
-      else if (was !== lv) { shadowCfg(lv); lampsOff(); lampsOn(); } // 第 37 批：漂亮 ↔ 最真實：影子大小、燈的數目不一樣
+      if (was === 0) { capture(); lights(true); crownsOn(true, lv === 2); }
+      else if (was !== lv) { shadowCfg(lv); lampsOff(); lampsOn(); crownsOn(true, lv === 2); } // 第 37 批：漂亮 ↔ 最真實：影子大小、燈的數目不一樣；第 43 批：卡片的樹只有最真實
+      if (lv === 1) { for (const x of HIDE) x.visible = true; HIDE.length = 0; } // 第 43 批：「高」沒有真的影子：地上畫的假影子拿回來
       scanAll(); // 影子、材質（換層級：材質重新編）
       for (const m of MATS) m.needsUpdate = true;
       if (leafMat) leafMat.needsUpdate = true;
@@ -875,7 +882,7 @@ function createLook(o) {
     set, treeK, stats: st,
     get hour() { return hourNow(); }, hourAt, setHour(h) { hourOv = h == null ? null : clamp(+h, 0, 24) % 24; timeStep(); lampN = 0; }, get night() { return TD.lamp; }, get sun() { return TD.elev; }, // 第 30 批：一天的時間
     _tex: () => TEX, _td: () => TD,
-    info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band, stars: NS ? +NS.stars.material.opacity.toFixed(2) : null, moon: NS ? +NS.moon.material.opacity.toFixed(2) : null, win: NS ? NS.lit : 0, winK: NS ? +NS.win.material.opacity.toFixed(2) : 0, pools: NS ? NS.pools : 0, pol: NS && NS.pol ? +NS.pol.intensity.toFixed(1) : 0, polD: NS && NS.polCar ? +NS.polD.toFixed(1) : null, sh: LV ? SH.map : 0, shR: LV ? SH.r : 0, shRad: dl ? dl.shadow.radius : 0, cube: CUBE.n, cubeCalls: CUBE.calls, carCube: !!(CARM.length && CUBE.rt && CARM[0][0].envMap === CUBE.rt.texture), nLamp: PL ? PL.length : 0, nHead: HLT ? HLT.length : 0, polOn: !!(NS && NS.pol) }), // 第 37 批：影子大小、燈幾盞
+    info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band, stars: NS ? +NS.stars.material.opacity.toFixed(2) : null, moon: NS ? +NS.moon.material.opacity.toFixed(2) : null, win: NS ? NS.lit : 0, winK: NS ? +NS.win.material.opacity.toFixed(2) : 0, pools: NS ? NS.pools : 0, pol: NS && NS.pol ? +NS.pol.intensity.toFixed(1) : 0, polD: NS && NS.polCar ? +NS.polD.toFixed(1) : null, sh: LV && R.shadowMap.enabled ? SH.map : 0, shR: LV && R.shadowMap.enabled ? SH.r : 0, shRad: dl ? dl.shadow.radius : 0, cube: CUBE.n, cubeCalls: CUBE.calls, carCube: !!(CARM.length && CUBE.rt && CARM[0][0].envMap === CUBE.rt.texture), nLamp: PL ? PL.length : 0, nHead: HLT ? HLT.length : 0, polOn: !!(NS && NS.pol) }), // 第 37 批：影子大小、燈幾盞
     _ns: () => NS, _az: () => TD.az,
   };
   return API;

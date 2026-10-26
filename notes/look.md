@@ -235,3 +235,16 @@ Nick: 「在這個頁面就要可以改畫質 剛剛開太高 結果現在可能
 - Before the first trip LOOK does not exist yet: the tap only saves the choice, and the trip builds that level. The never-chosen default comes from `lookCaps(renderer).pref` (look.js; the GPU and phone detection moved out of `createLook`).
 - After a trip LOOK exists: the tap calls `lookSet(lv, true)` straight away.
 - night-test sections 0 and 8 cover it.
+
+## Batch 43 (2026-10-26, trial v57): 高 lighter again
+
+Nick: 「畫質"高"再降低一點 能降什麼」. I offered six options and he picked 「123」.
+
+- **1. No sun shadows at 高.** `shadowCfg` turns `R.shadowMap.enabled` and `dl.castShadow` off when the level is 1 and disposes the shadow map.
+  - The painted ground shadows (`st-shadow`) stay visible at 高; `visit` hides them only at 超高, and `apply` restores `HIDE` when switching to 高.
+  - `info().sh` / `shR` report 0 when the shadow map is off.
+- **2. Pixel cap 0.5 M → 0.35 M** (garage.src.html `pxLow`). The ratio may now drop to 0.75 (below 1 = upscaled), so the cap really applies on phones whose screens already exceed 0.35 M CSS pixels.
+- **3. Trees are the 普通 trees at 高.** `crownsOn(on, cards)` keeps the smoothed green normals for any level above 0. Collapsing the crowns, the leaf-card cells and the Neihu card swap happen only at 超高 (`CARDS`). `lodStep` does nothing without cards.
+- **Tests:**
+  - look-test section 8 has a new check; section 11 switches 高 → 超高 → 高; the button labels check now expects 超高/高/普通 (it was still on the old names).
+  - night-test: 高 shadow map 0; the pixel cap is 0.35 M plus a 1280×720 check that the ratio goes below 1.

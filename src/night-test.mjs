@@ -179,10 +179,16 @@ await p.waitForFunction(() => window.__D().LOOK.level === 1 && !window.__D().LOO
 const b1 = await at('22-b', 22);
 check(b1.night === 1 && b1.pl.some((l) => l.I > 0) && b1.sp.every((l) => l.I === 18) && b1.paintN === 1 && Object.values(perf['22-b']).every((v) => v.wet === 0) && b1.dl.I === 0.8,
   `漂亮 at 22:00: lamps, headlights, car lamps, moon light; no wet reflection pass`);
-check(b1.pl.length === 2 && b1.sp.length === 1 && b1.ns.pol === null && !b1.info.polOn && b1.info.sh === 1024 && b1.info.shR === 40 && b1.ns.beamVis && n.info.sh === 4096 && n.info.shR === 110 && n.info.shRad === 3.5 && b1.info.shRad === 2 && n.pl.length === 4 && n.sp.length === 2 && n.info.polOn,
-  `第 37 批 漂亮 is lighter: ${b1.pl.length} street lamps (最真實 ${n.pl.length}), ${b1.sp.length} headlight spot (最真實 ${n.sp.length}), no police roof light, shadow map ${b1.info.sh} / ${b1.info.shR} m (最真實 ${n.info.sh} / ${n.info.shR} m); the road beam stays`);
+check(b1.pl.length === 2 && b1.sp.length === 1 && b1.ns.pol === null && !b1.info.polOn && b1.info.sh === 0 && b1.info.shR === 0 && b1.ns.beamVis && n.info.sh === 4096 && n.info.shR === 110 && n.info.shRad === 3.5 && n.pl.length === 4 && n.sp.length === 2 && n.info.polOn,
+  `第 37 批 漂亮 is lighter: ${b1.pl.length} street lamps (最真實 ${n.pl.length}), ${b1.sp.length} headlight spot (最真實 ${n.sp.length}), no police roof light, shadow map ${b1.info.sh} / ${b1.info.shR} m (第 43 批: 高 has none; 最真實 ${n.info.sh} / ${n.info.shR} m); the road beam stays`);
 const pxl = await p.evaluate(() => { window.__dstep(1); const v = new window.__THREE.Vector2(); window.__D().renderer.getDrawingBufferSize(v); return { on: window.__pxLow() && !window.__pxHigh(), px: v.x * v.y, css: innerWidth * innerHeight }; });
-check(pxl.on && pxl.px <= Math.max(0.5e6, pxl.css) * 1.01, `第 37 批: driving at 漂亮（高） caps the drawing buffer (第 41 批: 0.5 M pixels; ${pxl.px} px for a ${pxl.css} px window)`);
+check(pxl.on && pxl.px <= Math.max(0.35e6, pxl.css * 0.5625) * 1.01, `第 37 批: driving at 漂亮（高） caps the drawing buffer (第 43 批: 0.35 M pixels, down to 0.75× the screen; ${pxl.px} px for a ${pxl.css} px window)`);
+{ // 第 43 批：大視窗（1280×720＝92 萬點）：畫的點可以比螢幕少（最少 0.75 倍），再放大給螢幕
+  await p.setViewportSize({ width: 1280, height: 720 }); await p.waitForTimeout(300);
+  const big = await p.evaluate(() => { window.__dstep(1); const v = new window.__THREE.Vector2(); window.__D().renderer.getDrawingBufferSize(v); return { px: v.x * v.y, css: innerWidth * innerHeight, pr: window.__D().renderer.getPixelRatio() }; });
+  await p.setViewportSize({ width: 844, height: 390 }); await p.waitForTimeout(300);
+  check(big.pr < 1 && big.pr >= 0.75 && big.px < big.css * 0.6, `第 43 批: 高 in a big window draws fewer pixels than the screen (ratio ${big.pr.toFixed(3)}, ${big.px} px for ${big.css})`);
+}
 // ---- 6 換回順：燈拿掉、招牌、車燈回去 ----
 const signBase = await p.evaluate(() => { let m = null; window.__D().TR.scene.traverse((o) => { if (!m && o.isMesh && o.material && o.material.emissiveMap && /sign/.test(o.name)) m = o.material; }); return m ? m.emissiveIntensity : null; });
 await p.evaluate(() => window.__D().LOOK.set(0));
