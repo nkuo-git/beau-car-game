@@ -248,3 +248,4 @@ Nick: 「畫質"高"再降低一點 能降什麼」. I offered six options and h
 - **Tests:**
   - look-test section 8 has a new check; section 11 switches 高 → 超高 → 高; the button labels check now expects 超高/高/普通 (it was still on the old names).
   - night-test: 高 shadow map 0; the pixel cap is 0.35 M plus a 1280×720 check that the ratio goes below 1.
+- look-test 18 ok: 高 highway 262 calls / 1.33 M tris (was ~500; 普通 260).
