@@ -16,17 +16,17 @@ const pMe = $('pMe'), pOpp = $('pOpp');
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const TYRE_GRIP = [0, 0.08, 0.16]; // 原廠胎、半熱熔胎、直線加速胎
-// s：{ key, hp, tyre }（你的車照車庫裝的零件和輪胎，對手的車寫在 OPPS）
+// s：{ key, hp, tyre, vmax? }（你的車照車庫裝的零件和輪胎，極速照零件＝vmaxOf；對手的車寫在 OPPS，極速照原廠）
 function racer(s) {
   const P = PERF[s.key], W = CARS[s.key].spec.wheels;
   const r = W.RR ?? W.R, m = P.kg + 75, wr = (P.red * 2 * Math.PI) / 60, grip = 1.35 * (1 + TYRE_GRIP[s.tyre || 0]);
   return {
-    key: s.key, P, m, r, wr, fd: (wr * r) / (GEARS[5] * (P.vmax / 3.6)), Tpk: (s.hp * 745.7) / (wr * 0.95 * torqueAt(0.95)),
+    key: s.key, P, m, r, wr, fd: (wr * r) / (GEARS[5] * ((s.vmax || P.vmax) / 3.6)), Tpk: (s.hp * 745.7) / (wr * 0.95 * torqueAt(0.95)),
     tract: grip * m * 9.81 * (P.awd ? 0.9 : P.drive ?? 0.74), cda: P.cda,
     x: 0, v: 0, gear: 0, shiftT: 0, cut: 0, nitro: 0, nitroUsed: false, go: null, react: null, fin: null, trap: 0, rpm: 0.12, spin: 0,
   };
 }
-const mySetup = () => ({ key: cur, hp: hpOf(cur), tyre: tyreOf(cur) });
+const mySetup = () => ({ key: cur, hp: hpOf(cur), tyre: tyreOf(cur), vmax: vmaxOf(cur) }); // 第 46 批：你的車的極速照零件（對手照原廠）
 const statLine = (key) => { const P = PERF[key]; return `${hpOf(key).toLocaleString('en-US')} 匹 · ${P.kg.toLocaleString('en-US')} 公斤 · ${P.awd ? '四驅' : '後驅'}`; };
 
 // ---- 對手：從隔壁同學到大魔王，越後面越快、獎金越多（萬）----

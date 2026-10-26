@@ -224,6 +224,7 @@ const three = path.join(dir, '../node_modules/three');
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const hook = 'window.__G = () => GAME; window.__S = () => S; window.__scene = () => scene; window.__eA = () => engineAudio;'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
+  + ' window.__PERF = () => PERF; window.__fd = () => racer(mySetup()).fd;' // 第 46 批：極速照零件
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, TR, LODS, cur, built, walker });'
   + ' window.__N = () => NPC;'
   + ' window.__switch = (k) => { GAME.owned.add(k); if (!tripPose[k]) { const t = drv.telemetry(); tripPose[k] = { x: t.x + Math.sin(t.heading) * 6, z: t.z + Math.cos(t.heading) * 6, heading: t.heading }; } return switchCar(k); };'
@@ -523,6 +524,15 @@ await p.evaluate(() => { const d = window.__D().drv; d.setInput(null); d.resume(
   check(off.pressed === 'false' && off.api === false && off.t === 0 && !off.vis, `pressing 跳燈 again: lights off and lids folded (${JSON.stringify({ t: off.t, pressed: off.pressed })})`);
   await p.evaluate(() => window.__switch('supra')); await p.evaluate(() => window.__dstep(5)); const back = await popUi();
   check(back.cur === 'supra' && !back.shown && back.api === null, `back in the SUPRA: no 跳燈 button again`);
+}
+// 第 46 批（Nick 2026-10-26「…真實世界改到多快 你就讓遊戲裡改到多快」）：開的車的極速照零件（town.src.js perf.vmax ＝ vmaxOf；400 公尺 race.src.js 的 fd 也是）
+{
+  const vt = await p.evaluate(() => { const G = window.__G(), k = window.__D().cur, old = G.parts[k], o = {};
+    o.k = k; o.a = window.__D().drv.carInfo.vmax; o.fa = window.__fd();
+    G.parts[k] = window.__PERF()[k].parts.map((x) => x[0]); window.__remake(); window.__dstep(3); o.b = window.__D().drv.carInfo.vmax; o.fb = window.__fd();
+    G.parts[k] = old; window.__remake(); window.__dstep(3); o.c = window.__D().drv.carInfo.vmax; return o; });
+  console.log('  極速 (第 46 批):', JSON.stringify(vt));
+  check(vt.k === 'supra' && vt.a === 300 && vt.b === 387 && vt.c === 300 && Math.abs(vt.fb / vt.fa - 300 / 387) < 1e-6, `top speed follows the parts in the game: SUPRA no parts ${vt.a} km/h, all parts ${vt.b} km/h (the real tuned record), back to ${vt.c}; the 400 m gearing follows too`);
 }
 check(!errs.length, `no page errors (${errs.join(' | ') || 'none'})`);
 await b.close(); srv.close();

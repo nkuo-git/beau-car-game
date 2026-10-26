@@ -38,3 +38,37 @@ Nick asked for 10 more cars modelled from web photos. The photos were only used 
 - town.src.js `MIR` / `mirrorSet` / `mirrorStep`: in the driver's-seat view only, a backward camera at the driver's eye height (car centre line) draws the scene into a 512×170 render target every 3rd frame, with your own car hidden for that pass. The inside mirror (cabin.js `cabin.userData.mirror`, a hidden quad in front of the painted mirror) and both side-mirror glasses (`S.mats.mirrorGlass` meshes) get `MIR.mat` with UVs from `mirUV` (inside: straight back; left: left-behind; right: right-behind; flipped like a mirror). Leaving the driver's view (or stowing the car) puts the original materials back.
 - Cost: one extra pass of about 87 calls / 0.38M tris (mirror-test, village road) every 3rd frame, only in the driver’s view.
 - Test: `mirror-test.mjs`.
+
+## Tuned top speeds = real-world records (第 46 批, trial v59, 2026-10-26)
+- Nick: 「你去查世界記錄遊戲中的車在真實世界改到多快 你就讓遊戲裡改到多快」.
+- `PERF[k].top` (garage.src.html) is the fastest measured speed of a modified car of that model. `vmaxOf(k, hp = hpOf(k))` goes linearly from stock `vmax` (no parts) to `top` (all parts) by added hp.
+- Used by:
+  - the town drive: town.src.js `perf.vmax`, which drives `drive.js`'s gearing and governor;
+  - your car in the 400 m: race.src.js `mySetup().vmax` → `racer` `fd`.
+- Not used by the 400 m / circuit opponents or the dealer label (still stock).
+- No new UI.
+
+| car | stock | tuned | record (research 2026-10-26) |
+|---|---|---|---|
+| GC8 | 250 | 288 | AFP GC8, 1/4-mile trap, Santa Pod 2014 (engine swap) |
+| GR Yaris | 230 | 250 | Lamspeed, 1/4-mile trap, ~2024 |
+| SUPRA (A80) | 300 | 387 | Ekanoo Racing 2JZ drag Supra, 1/4-mile trap, Bahrain 2014 |
+| GT-R (R34) | 290 | 346 | Veilside R34, closed road, NZ 1999 |
+| 918 | 345 | 351 | Weissach, runway mile, 2018 (best measured) |
+| JESKO | 330 | 413 | Jesko Absolut 0-400-0 runs 2024 (best measured; no aftermarket record) |
+| R7 (FD) | 250 | 389 | Racing Beat FD, Bonneville 1995 (three-rotor) |
+| C16 (Chiron) | 350 | 490 | Chiron Super Sport 300+ prototype, Ehra-Lessien 2019 |
+| 86 (AE86) | 190 | 254 | 3S-GTE swap, 1/4-mile trap (low confidence) |
+| AV12 | 345 | 350 | Underground Racing twin-turbo, standing half-mile 2015 |
+| 小黃 (Corolla) | 180 | 241 | E110 Corolla 3S-GTE, standing half-mile 2019 (different generation) |
+| FK | 272 | 275 | Stage 2 FK8, Autobahn speedometer video 2022 (low) |
+| E9 (Evo IX) | 250 | 299 | Extreme Tuners, 1/4-mile trap 2017–18 |
+| monster truck | 110 | 160 | Raminator, Guinness 2014 |
+| SP3, SN8, HY, LF | same | same | no modified run found; LF's 372 is an unverified speedometer video |
+
+- A "trap" is the speed at the end of a 1/4 mile. The car's true top would be higher, but nobody has measured it.
+- Test: `top-test.mjs` (Node, ~1 s) checks every car flat out on a flat plane through `drive.js`:
+  - no parts reach `vmax`;
+  - all parts reach `top`;
+  - half the parts land in between.
+- drift-test checks the in-game wiring: SUPRA `carInfo.vmax` goes 300 → 387 → 300, and the 400 m `fd` scales too.
