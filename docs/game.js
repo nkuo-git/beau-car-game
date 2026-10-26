@@ -39089,81 +39089,81 @@ const CARS = {
   evo: { file: 'tune/evo.glb?h=3559e5a0', size: SIZES.evo, spec: EVO_SPEC, btn: ['E9', '拉力房車 · 白'], ...EVO_GARAGE },
   monster: { file: 'tune/monster.glb?h=d023a5e6', size: SIZES.monster, spec: MONSTER_SPEC, btn: ['怪獸卡車', '越野車 · 桃紅'], ...MONSTER_GARAGE }, // ==== 第 4 批：越野車（越野車場的越野車行才買得到）====
 };
-// 性能（約略照真車）：馬力、重量、四驅、紅線、極速、風阻；drive＝後驅的車起步時後輪壓到多少重量（引擎在中間的比較會起步）
+// 性能（約略照真車）：馬力、重量、四驅、紅線、極速（vmax 原廠；top＝零件全裝，第 46 批 vmaxOf）、風阻；drive＝後驅的車起步時後輪壓到多少重量（引擎在中間的比較會起步）
 // price＝大概行情價的一半（Nick 2026-10-07「所有車都半價」；怪獸卡車他說 100 萬）（新台幣「萬」，二手車看車況差很多）；tyres＝半熱熔胎、直線加速胎的價錢（萬）
 // parts：引擎零件 [代號, 名字, 做什麼, 加幾匹, 多少錢（萬）]，每台車不一樣，便宜的在前面；買了就一直裝著
 const PERF = {
-  gc8: { price: 75, hp: 280, kg: 1260, awd: 1, red: 8000, vmax: 250, cda: 0.62, eng: 'EJ20 水平對臥四缸渦輪', tyres: [3, 6], parts: [
+  gc8: { price: 75, hp: 280, kg: 1260, awd: 1, red: 8000, vmax: 250, top: 288, cda: 0.62, eng: 'EJ20 水平對臥四缸渦輪', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 30, 4], ['exhaust', '不鏽鋼排氣', '中尾段換大口徑', 15, 4],
     ['ic', '上置大中冷', '進氣溫度降下來', 15, 5], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 5], ['header', '等長排氣頭段', '水平對臥的咕嚕聲會變順', 20, 8],
     ['turbo', 'TD05 大渦輪', '換更大顆的渦輪', 100, 20], ['forged', '鍛造活塞連桿', '引擎撐得住高增壓', 40, 35]] },
-  yaris: { price: 130, hp: 300, kg: 1280, awd: 1, red: 7000, vmax: 230, cda: 0.66, eng: 'G16E 1.6 三缸渦輪', tyres: [3, 6], parts: [
+  yaris: { price: 130, hp: 300, kg: 1280, awd: 1, red: 7000, vmax: 230, top: 250, cda: 0.66, eng: 'G16E 1.6 三缸渦輪', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成高流量的', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 4], ['exhaust', '中尾段排氣', '排氣更順', 10, 5],
     ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 5], ['ic', '大中冷', '進氣溫度降下來', 15, 6], ['cams', '賽車凸輪軸', '高轉更有力', 25, 15],
     ['turbo', '混合式大渦輪', '渦輪換大一號', 80, 22], ['forged', '鍛造活塞連桿', '三缸也撐得住高增壓', 40, 38]] },
-  supra: { price: 200, hp: 550, kg: 1520, awd: 0, drive: 0.7, red: 7200, vmax: 300, cda: 0.62, eng: '2JZ 直六雙渦輪', tyres: [4, 8], parts: [
+  supra: { price: 200, hp: 550, kg: 1520, awd: 0, drive: 0.7, red: 7200, vmax: 300, top: 387, cda: 0.62, eng: '2JZ 直六雙渦輪', tyres: [4, 8], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 15, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 5], ['exhaust', '3 吋全段排氣', '整條換大口徑', 25, 6],
     ['ic', '前置大中冷', '進氣溫度降下來', 20, 6], ['fuel', '1000cc 噴油嘴＋雙汽油泵', '大馬力要很多油', 30, 8], ['cams', '高角度凸輪軸', '高轉更有力', 60, 18],
     ['turbo', '單顆大渦輪', '兩顆渦輪換成一顆大的', 180, 35], ['forged', '鍛造活塞連桿', '2JZ 撐到 1000 匹', 80, 60]] },
-  gtr: { price: 400, hp: 500, kg: 1560, awd: 1, red: 8000, vmax: 290, cda: 0.66, eng: 'RB26 直六雙渦輪', tyres: [4, 8], parts: [
+  gtr: { price: 400, hp: 500, kg: 1560, awd: 1, red: 8000, vmax: 290, top: 346, cda: 0.66, eng: 'RB26 直六雙渦輪', tyres: [4, 8], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 6], ['ic', '前置大中冷', '進氣溫度降下來', 20, 7],
     ['exhaust', '鈦合金排氣', '又輕又大口徑', 20, 8], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 20, 8], ['cams', '高角度凸輪軸', '高轉更有力', 60, 20],
     ['turbo', '雙大渦輪', '兩顆渦輪都換大', 150, 45], ['stroker', 'RB28 鍛造曲軸', '排氣量加到 2.8 升', 80, 80]] },
-  p918: { price: 3000, hp: 887, kg: 1675, awd: 1, red: 9150, vmax: 345, cda: 0.62, eng: '4.6 V8＋兩顆電動馬達', tyres: [12, 20], parts: [
+  p918: { price: 3000, hp: 887, kg: 1675, awd: 1, red: 9150, vmax: 345, top: 351, cda: 0.62, eng: '4.6 V8＋兩顆電動馬達', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 8, 5], ['flywheel', '輕量化飛輪', '轉速拉得更快', 10, 25], ['exhaust', '鈦合金排氣', '頂出式排氣換鈦合金', 20, 30],
     ['ecu', 'ECU 調校', '引擎和馬達一起重調', 30, 40], ['battery', '電池放電升級', '電池一次放更多電', 40, 120], ['motorF', '前馬達升級', '前輪的電動馬達換大', 40, 150],
     ['motorR', '後馬達升級', '後面的電動馬達換大', 45, 180], ['turbo', 'V8 加裝雙渦輪', '自然進氣改成渦輪', 70, 450]] },
-  sp3: { price: 6000, hp: 829, kg: 1485, awd: 0, drive: 0.8, red: 9500, vmax: 340, cda: 0.62, eng: '6.5 V12 自然進氣', tyres: [12, 20], parts: [
+  sp3: { price: 6000, hp: 829, kg: 1485, awd: 0, drive: 0.8, red: 9500, vmax: 340, top: 340, cda: 0.62, eng: '6.5 V12 自然進氣', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 8, 5], ['flywheel', '輕量化飛輪', '轉速拉得更快', 10, 30], ['ecu', 'ECU 調校', '重寫點火和汽門正時', 20, 35],
     ['exhaust', '鈦合金排氣', 'V12 叫得更大聲', 25, 45], ['intake', '可變長度進氣歧管', '高轉低轉都有力', 15, 60], ['cams', '高角度凸輪軸', '高轉更有力', 30, 90],
     ['forged', '鍛造活塞', '撐得住機械增壓', 20, 150], ['sc', '機械增壓', 'V12 加一顆機械增壓器', 250, 600]] },
-  jesko: { price: 7500, hp: 1280, kg: 1420, awd: 0, drive: 0.8, red: 8500, vmax: 330, cda: 0.72, eng: '5.0 V8 雙渦輪', tyres: [12, 20], parts: [
+  jesko: { price: 7500, hp: 1280, kg: 1420, awd: 0, drive: 0.8, red: 8500, vmax: 330, top: 413, cda: 0.72, eng: '5.0 V8 雙渦輪', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 10, 8], ['e85', 'E85 生質燃料', '改加 E85，1280 匹變 1600 匹', 320, 30], ['fuel', '大噴油嘴', 'E85 要更多油', 20, 50],
     ['exhaust', '鈦合金排氣', '又輕又大聲', 30, 60], ['ecu', 'ECU 調校', '重寫點火和增壓', 50, 80], ['cams', '賽車凸輪軸', '高轉更有力', 20, 150],
     ['forged', '鍛造內部', '曲軸、活塞都換鍛造', 40, 300], ['turbo', '大渦輪', '兩顆渦輪都換大', 150, 400]] },
   // 2026-10-17 新的 10 台車（價錢一樣是行情價的一半左右）
-  rx7: { price: 100, hp: 280, kg: 1260, awd: 0, drive: 0.7, red: 8000, vmax: 250, cda: 0.62, eng: '13B 雙轉子雙渦輪', tyres: [3, 6], parts: [
+  rx7: { price: 100, hp: 280, kg: 1260, awd: 0, drive: 0.7, red: 8000, vmax: 250, top: 389, cda: 0.62, eng: '13B 雙轉子雙渦輪', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 30, 4], ['exhaust', '不鏽鋼排氣', '轉子引擎叫得更兇', 15, 4],
     ['ic', '前置大中冷', '進氣溫度降下來', 15, 5], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 5], ['port', '轉子擴孔', '進氣孔磨大，高轉更有力', 40, 15],
     ['turbo', '單顆大渦輪', '兩顆小渦輪換成一顆大的', 150, 30], ['seals', '強化油封', '轉子撐得住高增壓', 30, 35]] },
-  chiron: { price: 8000, hp: 1500, kg: 1995, awd: 1, red: 6700, vmax: 350, cda: 0.62, eng: '8.0 W16 四渦輪', tyres: [12, 20], parts: [
+  chiron: { price: 8000, hp: 1500, kg: 1995, awd: 1, red: 6700, vmax: 350, top: 490, cda: 0.62, eng: '8.0 W16 四渦輪', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 10, 8], ['exhaust', '鈦合金排氣', '四根排氣管叫得更大聲', 30, 60], ['ecu', 'ECU 調校', '重寫點火和增壓', 60, 80],
     ['ic', '大水冷中冷', '四顆渦輪的空氣更冷', 40, 90], ['fuel', '大噴油嘴', '大馬力要很多油', 30, 100], ['cams', '賽車凸輪軸', '高轉更有力', 40, 150],
     ['forged', '鍛造內部', 'W16 撐得住更高增壓', 50, 300], ['turbo', '四顆大渦輪', '四顆渦輪都換大', 200, 500]] },
-  ae86: { price: 75, hp: 130, kg: 940, awd: 0, drive: 0.65, red: 7600, vmax: 190, cda: 0.7, eng: '4A-GE 1.6 直列四缸自然進氣', tyres: [2, 4], parts: [
+  ae86: { price: 75, hp: 130, kg: 940, awd: 0, drive: 0.65, red: 7600, vmax: 190, top: 254, cda: 0.7, eng: '4A-GE 1.6 直列四缸自然進氣', tyres: [2, 4], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 6, 1], ['exhaust', '不鏽鋼排氣', '叫得更清脆', 8, 2], ['header', '4-2-1 頭段', '高轉更順', 10, 3],
     ['ecu', 'ECU 調校', '重寫點火和噴油', 10, 3], ['itb', '四喉節氣門', '每一缸自己一個節氣門', 25, 8], ['cams', '高角度凸輪軸', '高轉更有力', 20, 10],
     ['bore', '加大缸徑', '排氣量加到 1.8 升', 30, 18], ['sc', '機械增壓', '加一顆機械增壓器', 70, 30]] },
-  aventador: { price: 1200, hp: 740, kg: 1575, awd: 1, red: 8500, vmax: 345, cda: 0.68, eng: '6.5 V12 自然進氣', tyres: [10, 18], parts: [
+  aventador: { price: 1200, hp: 740, kg: 1575, awd: 1, red: 8500, vmax: 345, top: 350, cda: 0.68, eng: '6.5 V12 自然進氣', tyres: [10, 18], parts: [
     ['filter', '賽車空濾', '吸氣更順', 8, 5], ['exhaust', '鈦合金排氣', 'V12 叫得更大聲', 25, 30], ['ecu', 'ECU 調校', '重寫點火和汽門正時', 20, 30],
     ['flywheel', '輕量化飛輪', '轉速拉得更快', 10, 25], ['intake', '碳纖維進氣', '進氣更順更冷', 15, 40], ['cams', '高角度凸輪軸', '高轉更有力', 30, 70],
     ['forged', '鍛造活塞', '撐得住雙渦輪', 20, 120], ['turbo', '雙渦輪套件', '自然進氣改成雙渦輪', 300, 450]] },
-  altis: { price: 45, hp: 122, kg: 1385, awd: 0, drive: 0.58, red: 5200, vmax: 180, cda: 0.68, eng: '1.8 油電混合（引擎＋電動馬達）', tyres: [2, 4], parts: [
+  altis: { price: 45, hp: 122, kg: 1385, awd: 0, drive: 0.58, red: 5200, vmax: 180, top: 241, cda: 0.68, eng: '1.8 油電混合（引擎＋電動馬達）', tyres: [2, 4], parts: [
     ['filter', '高流量空濾', '吸氣更順', 3, 1], ['exhaust', '不鏽鋼排氣', '安靜的計程車也會叫了', 5, 2], ['ecu', '油電電腦調校', '引擎和馬達一起出力', 8, 4],
     ['battery', '大電池', '馬達可以出力更久', 15, 6], ['motor', '強化馬達', '起步更快', 20, 8], ['cams', '高角度凸輪軸', '高轉更有力', 12, 8],
     ['sc', '機械增壓', '加一顆機械增壓器', 50, 30], ['swap', '換 2.0 引擎', '整顆換成 2.0 升', 60, 40]] },
-  senna: { price: 1500, hp: 800, kg: 1198, awd: 0, drive: 0.8, red: 8250, vmax: 335, cda: 0.72, eng: '4.0 V8 雙渦輪（中置後驅）', tyres: [10, 18], parts: [
+  senna: { price: 1500, hp: 800, kg: 1198, awd: 0, drive: 0.8, red: 8250, vmax: 335, top: 335, cda: 0.72, eng: '4.0 V8 雙渦輪（中置後驅）', tyres: [10, 18], parts: [
     ['filter', '賽車空濾', '吸氣更順', 8, 5], ['exhaust', '鈦合金排氣', '往上排的排氣叫得更兇', 25, 30], ['ecu', 'ECU 調校', '重寫點火和增壓', 30, 50],
     ['ic', '大中冷', '進氣溫度降下來', 20, 40], ['fuel', '大噴油嘴', '大馬力要更多油', 15, 50], ['cams', '賽車凸輪軸', '高轉更有力', 30, 70],
     ['forged', '鍛造內部', '撐得住更高增壓', 40, 150], ['turbo', '大渦輪', '兩顆渦輪都換大', 150, 250]] },
-  huayra: { price: 4500, hp: 730, kg: 1350, awd: 0, drive: 0.8, red: 7000, vmax: 360, cda: 0.68, eng: '6.0 V12 雙渦輪（中置後驅）', tyres: [12, 20], parts: [
+  huayra: { price: 4500, hp: 730, kg: 1350, awd: 0, drive: 0.8, red: 7000, vmax: 360, top: 360, cda: 0.68, eng: '6.0 V12 雙渦輪（中置後驅）', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 10, 5], ['exhaust', '鈦合金排氣', '四根排氣管叫得更大聲', 30, 30], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 50],
     ['ic', '大中冷', '進氣溫度降下來', 25, 40], ['fuel', '大噴油嘴', '大馬力要更多油', 20, 50], ['cams', '賽車凸輪軸', '高轉更有力', 35, 70],
     ['forged', '鍛造內部', '撐得住更高增壓', 50, 150], ['turbo', '大渦輪', '兩顆渦輪都換大', 180, 300]] },
-  laferrari: { price: 5000, hp: 963, kg: 1255, awd: 0, drive: 0.8, red: 9250, vmax: 350, cda: 0.65, eng: '6.3 V12 油電（中置後驅）', tyres: [12, 20], parts: [
+  laferrari: { price: 5000, hp: 963, kg: 1255, awd: 0, drive: 0.8, red: 9250, vmax: 350, top: 350, cda: 0.65, eng: '6.3 V12 油電（中置後驅）', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 10, 5], ['exhaust', '鈦合金排氣', 'V12 叫得更大聲', 30, 30], ['ecu', 'ECU 調校', '重寫點火和汽門正時', 40, 40],
     ['battery', '大電池', '馬達可以出力更久', 40, 60], ['motor', '強化馬達', '起步更快', 50, 80], ['cams', '賽車凸輪軸', '高轉更有力', 35, 70],
     ['forged', '鍛造活塞', '撐得住雙渦輪', 30, 120], ['turbo', '雙渦輪套件', '自然進氣改成雙渦輪', 300, 400]] },
-  civic: { price: 115, hp: 320, kg: 1380, awd: 0, drive: 0.58, red: 7000, vmax: 272, cda: 0.68, eng: '2.0 渦輪直列四缸（前置前驅）', tyres: [3, 6], parts: [
+  civic: { price: 115, hp: 320, kg: 1380, awd: 0, drive: 0.58, red: 7000, vmax: 272, top: 275, cda: 0.68, eng: '2.0 渦輪直列四缸（前置前驅）', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 8, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 20, 5], ['exhaust', '中置三出排氣', '中間三根叫得更兇', 15, 4],
     ['ic', '前置大中冷', '進氣溫度降下來', 12, 5], ['fuel', '大噴油嘴', '大馬力要更多油', 10, 5], ['lsd', '強化限滑差速器', '前輪不會只有一邊空轉', 15, 10],
     ['cams', '高角度凸輪軸', '高轉更有力', 20, 15], ['turbo', '大渦輪', '渦輪換大一號', 80, 40]] },
-  evo: { price: 100, hp: 280, kg: 1400, awd: 1, red: 7500, vmax: 250, cda: 0.68, eng: '4G63 2.0 渦輪直列四缸（四輪驅動）', tyres: [3, 6], parts: [
+  evo: { price: 100, hp: 280, kg: 1400, awd: 1, red: 7500, vmax: 250, top: 299, cda: 0.68, eng: '4G63 2.0 渦輪直列四缸（四輪驅動）', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 8, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 20, 5], ['exhaust', '不鏽鋼排氣', '叫得更兇', 12, 4],
     ['ic', '前置大中冷', '進氣溫度降下來', 12, 6], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 6], ['cams', '高角度凸輪軸', '高轉更有力', 20, 12],
     ['forged', '鍛造活塞連桿', '4G63 撐得住大增壓', 30, 25], ['turbo', '大渦輪', '渦輪換大一號', 80, 60]] },
   // ==== 第 4 批：越野車：offroad＝越野車行賣的（泥巴、石頭、沙跑得動：terrain.js）；big＝大車（車庫頁鏡頭拉遠、不停車位）；halfW＝碰撞半寬（輪胎比車身寬）；gears＝自己的齒比 ====
-  monster: { price: 100, hp: 1500, kg: 5400, awd: 1, red: 6800, vmax: 110, cda: 2.2, offroad: 1, big: 1, halfW: 1.905, gears: [2.1, 1.35, 1.0, 0.92, 0.88, 0.86], eng: '機械增壓 V8（燒甲醇）', tyres: [8, 15], parts: [
+  monster: { price: 100, hp: 1500, kg: 5400, awd: 1, red: 6800, vmax: 110, top: 160, cda: 2.2, offroad: 1, big: 1, halfW: 1.905, gears: [2.1, 1.35, 1.0, 0.92, 0.88, 0.86], eng: '機械增壓 V8（燒甲醇）', tyres: [8, 15], parts: [
     ['intake', '大口徑進氣帽', '增壓器上面的進氣帽換大', 50, 6], ['ecu', '噴射電腦調校', '甲醇噴射重新調', 90, 12], ['exhaust', '直排頭段', '八根短管直排，聲音更兇', 70, 18],
     ['fuel', '大流量甲醇泵', '大馬力要很多甲醇', 50, 22], ['cams', '賽車凸輪軸', '高轉更有力', 110, 40], ['heads', '大口徑汽缸頭', '進排氣更順', 120, 70],
     ['blower', '大顆機械增壓', '增壓器換大一號', 250, 120], ['forged', '鍛造引擎', '整顆換鍛造，撐得住大增壓', 150, 200]] },
@@ -39182,6 +39182,9 @@ const partsOf = (k) => (GAME.parts[k] ||= []);
 const tyresOf = (k) => (GAME.tyres[k] ||= { own: [], use: 0 });
 const tyreOf = (k) => GAME.tyres[k]?.use ?? 0;
 const hpOf = (k) => PERF[k].hp + PERF[k].parts.reduce((a, p) => a + (partsOf(k).includes(p[0]) ? p[3] : 0), 0);
+// 第 46 批（Nick 2026-10-26「你去查世界記錄遊戲中的車在真實世界改到多快 你就讓遊戲裡改到多快」）：極速照裝了多少零件，
+// 沒裝＝原廠 vmax，全部裝好＝那款車真的改裝車跑過最快的 top（km/h；沒有人改過再測的超跑＝原廠；notes/cars.md），中間照多了幾匹算
+const vmaxOf = (k, hp = hpOf(k)) => { const P = PERF[k], add = P.parts.reduce((a, p) => a + p[3], 0); return Math.round(P.vmax + ((P.top ?? P.vmax) - P.vmax) * Math.min(1, Math.max(0, (hp - P.hp) / add))); };
 const money = (w) => (w >= 10000 ? `${+(w / 10000).toFixed(2)} 億` : `${w.toLocaleString('en-US')} 萬`);
 const byPrice = (keys) => [...keys].sort((a, b) => PERF[a].price - PERF[b].price); // 照價錢排（便宜的在前面）
 const COMMON_OPTS = { wide: [['off', '原廠'], ['on', '寬體']], tint: [['light', '淺'], ['dark', '深']], studio: [['room', '豪華車庫'], ['light', '亮攝影棚'], ['dark', '暗攝影棚']],
@@ -39696,17 +39699,17 @@ const pMe = $('pMe'), pOpp = $('pOpp');
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const TYRE_GRIP = [0, 0.08, 0.16]; // 原廠胎、半熱熔胎、直線加速胎
-// s：{ key, hp, tyre }（你的車照車庫裝的零件和輪胎，對手的車寫在 OPPS）
+// s：{ key, hp, tyre, vmax? }（你的車照車庫裝的零件和輪胎，極速照零件＝vmaxOf；對手的車寫在 OPPS，極速照原廠）
 function racer(s) {
   const P = PERF[s.key], W = CARS[s.key].spec.wheels;
   const r = W.RR ?? W.R, m = P.kg + 75, wr = (P.red * 2 * Math.PI) / 60, grip = 1.35 * (1 + TYRE_GRIP[s.tyre || 0]);
   return {
-    key: s.key, P, m, r, wr, fd: (wr * r) / (GEARS[5] * (P.vmax / 3.6)), Tpk: (s.hp * 745.7) / (wr * 0.95 * torqueAt(0.95)),
+    key: s.key, P, m, r, wr, fd: (wr * r) / (GEARS[5] * ((s.vmax || P.vmax) / 3.6)), Tpk: (s.hp * 745.7) / (wr * 0.95 * torqueAt(0.95)),
     tract: grip * m * 9.81 * (P.awd ? 0.9 : P.drive ?? 0.74), cda: P.cda,
     x: 0, v: 0, gear: 0, shiftT: 0, cut: 0, nitro: 0, nitroUsed: false, go: null, react: null, fin: null, trap: 0, rpm: 0.12, spin: 0,
   };
 }
-const mySetup = () => ({ key: cur, hp: hpOf(cur), tyre: tyreOf(cur) });
+const mySetup = () => ({ key: cur, hp: hpOf(cur), tyre: tyreOf(cur), vmax: vmaxOf(cur) }); // 第 46 批：你的車的極速照零件（對手照原廠）
 const statLine = (key) => { const P = PERF[key]; return `${hpOf(key).toLocaleString('en-US')} 匹 · ${P.kg.toLocaleString('en-US')} 公斤 · ${P.awd ? '四驅' : '後驅'}`; };
 
 // ---- 對手：從隔壁同學到大魔王，越後面越快、獎金越多（萬）----
@@ -40770,7 +40773,7 @@ function makeDrv(pose) {
   const eye = CABIN_VIEW[cur] ? { ...CABIN_VIEW[cur], fov: cabinFov(cur, dcam.aspect) } : undefined;
   dEye = eye;
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
-  drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur) }, world: PW, colliders: meCols(), hudParent: stage,
+  drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
     onZone: arrive, onShift: () => dvoice?.shift(), onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
     crush: crushFx && offK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
@@ -43720,8 +43723,9 @@ function netDragDrop(Rc) { // exitRace：朋友的車收掉
 // 借的人：走到朋友停著的車旁邊 →「🔑 借車 · 小明的 GT-R」→ 數字鍵盤打 4 個數字 → 網站送給車主的手機，車主那邊對密碼（錯 3 次要等 30 秒）
 //   → 對了：車主那邊把車藏起來，回車子的樣子、零件、輪胎、停的位置 → 走去車門坐進去（walk.js getIn）→ 開的是朋友的車（他的顏色、零件）
 //   存檔還是你自己的（saveFix）；不能改裝、不能在車行買車、不能比直線加速、不能找人比賽（town.src.js 看 BORROW_K、網站看 borrowing()）
-//   下車＝還車（停在你下車的地方）；車主按「拿回來」、車主離開世界、你回車庫頁：也還（你在開的話，人站到車子旁邊）
-// 車主那邊：借出去的那台藏起來、不能上（LENT_K）；上面一條「🔑 阿龍在開你的 GT-R  拿回來」；還回來＝停在他下車的地方（輕量車，上車照常換成完整的）
+//   下車＝還車（停在你下車的地方）；車主回車庫頁、車主離開世界、你回車庫頁：也還（你在開的話，人站到車子旁邊）
+// 車主那邊：借出去的那台藏起來、不能上（LENT_K）；跳一下「🔑 阿龍借走你的 GT-R 了」；還回來＝停在他下車的地方（輕量車，上車照常換成完整的）
+// 第 45 批（Nick 2026-10-26「借還車的時候他會有一個橫著的文字顯示要不要把車拿回來那個可以把它弄掉／借車的人也有一個」）：上面那一條（車主「拿回來」、借的人「還車」）拿掉了；拿回來＝回車庫頁，還車＝下車
 // 網站（site/world.js）送：borrow/q（密碼）→ borrow/a（回答、拿回來）→ borrow/r（還車：停在哪裡）
 const BOR = { near: null, pad: null, want: null, on: null, lent: null, loading: null, ui: null, nearSig: '', locks: {} }; // loading：坐進去了、車子載入中（want 那一筆）
 const BOR_TRY = 3; // 錯幾次要等（車主那邊算；這邊只是顯示）
@@ -43750,11 +43754,7 @@ function borUi() {
 .nt-keys{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
 .nt-keys button{min-height:46px;border:0;border-radius:12px;background:#2a2d33;color:#F2F3F5;font:800 20px/1 "Barlow Condensed","Arial Narrow",sans-serif;cursor:pointer;touch-action:manipulation;font-variant-numeric:tabular-nums}
 .nt-keys button.sm{font:700 14px "Noto Sans TC",sans-serif}
-.nt-keys button:disabled{opacity:.4}
-.nt-bor{position:absolute;z-index:7;left:50%;top:calc(var(--fs-t,0px) + 112px);transform:translateX(-50%);max-width:calc(100% - 20px);display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;border-radius:999px;background:rgba(20,21,24,0.9);border:2px solid #ffcc33;color:#F2F3F5;font:700 14px "Noto Sans TC",sans-serif;pointer-events:auto}
-.nt-bor[hidden],body:not(.driving) .nt-bor,body.bigmap .nt-bor,body.shopping .nt-bor{display:none}
-.nt-bor span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nt-bor button{flex:none;min-height:34px;padding:0 14px;border:0;border-radius:999px;background:#ffcc33;color:#1a1405;font:800 14px "Noto Sans TC",sans-serif;cursor:pointer;touch-action:manipulation}`;
+.nt-keys button:disabled{opacity:.4}`;
   document.head.appendChild(st);
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const near = mk('button', 'nt-key'); near.type = 'button'; near.hidden = true; near.addEventListener('click', () => { if (BOR.near) borPadOpen(BOR.near); });
@@ -43766,10 +43766,8 @@ function borUi() {
     b.addEventListener('click', () => borPadKey(d)); keys.append(b); btns.push(b);
   }
   box.append(title, dots, msg, keys); pad.append(box); pad.hidden = true;
-  const bar = mk('div', 'nt-bor'), barT = mk('span'), barB = mk('button'); barB.type = 'button'; bar.append(barT, barB); bar.hidden = true;
-  barB.addEventListener('click', () => { if (BOR.on) leaveCar(); else if (BOR.lent) netEv('takeback', { uid: BOR.lent.uid }); });
-  stage.append(near, pad, bar);
-  return (BOR.ui = { near, pad, title, dots, msg, btns, bar, barT, barB });
+  stage.append(near, pad);
+  return (BOR.ui = { near, pad, title, dots, msg, btns });
 }
 // ---- 借的人：數字鍵盤 ----
 function borPadOpen(P) {
@@ -43913,7 +43911,6 @@ function netBorrowEnd(why) {
     walker.setCars([], { keepParked: false });
     arrangeCars();
   }
-  borUi().bar.hidden = true;
   if (pose && why !== 'back' && why !== 'gone') netEv('return', { uid: B.uid, x: pose.x, z: pose.z, h: pose.heading });
   if (why === 'out') netToast(`還給${B.n}了`);
   else if (why === 'back') netToast(`${B.n}把車拿回去了`);
@@ -43950,27 +43947,24 @@ function borLend(uid, n) { // 借出去了：開車的收掉、車子藏起來�
   tripPose[k] = { x: t.x, z: t.z, heading: t.heading };
   BOR.lent = { uid, n: String(n || '朋友').slice(0, 12), k }; LENT_K = k;
   walker.setCars([], { keepParked: false }); arrangeCars();
-  const U = borUi(); U.barT.textContent = `🔑 ${BOR.lent.n}在開你的 ${borCarName(k)}`; U.barB.textContent = '拿回來'; U.bar.hidden = false;
-  netToast(`🔑 ${BOR.lent.n}借走你的 ${borCarName(k)} 了`);
+  netToast(`🔑 ${BOR.lent.n}借走你的 ${borCarName(k)} 了（回車庫就拿回來）`); // 第 45 批：上面那一條拿掉了，跟他說怎麼拿回來
   return true;
 }
 function borUnlend(pose) { // 還回來了（停在他下車的地方；沒有位置＝原本停的地方）
   const L = BOR.lent; if (!L) return;
   BOR.lent = null; LENT_K = null;
-  if (BOR.ui) BOR.ui.bar.hidden = true;
   if (!trip || !tripPose) return;
   if (pose && [pose.x, pose.z, pose.heading].every(Number.isFinite)) tripPose[L.k] = { x: pose.x, z: pose.z, heading: pose.heading };
   arrangeCars();
   netToast(`${L.n}把 ${borCarName(L.k)} 還給你了`);
 }
-function netLendHome() { if (BOR.lent) { netEv('takeback', { uid: BOR.lent.uid }); BOR.lent = null; LENT_K = null; if (BOR.ui) BOR.ui.bar.hidden = true; } } // 回車庫頁：借出去的拿回來
-// 每一格（netStep）：旁邊有朋友停著的車＝「🔑 借車」；開借來的車＝上面那一條；下車了＝還車
+function netLendHome() { if (BOR.lent) { netEv('takeback', { uid: BOR.lent.uid }); BOR.lent = null; LENT_K = null; } } // 回車庫頁：借出去的拿回來
+// 每一格（netStep）：旁邊有朋友停著的車＝「🔑 借車」；下車了＝還車
 function borTick(me, show, race) {
   const U = borUi();
   borPadTick();
   if (BOR.on && trip && DRIVE.on && (!drv || cur !== BOR.on.k || (walker && walker.mode !== 'off' && walker.mode !== 'out'))) netBorrowEnd('out'); // 下車（走出來以後）＝還車
   if (BOR.want && walker && walker.mode === 'walk' && performance.now() - BOR.want.t > 600) borWantOff(); // 走去車門的時候推搖桿取消了
-  if (BOR.on) { const t = `🔑 借來的車 · ${BOR.on.n}的 ${borCarName(BOR.on.k)}`; if (U.barT.textContent !== t) { U.barT.textContent = t; U.barB.textContent = '還車'; } U.bar.hidden = false; }
   let best = null;
   if (show && !race && !BOR.on && !BOR.want && !BOR.pad && me && walker && walker.mode === 'walk') {
     let bd = 2.4;
@@ -43992,7 +43986,7 @@ function borOff() { // 離開世界：借來的還、借出去的拿回來（網
   borPadClose();
   if (BOR.lent) borUnlend(null);
   BOR.near = null; BOR.nearSig = '';
-  if (BOR.ui) { BOR.ui.near.hidden = true; BOR.ui.bar.hidden = true; }
+  if (BOR.ui) BOR.ui.near.hidden = true;
 }
 
 // ==== 第 23 批：開進朋友的車庫（Nick 2026-10-18「可以開進別人的車庫」；草稿 https://claude.ai/artifact/RUhVB6G34nJk9SBLt1rm6q，卡片選「按門鈴」）====
@@ -44102,7 +44096,6 @@ function gstUi() {
   const st = document.createElement('style');
   st.textContent = `.nt-gst{position:absolute;z-index:7;left:50%;top:calc(var(--fs-t,0px) + 112px);transform:translateX(-50%);max-width:calc(100% - 20px);display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;border-radius:999px;background:rgba(20,21,24,0.9);border:2px solid #FF6A1F;color:#F2F3F5;font:700 14px "Noto Sans TC",sans-serif;pointer-events:auto;box-sizing:border-box}
 .nt-gst[hidden],body.bigmap .nt-gst,body.shopping .nt-gst{display:none}
-.nt-gst.low{top:calc(var(--fs-t,0px) + 160px)}
 .nt-gst span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nt-gst button{flex:none;min-height:34px;padding:0 14px;border:0;border-radius:999px;background:#FF6A1F;color:#1a0d05;font:800 14px "Noto Sans TC",sans-serif;cursor:pointer;touch-action:manipulation}`;
   document.head.appendChild(st);
@@ -44113,7 +44106,7 @@ function gstUi() {
   return (GUEST.ui = { bar, t, b });
 }
 function netGuest(g, why) {
-  if (g && g.uid) { const U = gstUi(); GUEST.uid = String(g.uid); GUEST.n = String(g.n || '朋友').slice(0, 12); U.t.textContent = `🏠 ${GUEST.n}在你的車庫裡`; U.bar.classList.toggle('low', !!(BOR.ui && !BOR.ui.bar.hidden)); U.bar.hidden = false; return; }
+  if (g && g.uid) { const U = gstUi(); GUEST.uid = String(g.uid); GUEST.n = String(g.n || '朋友').slice(0, 12); U.t.textContent = `🏠 ${GUEST.n}在你的車庫裡`; U.bar.hidden = false; return; }
   const n = GUEST.n; GUEST.uid = ''; GUEST.n = '';
   if (GUEST.ui) GUEST.ui.bar.hidden = true;
   if (why === 'left' && n) netToast(`${n}離開你的車庫了`);
@@ -44315,7 +44308,7 @@ Object.assign(window.beauGame, {
     guest: netGuest, // 朋友在我的車庫裡（null＝走了）
     place: netPlace,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
-    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, pv: P.cur.pv ? P.cur.pv[0] : null, park: !!P.pkOn, carVis: !!(P.obj && P.obj.car.visible), inPol: !!(P.chr && P.chr.group.visible && PSC && P.chr.group.parent === PSC), car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, polHits: NET_POL.hits, phSent: NET_PH.sent, bumped: NET.bumped, cellShut: NET.cellShut, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '', bar: BOR.ui && !BOR.ui.bar.hidden ? BOR.ui.barT.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at,
+    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, pv: P.cur.pv ? P.cur.pv[0] : null, park: !!P.pkOn, carVis: !!(P.obj && P.obj.car.visible), inPol: !!(P.chr && P.chr.group.visible && PSC && P.chr.group.parent === PSC), car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, polHits: NET_POL.hits, phSent: NET_PH.sent, bumped: NET.bumped, cellShut: NET.cellShut, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at,
       gstBtn: NET.hud && !NET.hud.gar.hidden ? NET.hud.gar.textContent : '', bell: BELL.uid || null, guest: GUEST.uid || null, guestBar: GUEST.ui && !GUEST.ui.bar.hidden ? GUEST.ui.t.textContent : '',
       gv: GV.on ? { uid: GV.uid, n: GV.n, slot: GV.slot, in: GV.in, want: GV.want.filter(Boolean).length, made: Object.keys(GV.objs).length, gs: HOME.gs, home: HOME.slot } : null }; },
   },
@@ -44412,7 +44405,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 25; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 26; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
