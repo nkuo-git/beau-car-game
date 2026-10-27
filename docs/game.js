@@ -4947,7 +4947,7 @@ function createEngineAudio(opt = {}) {
   }
   // ---- 第 31 批：環境聲（出門就有，下車走路也有）：風（低通雜訊，一陣一陣）、白天的鳥叫（兩三聲的啾啾）、晚上的蟲叫（4.3 kHz 一秒 28 下）、路上最近 3 台車的引擎（鋸齒波低通＋低八度，照距離變小、照左右分邊）----
   // set({ wind, birds, crickets, cars: [{ d, pan, v }] })：每 0.1 秒叫一次就好；數字都用 setTargetAtTime 慢慢到（不會卡卡的）
-  const AMB_V = { n: 3, car: 0.26, carD: 15, wind: 0.045, birds: 0.022, cric: 0.011, bird0: 5, bird1: 14 }; // 第 38 批（Nick「鳥叫聲太多了」）：鳥 0.035 → 0.022，每 5–14 秒才叫一聲（以前 1.6–4 秒）
+  const AMB_V = { n: 3, car: 0.26, carD: 15, wind: 0.045, birds: 0.022, cric: 0.011, bird0: 5, bird1: 14, rain: 0.08, rainHp: 500, rainLp: 7000, rainLpIn: 1600 }; // 第 38 批（Nick「鳥叫聲太多了」）：鳥 0.035 → 0.022，每 5–14 秒才叫一聲（以前 1.6–4 秒）
   function ambient() {
     const h = { alive: false, last: null, set() {}, dispose() {} };
     try {
@@ -4960,6 +4960,9 @@ function createEngineAudio(opt = {}) {
       const ns = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), wg = ctx.createGain(), wl = ctx.createGain(); ns.buffer = noiseBuf(ctx); ns.loop = true; lp.type = 'lowpass'; lp.frequency.value = 380; lp.Q.value = 0.4;
       wg.gain.value = 1; wl.gain.value = 0; ns.connect(lp); lp.connect(wg); wg.connect(wl); wl.connect(out); keep.push(ns, lp, wg, wl);
       const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 0.13; lg.gain.value = 0.45; lfo.connect(lg); lg.connect(wg.gain); keep.push(lfo, lg); // 一陣一陣（0.55–1.45）
+      // 雨（第 47 批）：雜訊去掉低的、高的＝沙沙聲；坐在車裡（打在車頂）低通多一點、悶悶的；從雜訊的別的地方開始放（跟風不一樣）
+      const rs = ctx.createBufferSource(), rh = ctx.createBiquadFilter(), rlp = ctx.createBiquadFilter(), rl = ctx.createGain(); rs.buffer = ns.buffer; rs.loop = true; rs.playbackRate.value = 0.87; rh.type = 'highpass'; rh.frequency.value = AMB_V.rainHp; rh.Q.value = 0.5;
+      rlp.type = 'lowpass'; rlp.frequency.value = AMB_V.rainLp; rlp.Q.value = 0.5; rl.gain.value = 0; rs.connect(rh); rh.connect(rlp); rlp.connect(rl); rl.connect(out); keep.push(rs, rh, rlp, rl);
       // 蟲（晚上）
       const cr = ctx.createOscillator(), cg = ctx.createGain(), ct = ctx.createOscillator(), ctg = ctx.createGain(), cl = ctx.createGain();
       cr.type = 'sine'; cr.frequency.value = 4300; ct.type = 'square'; ct.frequency.value = 28; cg.gain.value = 0.5; ctg.gain.value = 0.5; cl.gain.value = 0;
@@ -4974,7 +4977,7 @@ function createEngineAudio(opt = {}) {
         keep.push(o, o2, f, g); if (pn) keep.push(pn);
         cars.push({ o, o2, g, pn });
       }
-      for (const x of [ns, lfo, cr, ct]) x.start(t0); for (const c of cars) { c.o.start(t0); c.o2.start(t0); }
+      for (const x of [ns, lfo, cr, ct]) x.start(t0); rs.start(t0, (ns.buffer.duration || 2) * 0.5); for (const c of cars) { c.o.start(t0); c.o2.start(t0); }
       // 鳥：每 5–14 秒叫一聲（白天才叫；頁面藏起來不叫）；第 38 批：以前 1.6–4 秒，太多了
       let birds = 0, bT = 0, done = false;
       const chirp = () => {
@@ -4996,6 +4999,7 @@ function createEngineAudio(opt = {}) {
         if (done) return; h.last = o; wake();
         tgt(wl.gain, AMB_V.wind * Math.max(0, Math.min(1.5, num(o.wind, 1))), 0.6);
         tgt(cl.gain, AMB_V.cric * Math.max(0, Math.min(1, num(o.crickets, 0))), 0.8);
+        tgt(rl.gain, AMB_V.rain * Math.max(0, Math.min(1, num(o.rain, 0))), 1.2); tgt(rlp.frequency, o.rainIn ? AMB_V.rainLpIn : AMB_V.rainLp, 0.3); // 第 47 批：雨聲
         birds = Math.max(0, Math.min(1, num(o.birds, 0)));
         const L = Array.isArray(o.cars) ? o.cars : [];
         for (let i = 0; i < cars.length; i++) {
@@ -5010,7 +5014,7 @@ function createEngineAudio(opt = {}) {
           if (done) return; done = true; h.alive = false; clearTimeout(bT);
           const t1 = ctx.currentTime; out.gain.cancelScheduledValues(t1); out.gain.setTargetAtTime(0, t1, 0.12);
           setTimeout(() => {
-            for (const x of [ns, lfo, cr, ct]) try { x.stop(); } catch { /* 算了 */ }
+            for (const x of [ns, lfo, cr, ct, rs]) try { x.stop(); } catch { /* 算了 */ }
             for (const c of cars) { try { c.o.stop(); c.o2.stop(); } catch { /* 算了 */ } }
             for (const x of keep) try { x.disconnect(); } catch { /* 算了 */ }
             if (S.rec) { S.rec.n = Math.max(0, S.rec.n - 1); idleCheck(); }
@@ -38049,7 +38053,14 @@ const NIGHT = { hemiI: 0.95, hemiC: 0x46536f, hemiG: 0x1c1f27, fog: 0x161c29, en
 const MOON = { elev: 48, az: 300, c: 0x9fb4d8, I: 0.8 }; // 月亮當太陽（有影子）；第 37 批 0.5 → 0.8
 const LAMP = { n: 4, nLow: 2, c: 0xffd9a0, I: 180, dist: 46, fade0: 50, fade1: 88, headC: 0xfff0d0, headI: 18, headDecay: 0.5, headDist: 280, headAim: 90, headAng: 0.95, bloom: 0.18, thr: 2.6, sign: 0.5, up: 1.2, down: 0.5 }; // 路燈（最近 4 支真的有光；離鏡頭 50–88 公尺慢慢變暗＝換支的時候不跳）、自己的車的大燈（第 31 批：520 → 150，車前面不再一片白；第 34 批：Nick「晚上車燈可以照遠一點嗎」：衰減改成 1／距離^0.6（以前 1／距離²）、強度 18、照到 150 公尺、對準前面 60 公尺——車前面一樣亮（5 公尺 6.8），30 公尺 2.3、60 公尺 1.5（以前 0.17、0.04））、晚上的光暈；第 44 批（Nick「車燈可以再廣再遠一點 路燈照到的時候要漸漸的變亮 不要突然變亮」）：大燈 1／距離^0.5、照到 280 公尺、對準前面 90 公尺、角度 0.72 → 0.95；路燈換支的時候慢慢亮（up 1.2 秒）、慢慢暗（down 0.5 秒）
 const NSKY = { stars: 900, starR: 870, starSz: 2.4, moonR: 24, moonD: 860, moonC: 0xe9eef7, winC: [1.9, 1.45, 0.85], shopC: [1.5, 1.55, 1.45], winP: 0.6, shopP: 0.85, polI: 70, polD: 34, polT: 0.8, poolN: 12, poolI: 0.34, poolL: 9.5, poolW: 4.4, hwK: 2.2, parkK: 1.4, beamL: 150, beamW: 40, beamI: 0.8 }; // 第 37 批（Nick「車燈要能照廣照遠一點」）：自己的大燈在路上的光斑 70 → 100 公尺、18 → 30 公尺寬、0.65 → 0.8；SpotLight 照到 200 公尺、角度 0.5 → 0.72 // 第 32 批：晚上的天空（星星、月亮的圓盤）、透天厝一樓窗戶、店面的燈（幾成亮）、警車的紅藍燈（最近一台）、路上車子的大燈照在路上（最近 12 台）、快速道路／停車場的路燈比電線桿的亮（燈頭比較高） // 第 44 批：光斑 100 → 150 公尺長、30 → 40 公尺寬，越遠淡得慢一點
-const WET = { dark: 0.62, pud: 0.55, rough: 0.3, pudRough: 0.04, base: 0.28, lod: 4.5 }; // 下過雨的路（最真實）：變暗、水窪更暗、粗糙度、倒影（水窪外面 35%、模糊）
+const WET = { dark: 0.62, pud: 0.55, rough: 0.3, pudRough: 0.04, base: 0.28, lod: 4.5, darkL: 0.55, roughL: 0.34, dayR: 0.6, dayP: 0.05, rip: 0.012 }; // 第 47 批：白天倒影暗一點、水窪少一點（亮的天空反在水窪：不要像雪）、下雨的時候水窪的倒影會抖（雨打在水上） // 下過雨的路（最真實）：變暗、水窪更暗、粗糙度、倒影（水窪外面 35%、模糊）
+// 第 47 批（Nick 2026-10-27「做下雨 偶爾可以讓它下雨 但這樣跑得動嗎?」）：下雨（只有高、超高：普通沒有天氣，跟沒有日夜一樣）
+//   什麼時候：照手機的時鐘（大家一樣、不用連線）：每 4 分鐘一段，一段 25% 會下（0.55–1 那麼大），開始、停的時候 40 秒慢慢變；試做頁出門 15 秒就下 3 分多鐘（trial）
+//   雨絲：一個網格（高 2500、超高 4500 條，一個 draw call），在 shader 裡跟著鏡頭繞（34 公尺見方、22 公尺高），斜的方向＝雨往下掉＋風－鏡頭在動；晚上大燈照到的雨絲亮
+//   天空：雲變多、變灰（天空的 shader 加 lkRain）、沒有太陽的圓盤；太陽的光少 8 成、天空光多一點、灰灰的；霧近一點、灰一點；反射的圖也有下雨的（照雨多大分 3 段）
+//   路變濕：下雨 35 秒全濕、停了 160 秒才乾；超高＝濕路（跟晚上一樣：倒影、水窪），高＝朝上的地面變暗、亮亮的（粗糙度小，反射灰灰的天空）
+const RAIN = { slot: 4, p: 0.25, fade: 40, k0: 0.55, n: [0, 3000, 5000], box: 24, high: 16, fall: 9.5, len: 0.04, w: 0.008, px: 0.8, near: 0.7, nearCab: 2.6, op: 0.5, colK: 1.1, headK: 3, wind: 1.6, wetUp: 35, dry: 160,
+  dl: 0.8, dlN: 0.35, hemi: 0.55, hemiC: 0xc2c8ce, hemiG: 0x3a3e41, sunC: 0xdfe3e6, fogNear: 0.6, fogFar: 0.6, cloud: 0.97, cden: 0.95, skyL: 0.7, skyN: 0.01, skyH: 0.72, exp: 0.15, trialAt: 15, trialLen: 200, trialK: 0.9, envs: 12 };
 const CAVE_I = 1.5, CAVE_C = 0xf4f1ea, CAVE_G = 0x8a8478; // 隧道裡面（hills.js 的 dimK 0.42）、圓塔裡面：天空光補到這麼多、顏色白一點（太陽被擋住了，不然一片黑、藍藍的）
 // 材質（範例 3 號、5 號）
 const MB = { desat: 0.9, grain: 0.08, grass: 0.38, patch: 0.3, fine2: 0.22, olive: 0.75, clump: 0.5, albedo: 0.78, leaf: 3.5, pk: 0.9, pn: 1.6, macro: 5, wallS: 1.7, wallK: 0.75, streak: 0.16, wallN: 1.1 }; // 第 39 批：牆的材質（wall*：貼圖幾公尺一格、顏色多強、髒水痕、凹凸）
@@ -38090,7 +38101,7 @@ const COLOR = (pbr, road, wall, lite) => `#include <color_fragment>
     float fine = 0.5, med = 0.5, pch = 0.5;
     if (nr > 0.0) fine = bnoise(vBW * 11.0) * 0.5 + bnoise(vBW * 31.0) * 0.5;
     if (mid > 0.0) { med = bnoise(vBW * 1.3); pch = bnoise(vBW * 0.11) * 0.65 + bnoise(vBW * 0.035) * 0.35; }
-    float green = step(mn, c.b) * smoothstep(0.08, 0.3, sat) * step(c.r, c.g) * step(c.b, c.g);
+    float green = step(mn, c.b) * smoothstep(0.08, 0.3, sat) * step(c.r, c.g) * step(c.b, c.g); bGreen = green;
     c = mix(vec3(l), c, ${f3(MB.desat)});
     float gr = 1.0 - green;
     c *= 1.0 + gr * (${f3(MB.grain)} * (fine - 0.5) * nr + 0.03 * (med - 0.5) * mid);
@@ -38133,14 +38144,18 @@ const PBRN = `#include <normal_fragment_maps>
     if (kw > 0.01) { vec3 tn = texture(tCoN, bWuv / ${f3(MB.wallS)}).xyz * 2.0 - 1.0; vec3 T1 = abs(N.x) > abs(N.z) ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0); T1 = normalize(T1 - N * dot(N, T1)); vec3 T2 = normalize(cross(N, T1));
       vec3 wn = normalize(N + (T1 * tn.x + T2 * tn.y) * ${f3(MB.wallN)}); normal = normalize(mix(normal, normalize((viewMatrix * vec4(wn, 0.0)).xyz), kw)); } }`;
 // 第 30 批：濕的路（最真實）：朝上、不是草的地面：變暗、水窪、粗糙度變小；路面高度（wetY）1 公尺內的地方混上倒影（tRefl：倒過來畫的世界，reflM 把世界座標投到那張圖上）
-const WETH = 'uniform sampler2D tRefl; uniform mat4 reflM; uniform float wetK, wetY; float wWet = 0.0, wPud = 0.0;';
+const WETH = 'uniform sampler2D tRefl; uniform mat4 reflM; uniform float wetK, wetY, wetR, wetT, wetRain, wetP; float wWet = 0.0, wPud = 0.0;';
 const WETR = `#include <roughnessmap_fragment>
-  if (wetK > 0.0) { wWet = wetK * bUp * (1.0 - bG) * smoothstep(400.0, 60.0, vBD); if (wWet > 0.0) { float pn = bnoise(vBW * 0.45) * 0.6 + bnoise(vBW * 1.9) * 0.4; wPud = wWet * smoothstep(0.56, 0.63, pn);
+  if (wetK > 0.0) { wWet = wetK * bUp * (1.0 - bG) * smoothstep(400.0, 60.0, vBD); if (wWet > 0.0) { float pn = bnoise(vBW * 0.45) * 0.6 + bnoise(vBW * 1.9) * 0.4; wPud = wWet * smoothstep(0.56 + wetP, 0.63 + wetP, pn);
     diffuseColor.rgb *= mix(1.0, ${f3(WET.dark)}, wWet) * mix(1.0, ${f3(WET.pud)}, wPud); roughnessFactor = mix(roughnessFactor, mix(${f3(WET.rough)}, ${f3(WET.pudRough)}, wPud), wWet); } }`;
 const WETO = `if (wWet > 0.0 && abs(vBW.y - wetY) < 1.0) { vec4 rp = reflM * vec4(vBW, 1.0); vec2 ruv = rp.xy / rp.w;
+    if (wetRain > 0.0) ruv += (vec2(bnoise(vec3(vBW.xz * 7.0, wetT * 2.5)), bnoise(vec3(vBW.zx * 7.0 + 3.1, wetT * 2.5))) - 0.5) * ${f3(WET.rip)} * wetRain;
     if (rp.w > 0.0 && ruv.x > 0.0 && ruv.x < 1.0 && ruv.y > 0.0 && ruv.y < 1.0) { vec3 vd = normalize(cameraPosition - vBW); float ct = max(dot(vd, vec3(0.0, 1.0, 0.0)), 0.0), F = 0.04 + 0.96 * pow(1.0 - ct, 5.0);
-      vec3 rc = textureLod(tRefl, ruv, mix(${f3(WET.lod)}, 0.0, wPud)).rgb; outgoingLight = mix(outgoingLight, rc * mix(0.6, 1.0, wPud), clamp(F * 1.3, 0.0, 1.0) * wWet * (1.0 - smoothstep(0.7, 1.0, abs(vBW.y - wetY))) * mix(${f3(WET.base)}, 1.0, wPud)); } }
+      vec3 rc = textureLod(tRefl, ruv, mix(${f3(WET.lod)}, 0.0, wPud)).rgb; outgoingLight = mix(outgoingLight, rc * mix(0.6, 1.0, wPud) * wetR, clamp(F * 1.3, 0.0, 1.0) * wWet * (1.0 - smoothstep(0.7, 1.0, abs(vBW.y - wetY))) * mix(${f3(WET.base)}, 1.0, wPud)); } }
   #include <opaque_fragment>`;
+// 第 47 批：下過雨（高；超高用上面的 WETR）：朝上、不是草的地面變暗、比較滑亮（反射灰灰的天空）
+const WETL = `#include <roughnessmap_fragment>
+  if (lkWet > 0.0) { float wk = lkWet * smoothstep(0.6, 0.85, bN().y) * (1.0 - bGreen) * smoothstep(300.0, 40.0, vBD); diffuseColor.rgb *= mix(1.0, ${f3(WET.darkL)}, wk); roughnessFactor = mix(roughnessFactor, ${f3(WET.roughL)}, wk); }`;
 const VDECL = 'varying vec3 vBW; varying float vBD; varying vec3 vBN;';
 const VPOS = `#include <project_vertex>
   { vec4 w4 = vec4(transformed, 1.0);
@@ -38189,8 +38204,16 @@ function createLook(o) {
   const hourAt = (ms) => { const u = (((ms / 60000) % DAY_MIN) / DAY_MIN) * 24, h = u - DAY_SLOW * (6 / Math.PI) * Math.sin((Math.PI * (u - 6)) / 6); return ((h % 24) + 24) % 24; };
   const hourNow = () => (hourOv != null ? hourOv : hourAt(Date.now()));
   const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-  const TD = { h: 12, elev: SUN_MAX, az: 270, day: 1, warm: 0, night: 0, lamp: 0, moon: 0, exp: LT.exp, envI: LT.envI, hemiI: LT.hemiI, sunI: LT.sunI, dlI: LT.sunI, fog: new THREE.Color(LT.fog), hemiC: new THREE.Color(LT.hemiC), hemiG: new THREE.Color(LT.hemiG), sunC: new THREE.Color(LT.sunC), band: '' };
-  const C_D = { sunC: new THREE.Color(LT.sunC), fog: new THREE.Color(LT.fog), hC: new THREE.Color(LT.hemiC), hG: new THREE.Color(LT.hemiG) }, C_K = { sunC: new THREE.Color(DUSK.sunC), fog: new THREE.Color(DUSK.fog), hC: new THREE.Color(DUSK.hemiC), hG: new THREE.Color(DUSK.hemiG) }, C_N = { fog: new THREE.Color(NIGHT.fog), hC: new THREE.Color(NIGHT.hemiC), hG: new THREE.Color(NIGHT.hemiG), moon: new THREE.Color(MOON.c) };
+  // ==== 第 47 批：下雨（什麼時候、多大）：照手機的時鐘，每 4 分鐘一段（整數雜湊：每支手機算出來一樣）====
+  const hash01 = (n, sd) => { let x = Math.imul((n | 0) ^ sd, 0x9e3779b1); x ^= x >>> 16; x = Math.imul(x, 0x85ebca6b); x ^= x >>> 13; x = Math.imul(x, 0xc2b2ae35); x ^= x >>> 16; return (x >>> 0) / 4294967296; };
+  const slotK = (s) => (hash01(s, 0x5eed) < RAIN.p ? RAIN.k0 + (1 - RAIN.k0) * hash01(s, 0xa11) : 0);
+  const rainAt = (ms) => { const L = RAIN.slot * 60000, s = Math.floor(ms / L), t = (ms - s * L) / 1000, a = slotK(s - 1); return a + (slotK(s) - a) * ss(0, RAIN.fade, t); }; // 前一段的 → 這一段的（40 秒）：接得起來、不會跳
+  const rainT0 = Date.now(); let rainOv = null, rainK = 0, wetK = 0, rainLast = 0;
+  const trialK = (t) => { const a = RAIN.trialAt, b = a + RAIN.trialLen; return RAIN.trialK * ss(a, a + 20, t) * (1 - ss(b, b + RAIN.fade, t)); }; // 試做頁：出門 15 秒就下（Nick 不用等），下 3 分多鐘
+  const rainNow = () => { if (rainOv != null) return rainOv; const now = Date.now(), k = rainAt(now); return o.trialRain ? Math.max(k, trialK((now - rainT0) / 1000)) : k; };
+  const TD = { h: 12, elev: SUN_MAX, az: 270, day: 1, warm: 0, night: 0, lamp: 0, moon: 0, exp: LT.exp, envI: LT.envI, hemiI: LT.hemiI, sunI: LT.sunI, dlI: LT.sunI, fog: new THREE.Color(LT.fog), hemiC: new THREE.Color(LT.hemiC), hemiG: new THREE.Color(LT.hemiG), sunC: new THREE.Color(LT.sunC), band: '', rq: 0, env: '', rainL: 0 };
+  const C_D = { sunC: new THREE.Color(LT.sunC), fog: new THREE.Color(LT.fog), hC: new THREE.Color(LT.hemiC), hG: new THREE.Color(LT.hemiG) }, C_K = { sunC: new THREE.Color(DUSK.sunC), fog: new THREE.Color(DUSK.fog), hC: new THREE.Color(DUSK.hemiC), hG: new THREE.Color(DUSK.hemiG) }, C_N = { fog: new THREE.Color(NIGHT.fog), hC: new THREE.Color(NIGHT.hemiC), hG: new THREE.Color(NIGHT.hemiG), moon: new THREE.Color(MOON.c) }, C_R = { sunC: new THREE.Color(RAIN.sunC), hC: new THREE.Color(RAIN.hemiC), hG: new THREE.Color(RAIN.hemiG) }, COLR = new THREE.Color();
+  const acesG = (x) => { const v = x / 0.6; return clamp((v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.432951) + 0.238081), 0, 1); }; // three 的 ACESFilmicToneMapping（灰色：前後兩個矩陣每一行加起來都是 1）
   const dirOf = (out, elev, az) => { const e = THREE.MathUtils.degToRad(elev), a = THREE.MathUtils.degToRad(az); return out.set(Math.cos(e) * Math.cos(a), Math.sin(e), -Math.cos(e) * Math.sin(a)).normalize(); };
   function timeStep() { // 現在幾點 → 太陽在哪、多亮、多暖、晚上多深、燈亮多少、各種顏色（每一格算，都很便宜）
     const h = hourNow(), t = (((h - 6) / 12) % 2 + 2) % 2, elev = SUN_MAX * Math.sin(Math.PI * t), az = ((360 - (h - 6) * 15) % 360 + 360) % 360;
@@ -38204,6 +38227,11 @@ function createLook(o) {
     if (TD.day > 0.001) { dirOf(sun, elev, az); TD.sunC.lerpColors(C_D.sunC, C_K.sunC, w); TD.dlI = LT.sunI * TD.day * (1 - DUSK.sunK * w); } // 第 31 批：太陽低的時候光也弱（夕陽不刺眼）
     else { dirOf(sun, MOON.elev, MOON.az); TD.sunC.copy(C_N.moon); TD.dlI = MOON.I * TD.moon; }
     TD.band = n > 0.5 ? 'n' : 'b' + Math.floor(clamp(elev, 0, SUN_MAX - 0.01) / 5); // 反射的圖每 5 度一段（第 31 批：以前 5 段，換段的時候反射看得出跳；現在 11 段＋晚上，每段差很少，第一次用到才做）
+    TD.rainL = RAIN.skyN + RAIN.skyL * ss(-4, 30, elev); // 下雨的天空多亮
+    const r = rainK; // 第 47 批：下雨：太陽被雲擋住（光少 8 成、白白的；晚上的月光少 3.5 成：不要太黑）、白天的天空光多一點、灰灰的；霧照原本的亮度變灰；曝光高一點（不然整個暗掉）
+    if (r > 0.001) { const d = r * TD.day; TD.dlI *= 1 - RAIN.dl * d - RAIN.dlN * (r - d); TD.sunC.lerp(C_R.sunC, d); TD.hemiI += RAIN.hemi * d; TD.hemiC.lerp(C_R.hC, d); TD.hemiG.lerp(C_R.hG, d);
+      TD.exp *= 1 + RAIN.exp * r; const g = LV === 2 ? TD.rainL * RAIN.skyH : acesG(TD.rainL * RAIN.skyH * TD.exp); TD.fog.lerp(COLR.setRGB(g, g, g * 1.04), r); } // 霧＝下雨的天空在地平線的顏色（遠的山接得起來）；高：three 的霧在色調之後才加（霧的顏色＝畫面上的顏色），所以先照天空一樣算色調
+    TD.rq = r < 0.25 ? 0 : r < 0.75 ? 1 : 2; TD.env = TD.band + (TD.rq ? 'r' + TD.rq : ''); // 反射的圖：下雨分 3 段（沒有、一半、大雨）
   }
   timeStep();
   const V3 = new THREE.Vector3(), V3b = new THREE.Vector3(), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0), S3 = new THREE.Vector3(), COL = new THREE.Color();
@@ -38219,21 +38247,31 @@ function createLook(o) {
 
   // ==== 天空、反射 ====
   let skyMat = null, envTex = null; const ENVS = new Map(); let envBand = '';
-  const skyUni = (u) => { const w = TD.warm; u.turbidity.value = THREE.MathUtils.lerp(LT.turb, DUSK.turb, w); u.rayleigh.value = THREE.MathUtils.lerp(LT.ray, DUSK.ray, w); u.mieCoefficient.value = THREE.MathUtils.lerp(LT.mie, DUSK.mie, w); u.mieDirectionalG.value = THREE.MathUtils.lerp(0.8, DUSK.g, w);
+  const RAINU = { value: 0 }, RAINL = { value: 0 }, SKYF0 = 'gl_FragColor = vec4( texColor, 1.0 );';
+  // 第 47 批：下雨的天空＝整片灰（亮度 lkRainL 照太陽多高算，上面亮一點、地平線＝霧的顏色），雲的深淺留 3 成；不照原本的天空變灰：傍晚太陽那邊的天空亮幾十倍，灰了還是一片白
+  function skyPatch(m, max) { // 第 34 批：太陽那一點夾住（反射圖那個不夾：本來就沒有太陽）；第 47 批：下雨（lkRain）
+    if (!m.fragmentShader.includes(SKYF0)) { console.warn('look: sky shader changed, no skyMax / rain'); return; }
+    m.uniforms.lkRain = max ? RAINU : { value: 0 }; m.uniforms.lkRainL = max ? RAINL : { value: 0 };
+    m.fragmentShader = 'uniform float lkRain, lkRainL;\n' + m.fragmentShader.replace(SKYF0, `if ( lkRain > 0.0 ) { float rl = dot( texColor, vec3( 0.2126, 0.7152, 0.0722 ) ) * 0.42 / max( lkRainL, 1e-4 );
+\t\t\t\ttexColor = mix( texColor, vec3( lkRainL * ( ${f3(RAIN.skyH)} + ${f3(1 - RAIN.skyH)} * clamp( direction.y * 3.0, 0.0, 1.0 ) ) * mix( 1.0, clamp( rl, 0.6, 1.4 ), 0.3 ) ), lkRain ); }
+\t\t\tgl_FragColor = vec4( ${max ? `min( texColor, vec3( ${POST.skyMax.toFixed(1)} ) )` : 'texColor'}, 1.0 );`); m.needsUpdate = true; }
+  const skyUni = (u, r = 0) => { const w = TD.warm; u.turbidity.value = THREE.MathUtils.lerp(LT.turb, DUSK.turb, w); u.rayleigh.value = THREE.MathUtils.lerp(LT.ray, DUSK.ray, w); u.mieCoefficient.value = THREE.MathUtils.lerp(LT.mie, DUSK.mie, w); u.mieDirectionalG.value = THREE.MathUtils.lerp(0.8, DUSK.g, w);
     if (TD.day > 0.001) u.sunPosition.value.copy(sun); else dirOf(u.sunPosition.value, TD.elev, TD.az); // 晚上：天空照（地平線下的）太陽算＝黑的；月亮只當燈
-    if (u.cloudCoverage) { u.cloudCoverage.value = LT.cloud; u.cloudDensity.value = LT.cden; } };
-  function skyOf(scale) { const k = new Sky(); skyUni(k.material.uniforms); k.scale.setScalar(scale); return k; }
+    if (u.cloudCoverage) { u.cloudCoverage.value = THREE.MathUtils.lerp(LT.cloud, RAIN.cloud, r); u.cloudDensity.value = THREE.MathUtils.lerp(LT.cden, RAIN.cden, r); } // 第 47 批：下雨雲變多
+    if (u.showSunDisc) u.showSunDisc.value = clamp(1 - r * 2.5, 0, 1); if (u.lkRain) { u.lkRain.value = r; u.lkRainL.value = TD.rainL; } };
+  function skyOf(scale, r, max) { const k = new Sky(); skyPatch(k.material, max); skyUni(k.material.uniforms, r); k.scale.setScalar(scale); return k; }
   function makeSky() {
-    if (!skyMat) { const k = skyOf(1); skyMat = k.material; skyMat.depthWrite = false; k.geometry.dispose();
-      const f0 = 'gl_FragColor = vec4( texColor, 1.0 );'; if (skyMat.fragmentShader.includes(f0)) { skyMat.fragmentShader = skyMat.fragmentShader.replace(f0, `gl_FragColor = vec4( min( texColor, vec3( ${POST.skyMax.toFixed(1)} ) ), 1.0 );`); skyMat.needsUpdate = true; } else console.warn('look: sky shader changed, no skyMax clamp'); } // 第 34 批：太陽那一點夾住（反射圖那個 skyOf(100) 不夾：本來就沒有太陽）
-    skyUni(skyMat.uniforms);
-    const band = TD.band; if (band === envBand && envTex) return; envBand = band;
+    if (!skyMat) { const k = skyOf(1, 0, true); skyMat = k.material; skyMat.depthWrite = false; k.geometry.dispose(); }
+    skyUni(skyMat.uniforms, rainK);
+    const band = TD.env; if (band === envBand && envTex) return; envBand = band;
     let tex = ENVS.get(band);
-    if (!tex) { // 這一段太陽高度的反射圖（第一次用到才做，之後換來換去不用再做）
-      const es = new THREE.Scene(), k2 = skyOf(100); es.add(k2); if (k2.material.uniforms.showSunDisc) k2.material.uniforms.showSunDisc.value = 0; // 反射、天空光不要太陽本身（不然影子裡面也被太陽照到，影子很淡）
+    if (tex) { ENVS.delete(band); ENVS.set(band, tex); } // 第 47 批：最近用的排最後（最多留 12 張：一張約 6 MB，下雨又多 2 種）
+    else { // 這一段太陽高度（＋下雨）的反射圖（第一次用到才做，之後換來換去不用再做）
+      const es = new THREE.Scene(), k2 = skyOf(100, TD.rq / 2, false); es.add(k2); if (k2.material.uniforms.showSunDisc) k2.material.uniforms.showSunDisc.value = 0; // 反射、天空光不要太陽本身（不然影子裡面也被太陽照到，影子很淡）
       const gnd = new THREE.Mesh(new THREE.CircleGeometry(90, 32), new THREE.MeshBasicMaterial({ color: LT.gnd })); gnd.rotation.x = -Math.PI / 2; gnd.position.y = -2; es.add(gnd);
       const pm = new THREE.PMREMGenerator(R); tex = pm.fromScene(es, 0.03).texture; pm.dispose(); ENVS.set(band, tex);
       k2.geometry.dispose(); k2.material.dispose(); gnd.geometry.dispose(); gnd.material.dispose();
+      while (ENVS.size > RAIN.envs) { const [k0, t0] = ENVS.entries().next().value; ENVS.delete(k0); t0.dispose(); }
     }
     envTex = tex; if (LV > 0) { scene.environment = envTex; const ce = carEnvTex(); for (const c of CARM) if (c[0].envMap) { c[0].envMap = ce; } }
   }
@@ -38246,7 +38284,8 @@ function createLook(o) {
     .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n  #ifndef FLAT_SHADED\n  normal = normalize(vNormal);\n  #endif'); }; // 卡片兩面都用同一個法線（背面不要翻成朝下：一半的草葉、葉子會黑黑的）
   const pbrOk = (m) => LV === 2 && !!TEX && !m.transparent && !(m.alphaTest > 0);
   const roadOf = (m) => (m.userData.role === 'road' && m.map ? (m.userData.concU ?? -1) : null); // 第 35 批：柏油的材質（village／neihu／circuit／race 標的）→ 水泥農路從 u 幾起（沒有＝−1）
-  const WU = { tRefl: { value: null }, reflM: { value: new THREE.Matrix4() }, wetK: { value: 0 }, wetY: { value: 0 } }; // 濕路：所有材質共用
+  const WU = { tRefl: { value: null }, reflM: { value: new THREE.Matrix4() }, wetK: { value: 0 }, wetY: { value: 0 }, wetR: { value: 1 }, wetT: { value: 0 }, wetRain: { value: 0 }, wetP: { value: 0 } }; // 濕路：所有材質共用
+  const WL = { value: 0 }; // 第 47 批：高的濕路（下雨）：所有材質共用
   const SIGNS = new Map(); // 第 30 批：招牌（emissiveMap＝map 的材質）→ 原本的 emissiveIntensity；晚上加亮
   let lampSent = -1, signK = -1;
   let PLAINR = null; const PLAINM = new Set(); // 圓塔（plain）的材質：別的家的外殼也用同一個，所以記材質不是記東西
@@ -38261,11 +38300,12 @@ function createLook(o) {
       if (LV === 0) return;
       const pbr = pbrOk(this), road = roadOf(this);
       if (pbr) { const T = TEX; Object.assign(sh.uniforms, { tAsA: { value: T.asA }, tAsN: { value: T.asN }, tGrA: { value: T.grA }, tGrN: { value: T.grN }, tCoA: { value: T.coA }, tCoN: { value: T.coN } }, WU); }
+      if (LV === 1) sh.uniforms.lkWet = WL;
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VDECL).replace('#include <project_vertex>', VPOS);
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + VDECL + NOISE + (pbr ? PBRH + WETH : ''))
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + VDECL + NOISE + 'float bGreen = 0.0;' + (pbr ? PBRH + WETH : '') + (LV === 1 ? 'uniform float lkWet;' : ''))
         .replace('#include <color_fragment>', COLOR(pbr, road, pbr && MAX, LV === 1))
         .replace('#include <normal_fragment_maps>', pbr ? PBRN : '#include <normal_fragment_maps>')
-        .replace('#include <roughnessmap_fragment>', (pbr ? WETR : '#include <roughnessmap_fragment>') + (LV === 1 ? '' : '\nroughnessFactor = clamp(roughnessFactor * (0.85 + 0.3 * bnoise(vBW * 5.0)), 0.04, 1.0);'))
+        .replace('#include <roughnessmap_fragment>', (pbr ? WETR : LV === 1 ? WETL : '#include <roughnessmap_fragment>') + (LV === 1 ? '' : '\nroughnessFactor = clamp(roughnessFactor * (0.85 + 0.3 * bnoise(vBW * 5.0)), 0.04, 1.0);'))
         .replace('#include <opaque_fragment>', pbr ? WETO : '#include <opaque_fragment>');
     };
     m.customProgramCacheKey = function () { const rd = roadOf(this); return (key0 ? key0.call(this) : obc0 ? obc0.toString() : '') + '|lk' + LV + (pbrOk(this) ? (MAX ? 'px' : 'p') : '') + (rd != null ? 'r' + rd : ''); };
@@ -38678,7 +38718,7 @@ function createLook(o) {
   function nightOff() { if (!NS) return; for (const k of ['stars', 'moon', 'win', 'pol', 'pool', 'beam']) { const x = NS[k]; if (!x) continue; x.removeFromParent(); x.geometry?.dispose(); if (x.material) { x.material.map?.dispose(); x.material.dispose(); } } NS = null; }
   function nightStep(cam, k) {
     if (!NS) return;
-    const nk = TD.night * TD.night * (1 - cave); NS.stars.material.opacity = nk; NS.moon.material.opacity = TD.moon * (1 - cave); // 隧道、塔裡面看不到天
+    const nk = TD.night * TD.night * (1 - cave) * (1 - rainK); NS.stars.material.opacity = nk; NS.moon.material.opacity = TD.moon * (1 - cave) * (1 - rainK); // 隧道、塔裡面看不到天；第 47 批：下雨看不到
     NS.win.material.opacity = k; if (NS.win.visible !== (k > 0.001 && NS.lit > 0)) NS.win.visible = k > 0.001 && NS.lit > 0;
     // 警車：最近的、燈在閃的那台
     const PC = k > 0.001 ? policeOf() : null; let best = 70 * 70, bc = null;
@@ -38700,6 +38740,67 @@ function createLook(o) {
     pool.count = n; NS.pools = n; pool.material.opacity = NSKY.poolI * k; if (pool.visible !== n > 0) pool.visible = n > 0;
   }
 
+  // ==== 第 47 批：雨絲（一個網格，第一次下雨才做）：一條 4 個點，位置全部在 shader 裡算（跟著鏡頭繞、往下掉、被風吹、照「雨－鏡頭」的速度斜＝開快的時候雨往你這邊斜），CPU 每格只改幾個數字 ====
+  let RN = null, rcpOk = false; const RCV = new THREE.Vector3(), RCP = new THREE.Vector3(), RWT = new THREE.Vector3(), RCW = new THREE.Vector3(); const FG = { n: 0, f: 0, sn: -1, sf: -1 };
+  function rainOn() {
+    if (RN) return RN;
+    const n = RAIN.n[2], pos = new Float32Array(n * 12), sd = new Float32Array(n * 16), idx = new Uint16Array(n * 6);
+    let s0 = 20261027; const rnd = () => ((s0 = (s0 * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < n; i++) { const a = rnd(), b = rnd(), c = rnd(), d = rnd();
+      for (let k = 0; k < 4; k++) { const v = i * 4 + k; pos[v * 3] = k & 1 ? 1 : -1; pos[v * 3 + 1] = k >> 1; sd[v * 4] = a; sd[v * 4 + 1] = b; sd[v * 4 + 2] = c; sd[v * 4 + 3] = d; } // x＝左右、y＝0 雨滴（下面）／1 尾巴
+      idx.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4 + 2, i * 4 + 1, i * 4 + 3], i * 6); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aSeed', new THREE.BufferAttribute(sd, 4)); g.setIndex(new THREE.BufferAttribute(idx, 1));
+    const u = { uT: { value: 0 }, uDrift: { value: new THREE.Vector3() }, uWind: { value: new THREE.Vector3() }, uCamV: { value: new THREE.Vector3() }, uNear: { value: RAIN.near }, uPx: { value: 0.002 }, uOp: { value: 0 }, uCol: { value: new THREE.Color() },
+      uHeadP: { value: new THREE.Vector3() }, uHeadD: { value: new THREE.Vector3(1, 0, 0) }, uHeadK: { value: 0 }, uHeadC: { value: new THREE.Color(LAMP.headC) } };
+    const m = new THREE.ShaderMaterial({ uniforms: u, transparent: true, depthWrite: false, fog: false,
+      vertexShader: `uniform float uT, uNear, uHeadK, uPx; uniform vec3 uDrift, uWind, uCamV, uHeadP, uHeadD; attribute vec4 aSeed; varying vec2 vQ; varying float vA, vL;
+        void main() { const float B = ${RAIN.box.toFixed(1)}, H = ${RAIN.high.toFixed(1)}; vec3 c = cameraPosition; float sp = 0.8 + 0.4 * fract(aSeed.w * 7.31 + aSeed.x * 3.7);
+          vec3 p; p.x = c.x - B * 0.5 + mod(aSeed.x * B + uDrift.x * sp - (c.x - B * 0.5), B); p.z = c.z - B * 0.5 + mod(aSeed.z * B + uDrift.z * sp - (c.z - B * 0.5), B);
+          p.y = c.y - H * 0.35 + mod(aSeed.y * H - uT * ${RAIN.fall.toFixed(2)} * sp - (c.y - H * 0.35), H);
+          vec3 vr = vec3(uWind.x, -${RAIN.fall.toFixed(2)}, uWind.z) * sp - uCamV; vec3 dir = normalize(vr); float L = clamp(length(vr) * ${RAIN.len.toFixed(3)}, 0.12, 1.6);
+          vec3 q = p - dir * L * position.y; vec3 vd = q - c; float dist = length(vd);
+          q += normalize(cross(dir, vd) + vec3(1e-5)) * position.x * max(${RAIN.w.toFixed(4)}, dist * uPx * ${f3(RAIN.px)}); // 遠的最少差不多 1.5 個像素寬（太細會閃、看不到）
+          vA = smoothstep(uNear, uNear + 1.0, dist) * (1.0 - smoothstep(B * 0.3, B * 0.5, length(p.xz - c.xz)));
+          vL = 0.0; if (uHeadK > 0.0) { vec3 hv = p - uHeadP; float hl = length(hv); vL = uHeadK * smoothstep(0.82, 0.96, dot(hv, uHeadD) / max(hl, 0.001)) * (1.0 - smoothstep(4.0, 40.0, hl)); } // 晚上：大燈照到的雨絲亮
+          vQ = position.xy; gl_Position = projectionMatrix * viewMatrix * vec4(q, 1.0); }`,
+      fragmentShader: `uniform float uOp; uniform vec3 uCol, uHeadC; varying vec2 vQ; varying float vA, vL;
+        void main() { float a = vA * uOp * (1.0 - abs(vQ.x)) * (1.0 - 0.6 * vQ.y) * (1.0 + vL * ${f3(RAIN.headK)}); if (a < 0.003) discard;
+          gl_FragColor = vec4(uCol + uHeadC * vL * ${f3(RAIN.headK)}, min(a, 1.0));
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }` });
+    const mesh = new THREE.Mesh(g, m); mesh.name = 'lk-rain'; mesh.frustumCulled = false; mesh.renderOrder = 4; mesh.visible = false; mesh.matrixAutoUpdate = false;
+    scene.add(mesh); RN = { mesh, u, n: 0 }; return RN;
+  }
+  function rainOff() { if (!RN) return; RN.mesh.removeFromParent(); RN.mesh.geometry.dispose(); RN.mesh.material.dispose(); RN = null; }
+  function fogRain(k) { // 下雨霧近一點（看得比較近）；別人（townFog）改了霧就當新的原本
+    const f = scene.fog; if (!f || !f.isFog) return;
+    if (f.near !== FG.sn || f.far !== FG.sf) { FG.n = f.near; FG.f = f.far; }
+    f.near = FG.n * (1 - RAIN.fogNear * k); f.far = FG.f * (1 - RAIN.fogFar * k); FG.sn = f.near; FG.sf = f.far;
+  }
+  function rainStep(cam, dt, t0) {
+    const r0t = performance.now(); rainStepIn(cam, dt, t0); st.rainMs = (st.rainMs || 0) * 0.95 + (performance.now() - r0t) * 0.05;
+  }
+  function rainStepIn(cam, dt, t0) {
+    const vis = rainK * (1 - cave);
+    if (vis < 0.004 || LV === 0) { if (RN) RN.mesh.visible = false; rcpOk = false; return; }
+    const N = rainOn(), u = N.u; N.mesh.visible = true;
+    N.n = Math.ceil(RAIN.n[LV] * clamp(rainK * 1.25, 0, 1)); N.mesh.geometry.setDrawRange(0, N.n * 6); // 小雨＝少一點雨絲（前面那幾條本來就是亂數撒的）
+    u.uT.value = (t0 / 1000) % 600;
+    const ws = Math.floor(Date.now() / (RAIN.slot * 60000)), wa = hash01(ws, 0x77) * Math.PI * 2; // 風：每一段一個方向，慢慢轉過去
+    RWT.set(Math.cos(wa), 0, Math.sin(wa)).multiplyScalar(RAIN.wind * (0.4 + 0.6 * rainK)); u.uWind.value.lerp(RWT, 1 - Math.exp(-dt / 8));
+    const D = u.uDrift.value; D.addScaledVector(u.uWind.value, dt); if (Math.abs(D.x) > 5e4 || Math.abs(D.z) > 5e4) D.set(0, 0, 0);
+    RCW.setFromMatrixPosition(cam.matrixWorld);
+    if (rcpOk && dt > 0) { RCV.subVectors(RCW, RCP).divideScalar(dt); if (RCV.lengthSq() > 3600) RCV.set(0, 0, 0); } else RCV.set(0, 0, 0); // 一格跳太遠（去這裡）＝不算
+    RCP.copy(RCW); rcpOk = true; u.uCamV.value.lerp(RCV, 1 - Math.exp(-dt * 6));
+    const car = getCar(); let near = RAIN.near;
+    if (car && headDims) { const H = headDims; V3.copy(RCW); car.worldToLocal(V3); if (Math.abs(V3.x - H.cx) < H.hx + 0.3 && Math.abs(V3.z) < H.hz + 0.3 && V3.y < 2.2) near = RAIN.nearCab; } // 駕駛座：車子裡面不要有雨
+    u.uNear.value = near; R.getDrawingBufferSize(SZ); u.uPx.value = (2 * Math.tan(THREE.MathUtils.degToRad((cam.fov || 60) / 2))) / Math.max(1, SZ.y); // 一個像素在 1 公尺外多寬
+    if (car && headDims && TD.lamp > 0.001) { const H = headDims; u.uHeadP.value.set(H.cx + H.hx - 0.15, 0.62, 0).applyMatrix4(car.matrixWorld); u.uHeadD.value.set(1, -0.02, 0).transformDirection(car.matrixWorld); u.uHeadK.value = TD.lamp; } else u.uHeadK.value = 0;
+    u.uCol.value.setScalar(TD.rainL * RAIN.colK); // 雨絲＝比下雨的天空亮一點（晚上暗暗的，大燈照到才亮）
+    u.uOp.value = RAIN.op * Math.min(1, vis * 1.6);
+  }
+
   // ==== 第 30 批：濕的路的倒影（最真實、燈亮的時候）：把世界從路面倒過來再畫一次到半張大小的圖（地上的東西不畫、鏡頭在路面下面、路面以上才畫）====
   const WR = { rt: null, cam: new THREE.PerspectiveCamera(), hid: [], n: new THREE.Vector3(0, 1, 0), P0: new THREE.Vector3(), cp: new THREE.Vector3(), rot: new THREE.Matrix4(), view: new THREE.Vector3(), look: new THREE.Vector3(), tgt: new THREE.Vector3(), pl: new THREE.Plane(), cpl: new THREE.Vector4(), q: new THREE.Vector4(), w: 0, h: 0 };
   function wetRender(cam) {
@@ -38714,7 +38815,7 @@ function createLook(o) {
     { const pl = W.pl.setFromNormalAndCoplanarPoint(n, W.P0).applyMatrix4(rc.matrixWorldInverse), c = W.cpl.set(pl.normal.x, pl.normal.y, pl.normal.z, pl.constant), pm = rc.projectionMatrix, q = W.q; // 斜的近平面＝路面（路面下面的不畫）
       q.x = (Math.sign(c.x) + pm.elements[8]) / pm.elements[0]; q.y = (Math.sign(c.y) + pm.elements[9]) / pm.elements[5]; q.z = -1; q.w = (1 + pm.elements[10]) / pm.elements[14]; c.multiplyScalar(2 / c.dot(q));
       pm.elements[2] = c.x; pm.elements[6] = c.y; pm.elements[10] = c.z + 1; pm.elements[14] = c.w; }
-    const hid = W.hid; hid.length = 0; for (const x of GND) if (x.visible) { x.visible = false; hid.push(x); }
+    const hid = W.hid; hid.length = 0; for (const x of GND) if (x.visible) { x.visible = false; hid.push(x); } if (RN && RN.mesh.visible) { RN.mesh.visible = false; hid.push(RN.mesh); } // 第 47 批：雨絲不畫進倒影
     WU.tRefl.value = null; const c0 = R.info.render.calls; R.setRenderTarget(W.rt); R.clear(); r0(scene, rc); R.setRenderTarget(null); st.wetCalls = R.info.render.calls - c0;
     for (const x of hid) x.visible = true; WU.tRefl.value = W.rt.texture;
   }
@@ -38725,9 +38826,9 @@ function createLook(o) {
     if (!car) return;
     if (!CUBE.rt) { CUBE.rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType, generateMipmaps: false }); CUBE.cam = new THREE.CubeCamera(0.5, 450, CUBE.rt); CUBE.cam.coordinateSystem = R.coordinateSystem; CUBE.cam.updateCoordinateSystem(); }
     car.getWorldPosition(V3); CUBE.cam.position.set(V3.x, V3.y + 1.1, V3.z); CUBE.cam.updateMatrixWorld(true);
-    const prev = R.getRenderTarget(), vis = car.visible, gv = GR ? GR.im.visible : false, ar = R.autoClear; let cs = 0; car.visible = false; if (GR) GR.im.visible = false; R.autoClear = true;
+    const prev = R.getRenderTarget(), vis = car.visible, gv = GR ? GR.im.visible : false, rv = RN ? RN.mesh.visible : false, ar = R.autoClear; let cs = 0; car.visible = false; if (GR) GR.im.visible = false; if (RN) RN.mesh.visible = false; R.autoClear = true;
     for (let k = 0; k < CUBE.faces; k++) { const i = CUBE.face; R.setRenderTarget(CUBE.rt, i); const a = R.info.render.calls; r0(scene, CUBE.cam.children[i]); const b = R.info.render.calls; cs += b >= a ? b - a : b; CUBE.face = (i + 1) % 6; if (CUBE.face === 0) { CUBE.rt.texture.needsPMREMUpdate = true; CUBE.n++; } }
-    R.setRenderTarget(prev); car.visible = vis; if (GR) GR.im.visible = gv; R.autoClear = ar; CUBE.calls = cs;
+    R.setRenderTarget(prev); car.visible = vis; if (GR) GR.im.visible = gv; if (RN) RN.mesh.visible = rv; R.autoClear = ar; CUBE.calls = cs;
   }
   const carEnvTex = () => (LV === 2 && MAX && CUBE.rt && CUBE.n > 0 ? CUBE.rt.texture : envTex); // 方塊畫好一輪以前先用天空的
 
@@ -38771,10 +38872,13 @@ function createLook(o) {
   function postRender(cam) {
     postSize();
     R.info.autoReset = false; R.info.reset();
-    WU.wetK.value = TD.night; if (TD.night > 0.01) wetRender(cam); else st.wetCalls = 0; // 第 34 批：濕路照「晚上」（以前照「燈亮」：傍晚太陽還在，濕路把太陽那片天空整個反到路上，前面一片白）
+    const wk = Math.max(TD.night, wetK * (1 - 0.75 * TD.warm * TD.day * (1 - rainK)) * (1 - cave)); // 第 47 批：下過雨也濕（雨停了太陽低的時候倒影弱一點：不要又一片白；隧道裡面是乾的）
+    WU.wetK.value = wk; WU.wetR.value = 1 - WET.dayR * TD.day; WU.wetP.value = WET.dayP * TD.day; WU.wetRain.value = rainK * (1 - cave); WU.wetT.value = (performance.now() / 1000) % 600;
+    if (wk > 0.01) wetRender(cam); else st.wetCalls = 0; // 第 34 批：濕路照「晚上」（以前照「燈亮」：傍晚太陽還在，濕路把太陽那片天空整個反到路上，前面一片白）
     R.setRenderTarget(PP.a); MASKU.value = 1; r0(scene, cam); MASKU.value = 0;
     PP.ao.camera = cam; PP.ao.render(R, PP.b, PP.a);
-    PP.bloom.strength = THREE.MathUtils.lerp(POST.bloom, LAMP.bloom, TD.night); PP.bloom.threshold = THREE.MathUtils.lerp(POST.thr, LAMP.thr, TD.night); // 第 34 批：光暈照「晚上」不照「燈亮」：傍晚太陽還在的時候不會把天空暈成一片白 PP.q.material.uniforms.toneMappingExposure.value = TD.exp;
+    PP.bloom.strength = THREE.MathUtils.lerp(POST.bloom, LAMP.bloom, TD.night); PP.bloom.threshold = THREE.MathUtils.lerp(POST.thr, LAMP.thr, TD.night); // 第 34 批：光暈照「晚上」不照「燈亮」：傍晚太陽還在的時候不會把天空暈成一片白
+    PP.q.material.uniforms.toneMappingExposure.value = TD.exp; // 第 47 批：這一行以前被上面的註解吃掉了（超高一直是 0.45）
     PP.bloom.render(R, null, PP.b, 0, false);
     PP.q.material.uniforms.tDiffuse.value = PP.b.texture; R.setRenderTarget(null); PP.q.render(R);
     R.info.autoReset = true;
@@ -38799,6 +38903,7 @@ function createLook(o) {
       lampsOn(); // 第 30 批：路燈、大燈（白天亮度 0）
     } else if (S0) {
       lampsOff(); signsK(0); if (lampSent !== 0) { lampSent = 0; nightCb(0); } WU.wetK.value = 0; if (WR.rt) { WR.rt.dispose(); WR.rt = null; WU.tRefl.value = null; }
+      rainK = 0; fogRain(0); rainOff(); WL.value = 0; rainLast = 0; // 第 47 批：普通沒有雨
       if (skyM) skyM.material = S0.skyMat;
       scene.environment = S0.env; scene.environmentIntensity = S0.envI;
       if (scene.fog) scene.fog.color.set(S0.fogC);
@@ -38858,10 +38963,12 @@ function createLook(o) {
   let cave = 0, ind = 0; const CC = new THREE.Color(CAVE_C), CG = new THREE.Color(CAVE_G);
   function frame(cam, dt) {
     const t0 = performance.now();
+    rainK = rainNow(); if (!rainLast || t0 - rainLast > 5000) wetK = rainK; else wetK = rainK > wetK ? Math.min(rainK, wetK + dt / RAIN.wetUp) : Math.max(rainK, wetK - dt / RAIN.dry); rainLast = t0; // 第 47 批：下雨多大、路多濕（剛出門、5 秒沒畫（車庫頁、普通）＝照現在的雨）
     timeStep(); makeSky(); // 第 30 批：現在幾點 → 太陽、天空、反射的圖
     LX.crossVectors(sun, UP).normalize(); LY.crossVectors(LX, sun).normalize();
     if (dl) { dl.color.copy(TD.sunC); setBase(dl, TD.dlI); }
     if (scene.fog) scene.fog.color.copy(TD.fog);
+    fogRain(rainK);
     // 影子：跟著鏡頭（前面 35 公尺），對齊影子的格子
     if (dl) {
       cam.getWorldDirection(V3b); V3b.y = 0; if (V3b.lengthSq() > 1e-6) V3b.normalize();
@@ -38875,9 +38982,11 @@ function createLook(o) {
     { const H = hl(), k = H && H.dimK != null ? H.dimK : 1; ind += ((indoor(cam) ? 1 : 0) - ind) * (1 - Math.exp(-dt * 6)); cave = Math.max(clamp((1 - k) / 0.58, 0, 1), ind);
       scene.environmentIntensity = TD.envI * k + cave * 0.3;
       if (hemi) { hemi.intensity = TD.hemiI + (CAVE_I - TD.hemiI) * cave; hemi.color.lerpColors(TD.hemiC, CC, cave); hemi.groundColor.lerpColors(TD.hemiG, CG, cave); } }
+    WL.value = LV === 1 ? wetK * (1 - cave) : 0;
     lodStep(cam, false);
     scanStep(300, dt);
     lampStep(cam, dt);
+    rainStep(cam, dt, t0);
     if (LV === 2) { if (GR) grassStep(cam); const car = getCar(); carEnv(car); if (car) { if (MAX) cubeStep(car); const ce = carEnvTex(); for (const c of CARM) if (c[0].envMap !== ce) c[0].envMap = ce; } } // 第 39 批：方塊反射
     const ms = performance.now() - t0; st.ms = st.ms * 0.95 + ms * 0.05; if (ms > st.maxMs) st.maxMs = ms;
   }
@@ -38899,9 +39008,10 @@ function createLook(o) {
     half,
     pref: lookCaps(R).pref, // 沒有設定過：電腦模擬的（測試）＝順，手機＝漂亮（第 39 批：最真實不管手機，太重），電腦畫得了半精度＝最真實
     set, treeK, stats: st,
+    get rain() { return LV > 0 ? rainK * (1 - cave) : 0; }, get wet() { return LV > 0 ? wetK : 0; }, rainAt, _trialK: trialK, setRain(k, snap = true) { rainOv = k == null ? null : clamp(+k, 0, 1); if (rainOv != null && snap) { rainK = wetK = rainOv; timeStep(); } }, // 第 47 批：鏡頭這裡的雨（隧道裡＝0）、路多濕；setRain(k) 測試固定（snap：路馬上一樣濕），null＝照時鐘
     get hour() { return hourNow(); }, hourAt, setHour(h) { hourOv = h == null ? null : clamp(+h, 0, 24) % 24; timeStep(); lampN = 0; }, get night() { return TD.lamp; }, get sun() { return TD.elev; }, // 第 30 批：一天的時間
     _tex: () => TEX, _td: () => TD,
-    info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band, stars: NS ? +NS.stars.material.opacity.toFixed(2) : null, moon: NS ? +NS.moon.material.opacity.toFixed(2) : null, win: NS ? NS.lit : 0, winK: NS ? +NS.win.material.opacity.toFixed(2) : 0, pools: NS ? NS.pools : 0, pol: NS && NS.pol ? +NS.pol.intensity.toFixed(1) : 0, polD: NS && NS.polCar ? +NS.polD.toFixed(1) : null, sh: LV && R.shadowMap.enabled ? SH.map : 0, shR: LV && R.shadowMap.enabled ? SH.r : 0, shRad: dl ? dl.shadow.radius : 0, cube: CUBE.n, cubeCalls: CUBE.calls, carCube: !!(CARM.length && CUBE.rt && CARM[0][0].envMap === CUBE.rt.texture), nLamp: PL ? PL.length : 0, nHead: HLT ? HLT.length : 0, polOn: !!(NS && NS.pol) }), // 第 37 批：影子大小、燈幾盞
+    info: () => ({ level: LV, crowns: st.crowns, cells: CELLS.size, nh: NHT.length, mats: MATS.size, shad: SHAD.size, grass: GR ? GR.im.count : 0, hour: +hourNow().toFixed(2), sun: +TD.elev.toFixed(1), night: +TD.lamp.toFixed(2), lamps: lampPts ? lampPts.length / 3 : 0, signs: SIGNS.size, envs: ENVS.size, band: TD.band, stars: NS ? +NS.stars.material.opacity.toFixed(2) : null, moon: NS ? +NS.moon.material.opacity.toFixed(2) : null, win: NS ? NS.lit : 0, winK: NS ? +NS.win.material.opacity.toFixed(2) : 0, pools: NS ? NS.pools : 0, pol: NS && NS.pol ? +NS.pol.intensity.toFixed(1) : 0, polD: NS && NS.polCar ? +NS.polD.toFixed(1) : null, sh: LV && R.shadowMap.enabled ? SH.map : 0, shR: LV && R.shadowMap.enabled ? SH.r : 0, shRad: dl ? dl.shadow.radius : 0, cube: CUBE.n, cubeCalls: CUBE.calls, carCube: !!(CARM.length && CUBE.rt && CARM[0][0].envMap === CUBE.rt.texture), nLamp: PL ? PL.length : 0, nHead: HLT ? HLT.length : 0, polOn: !!(NS && NS.pol), rain: +rainK.toFixed(3), wet: +wetK.toFixed(3), drops: RN && RN.mesh.visible ? RN.n : 0, rainOp: RN ? +RN.u.uOp.value.toFixed(3) : 0, wetK: +WU.wetK.value.toFixed(3), wetL: +WL.value.toFixed(3), fogFar: scene.fog ? Math.round(scene.fog.far) : 0, exp: +TD.exp.toFixed(3), expPost: PP ? +PP.q.material.uniforms.toneMappingExposure.value.toFixed(3) : null, env: TD.env, wetCalls: st.wetCalls || 0, rainMs: +(st.rainMs || 0).toFixed(4) }), // 第 37 批：影子大小、燈幾盞；第 47 批：下雨
     _ns: () => NS, _az: () => TD.az,
   };
   return API;
@@ -40660,7 +40770,7 @@ async function enterDrive() {
     // 第 29 批（Nick 2026-10-23「就用5號的真實度」）：畫質；第一次「漂亮／最真實」要先找樹冠、畫材質貼圖、編 shader（在這裡做，開出去不會頓）
     try {
       LOOK = createLook({ renderer, scene: TR.scene, world: VIL, getCar: lookCar, plain: () => GAR?.group || null, indoor: (c) => !!GAR && !!TWR && inTower(c.position.x, c.position.z),
-        night: lookNight, carDims: (car) => (tripS && car === tripS.car ? fullBox(tripS) : null), police: () => police?.npcCars || null, traffic: () => NPC?.traffic?.cars || null }); // 第 30 批：晚上（車燈）、自己的車的大燈放哪裡；第 32 批：警車（紅藍燈）、路上的車（大燈照路）
+        night: lookNight, carDims: (car) => (tripS && car === tripS.car ? fullBox(tripS) : null), police: () => police?.npcCars || null, traffic: () => NPC?.traffic?.cars || null, trialRain: TRIAL_FREE }); // 第 30 批：晚上（車燈）、自己的車的大燈放哪裡；第 32 批：警車（紅藍燈）、路上的車（大燈照路）；第 47 批：試做頁出門 15 秒就下雨
       const lv = lookPref(); lookBtns(lv);
       if (lv > 0) { msg.textContent = '畫面準備中⋯'; await new Promise((r) => setTimeout(r, 30)); await lookSet(lv, false); renderer.compile(TR.scene, dcam); }
     } catch (e) { console.error(e); }
@@ -42446,7 +42556,7 @@ function clockStep() {
   drv?.setClock(s); walker?.setClock(s);
 }
 // 環境聲（sound.js ambient）：出門就有，開車、走路都有：風（走路比較大聲）、白天的鳥、晚上的蟲（看 LOOK 的天色；順＝白天）、路上最近 3 台車的引擎（照距離、左右）；回車庫頁、進比賽就收掉
-let AMB = null; const AMB_S = { f: 0, wind: 1, birds: 1, crickets: 0, cars: [{ d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }] };
+let AMB = null; const AMB_S = { f: 0, wind: 1, birds: 1, crickets: 0, rain: 0, rainIn: false, cars: [{ d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }] };
 let MUS = null; // 第 34 批：背景音樂（sound.js music）：跟環境聲一起開、一起收；房子裡面小聲
 // 第 35 批（Nick 2026-10-24「做背景音樂開關 不用畫圖 直接做」）：「⋯」打開那一排 ⋯ 下面多一顆「🎵」，按一下關（變灰）、再按開；每支手機自己記（carid.music，不搬家、不上雲端）；音樂還是跟著「聲音」總開關
 const MUS_KEY = 'carid.music';
@@ -42468,8 +42578,9 @@ function ambStep() {
   let px, pz, hd; const walking = !!walker && walker.mode !== 'off';
   if (!MUS && engineAudio.music) { MUS = engineAudio.music(walking ? 'walk' : 'drive'); if (!MUS.alive) MUS = null; } musLevel();
   if (walking) { const w = walker.telemetry(); px = w.x; pz = w.z; hd = w.heading; } else if (drv) { const t = drv.telemetry(); px = t.x; pz = t.z; hd = t.heading; } else return;
-  const night = LOOK && LOOK.level > 0 ? LOOK.night : 0, inK = indoor ? 0.3 : 1; // 順沒有日夜＝白天；房子裡面：外面的聲音小聲
-  AMB_S.wind = (walking ? 1 : 0.55) * inK; AMB_S.crickets = night * inK; AMB_S.birds = (1 - night) * inK;
+  const night = LOOK && LOOK.level > 0 ? LOOK.night : 0, rain = LOOK && LOOK.level > 0 ? LOOK.rain : 0, inK = indoor ? 0.3 : 1; // 順沒有日夜＝白天；房子裡面：外面的聲音小聲
+  AMB_S.wind = (walking ? 1 : 0.55) * inK * (1 + rain * 0.5); AMB_S.crickets = night * inK * (1 - rain * 0.8); AMB_S.birds = (1 - night) * inK * (1 - rain); // 第 47 批：下雨鳥不叫、蟲小聲
+  AMB_S.rain = rain * inK; AMB_S.rainIn = !walking && !indoor; // 雨聲：坐在車裡悶悶的（打在車頂）
   const L = AMB_S.cars; for (const c of L) c.d = 1e9;
   const cars = NPC?.traffic?.cars; if (cars && !indoor) { const rx = Math.sin(hd), rz = Math.cos(hd); // 右手邊（heading：x = cos, z = −sin）
     for (let i = 0; i < cars.length; i++) { const c = cars[i], dx = c.x - px, dz = c.z - pz, d = Math.hypot(dx, dz); if (d > 80 || d >= L[2].d) continue;
@@ -44405,7 +44516,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 26; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 27; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
