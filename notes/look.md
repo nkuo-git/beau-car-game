@@ -266,3 +266,34 @@ Nick: 「車燈可以再廣再遠一點 路燈照到的時候要漸漸的變亮 
 - **Tests:** night-test `__lampDrive` drives about 60 m up the highway, recording every street lamp light frame by frame. It checks that at least one lamp came on along the way and that no lamp rose by more than 99 (of 396) between frames, at 超高 (4 lights) and at 高 (2 lights). The headlight and beam checks moved to the new numbers.
   - Against the old look.js the same drive rose by 244 (超高) and 396 (高) in one frame, so the check really catches the pop. With the fix: 51.5 and 49.
   - The drive ends with a 1-pixel `readPixels`: swiftshader had about 14 s of queued frames after it, so the next check (1280×720 window) saw no ResizeObserver frame in time. The resize check now waits until the drawing buffer really changes instead of a fixed 300 ms.
+
+## Batch 47 (2026-10-27, trial v60): rain now and then
+
+Nick: 「好 做下雨 偶爾可以讓它下雨 但這樣跑得動嗎?」. Rain exists only at 高 and 超高; 普通 has no weather, the same way it has no time of day.
+
+- **When (look.js `rainAt`):** by the phone's clock, so every phone agrees without being online. Time is cut into 4-minute slots; an integer hash (`hash01`) gives each slot a 25 % chance of rain at strength 0.55–1. The first 40 s of a slot fade from the previous slot's strength, so rain starts and stops smoothly and back-to-back rainy slots join. Over a week: rain about 28 % of the time, about 70 short showers per real day, longest dry spell about 1.5 h.
+  - The trial page (`TRIAL_FREE` → `createLook({ trialRain })`) also rains 0.9 from 15 s after the first trip out, for about 3 minutes (`trialK`).
+  - Tests pin it: `LOOK.setRain(k, snap = true)` (null = back to the clock). look-test and night-test call `setRain(0)` next to `setHour`, because a clock-based shower would otherwise land in their pixel comparisons a quarter of the time.
+- **Raindrops (`rainOn` / `rainStep`):** one mesh, one draw call, 3000 streaks at 高 and 5000 at 超高. Fewer are drawn in light rain (`drawRange`). Each streak is a quad whose position is computed entirely in the vertex shader:
+  - it wraps around the camera in a 24 m box, 16 m tall (fading out from 7 to 12 m away; the fog does the far rain);
+  - it falls at 9.5 m/s ± 20 % and drifts with a slow wind (a direction per slot, eased over 8 s; the drift is integrated on the CPU so a wind change never jumps the drops);
+  - it is stretched along (rain velocity − camera velocity) × 0.04 s, so driving fast slants the rain toward you;
+  - it is at least ~1.5 px wide at any distance (`uPx`), otherwise far streaks alias away;
+  - near/far fade; in the driver's seat (camera inside the car box) nothing within 2.6 m, so no rain inside the cabin;
+  - at night, streaks inside the headlight cone (to 40 m) are lit.
+  - Hidden inside tunnels and the tower (`cave`), in the wet-road reflection pass and in the car's cube reflection.
+- **Sky and light (`timeStep`, `skyPatch`):** in rain the sky shader (`lkRain`, `lkRainL`) mixes toward one flat gray whose brightness follows the sun height (`TD.rainL` = 0.01 + 0.7 · smoothstep(−4°, 30°)), a bit brighter overhead, keeping ±30 % of the cloud pattern; no sun disc. A first try that just desaturated the real sky failed at dusk: the glow around a low sun is tens of times brighter than the rest, so it stayed a white band and the far hills (fogged, and sheened at 高) turned white.
+  - The fog takes the rain sky's horizon gray, so far hills melt into it, and closes in to 60–600 m (from 150–1500).
+  - Sun ×0.2 by day (moon ×0.65 at night, so rainy nights are not black); daytime sky light +0.55 and gray; stars and moon hidden; exposure ×1.15.
+  - Reflection maps get a rain variant per sun band in 3 steps (`TD.env` = band + `r1`/`r2`). The cache is now LRU with at most 12 maps (one is ~6 MB of GPU memory).
+- **Wet road:** gets wet over 35 s, dries over 160 s.
+  - 超高: the existing wet-road shader and reflection pass (night-only until now) also run in rain by day. Daytime puddle reflections are dimmed ×0.4 (`wetR`), there are fewer puddles by day (`wetP`) and wobble while it rains (`wetRain`, `wetT`), otherwise the bright overcast sky made the puddles look like snow. After the rain at dusk the reflection is weaker (same white-glare problem as batch 34). Inside a tunnel the road is dry.
+  - 高: new `WETL` chunk (uniform `lkWet`): upward, non-green ground ×0.55 darker and roughness 0.34, so it picks up a gray sheen from the sky map.
+- **Sound (sound.js `ambient`):** a rain channel (noise, highpass 500 / lowpass 7 kHz, muffled to 1.6 kHz while sitting in the car), gain 0.08 × rain. Birds stop, crickets drop, wind a bit stronger. town.src.js `ambStep` passes `rain` / `rainIn`.
+- **Bug found on the way:** in `postRender` the line setting the final exposure had been swallowed by the inline `//` comment before it (since batch 34), so 超高 always used exposure 0.45 (dusk 0.38 and night 1.15 never applied). It now runs. Night at 超高 is a bit brighter than before, as batch 37 intended.
+- **Cost (rain-test, 960×576, same frame dry → rain):**
+  - 高: +1 draw call, +6000 triangles. Street 272 → 273 calls (1.30 M → 1.31 M), highway 268 → 269, night 275 → 276, dusk 271 → 272. The rain's own JS is about 0.05 ms per frame (look total 0.27 ms).
+  - 超高: rain by day turns on the wet-road reflection pass, which until now ran only at night. Street 555 → 813 calls (3.1 M → 4.5 M), highway 580 → 844, dusk 600 → 893. At night (already wet) 847 → 869. So a rainy day on 超高 costs the same as a night on 超高.
+  - 普通: nothing (no rain).
+  - New reflection maps at the rain thresholds (0.25 / 0.75) cost one PMREM each, a short hitch like the existing sun bands.
+- **Tests:** rain-test.mjs, 17 ok (about 17 min). look-test and night-test now pin `setRain(0)`.

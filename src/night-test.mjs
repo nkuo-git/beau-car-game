@@ -110,7 +110,7 @@ const s0 = await p.evaluate(() => { const D = window.__D(); const h0 = D.LOOK.ho
 console.log('1 順', JSON.stringify(s0));
 check(s0.lv === 0 && s0.hour >= 0 && s0.hour < 24 && Math.abs(s0.hour - s0.clock) < 0.05 && s0.st.pl.length === 0 && s0.st.sp.length === 0 && s0.st.paintN === 0 && s0.st.dl.I === 1.4,
   `順: clock hour ${s0.hour.toFixed(2)} (a 12-minute day, 第 34 批; 第 40 批: slower round sunrise/sunset), nothing changes (no lamps, sun 1.4, paint night 0)`);
-await p.evaluate(() => window.__D().LOOK.setHour(22));
+await p.evaluate(() => { window.__D().LOOK.setHour(22); window.__D().LOOK.setRain(0); }); // 第 47 批：不下雨（照時鐘會下：rain-test 測）
 const s0n = await p.evaluate(() => window.__state());
 check(s0n.hour === 22 && s0n.dl.I === 1.4 && s0n.pl.length === 0 && s0n.paintN === 0 && s0n.lodE === 0, `順 at 22:00: still daytime look (sun 1.4, no lamps, LOD car lamps off)`);
 

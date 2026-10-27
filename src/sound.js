@@ -955,7 +955,7 @@ export function createEngineAudio(opt = {}) {
   }
   // ---- 第 31 批：環境聲（出門就有，下車走路也有）：風（低通雜訊，一陣一陣）、白天的鳥叫（兩三聲的啾啾）、晚上的蟲叫（4.3 kHz 一秒 28 下）、路上最近 3 台車的引擎（鋸齒波低通＋低八度，照距離變小、照左右分邊）----
   // set({ wind, birds, crickets, cars: [{ d, pan, v }] })：每 0.1 秒叫一次就好；數字都用 setTargetAtTime 慢慢到（不會卡卡的）
-  const AMB_V = { n: 3, car: 0.26, carD: 15, wind: 0.045, birds: 0.022, cric: 0.011, bird0: 5, bird1: 14 }; // 第 38 批（Nick「鳥叫聲太多了」）：鳥 0.035 → 0.022，每 5–14 秒才叫一聲（以前 1.6–4 秒）
+  const AMB_V = { n: 3, car: 0.26, carD: 15, wind: 0.045, birds: 0.022, cric: 0.011, bird0: 5, bird1: 14, rain: 0.08, rainHp: 500, rainLp: 7000, rainLpIn: 1600 }; // 第 38 批（Nick「鳥叫聲太多了」）：鳥 0.035 → 0.022，每 5–14 秒才叫一聲（以前 1.6–4 秒）
   function ambient() {
     const h = { alive: false, last: null, set() {}, dispose() {} };
     try {
@@ -968,6 +968,9 @@ export function createEngineAudio(opt = {}) {
       const ns = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), wg = ctx.createGain(), wl = ctx.createGain(); ns.buffer = noiseBuf(ctx); ns.loop = true; lp.type = 'lowpass'; lp.frequency.value = 380; lp.Q.value = 0.4;
       wg.gain.value = 1; wl.gain.value = 0; ns.connect(lp); lp.connect(wg); wg.connect(wl); wl.connect(out); keep.push(ns, lp, wg, wl);
       const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 0.13; lg.gain.value = 0.45; lfo.connect(lg); lg.connect(wg.gain); keep.push(lfo, lg); // 一陣一陣（0.55–1.45）
+      // 雨（第 47 批）：雜訊去掉低的、高的＝沙沙聲；坐在車裡（打在車頂）低通多一點、悶悶的；從雜訊的別的地方開始放（跟風不一樣）
+      const rs = ctx.createBufferSource(), rh = ctx.createBiquadFilter(), rlp = ctx.createBiquadFilter(), rl = ctx.createGain(); rs.buffer = ns.buffer; rs.loop = true; rs.playbackRate.value = 0.87; rh.type = 'highpass'; rh.frequency.value = AMB_V.rainHp; rh.Q.value = 0.5;
+      rlp.type = 'lowpass'; rlp.frequency.value = AMB_V.rainLp; rlp.Q.value = 0.5; rl.gain.value = 0; rs.connect(rh); rh.connect(rlp); rlp.connect(rl); rl.connect(out); keep.push(rs, rh, rlp, rl);
       // 蟲（晚上）
       const cr = ctx.createOscillator(), cg = ctx.createGain(), ct = ctx.createOscillator(), ctg = ctx.createGain(), cl = ctx.createGain();
       cr.type = 'sine'; cr.frequency.value = 4300; ct.type = 'square'; ct.frequency.value = 28; cg.gain.value = 0.5; ctg.gain.value = 0.5; cl.gain.value = 0;
@@ -982,7 +985,7 @@ export function createEngineAudio(opt = {}) {
         keep.push(o, o2, f, g); if (pn) keep.push(pn);
         cars.push({ o, o2, g, pn });
       }
-      for (const x of [ns, lfo, cr, ct]) x.start(t0); for (const c of cars) { c.o.start(t0); c.o2.start(t0); }
+      for (const x of [ns, lfo, cr, ct]) x.start(t0); rs.start(t0, (ns.buffer.duration || 2) * 0.5); for (const c of cars) { c.o.start(t0); c.o2.start(t0); }
       // 鳥：每 5–14 秒叫一聲（白天才叫；頁面藏起來不叫）；第 38 批：以前 1.6–4 秒，太多了
       let birds = 0, bT = 0, done = false;
       const chirp = () => {
@@ -1004,6 +1007,7 @@ export function createEngineAudio(opt = {}) {
         if (done) return; h.last = o; wake();
         tgt(wl.gain, AMB_V.wind * Math.max(0, Math.min(1.5, num(o.wind, 1))), 0.6);
         tgt(cl.gain, AMB_V.cric * Math.max(0, Math.min(1, num(o.crickets, 0))), 0.8);
+        tgt(rl.gain, AMB_V.rain * Math.max(0, Math.min(1, num(o.rain, 0))), 1.2); tgt(rlp.frequency, o.rainIn ? AMB_V.rainLpIn : AMB_V.rainLp, 0.3); // 第 47 批：雨聲
         birds = Math.max(0, Math.min(1, num(o.birds, 0)));
         const L = Array.isArray(o.cars) ? o.cars : [];
         for (let i = 0; i < cars.length; i++) {
@@ -1018,7 +1022,7 @@ export function createEngineAudio(opt = {}) {
           if (done) return; done = true; h.alive = false; clearTimeout(bT);
           const t1 = ctx.currentTime; out.gain.cancelScheduledValues(t1); out.gain.setTargetAtTime(0, t1, 0.12);
           setTimeout(() => {
-            for (const x of [ns, lfo, cr, ct]) try { x.stop(); } catch { /* 算了 */ }
+            for (const x of [ns, lfo, cr, ct, rs]) try { x.stop(); } catch { /* 算了 */ }
             for (const c of cars) { try { c.o.stop(); c.o2.stop(); } catch { /* 算了 */ } }
             for (const x of keep) try { x.disconnect(); } catch { /* 算了 */ }
             if (S.rec) { S.rec.n = Math.max(0, S.rec.n - 1); idleCheck(); }

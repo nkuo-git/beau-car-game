@@ -364,7 +364,7 @@ async function enterDrive() {
     // 第 29 批（Nick 2026-10-23「就用5號的真實度」）：畫質；第一次「漂亮／最真實」要先找樹冠、畫材質貼圖、編 shader（在這裡做，開出去不會頓）
     try {
       LOOK = createLook({ renderer, scene: TR.scene, world: VIL, getCar: lookCar, plain: () => GAR?.group || null, indoor: (c) => !!GAR && !!TWR && inTower(c.position.x, c.position.z),
-        night: lookNight, carDims: (car) => (tripS && car === tripS.car ? fullBox(tripS) : null), police: () => police?.npcCars || null, traffic: () => NPC?.traffic?.cars || null }); // 第 30 批：晚上（車燈）、自己的車的大燈放哪裡；第 32 批：警車（紅藍燈）、路上的車（大燈照路）
+        night: lookNight, carDims: (car) => (tripS && car === tripS.car ? fullBox(tripS) : null), police: () => police?.npcCars || null, traffic: () => NPC?.traffic?.cars || null, trialRain: TRIAL_FREE }); // 第 30 批：晚上（車燈）、自己的車的大燈放哪裡；第 32 批：警車（紅藍燈）、路上的車（大燈照路）；第 47 批：試做頁出門 15 秒就下雨
       const lv = lookPref(); lookBtns(lv);
       if (lv > 0) { msg.textContent = '畫面準備中⋯'; await new Promise((r) => setTimeout(r, 30)); await lookSet(lv, false); renderer.compile(TR.scene, dcam); }
     } catch (e) { console.error(e); }
@@ -2150,7 +2150,7 @@ function clockStep() {
   drv?.setClock(s); walker?.setClock(s);
 }
 // 環境聲（sound.js ambient）：出門就有，開車、走路都有：風（走路比較大聲）、白天的鳥、晚上的蟲（看 LOOK 的天色；順＝白天）、路上最近 3 台車的引擎（照距離、左右）；回車庫頁、進比賽就收掉
-let AMB = null; const AMB_S = { f: 0, wind: 1, birds: 1, crickets: 0, cars: [{ d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }] };
+let AMB = null; const AMB_S = { f: 0, wind: 1, birds: 1, crickets: 0, rain: 0, rainIn: false, cars: [{ d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }, { d: 1e9, pan: 0, v: 0 }] };
 let MUS = null; // 第 34 批：背景音樂（sound.js music）：跟環境聲一起開、一起收；房子裡面小聲
 // 第 35 批（Nick 2026-10-24「做背景音樂開關 不用畫圖 直接做」）：「⋯」打開那一排 ⋯ 下面多一顆「🎵」，按一下關（變灰）、再按開；每支手機自己記（carid.music，不搬家、不上雲端）；音樂還是跟著「聲音」總開關
 const MUS_KEY = 'carid.music';
@@ -2172,8 +2172,9 @@ function ambStep() {
   let px, pz, hd; const walking = !!walker && walker.mode !== 'off';
   if (!MUS && engineAudio.music) { MUS = engineAudio.music(walking ? 'walk' : 'drive'); if (!MUS.alive) MUS = null; } musLevel();
   if (walking) { const w = walker.telemetry(); px = w.x; pz = w.z; hd = w.heading; } else if (drv) { const t = drv.telemetry(); px = t.x; pz = t.z; hd = t.heading; } else return;
-  const night = LOOK && LOOK.level > 0 ? LOOK.night : 0, inK = indoor ? 0.3 : 1; // 順沒有日夜＝白天；房子裡面：外面的聲音小聲
-  AMB_S.wind = (walking ? 1 : 0.55) * inK; AMB_S.crickets = night * inK; AMB_S.birds = (1 - night) * inK;
+  const night = LOOK && LOOK.level > 0 ? LOOK.night : 0, rain = LOOK && LOOK.level > 0 ? LOOK.rain : 0, inK = indoor ? 0.3 : 1; // 順沒有日夜＝白天；房子裡面：外面的聲音小聲
+  AMB_S.wind = (walking ? 1 : 0.55) * inK * (1 + rain * 0.5); AMB_S.crickets = night * inK * (1 - rain * 0.8); AMB_S.birds = (1 - night) * inK * (1 - rain); // 第 47 批：下雨鳥不叫、蟲小聲
+  AMB_S.rain = rain * inK; AMB_S.rainIn = !walking && !indoor; // 雨聲：坐在車裡悶悶的（打在車頂）
   const L = AMB_S.cars; for (const c of L) c.d = 1e9;
   const cars = NPC?.traffic?.cars; if (cars && !indoor) { const rx = Math.sin(hd), rz = Math.cos(hd); // 右手邊（heading：x = cos, z = −sin）
     for (let i = 0; i < cars.length; i++) { const c = cars[i], dx = c.x - px, dz = c.z - pz, d = Math.hypot(dx, dz); if (d > 80 || d >= L[2].d) continue;

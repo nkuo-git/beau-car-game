@@ -110,7 +110,7 @@ const u2 = await ui();
 check(!u0.tog && u1.tog && !u1.pop && u2.pop && !u2.tog && u2.btns === '超高/高/普通', `fullscreen driving: ✨ only after ⋯; ✨ opens 「畫質 ${u2.btns}」`);
 check(!overlaps.length, `✨ and 🎵 are on screen and cover no other button (844×390, 390×844, 360×800, 915×412, 800×360${overlaps.length ? ': ' + overlaps.join(' / ') : ''})`);
 const t2 = Date.now();
-await p.evaluate(() => window.__D().LOOK.setHour(13)); // 第 30 批：太陽會動（24 分鐘一天）：測試固定下午 1 點
+await p.evaluate(() => { window.__D().LOOK.setHour(13); window.__D().LOOK.setRain(0); }); // 第 30 批：太陽會動（24 分鐘一天）：測試固定下午 1 點；第 47 批：不下雨（照時鐘會下）
 await p.evaluate(() => [...document.querySelectorAll('#lookPop button')].find((b) => b.dataset.l === '2').click());
 const toastA = (await ui()).toast;
 await p.waitForFunction(() => window.__D().LOOK.level === 2 && !window.__D().LOOK.busy, null, { timeout: 120000 });
