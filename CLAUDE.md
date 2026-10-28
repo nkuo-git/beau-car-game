@@ -106,7 +106,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `node rain-test.mjs ../out/rain/rn` | 下雨（look.js 第 47 批）：照時鐘（一週 28% 在下、不會跳）、試做頁 15 秒就下；普通沒有雨；高：雨絲一個 draw call、天空灰、太陽弱、霧近、路濕（lkWet）、JS 很小；雨聲、鳥不叫；慢慢乾；開車雨往你斜、駕駛座裡沒有雨；隧道裡沒有雨；超高：白天也有濕路倒影、曝光真的有用；晚上看不到星星、大燈照到的雨；換回普通沒有留下東西；截圖＋draw calls | 17 ok，ALL CHECKS OK（約 17 分；試做頁 v60 起） |
 | `node free-test.mjs` | 試做頁錢用不完、正常頁存檔的錢 | 2 ok（先跑 make-free.mjs） |
 | `node test-app-b1.mjs ../docs ../out/app1/app` | 網站（docs/）整趟：跟 test-b1 一樣（圓塔、電梯、方向盤、一層樓、停車場也有）＋版本號、標題列、App 外殼的全螢幕；沒全螢幕在電梯上（開車、走路）：面板不壓到別的按鈕（網站的畫面只有 426 寬） | 152 ok（試玩頁 docs/try 標題寫「試玩」，版本號那一項會不過） |
-| `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場（跟 test-b4 一樣，含怪獸卡車不能坐電梯） | 80 ok |
+| `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場（跟 test-b4 一樣，含怪獸卡車不能坐電梯、J4 吉普車在車行裡面） | 84 ok |
 | `node site-test.mjs ../docs ../out/site/site` | 網站：打開、開車、有新版本那一條、App 有新版本、搬進度 | 24 ok |
 | `node cloud-test.mjs ../docs ../out/cloud/cloud` | 登入＋雲端存檔（假的雲端、兩支手機、沒網路、App 外殼）、一個帳號一支手機（把那支登出／不要在這支登入、已經登出了、存檔前先看、每分鐘看） | 27 ok |
 | `node online-test.mjs ../docs ../out/online/online` | 連線：要先登入、取名字（擋髒話）、跑完自己上傳、排行榜、鬼影車按鈕（假的 Firestore） | 30 ok |
