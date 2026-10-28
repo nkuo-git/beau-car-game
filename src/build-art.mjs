@@ -23,6 +23,7 @@ const CARS = [
   ['civic', 'body-civic-q.glb', 'car-civic.txt', ['civic-look.js', 'civic-spec.js']],
   ['evo', 'body-evo-q.glb', 'car-evo.txt', ['evo-look.js', 'evo-spec.js']],
   ['monster', 'body-monster-q.glb', 'car-monster.txt', ['monster-look.js', 'monster-spec.js']], // 第 4 批：越野車（越野車場的越野車行賣的）；輕量車 body-monster-lod.glb（monster-lod.mjs）
+  ['jp4', 'body-jp4-q.glb', 'car-jp4.txt', ['jp4-look.js', 'jp4-spec.js']], // 第 48 批：J4 吉普車（越野車行賣的）；輕量車 body-jp4-lod.glb（make-lod.mjs）
 ];
 const NOLOD = []; // 沒有輕量車的車（不停車位、不擺阿財車行）；怪獸卡車現在有了（body-monster-lod.glb）
 const yaris = process.argv.includes('--yaris');

@@ -27,6 +27,8 @@ src/body-ae86.glb
 src/body-civic.glb
 src/body-evo.glb
 src/body-altis.glb
+# 第 48 批：吉普車的中間檔
+src/body-jp4.glb
 src/*3d/
 src/monster3d/
 # 備份

@@ -2,7 +2,7 @@
 //   車身 SDF（<key>-body.mjs 的 makeSDF；supra＝body.mjs）量：
 //     S：側面半寬（x −1.9～1.2 每 0.1 × y 0.2～1.3 每 0.1）：從中線往外走（每 2 公釐）走到車身外面；中線就在車身外面＝0
 //     T：頭上車身高度（x 同上 × |z| 0～1.0 每 0.1）：從 y＝2 往下走（每 2 公釐），碰到車身前最後一個在外面的點；整條都碰不到＝0
-//     bot：車艙底下（x −1～0.6、z 0～0.6）車身最低點的平均；fa／ra：前輪拱後緣、後輪拱前緣 [x, 輪拱頂 y]（z＝0.7、輪心高）
+//     bot：車艙底下（x −1～0.6、z 0～0.6）車身最低點的平均；fa／ra：前輪拱後緣、後輪拱前緣 [x, 輪拱頂 y]（z＝0.7、輪心高；碰不到就高 20 公分）
 //   車窗遮罩（cabin-masks.json；--masks 或 json 裡沒有這台：用 Chromium 畫 <KEY>_LOOK 的 side()／top() 量，存回 json）：
 //     belt／st：側窗（側面圖 R 有、G 沒有＝看得到的玻璃）每個 x 的下緣／上緣 y（每 4 公釐量）；沒有玻璃＝0
 //     ws／wf／wt：前擋（俯視圖 A＝玻璃、G＝黑邊；從車頭往後第一段玻璃）每個 |z| 的看得到的玻璃下緣（最前面）x／整片玻璃最前面 x／上緣 x（每 5 公釐）
@@ -34,8 +34,11 @@ async function measureMasks(list) {
       let look;
       if (key === 'supra' || key === 'gtr') { const m = await import('/supra.js'); look = (key === 'supra' ? m.SUPRA_SPEC : m.GTR_SPEC).look; }
       else look = (await import(`/${key}-spec.js`))[`${key.toUpperCase()}_SPEC`].look;
+      // 第 48 批：吉普車（車太高）的遮罩是遮罩座標（<KEY>_M：xm＝(x−X0)·S、ym＝(y−Y0)·S、zm＝z·S）：量的點（公尺）先換過去
+      const MK = key === 'supra' || key === 'gtr' ? null : (await import(`/${key}-look.js`))[`${key.toUpperCase()}_M`] || null;
       const px = (t, b, x, y, ch) => { // t.image.data：第 0 列在下面（y0）
         const { width: w, height: h, data } = t.image, k = w / (b.x1 - b.x0);
+        if (MK) { if (b === BOX.top) { x = (x - MK.X0) * MK.S; y *= MK.S; } else { x = (x - MK.X0) * MK.S; y = (y - MK.Y0) * MK.S; } }
         const i = Math.floor((x - b.x0) * k), j = Math.floor((y - b.y0) * k);
         if (i < 0 || j < 0 || i >= w || j >= h) return 0;
         return data[(j * w + i) * 4 + ch];
@@ -45,7 +48,7 @@ async function measureMasks(list) {
       const sd = look.side(), belt = [], st = [];
       for (let i = 0; i < NX; i++) {
         const x = X0 + i * 0.1; let lo = 0, hi = 0;
-        for (let q = 0; q <= 350; q++) { const y = q * 0.004; if (px(sd, BOX.side, x, Math.min(y, 1.3999), 0) > 127 && px(sd, BOX.side, x, Math.min(y, 1.3999), 1) < 128) { if (!lo) lo = r3(y) || 1; hi = r3(y); } }
+        for (let q = 0; q <= (MK ? 500 : 350); q++) { const y = q * 0.004, yy = MK ? y : Math.min(y, 1.3999); if (px(sd, BOX.side, x, yy, 0) > 127 && px(sd, BOX.side, x, yy, 1) < 128) { if (!lo) lo = r3(y) || 1; hi = r3(y); } } // 吉普車的窗戶到 1.75 公尺：量到 2 公尺
         belt.push(lo); st.push(hi);
       }
       // 前擋、後擋
@@ -73,7 +76,9 @@ async function measureMasks(list) {
 async function measureBody(key) {
   const M = await import(key === 'supra' ? './body.mjs' : `./${key}-body.mjs`);
   const sp = key === 'supra' || key === 'gtr' ? (await import('./supra.js'))[`${key.toUpperCase()}_SPEC`] : (await import(`./${key}-spec.js`))[`${key.toUpperCase()}_SPEC`];
-  const f = M.makeSDF(), W = sp.wheels, st = 0.002;
+  const f0 = M.makeSDF(), W = sp.wheels, st = 0.002;
+  const MK = key === 'jp4' ? M.JP4 : null; // 第 48 批：吉普車的 SDF 是遮罩座標（xm＝x·S、ym＝(y−Y0)·S、zm＝z·S）：換回公尺再量
+  const f = MK ? (x, y, z) => f0(x * MK.S, (y - MK.Y0) * MK.S, z * MK.S) / MK.S : f0;
   const side = (x, y) => { if (f(x, y, 0) >= 0) return 0; let z = 0; while (z < 1.2 && f(x, y, z) < 0) z += st; return z; };
   const top = (x, z) => { let y = 2; while (y > 0 && f(x, y, z) > 0) y -= st; return y > 0 ? y + st : 0; };
   const S = [], T = [];
@@ -82,7 +87,8 @@ async function measureBody(key) {
   let bs = 0, bn = 0;
   for (let x = -1; x <= 0.601; x += 0.1) for (let z = 0; z <= 0.601; z += 0.1) { let y = 0; while (y < 1 && f(x, y, z) >= 0) y += st; if (y < 1) { bs += y; bn++; } }
   const arch = (xc, R, dir) => { // dir：往車艙的方向（前輪 −1、後輪 +1）
-    let x = xc; while (Math.abs(x - xc) < 0.8 && f(x, R, 0.7) >= 0) x += dir * st;
+    const walk = (y) => { let x = xc; while (Math.abs(x - xc) < 0.8 && f(x, y, 0.7) >= 0) x += dir * st; return x; };
+    let x = walk(R); if (Math.abs(x - xc) >= 0.8) x = walk(R + 0.2); // 第 48 批：吉普車車身底（0.52）比輪心高，輪心高度走 0.8 公尺都碰不到 → 高 20 公分再走一次
     let y = R; while (y < R + 0.8 && f(xc, y, 0.7) >= 0) y += st;
     return `${mm(x)} ${mm(y)}`;
   };

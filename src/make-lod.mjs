@@ -22,11 +22,12 @@ import { Document, NodeIO } from '@gltf-transform/core';
 import { KHRMeshQuantization } from '@gltf-transform/extensions';
 import { serve, browser, DIR } from './lod-serve.mjs';
 
-const ALL = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'rx7', 'evo', 'civic', 'laferrari', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron'];
+const ALL = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'rx7', 'evo', 'civic', 'laferrari', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron', 'jp4']; // 第 48 批：吉普車（車身是遮罩座標，B.mask）
 const arg = (k, d) => { const a = process.argv.find((s) => s.startsWith(`--${k}=`)); return a ? a.split('=')[1] : d; };
 const KEYS = (process.argv.slice(2).find((s) => !s.startsWith('--')) || ALL.join(',')).split(',');
 const HALF = +arg('half', 9000); // 半邊車身（含車頭）目標三角形數
 const PART_ERR = +arg('perr', 0.002); // 零件簡化誤差（公尺）
+const PART_ERR_CAR = { jp4: 0.004 }; // 第 48 批：吉普車的零件又多又大（輪弧、保桿、備胎、車底），誤差 4 公釐（沒給 --perr 的時候）
 const WIDE_ERR = +arg('werr', 0.004); // 寬體葉子板（大片、平順）
 const BLUR = 0.005; // 遮罩模糊（公尺，高斯 σ）
 const MATTE_ERR = +arg('merr', 0.012); // 輪拱內、車底先簡化的誤差（公尺）
@@ -88,7 +89,7 @@ export const BODY_CLS = ['paint', 'glass', 'trim', 'matte', 'lamp', 'lens', 'wir
 const GLASS = 1, LAMP = 4, LENS = 5, WIRE = 6, CHROME = 10, ORDER = [2, 3, 4, 5, 6, 7, 8, 9]; // trim, matte, lamp, lens, wire, amber, red, rev（跟 shader 的 mix 順序一樣）
 const LOW_LAMP = 0.48, WIRE_MIN = 0.08;
 // cls(x, y, z, nx, ny, nz) → 分類；cls.at＝最後一次的細節：a＝前面投影圖的 alpha（燈裡暗玻璃的比例）、wire＝模糊後網子的覆蓋率
-function classifier(M, U) {
+function classifier(M, U, low = LOW_LAMP) { // low：低的鍍鉻從多高以下（吉普車沒有：-Infinity）
   const S = [0, 0, 0, 0], Tp = [0, 0, 0, 0], F = [0, 0, 0, 0], Rr = [0, 0, 0, 0], w = new Float32Array(10), at = { a: 0, wire: 0 };
   const wr = U.uWellR ?? U.uWell, wf = U.uWell;
   const cls = (x, y, z, nx, ny, nz) => {
@@ -118,7 +119,7 @@ function classifier(M, U) {
     let keep = 1, bc = 0, bv = 0; // 從最後蓋上去的往前算：這一層佔 w×（後面每一層的 1−w），車漆佔剩下的
     for (let i = ORDER.length - 1; i >= 0; i--) { const c = ORDER[i], v = w[c] * keep; if (v > bv) { bv = v; bc = c; } keep *= 1 - w[c]; }
     const c = keep >= bv ? 0 : bc;
-    return c === LAMP && y < LOW_LAMP ? CHROME : c;
+    return c === LAMP && y < low ? CHROME : c;
   };
   cls.at = at;
   return cls;
@@ -301,7 +302,7 @@ for (const key of KEYS) {
   const totalIn = u32(B.body.idx).length / 3 + Math.max(0, ...Object.values(B.noses).map((g) => u32(g.idx).length / 3)); // 看得到的＝車身＋一個車頭
   const acc = { lens: [0, 0], wire: [0, 0] }, done = [];
   for (const [name, g, front] of pieces) {
-    const cls = classifier({ ...M, front }, B.U);
+    const cls = classifier({ ...M, front }, B.U, B.mask ? -Infinity : LOW_LAMP); // 吉普車：大燈的下半圈在遮罩座標 0.48 以下，不能當成低的鍍鉻（晚上會不亮）
     const cut = cutByClass(f32(g.pos), f32(g.nor), u32(g.idx), cls);
     mixes(cut, cls, acc);
     const share = u32(g.idx).length / 3 / totalIn; // 目標三角形照原本的比例分（Supra：車身＋任一個車頭 ≈ HALF）
@@ -312,6 +313,10 @@ for (const key of KEYS) {
   for (const { name, g, cut, s } of done) {
     const lists = BODY_CLS.map((role) => ({ role, idx: [], x: role === 'lens' || role === 'wire' ? { mix: out.mix[role] } : null }));
     for (let t = 0; t < s.I.length; t += 3) lists[s.C[s.I[t]]].idx.push(s.I[t], s.I[t + 1], s.I[t + 2]);
+    if (B.mask) { // 第 48 批：吉普車的車身是遮罩座標（xm＝(x−X0)·S、ym＝(y−Y0)·S、zm＝z·S；jp4-look.js JP4_M）：分類、切、簡化都做完了，換成公尺（法線不變）
+      const { S: k, X0, Y0 } = B.mask, P = s.P;
+      for (let i = 0; i < P.length; i += 3) { P[i] = P[i] / k + X0; P[i + 1] = P[i + 1] / k + Y0; P[i + 2] = P[i + 2] / k; }
+    }
     const extras = name === 'body' ? { lod: 'body', half: true } : { lod: 'nose', half: true, kits: Object.entries(B.noseOfKit).filter(([, n]) => 'nose_' + n === name).map(([k]) => k) };
     W.add(name, s.P, s.N, lists, extras);
     const n = s.I.length / 3;
@@ -338,7 +343,7 @@ for (const key of KEYS) {
       const cat = (arrs) => { const n = arrs.reduce((a, x) => a + x.length, 0), o = new Float32Array(n); let k = 0; for (const x of arrs) { o.set(x, k); k += x.length; } return o; };
       const wd = weld(cat(e.P), cat(e.N));
       nIn += wd.I.length / 3;
-      const [idx] = MS.simplifyWithAttributes(wd.I, wd.P, 3, wd.N, 3, [0.05, 0.05, 0.05], null, 0, cond.wide ? WIDE_ERR : PART_ERR, ['ErrorAbsolute', 'Prune']);
+      const [idx] = MS.simplifyWithAttributes(wd.I, wd.P, 3, wd.N, 3, [0.05, 0.05, 0.05], null, 0, cond.wide ? WIDE_ERR : (arg('perr') ? PART_ERR : PART_ERR_CAR[key] ?? PART_ERR), ['ErrorAbsolute', 'Prune']);
       const c = compact({ P: wd.P, N: wd.N, I: idx });
       const o = P.length / 3;
       P.push(...c.P); N.push(...c.N);

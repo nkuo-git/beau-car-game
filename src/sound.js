@@ -572,12 +572,19 @@ Object.assign(SND_CARS, {
   senna: { ...SND_CARS.jesko, name: '4.0 V8 平面曲軸雙渦輪', red: 8250 },
   laferrari: { ...SND_CARS.sp3, name: '6.3 V12＋電動馬達', red: 9250, motor: SND_CARS.p918.motor },
   huayra: { ...SND_CARS.sp3, name: '6.0 V12 雙渦輪', red: 6000, fire: SND_V12, lp: 5000, turbo: { ...SND_CARS.jesko.turbo, whoosh: 0.9, bov: 'atmo', bovLvl: 1.1 } },
+  // 第 48 批：吉普車：60 度 V6 自然進氣（每 120 度點火一次，比直六粗一點、低一點）；換了 6.4 V8（零件 swap）就變成十字曲軸 V8 的咕嚕聲
+  jp4: { ...SND_CARS.supra, name: '3.6 V6 自然進氣', red: 6600, gain: 1.0, fire: [0, 120, 240, 360, 480, 600], bank: [0, 1, 0, 1, 0, 1], cylAmp: [1, 0.98, 1.01, 0.97, 1, 0.99],
+    width: 140, vari: 0.05, jit: 0.8, turbo: null, lp: 2200, eq: [[110, 1, 5], [420, 1.3, 3], [1200, 2, 1.5]], drive: 1.35, rasp: 0.22, raspHz: 1800,
+    intake: { lvl: 0.18, f: 380, q: 1.4, f2: 1200 }, pops: { ...SND_CARS.supra.pops, lift: 0.15, shift: 0.1, lvl: 0.4 },
+    swap: { name: '6.4 V8 自然進氣（換過）', fire: [0, 90, 180, 270, 360, 450, 540, 630], bank: [0, 1, 1, 0, 1, 0, 0, 1], cylAmp: [1, 0.97, 1.02, 0.98, 1, 0.96, 1.03, 0.99],
+      width: 130, lp: 2000, gain: 1.05, rasp: 0.3, raspHz: 1600 } },
 });
 // 車庫的引擎零件會改變聲音
 function SND_profile(key, parts) {
   const B = SND_CARS[key] || SND_CARS.supra;
   const P = JSON.parse(JSON.stringify({ ...SND_BASE, ...B, intake: { ...SND_BASE.intake, ...B.intake }, pops: { ...SND_BASE.pops, ...B.pops } }));
   const has = (id) => Array.isArray(parts) && parts.includes(id);
+  if (has('swap') && B.swap) Object.assign(P, JSON.parse(JSON.stringify(B.swap))); // 第 48 批：換引擎（吉普車換 6.4 V8）先換底，下面的零件再照著改
   if (has('exhaust')) { P.lp *= 1.3; P.gain *= 1.19; P.rasp *= 1.25; P.drive *= 1.1; P.pops.lift += 0.2; } // 大口徑排氣：大聲、亮
   if (has('intake') || has('filter')) { P.intake.lvl *= 1.6; P.intake.hiss *= 1.5; if (P.turbo) { P.turbo.whoosh *= 1.3; P.turbo.whistle *= 1.15; } }
   if (has('ecu')) { P.pops.lift += 0.3; P.pops.shift += 0.3; P.pops.als += 0.3; } // 調過的電腦：放炮

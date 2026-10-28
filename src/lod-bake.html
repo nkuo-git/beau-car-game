@@ -29,6 +29,8 @@ import { ALTIS_SPEC, ALTIS_GARAGE } from './altis-spec.js';
 import { AVENTADOR_SPEC, AVENTADOR_GARAGE } from './aventador-spec.js';
 import { AE86_SPEC, AE86_GARAGE } from './ae86-spec.js';
 import { CHIRON_SPEC, CHIRON_GARAGE } from './chiron-spec.js';
+import { JP4_SPEC, JP4_GARAGE } from './jp4-spec.js'; // 第 48 批：吉普車
+import { JP4_M } from './jp4-look.js';
 const KITS3 = [['stock'], ['bomex'], ['track']];
 const CARS = {
   supra: { spec: SUPRA_SPEC, glb: 'body-q.glb', kits: KITS3, wings: [['stock'], ['gt'], ['none']] },
@@ -48,6 +50,7 @@ const CARS = {
   aventador: { spec: AVENTADOR_SPEC, glb: 'body-aventador-q.glb', ...AVENTADOR_GARAGE.opts },
   ae86: { spec: AE86_SPEC, glb: 'body-ae86-q.glb', ...AE86_GARAGE.opts },
   chiron: { spec: CHIRON_SPEC, glb: 'body-chiron-q.glb', ...CHIRON_GARAGE.opts },
+  jp4: { spec: JP4_SPEC, glb: 'body-jp4-q.glb', ...JP4_GARAGE.opts, mask: JP4_M }, // 車身存成遮罩座標（mask：make-lod.mjs 分類完再換成公尺）
 };
 for (const C of Object.values(CARS)) C.kits = (C.kit || C.kits).map((o) => o[0]), C.wingKeys = (C.wing || C.wings).map((o) => o[0]);
 const SENT = '#123457';
@@ -102,7 +105,7 @@ window.inventory = async (key) => {
 };
 
 // ---- 烘焙：回傳 node 端要的全部資料（大陣列用 base64）----
-// 半邊車身：照 glb 節點矩陣還原成公尺（跟 supra.js fullBody 一樣，只是不鏡射）
+// 半邊車身：照 glb 節點矩陣還原成公尺（跟 supra.js fullBody 一樣，只是不鏡射）；吉普車（mask）的 glb 本來就是遮罩座標：拿出來還是遮罩座標
 function half(scene, name) {
   scene.updateMatrixWorld(true);
   let src = null; scene.traverse((o) => { if (o.isMesh && o.name === name) src = o; });
@@ -133,7 +136,7 @@ const hex = (c) => '#' + c.getHexString();
 window.bake = async (key) => {
   const { C, gltf, spec, S } = await load(key);
   const look = spec.look, T = makeMaskTextures(look);
-  const out = { key, U: look.U, kits: C.kits, wings: [...Object.keys(spec.wings), 'none'], wing: spec.wing, kit: spec.kit,
+  const out = { key, mask: C.mask || null, U: look.U, kits: C.kits, wings: [...Object.keys(spec.wings), 'none'], wing: spec.wing, kit: spec.kit,
     body: half(gltf.scene, 'Body'), noses: {}, masks: { side: tex(T.side), top: tex(T.top), rear: tex(T.rear), fronts: {} }, noseOfKit: {}, parts: [] };
   for (const k of Object.keys(S.noses)) { out.noses[k] = half(gltf.scene, 'Nose_' + k); out.masks.fronts[k] = tex(T.fronts[k]); }
   if (!Object.keys(S.noses).length) out.masks.fronts.base = tex(T.fronts[Object.keys(T.fronts)[0]]);

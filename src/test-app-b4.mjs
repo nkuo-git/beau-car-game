@@ -25,7 +25,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
   + ' window.__money = (n) => { GAME.money = n; save(true); renderWallet(); renderOptions(); refreshCarBtns(); };'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, home, bayLock, snooze, TR, LODS, camGo, cur, built, walker, tripPose, tripFull, boarding,'
-  + '   TWR, EL, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE, OB, orbaySpot, parkSpot, baySpot, TOWER_BAYS, towerFy });' // 第 6 批：越野車車庫（orbay.js）
+  + '   TWR, EL, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE, OB, orbaySpot, parkSpot, baySpot, TOWER_BAYS, towerFy, liftAnim, room });' // 第 6 批：越野車車庫（orbay.js）；第 48 批：車庫頁的電梯（liftAnim）
   + ' window.__N = () => NPC; window.__NMAX = () => NPC_MAX; window.__HOME = () => HOME;'
   + ' window.__pol = () => (typeof police !== "undefined" ? police : null);' // 第 3 批（b3-int）：警察（開車的機器人不小心撞到人：星星清掉，見 leg）
   + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR });'
@@ -502,7 +502,7 @@ check(await p.evaluate(() => { const N = window.__N(), V = window.__D().VIL; ret
 // ---- 3 越野車行：展示台上的怪獸卡車（走路也擋人）→ 開進買車區 → 同一個面板（只擺越野車）----
 await p.evaluate(() => window.__D().drv.setDestination('odealer'));
 r = await leg('odealer', 'Math.hypot(window.__D().drv.telemetry().x - window.__D().VIL.places.odealer.display[0].x, window.__D().drv.telemetry().z - window.__D().VIL.places.odealer.display[0].z) < 40', {}, 200);
-await p.waitForFunction(() => window.__O().oDisp?.k === 'monster', null, { timeout: 240000 });
+await p.waitForFunction(() => window.__O().oDisp[0]?.k === 'monster' && window.__O().oDisp[1]?.k === 'jp4', null, { timeout: 240000 }); // 第 48 批：門口大圓台＝怪獸卡車、車行裡面＝J4 吉普車
 // 停下來、下車：走去展示台推（擋住）、腳踩在地形上；走回去上車（同一台接著開）
 const pod = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, d = D.drv; window.__drvG = d;
@@ -520,6 +520,21 @@ console.log('3', el(), 'podium on foot:', JSON.stringify(pod));
 check(pod.pressed === '下車' && pod.moved > 1 && pod.gap >= pod.R - 0.05 && pod.gap < pod.R + 0.3, `on foot at 越野車行: walking at the podium with the monster truck on it stops you at its edge (gap ${pod.gap} m, radius ${pod.R})`);
 check(Math.abs(pod.cy - pod.gy) < 0.01 && pod.camAbove > 0.3, `on foot in the off-road park you stand on the ground (feet at ${pod.cy}, ground ${pod.gy}); camera ${pod.camAbove} m above the ground`);
 await drawAndShot('3a-podium-on-foot');
+// 第 48 批：車行裡面展示位上的 J4 吉普車（還沒買）車頭朝外、也擋人：從車頭前面 3 公尺往車子走，停在車頭的碰撞盒外面
+const jw = await p.evaluate(() => {
+  const D = window.__D(), H = window.__H, W = D.walker, pad = D.VIL.places.odealer.display[1], o = window.__O().oDisp[1], B = o.box, car = o.S.car;
+  const c = Math.cos(pad.heading), s = Math.sin(pad.heading), cx = pad.x + B.cx * c + B.cz * s, cz = pad.z - B.cx * s + B.cz * c, fx = Math.cos(pad.heading), fz = -Math.sin(pad.heading);
+  const a = Math.atan2(fz, -fx); // 往車頭走（走路的 heading：方向 (cos, −sin)）
+  W.teleport({ x: cx + fx * (B.hx + 3), z: cz + fz * (B.hx + 3), heading: a }); H.step(20);
+  const ph = H.push(a, 3, 1, false); H.step(10);
+  const t = W.telemetry(), R = W.character.radius, gap = (t.x - cx) * fx + (t.z - cz) * fz - B.hx, side = Math.abs(-(t.x - cx) * fz + (t.z - cz) * fx);
+  return { k: o.k, parent: car.parent === D.VIL.group, vis: car.visible, pos: car.position.toArray().map((v) => +v.toFixed(2)), rot: +car.rotation.y.toFixed(3), pad: [pad.x, pad.y, pad.z, pad.heading], len: +(2 * B.hx).toFixed(2),
+    moved: +ph.d.toFixed(2), gap: +gap.toFixed(3), R: +R.toFixed(3), side: +side.toFixed(2) };
+});
+console.log('  jeep in the shed:', JSON.stringify(jw));
+check(jw.parent && jw.vis && Math.abs(jw.pos[0] - jw.pad[0]) < 0.01 && Math.abs(jw.pos[1] - jw.pad[1]) < 0.01 && Math.abs(jw.pos[2] - jw.pad[2]) < 0.01 && Math.abs(jw.rot - jw.pad[3]) < 1e-3 && jw.len > 3.8 && jw.len < 5,
+  `the unbought J4 jeep stands on the display mat inside the 越野車行, nose out (${jw.len} m long)`);
+check(jw.moved > 1 && jw.gap >= jw.R - 0.05 && jw.gap < jw.R + 0.3 && jw.side < 0.3, `on foot the displayed jeep blocks you at its nose (gap ${jw.gap} m, radius ${jw.R})`);
 const bk = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker, d = window.__drvG, t = d.telemetry(), ci = d.carInfo, c0 = (ci.nose + ci.tail) / 2, f = [Math.cos(t.heading), -Math.sin(t.heading)], rt = [Math.sin(t.heading), Math.cos(t.heading)], cx = t.x + f[0] * c0, cz = t.z + f[1] * c0;
   const at = (u, w) => [cx + f[0] * u + rt[0] * w, cz + f[1] * u + rt[1] * w];
   W.teleport({ x: at(-ci.len / 2 - 2, 0)[0], z: at(-ci.len / 2 - 2, 0)[1], heading: t.heading }); H.step(10);
@@ -533,8 +548,18 @@ check(r.arrived, 'drove into the 越野車行 bay and the dealer panel opened');
 const od = await p.evaluate(() => ({ list: [...document.querySelectorAll('#dealerCars .part')].map((x) => x.querySelector('b').textContent + (x.classList.contains('sel') ? '*' : '') + ':' + x.className.replace('part ', '')),
   buy: document.getElementById('dealerBuyHead').textContent, msg: document.getElementById('dealerMsg').textContent, name: document.getElementById('dealerName').textContent, at: window.__O().dealerAt }));
 console.log('  odealer:', JSON.stringify(od));
-check(od.at === 'odealer' && od.name === '越野車行' && od.list.length === 1 && /^怪獸卡車\*/.test(od.list[0]) && /買 怪獸卡車/.test(od.buy), '越野車行 lists only off-road vehicles: the monster truck, selected and affordable');
-const disp = await p.evaluate(() => { const O = window.__O(), D = window.__D(), pad = D.VIL.places.odealer.display[0], c = O.oDisp.S.car; return { parent: c.parent === D.VIL.group, vis: c.visible, pos: c.position.toArray().map((v) => +v.toFixed(2)), pad: [pad.x, pad.y || 0, pad.z] }; });
+check(od.at === 'odealer' && od.name === '越野車行' && od.list.length === 2 && /^J4\*:sel can$/.test(od.list[0]) && /^怪獸卡車:can$/.test(od.list[1]) && /買 J4/.test(od.buy),
+  '越野車行 lists only off-road vehicles, cheapest first: the J4 jeep (80 萬, selected) and the monster truck (100 萬), both affordable');
+// 鏡頭先看選好的那台（車行裡面的吉普車）；按怪獸卡車：鏡頭移到門口的大圓台、買的是怪獸卡車
+const camAt = () => p.evaluate(async () => { await new Promise((r) => setTimeout(r, 1200)); const D = window.__D(), c = D.dcam.position, P = D.VIL.places.odealer.display, d = (i) => +Math.hypot(c.x - P[i].x, c.z - P[i].z).toFixed(2); return [d(0), d(1)]; });
+const cam1 = await camAt();
+ri = await drawAndShot('3-odealer-jeep');
+summary.push(`越野車行 panel (jeep in the shed): ${ri.calls} calls, ${ri.tris} tris`);
+await p.evaluate(() => [...document.querySelectorAll('#dealerCars .part')].find((b) => b.querySelector('b').textContent === '怪獸卡車').click());
+const cam2 = await camAt(), od2 = await p.evaluate(() => ({ sel: document.querySelector('#dealerCars .part.sel b')?.textContent, buy: document.getElementById('dealerBuyHead').textContent }));
+console.log('  camera to jeep / monster:', JSON.stringify(cam1), JSON.stringify(cam2), JSON.stringify(od2));
+check(cam1[1] > 4 && cam1[1] < 7 && cam1[0] > 15 && cam2[0] > 8 && cam2[0] < 11 && od2.sel === '怪獸卡車' && /買 怪獸卡車/.test(od2.buy), `the dealer camera looks at the jeep in the shed first (${cam1[1]} m away), then at the podium after choosing the monster truck (${cam2[0]} m)`);
+const disp = await p.evaluate(() => { const O = window.__O(), D = window.__D(), pad = D.VIL.places.odealer.display[0], c = O.oDisp[0].S.car; return { parent: c.parent === D.VIL.group, vis: c.visible, pos: c.position.toArray().map((v) => +v.toFixed(2)), pad: [pad.x, pad.y || 0, pad.z] }; });
 console.log('  display:', JSON.stringify(disp));
 check(disp.parent && disp.vis && Math.abs(disp.pos[0] - disp.pad[0]) < 0.01 && Math.abs(disp.pos[2] - disp.pad[2]) < 0.01, 'the unbought monster truck stands on the showroom podium');
 ri = await drawAndShot('3-odealer');
@@ -547,12 +572,12 @@ await p.waitForFunction(() => window.__D().cur === 'monster' && window.__D().drv
 await p.waitForFunction(() => window.__D().LODS.gc8?.lod, null, { timeout: 120000 });
 await p.evaluate(() => window.__dstep(2));
 di = await driveInfo();
-const sw = await p.evaluate(() => { const D = window.__D(), ex = D.VIL.places.odealer.exit, t = D.drv.telemetry(); return { money: window.__G().money, owned: [...window.__G().owned], atExit: Math.hypot(t.x - ex.x, t.z - ex.z) < 0.05, tripIsS: D.tripS === window.__S(), oDisp: window.__O().oDisp, halfW: D.drv.carInfo.halfW,
+const sw = await p.evaluate(() => { const D = window.__D(), ex = D.VIL.places.odealer.exit, t = D.drv.telemetry(); return { money: window.__G().money, owned: [...window.__G().owned], atExit: Math.hypot(t.x - ex.x, t.z - ex.z) < 0.05, tripIsS: D.tripS === window.__S(), oDisp: window.__O().oDisp.map((o) => o && o.k), halfW: D.drv.carInfo.halfW,
   tw: D.TWR.indexOf('gc8'), twr: D.TWR.join(), park: window.__G().park, gc8Pose: D.tripPose.gc8?.tw ?? null, gc8On: D.LODS.gc8?.lod?.car.parent?.name, dmg: !!D.tripS.dmg, dmgH: D.tripS.dmg?.health }; });
 console.log('4', el(), 'bought:', JSON.stringify(sw), JSON.stringify(di), '| lods', JSON.stringify(await lodAt()), '| plates', JSON.stringify(await plates('town')));
 check(sw.money === m0 - 100 && sw.owned.includes('monster') && sw.atExit && sw.tripIsS && di.cur === 'monster' && !di.paused && di.voice, 'bought the monster truck (−100 萬): it waits at the 越野車行 exit, engine running');
 check(di.dest === 'orace' && /起跑區/.test(di.toast), `next stop: the off-road race start (dest ${di.dest}, toast "${di.toast}")`);
-check(sw.oDisp === null && (await lodAt()).gc8 === 'town-garage' && sw.tw === 1 && sw.gc8Pose === 1 && sw.gc8On === 'towerBay2', `podium cleared (nothing left to sell); old GC8 was delivered into the first free spot of the tower at home (2 樓 ${sw.tw + 1} 號, next to YARIS)`);
+check(sw.oDisp[0] === null && sw.oDisp[1] === 'jp4' && (await lodAt()).gc8 === 'town-garage' && sw.tw === 1 && sw.gc8Pose === 1 && sw.gc8On === 'towerBay2', `podium cleared (the J4 jeep is still for sale in the shed: ${sw.oDisp}); old GC8 was delivered into the first free spot of the tower at home (2 樓 ${sw.tw + 1} 號, next to YARIS)`);
 check(!sw.twr.includes('monster') && !sw.park.tower.includes('monster') && !(await plates('town')).length, 'the monster truck (too big for the lift) is never put into a tower spot, and no spot shows just a name without a car');
 check(di.rideOn === true && sw.halfW === 1.905, `off-road vehicle uses the terrain ride everywhere (cls ${di.rcls}); collision half width is the tyres (${sw.halfW} m)`);
 check(!sw.dmg, 'no crash damage attached to the monster truck (撞爛 is off)');
@@ -623,7 +648,7 @@ await p.evaluate(() => window.__dstep(40));
 di = await driveInfo();
 const aft = await p.evaluate(() => ({ race: window.__O().orRace, hud: !!document.querySelector('.orr'), orcp: !!window.__D().VIL.places.orcp }));
 console.log('  after 開走:', JSON.stringify(aft), JSON.stringify(di));
-check(aft.race === null && !aft.hud && !aft.orcp && di.brake < 0.05 && !di.paused && di.dest === 'garage', `開走: race cleared, brake released (${di.brake}), destination home`);
+check(aft.race === null && !aft.hud && !aft.orcp && di.brake < 0.05 && !di.paused && di.dest === 'odealer', `開走: race cleared, brake released (${di.brake}); next stop the 越野車行 (dest ${di.dest}): the J4 jeep there is still for sale and the prize money covers it`);
 check(await p.evaluate(() => { const B = document.body.classList, tog = getComputedStyle(document.getElementById('destTog')).display !== 'none'; if (!B.contains('destsopen')) document.getElementById('destTog').click();
   const list = getComputedStyle(document.getElementById('dests')).display !== 'none'; document.getElementById('destTog').click(); return !B.contains('orracing') && tog && list && !B.contains('destsopen'); }), 'destination pills back after the race (「📍 去哪裡 ▾」 opens them)');
 await p.evaluate(() => { const d = window.__D().drv; d.setInput({ throttle: 0, brake: 1, steer: 0 }); for (let i = 0; i < 400 && Math.abs(d.telemetry().v) > 0.3; i++) window.__dstep(1); d.setInput(null); }); // 開走：先停下來（跟玩的人一樣）
@@ -796,7 +821,9 @@ const re = await p.evaluate(() => ({ money: window.__G().money, owned: [...windo
 console.log('11', el(), 'reload:', JSON.stringify(keep), '→', JSON.stringify(re));
 check(re.money === keep.money && re.owned === keep.owned && re.cur === 'monster' && re.parts === 1 && re.win === 1 && re.lvl === 1 && re.paint === '#1d4fd8' && re.big === 1.55 && re.trophies === 0 && re.park === keep.park && re.dmg === keep.dmg,
   `reload keeps the monster truck, money, the off-road win (next race: level 2), engine part, look, tower parking and its condition (${keep.dmg === 'null' ? 'as repaired' : 'dented again on the way home'})`);
-await p.evaluate(() => document.querySelector('#cars button[data-car="gc8"]').click()); await p.waitForTimeout(3000);
+const ride = await p.evaluate(async () => { document.querySelector('#cars button[data-car="gc8"]').click(); await new Promise((r) => setTimeout(r, 300)); const D = window.__D(), A = D.liftAnim.on; return { on: !!A, key: A?.key, rides: !!A?.wasCar, monsterVis: !!D.built.monster?.car.visible }; });
+await p.waitForFunction(() => !window.__D().liftAnim.on, null, { timeout: 60000 }); await p.waitForTimeout(1500); // 第 33 批：電梯真的去 2 樓載 GC8（約 5 秒），載回來才換
+check(ride.on && ride.key === 'gc8' && !ride.rides && !ride.monsterVis, `picking the GC8 (2F) on the garage page: the lift goes up to fetch it, and the monster truck does not ride the lift (too big; it is put away) (${JSON.stringify(ride)})`);
 const back = await p.evaluate(() => ({ cur: window.__D().cur, big: window.__O().bigCam, ty: +window.__controls().target.y.toFixed(2), tk: (window.__room().tk || []).join(), dist: +window.__cam().dist.toFixed(2), maxD: +window.__cam().maxD.toFixed(2) }));
 check(back.cur === 'gc8' && back.big === 1 && back.ty === 0.55 && !/gc8|monster/.test(back.tk) && back.dist <= back.maxD + 1e-6, `switching back to GC8 restores the normal camera (${JSON.stringify(back)})`);
 

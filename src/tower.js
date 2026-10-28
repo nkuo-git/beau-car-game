@@ -64,7 +64,7 @@ export const TOWER_BAYS = (() => {
   return out;
 })();
 // 第 24 批：斜坡的碰撞（本地座標、平的；頁面照現在在哪換）
-//   towerRampCols(F)：開在斜坡上（或在樓上）：裡面的矮牆一整圈（F 那一層的口開著；F 0＝都沒開）、外面的護欄一整圈、最上面的端牆（F＝最上面那一層才有）
+//   towerRampCols(F)：開在斜坡上（或在樓上）：裡面的矮牆一整圈（F 那一層的口開著；F 0＝都沒開）、外面的護欄一整圈、最上面的端牆（F＝最上面那一層才有）；F 0 起點前面那一段不放（第 48 批）；都 noCrush
 //   towerRampGround()：從地上看：第一個半圈（u 0 … π，低的那段）是實心的：外面一圈弧＋π 那邊的端牆；mouth＝斜坡的起點橫著一道（不能開上去的時候擋）
 //   towerColsAt(list, lot)：本地 → 世界（lot＝塔的中心、heading）
 export const { towerRampCols, towerRampGround, towerColsAt } = (() => {
@@ -74,9 +74,14 @@ export const { towerRampCols, towerRampGround, towerColsAt } = (() => {
   const radial = (a, r0, r1, h) => ({ t: 'box', x: ((r0 + r1) / 2) * Math.cos(a), z: ((r0 + r1) / 2) * Math.sin(a), hx: (r1 - r0) / 2, hz: 0.15, rot: -a, h }); // 橫跨的牆（x 軸朝外）
   const HC = 1.1; // 矮一點：鏡頭的線不會被護欄擋（drive.js：2.4 公尺以上才擋鏡頭）
   const RAMP_COLS = [];
+  // 第 48 批（吉普車）：起點前面那一段（A0 前 0.55 弧度）在第一圈（F 0：一樓到二樓）是地面、沒有護欄（那裡的護欄是 3 樓那一圈的）：F 0 不放
+  //   以前放著：寬的車斜斜開上起點（車頭過了起點、車尾還在外面）車尾會撞到看不到的牆；越野車（會輾東西）還會把它當成路邊的東西輾扁、報警
+  //   斜坡的牆都 noCrush（越野車也輾不到）
+  const pre = (c) => { const d = Math.atan2(Math.sin(Math.atan2(c.z, c.x) - R.A0), Math.cos(Math.atan2(c.z, c.x) - R.A0)); return d < 0 && d > -0.55; };
   for (let F = 0; F <= R.NE; F++) {
     const inner = F ? arc(R.R0 + 0.05, 0.25, R.ent(F) + R.GW, R.ent(F) + 2 * Math.PI - R.GW, 44, HC) : arc(R.R0 + 0.05, 0.25, 0, 2 * Math.PI, 48, HC);
-    RAMP_COLS.push([...inner, ...arc(R.R1 - 0.12, 0.15, 0, 2 * Math.PI, 56, HC), ...(F === R.NE ? [radial(R.A0 + R.UEND + 0.02, R.R0 - 0.3, R.R1 + 0.2, HC)] : [])]); // 端牆只在最上面那一圈（碰撞是平的：別圈經過同一個角度不能擋）
+    const all = [...inner, ...arc(R.R1 - 0.12, 0.15, 0, 2 * Math.PI, 56, HC), ...(F === R.NE ? [radial(R.A0 + R.UEND + 0.02, R.R0 - 0.3, R.R1 + 0.2, HC)] : [])]; // 端牆只在最上面那一圈（碰撞是平的：別圈經過同一個角度不能擋）
+    RAMP_COLS.push((F ? all : all.filter((c) => !pre(c))).map((c) => ({ ...c, noCrush: true })));
   }
   const GROUND = { wedge: [...arc(R.R1 - 0.05, 0.3, R.A0, R.A0 + Math.PI, 24, 4), radial(R.A0 + Math.PI + 0.01, RO - 0.3, R.R1 + 0.25, 4)], mouth: radial(R.A0 - 0.012, RO - 0.3, R.R1 + 0.4, 2) };
   const towerRampCols = (F) => RAMP_COLS[Math.max(0, Math.min(R.NE, F | 0))].map((c) => ({ ...c }));

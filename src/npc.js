@@ -913,9 +913,9 @@ const PAINTS = [ // 路上真的車：白、銀、黑、灰、深藍最多，偶
   { c: '#e5bf1c', f: 'stock', w: 1 }, { c: '#d9651e', f: 'stock', w: 1 }, { c: '#5b4535', f: 'metal', w: 2 },
 ];
 const CAR_W = { yaris: 5, gc8: 4, supra: 1.3, gtr: 1.3, p918: 0.2, sp3: 0.12, jesko: 0.12,
-  altis: 4, ae86: 0.6, rx7: 0.6, civic: 1.5, evo: 1, aventador: 0.15, chiron: 0.08, senna: 0.1, laferrari: 0.1, huayra: 0.08 }; // 哪台常見（超跑很少；小黃最多）
+  altis: 4, ae86: 0.6, rx7: 0.6, civic: 1.5, evo: 1, aventador: 0.15, chiron: 0.08, senna: 0.1, laferrari: 0.1, huayra: 0.08, jp4: 0.8 }; // 哪台常見（超跑很少；小黃最多）；第 48 批：吉普車
 const CAR_WING = { gc8: 'none', yaris: 'stock', supra: 'stock', gtr: 'stock', p918: 'stock', sp3: 'none', jesko: 'stock',
-  altis: 'none', ae86: 'none', rx7: 'stock', civic: 'stock', evo: 'stock', aventador: 'stock', chiron: 'stock', senna: 'stock', laferrari: 'stock', huayra: 'stock' };
+  altis: 'none', ae86: 'none', rx7: 'stock', civic: 'stock', evo: 'stock', aventador: 'stock', chiron: 'stock', senna: 'stock', laferrari: 'stock', huayra: 'stock', jp4: 'none' };
 const CAR_DIM = { yaris: [2.0, 0.9], gc8: [2.18, 0.86], supra: [2.26, 0.91], gtr: [2.3, 0.9], p918: [2.32, 0.97], sp3: [2.35, 1.03], jesko: [2.44, 1.02] }; // 半長、半寬（量不到的時候）
 const NONE = [], SIT = { speed: 0, state: 'sit' };
 const IDM = { A: 1.6, AH: 2.0, T: 1.2, TH: 1.5, S0: 2.2, B: 2.6 };

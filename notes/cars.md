@@ -72,3 +72,39 @@ Nick asked for 10 more cars modelled from web photos. The photos were only used 
   - all parts reach `top`;
   - half the parts land in between.
 - drift-test checks the in-game wiring: SUPRA `carInfo.vmax` goes 300 → 387 → 300, and the 400 m `fd` scales too.
+
+## J4 jeep 吉普車 (第 48 批, trial v61 = content 28, 2026-10-28)
+- Nick: 「另外可以開始做 更多越野車（吉普車、小越野車、皮卡、沙灘車）」. Pictures first, then the decision card 「好，做進去」 (sold at the 越野車行, 80 萬 for now), then 「做好直接上線」: shipped as content 28 without a separate trial round.
+- A made-up two-door off-roader: round lamps, horizontal grille slats, black hardtop, spare wheel on the tailgate. No real brand, badge or logo. Reference photos were only looked at; none are in the repo.
+- Files:
+  - `jp4-body.mjs`: SDF body, then `body-jp4-q.glb` (garage) and `body-jp4-lod.glb` (light car).
+  - `jp4-look.js`: surface masks.
+  - `jp4-spec.js`: parts. 34" tyres on 17" beadlock-style rims, black flares, steel bumpers, side steps, mirrors, hinges. Off-road kit = winch + snorkel; roof rack + LED bar.
+- **Mask coordinates.** The body is taller than masks.js's 0–1.4 m window, so the mesh is stored in mask space, like the monster truck: xm = x·0.92, ym = (y − 0.44)·0.92, zm = z·0.92 (`JP4_M`). jp4-spec scales it back to metres.
+  - make-lod.mjs knows `mask`: it classifies and simplifies in mask space, then converts to metres.
+  - The "low chrome" rule is off for this car (the lower half of the round lamps would stop lighting up at night).
+  - Part simplification error is 4 mm (`PART_ERR_CAR`).
+- **PERF** (garage.src.html): price 80, 285 hp, 1840 kg, AWD, `vmax` = `top` = 180, `offroad: 1`, not `big`.
+  - No tuned top-speed record was found (big tyres; even the factory V8 versions are limited to about 160), so parts only add power: launch, hills, mud.
+  - Eight parts, up to `swap` (6.4 V8).
+- **Ride.** It is the first car on terrain.js's `offroad` class (suspension, 0.3 m clearance, off-road tyres): mud up to 40 km/h (road cars 12).
+  - Not `big`, so `liftOK` is true: tower, ramp, lift and basement all work.
+- **Crushing.** `offK` = `PERF.offroad`, so like the monster truck it crushes things (Nick 2026-10-09 「越車可碾任何東西」). People dive away. In the village that is 1★.
+- **Ramp fix (tower.js `RAMP_COLS`).** The jeep showed two old ramp problems:
+  - The ramp walls had no `noCrush`, so an off-road car flattened the guardrail and got a police star. All ramp walls are now `noCrush`.
+  - On the first half-lap (F 0) the full-circle outer rail also stood just before the ramp start (A0 − 0.55 rad). That stretch is ground at that lap; the rail there belongs to the 3F lap. A wide car turning onto the start had its tail inside that invisible wall when `TRAMP.on` added the colliders. F 0 now leaves those boxes out.
+- **Cockpit** (cabin.js `STYLE.jp4`):
+  - Left-hand drive, eyes 1.56 m up.
+  - Two big dials plus fuel and temperature, a knobs stack, manual gearbox, three pedals, bench rear seat with no parcel shelf.
+  - cabin-fit.mjs: the wheel-arch walk retries 20 cm higher when nothing is found at axle height (the tub floor 0.52 is above the axle 0.415).
+  - `fitOf`: no rear glass means the headliner runs to the tail.
+- **Sound** (sound.js): 3.6 V6 (120° firing). With the `swap` part, `SND_profile` applies `B.swap` (cross-plane V8 burble).
+- **Traffic.** npc.js `CAR_W` 0.8 (a common car), no wing.
+- **Dealer** (town.src.js `oDisp`, `oWant`): `display[0]` = the podium (big cars: monster truck); `display[1]`, `display[2]` = the two shed pads, nose out (normal-size off-roaders: the jeep).
+  - `lookAtCar` maps the camera to the right pad.
+  - offroad.js: pad mats rotated to match.
+- **cview.html:** `cab=1` adds the 3D cockpit; `v=eye` renders the driver's view (`node shot.mjs out.png 'car=jp4&v=eye' 1200 700`).
+- **Tests:**
+  - `jeep-test.mjs`: garage cockpit; ramp to 3F with nothing crushed and no invisible wall; lift to B1; park and get out; back to 1F; expressway 180 km/h; mud 40 km/h.
+  - test-b4 / test-app-b4: shed pad, walker blocked at the nose, buttons, camera.
+- **Numbers** (jeep-test, 390×844, traffic paused): garage page 242 calls / 1.67M tris; 3F 223 / 1.24M; B1 235 / 1.25M; expressway 136 / 0.90M; driver's view 38 / 0.28M; mud pit 180 / 0.99M. Cockpit 7 meshes, 9.2k tris.

@@ -102,3 +102,10 @@ Picking another car, going out (`enterDrive`) or hiding the room cancels: `liftS
 way + 1.1 s, B2 ≈ 2.5 s each way. Toast now ends with 「⋯」 while it rides.
 Tests: under-test 0b (pick the B1 YARIS: up/swap/down phases, positions, visibility, save; pick GC8 back), test-b1 / test-app-b1 pk11
 updated (toast 「⋯」, animation state, final state).
+
+## Big cars never ride the garage-page lift (第 48 批, 2026-10-28)
+Found by test-b4 (not run since 第 33 批): with the monster truck on the lobby turntable, picking a car parked upstairs
+made the full monster truck ride the lift up and slide into that car's bay. `elaStart` now only takes the current car along
+when `liftOK(was)`; a big car is just hidden (`liftAnim.vis`: no `wasCar`) and the lift fetches the wanted car alone.
+test-b4 / test-app-b4 section 11: picking the GC8 starts the lift without the monster truck, then waits for `!liftAnim.on`
+(about 5 s for 2F) before checking the camera and bays (the old 3 s wait ended mid-ride).

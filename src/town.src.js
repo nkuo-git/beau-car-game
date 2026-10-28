@@ -233,7 +233,7 @@ const ELA = { on: null, SW: 1.1 }; // on：{ key, was, i, lod, wasCar, ph: 'up'|
 function elaStart(key, was, twI) {
   const R = room; if (!R || !R.group.visible || R.lift.busy || ELA.on || DRIVE.on || RACE.on) return false;
   const lod = LODS[key]?.lod?.car; if (!lod || R.cars[twI] !== lod) return false;
-  const wasCar = was && was !== key && built[was]?.car || null, want = (GAME.park?.tower || []).slice(), b = TOWER_BAYS[twI];
+  const wasCar = was && was !== key && liftOK(was) && built[was]?.car || null, want = (GAME.park?.tower || []).slice(), b = TOWER_BAYS[twI]; // 第 48 批：大車（怪獸卡車）不坐電梯：圓台上那台先收起來（回越野車車庫），電梯只去載要的那台
   if (want[twI] !== key) return false;
   ELA.on = { key, was, i: twI, lod, wasCar, ph: 'up', t: 0, want };
   if (wasCar) { R.platform.attach(wasCar); wasCar.visible = true; }
@@ -1460,6 +1460,7 @@ function openDealer() {
 function lookAtCar(k, T = 0.8) {
   const D = VIL.places[dealerAt], n = D.display.length; let i = forSale().indexOf(k);
   if (dealerAt === 'dealer' && i >= 0) { const o = Math.floor(i / n) * n; if (o !== padOff) { padOff = o; arrangeCars(); } i -= padOff; } // 2026-10-17：車比 6 個轉盤多
+  if (dealerAt === 'odealer') i = oDisp.findIndex((o, j) => oWant(j) === k); // 第 48 批：大車在門口的大圓台、普通大小的在車行裡面
   const pad = D.display[i];
   if (!pad) { viewCar(D.park, 5.2, 3.4, 1.8, T); return; }
   // 從那台車往展示間的鏡頭那邊（門口）退 5.5 公尺、高 1.6 公尺看過去：鏡頭一定在展示間裡面、中間沒有別台車
@@ -1587,7 +1588,11 @@ $('raceBack').addEventListener('click', backToVillage);
 //   展示台上還沒買的越野車：有輕量車就擺輕量車（跟阿財車行一樣：載得快、畫得少；怪獸卡車有了），沒有才擺完整的車；開到越野車場附近（260 公尺）才載、離遠了不畫；買走了收掉
 //   越野賽：開進起跑區（慢一點）自己停到起跑位置 → 倒數 → 跑完 → 贏了拿獎金（GAME.money）、記在 GAME.wins['or:<比賽 id>']（不算車庫的獎盃）
 //     開進起跑區就是還沒贏過的第一場（三場都贏了就一直是冠軍賽）；「再比一次」同一場；比賽中開出越野車場、「放棄比賽」、「直接回車庫」都會收掉
-let orRace = null, oDisp = null, oLoading = false; // 越野賽（createOffroadRace）；展示台上的車 { k, S, box }；載入中
+let orRace = null; // 越野賽（createOffroadRace）
+// 越野車行的展示位（VIL.places.odealer.display）：[0] 門口的大圓台（大車：怪獸卡車）、[1] [2] 車行裡面（普通大小的越野車；第 48 批：吉普車）
+//   oDisp[i]＝擺著的車 { k, S, box }；oLoading[i]＝載入中；oWant(i)＝那個位子要擺哪台（還沒買的，便宜的在前面）
+const oDisp = [null, null, null], oLoading = [false, false, false];
+const oWant = (i) => { const s = saleOf('odealer').filter((k) => !!PERF[k].big === !i); return (i ? s[i - 1] : s[0]) || null; };
 const orLevel = () => { const i = OFFROAD_RACES.findIndex((r) => !(GAME.wins['or:' + r.id] > 0)); return i < 0 ? OFFROAD_RACES.length - 1 : i; };
 // 落地（drive.js 的 onLand）：飛久了說一聲；落地太用力手機震一下
 function orLand(e) {
@@ -1634,38 +1639,42 @@ function orStart(lv) {
   polRace(true); // 第 3 批（b3-int）：比賽的時候警察藏起來、不算犯罪（星星留著）
 }
 function orEnd() { document.body.classList.remove('orracing'); if (orRace) { orRace.dispose(); orRace = null; polRace(false); } }
-// 越野車行的展示台（門口的大圓台）：還沒買的第一台越野車；開到附近才載（輕量車；沒有輕量車的才載完整的車），遠了不畫
+// 越野車行的展示位：還沒買的越野車（oWant）；開到附近才載（輕量車；沒有輕量車的才載完整的車），遠了不畫
 const oFree = (S2) => { if (S2.lod) { S2.car.removeFromParent(); S2.lod.dispose(); } else disposeCar(S2); }; // 收掉展示台的車（輕量車／完整的車）
 function oTick(t) {
-  const pad = VIL.places.odealer?.display?.[0]; if (!pad) return;
-  const k = saleOf('odealer')[0] || null, near = Math.hypot(t.x - pad.x, t.z - pad.z) < 260;
-  if (oDisp && oDisp.k !== k) oShow();
-  if (!oDisp && k && near && !oLoading) {
-    oLoading = true;
-    (LOD_CARS[k] ? LOD_CARS[k].load().then((sc) => { const l = buildLodCar(k, sc, CARS[k].state); return { car: l.car, lod: l }; }) : loadCar(k)).then((S2) => {
-      oLoading = false;
-      if (!trip || !VIL || oDisp || saleOf('odealer')[0] !== k) { oFree(S2); return; }
-      const b = new THREE.Box3().setFromObject(S2.car); // 車子在原點、沒轉的時候量（碰撞用）
-      S2.car.position.set(pad.x, pad.y || 0, pad.z); S2.car.rotation.set(0, pad.heading || 0, 0);
-      if (S2.spec?.susp) S2.spec.susp(S2, [0, 0, 0, 0], 0, 0); // 怪獸卡車：懸吊擺好（輪子踩在台子上）
-      VIL.group.add(S2.car);
-      oDisp = { k, S: S2, box: { cx: (b.min.x + b.max.x) / 2, cz: (b.min.z + b.max.z) / 2, hx: (b.max.x - b.min.x) / 2, hz: (b.max.z - b.min.z) / 2 } };
-      oShow();
-    }).catch((e) => { oLoading = false; console.error(e); });
+  const D = VIL.places.odealer?.display; if (!D) return;
+  for (let i = 0; i < D.length && i < oDisp.length; i++) {
+    const pad = D[i], k = oWant(i), near = Math.hypot(t.x - pad.x, t.z - pad.z) < 260;
+    if (oDisp[i] && oDisp[i].k !== k) oShow();
+    if (!oDisp[i] && k && near && !oLoading[i]) {
+      oLoading[i] = true;
+      (LOD_CARS[k] ? LOD_CARS[k].load().then((sc) => { const l = buildLodCar(k, sc, CARS[k].state); return { car: l.car, lod: l }; }) : loadCar(k)).then((S2) => {
+        oLoading[i] = false;
+        if (!trip || !VIL || oDisp[i] || oWant(i) !== k) { oFree(S2); return; }
+        const b = new THREE.Box3().setFromObject(S2.car); // 車子在原點、沒轉的時候量（碰撞用）
+        S2.car.position.set(pad.x, pad.y || 0, pad.z); S2.car.rotation.set(0, pad.heading || 0, 0);
+        if (S2.spec?.susp) S2.spec.susp(S2, [0, 0, 0, 0], 0, 0); // 怪獸卡車：懸吊擺好（輪子踩在台子上）
+        VIL.group.add(S2.car);
+        oDisp[i] = { k, S: S2, box: { cx: (b.min.x + b.max.x) / 2, cz: (b.min.z + b.max.z) / 2, hx: (b.max.x - b.min.x) / 2, hz: (b.max.z - b.min.z) / 2 } };
+        oShow();
+      }).catch((e) => { oLoading[i] = false; console.error(e); });
+    }
+    if (oDisp[i]) oDisp[i].S.car.visible = near;
   }
-  if (oDisp) oDisp.S.car.visible = near;
 }
 // 展示台的車：買走了就收掉；還在就放碰撞（開車的重新做了也要再放：arrangeCars 叫）
 function oShow() {
-  if (!oDisp) return;
-  if (!trip || !VIL || saleOf('odealer')[0] !== oDisp.k) { oFree(oDisp.S); oDisp = null; drv?.removeColliders('odisp'); walker?.removeColliders('odisp'); return; }
-  const pad = VIL.places.odealer.display[0], B = oDisp.box, c = Math.cos(pad.heading || 0), s = Math.sin(pad.heading || 0);
-  const box = [{ t: 'box', x: pad.x + B.cx * c + B.cz * s, z: pad.z - B.cx * s + B.cz * c, hx: B.hx, hz: B.hz, rot: pad.heading || 0, h: 3 }];
-  if (drv) { drv.removeColliders('odisp'); drv.addColliders(box, 'odisp'); }
-  if (walker) { walker.removeColliders('odisp'); walker.addColliders(box, 'odisp'); } // 第 2 批的走路：展示台上的車也擋人
+  const box = [];
+  oDisp.forEach((o, i) => {
+    if (!o) return;
+    if (!trip || !VIL || oWant(i) !== o.k) { oFree(o.S); oDisp[i] = null; return; }
+    const pad = VIL.places.odealer.display[i], B = o.box, c = Math.cos(pad.heading || 0), s = Math.sin(pad.heading || 0);
+    box.push({ t: 'box', x: pad.x + B.cx * c + B.cz * s, z: pad.z - B.cx * s + B.cz * c, hx: B.hx, hz: B.hz, rot: pad.heading || 0, h: 3 });
+  });
+  for (const w of [drv, walker]) if (w) { w.removeColliders('odisp'); if (box.length) w.addColliders(box, 'odisp'); } // 第 2 批的走路：展示台上的車也擋人
 }
 // 回車庫頁：越野賽、展示台的車收掉（下一趟再載）
-function oLeave() { orEnd(); if (oDisp) { oFree(oDisp.S); oDisp = null; } walker?.removeColliders('odisp'); }
+function oLeave() { orEnd(); oDisp.forEach((o, i) => { if (o) { oFree(o.S); oDisp[i] = null; } }); walker?.removeColliders('odisp'); }
 
 // ---- 回車庫頁：「直接回車庫」（不用開，一下就回去；開車、走路、睡覺、比賽、改車廠、車店都可以按）----
 function goHome() {
