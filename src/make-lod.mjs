@@ -8,6 +8,8 @@
 //     低的鍍鉻（chrome：y＜0.48 的 lamp，霧燈框、中冷器、下巴亮條，開大燈不亮）；燈裡暗玻璃的比例、網子覆蓋率每台車取平均 → lens／wire 材質的 extras.mix
 //     遮罩先模糊 5 公釐（比 1.2 公分細的線：門縫、描邊，簡化後本來就看不到），再沿著分類的邊界把三角形切開（二分法找交界），邊界才會平順
 //  3. meshoptimizer 簡化（simplifyWithAttributes：法線也算誤差；分類交界是 seam，不會混色；對稱面 z=0 的邊只沿著邊收；Supra 車頭／車身接縫鎖住）
+//     第 49 批：烘焙的車身（gc8-bake.mjs → body-<key>-q.glb，每個材質一組）不用遮罩：直接從 glb 讀，每一組就是分類（bakedHalf：沿著 z=0 切、焊接），
+//     整台一起簡化（太小的碎片拿掉）；只有一邊的東西（排氣管）當零件
 //  4. 零件照「在哪些套件、哪個尾翼、寬體」分組，同一種材質併成一個、焊接頂點再簡化（誤差 2 公釐，寬體葉子板 4 公釐）；太小的（寬體鉚釘、SP3 葉子板盾牌、918 車蓋條紋＝拉花）不要
 //  5. 寫 glb（KHR_mesh_quantization：位置 int16、法線 int8，索引 uint16）：
 //     node「body」＝右半邊車身（執行時鏡射），extras＝{ lod: 'body', half: true }；每個分類一個 primitive（共用頂點），材質名字＝角色（paint、glass、trim、lamp⋯）
@@ -195,7 +197,8 @@ function cutByClass(P, N, I, cls) {
 
 // ---------- 簡化＋整理 ----------
 // pre：先把看不太到的分類（輪拱內、車底＝消光）自己簡化一次（邊界鎖住），整台再一起簡化到 target
-function simplify(M, target, lockFn, { attrW = 0.4, pre = [] } = {}) {
+// lockFn：(x, y, z) → 要不要鎖住，或直接給每個頂點的 Uint8Array（烘焙的車身）；flags：多的選項（烘焙的車身用 Prune：太小的碎片拿掉）
+function simplify(M, target, lockFn, { attrW = 0.4, pre = [], flags = [] } = {}) {
   const nv = M.P.length / 3;
   let I = M.I;
   for (const { cls, err } of pre) {
@@ -205,9 +208,9 @@ function simplify(M, target, lockFn, { attrW = 0.4, pre = [] } = {}) {
     const [s] = MS.simplify(new Uint32Array(mine), M.P, 3, 0, err, ['LockBorder', 'Sparse', 'ErrorAbsolute']);
     I = new Uint32Array([...rest, ...s]);
   }
-  const lock = new Uint8Array(nv);
-  if (lockFn) for (let i = 0; i < nv; i++) lock[i] = lockFn(M.P[i * 3], M.P[i * 3 + 1], M.P[i * 3 + 2]) ? 1 : 0;
-  const [idx, err] = MS.simplifyWithAttributes(I, M.P, 3, M.N, 3, [attrW, attrW, attrW], lockFn ? lock : null, Math.min(I.length, target * 3), 0.08, []);
+  let lock = lockFn instanceof Uint8Array ? lockFn : null;
+  if (lockFn && !lock) { lock = new Uint8Array(nv); for (let i = 0; i < nv; i++) lock[i] = lockFn(M.P[i * 3], M.P[i * 3 + 1], M.P[i * 3 + 2]) ? 1 : 0; }
+  const [idx, err] = MS.simplifyWithAttributes(I, M.P, 3, M.N, 3, [attrW, attrW, attrW], lock, Math.min(I.length, target * 3), 0.08, flags);
   return { ...compact({ ...M, I: idx }), err };
 }
 function compact(M) { // 只留用到的頂點
@@ -251,6 +254,154 @@ function weld(P, N, ang = 40) {
   return { P: op, N: on, I: new Uint32Array(J) };
 }
 
+// ---------- 第 49 批：烘焙的車身（gc8-bake.mjs → body-<key>-q.glb）：每一組（slot）自己就是分類，不用遮罩 ----------
+// 車漆、玻璃、黑飾條（淺色的＝車牌，自己一個材質）、網子（黑的，當黑飾條）、消光（輪拱裡、車底）、燈（反光碗、燈泡、霧面）、方向燈、尾燈（貼圖上面灰的＝倒車燈）、亮的（不鏽鋼＝低的鍍鉻）
+// 大燈罩（透明）、車內（inside）不要（輕量車沒有車內）；只有一邊的（排氣管在左後）拿出來當零件（整台、不鏡射）
+// 右半邊：沿著 z=0 切（交界點左右共用、法線 z 歸零）→ 焊接（同分類、同位置、法線差不到 2° 的併起來；稜角、分類交界留著當 seam）→ 整台一起簡化
+const BK_CLS = { paint: 0, glass: 1, trim: 2, net: 2, netF: 2, dark: 3, reflector: 4, bulb: 4, frost: 4, amber: 7, bright: 10 }; // tail 照貼圖分 red／rev
+const BK_PLATE = BODY_CLS.length; // 車牌：custom 材質（顏色跟車庫的黑飾條頂點色一樣）
+const BK_PLATE_MAT = { color: '#e8e6df', roughness: 0.5, metalness: 0.1, clearcoat: 0, emissive: '#000000', ei: 1, opacity: 1 };
+const BK_ASYM = { gc8: [{ slots: ['bright', 'dark'], box: [-2.26, -1.97, 0.2, 0.31, -0.47, -0.33] }] }; // 只有一邊的東西（哪幾組、[x0, x1, y0, y1, z0, z1]）：排氣管（左後：亮的管子、裡面黑的）
+const BK_TAIL_V = 0.43; // 尾燈貼圖：v＜0.43 是倒車燈（灰），以下紅（中間一條暗線）
+async function bakedBuckets(file) { // glb 裡車身（part body）的每一組 → { slot, P, N, I, V（貼圖 v）, L（頂點色亮度）}（車子座標、公尺）
+  const doc = await new NodeIO().registerExtensions([KHRMeshQuantization]).read(file), out = [], e = [];
+  for (const nd of doc.getRoot().listNodes()) {
+    const ex = nd.getExtras() || {}, mesh = nd.getMesh();
+    if (!mesh || !ex.slot || ex.part !== 'body') continue;
+    const m = nd.getWorldMatrix();
+    for (const pr of mesh.listPrimitives()) {
+      const pa = pr.getAttribute('POSITION'), na = pr.getAttribute('NORMAL'), ua = pr.getAttribute('TEXCOORD_0'), ca = pr.getAttribute('COLOR_0'), n = pa.getCount();
+      const P = new Float32Array(n * 3), N = new Float32Array(n * 3), V = ua && ex.uv ? new Float32Array(n) : null, L = ca ? new Float32Array(n) : null;
+      for (let i = 0; i < n; i++) {
+        pa.getElement(i, e);
+        for (let k = 0; k < 3; k++) P[i * 3 + k] = m[k] * e[0] + m[4 + k] * e[1] + m[8 + k] * e[2] + m[12 + k];
+        na.getElement(i, e);
+        const nx = m[0] * e[0] + m[4] * e[1] + m[8] * e[2], ny = m[1] * e[0] + m[5] * e[1] + m[9] * e[2], nz = m[2] * e[0] + m[6] * e[1] + m[10] * e[2], l = Math.hypot(nx, ny, nz) || 1;
+        N[i * 3] = nx / l; N[i * 3 + 1] = ny / l; N[i * 3 + 2] = nz / l;
+        if (V) { ua.getElement(i, e); V[i] = ex.uv[1] + ex.uv[3] * e[1]; }
+        if (L) { ca.getElement(i, e); L[i] = (e[0] + e[1] + e[2]) / 3; }
+      }
+      out.push({ slot: ex.slot, P, N, I: Uint32Array.from(pr.getIndices().getArray()), V, L });
+    }
+  }
+  return out;
+}
+// 照每個頂點的值 F 切三角形（F＝0 那條線）：交界點照邊內插（兩個三角形共用的邊切在同一點），每一邊各一個頂點
+// 回傳新的 P、N、I、F（交界點 F＝0）、C（每個頂點的分類：交界點跟那條邊一樣）和每個三角形在哪一邊 S（1：F≥0，0：F＜0）；keep：只要那一邊（null＝兩邊都要）
+function splitBy(P, N, I, F, keep = null, C = null) {
+  const op = Array.from(P), on = Array.from(N), of = Array.from(F), oc = C ? Array.from(C) : null, oi = [], os = [], pts = new Map(), ids = new Map();
+  const vid = (a, b, s) => { // 邊 a–b 上 F＝0 的點，s 那一邊的頂點
+    const [p, q] = a < b ? [a, b] : [b, a], key = p * 2 ** 21 + q;
+    let id = ids.get(key * 2 + s);
+    if (id !== undefined) return id;
+    let pt = pts.get(key);
+    if (!pt) {
+      const t = F[p] / (F[p] - F[q]), n = [0, 1, 2].map((k) => N[p * 3 + k] + (N[q * 3 + k] - N[p * 3 + k]) * t), l = Math.hypot(...n) || 1;
+      pts.set(key, (pt = [...[0, 1, 2].map((k) => P[p * 3 + k] + (P[q * 3 + k] - P[p * 3 + k]) * t), ...n.map((v) => v / l)]));
+    }
+    id = of.length; op.push(pt[0], pt[1], pt[2]); on.push(pt[3], pt[4], pt[5]); of.push(0); if (oc) oc.push(C[p]); ids.set(key * 2 + s, id);
+    return id;
+  };
+  const put = (s, a, b, c) => { if (keep === null || keep === s) { oi.push(a, b, c); os.push(s); } };
+  for (let t = 0; t < I.length; t += 3) {
+    const v = [I[t], I[t + 1], I[t + 2]], s = v.map((i) => (F[i] >= 0 ? 1 : 0));
+    if (s[0] === s[1] && s[1] === s[2]) { put(s[0], v[0], v[1], v[2]); continue; }
+    const j = s[0] !== s[1] && s[0] !== s[2] ? 0 : s[1] !== s[0] && s[1] !== s[2] ? 1 : 2; // 自己一邊的那個角
+    const a = v[j], b = v[(j + 1) % 3], c = v[(j + 2) % 3], sa = s[j], sb = 1 - sa;
+    put(sa, a, vid(a, b, sa), vid(c, a, sa));
+    const pb = vid(a, b, sb), pc = vid(c, a, sb);
+    put(sb, pb, b, c); put(sb, pb, c, pc);
+  }
+  return { P: new Float32Array(op), N: new Float32Array(on), F: Float32Array.from(of), C: oc ? Int8Array.from(oc) : null, I: new Uint32Array(oi), S: Uint8Array.from(os) };
+}
+// 有索引的網格焊接：同分類、同位置（0.01 mm）、法線差不到 ang 度的頂點併成一個（貼圖接縫拆開的頂點；稜角留著）
+function weldIdx(P, N, C, I, ang = 2) {
+  const nv = C.length, cosA = Math.cos((ang * Math.PI) / 180), map = new Int32Array(nv), groups = new Map(), keepV = [];
+  for (let i = 0; i < nv; i++) {
+    const key = C[i] + ':' + Math.round(P[i * 3] * 1e5) + ',' + Math.round(P[i * 3 + 1] * 1e5) + ',' + Math.round(P[i * 3 + 2] * 1e5);
+    let g = groups.get(key); if (!g) groups.set(key, (g = []));
+    const j = g.find((k) => N[k * 3] * N[i * 3] + N[k * 3 + 1] * N[i * 3 + 1] + N[k * 3 + 2] * N[i * 3 + 2] > cosA);
+    if (j === undefined) { g.push(i); map[i] = i; keepV.push(i); } else map[i] = j;
+  }
+  const J = [];
+  for (let t = 0; t < I.length; t += 3) { const a = map[I[t]], b = map[I[t + 1]], c = map[I[t + 2]]; if (a !== b && b !== c && a !== c) J.push(a, b, c); }
+  return compact({ P, N, C, I: new Uint32Array(J) });
+}
+// 燈罩（車庫是雙面的材質，有的做反了：尾燈朝車裡面）：每一塊（照位置連起來的）跟最近的車漆比，大部分朝裡面就整塊翻過來（輕量車的背面是車內的暗灰）
+const BK_FLIP = ['tail', 'amber', 'reflector', 'frost'];
+function bakedFlip(b, paint) {
+  const n = b.N.length / 3, key = (i) => Math.round(b.P[i * 3] * 1e5) + ',' + Math.round(b.P[i * 3 + 1] * 1e5) + ',' + Math.round(b.P[i * 3 + 2] * 1e5);
+  const par = new Int32Array(n).map((_, i) => i), first = new Map(), f = (x) => { while (par[x] !== x) x = par[x] = par[par[x]]; return x; };
+  for (let i = 0; i < n; i++) { const k = key(i); if (first.has(k)) par[f(i)] = f(first.get(k)); else first.set(k, i); }
+  for (let t = 0; t < b.I.length; t += 3) { const a = f(b.I[t]); par[f(b.I[t + 1])] = a; par[f(b.I[t + 2])] = f(a); }
+  const vote = new Map(); // 那一塊 → [跟車漆同一邊的, 全部]
+  for (let t = 0; t < b.I.length; t += 3) {
+    const [a, c, d] = [b.I[t], b.I[t + 1], b.I[t + 2]], g = [0, 1, 2].map((k) => (b.P[a * 3 + k] + b.P[c * 3 + k] + b.P[d * 3 + k]) / 3);
+    const u = [0, 1, 2].map((k) => b.P[c * 3 + k] - b.P[a * 3 + k]), w = [0, 1, 2].map((k) => b.P[d * 3 + k] - b.P[a * 3 + k]);
+    const fn = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], pn = paint(g);
+    const r = f(a), v = vote.get(r) || [0, 0]; if (pn && fn[0] * pn[0] + fn[1] * pn[1] + fn[2] * pn[2] > 0) v[0]++; v[1]++; vote.set(r, v);
+  }
+  const flip = new Set([...vote].filter(([, v]) => v[0] < 0.3 * v[1]).map(([r]) => r));
+  if (!flip.size) return b;
+  const I = Uint32Array.from(b.I), N = Float32Array.from(b.N);
+  for (let t = 0; t < I.length; t += 3) if (flip.has(f(I[t]))) { const x = I[t + 1]; I[t + 1] = I[t + 2]; I[t + 2] = x; }
+  for (let i = 0; i < n; i++) if (flip.has(f(i))) for (let k = 0; k < 3; k++) N[i * 3 + k] = -N[i * 3 + k];
+  return { ...b, I, N };
+}
+// 最近的車漆頂點的法線（5 公分一格，找旁邊 ±2 格）
+function paintNear(buckets) {
+  const G = new Map(), C = 0.05, ck = (x, y, z) => x * 1e6 + y * 1e3 + z;
+  for (const b of buckets) if (b.slot === 'paint') for (let i = 0; i < b.N.length / 3; i++) {
+    const k = ck(...[0, 1, 2].map((j) => Math.floor(b.P[i * 3 + j] / C) + 100)); let L = G.get(k); if (!L) G.set(k, (L = [])); L.push(b, i);
+  }
+  return (p) => {
+    const c = p.map((v) => Math.floor(v / C) + 100); let best = null, bd = 1e9;
+    for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) {
+      const L = G.get(ck(c[0] + dx, c[1] + dy, c[2] + dz)); if (!L) continue;
+      for (let j = 0; j < L.length; j += 2) { const b = L[j], i = L[j + 1], d = (b.P[i * 3] - p[0]) ** 2 + (b.P[i * 3 + 1] - p[1]) ** 2 + (b.P[i * 3 + 2] - p[2]) ** 2; if (d < bd) { bd = d; best = [b.N[i * 3], b.N[i * 3 + 1], b.N[i * 3 + 2]]; } }
+    }
+    return best;
+  };
+}
+// 右半邊車身 → { M（P、N、C、I，已焊接）, lock（z=0 上要鎖住的頂點）, asym（只有一邊的三角形：{ cls, P（湯）, N } 的陣列）}
+function bakedHalf(buckets, key) {
+  const P = [], N = [], C = [], I = [], asym = [], boxes = BK_ASYM[key] || [], paint = paintNear(buckets);
+  const inBox = (slot, x, y, z) => boxes.some(({ slots, box: [x0, x1, y0, y1, z0, z1] }) => slots.includes(slot) && x >= x0 && x <= x1 && y >= y0 && y <= y1 && z >= z0 && z <= z1);
+  for (let b of buckets) {
+    if (BK_FLIP.includes(b.slot)) b = bakedFlip(b, paint);
+    let TC; // 每個三角形的分類
+    if (b.slot === 'tail') { // 尾燈：照貼圖的 v 切成倒車燈、紅的
+      const s = splitBy(b.P, b.N, b.I, b.V.map((v) => v - BK_TAIL_V));
+      b = { ...b, P: s.P, N: s.N, I: s.I }; TC = Array.from(s.S, (x) => (x ? 8 : 9));
+    } else if (BK_CLS[b.slot] === undefined) continue; // 大燈罩、車內
+    else TC = Array.from({ length: b.I.length / 3 }, (_, t) => (b.slot === 'trim' && b.L && (b.L[b.I[t * 3]] + b.L[b.I[t * 3 + 1]] + b.L[b.I[t * 3 + 2]]) / 3 > 0.3 ? BK_PLATE : BK_CLS[b.slot]));
+    const map = new Map(); // (頂點, 分類) → 新的頂點：一個頂點只能有一個分類（交界的頂點分開，簡化的時候是 seam）
+    const vid = (i, c) => { const k = i * 16 + c; let v = map.get(k); if (v === undefined) { v = C.length; map.set(k, v); P.push(b.P[i * 3], b.P[i * 3 + 1], b.P[i * 3 + 2]); N.push(b.N[i * 3], b.N[i * 3 + 1], b.N[i * 3 + 2]); C.push(c); } return v; };
+    for (let t = 0; t < b.I.length; t += 3) {
+      const c = TC[t / 3], v = [b.I[t], b.I[t + 1], b.I[t + 2]], g = [0, 1, 2].map((k) => (b.P[v[0] * 3 + k] + b.P[v[1] * 3 + k] + b.P[v[2] * 3 + k]) / 3);
+      if (inBox(b.slot, g[0], g[1], g[2])) { asym.push({ cls: c, P: v.flatMap((i) => [b.P[i * 3], b.P[i * 3 + 1], b.P[i * 3 + 2]]), N: v.flatMap((i) => [b.N[i * 3], b.N[i * 3 + 1], b.N[i * 3 + 2]]) }); continue; }
+      I.push(vid(v[0], c), vid(v[1], c), vid(v[2], c));
+    }
+  }
+  // 沿著 z=0 切，留右邊（z≥0）；切出來的頂點 z 剛好 0、法線沒有 z（左右鏡射接起來是平順的；本來就很斜的不動：中間的稜線）
+  const Z = new Float32Array(C.length);
+  for (let i = 0; i < C.length; i++) Z[i] = P[i * 3 + 2];
+  const sp = splitBy(new Float32Array(P), new Float32Array(N), new Uint32Array(I), Z, 1, Int8Array.from(C));
+  for (let i = 0; i < sp.F.length; i++) if (Math.abs(sp.P[i * 3 + 2]) < 1e-6) {
+    sp.P[i * 3 + 2] = 0;
+    if (Math.abs(sp.N[i * 3 + 2]) < 0.35) { sp.N[i * 3 + 2] = 0; const l = Math.hypot(sp.N[i * 3], sp.N[i * 3 + 1]) || 1; sp.N[i * 3] /= l; sp.N[i * 3 + 1] /= l; }
+  }
+  const M = weldIdx(sp.P, sp.N, sp.C, sp.I);
+  // 要鎖住的：z=0 上、有一條開放的邊接到不在 z=0 的頂點（邊界在這裡轉彎離開中線），或同一個位置還有別的頂點（分類交界、稜角跨過中線）
+  const nv = M.C.length, lock = new Uint8Array(nv), ec = new Map(), at = new Map();
+  for (let t = 0; t < M.I.length; t += 3) for (let k = 0; k < 3; k++) { const a = M.I[t + k], b = M.I[t + (k + 1) % 3], key = a < b ? a * nv + b : b * nv + a; ec.set(key, (ec.get(key) || 0) + 1); }
+  const on = (i) => M.P[i * 3 + 2] === 0;
+  for (const [key, n] of ec) { if (n !== 1) continue; const a = Math.floor(key / nv), b = key % nv; if (on(a) && !on(b)) lock[a] = 1; if (on(b) && !on(a)) lock[b] = 1; }
+  for (let i = 0; i < nv; i++) if (on(i)) { const k = Math.round(M.P[i * 3] * 1e5) + ',' + Math.round(M.P[i * 3 + 1] * 1e5); at.set(k, (at.get(k) || 0) + 1); }
+  for (let i = 0; i < nv; i++) if (on(i) && at.get(Math.round(M.P[i * 3] * 1e5) + ',' + Math.round(M.P[i * 3 + 1] * 1e5)) > 1) lock[i] = 1;
+  return { M, lock, asym };
+}
+
 // ---------- glb ----------
 function writer() {
   const doc = new Document(), buf = doc.createBuffer(), scene = doc.createScene('lod');
@@ -291,38 +442,54 @@ const report = (() => { try { return JSON.parse(fs.readFileSync(path.join(CACHE,
 for (const key of KEYS) {
   const t0 = Date.now();
   const B = JSON.parse(fs.readFileSync(path.join(CACHE, `bake-${key}.json`), 'utf8'));
-  const M = { side: maskTex(B.masks.side, 4.7), top: maskTex(B.masks.top, 4.7), rear: maskTex(B.masks.rear, 2) };
-  const fronts = Object.fromEntries(Object.entries(B.masks.fronts).map(([k, t]) => [k, maskTex(t, 2)]));
   const W = writer();
   const out = { body: 0, noses: {}, parts: {} };
-  // 車身（和車頭）：分類 → 切 → 簡化
-  const pieces = [['body', B.body, fronts[B.noseOfKit[B.kit]] || fronts.base || Object.values(fronts)[0]]];
-  for (const [k, g] of Object.entries(B.noses)) pieces.push(['nose_' + k, g, fronts[k]]);
-  const seam = Object.keys(B.noses).length ? (x) => Math.abs(x - 1.5) < 2e-4 : null; // Supra 車頭和車身的接縫
-  const totalIn = u32(B.body.idx).length / 3 + Math.max(0, ...Object.values(B.noses).map((g) => u32(g.idx).length / 3)); // 看得到的＝車身＋一個車頭
-  const acc = { lens: [0, 0], wire: [0, 0] }, done = [];
-  for (const [name, g, front] of pieces) {
-    const cls = classifier({ ...M, front }, B.U, B.mask ? -Infinity : LOW_LAMP); // 吉普車：大燈的下半圈在遮罩座標 0.48 以下，不能當成低的鍍鉻（晚上會不亮）
-    const cut = cutByClass(f32(g.pos), f32(g.nor), u32(g.idx), cls);
-    mixes(cut, cls, acc);
-    const share = u32(g.idx).length / 3 / totalIn; // 目標三角形照原本的比例分（Supra：車身＋任一個車頭 ≈ HALF）
-    const s = simplify(cut, Math.round(HALF * share), seam ? (x) => seam(x) : null, { pre: [{ cls: 3, err: MATTE_ERR }] });
-    done.push({ name, g, cut, s });
-  }
-  out.mix = { lens: acc.lens[1] ? +(acc.lens[0] / acc.lens[1]).toFixed(3) : 1, wire: acc.wire[1] ? +(acc.wire[0] / acc.wire[1]).toFixed(3) : 0.45 };
-  for (const { name, g, cut, s } of done) {
-    const lists = BODY_CLS.map((role) => ({ role, idx: [], x: role === 'lens' || role === 'wire' ? { mix: out.mix[role] } : null }));
+  if (B.baked) { // 第 49 批：烘焙的車身（gc8-bake.mjs）：每一組就是分類 → 右半邊 → 整台一起簡化（太小的碎片拿掉）
+    const { M: H, lock, asym } = bakedHalf(await bakedBuckets(path.join(DIR, B.glb)), key);
+    const s = simplify(H, HALF, lock, { pre: [{ cls: 3, err: MATTE_ERR }], flags: ['Prune'] });
+    out.mix = { lens: 1, wire: 0.45 }; // 沒有燈裡的暗玻璃、網子（網子是黑的，當黑飾條）
+    const lists = [...BODY_CLS.map((role) => ({ role, idx: [], x: role === 'lens' || role === 'wire' ? { mix: out.mix[role] } : null })), { role: 'custom', mat: BK_PLATE_MAT, idx: [] }];
     for (let t = 0; t < s.I.length; t += 3) lists[s.C[s.I[t]]].idx.push(s.I[t], s.I[t + 1], s.I[t + 2]);
-    if (B.mask) { // 第 48 批：吉普車的車身是遮罩座標（xm＝(x−X0)·S、ym＝(y−Y0)·S、zm＝z·S；jp4-look.js JP4_M）：分類、切、簡化都做完了，換成公尺（法線不變）
-      const { S: k, X0, Y0 } = B.mask, P = s.P;
-      for (let i = 0; i < P.length; i += 3) { P[i] = P[i] / k + X0; P[i + 1] = P[i + 1] / k + Y0; P[i + 2] = P[i + 2] / k; }
+    W.add('body', s.P, s.N, lists, { lod: 'body', half: true });
+    out.body = s.I.length / 3;
+    out.classes = Object.fromEntries(lists.map((L) => [L.role === 'custom' ? 'plate' : L.role, L.idx.length / 3]));
+    console.log(`  ${key} body（烘焙）: 右半邊 ${H.I.length / 3}（鎖住 ${lock.reduce((a, v) => a + v, 0)} 個頂點）→ ${out.body} tris (err ${s.err.toExponential(2)})`);
+    const by = new Map(); // 只有一邊的（排氣管）：照分類併起來，當整台都有的零件
+    for (const a of asym) { if (!by.has(a.cls)) by.set(a.cls, { P: [], N: [] }); by.get(a.cls).P.push(...a.P); by.get(a.cls).N.push(...a.N); }
+    const b64f = (a) => Buffer.from(new Float32Array(a).buffer).toString('base64');
+    for (const [c, e] of by) B.parts.push({ role: c === BK_PLATE ? 'custom' : BODY_CLS[c], mat: c === BK_PLATE ? BK_PLATE_MAT : null, kits: B.kits, wing: null, wide: false, name: 'asym', pos: b64f(e.P), nor: b64f(e.N) });
+  } else {
+    const M = { side: maskTex(B.masks.side, 4.7), top: maskTex(B.masks.top, 4.7), rear: maskTex(B.masks.rear, 2) };
+    const fronts = Object.fromEntries(Object.entries(B.masks.fronts).map(([k, t]) => [k, maskTex(t, 2)]));
+    // 車身（和車頭）：分類 → 切 → 簡化
+    const pieces = [['body', B.body, fronts[B.noseOfKit[B.kit]] || fronts.base || Object.values(fronts)[0]]];
+    for (const [k, g] of Object.entries(B.noses)) pieces.push(['nose_' + k, g, fronts[k]]);
+    const seam = Object.keys(B.noses).length ? (x) => Math.abs(x - 1.5) < 2e-4 : null; // Supra 車頭和車身的接縫
+    const totalIn = u32(B.body.idx).length / 3 + Math.max(0, ...Object.values(B.noses).map((g) => u32(g.idx).length / 3)); // 看得到的＝車身＋一個車頭
+    const acc = { lens: [0, 0], wire: [0, 0] }, done = [];
+    for (const [name, g, front] of pieces) {
+      const cls = classifier({ ...M, front }, B.U, B.mask ? -Infinity : LOW_LAMP); // 吉普車：大燈的下半圈在遮罩座標 0.48 以下，不能當成低的鍍鉻（晚上會不亮）
+      const cut = cutByClass(f32(g.pos), f32(g.nor), u32(g.idx), cls);
+      mixes(cut, cls, acc);
+      const share = u32(g.idx).length / 3 / totalIn; // 目標三角形照原本的比例分（Supra：車身＋任一個車頭 ≈ HALF）
+      const s = simplify(cut, Math.round(HALF * share), seam ? (x) => seam(x) : null, { pre: [{ cls: 3, err: MATTE_ERR }] });
+      done.push({ name, g, cut, s });
     }
-    const extras = name === 'body' ? { lod: 'body', half: true } : { lod: 'nose', half: true, kits: Object.entries(B.noseOfKit).filter(([, n]) => 'nose_' + n === name).map(([k]) => k) };
-    W.add(name, s.P, s.N, lists, extras);
-    const n = s.I.length / 3;
-    if (name === 'body') out.body = n; else out.noses[name.slice(5)] = n;
-    out.classes = Object.fromEntries(lists.map((L) => [L.role, (out.classes?.[L.role] || 0) + L.idx.length / 3]));
-    console.log(`  ${key} ${name}: ${u32(g.idx).length / 3} → cut ${cut.I.length / 3} → ${n} tris (err ${s.err.toExponential(2)})`);
+    out.mix = { lens: acc.lens[1] ? +(acc.lens[0] / acc.lens[1]).toFixed(3) : 1, wire: acc.wire[1] ? +(acc.wire[0] / acc.wire[1]).toFixed(3) : 0.45 };
+    for (const { name, g, cut, s } of done) {
+      const lists = BODY_CLS.map((role) => ({ role, idx: [], x: role === 'lens' || role === 'wire' ? { mix: out.mix[role] } : null }));
+      for (let t = 0; t < s.I.length; t += 3) lists[s.C[s.I[t]]].idx.push(s.I[t], s.I[t + 1], s.I[t + 2]);
+      if (B.mask) { // 第 48 批：吉普車的車身是遮罩座標（xm＝(x−X0)·S、ym＝(y−Y0)·S、zm＝z·S；jp4-look.js JP4_M）：分類、切、簡化都做完了，換成公尺（法線不變）
+        const { S: k, X0, Y0 } = B.mask, P = s.P;
+        for (let i = 0; i < P.length; i += 3) { P[i] = P[i] / k + X0; P[i + 1] = P[i + 1] / k + Y0; P[i + 2] = P[i + 2] / k; }
+      }
+      const extras = name === 'body' ? { lod: 'body', half: true } : { lod: 'nose', half: true, kits: Object.entries(B.noseOfKit).filter(([, n]) => 'nose_' + n === name).map(([k]) => k) };
+      W.add(name, s.P, s.N, lists, extras);
+      const n = s.I.length / 3;
+      if (name === 'body') out.body = n; else out.noses[name.slice(5)] = n;
+      out.classes = Object.fromEntries(lists.map((L) => [L.role, (out.classes?.[L.role] || 0) + L.idx.length / 3]));
+      console.log(`  ${key} ${name}: ${u32(g.idx).length / 3} → cut ${cut.I.length / 3} → ${n} tris (err ${s.err.toExponential(2)})`);
+    }
   }
   // 零件：照可見條件分組 → 同材質合併 → 焊接 → 簡化
   const groups = new Map();

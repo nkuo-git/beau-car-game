@@ -80,7 +80,7 @@ export function wheel({ R = 0.325, width = 0.235, rim = 0.2413, mats, style = 'f
 export function rimFace(style, rim, w, mats, hand = 1) {
   const g = new THREE.Group(); g.name = 'rimface';
   if (RIM_FACES[style]) { g.add(RIM_FACES[style](rim, w, mats, hand)); return g; } // 新樣式自己有中心蓋和螺帽
-  if (typeof style === 'function') g.add(style(rim, w, mats)); // 各台車自己的輪框：style(rim, w, mats) 回傳輻條（外側朝 +z）
+  if (typeof style === 'function') { g.add(style(rim, w, mats)); if (style.own) return g; } // 各台車自己的輪框：style(rim, w, mats) 回傳輻條（外側朝 +z）；style.own：自己有中心蓋和螺帽
   else if (style === 'multi') g.add(multiSpoke(rim, w, mats));
   else {
     // 五根輻條：圓盤挖掉五個洞
@@ -119,7 +119,7 @@ export function rimFace(style, rim, w, mats, hand = 1) {
 // ---- 換裝的輪框樣式（任何車都能用，照這個輪子的輪框半徑 rim、寬度 w 縮放）----
 // 後面的碟盤、卡鉗不轉：卡鉗 r 0.106–0.21、z 到 w/2−0.073，碟盤帽 r＜0.085、z 到 w/2−0.06
 // → 輻條背面最深 w/2−0.058；最外面不超過胎壁（w/2）。零件先做成幾何，同材質的合成一個網格（draw call 少）
-function rimMerge(list) { // 幾何合成一個（只留 position、normal）
+export function rimMerge(list) { // 幾何合成一個（只留 position、normal）
   const P = [], N = []; let n = 0;
   for (let g of list) { if (g.index) g = g.toNonIndexed(); P.push(g.attributes.position.array); N.push(g.attributes.normal.array); n += g.attributes.position.count; }
   const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3); let o = 0;
@@ -151,8 +151,8 @@ function rimBar(A, B, wa, wb, ta, tb, top = 0.62) {
     [P[0] + (px * w * top) / 2, P[1] + (py * w * top) / 2, P[2] + t], [P[0] - (px * w * top) / 2, P[1] - (py * w * top) / 2, P[2] + t]];
   return rimLoft([sec(A, wa, ta), sec(B, wb, tb)]);
 }
-const rimLathe = (pts, n = 96) => new THREE.LatheGeometry(pts.map(([r, z]) => new THREE.Vector2(r, z)), n).rotateX(Math.PI / 2); // 剖面 [r, z]，往裡走的面朝外
-const rimCyl = (rF, rB, h, n, z, x = 0, y = 0) => new THREE.CylinderGeometry(rF, rB, h, n).rotateX(Math.PI / 2).translate(x, y, z); // 軸沿 z，rF＝前面的半徑
+export const rimLathe = (pts, n = 96) => new THREE.LatheGeometry(pts.map(([r, z]) => new THREE.Vector2(r, z)), n).rotateX(Math.PI / 2); // 剖面 [r, z]，往裡走的面朝外
+export const rimCyl = (rF, rB, h, n, z, x = 0, y = 0) => new THREE.CylinderGeometry(rF, rB, h, n).rotateX(Math.PI / 2).translate(x, y, z); // 軸沿 z，rF＝前面的半徑
 function rimNuts(list, n, r, z, a0 = Math.PI / 5, s = 0.009, h = 0.014) { for (let j = 0; j < n; j++) { const a = a0 + (j * 2 * Math.PI) / n; list.push(rimCyl(s, s, h, 6, z, Math.cos(a) * r, Math.sin(a) * r)); } }
 
 // 'six'：六根直輻（TE37 那種）：粗、直、往中間凹，平的輪轂上五顆螺帽＋小中心蓋

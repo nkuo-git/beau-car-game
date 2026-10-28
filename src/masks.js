@@ -489,6 +489,7 @@ export function makeMaskTextures(look = SUPRA_LOOK) {
     tLivR: { value: t.livR }, tLivL: { value: t.livL }, tLivF: { value: t.livFs[noses[0]] },
     uXr: { value: u.uXr }, uXf: { value: u.uXf }, uLiv: { value: look.livDefault ?? 1 },
     uFx: { value: V2(u.uFx) }, uRx: { value: V2(u.uRx) }, uWell: { value: V3(u.uWell) }, uWellR: { value: V3(u.uWellR ?? u.uWell) }, uGlassY: { value: u.uGlassY },
+    uUnderY: { value: 0.3 }, // 車底（朝下的面）多高以下變黑；烘焙的 GC8 是 0.2（保桿下緣圓弧留車身色，跟原本的高細節車一樣）
   };
   t.uLiv = t.U.uLiv;
   t.setNose = (k) => { t.nose = k; t.U.tFront.value = t.fronts[k]; t.U.tLivF.value = t.livFs[k]; };
@@ -511,7 +512,7 @@ const VERT_DECL = 'varying vec3 vP; varying vec3 vN;\n';
 export const PAINT_NIGHT = { value: 0 };
 const MASK_FN = `
 uniform sampler2D tSide, tFront, tRear, tTop, tLivR, tLivL, tLivF;
-uniform float uXr, uXf, uLiv, uGlassY, uNight;
+uniform float uXr, uXf, uLiv, uGlassY, uNight, uUnderY;
 uniform vec2 uFx, uRx; uniform vec3 uWell, uWellR;
 varying vec3 vP; varying vec3 vN;
 vec2 uvSide(vec3 p) { return vec2((p.x + 2.35) / 4.7, p.y / 1.4); }
@@ -569,7 +570,7 @@ export function patchPaint(mat, tex) {
   // 輪拱內側、底盤：黑
   float well = max(step(length(vP.xy - vec2(uXr, uWellR.x)), uWellR.y) * step(abs(vP.z), uWellR.z), step(length(vP.xy - vec2(uXf, uWell.x)), uWell.y) * step(abs(vP.z), uWell.z));
   well *= step(vN.y, 0.35); // 朝上的面（引擎蓋很低的車，蓋子會落在輪拱半徑裡）不算輪拱內側
-  float under = step(vN.y, -0.6) * step(vP.y, 0.3);
+  float under = step(vN.y, -0.6) * step(vP.y, uUnderY);
   matte = max(matte, max(well, under));
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.012), blackG);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.02), matte);

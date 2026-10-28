@@ -2,7 +2,7 @@
 // 每台車的不同都寫在 SPEC 裡（Supra、GT-R）
 import * as THREE from 'three';
 import { MAT, wheel, gtWing, mirror, interior, aeroKit, AERO_SUPRA, lip, r34Wing, mirrorR34, exhaust, wideKit, WIDE_PUSH, mk4Wing, rimFace, RIM_POLISH, neonPad } from './parts.js';
-import { makeMaskTextures, patchPaint, patchGlass, patchInside, SUPRA_LOOK } from './masks.js';
+import { makeMaskTextures, patchPaint, patchGlass, patchInside, SUPRA_LOOK, PAINT_NIGHT } from './masks.js';
 import { GTR_LOOK } from './gtr-look.js';
 
 export const SUPRA_SPEC = {
@@ -51,8 +51,10 @@ export const GTR_SPEC = {
 // geos：{ body, noses: { 名字: 車頭網格 } }（Supra 的車頭依套件換；GT-R 沒有分開的車頭）
 export function buildCar(spec, geos, opt = {}) {
   const car = new THREE.Group();
-  const tex = makeMaskTextures(spec.look);
+  const tex = makeMaskTextures(spec.look), BK = geos.baked || null; // BK：烘焙好的車身（第 49 批，gc8-bake.mjs）：玻璃、燈、黑飾條都是自己的網格，投影遮罩只留拉花
+  if (BK) bakedMasks(tex);
   const paint = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(opt.paint || spec.paint), metalness: spec.metal, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.03 });
+  if (BK) { const pm = BK.find((b) => b.slot === 'paint').src; paint.map = pm.map; paint.normalMap = pm.normalMap; paint.normalScale.set(1, 1); for (const t of [pm.map, pm.normalMap]) if (t) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = 8; t.needsUpdate = true; } } // 門縫（白底、縫是暗的＋法線貼圖）
   patchPaint(paint, tex);
   const finU = { uFlake: { value: 0 } };
   { // 漆面的 shader 補丁（包在 patchPaint 外面）：珍珠（iridescence）、金屬漆的亮片只上在車漆（黑飾條、燈、網子、消光的地方不要）
@@ -74,15 +76,17 @@ export function buildCar(spec, geos, opt = {}) {
     paint.customProgramCacheKey = () => 'paint+';
   }
   const inside = new THREE.MeshStandardMaterial({ color: 0x2c2e33, roughness: 0.9, metalness: 0, side: THREE.BackSide });
-  patchInside(inside, tex);
+  if (!BK) patchInside(inside, tex);
   const glass = new THREE.MeshPhysicalMaterial({ color: 0x0b0d10, roughness: 0.04, metalness: 0, transparent: true, opacity: opt.tint ?? 0.34, side: THREE.DoubleSide, depthWrite: false, envMapIntensity: 1.8 });
-  patchGlass(glass, tex);
+  if (BK) bakedClear(glass); else patchGlass(glass, tex); // 烘焙的車窗是自己的網格：不用遮罩挖
 
   const body = new THREE.Group(); body.name = 'body';
-  const shell = new THREE.Mesh(geos.body, paint); shell.name = 'paint';
-  const inner = new THREE.Mesh(geos.body, inside); inner.name = 'inside';
-  const glz = new THREE.Mesh(geos.body, glass); glz.name = 'glass'; glz.renderOrder = 2;
-  body.add(shell, inner, glz);
+  if (!BK) {
+    const shell = new THREE.Mesh(geos.body, paint); shell.name = 'paint';
+    const inner = new THREE.Mesh(geos.body, inside); inner.name = 'inside';
+    const glz = new THREE.Mesh(geos.body, glass); glz.name = 'glass'; glz.renderOrder = 2;
+    body.add(shell, inner, glz);
+  }
   const noses = {};
   for (const [k, g] of Object.entries(geos.noses || {})) {
     const m = new THREE.Mesh(g, paint); m.name = 'nose-' + k;
@@ -98,12 +102,13 @@ export function buildCar(spec, geos, opt = {}) {
     carbon: MAT.carbon(), polish: MAT.polish(),
   };
   const cab = interior(mats, spec.interior); cab.name = 'interior'; body.add(cab);
-  for (const s of [-1, 1]) body.add(spec.mirror(paint, mats, s));
+  if (spec.mirror) for (const s of [-1, 1]) body.add(spec.mirror(paint, mats, s)); // 烘焙的車：後照鏡在車身裡
+  const bw = BK ? bakedBody(BK, body, { paint, glass, inside, mats }) : null; // 烘焙的尾翼（spec.wings 裡寫 'baked' 的那個）
   const wings = {};
-  for (const [k, fn] of Object.entries(spec.wings)) { const w = fn(paint, mats); w.name = 'wing-' + k; w.visible = k === spec.wing; body.add(w); wings[k] = w; }
+  for (const [k, fn] of Object.entries(spec.wings)) { const w = fn === 'baked' ? bw : fn(paint, mats); w.name = 'wing-' + k; w.visible = k === spec.wing; body.add(w); wings[k] = w; }
   const setWing = (k) => { for (const [n, w] of Object.entries(wings)) w.visible = n === k; };
   const applyKit = spec.build(body, paint, mats);
-  const setNose = (k) => { for (const [n, m] of Object.entries(noses)) m.visible = n === k; tex.setNose(k); };
+  const setNose = BK ? () => {} : (k) => { for (const [n, m] of Object.entries(noses)) m.visible = n === k; tex.setNose(k); };
   const setKit = (kit) => applyKit(kit, { setNose });
   setKit(spec.kit);
   car.add(body);
@@ -152,7 +157,7 @@ export function buildCar(spec, geos, opt = {}) {
 
   // 底盤霓虹燈：地上一片柔柔的光，掛在 car 底下（跟著車子跑，不跟車身高度）；'none'＝關
   const bb = new THREE.Box3();
-  for (const g of [geos.body, ...Object.values(geos.noses || {})]) { if (!g.boundingBox) g.computeBoundingBox(); bb.union(g.boundingBox); }
+  for (const g of BK ? BK.filter((b) => b.part === 'body').map((b) => b.geo) : [geos.body, ...Object.values(geos.noses || {})]) { if (!g.boundingBox) g.computeBoundingBox(); bb.union(g.boundingBox); }
   let glow = null;
   const halfW = Math.max(bb.max.z, -bb.min.z);
   function fitGlow() { if (glow) glow.scale.y = wideOn ? 1 + Math.max(WIDE_PUSH.f, WIDE_PUSH.r) / (halfW + 0.5) : 1; } // 寬體：光也寬一點
@@ -172,7 +177,102 @@ export function buildCar(spec, geos, opt = {}) {
     [paint.roughness, paint.metalness, paint.clearcoat, paint.clearcoatRoughness, paint.iridescence, finU.uFlake.value] = f;
     paint.iridescenceIOR = 2; paint.iridescenceThicknessRange = [100, 380]; // 沒有厚度貼圖時膜厚＝最大值 380nm：白車偏淡紫、彩色車有粉色光澤
   };
+  if (BK) { // 用車漆、可是沒有 uv 的零件（寬體葉子板、套件⋯）：給一個沒有門縫的 uv（不然看貼圖的哪裡不一定）
+    const cl = BK.find((b) => b.slot === 'paint').clean || [0.5, 0.5];
+    car.traverse((o) => { if (o.isMesh && !o.geometry.attributes.uv && [].concat(o.material).includes(paint)) { const n = o.geometry.attributes.position.count, U = new Float32Array(n * 2); for (let i = 0; i < n; i++) { U[i * 2] = cl[0]; U[i * 2 + 1] = cl[1]; } o.geometry.setAttribute('uv', new THREE.BufferAttribute(U, 2)); } });
+  }
   return { car, body, paint, glass, wheels, wings, setWing, noses, setKit, setWide, setRim, setGlow, setFinish, mats, tex, spec };
+}
+
+// ---- 第 49 批：烘焙好的車身（gc8-bake.mjs → body-<key>-q.glb）：每個材質（slot）一組網格，不用投影遮罩 ----
+// 投影遮罩只剩拉花：玻璃、燈、黑邊、輪拱都是空的（車漆的 shader 照舊，只是遮罩什麼都沒有）
+const BAKED_BLANK = new THREE.DataTexture(new Uint8Array(4), 1, 1); BAKED_BLANK.needsUpdate = true;
+function bakedMasks(tex) {
+  const U = tex.U;
+  for (const k of ['tSide', 'tFront', 'tRear', 'tTop']) U[k].value = BAKED_BLANK;
+  U.uWell.value.set(0, -1, -1); U.uWellR.value.set(0, -1, -1);
+  U.uUnderY.value = 0.2; // 只有底盤（0.15–0.19）黑；保桿下緣的圓弧（0.22 以上）留車身色：法線一格一格算，0.3 的時候邊是鋸齒狀的
+}
+// 燈：晚上（PAINT_NIGHT）自己發光；how：'all' 整片、'red' 只有紅色的地方（尾燈：倒車燈不要紅）
+function bakedNight(m, rgb, how = 'all') {
+  const k = how === 'red' ? 'clamp((diffuseColor.r - max(diffuseColor.g, diffuseColor.b)) * 2.5, 0.0, 1.0)' : '1.0';
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uNight = PAINT_NIGHT;
+    sh.fragmentShader = 'uniform float uNight;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  totalEmissiveRadiance += uNight * vec3(${rgb.map((v) => v.toFixed(3)).join(', ')}) * ${k};`);
+  };
+  m.customProgramCacheKey = () => `bkN${rgb.join()}${how}`;
+  return m;
+}
+// 假玻璃（大燈罩）：跟車窗一樣，反光越亮越不透明（透明度＋反光；不用 transmission，手機才畫得動）
+function bakedClear(m, back = 0.3) {
+  m.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `#include <opaque_fragment>
+  float refl = max(max(outgoingLight.r, outgoingLight.g), outgoingLight.b);
+  if (!gl_FrontFacing) { gl_FragColor.rgb *= ${back.toFixed(2)}; refl *= 0.2; }
+  gl_FragColor.a = clamp(diffuseColor.a + refl * 0.9, 0.0, 1.0);`);
+  };
+  m.customProgramCacheKey = () => 'bkClear' + back;
+  return m;
+}
+// 載入的 glb → 每一組：{ slot, part, side, geo（車子座標、Float32）, src（glb 的材質：拿貼圖）, clean（車漆沒有縫的 uv）}
+function bakedGeos(gltfScene) {
+  gltfScene.updateMatrixWorld(true);
+  const out = [], v = new THREE.Vector3(), nm = new THREE.Matrix3();
+  gltfScene.traverse((o) => {
+    if (!o.isMesh || !o.userData.slot) return;
+    const g0 = o.geometry, M = o.matrixWorld, p = g0.attributes.position, q = g0.attributes.normal, uv = g0.attributes.uv, n = p.count, ex = o.userData;
+    nm.getNormalMatrix(M);
+    const P = new Float32Array(n * 3), N = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      v.fromBufferAttribute(p, i).applyMatrix4(M); P[i * 3] = v.x; P[i * 3 + 1] = v.y; P[i * 3 + 2] = v.z;
+      v.fromBufferAttribute(q, i).applyMatrix3(nm).normalize(); N[i * 3] = v.x; N[i * 3 + 1] = v.y; N[i * 3 + 2] = v.z;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+    if (uv && ex.uv) { const [u0, v0, du, dv] = ex.uv, U = new Float32Array(n * 2); for (let i = 0; i < n; i++) { U[i * 2] = u0 + du * uv.getX(i); U[i * 2 + 1] = v0 + dv * uv.getY(i); } geo.setAttribute('uv', new THREE.BufferAttribute(U, 2)); }
+    if (g0.attributes.color) geo.setAttribute('color', g0.attributes.color);
+    geo.setIndex(g0.index);
+    out.push({ slot: ex.slot, part: ex.part, side: ex.side || '', geo, src: o.material, clean: ex.clean });
+  });
+  return out;
+}
+// 烘焙的車身放進 body；回傳烘焙的尾翼（Group，沒有就是空的）
+function bakedBody(BK, body, { paint, glass, inside, mats }) {
+  const S = THREE.DoubleSide, own = {};
+  const mat = (b) => { // 每一組的材質（同一個 slot、同一張貼圖共用）
+    const s = b.src, key = `${b.slot}|${s.map?.uuid}|${b.part}`, vc = !!b.geo.attributes.color;
+    if (b.slot === 'paint') return paint;
+    if (b.slot === 'glass') return glass;
+    if (b.slot === 'inside') return inside;
+    if (b.slot === 'mirror') return mats.mirrorGlass;
+    if (own[key]) return own[key];
+    const base = { color: vc ? 0xffffff : s.color.getHex(), vertexColors: vc, side: s.side };
+    let m;
+    switch (b.slot) {
+      case 'trim': m = new THREE.MeshStandardMaterial({ ...base, roughness: 0.5, metalness: 0.1 }); break;
+      case 'dark': m = new THREE.MeshStandardMaterial({ ...base, roughness: 0.95, metalness: 0 }); break;
+      case 'bright': m = new THREE.MeshStandardMaterial({ ...base, roughness: 0.1, metalness: 1 }); break;
+      case 'reflector': m = bakedNight(new THREE.MeshStandardMaterial({ ...base, map: s.map, normalMap: s.normalMap, emissive: 0xffffff, emissiveMap: s.emissiveMap, emissiveIntensity: 0.14, roughness: 0.1, metalness: 1 }), [1.6, 1.55, 1.35]); break;
+      case 'frost': m = bakedNight(new THREE.MeshStandardMaterial({ ...base, normalMap: s.normalMap, emissive: 0xffffff, emissiveIntensity: 0.1, roughness: 0.3, metalness: 0.35 }), [1.2, 1.15, 1.0]); break;
+      case 'bulb': m = bakedNight(new THREE.MeshStandardMaterial({ ...base, emissive: 0xfff2d0, emissiveIntensity: 0.6, roughness: 0.3 }), [3.0, 2.9, 2.5]); break;
+      case 'lens': m = bakedClear(new THREE.MeshStandardMaterial({ color: 0x0d0f11, side: s.side, transparent: true, opacity: 0.05, roughness: 0.03, metalness: 0, depthWrite: false })); break; // 大燈罩：顏色要暗（只有反光讓它不透明；白色的話整片白，看不到裡面的反光碗）
+      case 'amber': m = bakedClear(new THREE.MeshStandardMaterial({ ...base, transparent: true, opacity: 0.78, roughness: 0.08, metalness: 0, depthWrite: false }), 0.6); break;
+      case 'tail': m = bakedNight(new THREE.MeshPhysicalMaterial({ ...base, map: s.map, normalMap: s.normalMap, roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05 }), [1.3, 0.04, 0.02], 'red'); break;
+      case 'net': case 'netF': m = new THREE.MeshStandardMaterial({ ...base, map: s.map, alphaTest: 0.5, roughness: 0.5, metalness: b.slot === 'net' ? 0.6 : 0.3 }); break;
+      default: m = new THREE.MeshStandardMaterial({ ...base, roughness: 0.5 });
+    }
+    if (m.normalMap) m.normalScale.set(1, 1);
+    return (own[key] = m);
+  };
+  const wing = new THREE.Group();
+  for (const b of BK) {
+    const m = new THREE.Mesh(b.geo, mat(b));
+    m.name = b.slot === 'paint' && b.part === 'body' ? 'paint' : b.slot === 'inside' || b.slot === 'glass' ? b.slot : b.slot === 'mirror' ? 'mirrorGlass' : `bk:${b.part}:${b.slot}`; // 車身的車漆叫 'paint'（look.js：不投影子，車內那一層投）
+    if (b.slot === 'glass' || b.slot === 'lens' || b.slot === 'amber') m.renderOrder = 2;
+    (b.part === 'wing' ? wing : body).add(m);
+  }
+  return wing;
 }
 export const buildSupra = (geos, opt = {}) => buildCar(SUPRA_SPEC, geos, opt);
 
@@ -201,6 +301,8 @@ export function fullBody(gltfScene, name) {
 }
 // 載入的 glb（Body、Nose_bomex、Nose_stock）→ buildSupra 要的 geos
 export function carGeos(gltfScene) {
+  let baked = false; gltfScene.traverse((o) => { if (o.userData?.slot) baked = true; });
+  if (baked) return { baked: bakedGeos(gltfScene) }; // 第 49 批：烘焙好的車身
   const names = []; gltfScene.traverse((o) => { if (o.isMesh && o.name.startsWith('Nose_')) names.push(o.name.slice(5)); });
   return { body: fullBody(gltfScene, 'Body'), noses: Object.fromEntries(names.map((k) => [k, fullBody(gltfScene, 'Nose_' + k)])) };
 }

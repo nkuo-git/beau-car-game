@@ -78,7 +78,7 @@ function parts(S) {
   S.body.updateMatrixWorld(true);
   S.body.traverse((o) => {
     if (!o.isMesh) return;
-    for (let p = o; p && p !== S.body; p = p.parent) if (['paint', 'inside', 'glass', 'interior'].includes(p.name) || p.name.startsWith('nose-')) return;
+    for (let p = o; p && p !== S.body; p = p.parent) if (['paint', 'inside', 'glass', 'interior'].includes(p.name) || p.name.startsWith('nose-') || p.name.startsWith('bk:body:')) return; // bk:body:＝烘焙的車身（第 49 批：make-lod.mjs 自己讀 glb）
     let wing = null, wide = false;
     for (let p = o; p && p !== S.body; p = p.parent) { if (p.name.startsWith('wing-')) wing = p.name.slice(5); if (p.name === 'wide') wide = true; }
     out.push({ o, wing, wide });
@@ -136,8 +136,9 @@ const hex = (c) => '#' + c.getHexString();
 window.bake = async (key) => {
   const { C, gltf, spec, S } = await load(key);
   const look = spec.look, T = makeMaskTextures(look);
-  const out = { key, mask: C.mask || null, U: look.U, kits: C.kits, wings: [...Object.keys(spec.wings), 'none'], wing: spec.wing, kit: spec.kit,
-    body: half(gltf.scene, 'Body'), noses: {}, masks: { side: tex(T.side), top: tex(T.top), rear: tex(T.rear), fronts: {} }, noseOfKit: {}, parts: [] };
+  let baked = false; gltf.scene.traverse((o) => { if (o.userData?.slot) baked = true; }); // 第 49 批：烘焙的車身（gc8-bake.mjs）：車身 make-lod.mjs 自己從 glb 讀（每組有自己的材質，不用遮罩分類）
+  const out = { key, mask: C.mask || null, baked, glb: C.glb, U: look.U, kits: C.kits, wings: [...Object.keys(spec.wings), 'none'], wing: spec.wing, kit: spec.kit,
+    body: baked ? null : half(gltf.scene, 'Body'), noses: {}, masks: { side: tex(T.side), top: tex(T.top), rear: tex(T.rear), fronts: {} }, noseOfKit: {}, parts: [] };
   for (const k of Object.keys(S.noses)) { out.noses[k] = half(gltf.scene, 'Nose_' + k); out.masks.fronts[k] = tex(T.fronts[k]); }
   if (!Object.keys(S.noses).length) out.masks.fronts.base = tex(T.fronts[Object.keys(T.fronts)[0]]);
   // 每個套件用哪個車頭、零件在哪些套件看得到（尾翼零件要先選那個尾翼；寬體零件要先開寬體）

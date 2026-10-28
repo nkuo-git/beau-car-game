@@ -8,6 +8,7 @@
 //     ws／wf／wt：前擋（俯視圖 A＝玻璃、G＝黑邊；從車頭往後第一段玻璃）每個 |z| 的看得到的玻璃下緣（最前面）x／整片玻璃最前面 x／上緣 x（每 5 公釐）
 //     rg／rt：後擋（最後面那段玻璃，要有兩段以上）看得到的玻璃最後面／最前面 x
 //   --write：把量好的車寫進 cabin.js 的 // __CABIN_FIT__ 和 // __CABIN_FIT_END__ 中間（沒量的車照舊）；沒有 --write 只印出來跟現在的比
+//   gc8 不在這裡量：第 49 批換成烘焙的車身，gc8-bake.mjs --write 用射線量（意思一樣）
 import fs from 'node:fs';
 import path from 'node:path';
 const DIR = path.dirname(new URL(import.meta.url).pathname);
@@ -17,6 +18,7 @@ const src = fs.readFileSync(CJ, 'utf8');
 const have = [...src.matchAll(/^ {4}(\w+): \{S: '/gm)].map((m) => m[1]);
 const keys = args.filter((a) => !a.startsWith('--'));
 if (!keys.length) keys.push(...have);
+if (keys.includes('gc8')) { keys.splice(keys.indexOf('gc8'), 1); console.log('gc8 不在這裡量（烘焙的車身：node gc8-bake.mjs --write）'); }
 const X0 = -1.9, NX = 32, Y0 = 0.2, NY = 12, NZ = 11;
 const mm = (v) => Math.round(v * 1000);
 

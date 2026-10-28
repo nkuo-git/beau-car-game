@@ -6,7 +6,7 @@
 <script type="module">
 // 做車用的看車頁（shot.mjs 用 Chromium 開）：?car=<key>&v=<視角>&W=&H=
 // v＝<KEY>_CAMS 裡的照片相機，或 side|front|rear|top|front34|rear34|low|custom（custom 用 a d h tx ty fov rl）
-// 其他參數：bg=none（透明，疊照片用）、paint、kit、wing、liv（拉花名字，0＝none）、ride（車身高度）、rim（樣式）、rimc（輪框顏色）、caliper、studio=dark、tint
+// 其他參數：bg=none（透明，疊照片用）、paint、kit、wing、liv（拉花名字，0＝none）、ride（車身高度）、rim（樣式）、rimc（輪框顏色）、caliper、studio=dark、tint、wide=1（寬體）
 //   cab=1：裝上 cabin.js 的車內（儀表、方向盤、座椅⋯）；v=eye：坐在駕駛座（cabinCamera；yaw／pitch＝往右、往上轉幾度；fov 照 cabinFov）
 // 相機（跟 CARS-CONTRACT.md 一樣）：位置 (tx + cos(a)·d, h, −sin(a)·d)，看 (tx, ty, 0)；fov 是垂直視角（度）；rl 是照片轉幾度
 import * as THREE from 'three';
@@ -21,7 +21,9 @@ if (key === 'supra') spec = SUPRA_SPEC; else if (key === 'gtr') spec = GTR_SPEC;
 else { const m = await import(`./${key}-spec.js?t=${Date.now()}`); spec = m[`${KEY}_SPEC`]; cams = m[`${KEY}_CAMS`] || {}; }
 const glb = key === 'supra' ? 'body-q.glb' : `body-${key}-q.glb`;
 const gltf = await new GLTFLoader().loadAsync(`${glb}?t=${Date.now()}`);
-const S = buildCar(spec, carGeos(gltf.scene), { paint: Q.get('paint') || spec.paint, tint: Q.get('tint') === 'dark' ? 0.75 : undefined });
+if (Q.has('wing') && !spec.wings[Q.get('wing')]) { const { extraWings } = await import('./wings.js'); spec = { ...spec, wings: { ...spec.wings, ...extraWings(key) } }; } // 車庫多加的尾翼（gt、duck、lip、swan、double）
+const S = buildCar(spec, carGeos(gltf.scene), { paint: Q.get('paint') || spec.paint, tint: Q.get('tint') === 'dark' ? 0.75 : undefined, wide: Q.has('wide') ? (await import('./wide.js')).WIDE[key] : undefined });
+if (Q.has('wide')) S.setWide(true);
 if (Q.has('kit')) S.setKit(Q.get('kit'));
 if (Q.has('wing')) S.setWing(Q.get('wing'));
 if (Q.has('rim')) S.setRim(Q.get('rim'));
