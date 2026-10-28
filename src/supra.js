@@ -215,7 +215,7 @@ function bakedClear(m, back = 0.3) {
   m.customProgramCacheKey = () => 'bkClear' + back;
   return m;
 }
-// 載入的 glb → 每一組：{ slot, part, side, geo（車子座標、Float32）, src（glb 的材質：拿貼圖）, clean（車漆沒有縫的 uv）}
+// 載入的 glb → 每一組：{ slot, part, side, geo（車子座標、Float32；照後鏡是對 at 的座標）, src（glb 的材質：拿貼圖）, clean（車漆沒有縫的 uv）, at }
 function bakedGeos(gltfScene) {
   gltfScene.updateMatrixWorld(true);
   const out = [], v = new THREE.Vector3(), nm = new THREE.Matrix3();
@@ -233,7 +233,9 @@ function bakedGeos(gltfScene) {
     if (uv && ex.uv) { const [u0, v0, du, dv] = ex.uv, U = new Float32Array(n * 2); for (let i = 0; i < n; i++) { U[i * 2] = u0 + du * uv.getX(i); U[i * 2 + 1] = v0 + dv * uv.getY(i); } geo.setAttribute('uv', new THREE.BufferAttribute(U, 2)); }
     if (g0.attributes.color) geo.setAttribute('color', g0.attributes.color);
     geo.setIndex(g0.index);
-    out.push({ slot: ex.slot, part: ex.part, side: ex.side || '', geo, src: o.material, clean: ex.clean });
+    let at = null; // 照後鏡：網格搬到鏡子中間（town.src.js mirrorSet 照位置分左右）
+    if (ex.slot === 'mirror') { geo.computeBoundingBox(); at = geo.boundingBox.getCenter(new THREE.Vector3()); geo.translate(-at.x, -at.y, -at.z); }
+    out.push({ slot: ex.slot, part: ex.part, side: ex.side || '', geo, src: o.material, clean: ex.clean, at });
   });
   return out;
 }
@@ -268,6 +270,7 @@ function bakedBody(BK, body, { paint, glass, inside, mats }) {
   const wing = new THREE.Group();
   for (const b of BK) {
     const m = new THREE.Mesh(b.geo, mat(b));
+    if (b.at) m.position.copy(b.at);
     m.name = b.slot === 'paint' && b.part === 'body' ? 'paint' : b.slot === 'inside' || b.slot === 'glass' ? b.slot : b.slot === 'mirror' ? 'mirrorGlass' : `bk:${b.part}:${b.slot}`; // 車身的車漆叫 'paint'（look.js：不投影子，車內那一層投）
     if (b.slot === 'glass' || b.slot === 'lens' || b.slot === 'amber') m.renderOrder = 2;
     (b.part === 'wing' ? wing : body).add(m);

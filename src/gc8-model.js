@@ -561,8 +561,11 @@ function build(THREE, opt = {}) {
     const fm = Mt.chrome.clone(); fm.color.set(0x9aa3aa); fm.roughness = 0.03; fm.userData.slot = 'mirror'; addMesh(fg, fm, 'mirrorGlass'); }
   // 門把：凹槽＋把手
   for (const s of [1, -1]) { const pocket = new THREE.BoxGeometry(0.17, 0.05, 0.02); pocket.translate(-0.36, 0.80, 0.826 * s); addMesh(pocket, Mt.dark, 'pocket'); const bar = new THREE.BoxGeometry(0.11, 0.022, 0.018); bar.translate(-0.35, 0.80, 0.84 * s); addMesh(bar, Mt.trim, 'handle'); }
-  // 雨刷
-  for (const [z, a] of [[0.30, 0.25], [-0.25, 0.25]]) { const arm = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.012, 0.012), Mt.trim); arm.position.set(0.70, 1.035, z); arm.rotation.set(0, a, -0.68); arm.castShadow = true; g.add(arm); const bl = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.018, 0.008), Mt.rubber); bl.position.set(0.69, 1.045, z + 0.015); bl.rotation.set(0, a, -0.68); g.add(bl); } // 貼著 39 度的擋風玻璃
+  // 雨刷：停著的時候橫躺在擋風玻璃最下面、貼著玻璃，兩支都往左躺（右邊駕駛座那支長一點）；以前立在玻璃上，從駕駛座看會擋在前面
+  { const x = 0.80, t = (WS_X0 - x) / (WS_X0 - WS_X1), y = COWL[13][1] + t * (ROOF0[13][1] - COWL[13][1]) + 0.05 * t * (1 - t), a = -0.72, nx = Math.sin(-a), ny = Math.cos(a); // 玻璃中線在 x 的高度；(nx, ny)＝玻璃的法線
+    for (const [z0, L] of [[0.52, 0.50], [-0.02, 0.44]]) { const zc = z0 - L / 2;
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, L), Mt.trim); arm.position.set(x + nx * 0.016, y + ny * 0.016, zc); arm.rotation.z = a; arm.castShadow = true; g.add(arm);
+      const bl = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.008, L - 0.04), Mt.rubber); bl.position.set(x + nx * 0.006, y + ny * 0.006, zc - 0.01); bl.rotation.z = a; g.add(bl); } }
   // 尾翼（照片）：一整片：翼片橫過整個行李廂蓋，兩頭往下接寬寬薄薄、往後斜的腳（腳在最外面），腳底一塊座；第三煞車燈在行李廂蓋前面（後擋風玻璃下面）
   { const ZW = 0.705, LT = 0.045; // 翼片半寬（＝腳的外面）、腳的厚度
     const af = new THREE.Shape(); // 翼片剖面（x 往車頭、y 往上）：前緣圓、後緣薄
