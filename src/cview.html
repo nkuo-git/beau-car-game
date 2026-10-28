@@ -6,7 +6,7 @@
 <script type="module">
 // 做車用的看車頁（shot.mjs 用 Chromium 開）：?car=<key>&v=<視角>&W=&H=
 // v＝<KEY>_CAMS 裡的照片相機，或 side|front|rear|top|front34|rear34|low|custom（custom 用 a d h tx ty fov rl）
-// 其他參數：bg=none（透明，疊照片用）、paint、kit、wing、liv（拉花名字，0＝none）、ride（車身高度）、rim、caliper、studio=dark、tint
+// 其他參數：bg=none（透明，疊照片用）、paint、kit、wing、liv（拉花名字，0＝none）、ride（車身高度）、rim（樣式）、rimc（輪框顏色）、caliper、studio=dark、tint
 // 相機（跟 CARS-CONTRACT.md 一樣）：位置 (tx + cos(a)·d, h, −sin(a)·d)，看 (tx, ty, 0)；fov 是垂直視角（度）；rl 是照片轉幾度
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -24,6 +24,7 @@ const S = buildCar(spec, carGeos(gltf.scene), { paint: Q.get('paint') || spec.pa
 if (Q.has('kit')) S.setKit(Q.get('kit'));
 if (Q.has('wing')) S.setWing(Q.get('wing'));
 if (Q.has('rim')) S.setRim(Q.get('rim'));
+if (Q.has('rimc')) { const [c, m, ro] = { chrome: [0xe8eaec, 1, 0.07], gunmetal: [0x4b4f55, 1, 0.3], black: [0x16171a, 0.5, 0.35], gold: [0xd2a646, 1, 0.18], white: [0xf0f0f0, 0, 0.3] }[Q.get('rimc')]; S.mats.chrome.color.set(c); S.mats.chrome.metalness = m; S.mats.chrome.roughness = ro; } // 輪框顏色（跟 garage.src.html 的 RIM_LOOK 一樣）
 if (Q.has('liv')) S.tex.setLivery?.(Q.get('liv') === '0' ? 'none' : Q.get('liv'));
 if (Q.has('caliper')) S.mats.caliper.color.set(Q.get('caliper'));
 if (Q.has('ride')) S.body.position.y = +Q.get('ride');
