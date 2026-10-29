@@ -108,7 +108,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 | `node rain-test.mjs ../out/rain/rn` | 下雨（look.js 第 47 批）：照時鐘（一週 28% 在下、不會跳）、試做頁 15 秒就下；普通沒有雨；高：雨絲一個 draw call、天空灰、太陽弱、霧近、路濕（lkWet）、JS 很小；雨聲、鳥不叫；慢慢乾；開車雨往你斜、駕駛座裡沒有雨；隧道裡沒有雨；超高：白天也有濕路倒影、曝光真的有用；晚上看不到星星、大燈照到的雨；換回普通沒有留下東西；截圖＋draw calls | 17 ok，ALL CHECKS OK（約 17 分；試做頁 v60 起） |
 | `node free-test.mjs` | 試做頁錢用不完、正常頁存檔的錢 | 2 ok（先跑 make-free.mjs） |
 | `node test-app-b1.mjs ../docs ../out/app1/app` | 網站（docs/）整趟：跟 test-b1 一樣（圓塔、電梯、方向盤、一層樓、停車場也有）＋版本號、標題列、App 外殼的全螢幕；沒全螢幕在電梯上（開車、走路）：面板不壓到別的按鈕（網站的畫面只有 426 寬） | 152 ok（試玩頁 docs/try 標題寫「試玩」，版本號那一項會不過） |
-| `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場（跟 test-b4 一樣，含怪獸卡車不能坐電梯、車行裡面 K2、J4 兩台） | 86 ok（K2 第 51 批起；docs/ 還是內容 29 的時候車行那幾項會不過，上線重 build 才對） |
+| `node test-app-b4.mjs ../docs ../out/app4/app` | 網站的越野車場（跟 test-b4 一樣，含怪獸卡車不能坐電梯、車行裡面 K2、J4 兩台） | 86 ok（K2 第 51 批起） |
 | `node site-test.mjs ../docs ../out/site/site` | 網站：打開、開車、有新版本那一條、App 有新版本、搬進度 | 24 ok |
 | `node cloud-test.mjs ../docs ../out/cloud/cloud` | 登入＋雲端存檔（假的雲端、兩支手機、沒網路、App 外殼）、一個帳號一支手機（把那支登出／不要在這支登入、已經登出了、存檔前先看、每分鐘看） | 27 ok |
 | `node online-test.mjs ../docs ../out/online/online` | 連線：要先登入、取名字（擋髒話）、跑完自己上傳、排行榜、鬼影車按鈕（假的 Firestore） | 30 ok |
@@ -295,7 +295,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - look-test 的樹／村子檢查碼不算輕量車（`lodcar-*`）：第 48 批起越野車行裡面的吉普車開到附近才擺進村子，會讓數字差一點（不是 GC8 的問題）。
   - test-b3 三個測試自己的問題（新的 GC8 比較輕、畫得快，時間點變了才露出來；舊版也照樣 56 ok）：每個提示框各自記上一句（`X.peek`，兩個框輪流記會把「時間到」擠掉）；第 4 段挑警車 3 秒內開得到的地方（警察局門口約 40 公尺內）每一點都看不到的人和站的地方（`X.hidFromPolice`；只看門口那一點不夠）；第 6 段打警察：子彈從胸口往準星的點飛，那一線打得到他才開槍（不然擦過去打到牆＝多一顆星）。
   - 說明在 `notes/cars.md` 最後一段。
-- **內容 30（2026-10-29 上線＝試做頁 v63＋v64＋v65；Nick「很好 上線」）**
+- **內容 30（2026-10-29 上線＝試做頁 v63＋v64＋v65；Nick「很好 上線」）**：main dfab04a、Pages run 40；測試 site-test 24、test-app-b4 86、jeep-test 22、test-app-b1 152、world-test 123 ok（試做頁那邊 test-b1 151、mirror 10、drift 66、free 2、k2-test 22、test-b4 86）。沒改 android/，不用編新的 APK。
 - **試做頁 v63（2026-10-29；第 50 批；內容 30）＝ GC8 的 A 柱**：Nick「Gc8其實做的還不錯 a柱稍微改明顯一點 不用太多」。新的 GC8 擋風玻璃和側窗是連在一起的（中間沒有柱子，駕駛座看出去幾乎沒有 A 柱；舊的 GC8 很粗）。
   - gc8-model.js：側窗前緣往後 5 公分（`xA`）、擋風玻璃兩邊窄 1 公分（`windGlass`）→ 中間一條約 4～5 公分的車身色 A 柱＋兩邊黑膠條；駕駛座看是一條深灰色的柱子（車內那一層）。車漆的點的法線只算車漆的三角形（以前混到玻璃邊上斜的黑膠條，窄的 A 柱上亮光一段一段的）。
   - 重新烘焙＋`--write`：FIT.gc8 只有 A 柱附近變（S、T、st、wt）；gc8-bake.mjs 量前擋的時候雨刷不算（`overGlass`：躺在玻璃、前圍上面的黑條，下面 3 公分內有玻璃或車漆就看那一面），所以 ws、wf 跟以前一樣。輕量車也重做（`node make-lod.mjs gc8 --rebake`）。
