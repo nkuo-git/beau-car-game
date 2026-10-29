@@ -54,7 +54,7 @@ export function buildCar(spec, geos, opt = {}) {
   const tex = makeMaskTextures(spec.look), BK = geos.baked || null; // BK：烘焙好的車身（第 49 批，gc8-bake.mjs）：玻璃、燈、黑飾條都是自己的網格，投影遮罩只留拉花
   if (BK) bakedMasks(tex);
   const paint = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(opt.paint || spec.paint), metalness: spec.metal, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.03 });
-  if (BK) { const pm = BK.find((b) => b.slot === 'paint').src; paint.map = pm.map; paint.normalMap = pm.normalMap; paint.normalScale.set(1, 1); for (const t of [pm.map, pm.normalMap]) if (t) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = 8; t.needsUpdate = true; } } // 門縫（白底、縫是暗的＋法線貼圖）
+  if (BK) { const pm = BK.find((b) => b.slot === 'paint').src; paint.map = pm.map; paint.normalMap = pm.normalMap; paint.normalScale.set(1, 1); paint.aoMap = pm.aoMap || null; paint.aoMapIntensity = 1; for (const t of [pm.map, pm.normalMap, pm.aoMap]) if (t) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = 8; t.needsUpdate = true; } } // 門縫（白底、縫是暗的＋法線貼圖）；第 54 批：車子自己的暗影（aoMap：只壓環境光、反光）
   patchPaint(paint, tex);
   const finU = { uFlake: { value: 0 } };
   { // 漆面的 shader 補丁（包在 patchPaint 外面）：珍珠（iridescence）、金屬漆的亮片只上在車漆（黑飾條、燈、網子、消光的地方不要）
@@ -67,7 +67,10 @@ export function buildCar(spec, geos, opt = {}) {
       sh.fragmentShader = 'uniform float uFlake;\n' + fs.replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
 #ifdef USE_IRIDESCENCE
   material.iridescence *= ${w};
-#endif`);
+#endif`).replace('#include <roughnessmap_fragment>', `#ifdef USE_AOMAP
+  diffuseColor.rgb *= 1.0 - 0.6 * (1.0 - texture2D(aoMap, vAoMapUv).r); // 第 54 批：烘焙的暗影也壓一點太陽光（普通、高沒有車子自己的影子：輪拱邊、保桿下面、燈的凹槽才看得出來）
+#endif
+#include <roughnessmap_fragment>`);
       // 亮片：3 mm 一格，每格法線亂偏一點；格子比一個像素小（遠看）就淡掉，不然是雜訊、自動轉的時候一直閃（白色、銀色在暗攝影棚最明顯）
       if (/varying vec3 vP;/.test(fs)) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   if (uFlake > 0.0) { vec3 fp = vP * 320.0, fc = floor(fp);
@@ -94,7 +97,7 @@ export function buildCar(spec, geos, opt = {}) {
   }
 
   const mats = {
-    rubber: MAT.rubber(), chrome: MAT.chrome(), alu: MAT.alu(), disc: MAT.disc(), caliper: MAT.caliper(), black: MAT.black(), gloss: MAT.gloss(),
+    rubber: MAT.rubber(), tyre: MAT.tyre(), chrome: MAT.chrome(), alu: MAT.alu(), disc: MAT.disc(), rotor: MAT.rotor(), caliper: MAT.caliper(), black: MAT.black(), gloss: MAT.gloss(),
     barrelIn: new THREE.MeshPhysicalMaterial({ color: 0x9aa0a6, roughness: 0.35, metalness: 1 }),
     mirrorGlass: new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.02, metalness: 1 }),
     seat: new THREE.MeshStandardMaterial({ color: spec.seat ?? 0x1b3f8f, roughness: 0.8 }),
@@ -121,7 +124,8 @@ export function buildCar(spec, geos, opt = {}) {
   const W = spec.wheels, wheels = [], rims = [];
   for (const [x, track, w, R, rim] of [[W.xf, W.trackF, W.wF, W.RF ?? W.R, W.rimF ?? W.rim], [W.xr, W.trackR, W.wR, W.RR ?? W.R, W.rimR ?? W.rim]]) {
     for (const s of [-1, 1]) {
-      const { wheel: wh, brake } = wheel({ R, width: w, rim, mats, style: W.style });
+      const { wheel: wh, brake, rotor } = wheel({ R, width: w, rim, mats, style: W.style, side: s, rotor: true });
+      wh.add(rotor); // 碟盤跟著輪子轉（第 54 批：有打洞）
       rims.push({ wh, rim, w, s });
       const hub = new THREE.Group();
       hub.position.set(x, R, s * track);
@@ -262,6 +266,9 @@ function bakedBody(BK, body, { paint, glass, inside, mats }) {
       case 'amber': m = bakedClear(new THREE.MeshStandardMaterial({ ...base, transparent: true, opacity: 0.78, roughness: 0.08, metalness: 0, depthWrite: false }), 0.6); break;
       case 'tail': m = bakedNight(new THREE.MeshPhysicalMaterial({ ...base, map: s.map, normalMap: s.normalMap, roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05 }), [1.3, 0.04, 0.02], 'red'); break;
       case 'net': case 'netF': m = new THREE.MeshStandardMaterial({ ...base, map: s.map, alphaTest: 0.5, roughness: 0.5, metalness: b.slot === 'net' ? 0.6 : 0.3 }); break;
+      case 'plate': m = new THREE.MeshStandardMaterial({ ...base, map: s.map, normalMap: s.normalMap, roughness: 0.42, metalness: 0.15 }); break; // 第 54 批：車牌（自己編的號碼，凸字）
+      case 'under': m = new THREE.MeshStandardMaterial({ ...base, roughness: 0.7, metalness: 0.35 }); break; // 第 54 批：車底（消音器、排氣管、油箱⋯）
+      case 'defrost': m = new THREE.MeshStandardMaterial({ ...base, map: s.map, transparent: true, depthWrite: false, roughness: 0.5, metalness: 0.3 }); break; // 第 54 批：後擋的除霧線（透明底的貼圖，貼在玻璃裡面）
       default: m = new THREE.MeshStandardMaterial({ ...base, roughness: 0.5 });
     }
     if (m.normalMap) m.normalScale.set(1, 1);
@@ -273,6 +280,7 @@ function bakedBody(BK, body, { paint, glass, inside, mats }) {
     if (b.at) m.position.copy(b.at);
     m.name = b.slot === 'paint' && b.part === 'body' ? 'paint' : b.slot === 'inside' || b.slot === 'glass' ? b.slot : b.slot === 'mirror' ? 'mirrorGlass' : `bk:${b.part}:${b.slot}`; // 車身的車漆叫 'paint'（look.js：不投影子，車內那一層投）
     if (b.slot === 'glass' || b.slot === 'lens' || b.slot === 'amber') m.renderOrder = 2;
+    else if (b.slot === 'defrost') m.renderOrder = 1; // 除霧線比玻璃先畫（在玻璃裡面）
     (b.part === 'wing' ? wing : body).add(m);
   }
   return wing;

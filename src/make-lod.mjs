@@ -373,8 +373,9 @@ function bakedHalf(buckets, key) {
     if (b.slot === 'tail') { // 尾燈：照貼圖的 v 切成倒車燈、紅的
       const s = splitBy(b.P, b.N, b.I, b.V.map((v) => v - BK_TAIL_V));
       b = { ...b, P: s.P, N: s.N, I: s.I }; TC = Array.from(s.S, (x) => (x ? 8 : 9));
-    } else if (BK_CLS[b.slot] === undefined) continue; // 大燈罩、車內
-    else TC = Array.from({ length: b.I.length / 3 }, (_, t) => (b.slot === 'trim' && b.L && (b.L[b.I[t * 3]] + b.L[b.I[t * 3 + 1]] + b.L[b.I[t * 3 + 2]]) / 3 > 0.3 ? BK_PLATE : BK_CLS[b.slot]));
+    } else if (b.slot === 'plate') TC = Array.from({ length: b.I.length / 3 }, () => BK_PLATE); // 第 54 批：車牌自己一組（有號碼的貼圖；輕量車還是淺色的板子）
+    else if (BK_CLS[b.slot] === undefined) continue; // 大燈罩、車內、車底、除霧線（第 54 批）
+    else TC = Array.from({ length: b.I.length / 3 }, (_, t) => (b.slot === 'trim' && b.L && (b.L[b.I[t * 3]] + b.L[b.I[t * 3 + 1]] + b.L[b.I[t * 3 + 2]]) / 3 > 0.3 ? BK_PLATE : BK_CLS[b.slot])); // 以前的車牌在飾條裡（淺色）
     const map = new Map(); // (頂點, 分類) → 新的頂點：一個頂點只能有一個分類（交界的頂點分開，簡化的時候是 seam）
     const vid = (i, c) => { const k = i * 16 + c; let v = map.get(k); if (v === undefined) { v = C.length; map.set(k, v); P.push(b.P[i * 3], b.P[i * 3 + 1], b.P[i * 3 + 2]); N.push(b.N[i * 3], b.N[i * 3 + 1], b.N[i * 3 + 2]); C.push(c); } return v; };
     for (let t = 0; t < b.I.length; t += 3) {

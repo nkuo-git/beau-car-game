@@ -215,6 +215,32 @@ function paintMaps(THREE, G, X, U, M, color, bake = false) { // bake：白底（
   const T = (cv, srgb) => { const t = new THREE.CanvasTexture(cv); t.anisotropy = 16; t.flipY = false; if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true; return t; };
   return bake ? { map: T(alb, true), normalMap: T(nrm, false) } : { map: T(alb, true), normalMap: T(nrm, false), roughnessMap: T(rgh, false) };
 }
+// ---- 車牌（第 54 批，Nick「細節做多一點」）：自己編的號碼，白底黑字（台灣的樣子），字、邊、螺絲是凸的；一張高度圖 → 顏色＋法線（前後共用）----
+function plateTex(THREE) {
+  const W = 512, H = 256, mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
+  const hc = mk(), h = hc.getContext('2d'), cc = mk(), c = cc.getContext('2d');
+  const TXT = 'BEA-8888', font = 'bold 170px "Liberation Sans", "DejaVu Sans", sans-serif';
+  h.font = font; const mt = h.measureText(TXT), sx = Math.min(0.62, 432 / mt.width), cy = H * 0.56 + (mt.actualBoundingBoxAscent - mt.actualBoundingBoxDescent) / 2; // 字寬 432、字的中間在 56% 的高度（上面留螺絲）
+  const draw = (g, bg, ink, scr) => {
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    g.strokeStyle = ink; g.lineWidth = 7; g.beginPath(); g.roundRect(13, 13, W - 26, H - 26, 18); g.stroke(); // 壓出來的邊（一圈黑線）
+    g.fillStyle = ink; g.font = font; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.save(); g.translate(W / 2, cy); g.scale(sx, 1); g.fillText(TXT, 0, 0); g.restore();
+    for (const x of [W * 0.2, W * 0.8]) { g.fillStyle = scr; g.beginPath(); g.arc(x, H * 0.155, 11, 0, 2 * PI); g.fill(); } }; // 上面兩顆螺絲
+  draw(h, '#000', '#fff', '#fff');
+  const grd = c.createLinearGradient(0, 0, 0, H); grd.addColorStop(0, '#f1f0eb'); grd.addColorStop(1, '#dddbd3'); // 下面髒一點點
+  draw(c, grd, '#151515', '#8d9094');
+  for (const x of [W * 0.2, W * 0.8]) { c.strokeStyle = '#3a3c40'; c.lineWidth = 3; c.beginPath(); c.moveTo(x - 7, H * 0.155); c.lineTo(x + 7, H * 0.155); c.stroke(); } // 螺絲的一字槽
+  const src = (() => { const b = mk(), g = b.getContext('2d'); g.filter = 'blur(1.6px)'; g.drawImage(hc, 0, 0); return g.getImageData(0, 0, W, H).data; })(); // 模糊一點：凸起來的邊是斜的
+  const nc = mk(), nx = nc.getContext('2d'), nd = nx.createImageData(W, H), N = nd.data, K = 3.2, hv = (x, y) => src[(Math.min(H - 1, Math.max(0, y)) * W + Math.min(W - 1, Math.max(0, x))) * 4] / 255;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const du = (hv(x + 1, y) - hv(x - 1, y)) * K, dv = (hv(x, y - 1) - hv(x, y + 1)) * K, l = Math.hypot(du, dv, 1), o = (y * W + x) * 4; // flipY：畫布往上＝v 往上
+    N[o] = ((-du / l) * 0.5 + 0.5) * 255; N[o + 1] = ((-dv / l) * 0.5 + 0.5) * 255; N[o + 2] = ((1 / l) * 0.5 + 0.5) * 255; N[o + 3] = 255; }
+  nx.putImageData(nd, 0, 0);
+  const T = (cv, srgb) => { const t = new THREE.CanvasTexture(cv); t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, map: T(cc, true), normalMap: T(nc, false), roughness: 0.42, metalness: 0.15 }); m.userData.slot = 'plate';
+  return m;
+}
+// 只讓網格朝裡面（三角形反過來、法線反過來）：從管子裡面看得到
+function inward(geo) { const I = geo.index.array; for (let k = 0; k < I.length; k += 3) { const t = I[k + 1]; I[k + 1] = I[k + 2]; I[k + 2] = t; } const n = geo.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, -n.getX(i), -n.getY(i), -n.getZ(i)); return geo; }
 // ---- 建材質 ----
 function materials(THREE, color) {
   const M = {
@@ -243,7 +269,7 @@ function materials(THREE, color) {
 }
 // ---- 主體 ----
 function build(THREE, opt = {}) {
-  const t0 = performance.now(), color = opt.color ?? 0x1c3fb0, Mt = materials(THREE, color), g = new THREE.Group(); g.name = 'car2';
+  const t0 = performance.now(), color = opt.color ?? 0x1c3fb0, Mt = materials(THREE, color), plateM = plateTex(THREE), g = new THREE.Group(); g.name = 'car2';
   const paint2 = new THREE.MeshPhysicalMaterial({ color, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.04 }); paint2.userData.slot = 'paint'; // 另外加的鈑件（尾翼、後視鏡、進氣口）：沒有車身的貼圖
   const crease = (geo, a = 0.7) => { const B = window.__BGU; return B && B.toCreasedNormals ? B.toCreasedNormals(geo, a) : geo; }; // 擠出來的東西：圓角那邊平滑、真的角還是尖的
   const { G, X, M, U } = loft(opt.dx ?? 0.015, opt.M ?? 160), nx = X.length;
@@ -336,6 +362,22 @@ function build(THREE, opt = {}) {
   { const n = body.attributes.normal, p = body.attributes.position; for (let i = 0; i < n.count; i++) if (Math.abs(p.getZ(i)) < 1e-4) { n.setZ(i, 0); } }
   const maps = paintMaps(THREE, G, X, U, M, color, !!opt.bake); Object.assign(Mt.paint, maps); Mt.paint.needsUpdate = true;
   const bodyMesh = new THREE.Mesh(body, [Mt.paint, Mt.glass, Mt.trim]); bodyMesh.name = 'car2-body'; bodyMesh.castShadow = bodyMesh.receiveShadow = true; g.add(bodyMesh);
+  // 後擋的除霧線（第 54 批）：後擋玻璃（玻璃那一組裡 x＜−0.9、朝上的三角形）往裡 1.5 公釐複製一層，貼一張透明底的線（14 條咖啡色細線＋兩邊的匯流條）
+  // 線畫在貼圖上（不是細細的網格）：遠的時候 mipmap 淡成一點點顏色，不會一閃一閃；v＝沿著玻璃往上（照 x），u＝每一排從左邊到右邊（照那一排玻璃的寬度）
+  { const I = body.index.array, gr = body.groups[1], p = body.attributes.position, n = body.attributes.normal, keep = [];
+    for (let t = gr.start; t < gr.start + gr.count; t += 3) { const a = I[t], b = I[t + 1], c = I[t + 2]; if ((p.getX(a) + p.getX(b) + p.getX(c)) / 3 < -0.9 && (n.getY(a) + n.getY(b) + n.getY(c)) / 3 > 0.4) keep.push(a, b, c); }
+    const ids = [...new Set(keep)], zm = new Map(), bin = (x) => Math.round(x * 200); let x0 = 1e9, x1 = -1e9;
+    for (const i of ids) { const x = p.getX(i), k = bin(x); x0 = Math.min(x0, x); x1 = Math.max(x1, x); zm.set(k, Math.max(zm.get(k) || 0, Math.abs(p.getZ(i)))); }
+    const half = (x) => { let m = 0; for (let d = -2; d <= 2; d++) m = Math.max(m, zm.get(bin(x) + d) || 0); return m || 1; };
+    const re = new Map(ids.map((i, k) => [i, k])), pp = [], nn = [], uu = [];
+    for (const i of ids) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), nx = n.getX(i), ny = n.getY(i), nz = n.getZ(i); pp.push(x - nx * 0.0015, y - ny * 0.0015, z - nz * 0.0015); nn.push(nx, ny, nz); uu.push(0.5 + z / (2 * half(x)), (x - x0) / (x1 - x0)); }
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 512; const c2 = cv.getContext('2d'); c2.fillStyle = 'rgba(74, 42, 26, 0.88)';
+    for (let k = 0; k < 14; k++) c2.fillRect(256 * 0.03, 512 * (0.07 + (0.86 * k) / 13) - 1, 256 * 0.94, 2); // 線（2 像素≈2 公釐）
+    for (const u of [0.022, 0.962]) c2.fillRect(256 * u, 512 * 0.05, 4, 512 * 0.9); // 匯流條
+    const dt = new THREE.CanvasTexture(cv); dt.anisotropy = 8; dt.colorSpace = THREE.SRGBColorSpace;
+    const dm = new THREE.MeshStandardMaterial({ color: 0xffffff, map: dt, transparent: true, depthWrite: false, roughness: 0.5, metalness: 0.3, side: THREE.DoubleSide }); dm.userData.slot = 'defrost';
+    const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); dg.setAttribute('normal', new THREE.Float32BufferAttribute(nn, 3)); dg.setAttribute('uv', new THREE.Float32BufferAttribute(uu, 2)); dg.setIndex(keep.map((i) => re.get(i)));
+    const dmesh = new THREE.Mesh(dg, dm); dmesh.name = 'defrost'; dmesh.renderOrder = 1; g.add(dmesh); }
   // ---- 洞的邊：輪拱外緣、輪拱內壁；大燈、尾燈、水箱罩、下面的進氣口 ----
   const ring = (h) => { const pts = []; for (let i = 0; i < nx; i++) for (let j = 0; j < M; j++) { const v = G[i][j]; if (v.hole === h && v.hsnap) pts.push(v); } return pts; };
   const addMesh = (geo, mat, name) => { const m = new THREE.Mesh(geo, mat); m.name = name; m.castShadow = m.receiveShadow = true; g.add(m); return m; };
@@ -484,15 +526,15 @@ function build(THREE, opt = {}) {
         flat([sh2], xf - 0.008, 0.025, coverMat, 'fogCover');
         const wp = [], wi = [], n = F.length; for (let k = 0; k < n; k++) { const k2 = (k + 1) % n; wp.push(xf, F[k][1], F[k][0], xf - 0.012, sh2[k][1], sh2[k][0]); wi.push(k * 2, k2 * 2, k * 2 + 1, k * 2 + 1, k2 * 2, k2 * 2 + 1); }
         const fw = new THREE.BufferGeometry(); fw.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); fw.setIndex(wi); fw.computeVertexNormals(); addMesh(fw, dmf, 'fogGap'); } }
-    { const pf = new THREE.BoxGeometry(0.012, 0.175, 0.345, 1, 8, 16); pf.translate(xf - 0.026, 0.385, 0); addMesh(pf, Mt.dark, 'plateFrameF'); const pl = new THREE.BoxGeometry(0.006, 0.165, 0.33, 1, 8, 16); pl.translate(xf - 0.016, 0.385, 0); const plm = new THREE.MeshStandardMaterial({ color: 0xe8e6df, roughness: 0.5 }); plm.userData.slot = 'trim'; addMesh(pl, plm, 'plateF'); } // 前面的車牌（空白）
+    { const pf = new THREE.BoxGeometry(0.012, 0.175, 0.345, 1, 8, 16); pf.translate(xf - 0.026, 0.385, 0); addMesh(pf, Mt.dark, 'plateFrameF'); const pl = new THREE.BoxGeometry(0.006, 0.165, 0.33, 1, 8, 16); pl.translate(xf - 0.016, 0.385, 0); addMesh(pl, plateM, 'plateF'); } // 前面的車牌（第 54 批：有號碼，以前空白）
     { const lip = new THREE.BoxGeometry(0.06, 0.018, 1.22, 1, 1, 48); lip.translate(xf - 0.01, 0.262, 0); const lu = lip.attributes.uv; for (let k = 0; k < lu.count; k++) lu.setXY(k, 0.5, 0.01); addMesh(lip, Mt.paint, 'lip'); } // 下面一條唇：車身色（照片），uv 對到漆的貼圖沒有縫的地方（切 48 段，跟著彎）
     flat([hole], xf - 0.02, 0.03, meshMat, 'mouthNet', (z, y) => [-z * 6.25, y * 6.25]);
     const H = hole, n = H.length, cy = H.reduce((a, p) => a + p[1], 0) / n, wp = [], wi = [], bk = []; // 殼：牆（洞的邊 → 往裡 12 公分、縮小一點）＋底
     for (let k = 0; k < n; k++) { const [z, y] = H[k], bz = z * 0.85, by = cy + (y - cy) * 0.85, k2 = (k + 1) % n; wp.push(xf, y, z, xf - 0.12, by, bz); wi.push(k * 2, k2 * 2, k * 2 + 1, k * 2 + 1, k2 * 2, k2 * 2 + 1); bk.push([bz, by]); }
     const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setIndex(wi); wg.computeVertexNormals(); const dm2 = Mt.dark.clone(); dm2.side = THREE.DoubleSide; addMesh(wg, dm2, 'mouthWall');
     flat([bk], xf - 0.12, 0.03, dm2, 'mouthBack'); }
-  // 霧燈：洞＋殼＋煙燻色燈罩＋裡面的反光碗；車牌：後面一塊凹框＋空白的牌子
-  { const fr = new THREE.BoxGeometry(0.012, 0.19, 0.38, 1, 4, 16); fr.translate(-2.112, 0.40, 0); addMesh(fr, Mt.dark, 'plateFrame'); const pl = new THREE.BoxGeometry(0.006, 0.16, 0.34, 1, 4, 16); pl.translate(-2.12, 0.40, 0); const plm = new THREE.MeshStandardMaterial({ color: 0xe8e6df, roughness: 0.5 }); plm.userData.slot = 'trim'; addMesh(pl, plm, 'plate'); }
+  // 霧燈：洞＋殼＋煙燻色燈罩＋裡面的反光碗；車牌：後面一塊凹框＋牌子
+  { const fr = new THREE.BoxGeometry(0.012, 0.19, 0.38, 1, 4, 16); fr.translate(-2.112, 0.40, 0); addMesh(fr, Mt.dark, 'plateFrame'); const pl = new THREE.BoxGeometry(0.006, 0.17, 0.34, 1, 8, 16); pl.translate(-2.12, 0.40, 0); addMesh(pl, plateM, 'plate'); } // 後面的車牌：跟前面同一張圖（2:1）
   // 車頂、窗框的橡膠條：玻璃邊上（quadMat 2 已經是黑邊），再加雨槽
   // 引擎蓋上的鈑件（進氣口、導風口）：上面一片（引擎蓋的高度＋H，可以有洞）＋外圈往外往下的圓邊和牆（插進引擎蓋）＋洞往下的圓邊；都是同一個網格，邊才是圓滑的
   // shape：本地 (u, v)；map(u, v) → [x, z]；Hf(x, z)：上面離引擎蓋多高；out(H, nx, nz)：外圈的環 [[o, h]…]（o 往外、h 離引擎蓋）；hole(H)：洞的環（o 往洞裡）
@@ -620,11 +662,42 @@ function build(THREE, opt = {}) {
       const bg2 = new THREE.BufferGeometry(); bg2.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); bg2.setIndex(ii); bg2.computeVertexNormals(); addMesh(bg2, paint2, 'wingBase');
       const sy = topY(xc, 0) - 0.006; const hb = new THREE.BoxGeometry(0.008, 0.016, 0.34); hb.translate(xc - hw - 0.001, sy + H * 0.55, 0); addMesh(hb, Mt.smoke, 'stopBox');
       const sl = new THREE.BoxGeometry(0.004, 0.008, 0.30); sl.translate(xc - hw - 0.004, sy + H * 0.55, 0); addMesh(sl, Mt.lensRed, 'stopLamp'); } }
-  // 排氣管（左後，照片）：亮亮的不鏽鋼尾管＋捲邊＋裡面黑
+  // 排氣管（左後，照片）：亮亮的不鏽鋼尾管＋捲邊；裡面一層燻黑的套管（第 54 批：以前管子裡面也是亮的）、更裡面黑的底
   { const z = -0.40, xe = -2.06, tm = new THREE.MeshStandardMaterial({ color: 0xd4d6d8, roughness: 0.16, metalness: 1, side: THREE.DoubleSide }); tm.userData.slot = 'bright';
     const tip = new THREE.CylinderGeometry(0.047, 0.047, 0.20, 40, 1, true); tip.rotateZ(PI / 2); tip.translate(xe - 0.06, 0.255, z); addMesh(tip, tm, 'exhaust');
     const lip = new THREE.TorusGeometry(0.044, 0.004, 10, 40); lip.rotateY(PI / 2); lip.translate(xe - 0.16, 0.255, z); addMesh(lip, tm, 'exhaustLip');
-    const inn = new THREE.CircleGeometry(0.045, 32); inn.rotateY(-PI / 2); inn.translate(xe - 0.10, 0.255, z); addMesh(inn, Mt.dark, 'exhaustIn'); }
+    const soot = new THREE.MeshStandardMaterial({ color: 0x1e1c1a, roughness: 0.9 }); soot.userData.slot = 'dark';
+    const sl = new THREE.CylinderGeometry(0.0435, 0.0435, 0.15, 32, 1, true); sl.rotateZ(PI / 2); sl.translate(xe - 0.08, 0.255, z); addMesh(inward(sl), soot, 'exhaustSoot'); // 套管：從管口往裡 15 公分
+    const inn = new THREE.CircleGeometry(0.044, 32); inn.rotateY(-PI / 2); inn.translate(xe - 0.01, 0.255, z); addMesh(inn, Mt.dark, 'exhaustIn'); }
+  // 車底（第 54 批）：消音器、排氣管、觸媒、中段消音器、傳動軸、後差速器、油箱、下擺臂、引擎下護板；從後面、旁邊低低的看得到
+  // 都放在「under」那一組（烘焙成一組、輕量車不要）；最低 12 公分（車身最低 12.5）
+  { const um = (c, r = 0.75, mt = 0.35) => { const m = new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: mt }); m.userData.slot = 'under'; return m; };
+    const steel = um(0x5b5853, 0.6, 0.6), pipe = um(0x48443f, 0.65, 0.55), black = um(0x1b1c1e, 0.8, 0.2), cast = um(0x34353a, 0.7, 0.45), plast = um(0x161719, 0.9, 0);
+    const tube = (pts, r, m, name, seg = 48) => addMesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(([x, y, zz]) => new THREE.Vector3(x, y, zz))), seg, r, 12, false), m, name);
+    const can = (x0, x1, ry, rz, y, zz, m, name, cap = true) => { const c = new THREE.CylinderGeometry(1, 1, x1 - x0, 24, 1, !cap); c.rotateZ(PI / 2); c.scale(1, ry, rz); c.translate((x0 + x1) / 2, y, zz); return addMesh(c, m, name); }; // 橢圓的罐子（沿著 x）
+    const box = (x, y, zz, sx, sy, sz, m, name, ry = 0) => { const b = new THREE.BoxGeometry(sx, sy, sz); if (ry) b.rotateY(ry); b.translate(x, y, zz); return addMesh(b, m, name); };
+    // 後消音器（左後、保桿下面看得到）＋兩條吊帶；出口接到尾管
+    can(-1.98, -1.60, 0.052, 0.105, 0.178, -0.42, steel, 'muffler'); // z −0.525…−0.315：賽道套件的擴散器（z ±0.31）旁邊
+    for (const x of [-1.66, -1.92]) can(x - 0.012, x + 0.012, 0.055, 0.108, 0.178, -0.42, black, 'mufflerBand', false);
+    tube([[-1.95, 0.20, -0.42], [-1.99, 0.215, -0.415], [-2.02, 0.245, -0.40], [-2.05, 0.255, -0.40]], 0.03, pipe, 'tailPipe', 16);
+    // 排氣管：從引擎（前面）沿著地板左邊到消音器；前面一顆觸媒、中間一顆中段消音器
+    tube([[1.02, 0.162, -0.11], [0.85, 0.153, -0.14], [0.6, 0.151, -0.15], [0.0, 0.151, -0.17], [-0.7, 0.151, -0.20], [-1.25, 0.152, -0.30], [-1.50, 0.16, -0.40], [-1.62, 0.17, -0.42]], 0.026, pipe, 'exhaustPipe', 96); // 前面從引擎下護板後面出來
+    can(0.58, 0.86, 0.033, 0.055, 0.153, -0.15, steel, 'cat');
+    can(-0.48, -0.10, 0.031, 0.062, 0.152, -0.185, steel, 'resonator');
+    // 傳動軸（四輪傳動：前面到後差速器）＋中間的軸承座、萬向節；後差速器（半軸在地板上面，看不到）
+    can(-1.10, 0.70, 0.032, 0.032, 0.17, 0, black, 'driveshaft');
+    for (const x of [0.66, -0.18, -1.06]) can(x - 0.03, x + 0.03, 0.04, 0.04, 0.17, 0, cast, 'ujoint');
+    box(-0.18, 0.152, 0, 0.07, 0.03, 0.16, cast, 'shaftMount');
+    { const d = new THREE.SphereGeometry(1, 20, 12); d.scale(0.12, 0.055, 0.13); d.translate(-1.24, 0.185, 0); addMesh(d, cast, 'diff'); }
+    // 油箱（右邊、後座下面）＋兩條固定帶
+    { const sh = new THREE.Shape(); sh.moveTo(-0.60, -0.02); sh.lineTo(-0.60, 0.56); sh.quadraticCurveTo(-0.60, 0.60, -0.64, 0.60); sh.lineTo(-1.04, 0.60); sh.quadraticCurveTo(-1.08, 0.60, -1.08, 0.56); sh.lineTo(-1.08, -0.02); sh.quadraticCurveTo(-1.08, -0.06, -1.04, -0.06); sh.lineTo(-0.64, -0.06); sh.quadraticCurveTo(-0.60, -0.06, -0.60, -0.02);
+      const tg = new THREE.ExtrudeGeometry(sh, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.012, bevelSegments: 2, curveSegments: 6 }); tg.rotateX(PI / 2); tg.translate(0, 0.149, 0); addMesh(crease(tg), black, 'fuelTank'); } // x–z 平面的圓角板子，往下厚 2.8 公分
+    for (const x of [-0.70, -0.98]) box(x, 0.1275, 0.27, 0.035, 0.003, 0.70, cast, 'tankStrap');
+    // 下擺臂（前、後；靠輪子那一段，車底是平的：高過 15 公分的都在車身裡面看不到）、引擎下護板（黑塑膠，蓋住前面的橫樑）
+    for (const s of [1, -1]) { box(-1.17, 0.14, 0.51 * s, 0.05, 0.03, 0.20, cast, 'armR'); box(-1.33, 0.14, 0.51 * s, 0.04, 0.025, 0.20, cast, 'armR2');
+      box(1.24, 0.14, 0.45 * s, 0.05, 0.03, 0.26, cast, 'armF', 0.25 * s); }
+    { const sh = new THREE.Shape(); sh.moveTo(0.95, -0.36); sh.lineTo(1.72, -0.30); sh.lineTo(1.72, 0.30); sh.lineTo(0.95, 0.36); sh.closePath();
+      const pg = new THREE.ExtrudeGeometry(sh, { depth: 0.006, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.008, bevelSegments: 1 }); pg.rotateX(PI / 2); pg.translate(0, 0.142, 0); addMesh(pg, plast, 'underTray'); } }
   // 車內（透過玻璃看得到）：儀表板（側面輪廓拉出來）、儀表罩、方向盤、兩張桶椅（側面輪廓拉出來）、後座、門板、地板、天篷（烘焙的不要：遊戲用 cabin.js 的車內）
   if (!opt.bake) { const ds = new THREE.Shape(); ds.moveTo(0.38, 0.66); ds.lineTo(0.38, 0.84); ds.quadraticCurveTo(0.53, 0.93, 0.83, 0.91); ds.lineTo(0.84, 0.66); ds.closePath();
     const dg = new THREE.ExtrudeGeometry(ds, { depth: 1.36, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 3 }); dg.translate(0, 0, -0.68); addMesh(dg, Mt.plastic, 'dash');

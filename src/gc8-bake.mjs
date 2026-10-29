@@ -31,9 +31,14 @@ if (INV || process.argv.includes('--rebake') || !fs.existsSync(CACHE)) {
     const THREE = await import('three');
     const BGU = await import('three/addons/utils/BufferGeometryUtils.js');
     window.__THREE = THREE; window.__BGU = BGU;
-    await new Promise((ok) => { const s = document.createElement('script'); s.src = '/gc8-model.js'; s.onload = ok; document.head.appendChild(s); });
+    for (const f of ['/gc8-model.js', '/gc8-ao.js']) await new Promise((ok) => { const s = document.createElement('script'); s.src = f; s.onload = ok; document.head.appendChild(s); });
     const t0 = performance.now(), car = window.__CAR2.build(THREE, { bake: true, color: 0xffffff }), ms = performance.now() - t0;
     const g = car.group; g.updateMatrixWorld(true);
+    // 第 54 批：車子自己的暗影（gc8-ao.js）：車漆 → aoMap（512×256），其他不透明的零件 → 每個頂點（乘進頂點色）；輪胎照 gc8-model.js 的位置放圓柱
+    const C2 = window.__CAR2, WH = [];
+    for (const x of [C2.XF, C2.XR]) for (const s of [1, -1]) WH.push({ x, y: C2.RW, r: C2.RW, z0: s * C2.TRACK - C2.TW / 2, z1: s * C2.TRACK + C2.TW / 2 });
+    const AOS = INV ? null : window.__AO.bake(THREE, g, { N: 48, D: 0.35, W: 512, H: 256, wheels: WH, paintMat: car.mats.paint, body: g.getObjectByName('car2-body'), nose: 'noseCap' });
+    const AOK = 0.8; // 頂點的暗影：乘進顏色的強度（1＝全部）
     const WING = new Set(['wing', 'wingLeg', 'wingFoot', 'wingBase', 'stopBox', 'stopLamp']);
     const KEEPUV = new Set(['car2-body', 'noseCap', 'lip']); // 車漆：這幾塊的 uv 就是車身貼圖（門縫）的 uv；其他的車漆零件給一個沒有縫的地方
     const MERGE = { smoke: 'trim' }; // 太小的組併到顏色差不多的
@@ -71,7 +76,8 @@ if (INV || process.argv.includes('--rebake') || !fs.existsSync(CACHE)) {
         const key = `${part}|${slot}|${side}|${tex ? `${tex.map},${tex.normalMap},${tex.emissiveMap}` : ''}`;
         let bk = B.get(key);
         if (!bk) B.set(key, (bk = { part, slot, side, tex, P: [], N: [], U: [], C: [], I: [], cols: new Set(), mats: [], dbl: false, names: new Set() }));
-        if (slot === 'paint' && m.map && !bk.tex) bk.tex = { map: texOf(m.map), normalMap: texOf(m.normalMap), emissiveMap: -1 };
+        if (slot === 'paint' && m.map && !bk.tex) bk.tex = { map: texOf(m.map), normalMap: texOf(m.normalMap), emissiveMap: -1, aoMap: texOf(m.aoMap) };
+        const AOV = slot === 'paint' || window.__AO.NOVERT.has(slot) ? null : geo.userData.ao; // 第 54 批：這個零件每個頂點的暗影（車身網格的玻璃跟飾條共用頂點：玻璃不要）
         const col = m.color.clone(); bk.cols.add(col.getHexString()); bk.names.add(o.name || '?');
         let fl = flip;
         if (slot === 'paint' && m.side === THREE.DoubleSide) { // 車漆是單面的：兩面都畫的零件（霧燈蓋）照「往車子外面」把三角形轉對方向
@@ -94,7 +100,8 @@ if (INV || process.argv.includes('--rebake') || !fs.existsSync(CACHE)) {
           v.fromBufferAttribute(pos, i).applyMatrix4(M); bk.P.push(v.x, v.y, v.z);
           v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); if (fl !== flip) v.negate(); bk.N.push(v.x, v.y, v.z);
           if (tx && uv) { v.set(uv.getX(i), uv.getY(i), 1).applyMatrix3(tm); bk.U.push(v.x, v.y); } else bk.U.push(0.5, 0.5);
-          bk.C.push(col.r, col.g, col.b);
+          const a = AOV ? 1 - AOK * (1 - AOV[i]) : 1; if (a < 0.995) bk.ao = true;
+          bk.C.push(col.r * a, col.g * a, col.b * a);
           return k;
         };
         for (let t = r.start; t + 2 < r.start + cnt; t += 3) {
@@ -111,13 +118,14 @@ if (INV || process.argv.includes('--rebake') || !fs.existsSync(CACHE)) {
     const out = [];
     for (const bk of B.values()) {
       if (bk.slot === 'paint') for (let i = 0; i < bk.U.length; i += 2) if (bk.U[i] === 0.5 && bk.U[i + 1] === 0.5) { bk.U[i] = clean[0]; bk.U[i + 1] = clean[1]; }
-      out.push({ part: bk.part, slot: bk.slot, side: bk.side, tex: bk.tex, cols: [...bk.cols], dbl: bk.dbl, names: [...bk.names], mats: bk.mats,
+      out.push({ part: bk.part, slot: bk.slot, side: bk.side, tex: bk.tex, cols: [...bk.cols], ao: !!bk.ao, dbl: bk.dbl, names: [...bk.names], mats: bk.mats,
         P: b64(new Float32Array(bk.P)), N: b64(new Float32Array(bk.N)), U: b64(new Float32Array(bk.U)), C: b64(new Float32Array(bk.C)), I: b64(new Uint32Array(bk.I)) });
     }
-    return { ms, inv, buckets: out, tex: texOut, clean };
+    return { ms, inv, buckets: out, tex: texOut, clean, aos: AOS };
   }, { INV });
   await b.close(); srv.close();
   console.log('build', Math.round(R.ms), 'ms;', R.buckets.length, 'groups;', R.tex.length, 'textures; clean uv', R.clean.map((v) => v.toFixed(4)).join(','));
+  if (R.aos) console.log('暗影：三角形', R.aos.tris, '節點', R.aos.nodes, '頂點', R.aos.verts, '（不一樣的', R.aos.uniq, '）車漆格子', R.aos.samples, '射線', R.aos.rays, '時間（BVH／頂點／車漆）', R.aos.ms.join('／'), 'ms');
   if (INV) {
     const rows = {};
     for (const r of R.inv) { const k = `${r.part}|${r.slot}${r.side}|${r.name}|${r.col}|${r.tex}|uv${+r.uv}${r.keepUV ? 'K' : ''}`; (rows[k] ??= { n: 0, tris: 0 }).n++; rows[k].tris += r.tris; }
@@ -131,7 +139,7 @@ if (INV || process.argv.includes('--rebake') || !fs.existsSync(CACHE)) {
 await MS.ready;
 const R = JSON.parse(fs.readFileSync(CACHE, 'utf8'));
 const dec = (s, T) => { const b = Buffer.from(s, 'base64'); return new T(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); };
-const ERR = { paint: 0.0004, glass: 0.0004, trim: 0.0003, dark: 0.0008, reflector: 0.0004 }; // 簡化誤差（公尺）；沒寫的 0.0003
+const ERR = { paint: 0.0004, glass: 0.0004, trim: 0.0003, dark: 0.0008, reflector: 0.0004, under: 0.002 }; // 簡化誤差（公尺）；沒寫的 0.0003（第 54 批：車底 2 公釐，看不太到）
 const NW = { paint: 1, glass: 1 }; // 法線算多重（沒寫的 0.3）：車漆、玻璃會反光，法線差一點點就看得出波浪（車漆 0.02 的時候大燈下面、保桿上緣一片皺皺的）
 const paintTex = R.buckets.find((b) => b.slot === 'paint' && b.tex)?.tex;
 // 焊接：位置、法線（、uv、顏色）都一樣（四捨五入）才是同一點；posOnly：只看位置（車內那一層）
@@ -165,7 +173,7 @@ function simp(w, hasT, hasC, err, attrs = true, nw = 0.3) {
 const RAW = {}; // 焊好、還沒簡化的（車內那一層、量車身用）
 const G = R.buckets.map((bk) => {
   const P0 = dec(bk.P, Float32Array), N0 = dec(bk.N, Float32Array), U0 = dec(bk.U, Float32Array), C0 = dec(bk.C, Float32Array), I0 = dec(bk.I, Uint32Array);
-  const tex = bk.slot === 'paint' ? paintTex : bk.tex, hasT = bk.slot === 'paint' || (!!tex && (tex.map >= 0 || tex.normalMap >= 0 || tex.emissiveMap >= 0)), hasC = bk.cols.length > 1;
+  const tex = bk.slot === 'paint' ? paintTex : bk.tex, hasT = bk.slot === 'paint' || (!!tex && (tex.map >= 0 || tex.normalMap >= 0 || tex.emissiveMap >= 0)), hasC = bk.cols.length > 1 || !!bk.ao; // 第 54 批：有暗影的組也要頂點色
   const w = weld(P0, N0, U0, C0, I0, hasT, hasC), before = w.I.length / 3;
   RAW[`${bk.part}|${bk.slot}${bk.side}`] ??= []; RAW[`${bk.part}|${bk.slot}${bk.side}`].push(w);
   const s = RAWG ? { ...w } : simp(w, hasT, hasC, ERR[bk.slot] ?? 0.0003, true, NW[bk.slot] ?? 0.3);
@@ -207,6 +215,7 @@ for (const g of G) {
     if (g.tex?.map >= 0) mat.setBaseColorTexture(TEX[g.tex.map]);
     if (g.tex?.normalMap >= 0) mat.setNormalTexture(TEX[g.tex.normalMap]);
     if (g.tex?.emissiveMap >= 0) mat.setEmissiveTexture(TEX[g.tex.emissiveMap]);
+    if (g.tex?.aoMap >= 0) mat.setOcclusionTexture(TEX[g.tex.aoMap]); // 第 54 批：車漆的暗影（遊戲裡 aoMap）
     mat.setExtras({ slot: g.slot, cc: m0?.cc ?? 0, at: m0?.at ?? 0 });
     mats.set(mk, mat);
   }
@@ -238,7 +247,7 @@ console.log('body-gc8-q.glb', (glb.length / 1e6).toFixed(2), 'MB; textures', R.t
 // 意思跟 cabin-fit.mjs、make-wide.mjs 量 SDF 的一樣（那兩個不再量 gc8）：S＝中線往外第一個碰到的面；T＝從上面往下第一個面；車窗＝從外面看第一個面是玻璃
 const TP = [], TS = [], TN = []; // 每個三角形：9 個座標、組名、單位法線
 for (const g of G) {
-  if (g.part !== 'body' || g.slot === 'inside') continue;
+  if (g.part !== 'body' || g.slot === 'inside' || g.slot === 'under' || g.slot === 'defrost') continue; // 第 54 批：車底的零件（消音器、油箱⋯）、除霧線不算（以前量的車身沒有）
   for (let t = 0; t < g.I.length; t += 3) {
     const v = [g.I[t], g.I[t + 1], g.I[t + 2]].map((i) => [g.P[i * 3], g.P[i * 3 + 1], g.P[i * 3 + 2]]);
     if (g.slot === 'paint' && Math.abs(v[0][2] + v[1][2] + v[2][2]) / 3 > 0.835 && (v[0][1] + v[1][1] + v[2][1]) / 3 > 0.85) continue;

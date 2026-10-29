@@ -6,12 +6,85 @@ export const MAT = {
   chrome: () => new THREE.MeshPhysicalMaterial({ color: 0xe8eaec, roughness: 0.07, metalness: 1 }),
   alu: () => new THREE.MeshPhysicalMaterial({ color: 0xc9ccd0, roughness: 0.28, metalness: 1 }),
   disc: () => new THREE.MeshPhysicalMaterial({ color: 0x6d6f72, roughness: 0.45, metalness: 0.9 }),
-  caliper: () => new THREE.MeshPhysicalMaterial({ color: 0x9da1a6, roughness: 0.3, metalness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.1 }),
+  caliper: () => calMat(), // 第 54 批：白色的字、鐵色的螺絲（parts.js calMat）
+  rotor: () => { const T = rotorTex(); return new THREE.MeshPhysicalMaterial(T ? { color: 0xffffff, map: T.col, normalMap: T.nrm, roughness: 0.42, metalness: 0.85 } : { color: 0x6d6f72, roughness: 0.45, metalness: 0.9 }); }, // 第 54 批：碟盤（打洞、車削的細紋、通風孔）
   black: () => new THREE.MeshPhysicalMaterial({ color: 0x0a0a0b, roughness: 0.5, metalness: 0 }),
   gloss: () => new THREE.MeshPhysicalMaterial({ color: 0x050506, roughness: 0.15, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05 }),
   carbon: () => new THREE.MeshPhysicalMaterial({ color: 0x17181b, roughness: 0.3, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.08, side: THREE.DoubleSide }),
   polish: () => new THREE.MeshPhysicalMaterial({ color: 0xdadde2, roughness: 0.1, metalness: 1 }), // 拋光輪唇（不跟輪框顏色）
+  tyre: () => { const T = tyreTex(); return new THREE.MeshStandardMaterial(T ? { color: 0xffffff, map: T.col, normalMap: T.nrm, roughness: 0.86 } : { color: 0x0c0c0d, roughness: 0.82 }); }, // 第 54 批：輪胎（花紋、側面的字）
 };
+
+// ---- 輪胎的貼圖（第 54 批，Nick「我比較希望細節做多一點」）：一張高度圖 → 顏色貼圖＋法線貼圖，每台車共用（只做一次）----
+// u：半圈（輪胎的 uv u 0..2 繞一圈：字、花紋各兩次）；v 三段（tyreGeo 照長度分）：0–0.25 內側胎壁、0.25–0.60 胎肩＋胎面、0.60–1 外側胎壁（0.60 胎肩那邊 → 1 輪框那邊）
+// 外側胎壁：自己編的字（BEAU RACING、SPORT GT、尺寸）、輪框邊一圈凸條、胎肩的小三角；胎面：三條直溝、胎肩的橫溝（半圈 30 塊）、中間的細紋
+// 畫布 y＝(1−v)·512（flipY）；字：上面朝胎肩、順時針讀（輪胎上面那段看起來是正的）＝畫布上轉 180 度
+let TYRE_TEX = null;
+function tyreTex() {
+  if (TYRE_TEX !== null) return TYRE_TEX;
+  if (typeof document === 'undefined') return (TYRE_TEX = false);
+  const W = 2048, H = 512, Y = (v) => (1 - v) * H, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'), hv = (k) => `rgb(${k},${k},${k})`;
+  g.fillStyle = hv(128); g.fillRect(0, 0, W, H);
+  const band = (v, w, k) => { g.fillStyle = hv(k); g.fillRect(0, Y(v) - w / 2, W, w); }; // 一圈（直溝、凸條）
+  // 胎面：三條直溝（胎面那段的 36%、50%、64%）、胎肩的橫溝、直溝中間的細紋
+  for (const t of [0.36, 0.5, 0.64]) band(0.25 + 0.35 * t, 7, 18);
+  g.lineCap = 'round';
+  for (let k = 0; k < 30; k++) {
+    const x = (k * W) / 30;
+    for (const [v0, v1] of [[0.605, 0.505], [0.245, 0.345]]) { // 外側、內側胎肩：從胎壁那邊往胎面裡面，斜一點
+      g.strokeStyle = hv(26); g.lineWidth = 9; g.beginPath(); g.moveTo(x, Y(v0)); g.quadraticCurveTo(x + 6, Y((v0 + v1) / 2), x + 16, Y(v1)); g.stroke();
+      for (const dx of [-W, W]) { g.beginPath(); g.moveTo(x + dx, Y(v0)); g.quadraticCurveTo(x + dx + 6, Y((v0 + v1) / 2), x + dx + 16, Y(v1)); g.stroke(); } // 接縫兩邊也畫（不會斷）
+    }
+    g.strokeStyle = hv(70); g.lineWidth = 3;
+    for (const [v0, v1] of [[0.385, 0.418], [0.434, 0.467]]) { g.beginPath(); g.moveTo(x + 20, Y(v0)); g.lineTo(x + 34, Y(v1)); g.stroke(); } // 中間兩條肋上的細紋
+  }
+  // 外側胎壁：輪框邊的凸條、胎肩那邊一條細線、小三角
+  band(0.905, 7, 190); band(0.66, 3, 165);
+  g.fillStyle = hv(190);
+  for (let k = 0; k < 3; k++) { const x = ((k + 0.17) * W) / 3, y = Y(0.637); g.beginPath(); g.moveTo(x - 9, y - 7); g.lineTo(x + 9, y - 7); g.lineTo(x, y + 8); g.closePath(); g.fill(); } // 尖的朝胎面
+  band(0.08, 5, 170); // 內側胎壁一條
+  // 字：另外一張畫好（模糊一點：法線才有斜的邊），轉 180 度貼上
+  const tc = document.createElement('canvas'); tc.width = W; tc.height = H;
+  const t = tc.getContext('2d'); t.fillStyle = '#fff'; t.textBaseline = 'middle'; t.textAlign = 'center';
+  const word = (s, x, v, px, sx = 1) => { t.save(); t.translate(x, Y(v)); t.rotate(Math.PI); t.scale(sx, 1); t.font = `900 ${px}px "Arial Black", "Roboto", "Helvetica", sans-serif`; t.fillText(s, 0, 0); t.restore(); };
+  word('BEAU RACING', W * 0.30, 0.775, 50, 1.05); word('SPORT GT', W * 0.66, 0.775, 34, 1.1);
+  word('225/45 R17 94W', W * 0.88, 0.80, 22); word('RADIAL  TUBELESS', W * 0.88, 0.74, 17);
+  g.filter = 'blur(1.2px)'; g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.85; g.drawImage(tc, 0, 0); g.filter = 'none'; g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+  // 高度 → 法線（左右接起來）、顏色（凸的淺一點、溝深一點）
+  const src = g.getImageData(0, 0, W, H).data, h = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) h[i] = src[i * 4] / 255;
+  const nc = document.createElement('canvas'); nc.width = W; nc.height = H; const nx = nc.getContext('2d'), nd = nx.createImageData(W, H), N = nd.data;
+  const cc = document.createElement('canvas'); cc.width = W; cc.height = H; const cx = cc.getContext('2d'), cd = cx.createImageData(W, H), C = cd.data, K = 2.4;
+  for (let y = 0; y < H; y++) {
+    const y0 = Math.max(0, y - 1) * W, y1 = Math.min(H - 1, y + 1) * W, r = y * W;
+    for (let x = 0; x < W; x++) {
+      const xl = (x + W - 1) % W, xr = (x + 1) % W;
+      const du = (h[r + xr] - h[r + xl]) * K, dv = (h[y0 + x] - h[y1 + x]) * K; // v 往上（畫布往上）
+      const l = Math.hypot(du, dv, 1), o = (r + x) * 4;
+      N[o] = ((-du / l) * 0.5 + 0.5) * 255; N[o + 1] = ((-dv / l) * 0.5 + 0.5) * 255; N[o + 2] = ((1 / l) * 0.5 + 0.5) * 255; N[o + 3] = 255;
+      const k = h[r + x] * 255, c = k > 128 ? 22 + (k - 128) * 0.22 : 22 - (128 - k) * 0.11; C[o] = C[o + 1] = c; C[o + 2] = c + 1; C[o + 3] = 255;
+    }
+  }
+  nx.putImageData(nd, 0, 0); cx.putImageData(cd, 0, 0);
+  const tex = (c, srgb) => { const T = new THREE.CanvasTexture(c); T.wrapS = THREE.RepeatWrapping; T.anisotropy = 4; if (srgb) T.colorSpace = THREE.SRGBColorSpace; return T; };
+  return (TYRE_TEX = { col: tex(cc, true), nrm: tex(nc, false) });
+}
+// 輪胎的網格：剖面（r, z）＋每一點的 v（三段各自照長度分）；胎壁中間鼓 3 公釐、胎肩圓角約 2.4 公分；u 繞一圈 0..2
+function tyreGeo(R, w, rim, seg = 96) {
+  const h = w / 2, mid = (rim + R) / 2 - 0.005;
+  const A = [[rim + 0.004, -(h - 0.012)], [rim + 0.02, -(h - 0.002)], [mid, -(h + 0.003)], [R - 0.024, -(h - 0.001)]]; // 內側胎壁（輪框 → 胎肩）
+  const B = [[R - 0.024, -(h - 0.001)], [R - 0.012, -(h - 0.005)], [R - 0.004, -(h - 0.013)], [R, -(h - 0.025)], [R, h - 0.025], [R - 0.004, h - 0.013], [R - 0.012, h - 0.005], [R - 0.024, h - 0.001]];
+  const Cs = [[R - 0.024, h - 0.001], [mid, h + 0.003], [rim + 0.02, h - 0.002], [rim + 0.004, h - 0.012]]; // 外側胎壁（胎肩 → 輪框）
+  const pts = [], V = [];
+  for (const [L, v0, v1] of [[A, 0, 0.25], [B, 0.25, 0.6], [Cs, 0.6, 1]]) {
+    const d = [0]; for (let k = 1; k < L.length; k++) d.push(d[k - 1] + Math.hypot(L[k][0] - L[k - 1][0], L[k][1] - L[k - 1][1]));
+    L.forEach((p, k) => { if (pts.length && k === 0) return; pts.push(new THREE.Vector2(p[0], p[1])); V.push(v0 + ((v1 - v0) * d[k]) / d[d.length - 1]); });
+  }
+  const geo = new THREE.LatheGeometry(pts, seg), uv = geo.attributes.uv, n = pts.length;
+  for (let i = 0; i <= seg; i++) for (let j = 0; j < n; j++) uv.setXY(i * n + j, (2 * i) / seg, V[j]);
+  return geo.rotateX(Math.PI / 2);
+}
 
 // 多輻輪框（照片那台 GT-R）：12 組 V 形雙輻，從中間往外、往內凹
 function multiSpoke(rim, w, mats) {
@@ -35,17 +108,145 @@ function multiSpoke(rim, w, mats) {
   return g;
 }
 
+// ---- 煞車（第 54 批）----
+// 碟盤＝一個 lathe（背面 → 通風的邊 → 摩擦面 → 帽子），放在輪子裡跟著轉；貼圖：打洞（8 段重複，一段 2 組×3 個洞）、車削的細紋、邊上的通風孔
+// v（剖面）：背面 0–0.05、倒角 –0.07、邊 –0.23（中間 1/3 是通風孔）、倒角 –0.25、摩擦面 –0.75（外 → 內）、圓角 –0.80、帽子的牆 –0.87、倒角 –0.88、帽子 –1
+const ROT = { r0: 0.089, r1: 0.168, K: 8 }; // 摩擦面的內外半徑、貼圖繞一圈重複幾次
+let ROTOR_TEX = null;
+function rotorTex() {
+  if (ROTOR_TEX !== null) return ROTOR_TEX;
+  if (typeof document === 'undefined') return (ROTOR_TEX = false);
+  const W = 512, H = 512, Y = (v) => (1 - v) * H, gy = (k) => `rgb(${k | 0},${k | 0},${k | 0})`;
+  const cv = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+  const cc = cv(W, H), c = cc.getContext('2d'), hc = cv(W, H), h = hc.getContext('2d');
+  const band = (g, v0, v1, k) => { g.fillStyle = typeof k === 'string' ? k : gy(k); g.fillRect(0, Y(v1), W, Y(v0) - Y(v1)); };
+  h.fillStyle = gy(128); h.fillRect(0, 0, W, H);
+  let sd = 54321; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  band(c, 0, 0.05, 92); band(c, 0.05, 0.07, 150); band(c, 0.23, 0.25, 160); // 背面、倒角
+  // 邊：外、內兩片鐵＋中間的通風孔（暗）跟斜的導風片（一圈 40 片）
+  band(c, 0.07, 0.23, 104); band(c, 0.1233, 0.1767, 14); band(h, 0.1233, 0.1767, 0);
+  for (let k = 0; k < 5; k++) for (const dx of [-W, 0, W]) { const x = (k / 5) * W + dx, y0 = Y(0.1767), y1 = Y(0.1233);
+    for (const [g, col] of [[c, gy(64)], [h, gy(128)]]) { g.fillStyle = col; g.beginPath(); g.moveTo(x, y0); g.lineTo(x + 20, y0); g.lineTo(x + 32, y1); g.lineTo(x + 12, y1); g.closePath(); g.fill(); } }
+  // 摩擦面：一圈一圈車削的細紋（每一行亮暗不一樣）、內外緣 3 公釐沒磨到（暗一點、帶一點鏽色）
+  const vR = (r) => 0.25 + (0.5 * (ROT.r1 - r)) / (ROT.r1 - ROT.r0);
+  for (let y = Math.floor(Y(0.75)); y < Math.ceil(Y(0.25)); y++) { const k = 122 + (rnd() - 0.5) * 30 + (rnd() < 0.08 ? 18 : 0); c.fillStyle = gy(k); c.fillRect(0, y, W, 1); }
+  band(c, vR(ROT.r1), vR(ROT.r1 - 0.0035), 'rgb(92,84,78)'); band(c, vR(ROT.r0 + 0.003), vR(ROT.r0), 'rgb(96,90,86)');
+  // 打洞：直徑 7.5 公釐、外面一圈倒角（亮）；uv 是角度×半徑，所以每個洞照半徑算成橢圓
+  for (let g = 0; g < 2; g++) for (let j = 0; j < 3; j++) {
+    const r = [0.106, 0.127, 0.148][j], f = g / 2 + 0.12 + j * 0.075, x0 = f * W, y = Y(vR(r));
+    const rx = (0.00375 / ((2 * Math.PI * r) / ROT.K)) * W, ry = (0.00375 / (ROT.r1 - ROT.r0)) * 0.5 * H;
+    for (const dx of [-W, 0, W]) { const x = x0 + dx;
+      c.fillStyle = gy(178); c.beginPath(); c.ellipse(x, y, rx * 1.45, ry * 1.45, 0, 0, Math.PI * 2); c.fill();
+      c.fillStyle = gy(12); c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); c.fill();
+      const gr = h.createRadialGradient(0, 0, 0, 0, 0, 1.45); gr.addColorStop(0, gy(0)); gr.addColorStop(0.69, gy(0)); gr.addColorStop(0.7, gy(60)); gr.addColorStop(1, gy(128));
+      h.save(); h.translate(x, y); h.scale(rx, ry); h.fillStyle = gr; h.beginPath(); h.arc(0, 0, 1.45, 0, Math.PI * 2); h.fill(); h.restore(); } }
+  // 圓角、帽子（深灰，陽極處理）、帽子的倒角
+  band(c, 0.75, 0.80, 118); band(c, 0.80, 0.87, 54); band(c, 0.87, 0.88, 150); band(c, 0.88, 1, 48);
+  for (let y = Math.floor(Y(1)); y < Math.ceil(Y(0.88)); y += 3) { c.fillStyle = gy(48 + (rnd() - 0.5) * 14); c.fillRect(0, y, W, 1); }
+  // 高度 → 法線（左右接起來）
+  const src = h.getImageData(0, 0, W, H).data, nc = cv(W, H), nx = nc.getContext('2d'), nd = nx.createImageData(W, H), N = nd.data, K = 3;
+  const hv = (x, y) => src[(Math.min(H - 1, Math.max(0, y)) * W + ((x + W) % W)) * 4] / 255;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const du = (hv(x + 1, y) - hv(x - 1, y)) * K, dv = (hv(x, y - 1) - hv(x, y + 1)) * K, l = Math.hypot(du, dv, 1), o = (y * W + x) * 4;
+    N[o] = ((-du / l) * 0.5 + 0.5) * 255; N[o + 1] = ((-dv / l) * 0.5 + 0.5) * 255; N[o + 2] = ((1 / l) * 0.5 + 0.5) * 255; N[o + 3] = 255;
+  }
+  nx.putImageData(nd, 0, 0);
+  const tex = (cnv, srgb) => { const T = new THREE.CanvasTexture(cnv); T.wrapS = THREE.RepeatWrapping; T.anisotropy = 4; if (srgb) T.colorSpace = THREE.SRGBColorSpace; return T; };
+  return (ROTOR_TEX = { col: tex(cc, true), nrm: tex(nc, false) });
+}
+function rotorGeo(w, seg = 64) {
+  const a = w / 2, P = [ // [從, 到, v0, v1]：每一段自己的法線（點重複，邊是利的）
+    [[0, a - 0.124], [0.168, a - 0.124], 0, 0.05], [[0.168, a - 0.124], [0.17, a - 0.122], 0.05, 0.07], [[0.17, a - 0.122], [0.17, a - 0.098], 0.07, 0.23],
+    [[0.17, a - 0.098], [0.168, a - 0.096], 0.23, 0.25], [[0.168, a - 0.096], [0.089, a - 0.096], 0.25, 0.75], [[0.089, a - 0.096], [0.085, a - 0.092], 0.75, 0.8],
+    [[0.085, a - 0.092], [0.085, a - 0.066], 0.8, 0.87], [[0.085, a - 0.066], [0.079, a - 0.06], 0.87, 0.88], [[0.079, a - 0.06], [0, a - 0.06], 0.88, 1]];
+  const pts = [], V = [];
+  for (const [p, q, v0, v1] of P) { pts.push(new THREE.Vector2(p[0], p[1]), new THREE.Vector2(q[0], q[1])); V.push(v0, v1); }
+  const geo = new THREE.LatheGeometry(pts, seg), uv = geo.attributes.uv, n = pts.length;
+  for (let i = 0; i <= seg; i++) for (let j = 0; j < n; j++) uv.setXY(i * n + j, (ROT.K * i) / seg, V[j]);
+  const I = []; for (let i = 0; i < seg; i++) for (let j = 0; j < n - 1; j += 2) { const a = j + i * n, b = a + n, c = b + 1, d = a + 1; I.push(a, b, d, c, d, b); } // 重複的點中間那一格（長度 0）不要
+  geo.setIndex(I);
+  return geo.rotateX(Math.PI / 2);
+}
+// 卡鉗：圓角的弧形一塊（兩頭是半圓）＋外面兩顆螺絲＋放氣嘴（鐵色）＋上面看得到來令片的窗（暗）；外面那一面有白色的字（自己編的 BEAU）
+// 一個網格、一個材質：頂點的 calk 0＝卡鉗的顏色、1＝鐵、2＝暗；字＝貼圖的 alpha（shader 裡混成白色，卡鉗換顏色字還是白的）
+let CAL_TEX = null;
+function calTex() {
+  if (CAL_TEX !== null) return CAL_TEX;
+  if (typeof document === 'undefined') return (CAL_TEX = false);
+  const W = 512, H = 256, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '900 96px "Arial Black", "Roboto", "Helvetica", sans-serif';
+  const sx = Math.min(1.25, 270 / g.measureText('BEAU').width); g.save(); g.translate(W / 2, H * 0.5); g.scale(sx, 1); g.fillText('BEAU', 0, 0); g.restore();
+  const T = new THREE.CanvasTexture(cv); T.anisotropy = 4; T.colorSpace = THREE.SRGBColorSpace;
+  return (CAL_TEX = T);
+}
+function calMat() {
+  const T = calTex(), m = new THREE.MeshPhysicalMaterial({ color: 0x9da1a6, roughness: 0.3, metalness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.1, map: T || null });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float calk;\nvarying float vCalK;').replace('#include <begin_vertex>', '#include <begin_vertex>\n  vCalK = calk;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vCalK;')
+      .replace('#include <map_fragment>', `float calS = clamp(1.0 - abs(vCalK - 1.0), 0.0, 1.0), calD = clamp(vCalK - 1.0, 0.0, 1.0);
+#ifdef USE_MAP
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92), texture2D(map, vMapUv).a * (1.0 - calS - calD));
+#endif
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.55, 0.56, 0.58), calS);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.015), calD);`)
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n  metalnessFactor = mix(metalnessFactor, 0.9, calS); roughnessFactor = mix(roughnessFactor, 0.85, calD);');
+  };
+  m.customProgramCacheKey = () => 'cal54';
+  return m;
+}
+// 沒有 index 的網格：同一點、方向差不多（< deg）的面一起平均法線（圓角才是圓的）；平的正面、背面（|n.z|≈1）留著自己的
+function smoothFlat(geo, deg = 40) {
+  const p = geo.attributes.position.array, cnt = p.length / 3, F = new Float32Array(cnt * 3), ct = Math.cos((deg * Math.PI) / 180), out = new Float32Array(cnt * 3), at = new Map();
+  for (let t = 0; t < cnt; t += 3) { const i = t * 3, ux = p[i + 3] - p[i], uy = p[i + 4] - p[i + 1], uz = p[i + 5] - p[i + 2], vx = p[i + 6] - p[i], vy = p[i + 7] - p[i + 1], vz = p[i + 8] - p[i + 2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    for (let k = 0; k < 3; k++) { F[i + k * 3] = nx; F[i + k * 3 + 1] = ny; F[i + k * 3 + 2] = nz; } }
+  for (let i = 0; i < cnt; i++) { const k = `${Math.round(p[i * 3] * 1e5)},${Math.round(p[i * 3 + 1] * 1e5)},${Math.round(p[i * 3 + 2] * 1e5)}`; let a = at.get(k); if (!a) at.set(k, (a = [])); a.push(i); }
+  for (const ids of at.values()) for (const i of ids) {
+    let x = 0, y = 0, z = 0;
+    if (Math.abs(F[i * 3 + 2]) > 0.999) { x = F[i * 3]; y = F[i * 3 + 1]; z = F[i * 3 + 2]; }
+    else for (const j of ids) if (F[i * 3] * F[j * 3] + F[i * 3 + 1] * F[j * 3 + 1] + F[i * 3 + 2] * F[j * 3 + 2] > ct) { x += F[j * 3]; y += F[j * 3 + 1]; z += F[j * 3 + 2]; }
+    const l = Math.hypot(x, y, z) || 1; out[i * 3] = x / l; out[i * 3 + 1] = y / l; out[i * 3 + 2] = z / l;
+  }
+  geo.setAttribute('normal', new THREE.BufferAttribute(out, 3));
+  return geo;
+}
+// side：右邊 1、左邊 −1（左邊的卡鉗是鏡射的，字的 u 要反過來才不會反）
+function caliperGeo(side = 1) {
+  const r0 = 0.118, r1 = 0.198, a = 0.31, rm = (r0 + r1) / 2, hr = (r1 - r0) / 2, bv = 0.012, dep = 0.05, zf = dep + bv;
+  const sh = new THREE.Shape();
+  sh.absarc(0, 0, r1, -a, a, false); sh.absarc(rm * Math.cos(a), rm * Math.sin(a), hr, a, a + Math.PI, false);
+  sh.absarc(0, 0, r0, a, -a, true); sh.absarc(rm * Math.cos(-a), rm * Math.sin(-a), hr, Math.PI - a, 2 * Math.PI - a, false);
+  const AT = a + (hr + bv) / rm, rA = r0 - bv, rB = r1 + bv;
+  const uvOf = (x, y) => { const u = 0.5 + (0.5 * Math.atan2(y, x)) / AT; return new THREE.Vector2(side > 0 ? 1 - u : u, (Math.hypot(x, y) - rA) / (rB - rA)); };
+  const UVG = { generateTopUV: (g, v, A, B, C) => [A, B, C].map((i) => uvOf(v[i * 3], v[i * 3 + 1])), generateSideWallUV: () => [0, 0, 0, 0].map(() => new THREE.Vector2(0, 0)) };
+  const body = smoothFlat(new THREE.ExtrudeGeometry(sh, { depth: dep, bevelEnabled: true, bevelThickness: bv, bevelSize: bv, bevelSegments: 3, curveSegments: 16, UVGenerator: UVG }));
+  const parts = [[body, 0]];
+  const flat = (geo) => { const g = geo.toNonIndexed(); g.computeVertexNormals(); return g; };
+  const at = (ang, r, z) => [r * Math.cos(ang), r * Math.sin(ang), z];
+  for (const s of [-1, 1]) { const [x, y] = at(s * (a + 0.12), 0.182, 0); parts.push([flat(new THREE.CylinderGeometry(0.0058, 0.0058, 0.005, 6).rotateX(Math.PI / 2).translate(x, y, zf + 0.0015)), 1]); } // 螺絲（六角）
+  { const [x, y] = at(-(a + 0.1), r1 - 0.012, 0); // 放氣嘴：六角的底＋細管＋圓頭
+    parts.push([flat(new THREE.CylinderGeometry(0.0048, 0.0048, 0.004, 6).rotateX(Math.PI / 2).translate(x, y, zf + 0.001)), 1]);
+    parts.push([new THREE.CylinderGeometry(0.0026, 0.0026, 0.009, 10).rotateX(Math.PI / 2).translate(x, y, zf + 0.0075).toNonIndexed(), 1]); }
+  { const P = [], N = [], ra = r1 + bv + 0.0006, A0 = -0.16, A1 = 0.16, z0 = 0.006, z1 = 0.044, n = 8; // 上面的窗（看得到來令片的地方）：暗的一片，貼在弧形的頂上
+    for (let i = 0; i < n; i++) { const t0 = A0 + ((A1 - A0) * i) / n, t1 = A0 + ((A1 - A0) * (i + 1)) / n, c0 = [Math.cos(t0), Math.sin(t0)], c1 = [Math.cos(t1), Math.sin(t1)];
+      const q = [[c0, z0], [c1, z0], [c1, z1], [c0, z0], [c1, z1], [c0, z1]]; for (const [c, z] of q) { P.push(c[0] * ra, c[1] * ra, z); N.push(c[0], c[1], 0); } }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((P.length / 3) * 2), 2)); parts.push([g, 2]); }
+  // 接成一個網格（位置、法線、uv、calk）
+  let n = 0; for (const [g] of parts) n += g.attributes.position.count;
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uvs = new Float32Array(n * 2), kk = new Float32Array(n); let o = 0;
+  for (const [g, k] of parts) { const c = g.attributes.position.count; pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3); if (g.attributes.uv && k === 0) uvs.set(g.attributes.uv.array, o * 2); kk.fill(k, o, o + c); o += c; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); geo.setAttribute('calk', new THREE.BufferAttribute(kk, 1));
+  return geo;
+}
+
 // ---- 輪子：輪軸沿著 z，外側朝 +z ----
-export function wheel({ R = 0.325, width = 0.235, rim = 0.2413, mats, style = 'five' } = {}) {
+export function wheel({ R = 0.325, width = 0.235, rim = 0.2413, mats, style = 'five', side = 1, rotor = false } = {}) {
   const g = new THREE.Group();
   const w = width;
-  // 輪胎剖面（r, 軸向）：內側胎唇 → 胎壁 → 胎肩 → 胎面 → 外側
-  const tp = [
-    [rim + 0.004, -w / 2 + 0.012], [rim + 0.02, -w / 2 + 0.002], [R - 0.045, -w / 2], [R - 0.016, -w / 2 + 0.008], [R - 0.003, -w / 2 + 0.028],
-    [R, -w / 2 + 0.05], [R, w / 2 - 0.05], [R - 0.003, w / 2 - 0.028], [R - 0.016, w / 2 - 0.008], [R - 0.045, w / 2], [rim + 0.02, w / 2 - 0.002], [rim + 0.004, w / 2 - 0.012],
-  ].map(([r, y]) => new THREE.Vector2(r, y));
-  const tire = new THREE.Mesh(new THREE.LatheGeometry(tp, 96), mats.rubber); tire.name = 'tire';
-  tire.geometry.rotateX(Math.PI / 2);
+  // 輪胎：內側胎唇 → 胎壁 → 胎肩 → 胎面 → 外側（第 54 批：花紋、側面的字＝mats.tyre 的貼圖；沒有 mats.tyre 的（輕量車的輪框圖）用 rubber）
+  const tire = new THREE.Mesh(tyreGeo(R, w, rim), mats.tyre || mats.rubber); tire.name = 'tire';
   g.add(tire);
   // 輪框筒＋外緣亮邊
   const bp = [
@@ -61,18 +262,14 @@ export function wheel({ R = 0.325, width = 0.235, rim = 0.2413, mats, style = 'f
   inner.geometry.rotateX(Math.PI / 2); inner.material = mats.barrelIn; inner.position.z = -0.01;
   g.add(inner);
   g.add(rimFace(style, rim, w, mats)); // 輪框面（輻條＋中心蓋＋螺帽），換輪框時整組換掉
-  // 碟盤＋卡鉗（不跟著輪子轉，放在另一個 group）
+  // 卡鉗（不跟著輪子轉，放在另一個 group）；碟盤（第 54 批：有打洞，要跟著輪子轉）：rotor＝true 才做，回傳出去由 buildCar 放進輪子
+  // （輕量車的輪框圖、吉普車的備胎也叫 wheel()：不要碟盤）
   const brake = new THREE.Group();
-  const d = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.028, 64), mats.disc);
-  d.geometry.rotateX(Math.PI / 2); d.position.z = w / 2 - 0.11; brake.add(d);
-  const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.05, 40), mats.disc);
-  hat.geometry.rotateX(Math.PI / 2); hat.position.z = w / 2 - 0.085; brake.add(hat);
-  // 卡鉗：包住碟盤外緣的一塊（弧形、四角修圓），在碟盤後上方
-  const ca = new THREE.Shape(), r0 = 0.118, r1 = 0.198, A = 0.62;
-  ca.absarc(0, 0, r1, -A / 2, A / 2, false); ca.absarc(0, 0, r0, A / 2, -A / 2, true); ca.closePath();
-  const cal = new THREE.Mesh(new THREE.ExtrudeGeometry(ca, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 3, curveSegments: 20 }), mats.caliper);
+  const cal = new THREE.Mesh(caliperGeo(side), mats.caliper); cal.name = 'caliper';
   cal.rotation.z = Math.PI * 0.64; cal.position.z = w / 2 - 0.135; brake.add(cal);
-  return { wheel: g, brake };
+  const disc = rotor ? new THREE.Mesh(rotorGeo(w), mats.rotor || mats.disc) : null;
+  if (disc) disc.name = 'rotor';
+  return { wheel: g, brake, rotor: disc };
 }
 
 // ---- 輪框面：輻條＋中心蓋＋螺帽（放在輪子 group 裡一起轉；setRim 換樣式時只換這一組）----

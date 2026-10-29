@@ -834,7 +834,7 @@ function createLook(o) {
     const seen = new Set();
     car.traverse((x) => { if (!x.material) return; for (const m of [].concat(x.material)) { if (!m || seen.has(m) || !m.isMeshStandardMaterial || m.transparent) continue; seen.add(m);
       CARM.push([m, m.envMap, m.envMapIntensity, m.clearcoat || 0, m.clearcoatRoughness || 0]); m.envMap = carEnvTex(); m.envMapIntensity = POST.carEnv;
-      if (m.isMeshPhysicalMaterial && m.metalness < 0.5) { m.clearcoat = Math.max(m.clearcoat || 0, 1); m.clearcoatRoughness = 0.05; } m.needsUpdate = true; } });
+      if (m.isMeshPhysicalMaterial && m.metalness < 0.5 && (m.clearcoat || 0) >= 0.05) { m.clearcoat = Math.max(m.clearcoat, 1); m.clearcoatRoughness = 0.05; } m.needsUpdate = true; } }); // 第 54 批：本來就有透明漆的才加（消光 0.001、輪胎、橡膠沒有：以前超高的時候消光漆變亮亮的）
   }
 
   // ==== 5 號：後製（場景 → AO → 光暈 → 色調＋四角）====
