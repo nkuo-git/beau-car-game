@@ -69,6 +69,11 @@ function loft(dx = 0.015, M = 160) {
   const xs = ST.map((s) => s[0]), longi = []; // 每個點沿 x 的曲線
   for (let k = 0; k < NP; k++) longi.push([hermite(xs, ST.map((s) => s[1][k][0])), hermite(xs, ST.map((s) => s[1][k][1]))]);
   const X = []; for (let x = xs[0]; x < xs[xs.length - 1] - 1e-6; x += (x > 1.99 || x < -1.99) ? dx / 3 : dx) X.push(x); X.push(xs[xs.length - 1]); // 車頭車尾比較密
+  // B 柱那段再密 3 倍（細的柱子兩邊都要有格子點）；原本的站不動。貼圖的 u 照原本的站算（加的站在中間），漆的貼圖跟以前一樣：
+  // u 照站的號碼的話這段的貼圖會被擠 3 倍，烘焙簡化以後大三角形跨過去，門縫、門把的線變成鋸齒
+  const VI = X.map((x, k) => k), nV = X.length;
+  for (let k = X.length - 2; k >= 0; k--) if (X[k] > -0.60 && X[k + 1] < -0.38) { X.splice(k + 1, 0, X[k] + (X[k + 1] - X[k]) / 3, X[k] + (2 * (X[k + 1] - X[k])) / 3); VI.splice(k + 1, 0, VI[k] + 1 / 3, VI[k] + 2 / 3); }
+  const U = VI.map((k) => k / (nV - 1));
   const G = []; // G[i][j] = { x, y, z, idx }
   for (const x of X) {
     const P = longi.map(([fz, fy]) => [fz(x), fy(x)]), f = profileCurve(P, kinkW7(x), kinkW10(x)), S = 600, pts = [], len = [0];
@@ -78,12 +83,15 @@ function loft(dx = 0.015, M = 160) {
       row.push({ x, y: a[1] + (b[1] - a[1]) * u, z: a[0] + (b[0] - a[0]) * u, idx: a[2] + (b[2] - a[2]) * u }); }
     row[0].z = 0; row[M - 1].z = 0; G.push(row);
   }
-  return { G, X, M };
+  return { G, X, M, U };
 }
 // ---- 區域（材質）----
 // A 柱（v63，Nick「a柱稍微改明顯一點 不用太多」）：側窗前緣往後 5 公分、擋風玻璃兩邊窄 1 公分 → 中間一條約 4～5 公分的車身色（加兩邊黑膠條）；以前兩塊玻璃連在一起，看不到柱子
-const xA = (y) => 0.75 - (y - 0.95) * 1.35, xC = (y) => -1.24 + (y - 0.95) * 0.55, xB = (y) => -0.50 - (y - 0.95) * 0.1;
-const sideGlass = (v) => v.idx > 7.55 && v.idx < 10.3 && v.y > 0.955 && v.z > 0.55 && v.x < xA(v.y) && v.x > xC(v.y);
+// B 柱（v65，Nick「加上b柱 要比a柱更細一點」）：照片上是黑色細細的一條、上面往前斜；側窗在這裡斷開 2.4 公分（整條黑的）＋兩邊玻璃的黑邊各 3 公釐 ≈ 3 公分（A 柱約 7 公分）
+const xA = (y) => 0.75 - (y - 0.95) * 1.35, xC = (y) => -1.24 + (y - 0.95) * 0.55, xB = (y) => -0.50 + (y - 0.95) * 0.12, BW = 0.012;
+const inWin = (v) => v.idx > 7.55 && v.idx < 10.3 && v.y > 0.955 && v.z > 0.55;
+const sideGlass = (v) => inWin(v) && v.x < xA(v.y) && v.x > xC(v.y) && Math.abs(v.x - xB(v.y)) > BW;
+const bPillar = (v) => inWin(v) && Math.abs(v.x - xB(v.y)) <= BW;
 const windGlass = (v) => v.idx > 7.6 && v.x > 0.29 + 0.05 * (v.z / 0.6) ** 2 && v.x < 0.82 - 0.06 * (v.z / 0.7) ** 2 && v.z < 0.65 - (0.82 - v.x) * 0.09;
 const rearGlass = (v) => v.idx > 7.6 && v.x > -1.48 + 0.05 * (v.z / 0.6) ** 2 && v.x < -1.02 - 0.05 * (v.z / 0.6) ** 2 && v.z < 0.58 + (-1.02 - v.x) * 0.1;
 const isGlass = (v) => sideGlass(v) || windGlass(v) || rearGlass(v);
@@ -175,8 +183,9 @@ const lawson = (P, T0, loops) => {
   }
   return T;
 };
-function paintMaps(THREE, G, X, M, color, bake = false) { // bake：白底（顏色交給材質的 color）、2048×1024、沒有亮片、沒有粗糙度圖
+function paintMaps(THREE, G, X, U, M, color, bake = false) { // bake：白底（顏色交給材質的 color）、2048×1024、沒有亮片、沒有粗糙度圖；U：每一站的貼圖 u
   const W = bake ? 2048 : 4096, H = bake ? 1024 : 2048, nx = X.length;
+  const CI = new Int32Array(W), CU = new Float32Array(W); for (let u = 0, i = 0; u < W; u++) { const t = u / (W - 1); while (i < nx - 2 && U[i + 1] <= t) i++; CI[u] = i; CU[u] = Math.min(1, (t - U[i]) / (U[i + 1] - U[i])); } // 貼圖的每一行在哪兩站中間
   const alb = document.createElement('canvas'), nrm = document.createElement('canvas'), rgh = document.createElement('canvas');
   alb.width = nrm.width = rgh.width = W; alb.height = nrm.height = rgh.height = H;
   const ga = alb.getContext('2d'), gn = nrm.getContext('2d'), gr = rgh.getContext('2d');
@@ -184,7 +193,7 @@ function paintMaps(THREE, G, X, M, color, bake = false) { // bake：白底（顏
   const hgt = new Float32Array(W * H), c = bake ? new THREE.Color(1, 1, 1) : new THREE.Color(color).convertLinearToSRGB(); // 縫的高度（0 平、1 凹）；貼圖是 sRGB，要寫 sRGB 的數字（以前寫成線性的值，藍色太深太紫）
   const px = [], py = [], pz = [];
   for (let v = 0; v < H; v++) { const fj = (v / (H - 1)) * (M - 1), j = Math.min(M - 2, Math.floor(fj)), uj = fj - j;
-    for (let u = 0; u < W; u++) { const fi = (u / (W - 1)) * (nx - 1), i = Math.min(nx - 2, Math.floor(fi)), ui = fi - i;
+    for (let u = 0; u < W; u++) { const i = CI[u], ui = CU[u];
       const a = G[i][j], b = G[i + 1][j], cc = G[i][j + 1], d = G[i + 1][j + 1], o = v * W + u;
       px[o] = (a.x * (1 - ui) + b.x * ui) * (1 - uj) + (cc.x * (1 - ui) + d.x * ui) * uj; py[o] = (a.y * (1 - ui) + b.y * ui) * (1 - uj) + (cc.y * (1 - ui) + d.y * ui) * uj; pz[o] = (a.z * (1 - ui) + b.z * ui) * (1 - uj) + (cc.z * (1 - ui) + d.z * ui) * uj; } }
   const SW = 0.004;
@@ -237,40 +246,58 @@ function build(THREE, opt = {}) {
   const t0 = performance.now(), color = opt.color ?? 0x1c3fb0, Mt = materials(THREE, color), g = new THREE.Group(); g.name = 'car2';
   const paint2 = new THREE.MeshPhysicalMaterial({ color, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.04 }); paint2.userData.slot = 'paint'; // 另外加的鈑件（尾翼、後視鏡、進氣口）：沒有車身的貼圖
   const crease = (geo, a = 0.7) => { const B = window.__BGU; return B && B.toCreasedNormals ? B.toCreasedNormals(geo, a) : geo; }; // 擠出來的東西：圓角那邊平滑、真的角還是尖的
-  const { G, X, M } = loft(opt.dx ?? 0.015, opt.M ?? 160), nx = X.length;
+  const { G, X, M, U } = loft(opt.dx ?? 0.015, opt.M ?? 160), nx = X.length;
   const topY = (x, z) => { let bi = 0; for (let i = 1; i < nx; i++) if (Math.abs(X[i] - x) < Math.abs(X[bi] - x)) bi = i; let best = null; for (const v of G[bi]) if (v.idx >= 8 && (!best || Math.abs(v.z - z) < Math.abs(best.z - z))) best = v; return best.y; }; // 上面（引擎蓋、車頂）在 (x, z) 的高度
   const nearI = (x) => { let i = 0; for (let k = 1; k < nx; k++) if (Math.abs(X[k] - x) < Math.abs(X[i] - x)) i = k; return i; };
   const rowY = (row, z) => { for (let j = M - 1; j > 0; j--) { const a = row[j], b = row[j - 1]; if (b.idx < 7.5) break; if ((a.z - z) * (b.z - z) <= 0 && a.z !== b.z) return a.y + ((b.y - a.y) * (z - a.z)) / (b.z - a.z); } return null; };
   const hoodY = (x, z) => { z = Math.abs(z); const i = nearI(x), i2 = X[i] > x ? Math.max(0, i - 1) : Math.min(nx - 1, i + 1), a = rowY(G[i], z); const b = i2 === i ? a : rowY(G[i2], z); if (a === null || b === null) return topY(x, z); return i2 === i ? a : a + ((b - a) * (x - X[i])) / (X[i2] - X[i]); }; // 同上，但兩站、兩點之間內插（跟畫出來的面一樣高，貼上去的鈑件才不會浮起來或陷進去）
   const sideZ = (x, y) => { const row = G[nearI(x)]; for (let j = 1; j < M; j++) { const a = row[j - 1], b = row[j]; if (a.idx < 3 || b.idx > 7.5) continue; if ((a.y - y) * (b.y - y) <= 0 && a.y !== b.y) return a.z + ((b.z - a.z) * (y - a.y)) / (b.y - a.y); } return 0.84; }; // 側面在 (x, y) 的 z
   // 玻璃往裡面凹
-  for (const row of G) for (const v of row) { v.glass = isGlass(v); }
+  for (const row of G) for (const v of row) { v.glass = isGlass(v); v.bp = bPillar(v); }
+  const O = G.map((row) => row.map((v) => ({ x: v.x, y: v.y, z: v.z }))); // 原本的格子（B 柱旁邊的玻璃點照這個放）
   // 法線（先用格子算）、玻璃凹進去
   const nrm = (i, j) => { const a = G[Math.max(0, i - 1)][j], b = G[Math.min(nx - 1, i + 1)][j], c = G[i][Math.max(0, j - 1)], d = G[i][Math.min(M - 1, j + 1)];
     const ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z, vx = d.x - c.x, vy = d.y - c.y, vz = d.z - c.z; let x = uy * vz - uz * vy, y = uz * vx - ux * vz, z = ux * vy - uy * vx; const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; };
   const NR = G.map((row, i) => row.map((v, j) => nrm(i, j)));
   // 法線要朝外：檢查中段最寬的點
   { const n = NR[Math.floor(nx / 2)][Math.floor(M * 0.3)]; if (n[2] < 0) for (const row of NR) for (const n of row) { n[0] = -n[0]; n[1] = -n[1]; n[2] = -n[2]; } }
+  // B 柱的上下兩頭：柱子下面（車門）、上面（車頂）的點推到柱子的邊（窗的下緣、上緣），黑色才會剛好停在玻璃黑邊那條線上（旁邊有玻璃的點下面玻璃那一圈會推）
+  for (let i = 0; i < nx; i++) for (let j = 0; j < M; j++) { const v = G[i][j]; if (v.glass || v.bp) continue;
+    const nb = [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]].filter(([a, b]) => a >= 0 && b >= 0 && a < nx && b < M).map(([a, b]) => G[a][b]);
+    if (nb.some((w) => w.glass) || !nb.some((w) => w.bp)) continue; let best = null, bd = 1e9;
+    for (const w of nb) { if (!w.bp) continue;
+      let lo = 0, hi = 1; for (let k = 0; k < 14; k++) { const m = (lo + hi) / 2, p = { x: v.x + (w.x - v.x) * m, y: v.y + (w.y - v.y) * m, z: v.z + (w.z - v.z) * m, idx: v.idx + (w.idx - v.idx) * m }; if (bPillar(p)) hi = m; else lo = m; }
+      if (lo < bd) { bd = lo; best = { x: v.x + (w.x - v.x) * lo, y: v.y + (w.y - v.y) * lo, z: v.z + (w.z - v.z) * lo, idx: v.idx + (w.idx - v.idx) * lo }; } }
+    if (best) { v.x = best.x; v.y = best.y; v.z = best.z; v.idx = best.idx; } }
   // 玻璃邊：不是玻璃、旁邊有玻璃的點，推到玻璃的邊界上（沿著格子線二分），邊才不會鋸齒
   for (let i = 0; i < nx; i++) for (let j = 0; j < M; j++) { const v = G[i][j]; if (v.glass) continue; let best = null, bd = 1e9;
     for (const [a, b] of [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]]) { if (a < 0 || b < 0 || a >= nx || b >= M) continue; const w = G[a][b]; if (!w.glass) continue;
       let lo = 0, hi = 1; for (let k = 0; k < 14; k++) { const m = (lo + hi) / 2, p = { x: v.x + (w.x - v.x) * m, y: v.y + (w.y - v.y) * m, z: v.z + (w.z - v.z) * m, idx: v.idx + (w.idx - v.idx) * m }; if (isGlass(p)) hi = m; else lo = m; }
       if (lo < bd) { bd = lo; best = { x: v.x + (w.x - v.x) * lo, y: v.y + (w.y - v.y) * lo, z: v.z + (w.z - v.z) * lo, idx: v.idx + (w.idx - v.idx) * lo }; } }
     if (best) { v.x = best.x; v.y = best.y; v.z = best.z; v.idx = best.idx; v.edge = true; } }
-  // 玻璃邊上的玻璃點：放在邊界往裡面 1.4 公分的地方（黑色膠條一樣寬，不然裡面那條邊是格子的鋸齒）
-  const TRIMW = 0.014, mv = [];
+  // 玻璃邊上的玻璃點：放在邊界往裡面 1.4 公分的地方（黑色膠條一樣寬，不然裡面那條邊是格子的鋸齒）；B 柱兩邊 3 公釐（那裡的格子 5 公釐一站，柱子本身就是黑的）
+  const TRIMW = 0.014, TRIMB = 0.003, mv = [], at = (P, Q, m) => ({ x: P.x + (Q.x - P.x) * m, y: P.y + (Q.y - P.y) * m, z: P.z + (Q.z - P.z) * m });
   for (let i = 0; i < nx; i++) for (let j = 0; j < M; j++) { const w = G[i][j]; if (!w.glass) continue; let best = null, bd = 1e9;
+    const nb = [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]].filter(([a, b]) => a >= 0 && b >= 0 && a < nx && b < M).map(([a, b]) => G[a][b]);
+    if (nb.some((v) => v.bp)) { // B 柱旁邊：沿著這一排（原本的格子）放在離柱子中線 BW＋TRIMB 的地方（柱子是斜的，跟著最近的點放的話每隔幾排凸一格，從車裡看像鋸齒）
+      const P0 = O[i][j], s = Math.sign(P0.x - xB(P0.y)) || 1, f = (p) => s * (p.x - xB(p.y)) - BW - TRIMB, Pa = O[i - s]?.[j], Pb = O[i + s]?.[j];
+      // 柱子的兩頭（窗的上緣、下緣也在旁邊）：先沿著格子線從邊往原本的點放 1.4 公分（跟別的玻璃點一樣），再沿著這一排找柱子那條線
+      // （先找柱子的線、再從邊往那裡量的話：原本的點離窗的上緣只有 0.3 公釐，方向幾乎是橫的，點被推到旁邊 1.4 公分，折到隔壁的三角形，從車裡看是亮亮的縫）
+      const e = nb.find((v) => !v.glass && v.edge && !v.bp), q = e ? at(e, P0, TRIMW / (Math.hypot(P0.x - e.x, P0.y - e.y, P0.z - e.z) || 1e-6)) : P0;
+      if (Pa && Pb) { const A = { x: q.x + 2 * (Pa.x - P0.x), y: q.y + 2 * (Pa.y - P0.y), z: q.z + 2 * (Pa.z - P0.z) }, B = { x: q.x + 2 * (Pb.x - P0.x), y: q.y + 2 * (Pb.y - P0.y), z: q.z + 2 * (Pb.z - P0.z) };
+        if (f(A) <= 0 && f(B) > 0) { let lo = 0, hi = 1; for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; if (f(at(A, B, m)) > 0) hi = m; else lo = m; }
+          const p = at(A, B, hi); mv.push([w, p.x, p.y, p.z]); continue; } } }
     for (const [a, b] of [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]]) { if (a < 0 || b < 0 || a >= nx || b >= M) continue; const v = G[a][b]; if (v.glass || !v.edge) continue; const d = Math.hypot(w.x - v.x, w.y - v.y, w.z - v.z); if (d < bd) { bd = d; best = v; } }
-    if (best) { const d = bd || 1e-6; mv.push([w, best.x + (w.x - best.x) / d * TRIMW, best.y + (w.y - best.y) / d * TRIMW, best.z + (w.z - best.z) / d * TRIMW]); } }
+    if (best) { const d = bd || 1e-6, tw = best.bp ? TRIMB : TRIMW; mv.push([w, best.x + (w.x - best.x) / d * tw, best.y + (w.y - best.y) / d * tw, best.z + (w.z - best.z) / d * tw]); } }
   for (const [w, x, y, z] of mv) { w.x = x; w.y = y; w.z = z; }
   for (let i = 0; i < nx; i++) for (let j = 0; j < M; j++) { const v = G[i][j]; if (v.glass) { const n = NR[i][j]; v.x -= n[0] * 0.007; v.y -= n[1] * 0.007; v.z -= n[2] * 0.007; } }
   for (const row of G) { row[0].z = 0; row[M - 1].z = 0; }
   // 洞：格子裡在洞裡的點標起來；有留下來的面用到的點推到洞邊
   for (const row of G) for (const v of row) { v.hole = null; for (const h of HOLES) if (h.cut(v)) { v.hole = h; break; } }
   const MESHH = []; for (const row of G) for (const v of row) if (v.hole && MESHH.includes(v.hole) && !v.hsnap) v.x -= 0.025; // 網子的洞裡面的點：往裡面 2.5 公分（這些點只有網子用）
-  const quadMat = new Int8Array((nx - 1) * (M - 1)); // -1 挖掉、0 漆、1 玻璃、2 邊（有玻璃的三角形才是邊）、3 黑網（水箱罩、進氣口的洞裡）
+  const quadMat = new Int8Array((nx - 1) * (M - 1)); // -1 挖掉、0 漆、1 玻璃、2 邊（有玻璃的三角形才是邊）、3 黑網（水箱罩、進氣口的洞裡）、4 B 柱（有 B 柱點的三角形是黑的）
   for (let i = 0; i < nx - 1; i++) for (let j = 0; j < M - 1; j++) { const vs = [G[i][j], G[i + 1][j], G[i][j + 1], G[i + 1][j + 1]]; const nh = vs.filter((v) => v.hole).length, ng = vs.filter((v) => v.glass).length;
-    quadMat[i * (M - 1) + j] = nh === 4 ? (vs.every((v) => v.hole === vs[0].hole && MESHH.includes(v.hole)) ? 3 : -1) : ng === 4 ? 1 : ng > 0 ? 2 : 0; }
+    quadMat[i * (M - 1) + j] = nh === 4 ? (vs.every((v) => v.hole === vs[0].hole && MESHH.includes(v.hole)) ? 3 : -1) : ng === 4 ? 1 : ng > 0 ? 2 : vs.some((v) => v.bp) ? 4 : 0; }
   // 洞邊上的點：在洞裡、旁邊（格子線上）有不在洞裡的點 → 沿格子線二分，推到洞的邊界（跟玻璃一樣的做法）
   for (let i = 0; i < nx; i++) for (let j = 0; j < M; j++) { const v = G[i][j]; v.hsnap = false; if (!v.hole) continue; let best = null, bd = 1e9; const h = v.hole;
     for (const [a, b] of [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]]) { if (a < 0 || b < 0 || a >= nx || b >= M) continue; const w = G[a][b]; if (w.hole) continue;
@@ -280,20 +307,21 @@ function build(THREE, opt = {}) {
   for (const row of G) for (const v of row) if (v.hsnap) { v.x = v.nx; v.y = v.ny; v.z = v.nz; v.idx = v.nidx; if (Math.abs(v.z) < 1e-3) v.z = 0; }
   // 做成 BufferGeometry（左右兩半），uv：u＝x 方向、v＝剖面方向；每個三角形自己決定材質；碰到洞裡沒推到邊的點的三角形丟掉
   const pos = [], uv = [], idxBy = [[], [], [], []], vid = (i, j, s) => ((s * nx + i) * M + j);
-  for (let s = 0; s < 2; s++) for (let i = 0; i < nx; i++) for (let j = 0; j < M; j++) { const v = G[i][j]; pos.push(v.x, v.y, s ? -v.z : v.z); uv.push(i / (nx - 1), j / (M - 1)); }
+  for (let s = 0; s < 2; s++) for (let i = 0; i < nx; i++) for (let j = 0; j < M; j++) { const v = G[i][j]; pos.push(v.x, v.y, s ? -v.z : v.z); uv.push(U[i], j / (M - 1)); }
   for (let s = 0; s < 2; s++) for (let i = 0; i < nx - 1; i++) for (let j = 0; j < M - 1; j++) { const m = quadMat[i * (M - 1) + j]; if (m < 0) continue; const a = vid(i, j, s), b = vid(i + 1, j, s), c = vid(i, j + 1, s), d = vid(i + 1, j + 1, s);
     if (m === 3) { if (s) idxBy[3].push(a, c, b, b, c, d); else idxBy[3].push(a, b, c, b, d, c); continue; }
     const A = G[i][j], B = G[i + 1][j], C = G[i][j + 1], D = G[i + 1][j + 1], ga = A.glass, gb = B.glass, gc = C.glass, gd = D.glass, bad = (v) => v.hole && !v.hsnap;
-    const tri = (p, q, r, P, Q, R) => { if (bad(P) || bad(Q) || bad(R)) return; if (P.hole && Q.hole && R.hole) return; const gp = P.glass, gq = Q.glass, gr = R.glass; const mm = m === 2 ? ((gp && gq && gr) ? 1 : (gp || gq || gr) ? 2 : 0) : m; if (s) idxBy[mm].push(p, r, q); else idxBy[mm].push(p, q, r); };
+    const tri = (p, q, r, P, Q, R) => { if (bad(P) || bad(Q) || bad(R)) return; if (P.hole && Q.hole && R.hole) return; const gp = P.glass, gq = Q.glass, gr = R.glass; const mm = m === 2 || m === 4 ? ((gp && gq && gr) ? 1 : (gp || gq || gr || P.bp || Q.bp || R.bp) ? 2 : 0) : m; if (s) idxBy[mm].push(p, r, q); else idxBy[mm].push(p, q, r); };
     const oneGlassBC = m === 2 && (gb !== gc) && !ga && !gd && (gb || gc), outs = [A, B, C, D].filter((v) => !v.hole).length, oneOutBC = outs === 1 && (!B.hole || !C.hole);
-    if (oneGlassBC || oneOutBC) { tri(a, b, d, A, B, D); tri(a, d, c, A, D, C); } // 只有 b 或 c 特別：對角線換成 a–d
+    const oneBBC = m === 2 && ga && gd && ((C.bp && gb) || (B.bp && gc)); // B 柱斜過去的那幾排：只有一點是柱子（b 或 c），黑色才只有窄窄一條
+    if (oneGlassBC || oneOutBC || oneBBC) { tri(a, b, d, A, B, D); tri(a, d, c, A, D, C); } // 只有 b 或 c 特別：對角線換成 a–d
     else { tri(a, b, c, A, B, C); tri(b, d, c, B, D, C); } }
   // 兩頭封起來（車尾那一圈是開的洞；車頭那圈被進氣口挖掉就不用）：從中間一點扇形接到最後一圈
   for (const end of [0]) { const row = G[end], js = []; for (let j = 0; j < M; j++) if (!row[j].hole || row[j].hsnap) js.push(j); if (js.length < M * 0.5) continue; // 洞裡沒推到邊的點跳過（燈的洞），其他接起來
     // 以前是從中間一點扇形接過去；現在裡面撒格子點再切三角形（車尾彎成圓弧以後，這一片才是圓的，不會變成尖尖的錐子）
     const ids = js.map((j) => vid(end, j, 0)).concat(js.slice(1, -1).reverse().map((j) => vid(end, j, 1))), loop = js.map((j) => [row[j].z, row[j].y]).concat(js.slice(1, -1).reverse().map((j) => [-row[j].z, row[j].y]));
     const ct = steinerTri(THREE, loop, [], 0.025), x0 = row[0].x + (end === 0 ? -0.004 : 0.004), base = pos.length / 3;
-    for (let k = ct.n; k < ct.P.length; k++) { pos.push(x0, ct.P[k][1], ct.P[k][0]); uv.push(end / (nx - 1), 0.5); }
+    for (let k = ct.n; k < ct.P.length; k++) { pos.push(x0, ct.P[k][1], ct.P[k][0]); uv.push(U[end], 0.5); }
     const idOf = (k) => (k < ct.n ? ids[k] : base + k - ct.n);
     for (const t of ct.T) { const [a, b, c] = t.map(idOf), nxx = (pos[b * 3 + 1] - pos[a * 3 + 1]) * (pos[c * 3 + 2] - pos[a * 3 + 2]) - (pos[b * 3 + 2] - pos[a * 3 + 2]) * (pos[c * 3 + 1] - pos[a * 3 + 1]); // 法線的 x
       if ((nxx < 0) === (end === 0)) idxBy[0].push(a, b, c); else idxBy[0].push(a, c, b); } }
@@ -306,7 +334,7 @@ function build(THREE, opt = {}) {
     for (let t = gr.start; t < gr.start + gr.count; t += 3) { const a = I[t], b = I[t + 1], c = I[t + 2]; const ux = p.getX(b) - p.getX(a), uy = p.getY(b) - p.getY(a), uz = p.getZ(b) - p.getZ(a), vx = p.getX(c) - p.getX(a), vy = p.getY(c) - p.getY(a), vz = p.getZ(c) - p.getZ(a); const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; for (const k of [a, b, c]) { acc[k * 3] += nx; acc[k * 3 + 1] += ny; acc[k * 3 + 2] += nz; has[k] = 1; } }
     for (let i = 0; i < p.count; i++) if (has[i]) { const l = Math.hypot(acc[i * 3], acc[i * 3 + 1], acc[i * 3 + 2]); if (l > 0) n.setXYZ(i, acc[i * 3] / l, acc[i * 3 + 1] / l, acc[i * 3 + 2] / l); } }
   { const n = body.attributes.normal, p = body.attributes.position; for (let i = 0; i < n.count; i++) if (Math.abs(p.getZ(i)) < 1e-4) { n.setZ(i, 0); } }
-  const maps = paintMaps(THREE, G, X, M, color, !!opt.bake); Object.assign(Mt.paint, maps); Mt.paint.needsUpdate = true;
+  const maps = paintMaps(THREE, G, X, U, M, color, !!opt.bake); Object.assign(Mt.paint, maps); Mt.paint.needsUpdate = true;
   const bodyMesh = new THREE.Mesh(body, [Mt.paint, Mt.glass, Mt.trim]); bodyMesh.name = 'car2-body'; bodyMesh.castShadow = bodyMesh.receiveShadow = true; g.add(bodyMesh);
   // ---- 洞的邊：輪拱外緣、輪拱內壁；大燈、尾燈、水箱罩、下面的進氣口 ----
   const ring = (h) => { const pts = []; for (let i = 0; i < nx; i++) for (let j = 0; j < M; j++) { const v = G[i][j]; if (v.hole === h && v.hsnap) pts.push(v); } return pts; };

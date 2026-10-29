@@ -156,3 +156,23 @@ Nick asked for 10 more cars modelled from web photos. The photos were only used 
   - test-b4 / test-app-b4: both shed pads checked (car, nose out, length, walker blocked at the nose), the dealer list is K2* / J4 / 怪獸卡車, the camera goes to pad 1, then pad 2 after tapping J4, then the podium.
 - Published to the trial page 2026-10-29 (artifact version 65: the page + car-k2.txt + car-k2-lod.txt). Tests run: k2-test 22 ok, test-b4 86 ok, test-b1 151 ok, top-test, free-test.
 - **Numbers** (k2-test, 390×844, traffic paused): garage page 204 calls / 1.42M tris; 3F 203 / 1.12M; B1 216 / 1.12M; expressway 119 / 0.77M; driver's view 39 / 0.26M; mud pit 162 / 0.86M. Cockpit 7 meshes, 9.2k tris. car-k2.txt 1.43 MB; light car 201 KB glb (18k body tris).
+
+## GC8 B-pillar (第 52 批, trial v65, 2026-10-29)
+- Nick 2026-10-29, after looking at v63: 「看到了 應該是我選錯車 GC8再幫我加上b柱 要比a柱更細一點」 (the A-pillar is fine; he had been looking at the wrong car). The baked GC8 side glass ran from the A-pillar to the C-pillar in one piece. In the reference photos the B-pillar is a thin black strip whose top leans forward.
+- gc8-model.js:
+  - Pillar centre line `xB(y) = −0.50 + (y − 0.95)·0.12` (top leans forward), half width `BW` = 1.2 cm. `sideGlass` excludes it and `bPillar` marks it (`v.bp`). Quads touching a pillar point and no glass are material 4, drawn as black trim.
+  - The glass next to the pillar gets a 3 mm black edge (`TRIMB`) instead of the usual 1.4 cm (`TRIMW`). So the pillar reads as about 3 cm of black, against about 7 cm for the A-pillar (body colour plus two bands). Inside, the dark `inside` layer covers it.
+  - Stations between x −0.60 and −0.38 are split in three (about 5 mm apart) so a thin pillar has grid points on both edges.
+  - **The paint texture u must stay linear in x.** Each station keeps a virtual index (`VI` → `U[i]`), and both the uv and `paintMaps(…, U, …)` use it. With u taken from the station number, this stretch of texture was squeezed three times. After simplification, big baked triangles crossing it turned the door seam and the handle outline into saw teeth.
+  - Glass points beside the pillar are placed along their original row (`O`, saved before any snapping), at BW + TRIMB from the centre line, by bisection. Placing them from the nearest edge point instead made every few rows stick out, because the pillar is slanted and the nearest neighbour switches; that looked jagged from inside.
+  - At the two ends (window top and bottom), the point first moves 1.4 cm in from the window edge along the grid line, like every other rubber-band point. Then the same row segment, shifted there, is bisected to the 3 mm line.
+    - The first version did it the other way round. One point sat 0.3 mm under the roof edge, so the edge→point direction was almost horizontal and the 1.4 cm move threw it 12 mm sideways. That flipped three triangles (light slivers from inside).
+    - Check: a flip test on the raw mesh, comparing the normal with the outward direction, found 0 flips at the top and the bottom. Glass points move at most 3 mm sideways.
+  - Slanted rows where only b or c is a pillar point take the a–d diagonal (`oneBBC`), so the black stays a thin line.
+- gc8-bake.mjs FIT belt/`st` scan: a thin black hit counts as glass when there is side glass 3 cm in front and 3 cm behind it. Otherwise the sample at x −0.5 jumped 11 cm up onto the pillar and the door-card line inside had a bump.
+  - After `--rebake --write`: belt, st, ws, wf, wt, rg and rt are unchanged. S changes by +7 mm in one cell, because the pillar is flush while the glass is recessed 7 mm. The rest are 1–3 mm rebake noise, and WINGS_DECK changes by 1 mm in places.
+- Numbers:
+  - Body 105.1k → 107.8k tris (+2.6%), body-gc8-q.glb 2.29 → 2.34 MB. Draw calls unchanged (garage 69).
+  - Light car: body 18k tris, 22.3k total, 4 draws.
+  - The driver's forward view is unchanged. Looking right shows a slim dark pillar.
+- Before/after sheet: /mnt/project-files/car-game/gc8/gc8-bpillar-v65.jpg (exterior close-up, rear three-quarter, driver looking right).

@@ -299,10 +299,12 @@ const FIT = {};
     return `${mm(x)} ${mm(y)}`;
   };
   // 側窗：每個 x 從外面看（z 最大的面）是側面的玻璃（|法線 z|＞0.5）的最低、最高 y（每 4 公釐）
+  // B 柱（v65）：前後 3 公分都是玻璃的黑條算玻璃（不然 x＝−0.5 那一格的下緣跳到柱子上面，車內的門板線會凸一塊）
   const belt = [], st = [];
+  const sideG = (x, y) => { const H = Zr(x, y), h = H[H.length - 1]; return !!h && h.slot === 'glass' && Math.abs(h.n[2]) > 0.5; };
   for (let i = 0; i < NX; i++) {
     let lo = 0, hi = 0;
-    for (let q = 0; q <= 350; q++) { const H = Zr(X0 + i * 0.1, q * 0.004), h = H[H.length - 1]; if (h && h.slot === 'glass' && Math.abs(h.n[2]) > 0.5) { if (!lo) lo = mm(q * 0.004) || 1; hi = mm(q * 0.004); } }
+    for (let q = 0; q <= 350; q++) { const x = X0 + i * 0.1, y = q * 0.004, H = Zr(x, y), h = H[H.length - 1]; if (h && ((h.slot === 'glass' && Math.abs(h.n[2]) > 0.5) || ((h.slot === 'trim' || h.slot === 'dark') && sideG(x - 0.03, y) && sideG(x + 0.03, y)))) { if (!lo) lo = mm(y) || 1; hi = mm(y); } }
     belt.push(lo); st.push(hi);
   }
   // 前擋、後擋：每個 |z| 從車頭往後（每 5 公釐）從上面看第一個面：前後的玻璃（|法線 x|＞0.3）＝看得到的玻璃，飾條／黑色＝黑邊；連在一起的一段要有 2 公分以上看得到的玻璃
