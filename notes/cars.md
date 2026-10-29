@@ -176,3 +176,4 @@ Nick asked for 10 more cars modelled from web photos. The photos were only used 
   - Light car: body 18k tris, 22.3k total, 4 draws.
   - The driver's forward view is unchanged. Looking right shows a slim dark pillar.
 - Before/after sheet: /mnt/project-files/car-game/gc8/gc8-bpillar-v65.jpg (exterior close-up, rear three-quarter, driver looking right).
+- Published to the trial page 2026-10-29 (artifact version 66: the page + car-gc8.txt + car-gc8-lod.txt). Tests run: test-b1 151 ok, mirror-test 10 ok, drift-test 66 ok, free-test 2 ok.
