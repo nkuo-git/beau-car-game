@@ -268,7 +268,7 @@ function bakedBody(BK, body, { paint, glass, inside, mats }) {
       case 'net': case 'netF': m = new THREE.MeshStandardMaterial({ ...base, map: s.map, alphaTest: 0.5, roughness: 0.5, metalness: b.slot === 'net' ? 0.6 : 0.3 }); break;
       case 'plate': m = new THREE.MeshStandardMaterial({ ...base, map: s.map, normalMap: s.normalMap, roughness: 0.42, metalness: 0.15 }); break; // 第 54 批：車牌（自己編的號碼，凸字）
       case 'under': m = new THREE.MeshStandardMaterial({ ...base, roughness: 0.7, metalness: 0.35 }); break; // 第 54 批：車底（消音器、排氣管、油箱⋯）
-      case 'defrost': m = new THREE.MeshStandardMaterial({ ...base, map: s.map, transparent: true, depthWrite: false, roughness: 0.5, metalness: 0.3 }); break; // 第 54 批：後擋的除霧線（透明底的貼圖，貼在玻璃裡面）
+      case 'defrost': m = new THREE.MeshStandardMaterial({ ...base, map: s.map, transparent: true, depthWrite: false, forceSinglePass: true, roughness: 0.5, metalness: 0.3 }); break; // 第 54 批：後擋的除霧線（透明底的貼圖，貼在玻璃裡面；兩面一次畫完，少一個 draw call）
       default: m = new THREE.MeshStandardMaterial({ ...base, roughness: 0.5 });
     }
     if (m.normalMap) m.normalScale.set(1, 1);
