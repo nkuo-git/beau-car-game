@@ -205,3 +205,9 @@ Nick asked for 10 more cars modelled from web photos. The photos were only used 
 - **Tests**:
   - `p8-test.mjs` = `jeep-test.mjs` with `OFFCAR=p8`: garage page, cockpit, ramp to 3F (nothing crushed), lift to B1, park, back to 1F, expressway 180 km/h, mud 40 km/h. 22 ok.
   - test-b4 / test-app-b4: three shed pads checked (car, nose out, length, walker blocked at the nose). The dealer list is K2* / J4 / P8 / 怪獸卡車. The camera goes to pad 1, then pad 2 after tapping J4, pad 3 after tapping P8, then the podium.
+  - mirror-test: adding the P8 to traffic (`CAR_W`) changed which car the seeded traffic puts nearest, and it became a dark, low HY. It shows in the mirror (screenshot), but hiding it changed the picture by only 2.51 (threshold 3; a GC8 gave 4.01 on 2026-10-21). The test now puts the nearest common car behind (YARIS, GC8 or 小黃; otherwise the nearest car): YARIS, 5.61. The threshold is unchanged.
+- Published to the trial page 2026-10-29 (artifact version 67: the page + car-p8.txt + car-p8-lod.txt). Tests run: p8-test 22 ok, jeep-test 22, k2-test 22, test-b4 88 (was 86: the third pad adds two checks), test-b1 151, mirror-test 10, drift-test 66, top-test 5, free-test 2. test-app-b4 needs the site rebuilt first (docs/ still has two shed cars).
+- **Numbers** (p8-test, 390×844, traffic paused):
+  - Garage page 224 calls / 2.04M tris (J4 242 / 1.67M, K2 204 / 1.42M); 3F 212 / 1.41M; B1 228 / 1.44M.
+  - Expressway 127 / 1.08M (J4 136 / 0.90M); driver's view 36 / 0.26M; mud pit 173 / 1.17M; 越野車行 panel with the P8 selected 151 / 0.43M (test-b4).
+  - Body 117k tris (J4 94k, K2 76k); cockpit 7 meshes, 8.6k tris; car-p8.txt 2.21 MB; light car glb 225 KB.
