@@ -31,6 +31,8 @@ src/body-altis.glb
 src/body-jp4.glb
 # 第 51 批：小越野車的中間檔
 src/body-k2.glb
+# 皮卡（P8）的中間檔
+src/body-p8.glb
 src/*3d/
 src/monster3d/
 # 備份

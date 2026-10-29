@@ -93,9 +93,11 @@ console.log('1', el(), JSON.stringify(in1));
 check(in1.mode === 'off' && in1.cur === 'gc8' && in1.cam === 'chase' && !in1.mir && in1.n === 0 && in1.side === 2 && in1.cabHidden,
   `chase view: no mirror drawing, GC8's two side mirrors keep their normal glass, the real inside mirror is hidden (${in1.side} side mirrors)`);
 // ---- 2 駕駛座視角：三面鏡子換成往後看的畫面 ----
-const nc = await p.evaluate(() => { // 路上最近的一台汽車：我的車放在它前面 12 公尺、同方向（它在我後面）
+const nc = await p.evaluate(() => { // 路上最近的一台常見的汽車：我的車放在它前面 12 公尺、同方向（它在我後面）
+  // 第 53 批：挑路上最常見的三款（YARIS、GC8、小黃），沒有才挑最近的那台。路上的車多一款（皮卡）以後，亂數抽到的最近那台從吉普車變成深色、很低的 HY：
+  //   鏡子裡看得到它（截圖），只是畫面只變 2.51（門檻 3；以前 GC8 4.01）。挑常見的車，以後路上再多新車，這一項也不會跟著換車
   const T = window.__N().traffic, D = window.__D(), me = D.drv.telemetry();
-  const cs = T.cars.filter((c) => c.kind === 'car' && !c.stun).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z)); const c = cs[0]; if (!c) return null;
+  const cs = T.cars.filter((c) => c.kind === 'car' && !c.stun).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z)), c = cs.find((q) => ['yaris', 'gc8', 'altis'].includes(q.key)) || cs[0]; if (!c) return null;
   D.drv.teleport({ x: c.x + Math.cos(c.heading) * 12, z: c.z - Math.sin(c.heading) * 12, heading: c.heading }); window.__dstep(2);
   return { key: c.key, id: c.id };
 });

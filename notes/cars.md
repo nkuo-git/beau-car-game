@@ -177,3 +177,37 @@ Nick asked for 10 more cars modelled from web photos. The photos were only used 
   - The driver's forward view is unchanged. Looking right shows a slim dark pillar.
 - Before/after sheet: /mnt/project-files/car-game/gc8/gc8-bpillar-v65.jpg (exterior close-up, rear three-quarter, driver looking right).
 - Published to the trial page 2026-10-29 (artifact version 66: the page + car-gc8.txt + car-gc8-lod.txt). Tests run: test-b1 151 ok, mirror-test 10 ok, drift-test 66 ok, free-test 2 ok.
+
+## P8 pickup 皮卡 (第 53 批, trial v66, 2026-10-29)
+- Nick 2026-10-29: 「越野車 繼續做」. Picture first (/mnt/project-files/car-game/offroad/p8-v1.jpg: 火山紅 stock; 沙色 with the trail kit, roll bar and stripe; white side with the mud livery; blue rear with the bed), then the decision card 「好，做進去」 (sold at the 越野車行 for 90 萬, trial page first).
+- A made-up four-door double-cab off-road pickup: mesh grille with body-colour "P8" letters, slim headlamps with two projector rings in a black band, red tow hooks, black squared flares, tube side steps, steel step bumper with a hitch, black bed liner, opaque rear window on the flat cab back. No real brand, badge or logo.
+- Size: body 5.05 m (5.28 with bumpers), 1.85 wide (1.97 with flares), roof 1.84, wheelbase 3.10 (front axle +1.70, rear −1.40), track 1.58, 33" all-terrain tyres (R 0.42) on 17" six-spoke wheels. Cab back at x −0.70, bed x −0.74 … −2.55.
+- Files:
+  - `p8-body.mjs`: SDF body like the jeep's and the K2's, then make-car.mjs → `body-p8-q.glb` (garage, 1.66 MB) and `body-p8-lod.glb` (light car, 225 KB). Mask coordinates S 0.90, Y0 0.40 (`P8_M`). BOUNDS need at least 2 cells of margin past the body: make-car.mjs's surface nets drop the outermost cell, and the tailgate vanished with a 3 cm margin.
+  - `p8-look.js`: surface masks, liveries `stripe` and `mud`.
+  - `p8-spec.js`: parts. Wing `none` / `rollbar` (black tube roll bar in the bed with four round lamps), kit `stock` / `trail` (roof LED bar, steel winch bumper with two round lamps, mud flaps), height 0 / +4 / +8 cm. Default look: 火山紅, gunmetal wheels, stock.
+- **PERF** (garage.src.html): price 90, 395 hp, 2250 kg, AWD, red 6000, `vmax` = `top` = 180, cda 1.35, `offroad: 1`, not `big`, tyres 3 / 6 萬. Six parts up to a big supercharger (+150 hp, 35 萬). One search (supercharged V8 pickups such as the TRX and the Raptor R) turned up only stock tests and drag races, no measured tuned top speed, so like the jeep and the K2 the parts only add power.
+- **Ride**: terrain.js `offroad` class (third car on it): mud 40 km/h; ramp, lift and basement all work (not big: 5.28 m fits the tower bays and the lift); crushes things like the other off-roaders (people dive away).
+- **Cockpit** (cabin.js `STYLE.p8`, `FIT.p8` from `node cabin-fit.mjs p8 --write`, which also writes the p8 entry of cabin-masks.json): left-hand drive automatic (two pedals, no hand brake), eyes 1.52 m up and 0.12 m in front of the car centre (0.22 first: the header was out of view and the legroom short), two big round dials with fuel and temperature between them, knobs stack, black cloth, grey headliner, a bench in the back. Three new STYLE options; the other cars keep the old behaviour because the defaults are the old values:
+  - `dash.lip` (P8 0.04): lifts the dash's front edge to meet the windshield base. FIT's `bil()` takes the lower sample where neighbours differ by more than 4 cm, so under the raked windshield the dash sat 5 cm low and a red strip of body showed under the glass.
+  - `bench.a` (default 24°, P8 12°): how far the rear backrest leans back. `inside()` clamps only y and z, never x, so a 24° backrest poked through the cab back wall into the bed.
+  - `roofR` (P8 −0.58): where the headliner ends at the back. With no rear glass in FIT, `rt` fell back to the car's tail and the lining ran out over the bed.
+  - Checked from outside (side, rear three-quarter, top): nothing of the cockpit shows outside the cab.
+- **Sound**: 5.0 NA V8 (`SND_CARS.p8`, cross-plane firing like the jeep's 6.4 swap, red 6000); the `sc` part adds the supercharger whine.
+- **Traffic**: npc.js `CAR_W` 0.8, no wing.
+- **Dealer**: the shed has three pads now (offroad.js `DMAT`: x −7, 0.5, 8; mats 3.4 × 6 m for the 5.3 m truck). `oWant` still fills them cheapest first: K2 (60), J4 (80, now in the middle), P8 (90). The podium keeps the monster truck. town.src.js `oDisp` / `oLoading` have four slots.
+- **Ramp entry**: jeep-test's line (from ramp-test) swings out to r 18.5 at 25°, which is outside the ramp's outer edge (17.2) and the concrete apron (17.5), then cuts in to RM 14.9 by 45°. The P8 couldn't follow that S at 4 or 7 m/s. Its wheelbase is 3.10 m, so the tightest turn is 4.5 m at the rear axle (the J4's is 3.5 m). Both times its nose hit the start of the ground wedge's outer wall at A0 (the first box of `towerRampGround().wedge`, r 17.15 ± 0.3).
+  - Five lines tried in one session:
+    - Turning right as soon as it's out of the door, aimed straight at the mouth (the RM circle from 12°): 0 bumps at 4 and 7 m/s, outer front corner 16.2–16.6 at the mouth (wall face 16.85).
+    - Leaving through the left half of the door and then taking the old line also works.
+    - A tighter first turn passes at 4 m/s but not at 7.
+  - jeep-test `CAR.tight` gives the P8 the first of those lines; the J4 and the K2 keep the old one. The check is unchanged (0 bumps), and so is the ramp. Tip for players: with the pickup, turn right as soon as you're out of the door.
+- **Tests**:
+  - `p8-test.mjs` = `jeep-test.mjs` with `OFFCAR=p8`: garage page, cockpit, ramp to 3F (nothing crushed), lift to B1, park, back to 1F, expressway 180 km/h, mud 40 km/h. 22 ok.
+  - test-b4 / test-app-b4: three shed pads checked (car, nose out, length, walker blocked at the nose). The dealer list is K2* / J4 / P8 / 怪獸卡車. The camera goes to pad 1, then pad 2 after tapping J4, pad 3 after tapping P8, then the podium.
+  - mirror-test: adding the P8 to traffic (`CAR_W`) changed which car the seeded traffic puts nearest, and it became a dark, low HY. It shows in the mirror (screenshot), but hiding it changed the picture by only 2.51 (threshold 3; a GC8 gave 4.01 on 2026-10-21). The test now puts the nearest common car behind (YARIS, GC8 or 小黃; otherwise the nearest car): YARIS, 5.61. The threshold is unchanged.
+- Published to the trial page 2026-10-29 (artifact version 67: the page + car-p8.txt + car-p8-lod.txt). Tests run: p8-test 22 ok, jeep-test 22, k2-test 22, test-b4 88 (was 86: the third pad adds two checks), test-b1 151, mirror-test 10, drift-test 66, top-test 5, free-test 2. test-app-b4 needs the site rebuilt first (docs/ still has two shed cars).
+- **Numbers** (p8-test, 390×844, traffic paused):
+  - Garage page 224 calls / 2.04M tris (J4 242 / 1.67M, K2 204 / 1.42M); 3F 212 / 1.41M; B1 228 / 1.44M.
+  - Expressway 127 / 1.08M (J4 136 / 0.90M); driver's view 36 / 0.26M; mud pit 173 / 1.17M; 越野車行 panel with the P8 selected 151 / 0.43M (test-b4).
+  - Body 117k tris (J4 94k, K2 76k); cockpit 7 meshes, 8.6k tris; car-p8.txt 2.21 MB; light car glb 225 KB.

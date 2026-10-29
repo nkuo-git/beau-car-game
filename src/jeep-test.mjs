@@ -3,7 +3,7 @@
 //   → 3 樓開上電梯 → 坐電梯去 B1（到了穩穩停在 B1 的地板，不彈、不掉）→ 往前開進格子、下車（「停好了：B1 N 號」）→ 上車、回到電梯上 → 回 1 樓、開出鐵捲門
 //   → 快速道路油門踩到底（貼著路面、不跳；最快多快）→ 越野車場的泥巴池（越野胎：比一般的車快很多）→ 駕駛座視角截圖、draw calls
 // 開車、走路都不是真的即時：頁面自己的開車先停住（__hold）、不畫（__noDraw），測試在頁面裡一步一步開，要截圖才畫
-// node jeep-test.mjs [prefix]（截圖：<prefix>-*.png）；OFFCAR=k2 node jeep-test.mjs ＝ K2 小越野車（k2-test.mjs）
+// node jeep-test.mjs [prefix]（截圖：<prefix>-*.png）；OFFCAR=k2 node jeep-test.mjs ＝ K2 小越野車（k2-test.mjs）；OFFCAR=p8 ＝ P8 皮卡（p8-test.mjs）
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +11,7 @@ import pw from '/opt/node22/lib/node_modules/playwright/index.js';
 const dir = path.dirname(new URL(import.meta.url).pathname);
 const three = path.join(dir, '../node_modules/three');
 // 第 51 批：同一趟也測 K2 小越野車（k2-test.mjs 設 OFFCAR=k2）：K＝哪台車，CAR＝那台的名字、價錢、極速、快速道路 20 秒至少要到多快
-const K = process.env.OFFCAR || 'jp4', CAR = { jp4: { name: 'J4', what: 'J4 jeep', price: 80, top: 180, hwMin: 130 }, k2: { name: 'K2', what: 'K2 mini off-roader', price: 60, top: 145, hwMin: 100 } }[K];
+const K = process.env.OFFCAR || 'jp4', CAR = { jp4: { name: 'J4', what: 'J4 jeep', price: 80, top: 180, hwMin: 130 }, k2: { name: 'K2', what: 'K2 mini off-roader', price: 60, top: 145, hwMin: 100 }, p8: { name: 'P8', what: 'P8 pickup', price: 90, top: 180, hwMin: 130, tight: true } }[K]; // 第 53 批：P8 皮卡（tight：開上斜坡走裡面那條，見第 2 段）
 const [prefix = K === 'jp4' ? '../out/jeep/jp' : `../out/${K}/${K}`] = process.argv.slice(2);
 if (path.dirname(prefix) !== '.') fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
@@ -137,10 +137,12 @@ check(in1.mode === 'off' && in1.cur === K && in1.door === 1, `in the ${CAR.name}
 check(in1.rideOn === true && in1.cls === 'offroad' && !in1.air && Math.abs(in1.dy) < 0.02 && in1.wheels === 4, `the ${CAR.name} uses the off-road ride everywhere (class ${in1.cls}: suspension, off-road tyres), sitting on the lobby floor (${in1.dy} m, ${in1.wheels} wheels down)`);
 
 // ---- 2 右轉開上斜坡到 3 樓（跟 ramp-test 同一條路線）----
-const up = await p.evaluate(() => {
+//   第 53 批：皮卡（CAR.tight）走裡面那條：出鐵捲門就右轉、直接對著斜坡的口（半徑 RM 那一圈）開。小車那條先繞到外面（18.5 公尺，比斜坡的外緣 17.2、門口的水泥地 17.5 還外面）
+//   再急急切進來（S 彎），5.3 公尺長的皮卡跟不上，車頭會擦到護欄的頭；開大車本來就是出門就轉（J4、K2 照舊測原本那條）
+const up = await p.evaluate((tight) => {
   const D = window.__D(), R = D.TOWER_RAMP, RM = R.RM, deg = Math.PI / 180, F = 2, e = R.ent(F), y0 = D.GAR.group.position.y;
-  const pts = [[2, 0], [6, 0], [10, 0], [13, 0], [16, 0.6], [18, 2.5], [18.6, 5]];
-  for (let a = 25 * deg; a <= e - 22 * deg; a += 5 * deg) { const r = a < 45 * deg ? RM + ((18.5 - RM) * (45 * deg - a)) / (20 * deg) : a > e - 60 * deg ? RM + (16 - RM) * Math.min(1, (a - e + 60 * deg) / (30 * deg)) : RM; pts.push([r * Math.cos(a), r * Math.sin(a)]); }
+  const pts = tight ? [[2, 0], [6, 0], [10, 0], [12.6, 0]] : [[2, 0], [6, 0], [10, 0], [13, 0], [16, 0.6], [18, 2.5], [18.6, 5]];
+  for (let a = (tight ? 12 : 25) * deg; a <= e - 22 * deg; a += 5 * deg) { const r = a < 45 * deg && !tight ? RM + ((18.5 - RM) * (45 * deg - a)) / (20 * deg) : a > e - 60 * deg ? RM + (16 - RM) * Math.min(1, (a - e + 60 * deg) / (30 * deg)) : RM; pts.push([r * Math.cos(a), r * Math.sin(a)]); }
   const rho = 5; for (let ph = 0; ph <= 90; ph += 10) { const sx = -rho + rho * Math.sin(ph * deg), n = rho - rho * Math.cos(ph * deg), r = 16 - n, an = e + sx / 16; pts.push([r * Math.cos(an), r * Math.sin(an)]); }
   for (const r of [9, 8]) pts.push([r * Math.cos(e), r * Math.sin(e)]);
   const o = { maxErr: 0, air: 0, ys: [], toasts: new Set(), lands: 0, pitch: 0, roll: 0, uMax: 0 };
@@ -157,10 +159,10 @@ const up = await p.evaluate(() => {
   const t = D.drv.telemetry();
   let dec = 0; for (let i = 1; i < o.ys.length; i++) dec = Math.max(dec, o.ys[i - 1] - o.ys[i]);
   return { ...r, s: +(r.i / 60).toFixed(1), maxErr: +o.maxErr.toFixed(3), dec: +dec.toFixed(3), air: o.air, lands: t.lands - l0, pitch: +o.pitch.toFixed(3), roll: +o.roll.toFixed(3), uMax: +o.uMax.toFixed(2), toasts: [...o.toasts], floor: D.GAR.floor, on: D.TRAMP.on, y: +(t.y - y0).toFixed(2), crushed: D.crushFx ? D.crushFx.stats.props + D.crushFx.stats.cars + D.crushFx.stats.big : -1, crimes: D.police ? D.police.telemetry().crimes.length : -1 };
-});
+}, !!CAR.tight);
 console.log('2', el(), 'up:', JSON.stringify(up));
 check(up.ok && up.uMax > 6 && up.maxErr < 0.12 && up.dec < 0.02 && up.air === 0 && up.lands === 0, `drove out the door and up the ramp: the suspension follows the ramp (off by ≤ ${up.maxErr} m, never drops, never in the air), two half-laps in ${up.s} s`);
-check(up.bumps === 0 && up.pitch < 0.2 && up.roll < 0.12, `no bumping into the low walls; leans at most ${up.pitch} rad (pitch), ${up.roll} rad (roll)`);
+check(up.bumps === 0 && up.pitch < 0.2 && up.roll < 0.12, `no bumping into the low walls${CAR.tight ? ' (the long pickup turns right as soon as it is out of the door, straight at the ramp)' : ''}; leans at most ${up.pitch} rad (pitch), ${up.roll} rad (roll)`);
 check(up.crushed === 0 && up.crimes === 0, `the ramp's walls are not crushable and there is no invisible wall before the start: the ${CAR.name} (an off-road car that crushes things) flattened nothing on the way up (${up.crushed}), no police (${up.crimes})`);
 check(up.floor === 2 && !up.on && Math.abs(up.y - 7.7) < 0.05 && up.toasts.some((x) => /3 樓/.test(x)), `turned in at the 3F entrance: on 3F (y ${up.y}) 「${up.toasts.join(' / ')}」`);
 const lift1 = await p.evaluate(() => { const D = window.__D(); let n = 0; for (; n < 1800 && (D.GAR.lift.busy || D.EL.ride || D.GAR.lift.floor !== 2); n++) window.__dstep(1); return { n, lf: D.GAR.lift.floor }; });

@@ -1589,9 +1589,9 @@ $('raceBack').addEventListener('click', backToVillage);
 //   越野賽：開進起跑區（慢一點）自己停到起跑位置 → 倒數 → 跑完 → 贏了拿獎金（GAME.money）、記在 GAME.wins['or:<比賽 id>']（不算車庫的獎盃）
 //     開進起跑區就是還沒贏過的第一場（三場都贏了就一直是冠軍賽）；「再比一次」同一場；比賽中開出越野車場、「放棄比賽」、「直接回車庫」都會收掉
 let orRace = null; // 越野賽（createOffroadRace）
-// 越野車行的展示位（VIL.places.odealer.display）：[0] 門口的大圓台（大車：怪獸卡車）、[1] [2] 車行裡面（普通大小的越野車；第 48 批：吉普車）
+// 越野車行的展示位（VIL.places.odealer.display）：[0] 門口的大圓台（大車：怪獸卡車）、[1] [2] [3] 車行裡面（普通大小的越野車；第 48 批：吉普車；第 51 批：小越野車；第 53 批：皮卡）
 //   oDisp[i]＝擺著的車 { k, S, box }；oLoading[i]＝載入中；oWant(i)＝那個位子要擺哪台（還沒買的，便宜的在前面）
-const oDisp = [null, null, null], oLoading = [false, false, false];
+const oDisp = [null, null, null, null], oLoading = [false, false, false, false];
 const oWant = (i) => { const s = saleOf('odealer').filter((k) => !!PERF[k].big === !i); return (i ? s[i - 1] : s[0]) || null; };
 const orLevel = () => { const i = OFFROAD_RACES.findIndex((r) => !(GAME.wins['or:' + r.id] > 0)); return i < 0 ? OFFROAD_RACES.length - 1 : i; };
 // 落地（drive.js 的 onLand）：飛久了說一聲；落地太用力手機震一下

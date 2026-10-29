@@ -79,7 +79,7 @@ async function measureBody(key) {
   const M = await import(key === 'supra' ? './body.mjs' : `./${key}-body.mjs`);
   const sp = key === 'supra' || key === 'gtr' ? (await import('./supra.js'))[`${key.toUpperCase()}_SPEC`] : (await import(`./${key}-spec.js`))[`${key.toUpperCase()}_SPEC`];
   const f0 = M.makeSDF(), W = sp.wheels, st = 0.002;
-  const MK = { jp4: M.JP4, k2: M.K2 }[key] || null; // 第 48 批：吉普車的 SDF 是遮罩座標（xm＝x·S、ym＝(y−Y0)·S、zm＝z·S）：換回公尺再量；第 51 批：小越野車也是
+  const MK = { jp4: M.JP4, k2: M.K2, p8: M.P8 }[key] || null; // 第 48 批：吉普車的 SDF 是遮罩座標（xm＝x·S、ym＝(y−Y0)·S、zm＝z·S）：換回公尺再量；第 51 批：小越野車也是；第 53 批：皮卡也是
   const f = MK ? (x, y, z) => f0(x * MK.S, (y - MK.Y0) * MK.S, z * MK.S) / MK.S : f0;
   const side = (x, y) => { if (f(x, y, 0) >= 0) return 0; let z = 0; while (z < 1.2 && f(x, y, z) < 0) z += st; return z; };
   const top = (x, z) => { let y = 2; while (y > 0 && f(x, y, z) > 0) y -= st; return y > 0 ? y + st : 0; };
