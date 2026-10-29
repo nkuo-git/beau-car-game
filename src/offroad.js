@@ -12,7 +12,7 @@
 //     V.surfaceAt、V.route 包一層：越野車場、新的水泥路照這裡算；村子裡完全照舊（同一個函式、同樣的答案）
 //     V.bounds.x1 改成 380（小地圖畫到越野車場東邊）
 //   V.places.offroad：越野車場（大門裡面的空地）{ name, pos, spawn, zone, gate }
-//   V.places.odealer：越野車行 { name, pos, display（展示台：[0] 門口的大圓台（怪獸卡車放得下）、[1] [2] 車行裡面）, bay（買車區）, park, exit, spawn, zone, view }
+//   V.places.odealer：越野車行 { name, pos, display（展示台：[0] 門口的大圓台（怪獸卡車放得下）、[1] [2] [3] 車行裡面，從西到東）, bay（買車區）, park, exit, spawn, zone, view }
 //   V.places.orace：越野賽起跑區 { name, pos, zone, start（停好等比賽的位置）, grid（四個起跑位置）, spawn }
 //   P.show（第 7 批：輾扁）：表演場 { x0, x1, z0, z1, cx, cz, ramp: [上坡起點, 坡頂, 外緣, 多高], cars: [[x, z, heading] × 5] }：
 //     車行南邊的碎石平地（x 12…44、z 117…131）：一個 1.5 公尺高的土坡＋一排五台舊車的位置；舊車（輕量車）跟輾扁都是 crush.js 做的
@@ -122,6 +122,7 @@ const PADDOCK_P = [[46, 106], [56, 106], [65, 106], [76, 105], [88, 101], [104, 
 const GAP = { x1: 78, z: 106 }; // 土堤的口：x < 78、z 106 前後
 const gapK = (x, z) => (x < GAP.x1 ? ss(5, 9, Math.abs(z - GAP.z)) : 1); // 0＝口的中間（沒有土堤）
 const PODIUM = { x: -33, z: 90, r: 5, h: 0.6 };
+const DMAT = [-7, 0.5, 8]; // 越野車行裡面的展示位（x；z 86，車頭朝外）：便宜的在西邊（第 48 批兩個；第 53 批：皮卡多一個，中間那個）
 // ---- 第 7 批（輾扁）：表演場（怪獸卡車的表演：一個土坡＋一排舊的垃圾車，輾爆好玩的，不會報警）----
 //   車行南邊的平地（x 12…44、z 117…131：樹、石頭本來就不種這裡）；碎石地（跟停車場一樣）
 const SHOW = { x0: 12, x1: 44, z0: 117, z1: 131, z: 124, w: 7, rx0: 15.4, rtop: 24, rx1: 26.2, h: 1.5 }; // 土坡：x 15.4 上去、24 坡頂、26.2 外緣；z 124 中間、寬 7
@@ -595,7 +596,7 @@ function buildOffroad(V, opts = {}) {
     box('main', T, [-0.55, 5.55, -6, -0.45, 7.45, 6], WOOD, { nx: U.gateW });
     box('main', T, [0.45, 5.75, -6, 0.55, 7.25, 6], WOOD, { px: U.gateE });
   }
-  // 越野車行：鐵皮大車棚（前面整片開著）、招牌、兩個展示位、門口的大圓台
+  // 越野車行：鐵皮大車棚（前面整片開著）、招牌、三個展示位（第 53 批：皮卡多一個）、門口的大圓台
   const floorY = 0.06 + 0.1;
   {
     const T = frame(0, 0.06, 86, 0), WALL = C('#d9d4c7'), ORG = C('#e58a2b'), ROOF = C('#b85a24');
@@ -611,7 +612,7 @@ function buildOffroad(V, opts = {}) {
     box('main', T, [-18.2, 5.7, 7.6, 18.2, 6.5, 8.2], ORG);
     box('main', T, [-7.5, 6.5, 7.9, 7.5, 9.5, 8.15], C('#2a1a0c'), { pz: U.dealer });
     for (const x of [-6.5, 6.5]) box('main', T, [x - 0.1, 6.5, 7.7, x + 0.1, 9.5, 7.9], C('#2a1a0c'));
-    for (const x of [-7, 8]) box('main', T, [x - 1.6, 0.1, -2.6, x + 1.6, 0.18, 2.6], C('#3b3d42')); // 展示位的地墊（第 48 批：車頭朝外擺，地墊轉成直的）
+    for (const x of DMAT) box('main', T, [x - 1.7, 0.1, -3.0, x + 1.7, 0.18, 3.0], C('#3b3d42')); // 展示位的地墊（第 48 批：車頭朝外擺，地墊轉成直的；第 53 批：三個、長一點（皮卡 5.3 公尺））
     // 裡面：輪胎架、工作台、工具箱
     for (let i = 0; i < 6; i++) for (let k = 0; k < 3; k++) cyl(T, -15 + i * 1.05, -6.8, 0.1 + k * 0.36, 0.44 + k * 0.36, 0.48, 0.48, 10, C(k % 2 ? '#2b2c30' : '#232427'));
     box('main', T, [11, 0.1, -7.4, 15.5, 1.0, -6.2], C('#6b4a2c')); box('main', T, [12, 1.0, -7.3, 13.4, 1.6, -6.6], C('#c8322a'));
@@ -795,7 +796,7 @@ function buildOffroad(V, opts = {}) {
     offroad: { name: '越野車場', pos: [-36, 106], spawn: { x: -30, z: 106, heading: 0 }, zone: { x: -36, z: 106, hx: 12, hz: 9, rot: 0 }, gate: { x: GATE.x, z: GATE.z, heading: 0 } },
     odealer: {
       name: '越野車行', pos: [0, 86],
-      display: [{ x: PODIUM.x, z: PODIUM.z, y: 0.06 + PODIUM.h, heading: -0.6, big: true }, { x: -7, z: 86, y: floorY + 0.08, heading: -Math.PI / 2 }, { x: 8, z: 86, y: floorY + 0.08, heading: -Math.PI / 2 }],
+      display: [{ x: PODIUM.x, z: PODIUM.z, y: 0.06 + PODIUM.h, heading: -0.6, big: true }, ...DMAT.map((x) => ({ x, z: 86, y: floorY + 0.08, heading: -Math.PI / 2 }))],
       bay: { x: PN.BAY[0], z: PN.BAY[1], hx: 5, hz: 3.8, rot: 0 }, park: { x: PN.BAY[0], z: PN.BAY[1], heading: 0 }, // 車棚下面（路從下面穿過去，車頭朝東）
       exit: { x: 12, z: 106, heading: Math.PI }, spawn: { x: 12, z: 106, heading: Math.PI }, // 買了新車：停在車棚西邊，車頭朝大門（開回家）
       zone: { x: PN.BAY[0], z: PN.BAY[1], hx: 12, hz: 8, rot: 0 },

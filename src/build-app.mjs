@@ -31,6 +31,7 @@ const CARS = [
   ['monster', 'body-monster-q.glb', 'car-monster.txt', ['monster-look.js', 'monster-spec.js']], // 第 4 批：越野車（越野車場的越野車行賣的）；輕量車 body-monster-lod.glb（monster-lod.mjs）
   ['jp4', 'body-jp4-q.glb', 'car-jp4.txt', ['jp4-look.js', 'jp4-spec.js']], // 第 48 批：J4 吉普車（越野車行賣的）；輕量車 body-jp4-lod.glb（make-lod.mjs）
   ['k2', 'body-k2-q.glb', 'car-k2.txt', ['k2-look.js', 'k2-spec.js']], // 第 51 批：K2 小越野車（越野車行賣的）；輕量車 body-k2-lod.glb（make-lod.mjs）
+  ['p8', 'body-p8-q.glb', 'car-p8.txt', ['p8-look.js', 'p8-spec.js']], // 第 53 批：P8 皮卡（越野車行賣的）；輕量車 body-p8-lod.glb（make-lod.mjs）
 ];
 const NOLOD = []; // 沒有輕量車的車（不停車位、不擺阿財車行）；怪獸卡車現在有了（body-monster-lod.glb）
 const read = (f) => fs.readFileSync(path.join(dir, f), 'utf8');
