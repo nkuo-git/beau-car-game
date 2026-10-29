@@ -578,6 +578,9 @@ Object.assign(SND_CARS, {
     intake: { lvl: 0.18, f: 380, q: 1.4, f2: 1200 }, pops: { ...SND_CARS.supra.pops, lift: 0.15, shift: 0.1, lvl: 0.4 },
     swap: { name: '6.4 V8 自然進氣（換過）', fire: [0, 90, 180, 270, 360, 450, 540, 630], bank: [0, 1, 1, 0, 1, 0, 0, 1], cylAmp: [1, 0.97, 1.02, 0.98, 1, 0.96, 1.03, 0.99],
       width: 130, lp: 2000, gain: 1.05, rasp: 0.3, raspHz: 1600 } },
+  // 第 51 批：小越野車：1.5 直列四缸自然進氣（小小的、嗡嗡的，不兇；轉不高、沒有 4A-GE 那麼尖）；加了機械增壓（零件 sc）會多增壓器的嗚嗚聲
+  k2: { ...SND_CARS.yaris, name: '1.5 直列四缸自然進氣', red: 6200, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.96, 1, 0.97], turbo: null, gain: 0.95, drive: 1.3, rasp: 0.2, raspHz: 2100, lp: 2800,
+    intake: { ...SND_CARS.yaris.intake, lvl: 0.22, tone: 0.4, hiss: 0.08 }, pops: { ...SND_CARS.yaris.pops, lift: 0.12, shift: 0.08, lvl: 0.4 } },
 });
 // 車庫的引擎零件會改變聲音
 function SND_profile(key, parts) {

@@ -3,14 +3,16 @@
 //   → 3 樓開上電梯 → 坐電梯去 B1（到了穩穩停在 B1 的地板，不彈、不掉）→ 往前開進格子、下車（「停好了：B1 N 號」）→ 上車、回到電梯上 → 回 1 樓、開出鐵捲門
 //   → 快速道路油門踩到底（貼著路面、不跳；最快多快）→ 越野車場的泥巴池（越野胎：比一般的車快很多）→ 駕駛座視角截圖、draw calls
 // 開車、走路都不是真的即時：頁面自己的開車先停住（__hold）、不畫（__noDraw），測試在頁面裡一步一步開，要截圖才畫
-// node jeep-test.mjs [prefix]（截圖：<prefix>-*.png）
+// node jeep-test.mjs [prefix]（截圖：<prefix>-*.png）；OFFCAR=k2 node jeep-test.mjs ＝ K2 小越野車（k2-test.mjs）
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import pw from '/opt/node22/lib/node_modules/playwright/index.js';
 const dir = path.dirname(new URL(import.meta.url).pathname);
 const three = path.join(dir, '../node_modules/three');
-const [prefix = '../out/jeep/jp'] = process.argv.slice(2);
+// 第 51 批：同一趟也測 K2 小越野車（k2-test.mjs 設 OFFCAR=k2）：K＝哪台車，CAR＝那台的名字、價錢、極速、快速道路 20 秒至少要到多快
+const K = process.env.OFFCAR || 'jp4', CAR = { jp4: { name: 'J4', what: 'J4 jeep', price: 80, top: 180, hwMin: 130 }, k2: { name: 'K2', what: 'K2 mini off-roader', price: 60, top: 145, hwMin: 100 } }[K];
+const [prefix = K === 'jp4' ? '../out/jeep/jp' : `../out/${K}/${K}`] = process.argv.slice(2);
 if (path.dirname(prefix) !== '.') fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const hook = 'window.__G = () => GAME; window.__room = () => room; window.__CV = () => CABIN_VIEW; window.__P = () => PERF;'
@@ -65,13 +67,14 @@ async function gshot(name) { // 車庫頁（它自己的 loop 一直在畫）：
   console.log('  shot', `${prefix}-${name}.png`, JSON.stringify(ri), el());
   return ri;
 }
-// 開局：J4（開的，停在一樓電梯上）＋GC8（2 樓 1 號）
-await p.addInitScript(() => {
+// 開局：J4（K2）（開的，停在一樓電梯上）＋GC8（2 樓 1 號）
+await p.addInitScript((k) => {
+  window.__K = k;
   if (sessionStorage.getItem('seeded')) return;
   sessionStorage.setItem('seeded', '1');
   const tower = Array(40).fill(null); tower[0] = 'gc8';
-  localStorage.setItem('carid.tune', JSON.stringify({ v: 2, cur: 'jp4', scene: 'room', money: 500, owned: ['gc8', 'jp4'], parts: {}, tyres: {}, wins: {}, cars: {}, park: { mid: 'jp4', tower } }));
-});
+  localStorage.setItem('carid.tune', JSON.stringify({ v: 2, cur: k, scene: 'room', money: 500, owned: ['gc8', k], parts: {}, tyres: {}, wins: {}, cars: {}, park: { mid: k, tower } }));
+}, K);
 // 開車的機器人（跟 ramp-test 一樣）：沿著路線（塔的本地座標）開，前面 la 公尺那一點；vmax(k, n)＝最快多快（m/s）；until() 到了就停；每 10 格叫 every(t)
 await p.addInitScript(() => {
   window.__follow = (pts, frames, vmax, until, every) => {
@@ -99,16 +102,16 @@ await p.goto(base, { waitUntil: 'domcontentloaded' });
 await ready();
 console.log('0', el(), 'page ready');
 // ---- 0 車庫頁：J4 是你的車、車內是 3D 駕駛座（儀表、方向盤、座椅）、停在一樓電梯上 ----
-await p.waitForFunction(() => window.__D().built.jp4?.car, null, { timeout: 120000 });
+await p.waitForFunction(() => window.__D().built[window.__K]?.car, null, { timeout: 120000 });
 const g0 = await p.evaluate(() => {
-  const D = window.__D(), C = D.built.jp4, btn = document.querySelector('#cars button[data-car="jp4"]'), V = window.__CV().jp4, P = window.__P().jp4;
+  const k = window.__K, D = window.__D(), C = D.built[k], btn = document.querySelector(`#cars button[data-car="${k}"]`), V = window.__CV()[k], P = window.__P()[k];
   let tris = 0; C.cabin?.traverse((o) => { if (o.isMesh) tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
   return { cur: D.cur, btn: btn ? btn.querySelector('span').textContent : null, name: btn?.querySelector('b')?.textContent, cabin: C.cabin?.children.length || 0, cabTris: Math.round(tris), interior: !!C.body.getObjectByName('interior'), eye: V?.eye, mid: window.__G().park.mid, perf: { price: P.price, hp: P.hp, vmax: P.vmax, offroad: P.offroad, big: !!P.big } };
 });
 console.log('  garage:', JSON.stringify(g0));
-check(g0.cur === 'jp4' && g0.name === 'J4' && g0.btn === '你的車' && g0.mid === 'jp4', 'garage page: the J4 jeep is your car, parked on the lobby lift');
+check(g0.cur === K && g0.name === CAR.name && g0.btn === '你的車' && g0.mid === K, `garage page: the ${CAR.what} is your car, parked on the lobby lift`);
 check(g0.cabin >= 4 && !g0.interior && g0.cabTris > 5000 && g0.cabTris < 20000 && g0.eye && g0.eye[1] > 1.4 && g0.eye[2] < 0, `it has a 3D cockpit instead of the simple box (${g0.cabin} meshes, ${g0.cabTris} triangles; left-hand drive, eyes ${g0.eye?.[1]} m up: sits high)`);
-check(g0.perf.price === 80 && g0.perf.offroad === 1 && !g0.perf.big && g0.perf.vmax === 180, 'sold at the 越野車行 for 80 萬, an off-road car of normal size (not big: fits the tower)');
+check(g0.perf.price === CAR.price && g0.perf.offroad === 1 && !g0.perf.big && g0.perf.vmax === CAR.top, `sold at the 越野車行 for ${CAR.price} 萬, an off-road car of normal size (not big: fits the tower)`);
 const riG = await gshot('0-garage');
 
 // ---- 1 出門：上 J4、開鐵捲門 ----
@@ -123,15 +126,15 @@ await p.evaluate(() => {
 });
 const in1 = await p.evaluate(() => {
   const W = window.__D().walker; let ok = false, k = 0;
-  for (; k < 600 && !ok; k++) { ok = W.getIn(W.cars.find((c) => c.key === 'jp4')); if (!ok) window.__wstep(1); }
+  for (; k < 600 && !ok; k++) { ok = W.getIn(W.cars.find((c) => c.key === window.__K)); if (!ok) window.__wstep(1); }
   let n = 0; for (; n < 1200 && !(window.__D().drv && W.mode === 'off'); n++) window.__wstep(1);
   const D = window.__D(); D.GAR.door.open(0.2); window.__dstep(40);
   const t = D.drv.telemetry(), y0 = D.GAR.group.position.y;
   return { ok, mode: W.mode, cur: D.cur, door: D.GAR.door.t, rideOn: t.rideOn, cls: t.cls, air: t.air, dy: +(t.y - y0).toFixed(3), wheels: t.wheels, halfW: D.drv.carInfo.halfW };
 });
 console.log('1', el(), JSON.stringify(in1));
-check(in1.mode === 'off' && in1.cur === 'jp4' && in1.door === 1, 'in the J4 on the lobby turntable, door open');
-check(in1.rideOn === true && in1.cls === 'offroad' && !in1.air && Math.abs(in1.dy) < 0.02 && in1.wheels === 4, `the jeep uses the off-road ride everywhere (class ${in1.cls}: suspension, off-road tyres), sitting on the lobby floor (${in1.dy} m, ${in1.wheels} wheels down)`);
+check(in1.mode === 'off' && in1.cur === K && in1.door === 1, `in the ${CAR.name} on the lobby turntable, door open`);
+check(in1.rideOn === true && in1.cls === 'offroad' && !in1.air && Math.abs(in1.dy) < 0.02 && in1.wheels === 4, `the ${CAR.name} uses the off-road ride everywhere (class ${in1.cls}: suspension, off-road tyres), sitting on the lobby floor (${in1.dy} m, ${in1.wheels} wheels down)`);
 
 // ---- 2 右轉開上斜坡到 3 樓（跟 ramp-test 同一條路線）----
 const up = await p.evaluate(() => {
@@ -158,7 +161,7 @@ const up = await p.evaluate(() => {
 console.log('2', el(), 'up:', JSON.stringify(up));
 check(up.ok && up.uMax > 6 && up.maxErr < 0.12 && up.dec < 0.02 && up.air === 0 && up.lands === 0, `drove out the door and up the ramp: the suspension follows the ramp (off by ≤ ${up.maxErr} m, never drops, never in the air), two half-laps in ${up.s} s`);
 check(up.bumps === 0 && up.pitch < 0.2 && up.roll < 0.12, `no bumping into the low walls; leans at most ${up.pitch} rad (pitch), ${up.roll} rad (roll)`);
-check(up.crushed === 0 && up.crimes === 0, `the ramp's walls are not crushable and there is no invisible wall before the start: the jeep (an off-road car that crushes things) flattened nothing on the way up (${up.crushed}), no police (${up.crimes})`);
+check(up.crushed === 0 && up.crimes === 0, `the ramp's walls are not crushable and there is no invisible wall before the start: the ${CAR.name} (an off-road car that crushes things) flattened nothing on the way up (${up.crushed}), no police (${up.crimes})`);
 check(up.floor === 2 && !up.on && Math.abs(up.y - 7.7) < 0.05 && up.toasts.some((x) => /3 樓/.test(x)), `turned in at the 3F entrance: on 3F (y ${up.y}) 「${up.toasts.join(' / ')}」`);
 const lift1 = await p.evaluate(() => { const D = window.__D(); let n = 0; for (; n < 1800 && (D.GAR.lift.busy || D.EL.ride || D.GAR.lift.floor !== 2); n++) window.__dstep(1); return { n, lf: D.GAR.lift.floor }; });
 check(lift1.lf === 2, `the lift came up to 3F (${(lift1.n / 60).toFixed(1)} s)`);
@@ -173,7 +176,7 @@ const onLift = await p.evaluate(() => {
   return { ...r, who: D.elWho(), panel: vis(P), btns: P ? [...P.querySelectorAll('.elg button')].map((x) => x.textContent.trim()) : [] };
 });
 console.log('3', el(), 'onto the lift:', JSON.stringify(onLift));
-check(onLift.ok && onLift.bumps === 0 && onLift.panel && onLift.btns.some((x) => /B1/.test(x)), `drove onto the lift on 3F: the panel opens (${onLift.btns.join(' ')}) — the jeep is not too big for the lift`);
+check(onLift.ok && onLift.bumps === 0 && onLift.panel && onLift.btns.some((x) => /B1/.test(x)), `drove onto the lift on 3F: the panel opens (${onLift.btns.join(' ')}) — the ${CAR.name} is not too big for the lift`);
 await p.evaluate(() => document.querySelector('#stage .elpanel .elg button[data-f="4"]').click());
 const b1 = await p.evaluate(() => {
   const D = window.__D(), G = D.GAR, y0 = G.group.position.y, l0 = D.drv.telemetry().lands; let n = 0, ride = false, toast = '', off = 0;
@@ -187,7 +190,7 @@ const b1 = await p.evaluate(() => {
   return { ride, n, floor: G.floor, lf: G.lift.floor, y: +(t.y - y0).toFixed(3), ymin: +Math.min(...ys).toFixed(3), ymax: +Math.max(...ys).toFixed(3), off: +off.toFixed(3), air: t.air, wheels: t.wheels, lands: t.lands - l0, carScene: D.tripS.car.parent === D.TR.scene, r: +Math.hypot(q.x, q.z).toFixed(2), toast, bay: bay && { id: bay.id, free: !D.TWR[bay.id] } };
 });
 console.log('  B1:', JSON.stringify(b1));
-check(b1.ride && b1.off < 0.6 && b1.floor === 4 && b1.lf === 4 && b1.carScene && /B1/.test(b1.toast), `pressed B1: the jeep rode the lift down with it (stays on the platform: ${b1.off} m) and arrived on B1 「${b1.toast}」`);
+check(b1.ride && b1.off < 0.6 && b1.floor === 4 && b1.lf === 4 && b1.carScene && /B1/.test(b1.toast), `pressed B1: the ${CAR.name} rode the lift down with it (stays on the platform: ${b1.off} m) and arrived on B1 「${b1.toast}」`);
 check(Math.abs(b1.y + 3.2) < 0.03 && b1.ymax - b1.ymin < 0.02 && !b1.air && b1.wheels === 4 && b1.lands === 0, `on B1 it sits still on the floor (y ${b1.ymin}…${b1.ymax} m over 1.5 s, 4 wheels down, no drop or bounce)`);
 const riB1 = await shot('3-b1');
 
@@ -197,14 +200,14 @@ const park4 = await p.evaluate(() => {
   const r = window.__follow([[0, 0], [ux * 3, uz * 3], [ux * 7.6, uz * 7.6], [ux * 10, uz * 10]], 60 * 15, () => 2, (t) => { const q = window.__gl(t.x, t.z); return Math.hypot(q.x, q.z) > 7.3; });
   window.__stop(60);
   D.leaveCar(); let n = 0, toast = ''; for (; n < 240 && (D.walker.mode !== 'walk' || !toast); n++) { window.__dstep(1); toast = toast || window.__toast(); }
-  const i = D.TWR.indexOf('jp4');
+  const i = D.TWR.indexOf(window.__K);
   return { ...r, mode: D.walker.mode, toast, bay: i, f: i >= 0 ? D.TOWER_BAYS[i].f : null, saved: window.__G().park.tower[i] };
 });
 console.log('4', el(), JSON.stringify(park4));
-check(park4.ok && park4.bumps === 0 && park4.mode === 'walk' && park4.f === 4 && park4.saved === 'jp4' && new RegExp(`停好了：B1 ${park4.bay - 23} 號`).test(park4.toast), `drove into a B1 spot and got out: 「${park4.toast}」 (saved in spot ${park4.bay + 1})`);
+check(park4.ok && park4.bumps === 0 && park4.mode === 'walk' && park4.f === 4 && park4.saved === K && new RegExp(`停好了：B1 ${park4.bay - 23} 號`).test(park4.toast), `drove into a B1 spot and got out: 「${park4.toast}」 (saved in spot ${park4.bay + 1})`);
 const back4 = await p.evaluate(async () => {
   const D = window.__D(), W = D.walker; let ok = false, k = 0;
-  for (; k < 600 && !ok; k++) { ok = W.getIn(W.cars.find((c) => c.key === 'jp4')); if (!ok) window.__wstep(1); }
+  for (; k < 600 && !ok; k++) { ok = W.getIn(W.cars.find((c) => c.key === window.__K)); if (!ok) window.__wstep(1); }
   let n = 0; for (; n < 1200 && !(window.__D().drv && W.mode === 'off'); n++) window.__wstep(1);
   const toast = window.__toast(), d = window.__D().drv, t = d.telemetry(), c = window.__gw(0, 0); let done = false;
   d.parkAt({ x: c.x, z: c.z, heading: t.heading }, () => { done = true; }); // 倒回電梯上（自動停車）
@@ -252,13 +255,13 @@ const hw = await p.evaluate(() => {
   return { vmax: Math.round(vmax), air, dy: +dy.toFixed(3), pitch: +pitch.toFixed(3), roll: +roll.toFixed(3), lands: t.lands - l0, bumps: t.bumps - b0, surface: t.surface };
 });
 console.log('5', el(), 'highway:', JSON.stringify(hw));
-check(hw.vmax > 130 && hw.vmax <= 181 && hw.bumps === 0, `flat out on the expressway for 20 s: ${hw.vmax} km/h (top 180), no bumps`);
+check(hw.vmax > CAR.hwMin && hw.vmax <= CAR.top + 1 && hw.bumps === 0, `flat out on the expressway for 20 s: ${hw.vmax} km/h (top ${CAR.top}), no bumps`);
 check(hw.air === 0 && hw.lands === 0 && hw.dy < 0.06 && hw.pitch < 0.08 && hw.roll < 0.08, `the suspension keeps it on the road at speed (≤ ${hw.dy} m off, pitch ≤ ${hw.pitch}, roll ≤ ${hw.roll} rad, never in the air)`);
 const riHw = await shot('5-highway');
 await p.evaluate(() => { window.__D().drv.setCameraMode('eye'); window.__dstep(2); });
-const eye = await p.evaluate(() => { const D = window.__D(), V = window.__CV().jp4, c = D.dcam.position.clone(), m = D.tripS.body.matrixWorld, e = new c.constructor(...V.eye).applyMatrix4(m); return { d: +c.distanceTo(e).toFixed(3), cab: !!D.tripS.cabin && D.tripS.cabin.visible !== false }; });
+const eye = await p.evaluate(() => { const D = window.__D(), V = window.__CV()[window.__K], c = D.dcam.position.clone(), m = D.tripS.body.matrixWorld, e = new c.constructor(...V.eye).applyMatrix4(m); return { d: +c.distanceTo(e).toFixed(3), cab: !!D.tripS.cabin && D.tripS.cabin.visible !== false }; });
 const riEye = await shot('5-eye');
-check(eye.cab && eye.d < 0.05, `driver's seat view: the camera sits at the jeep's eye point (${eye.d} m) inside the 3D cockpit`);
+check(eye.cab && eye.d < 0.05, `driver's seat view: the camera sits at the ${CAR.name}'s eye point (${eye.d} m) inside the 3D cockpit`);
 await p.evaluate(() => { window.__D().drv.setCameraMode('chase'); window.__stop(120); });
 
 // ---- 6 越野車場的泥巴池：越野胎在泥巴裡比一般的車快很多（一般的車最多 12 km/h）----

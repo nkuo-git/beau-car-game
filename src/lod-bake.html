@@ -31,6 +31,8 @@ import { AE86_SPEC, AE86_GARAGE } from './ae86-spec.js';
 import { CHIRON_SPEC, CHIRON_GARAGE } from './chiron-spec.js';
 import { JP4_SPEC, JP4_GARAGE } from './jp4-spec.js'; // 第 48 批：吉普車
 import { JP4_M } from './jp4-look.js';
+import { K2_SPEC, K2_GARAGE } from './k2-spec.js'; // 第 51 批：K2 小越野車
+import { K2_M } from './k2-look.js';
 const KITS3 = [['stock'], ['bomex'], ['track']];
 const CARS = {
   supra: { spec: SUPRA_SPEC, glb: 'body-q.glb', kits: KITS3, wings: [['stock'], ['gt'], ['none']] },
@@ -51,6 +53,7 @@ const CARS = {
   ae86: { spec: AE86_SPEC, glb: 'body-ae86-q.glb', ...AE86_GARAGE.opts },
   chiron: { spec: CHIRON_SPEC, glb: 'body-chiron-q.glb', ...CHIRON_GARAGE.opts },
   jp4: { spec: JP4_SPEC, glb: 'body-jp4-q.glb', ...JP4_GARAGE.opts, mask: JP4_M }, // 車身存成遮罩座標（mask：make-lod.mjs 分類完再換成公尺）
+  k2: { spec: K2_SPEC, glb: 'body-k2-q.glb', ...K2_GARAGE.opts, mask: K2_M },
 };
 for (const C of Object.values(CARS)) C.kits = (C.kit || C.kits).map((o) => o[0]), C.wingKeys = (C.wing || C.wings).map((o) => o[0]);
 const SENT = '#123457';
