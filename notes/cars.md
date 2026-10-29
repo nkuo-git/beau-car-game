@@ -154,4 +154,5 @@ Nick asked for 10 more cars modelled from web photos. The photos were only used 
 - **Tests**:
   - `k2-test.mjs` = `jeep-test.mjs` with `OFFCAR=k2` (jeep-test takes the car from a small table: name, price, top speed, expressway minimum). Garage page, cockpit, ramp to 3F (nothing crushed), lift to B1, park, back to 1F, expressway 140 km/h in 20 s (top 145), mud 40 km/h. 22 ok.
   - test-b4 / test-app-b4: both shed pads checked (car, nose out, length, walker blocked at the nose), the dealer list is K2* / J4 / 怪獸卡車, the camera goes to pad 1, then pad 2 after tapping J4, then the podium.
+- Published to the trial page 2026-10-29 (artifact version 65: the page + car-k2.txt + car-k2-lod.txt). Tests run: k2-test 22 ok, test-b4 86 ok, test-b1 151 ok, top-test, free-test.
 - **Numbers** (k2-test, 390×844, traffic paused): garage page 204 calls / 1.42M tris; 3F 203 / 1.12M; B1 216 / 1.12M; expressway 119 / 0.77M; driver's view 39 / 0.26M; mud pit 162 / 0.86M. Cockpit 7 meshes, 9.2k tris. car-k2.txt 1.43 MB; light car 201 KB glb (18k body tris).
