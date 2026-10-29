@@ -323,7 +323,8 @@ await p.addInitScript(() => {
   const H = () => window.__H, W = () => window.__D().walker, P3 = () => window.__P3();
   const X = (window.__X = {});
   const TS = ['#stage .pw-toast', '#stage .wk-toast', '#stage .dv-toast'];
-  X.peek = () => { for (const sel of TS) { const e = document.querySelector(sel); if (e && e.textContent && e.classList.contains('show') && X.toasts[X.toasts.length - 1] !== e.textContent) X.toasts.push(e.textContent); } };
+  const seen = {}; // 每個提示框上次看到的字：同一句還亮著就不再記（一格一格走的時候 setTimeout 不會跑，別的框上一句還亮著，兩個框輪流記會把新的擠掉）
+  X.peek = () => { for (const sel of TS) { const e = document.querySelector(sel), t = e && e.classList.contains('show') ? e.textContent : ''; if (t && t !== seen[sel]) X.toasts.push(t); seen[sel] = t; } };
   X.step = (n = 1) => { let t = null; for (let i = 0; i < n; i++) { t = window.__wstep(1); X.peek(); } return t; }; // 每一格看一下說了什麼（提示的 setTimeout 是真的時間）
   // 鏡頭轉到準星對著 (x, y, z)（guns-test.html 的 aimAt：轉幾次，每次走一格讓鏡頭跟上）
   const V3 = { x: 0, y: 0, z: 0 };
@@ -364,6 +365,12 @@ await p.addInitScript(() => {
     for (const c of cs) { const px = c.x - x, pz = c.z - z, t = px * ux + pz * uz; if (t > 0 && t < L + 60 && Math.abs(px * uz - pz * ux) < 1.5 + Math.max(c.hx || 1, c.hz || 1)) return false; }
     return true; };
   X.farFromPolice = (q) => { const D = P3().police._dbg, st = D.station.spawn || window.__D().VIL.places.police?.spawn; return !st || (Math.hypot(q.x - st.x, q.z - st.z) > 60 && D.tall.blocked(st.x, st.z, q.x, q.z, 0)); };
+  // 警車從警察局出來 s 秒內開得到的地方（一出來 4 m/s、加速度最多 T.acc：3 秒約 40 公尺內）每一點都看不到 (x, z)：那幾秒警察一定還沒看到你
+  // （只看警察局門口那一點不夠：車開出來幾公尺，房子中間的空隙就看得到；看得到 T.seeR＝180 公尺，村子裡的人都在警察局 180 公尺內）
+  X.hidFromPolice = (x, z, s = 3) => { const D = P3().police._dbg, T = D.T, st = D.station.spawn || window.__D().VIL.places.police?.spawn; if (!st) return true;
+    const R = 4 * s + 0.5 * T.acc * s * s;
+    for (let dx = -R; dx <= R; dx += 2) for (let dz = -R; dz <= R; dz += 2) { if (dx * dx + dz * dz > R * R) continue; const sx = st.x + dx, sz = st.z + dz, d = Math.hypot(x - sx, z - sz); if (d < T.nearR || (d < T.seeR && !D.tall.blocked(sx, sz, x, z, 0))) return false; }
+    return true; };
   // 離 (x, z) 最近的人（age：'adult' | 'kid'；站著、走著的）
   X.person = (x, z, age, maxD = 200, ok = null) => { // ok(q)：另外的條件（例如離警察局夠遠）
     let best = null, bd = maxD;
@@ -570,10 +577,16 @@ const s4a = await ev(() => {
   // 離警察局遠一點（你家門口外面）揍一個大人
   w.teleport(H.gw(23, 4, 0)); X.step(60);
   // 第 21 批：揍了以後警車從警察局開出來，3 秒內有時候就看到你（看揍的人在哪裡）：附近（300 公尺內）挑離警察局最遠的大人
-  const st = pol._dbg.station.spawn || D.VIL.places.police?.spawn, t = w.telemetry(), stD = (q) => (st ? Math.hypot(q.x - st.x, q.z - st.z) : 0);
-  let ad = null; for (const q of P3.NPC.peds.people) if (q.age !== 'kid' && !q.gone && q.active !== false && ['walk', 'idle', 'stand', 'talk', 'wait'].includes(q.mode) && q.y <= 0.1 && Math.hypot(q.x - t.x, q.z - t.z) < 300 && X.farFromPolice(q) && (!ad || stD(q) > stD(ad))) ad = q;
+  // 第 49 批：而且警車 3 秒內開得到的地方都看不到他、也看不到你站的地方（X.hidFromPolice）；一時找不到就等路人走一走再找
+  const st = pol._dbg.station.spawn || D.VIL.places.police?.spawn, stD = (q) => (st ? Math.hypot(q.x - st.x, q.z - st.z) : 0);
+  let ad = null;
+  for (let k = 0; k < 30 && !ad; k++) {
+    if (k) X.step(60);
+    const t = w.telemetry(), qs = P3.NPC.peds.people.filter((q) => q.age !== 'kid' && !q.gone && q.active !== false && ['walk', 'idle', 'stand', 'talk', 'wait'].includes(q.mode) && q.y <= 0.1 && Math.hypot(q.x - t.x, q.z - t.z) < 300 && X.farFromPolice(q) && X.hidFromPolice(q.x, q.z)).sort((p, q) => stD(q) - stD(p));
+    for (const q of qs) if (X.faceTo(q, 0.75, (x, z) => X.hidFromPolice(x, z))) { ad = q; break; }
+  }
   if (!ad) return { err: 'no adult' };
-  X.faceTo(ad); X.punchBtn(); X.step(2);
+  X.punchBtn(); X.step(2);
   const a = { wanted: pol.wanted, stD: st ? +Math.hypot(ad.x - st.x, ad.z - st.z).toFixed(0) : null };
   X.step(180); const t3 = pol.telemetry(); a.at3 = { heat: t3.heat, everSeen: t3.everSeen, seen: t3.seen, hunt: t3.hunt, cars: X.pol().cars };
   // 最近的透天厝（走得進去的）
@@ -732,7 +745,10 @@ const s6b = await ev(() => {
   g.setAim(true); X.step(10);
   for (let i = 0; i < 8 && !down && pol.state === 'wanted'; i++) {
     for (let j = 0; j < 240; j++) { const p = w.telemetry(), dx = cop.x - p.x, dy = 1.1 - 1.36, dz = cop.z - p.z, L = Math.hypot(dx, dy, dz), h = g.probe(p.x, 1.36, p.z, dx / L, dy / L, dz / L, { maxT: L + 1 }); if (!h || h.kind !== 'world') break; X.step(1); } // 第 18 批：他從牆角後面跑過來：牆不擋了才開槍（不然打到牆＝在警察旁邊開槍，多 1★）
-    X.aimAt(cop.x, 1.1, cop.z, 6); shots += X.fire(); { const p = w.telemetry(), L = g.telemetry().last; hits.push([L?.kind, +Math.hypot(cop.x - p.x, cop.z - p.z).toFixed(1), L && L.x != null ? [+L.x.toFixed(1), +L.z.toFixed(1)] : null]); } for (const f of DBG.offs) if (f.on) st.add(f.pose.state);
+    X.aimAt(cop.x, 1.1, cop.z, 6);
+    // 第 49 批：子彈是從胸口往準星對到的點飛（鏡頭在後面）：準星擦過他的邊，子彈就從他旁邊過去打到後面的牆（＝在警察旁邊開槍，多 1★）→ 子彈那一線打得到他才開槍
+    for (let j = 0; j < 60; j++) { const p = w.telemetry(), A = g.telemetry().aimPoint, dx = A.x - p.x, dy = A.y - 1.36, dz = A.z - p.z, L = Math.hypot(dx, dy, dz) || 1, h = g.probe(p.x, 1.36, p.z, dx / L, dy / L, dz / L, { maxT: L + 1 }); if (h && h.kind === 'ped' && Math.hypot(h.x - cop.x, h.z - cop.z) < 1) break; X.aimAt(cop.x, 1.1, cop.z, 1); }
+    shots += X.fire(); { const p = w.telemetry(), L = g.telemetry().last; hits.push([L?.kind, +Math.hypot(cop.x - p.x, cop.z - p.z).toFixed(1), L && L.x != null ? [+L.x.toFixed(1), +L.z.toFixed(1)] : null]); } for (const f of DBG.offs) if (f.on) st.add(f.pose.state);
     if (cop.st === 'down' || cop.pose.state === 'fall') down = true;
     if (g.telemetry().mag === 0) { g.reload(); X.step(90); }
   }
