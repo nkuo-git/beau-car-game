@@ -307,10 +307,11 @@ const FIT = {};
   }
   // 前擋、後擋：每個 |z| 從車頭往後（每 5 公釐）從上面看第一個面：前後的玻璃（|法線 x|＞0.3）＝看得到的玻璃，飾條／黑色＝黑邊；連在一起的一段要有 2 公分以上看得到的玻璃
   const ws = [], wf = [], wt = [], rg = [], rt = [];
+  const overGlass = (H) => { const h = H[H.length - 1]; if (h && (h.slot === 'dark' || h.slot === 'trim')) for (let i = H.length - 2; i >= 0 && H[i].t > h.t - 0.03; i--) if (H[i].slot !== 'dark' && H[i].slot !== 'trim') return H[i]; return h; }; // 雨刷（躺在玻璃、前圍上面的黑條）不算：下面 3 公分內有玻璃或車漆就看那一面
   for (let k = 0; k < NZ; k++) {
     const z = k * 0.1, runs = []; let cur = null;
     for (let q = 470; q >= -470; q--) {
-      const x = q * 0.005, H = Yr(x, z), h = H[H.length - 1], vis = !!h && h.slot === 'glass' && Math.abs(h.n[0]) > 0.3, a = vis || (!!h && (h.slot === 'trim' || h.slot === 'dark'));
+      const x = q * 0.005, H = Yr(x, z), h = overGlass(H), vis = !!h && h.slot === 'glass' && Math.abs(h.n[0]) > 0.3, a = vis || (!!h && (h.slot === 'trim' || h.slot === 'dark'));
       if (a) { if (!cur) runs.push((cur = { f: x, vmax: null, vmin: null })); if (vis) { if (cur.vmax == null) cur.vmax = x; cur.vmin = x; } } else cur = null;
     }
     const RR = runs.filter((r) => r.vmax != null && r.vmax - r.vmin > 0.015), w = RR[0], rr = RR.length > 1 ? RR[RR.length - 1] : null; // 玻璃不到 2 公分的（車窗角落）不算

@@ -81,9 +81,10 @@ function loft(dx = 0.015, M = 160) {
   return { G, X, M };
 }
 // ---- 區域（材質）----
-const xA = (y) => 0.80 - (y - 0.95) * 1.35, xC = (y) => -1.24 + (y - 0.95) * 0.55, xB = (y) => -0.50 - (y - 0.95) * 0.1;
+// A 柱（v63，Nick「a柱稍微改明顯一點 不用太多」）：側窗前緣往後 5 公分、擋風玻璃兩邊窄 1 公分 → 中間一條約 4～5 公分的車身色（加兩邊黑膠條）；以前兩塊玻璃連在一起，看不到柱子
+const xA = (y) => 0.75 - (y - 0.95) * 1.35, xC = (y) => -1.24 + (y - 0.95) * 0.55, xB = (y) => -0.50 - (y - 0.95) * 0.1;
 const sideGlass = (v) => v.idx > 7.55 && v.idx < 10.3 && v.y > 0.955 && v.z > 0.55 && v.x < xA(v.y) && v.x > xC(v.y);
-const windGlass = (v) => v.idx > 7.6 && v.x > 0.29 + 0.05 * (v.z / 0.6) ** 2 && v.x < 0.82 - 0.06 * (v.z / 0.7) ** 2 && v.z < 0.66 - (0.82 - v.x) * 0.09;
+const windGlass = (v) => v.idx > 7.6 && v.x > 0.29 + 0.05 * (v.z / 0.6) ** 2 && v.x < 0.82 - 0.06 * (v.z / 0.7) ** 2 && v.z < 0.65 - (0.82 - v.x) * 0.09;
 const rearGlass = (v) => v.idx > 7.6 && v.x > -1.48 + 0.05 * (v.z / 0.6) ** 2 && v.x < -1.02 - 0.05 * (v.z / 0.6) ** 2 && v.z < 0.58 + (-1.02 - v.x) * 0.1;
 const isGlass = (v) => sideGlass(v) || windGlass(v) || rearGlass(v);
 const HEAD = [[0.30, 0.724], [0.46, 0.729], [0.62, 0.730], [0.735, 0.725], [0.778, 0.71], [0.795, 0.684], [0.80, 0.64], [0.79, 0.606], [0.76, 0.594], [0.60, 0.592], [0.385, 0.595], [0.36, 0.606], [0.33, 0.664]]; // 大燈（照片）：梯形，上緣直直的貼著引擎蓋，裡面那頭斜斜的（上面靠水箱罩、下面往外），外面那頭圓圓的包到側面
@@ -300,6 +301,10 @@ function build(THREE, opt = {}) {
   const index = [].concat(idxBy[0], idxBy[1], idxBy[2], idxBy[3]); body.setIndex(index); let o = 0; for (let m = 0; m < 4; m++) { body.addGroup(o, idxBy[m].length, m); o += idxBy[m].length; }
   const BGU = window.__BGU; if (BGU) { body = BGU.mergeVertices(body, 1e-5); }
   body.computeVertexNormals();
+  { // 車漆的點：法線只算車漆的三角形（玻璃邊上的黑膠條往裡面斜，混進來的話窄的地方（A 柱）亮光會一段一段的）
+    const p = body.attributes.position, n = body.attributes.normal, I = body.index.array, gr = body.groups[0], acc = new Float32Array(p.count * 3), has = new Uint8Array(p.count);
+    for (let t = gr.start; t < gr.start + gr.count; t += 3) { const a = I[t], b = I[t + 1], c = I[t + 2]; const ux = p.getX(b) - p.getX(a), uy = p.getY(b) - p.getY(a), uz = p.getZ(b) - p.getZ(a), vx = p.getX(c) - p.getX(a), vy = p.getY(c) - p.getY(a), vz = p.getZ(c) - p.getZ(a); const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; for (const k of [a, b, c]) { acc[k * 3] += nx; acc[k * 3 + 1] += ny; acc[k * 3 + 2] += nz; has[k] = 1; } }
+    for (let i = 0; i < p.count; i++) if (has[i]) { const l = Math.hypot(acc[i * 3], acc[i * 3 + 1], acc[i * 3 + 2]); if (l > 0) n.setXYZ(i, acc[i * 3] / l, acc[i * 3 + 1] / l, acc[i * 3 + 2] / l); } }
   { const n = body.attributes.normal, p = body.attributes.position; for (let i = 0; i < n.count; i++) if (Math.abs(p.getZ(i)) < 1e-4) { n.setZ(i, 0); } }
   const maps = paintMaps(THREE, G, X, M, color, !!opt.bake); Object.assign(Mt.paint, maps); Mt.paint.needsUpdate = true;
   const bodyMesh = new THREE.Mesh(body, [Mt.paint, Mt.glass, Mt.trim]); bodyMesh.name = 'car2-body'; bodyMesh.castShadow = bodyMesh.receiveShadow = true; g.add(bodyMesh);
