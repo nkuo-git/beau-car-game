@@ -259,6 +259,45 @@ export const Z2_SPEC = {
   kit: 'stock',
 };
 
+// ---- 第 56 批：騎的人（Nick 卡片「好，做進去」）：坐哪裡、手握哪裡、腳踩哪裡（車身座標，公尺）、手把繞哪一根軸轉 ----
+//   at：人（character.js 的 group，state 'sit'）放的地方＝座椅面 0.884 − 屁股高 0.45 ＋ 0.4 公分
+//   grip：右手的握把（左手 z 相反）；foot：右腳的腳踝（腳踏板上面 7 公分；左腳 z 相反）
+//   piv、ax：手把（bars 這組）繞的龍頭軸（上面往後倒 20 度）；max：drive 的 steer 打到底（±1）轉幾弧度
+//   view：第一人稱（CABIN_VIEW.z2）：眼睛、往前看的點（看得到手把、螢幕）；真的騎的時候 town.src.js 照騎的那個人的眼睛換（Z2_eye）
+export const Z2_RIDE = { at: [-0.22, 0.438, 0], grip: [0.364, 1.061, 0.36], foot: [0.04, 0.438, 0.37], piv: [0.40, 0.95, 0], ax: [-0.342, 0.94, 0], max: 0.5,
+  view: { eye: [0.02, 1.6, 0], look: [3.2, 0.7, 0], fov: 72 } };
+const Z2_QS = new THREE.Quaternion(), Z2_VS = new THREE.Vector3(), Z2_PV = new THREE.Vector3(...Z2_RIDE.piv), Z2_AX = new THREE.Vector3(...Z2_RIDE.ax).normalize();
+// 手把跟著轉：s＝drive 的 steer（−1 左～1 右）；右轉＝右手那邊往後（從上面看順時針）
+export function Z2_steer(body, s) {
+  const b = body.userData.z2bars || (body.userData.z2bars = body.getObjectByName('bars')); if (!b) return;
+  b.quaternion.setFromAxisAngle(Z2_AX, -s * Z2_RIDE.max);
+  b.position.copy(Z2_PV).sub(Z2_VS.copy(Z2_PV).applyQuaternion(b.quaternion));
+}
+// 人坐好：手握著（轉過的）把手、腳踩腳踏板；C＝buildCharacter(look, { state: 'sit', shadow: false, plant: false })，C.group 放在車身底下的 Z2_RIDE.at；每一格叫（不會 new 東西）
+const Z2_HD = [[0, 0, 0], [0, 0, 0]], Z2_FT = [0, 0, 0], Z2_UP = { state: 'sit', hands: Z2_HD, feet: Z2_FT };
+export function Z2_ride(C, s = 0, dt = 1 / 60) {
+  const R = Z2_RIDE, at = R.at, G = R.grip;
+  Z2_QS.setFromAxisAngle(Z2_AX, -s * R.max);
+  for (let k = 0; k < 2; k++) {
+    Z2_VS.set(G[0], G[1], (k ? 1 : -1) * G[2]).sub(Z2_PV).applyQuaternion(Z2_QS).add(Z2_PV);
+    Z2_HD[k][0] = Z2_VS.x - at[0]; Z2_HD[k][1] = Z2_VS.y - at[1]; Z2_HD[k][2] = Z2_VS.z - at[2];
+  }
+  Z2_FT[0] = R.foot[0] - at[0]; Z2_FT[1] = R.foot[1] - at[1]; Z2_FT[2] = R.foot[2];
+  C.update(dt, Z2_UP);
+}
+// 騎沙灘車戴安全帽：look 要換的欄位（本來就戴安全帽：照它的顏色；不然白色的）
+export const Z2_helmet = (L) => ({ hat: 'helmet', hatColor: L && L.hat === 'helmet' && L.hatColor ? L.hatColor : '#f1f1ee' });
+// 騎的人的眼睛（車身座標）：手把擺正坐好以後量（out＝[x, y, z]）；C 還沒放進車身的時候也可以量（照 Z2_RIDE.at 算）
+export function Z2_eye(C, out = [0, 0, 0]) {
+  for (let i = 0; i < 30; i++) Z2_ride(C, 0, 1 / 30); // 坐好（混到底）
+  const g = C.group, p = g.parent; if (p) p.remove(g);
+  const P0 = g.position.clone(), R0 = g.rotation.clone(); g.position.set(0, 0, 0); g.rotation.set(0, 0, 0);
+  g.updateMatrixWorld(true); C.eyes.getWorldPosition(Z2_VS);
+  g.position.copy(P0); g.rotation.copy(R0); if (p) p.add(g);
+  out[0] = Z2_VS.x + Z2_RIDE.at[0]; out[1] = Z2_VS.y + Z2_RIDE.at[1]; out[2] = Z2_VS.z + Z2_RIDE.at[2];
+  return out;
+}
+
 // 這台車的標準視角（車很小）
 export const Z2_CAMS = {
   front34: { a: 35, d: 4.6, h: 1.55, tx: 0, ty: 0.62, fov: 32 }, rear34: { a: 145, d: 4.6, h: 1.55, tx: -0.05, ty: 0.62, fov: 32 },

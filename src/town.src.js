@@ -466,6 +466,7 @@ function keepRecent(k) {
 function stowFull(Sx) {
   if (!Sx) return;
   if (MIR.S === Sx) mirrorSet(false); // 第 25 批：照後鏡換回原本的
+  if (RIDER.S === Sx) riderOff(); // 第 56 批：沙灘車騎的人拿下來
   scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.rotation.set(0, 0, 0); Sx.car.visible = false;
   Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0); Sx.cabin?.userData.setSteer?.(0);
 }
@@ -475,11 +476,12 @@ function makeDrv(pose) {
   TR.scene.add(Sx.car); Sx.car.visible = true; Sx.body.position.y = +CARS[cur].state.height;
   // 駕駛座視角：車內（cabin.js）的眼睛；手機直拿畫面窄，視角放大一點（跟車庫的「車內」一樣）
   const eye = CABIN_VIEW[cur] ? { ...CABIN_VIEW[cur], fov: cabinFov(cur, dcam.aspect) } : undefined;
+  if (cur === 'z2' && eye && riderMake()) eye.eye = [RIDER.eye[0] + 0.06, RIDER.eye[1], 0]; // 第 56 批：沙灘車：騎的人的眼睛往前 6 公分（人不畫）
   dEye = eye;
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
     onZone: arrive, onShift: () => dvoice?.shift(), onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
-    crush: crushFx && offK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
+    crush: crushFx && crushK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
@@ -1589,9 +1591,9 @@ $('raceBack').addEventListener('click', backToVillage);
 //   越野賽：開進起跑區（慢一點）自己停到起跑位置 → 倒數 → 跑完 → 贏了拿獎金（GAME.money）、記在 GAME.wins['or:<比賽 id>']（不算車庫的獎盃）
 //     開進起跑區就是還沒贏過的第一場（三場都贏了就一直是冠軍賽）；「再比一次」同一場；比賽中開出越野車場、「放棄比賽」、「直接回車庫」都會收掉
 let orRace = null; // 越野賽（createOffroadRace）
-// 越野車行的展示位（VIL.places.odealer.display）：[0] 門口的大圓台（大車：怪獸卡車）、[1] [2] [3] 車行裡面（普通大小的越野車；第 48 批：吉普車；第 51 批：小越野車；第 53 批：皮卡）
+// 越野車行的展示位（VIL.places.odealer.display）：[0] 門口的大圓台（大車：怪獸卡車）、[1] [2] [3] [4] 車行裡面（普通大小的越野車；第 48 批：吉普車；第 51 批：小越野車；第 53 批：皮卡；第 56 批：沙灘車）
 //   oDisp[i]＝擺著的車 { k, S, box }；oLoading[i]＝載入中；oWant(i)＝那個位子要擺哪台（還沒買的，便宜的在前面）
-const oDisp = [null, null, null, null], oLoading = [false, false, false, false];
+const oDisp = [null, null, null, null, null], oLoading = [false, false, false, false, false];
 const oWant = (i) => { const s = saleOf('odealer').filter((k) => !!PERF[k].big === !i); return (i ? s[i - 1] : s[0]) || null; };
 const orLevel = () => { const i = OFFROAD_RACES.findIndex((r) => !(GAME.wins['or:' + r.id] > 0)); return i < 0 ? OFFROAD_RACES.length - 1 : i; };
 // 落地（drive.js 的 onLand）：飛久了說一聲；落地太用力手機震一下
@@ -1703,6 +1705,7 @@ function leaveDrive() {
   police?.clear(); police?.setEnabled(false); bodyFlag('wanted', false); bodyFlag('jailed', false); // 第 3 批（b3-int）：星星、警車、拘留室都清掉（回車庫頁）
   netRaceEnd(); netHideAll(); // 一起開車：朋友的車、人收起來（回車庫頁）
   drv?.dispose(); drv = null; home = null;
+  riderOff(); // 第 56 批：沙灘車騎的人拿下來（車庫頁只有車）
   walker?.pause({ hide: true });
   npcShow(false);
   if (parkShadow) parkShadow.visible = false;
@@ -1782,7 +1785,7 @@ function npcStep(dt) {
   if (drv && walker.mode === 'off' && !sleep) {
     const t = drv.telemetry(), ci = drv.carInfo, CX = (ci.nose + ci.tail) / 2;
     me.x = t.x + Math.cos(t.heading) * CX; me.z = t.z - Math.sin(t.heading) * CX; me.heading = t.heading; me.v = t.v; me.hx = ci.len / 2; me.hz = ci.halfW;
-    me.crush = !!(crushFx && offK(cur) && !t.paused); // 第 7 批：怪獸卡車：碰到路上的車就輾過去（npc.js 把那台拿出車流）；第 9 批：越野車（路上的人看到會撲開）
+    me.crush = !!(crushFx && crushK(cur) && !t.paused); // 第 7 批：怪獸卡車：碰到路上的車就輾過去（npc.js 把那台拿出車流）；第 9 批：越野車（路上的人看到會撲開）
     f.x = t.x; f.z = t.z; f.heading = t.heading;
     N.traffic.update(dt, f, N.OBS, N.peds.people);
     N.peds.update(dt, f, N.PCARS, N.NONE);
@@ -1829,6 +1832,7 @@ function inGarage(x, z) {
 }
 // 第 9 批（路變大）Nick 2026-10-09「越車可碾任何東西」：越野車（PERF.offroad；以後的越野車自己就有）什麼都輾（房子、樹、路燈、牆、警車⋯）；一般的車照舊
 const offK = (k) => !!(PERF[k] && PERF[k].offroad);
+const crushK = (k) => offK(k) && !PERF[k].light; // 第 56 批：沙灘車（light）很輕：不輾東西，撞到跟一般的車一樣
 // 輾不到的地方（世界座標的長方形 [x0, z0, x1, z1]，第一次用到才算）：你的車庫（小房子）、車庫街的車庫、越野車車庫、改車廠、車店、槍店、警察局、越野車行、福德宮
 let CRUSH_SAFE = null;
 function crushSafe(x, z) {
@@ -1857,7 +1861,7 @@ function makeCrush() {
       const t = drv.telemetry(); if (t.paused) return false;
       const ci = drv.carInfo, CX = (ci.nose + ci.tail) / 2;
       q.x = t.x + Math.cos(t.heading) * CX; q.z = t.z - Math.sin(t.heading) * CX;
-      q.heading = t.heading; q.v = t.v; q.hx = ci.len / 2; q.hz = ci.halfW; q.big = offK(cur); // 第 9 批：越野車
+      q.heading = t.heading; q.v = t.v; q.hx = ci.len / 2; q.hz = ci.halfW; q.big = crushK(cur); // 第 9 批：越野車（第 56 批：沙灘車不算）
       return true;
     },
     makeJunk: async (i) => { // 表演場的舊車：輕量車（一次做一台）
@@ -1872,7 +1876,7 @@ function makeCrush() {
     sound: (kind, x, z, k) => engineAudio.crash(kind === 'glass' ? { strength: 0.12, glass: 1 } : { strength: k, glass: 0 }),
     toast: (text) => { if (drv && DRIVE.on) drv.toast(text, 2000); },
     crime: (x, z) => { CRUSH_POS.x = x; CRUSH_POS.z = z; police?.crime('crush', CRUSH_POS); }, // 村子裡輾東西＝1★（越野車場裡面 crush.js 不叫）
-    any: () => offK(cur), protect: crushSafe, // 第 9 批：越野車什麼都輾；輾不到的地方
+    any: () => crushK(cur), protect: crushSafe, // 第 9 批：越野車什麼都輾；輾不到的地方（第 56 批：沙灘車不輾）
     treeK: (j, k) => LOOK?.treeK(j, k), // 第 29 批：畫質的樹葉卡片跟著扁
     copWreck: (i, x, z) => (police && police.wreck ? police.wreck(i, x, z) : null), // 第 9 批：警車扁掉、警察下車跑掉、+2★（police-ai.js）
   });
@@ -2142,6 +2146,7 @@ function driveStep(dt) {
   if (DRIVE.on) npcStep(dt); // 路上的車、居民（走路的碰撞要在 walker.update 前面放好）
   if (DRIVE.on) crushStep(dt); // 第 7 批（輾扁）：怪獸卡車壓扁的東西（墊子、壓扁、表演場的垃圾車）
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
+  riderStep(dt); // 第 56 批：沙灘車騎的人（walker 後面：上車那一格就坐上去）
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
   netStep(dt); // 一起開車（net.src.js）：朋友的車、人、名字、表情、一起比賽
@@ -2311,7 +2316,7 @@ function mirrorSet(on) {
 function mirrorStep() {
   const want = !!(drv && DRIVE.on && drv.cameraMode === 'eye' && tripS?.car?.visible);
   if (want !== MIR.on || (want && MIR.S !== tripS)) mirrorSet(want);
-  if (!MIR.on || MIR.n++ % 3) return; // 三格畫一次
+  if (!MIR.on || !MIR.list.length || MIR.n++ % 3) return; // 三格畫一次；沒有鏡子（第 56 批：沙灘車、怪獸卡車）就不畫
   const S = MIR.S, e = dEye?.eye || MIR_EYE;
   S.body.updateMatrixWorld(true);
   MIR.cam.position.set(e[0], e[1], 0).applyMatrix4(S.body.matrixWorld);
@@ -2320,6 +2325,35 @@ function mirrorStep() {
   renderer.setRenderTarget(MIR.rt); renderer.render(TR.scene, MIR.cam); renderer.setRenderTarget(null);
   S.car.visible = true;
   MIR.calls = renderer.info.render.calls; MIR.tris = renderer.info.render.triangles;
+}
+// ==== 第 56 批：沙灘車（Z2）騎的人：你自己的樣子＋安全帽，坐在座椅上、手握把手（跟著轉）、腳踩腳踏板（z2-spec.js：Z2_RIDE、Z2_ride、Z2_steer）====
+//   騎著（walker 收起來、你的人藏起來＝坐在車上）才放上去；第一人稱不畫人（鏡頭在眼睛往前 6 公分）；下車、回車庫頁就拿下來
+//   400 公尺直線加速（race.src.js enterRace）也騎在上面：riderOn(S)；比完回車庫頁 riderOff()
+const RIDER = { C: null, lk: null, S: null, eye: [0, 0, 0] };
+const riderLook = () => { const L = meLook(); return { ...L, ...Z2_helmet(L) }; }; // 騎沙灘車戴安全帽（你自己的帽子就是安全帽：照它的顏色）
+function riderMake() { // 第一次騎、換了樣子：做（換）人、量眼睛（第一人稱的鏡頭）
+  const L = meLook();
+  if (RIDER.C && RIDER.lk === L) return RIDER.C;
+  try {
+    if (!RIDER.C) { RIDER.C = buildCharacter(riderLook(), { state: 'sit', shadow: false, plant: false }); RIDER.C.group.name = 'z2-rider'; }
+    else RIDER.C.setLook(riderLook());
+    RIDER.lk = L; Z2_eye(RIDER.C, RIDER.eye);
+  } catch (e) { console.error(e); RIDER.C = null; }
+  return RIDER.C;
+}
+function riderOn(Sx, vis = true) { // 人放到這台車上（車身底下，跟著懸吊晃）
+  const C = riderMake(); if (!C || !Sx?.body) return null;
+  if (C.group.parent !== Sx.body) { if (RIDER.S && RIDER.S !== Sx) riderOff(); Sx.body.add(C.group); C.group.position.fromArray(Z2_RIDE.at); C.group.rotation.set(0, 0, 0); Z2_ride(C, 0, 1); }
+  C.group.visible = vis; RIDER.S = Sx;
+  return C;
+}
+function riderOff() { if (RIDER.C) { RIDER.C.group.removeFromParent(); RIDER.C.group.visible = false; } if (RIDER.S?.body) Z2_steer(RIDER.S.body, 0); RIDER.S = null; }
+function riderStep(dt) {
+  const ride = cur === 'z2' && DRIVE.on && !!drv && !!tripS?.body && tripS.car.visible && walker?.mode === 'off' && walker.character && !walker.character.group.visible;
+  if (!ride) { if (RIDER.S) riderOff(); return; }
+  const C = riderOn(tripS, drv.cameraMode !== 'eye'); if (!C) return;
+  const s = drv.telemetry().steer; Z2_steer(tripS.body, s);
+  if (C.group.visible) Z2_ride(C, s, dt);
 }
 function driveFrame(now) {
   const w = stage.clientWidth, h = stage.clientHeight;

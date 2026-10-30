@@ -585,6 +585,10 @@ Object.assign(SND_CARS, {
 // 第 53 批：皮卡：5.0 V8 自然進氣（十字曲軸的咕嚕聲，跟吉普車換過的 6.4 V8 同一種，小一點、轉得高一點；吉普車那一筆要先有，所以另外接）；加了機械增壓（零件 sc）會多增壓器的嗚嗚聲
 SND_CARS.p8 = { ...SND_CARS.jp4, name: '5.0 V8 自然進氣', red: 6000, swap: null, fire: [0, 90, 180, 270, 360, 450, 540, 630], bank: [0, 1, 1, 0, 1, 0, 0, 1],
   cylAmp: [1, 0.97, 1.02, 0.98, 1, 0.96, 1.03, 0.99], width: 130, lp: 2200, gain: 1.05, rasp: 0.28, raspHz: 1700 };
+// 第 56 批：沙灘車：686 cc 單缸四行程（兩圈點火一次：「噗噗噗」的大單缸，脈衝寬、間隔大；轉得高、聲音乾一點；一缸比較小聲，gain 大一點）
+SND_CARS.z2 = { ...SND_CARS.yaris, name: '686 cc 單缸自然進氣', red: 8500, idle: 0.16, fire: [0], bank: [0], cylAmp: [1], turbo: null, gain: 1.3, idleGain: 3.4,
+  width: 210, rise: 0.06, decay: 0.85, vari: 0.09, jit: 1.6, wob: 0.022, drive: 1.6, rasp: 0.34, raspHz: 1900, lp: 2600, eq: [[120, 1, 4], [520, 1.4, 3], [1600, 2, 1.5]],
+  intake: { ...SND_CARS.yaris.intake, lvl: 0.24, f: 520, tone: 0.45, hiss: 0.1 }, pops: { ...SND_CARS.yaris.pops, lift: 0.3, shift: 0.2, lvl: 0.5, rate: 9 } };
 // 車庫的引擎零件會改變聲音
 function SND_profile(key, parts) {
   const B = SND_CARS[key] || SND_CARS.supra;

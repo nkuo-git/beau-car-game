@@ -124,7 +124,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 /*__INLINE__*/
 // ==== 第 4 批：越野車（offroad.js）：駕駛座視角、引擎聲接到車內（cabin.js）、引擎聲（sound.js）的表 ====
-Object.assign(CABIN_VIEW, OFFROAD_EYE); if (createEngineAudio.cars) Object.assign(createEngineAudio.cars, OFFROAD_SOUND);
+Object.assign(CABIN_VIEW, OFFROAD_EYE, { z2: Z2_RIDE.view }); if (createEngineAudio.cars) Object.assign(createEngineAudio.cars, OFFROAD_SOUND); // 第 56 批：沙灘車的第一人稱（騎的人的眼睛）
 
 const stage = document.getElementById('stage');
 const msg = document.getElementById('msg'), prog = document.getElementById('prog'), status = document.getElementById('status'), hint = document.getElementById('hint');
@@ -305,6 +305,7 @@ const CARS = {
   jp4: { file: 'car-jp4.txt', size: SIZES.jp4, spec: JP4_SPEC, btn: ['J4', '吉普車 · 軍綠'], ...JP4_GARAGE }, // 第 48 批（Nick 2026-10-28「可以開始做 更多越野車」）：兩門吉普車（自己設計的，沒有真的牌子），越野車行賣
   k2: { file: 'car-k2.txt', size: SIZES.k2, spec: K2_SPEC, btn: ['K2', '小越野車 · 薄荷綠'], ...K2_GARAGE }, // 第 51 批（Nick 2026-10-29 卡片「好，做進去」）：三門小越野車（自己設計的，沒有真的牌子），越野車行賣
   p8: { file: 'car-p8.txt', size: SIZES.p8, spec: P8_SPEC, btn: ['P8', '皮卡 · 火山紅'], ...P8_GARAGE }, // 第 53 批（Nick 2026-10-29「越野車 繼續做」→ 看圖卡片「好，做進去」）：四門雙排座皮卡（自己設計的，沒有真的牌子），越野車行賣
+  z2: { file: 'car-z2.txt', size: SIZES.z2, spec: Z2_SPEC, btn: ['Z2', '沙灘車 · 閃電黃'], ...Z2_GARAGE }, // 第 56 批（Nick 2026-10-29「繼續做其他的」→ 看圖卡片「好，做進去」）：四輪沙灘車（騎的；自己設計的，沒有真的牌子），越野車行賣
 };
 // 性能（約略照真車）：馬力、重量、四驅、紅線、極速（vmax 原廠；top＝零件全裝，第 46 批 vmaxOf）、風阻；drive＝後驅的車起步時後輪壓到多少重量（引擎在中間的比較會起步）
 // price＝大概行情價的一半（Nick 2026-10-07「所有車都半價」；怪獸卡車他說 100 萬）（新台幣「萬」，二手車看車況差很多）；tyres＝半熱熔胎、直線加速胎的價錢（萬）
@@ -400,6 +401,12 @@ const PERF = {
   p8: { price: 90, hp: 395, kg: 2250, awd: 1, red: 6000, vmax: 180, top: 180, cda: 1.35, offroad: 1, eng: '5.0 V8 自然進氣（四輪驅動）', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 10, 2], ['exhaust', '不鏽鋼排氣', 'V8 叫得更大聲', 12, 3], ['ecu', 'ECU 調校', '重寫點火和噴油', 18, 3],
     ['header', '不鏽鋼頭段', '排氣更順', 15, 4], ['cams', '高角度凸輪軸', '高轉更有力', 25, 8], ['sc', '機械增壓', '加一顆大的機械增壓器', 150, 35]] },
+  // 第 56 批：Z2 沙灘車（騎的四輪沙灘車，2.1 公尺：停得進圓塔、坐得了電梯、開得上斜坡）：照 700 cc 單缸四驅的大沙灘車（約 48 匹、300 公斤、極速約 105）；
+  //   light：很輕，不輾東西（越野車裡只有它：撞到就像一般的車）；top＝vmax：找了一次，最快的四輪沙灘車紀錄（315 公里）是 Raptor 700 綁火箭推進器，
+  //   改裝過再量的只有 1000 cc 雙缸的大台（160 公里以上），沒有這種單缸四驅的（notes/cars.md）→ 零件只加馬力（起步、爬坡、泥巴更快）
+  z2: { price: 30, hp: 48, kg: 300, awd: 1, red: 8500, vmax: 105, top: 105, cda: 1.0, offroad: 1, light: 1, eng: '686 cc 單缸 自然進氣（四輪驅動）', tyres: [1, 2], parts: [
+    ['intake', '高流量進氣', '空濾換成香菇頭', 3, 1], ['exhaust', '不鏽鋼排氣', '單缸叫得更有精神', 4, 2], ['ecu', 'ECU 調校', '重寫點火和噴油', 4, 2],
+    ['header', '不鏽鋼頭段', '排氣更順', 3, 2], ['cams', '高角度凸輪軸', '高轉更有力', 5, 3], ['stroker', '加大缸徑', '686 cc 擴到 750 cc', 6, 4]] },
 };
 const TYRES = [[0, '原廠胎', '原本的輪胎'], [1, '半熱熔胎', '起步抓地 +8%'], [2, '直線加速胎', '起步抓地 +16%']];
 // 遊戲進度：錢（萬）、有哪些車、每台裝了哪些零件、輪胎（買過哪些、現在用哪個）、每個對手贏過幾次、車子停在車庫哪裡（park：town.src.js 的 normPark）、

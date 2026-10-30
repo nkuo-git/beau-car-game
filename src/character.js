@@ -16,6 +16,7 @@
 //       ＋ aimPitch  'aim'／'shoot' 槍口往上幾弧度（負＝往下；大約 −0.6～0.8）
 //       ＋ support   長槍：左手扶在右手前面幾公尺（預設 0.32）
 //       ＋ hands     'sit' 的時候手放哪：'lap' 放腿上（預設）｜'bars' 機車把手（右手 [0.62, 0.8, 0.3]、左手 z 相反）｜'wheel' 方向盤｜[x, y, z]（本地公尺，右手；左手 z 相反）
+//                    ｜[[左手 x, y, z], [右手 x, y, z]]（兩隻手各自給：沙灘車的手把會轉，第 56 批）
 //       ＋ feet      'sit' 的時候腳踩哪：不給＝椅子前面的地上｜[x, y, z]（腳踝，本地公尺，右腳；左腳 z 相反；膝蓋往外張開）：跨坐沙灘車
 //                    手搆不到的時候身體會往前傾（最多 0.9 弧度）
 //     C.state       現在的狀態
@@ -2365,11 +2366,12 @@ function handsTarget(S, M, o) {
   return null;
 }
 const BARS = [0.62, 0.8, 0.3], WHEEL = [0.45, 0.86, 0.19];
-function sitLean(M, g) { // 肩膀繞著腰往前轉，轉到手搆得到（最多 0.9）
+function sitLean(M, g) { // 肩膀繞著腰往前轉，轉到手搆得到（最多 0.9）；兩隻手各自給的：遠的那隻搆得到
+  if (Array.isArray(g[0])) return Math.max(sitLean(M, g[0]), sitLean(M, g[1]));
   const hy = sitHipJ(M), pivY = hy + (M.spineY - M.hipJY), Ls = M.shY - M.spineY, R = (M.upper + M.fore) * 0.97 + 0.07 * M.s;
   for (let l = 0; l <= 0.9; l += 0.05) {
     const sx = Math.sin(l) * Ls, sy = pivY + Math.cos(l) * Ls;
-    if (Math.hypot(g[0] - sx, g[1] - sy, g[2] - M.shZ * 0.9) <= R) return l;
+    if (Math.hypot(g[0] - sx, g[1] - sy, Math.abs(g[2]) - M.shZ * 0.9) <= R) return l;
   }
   return 0.9;
 }
@@ -2441,7 +2443,7 @@ function sitArms(S, M, o) {
   const g = handsTarget(S, M, o), s = M.s, hy = sitHipJ(M);
   for (let k = 0; k < 2; k++) {
     const sd = k ? 1 : -1;
-    if (g) { G1.set(g[0], g[1], sd * Math.abs(g[2])); PL.set(-0.3, -0.6, sd); handIK(S, M, k, G1, QB_BAR[k], PL); }
+    if (g) { const q = Array.isArray(g[0]) ? g[k] : g; G1.set(q[0], q[1], q === g ? sd * Math.abs(q[2]) : q[2]); PL.set(-0.3, -0.6, sd); handIK(S, M, k, G1, QB_BAR[k], PL); }
     else { G1.set(0.55 * M.thigh, hy + 0.085 * s * M.limbK - 0.001 * s, sd * (M.hipZ + 0.012 * s)); PL.set(-1, -0.2, sd * 0.6); handIK(S, M, k, G1, QB_LAP[k], PL); }
   }
 }

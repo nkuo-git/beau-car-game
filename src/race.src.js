@@ -324,6 +324,7 @@ async function enterRace() {
   race.meInfo = carSize(S);
   snd.me?.dispose(); snd.me = engineAudio.voice(cur, { parts: partsOf(cur) });
   TR.scene.add(S.car); S.car.visible = true; S.body.position.y = +CARS[cur].state.height;
+  if (cur === 'z2') riderOn(S); // 第 56 批：沙灘車：你騎在上面（town.src.js；車庫頁直接來比也一樣）
   putCar(S, race.me, LANE, race.meInfo);
   hudIdle();
   if (!netDragInit(race)) showOpp(); // 一起比賽（net.src.js）：對手是朋友，不放 AI
@@ -336,6 +337,7 @@ function exitRace(village = false) {
   RACE.on = false; controls.enabled = !village;
   document.body.classList.remove('racing'); raceLive(false);
   raceEl.hidden = true; hudEl.hidden = true;
+  if (!village) riderOff(); // 第 56 批：回車庫頁：沙灘車騎的人拿下來
   if (!village) for (const Sx of [race.meS]) {
     if (!Sx || !Object.values(built).includes(Sx)) continue;
     scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.visible = Sx === S; Sx.wheels.forEach((w) => (w.rotation.z = 0));
