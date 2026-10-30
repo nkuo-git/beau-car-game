@@ -548,7 +548,7 @@ export function patchPaint(mat, tex) {
   float sf = sideF(vN);
   float sideW = smoothstep(0.2, 0.45, abs(vN.z));
   vec4 LV = vP.z > 0.0 ? texture2D(tLivR, uvSide(vP)) : texture2D(tLivL, uvSide(vP));
-  diffuseColor.rgb = mix(diffuseColor.rgb, LV.rgb, LV.a * sideW * uLiv);
+  diffuseColor.rgb = mix(diffuseColor.rgb, LV.rgb, LV.a * sideW * uLiv * step(0.0, vN.z * vP.z)); // 只畫在朝外的面（第 55 批：沙灘車葉子板裡面那一面、皮卡車斗裡面不會印到）
   float blackG = S.g * sf, gap = S.b * sideW, lamp = 0.0, lens = 0.0, wire = 0.0, amber = 0.0, red = 0.0, rev = 0.0, matte = 0.0;
   if (glass > 0.5) blackG = 1.0; // 玻璃範圍裡留下來的（窗框膠條、黑點）整個黑：不然膠條內緣半黑半車色，窗戶邊一條虛線（吉普車的黑硬頂最明顯）
   float fW = smoothstep(uFx.x, uFx.y, vP.x) * smoothstep(-0.35, 0.1, vN.x) * (1.0 - smoothstep(0.82, 0.95, vN.y));

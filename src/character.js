@@ -16,6 +16,7 @@
 //       ＋ aimPitch  'aim'／'shoot' 槍口往上幾弧度（負＝往下；大約 −0.6～0.8）
 //       ＋ support   長槍：左手扶在右手前面幾公尺（預設 0.32）
 //       ＋ hands     'sit' 的時候手放哪：'lap' 放腿上（預設）｜'bars' 機車把手（右手 [0.62, 0.8, 0.3]、左手 z 相反）｜'wheel' 方向盤｜[x, y, z]（本地公尺，右手；左手 z 相反）
+//       ＋ feet      'sit' 的時候腳踩哪：不給＝椅子前面的地上｜[x, y, z]（腳踝，本地公尺，右腳；左腳 z 相反；膝蓋往外張開）：跨坐沙灘車
 //                    手搆不到的時候身體會往前傾（最多 0.9 弧度）
 //     C.state       現在的狀態
 //     C.dispose()   從場景拿掉、釋放幾何（材質、貼圖大家共用，不會釋放）
@@ -2448,10 +2449,11 @@ function sitLegs(S, M) {
   const hy = sitHipJ(M);
   for (let k = 0; k < 2; k++) {
     const sd = k ? 1 : -1, b = SIDE_B[k], yaw = -sd * 0.14;
-    let ay = M.ankleY, th = 0; const x = M.thigh * 0.98 + 0.03 * M.s;
+    let ay = M.ankleY, th = 0; const x = M.thigh * 0.98 + 0.03 * M.s, f = S.seatFeet;
     if (hy - M.shin * 0.97 > ay) { ay = hy - M.shin * 0.97; th = -0.35; } // 腳搆不到地（小孩）：垂著
-    V_A.set(x, ay, sd * (M.hipZ + 0.02 * M.s)); footQ(yaw, th, Q_F);
-    V_POLE.set(1, 0.7, sd * 0.15);
+    if (f) { V_A.set(f[0], f[1], sd * Math.abs(f[2])); V_POLE.set(1, 0.35, sd * 0.9); } // 腳踩的地方（腳踝，本地公尺；跨坐沙灘車：腳開開、膝蓋往外）
+    else { V_A.set(x, ay, sd * (M.hipZ + 0.02 * M.s)); V_POLE.set(1, 0.7, sd * 0.15); }
+    footQ(yaw, th, Q_F);
     ik2(M, S.Q, S.HP, b.thigh, b.shin, M.thigh, M.shin, V_A, V_POLE, true, Q_F, b.foot);
   }
 }
@@ -2540,6 +2542,7 @@ function animate(C, S, dt, o) {
   if (o.weapon) S.weapon = o.weapon === 'long' ? 'long' : 'pistol';
   if (o.support) S.support = +o.support;
   if (o.hands !== undefined) S.hands = o.hands;
+  if (o.feet !== undefined) S.seatFeet = o.feet; // （S.feet 是走路的兩隻腳）
   const want = o.state;
   if (want && want !== S.state && STATES[want]) request(C, S, want, o);
   S.t += dt; S.time += dt; S.rec += dt;
