@@ -846,10 +846,12 @@ const sw9e = await B.evaluate(() => { const U = document.querySelector('#stage .
 await click(B, '#stage .sp-seat[data-i="4"]');
 const sw9eOk = await waitFor(A, () => window.beauGame.net.info.seat.sit.some((q) => q.uid === 'u2' && q.i === 4), null, 15000);
 check(sw9e && sw9e.find((x) => x.i === 1)?.me && sw9e.find((x) => x.i === 0)?.tk && (await seatI(B)).hop?.i === 4 && sw9eOk, 'B 換位子 → 後座右: A sees B move to the rear right seat');
+const eye0 = await B.evaluate(() => window.beauGame.net.info.seat.cam); // 坐上去的時候是記住的那一種（沒記過＝第一人稱）
 await click(B, '#stage .ps-eye');
 await B.waitForTimeout(800);
 const eye9e = await B.evaluate(() => { const s = window.beauGame.net.info.seat; return { cam: s.cam, me: s.me }; });
-check(eye9e.cam === 'eye' && !eye9e.me, 'B’s eye button: first person from the rear seat (B not drawn)');
+check((eye0 === 'eye' || eye0 === 'out') && eye9e.cam !== eye0 && (eye9e.cam === 'eye' ? !eye9e.me : eye9e.me), `B’s eye button: ${eye0} → ${eye9e.cam} (first person from the rear seat = B not drawn; outside = B drawn: ${eye9e.me})`);
+if (eye9e.cam !== 'eye') { await click(B, '#stage .ps-eye'); await B.waitForTimeout(800); } // 截圖：後座的第一人稱
 await shot(B, `${prefix}-9e-rear-eye.png`);
 // 停著：下車
 await click(B, '#stage .ps-out');
