@@ -196,21 +196,46 @@ function paintMaps(THREE, G, X, U, M, color, bake = false) { // bake：白底（
     for (let u = 0; u < W; u++) { const i = CI[u], ui = CU[u];
       const a = G[i][j], b = G[i + 1][j], cc = G[i][j + 1], d = G[i + 1][j + 1], o = v * W + u;
       px[o] = (a.x * (1 - ui) + b.x * ui) * (1 - uj) + (cc.x * (1 - ui) + d.x * ui) * uj; py[o] = (a.y * (1 - ui) + b.y * ui) * (1 - uj) + (cc.y * (1 - ui) + d.y * ui) * uj; pz[o] = (a.z * (1 - ui) + b.z * ui) * (1 - uj) + (cc.z * (1 - ui) + d.z * ui) * uj; } }
-  const SW = 0.004;
+  // 第 55 批（Nick「縫隙有點太明顯 修飾的細一點 少一點鋸齒」）：縫 3.4 公釐（以前 8 公釐＋1.5 公釐的斜邊，一格一格的硬邊），兩邊各 2.5 公釐的圓角；
+  // 縫附近的格子切 5×5 個點算（反鋸齒）：顏色＝蓋到縫的比例，法線＝圓角斜度的平均（照真的方向：縫的邊往縫裡面彎）
+  const SW = 0.0017, BV = 0.0025, NS = 5, FP = 1.25, KN = 0.8, D = new Float32Array(W * H);
   for (let o = 0; o < W * H; o++) { const x = px[o], y = py[o], z = pz[o]; let d = 1e9;
     if (z > 0.5) for (const L of SEAMS_SIDE) d = Math.min(d, dpoly(L, x, y));
     if (y > 0.728 && z < 0.82 && x > -2.0) for (const L of SEAMS_TOP) d = Math.min(d, dpoly(L, x, z));
     if (x < -2.0) for (const L of SEAMS_REAR) d = Math.min(d, dpoly(L, z, y));
-    hgt[o] = d < SW ? 1 : d < SW + 0.0015 ? (SW + 0.0015 - d) / 0.0015 : 0; }
-  // 公尺／像素（u 方向、v 方向）
-  const mu = 4.3 / W, mv = 3.4 / H;
-  for (let v = 0; v < H; v++) for (let u = 0; u < W; u++) { const o = v * W + u, k = hgt[o];
-    const hx = (hgt[v * W + Math.min(W - 1, u + 1)] - hgt[v * W + Math.max(0, u - 1)]) / (2 * mu) * 0.006, hy = (hgt[Math.min(H - 1, v + 1) * W + u] - hgt[Math.max(0, v - 1) * W + u]) / (2 * mv) * 0.006;
+    D[o] = d; }
+  // 最近的縫：距離＋離開縫的方向（世界座標）；三個投影面：側面 (x, y)、上面 (x, z)、車尾 (z, y)
+  const SR = { d: 0, gx: 0, gy: 0, gz: 0 };
+  const segN = (L, a0, b0, ia, ib) => { for (let i = 1; i < L.length; i++) { const a = L[i - 1], b = L[i], vx = b[0] - a[0], vy = b[1] - a[1], l2 = vx * vx + vy * vy || 1e-9; let t = ((a0 - a[0]) * vx + (b0 - a[1]) * vy) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const e0 = a0 - a[0] - vx * t, e1 = b0 - a[1] - vy * t, d = Math.hypot(e0, e1); if (d < SR.d) { SR.d = d; const q = d > 1e-9 ? 1 / d : 0; SR.gx = SR.gy = SR.gz = 0; SR[ia] = e0 * q; SR[ib] = e1 * q; } } };
+  const seamAt = (x, y, z) => { SR.d = 1e9; SR.gx = SR.gy = SR.gz = 0;
+    if (z > 0.5) for (const L of SEAMS_SIDE) segN(L, x, y, 'gx', 'gy');
+    if (y > 0.728 && z < 0.82 && x > -2.0) for (const L of SEAMS_TOP) segN(L, x, z, 'gx', 'gz');
+    if (x < -2.0) for (const L of SEAMS_REAR) segN(L, z, y, 'gz', 'gy');
+    return SR; };
+  const SUB = []; for (let k = 0; k < NS; k++) SUB.push(((k + 0.5) / NS - 0.5) * FP);
+  const near = SW + BV + 0.008; // 這麼近才切小點算（一格最大約 3.3 公釐 × 1.25）
+  for (let v = 0; v < H; v++) for (let u = 0; u < W; u++) { const o = v * W + u;
+    let nX = 0, nY = 0, dk = 1;
+    if (D[o] < near) {
+      const u1 = Math.min(W - 1, u + 1), u0 = Math.max(0, u - 1), v1 = Math.min(H - 1, v + 1), v0 = Math.max(0, v - 1), a1 = v * W + u1, a0 = v * W + u0, b1 = v1 * W + u, b0 = v0 * W + u;
+      const ux = (px[a1] - px[a0]) / (u1 - u0), uy = (py[a1] - py[a0]) / (u1 - u0), uz = (pz[a1] - pz[a0]) / (u1 - u0), vx = (px[b1] - px[b0]) / (v1 - v0), vy = (py[b1] - py[b0]) / (v1 - v0), vz = (pz[b1] - pz[b0]) / (v1 - v0); // 一格是世界的哪個方向、多長
+      const lu = Math.hypot(ux, uy, uz) || 1e-6, lv = Math.hypot(vx, vy, vz) || 1e-6;
+      let cov = 0, ao = 0, sx = 0, sy = 0;
+      for (const a of SUB) for (const b of SUB) { const r = seamAt(px[o] + a * ux + b * vx, py[o] + a * uy + b * vy, pz[o] + a * uz + b * vz);
+        if (r.d < SW) { cov++; continue; }
+        if (r.d >= SW + BV) continue;
+        const t = (SW + BV - r.d) / BV, m = Math.min(2.5, t / Math.sqrt(Math.max(0.0256, 1 - t * t))); // 圓角：越靠近縫越斜（最斜約 68 度）
+        ao += t * t; sx -= (m * (r.gx * ux + r.gy * uy + r.gz * uz)) / lu; sy -= (m * (r.gx * vx + r.gy * vy + r.gz * vz)) / lv; } // 斜度往縫裡面（每公尺）
+      const n2 = NS * NS, gu = 1 / (lu * (W - 1)), gv = 1 / (lv * (H - 1)), gm = Math.max(gu, gv); // shader 的切線空間：T＝∇u、B＝∇v，除以比較大的那個
+      cov /= n2; ao /= n2; nX = ((KN * sx) / n2) * (gm / gu); nY = ((KN * sy) / n2) * (gm / gv);
+      dk = 1 - 0.82 * cov - 0.22 * ao;
+      hgt[o] = cov; }
     const fx = bake ? 0 : (rnd() - 0.5) * 0.10, fy = bake ? 0 : (rnd() - 0.5) * 0.10; // 金屬亮片：每個點的法線亂一點點（烘焙的沒有：遊戲的漆面有自己的亮片）
-    let nX = -hx * 30 + fx, nY = hy * 30 + fy, nZ = 1; const l = Math.hypot(nX, nY, nZ); nX /= l; nY /= l; nZ /= l;
+    nX += fx; nY += fy; let nZ = 1; const l = Math.hypot(nX, nY, nZ); nX /= l; nY /= l; nZ /= l;
     N[o * 4] = (nX * 0.5 + 0.5) * 255; N[o * 4 + 1] = (nY * 0.5 + 0.5) * 255; N[o * 4 + 2] = (nZ * 0.5 + 0.5) * 255; N[o * 4 + 3] = 255;
-    const dk = 1 - 0.75 * k; A[o * 4] = c.r * 255 * dk; A[o * 4 + 1] = c.g * 255 * dk; A[o * 4 + 2] = c.b * 255 * dk; A[o * 4 + 3] = 255;
-    const r = 0.30 + 0.5 * k + (rnd() - 0.5) * 0.06; R[o * 4] = R[o * 4 + 1] = R[o * 4 + 2] = r * 255; R[o * 4 + 3] = 255; }
+    A[o * 4] = c.r * 255 * dk; A[o * 4 + 1] = c.g * 255 * dk; A[o * 4 + 2] = c.b * 255 * dk; A[o * 4 + 3] = 255;
+    const r = 0.30 + 0.5 * hgt[o] + (rnd() - 0.5) * 0.06; R[o * 4] = R[o * 4 + 1] = R[o * 4 + 2] = r * 255; R[o * 4 + 3] = 255; }
   ga.putImageData(IA, 0, 0); gn.putImageData(IN, 0, 0); gr.putImageData(IR, 0, 0);
   const T = (cv, srgb) => { const t = new THREE.CanvasTexture(cv); t.anisotropy = 16; t.flipY = false; if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true; return t; };
   return bake ? { map: T(alb, true), normalMap: T(nrm, false) } : { map: T(alb, true), normalMap: T(nrm, false), roughnessMap: T(rgh, false) };
@@ -255,7 +280,7 @@ function materials(THREE, color) {
     red: new THREE.MeshStandardMaterial({ color: 0xb3121a, roughness: 0.4, metalness: 0.2 }),
     steel: new THREE.MeshStandardMaterial({ color: 0x6d6f73, roughness: 0.45, metalness: 0.85 }),
     lensRed: new THREE.MeshPhysicalMaterial({ color: 0xd0101c, roughness: 0.05, transmission: 0.6, ior: 1.5, thickness: 0.01, transparent: true, side: THREE.DoubleSide }),
-    lensAmber: new THREE.MeshPhysicalMaterial({ color: 0xe88a16, roughness: 0.05, transmission: 0.6, ior: 1.5, thickness: 0.01, transparent: true, side: THREE.DoubleSide }),
+    lensAmber: new THREE.MeshPhysicalMaterial({ color: 0xe47c12, roughness: 0.05, transmission: 0.6, ior: 1.5, thickness: 0.01, transparent: true, side: THREE.DoubleSide }),
     lensClear: new THREE.MeshPhysicalMaterial({ color: 0xdce8ef, roughness: 0.04, transmission: 0.82, ior: 1.5, thickness: 0.02, clearcoat: 1, clearcoatRoughness: 0.03, transparent: true, side: THREE.DoubleSide }),
     bulb: new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff2d0, emissiveIntensity: 0.6, roughness: 0.3 }),
     smoke: new THREE.MeshPhysicalMaterial({ color: 0x1a1c20, roughness: 0.1, metalness: 0.3, clearcoat: 1 }),
@@ -424,41 +449,45 @@ function build(THREE, opt = {}) {
   const edgeTube = (h, mat, r, name, dz = 0) => { const pts = ring(h); if (pts.length < 8) return; const cz = pts.reduce((s, v) => s + v.z, 0) / pts.length, cy = pts.reduce((s, v) => s + v.y, 0) / pts.length;
     const ord = pts.map((v) => ({ a: Math.atan2(v.y - cy, v.z - cz), v })).sort((p, q) => p.a - q.a); const curve = new THREE.CatmullRomCurve3(ord.map((p) => new THREE.Vector3(p.v.x, p.v.y, p.v.z + dz)), true); both(new THREE.TubeGeometry(curve, 120, r, 8, true), mat, name); };
   edgeTube(HOLES[2], Mt.trim, 0.0042, 'headBezel'); edgeTube(HOLES[3], Mt.trim, 0.005, 'tailBezel');
-  // 大燈（照片 5b061c63）：主燈＝透明燈罩（細細的格子線）後面一個橢圓的反光碗（一圈一圈的小鏡面）＋旁邊鍍鉻的直條紋＋下面一條霧白；外角＝霧白的角燈（直的細紋）；中間深灰色隔板；燈泡前面六角的小遮罩
+  // 大燈（照片 5b061c63）：主燈＝透明燈罩（細細的格子線）後面一個橢圓的反光碗（一片一片的鍍鉻小鏡面）＋旁邊鍍鉻的直條紋＋下面一條霧白；外角＝霧白的角燈（直的細紋）；中間深灰色隔板；燈泡前面六角的小遮罩
   // 反光鏡、燈罩的貼圖：u＝z 0.30…0.698，v＝y 0.590…0.732（主燈那一格）
   const HU = (z, y) => [(z - 0.30) / 0.398, (y - 0.590) / 0.142];
+  // 第 55 批（Nick「車燈可以再做更好一點」）：照片的反光鏡是一大片一大片斜斜的鍍鉻小鏡面（照到的東西一塊亮一塊暗），旁邊是一條一條圓的直槽；
+  // 以前一圈一圈小格子＋灰色深淺不一＋白天自己發光 → 看起來像一張灰色的圖。現在：顏色都是亮的鍍鉻，亮暗交給反光（每一片斜的方向不一樣，片裡面也有一點彎）
   const HT = (() => {
     const W = 1024, H = 384, rr = (k) => { const s = Math.sin(k * 91.345 + 7.13) * 43758.5453; return s - Math.floor(s); };
-    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const c = cv.getContext('2d');
-    const nv = document.createElement('canvas'); nv.width = W; nv.height = H; const n = nv.getContext('2d');
-    const g8 = (b) => { const v = Math.round(255 * Math.max(0, Math.min(1, b))); return `rgb(${v},${v},${v})`; };
-    const nrm = (tx, ty) => `rgb(${Math.round(127.5 + tx * 127)},${Math.round(127.5 + ty * 127)},${Math.round(127.5 + Math.sqrt(Math.max(0, 1 - tx * tx - ty * ty)) * 127)})`;
-    // 旁邊：直條紋（寬窄、亮暗不一），兩條橫的斷開
-    let X = 0, k = 1; while (X < W) { const w = 12 + rr(k) * 18, b = 0.7 + rr(k + 50) * 0.28, t = (rr(k + 99) - 0.5) * 0.5;
-      for (const [y0, y1, db] of [[0, H * 0.34, 0.05], [H * 0.34, H * 0.7, -0.04], [H * 0.7, H, 0.02]]) { c.fillStyle = g8(b + db + (rr(k * 7 + y0) - 0.5) * 0.08); c.fillRect(X, y0, w, y1 - y0); n.fillStyle = nrm(t, (rr(k * 3 + y0) - 0.5) * 0.3); n.fillRect(X, y0, w, y1 - y0); }
-      c.fillStyle = g8(0.5); c.fillRect(X, 0, 1, H); X += w; k++; }
-    c.fillStyle = g8(0.55); c.fillRect(0, H * 0.34, W, 1.5); c.fillRect(0, H * 0.7, W, 1.5);
-    // 反光碗：橢圓（中心 z 0.50、y 0.662），一圈一圈的扇形小鏡面，每一片亮暗、斜的方向不一樣
-    const X0 = W * 0.5025, Y0 = H * (1 - 0.507), A = W * 0.339, B = H * 0.366, RIN = [0.14, 0.34, 0.56, 0.78, 1.0], SEC = [8, 12, 18, 26];
-    c.fillStyle = g8(0.3); c.beginPath(); c.ellipse(X0, Y0, A + 3, B + 3, 0, 0, 2 * Math.PI); c.fill();
-    for (let r = 0; r < 4; r++) { const ns = SEC[r], off = (rr(r + 300) * 2 * Math.PI) / ns;
-      for (let s = 0; s < ns; s++) { const a0 = off + (s * 2 * Math.PI) / ns, a1 = a0 + (2 * Math.PI) / ns, r0 = RIN[r], r1 = RIN[r + 1], q = r * 40 + s, am = (a0 + a1) / 2, b = 0.38 + rr(q + 500) * 0.55;
-        const path = (ctx) => { ctx.beginPath(); for (let t = 0; t <= 6; t++) { const a = a0 + ((a1 - a0) * t) / 6; ctx.lineTo(X0 + A * r1 * Math.cos(a), Y0 + B * r1 * Math.sin(a)); } for (let t = 6; t >= 0; t--) { const a = a0 + ((a1 - a0) * t) / 6; ctx.lineTo(X0 + A * r0 * Math.cos(a), Y0 + B * r0 * Math.sin(a)); } ctx.closePath(); };
-        path(c); const gr = c.createLinearGradient(X0 + A * r0 * Math.cos(am), Y0 + B * r0 * Math.sin(am), X0 + A * r1 * Math.cos(am), Y0 + B * r1 * Math.sin(am)); gr.addColorStop(0, g8(b + 0.12)); gr.addColorStop(1, g8(b * 0.85)); c.fillStyle = gr; c.fill();
-        c.strokeStyle = g8(0.97); c.lineWidth = 1.6; c.stroke();
-        path(n); n.fillStyle = nrm(Math.cos(am) * 0.28 + (rr(q + 700) - 0.5) * 0.3, -Math.sin(am) * 0.28 + (rr(q + 900) - 0.5) * 0.3); n.fill(); } }
-    c.fillStyle = g8(0.22); c.beginPath(); c.ellipse(X0, Y0, A * 0.14, B * 0.14, 0, 0, 2 * Math.PI); c.fill();
-    c.strokeStyle = g8(1); c.lineWidth = 2.5; c.beginPath(); c.ellipse(X0, Y0, A + 5, B + 5, 0, 0, 2 * Math.PI); c.stroke();
-    // 燈罩：白底＋細細的格子線（直 12 條、橫 3 條）
-    const lv = document.createElement('canvas'); lv.width = 512; lv.height = 128; const l2 = lv.getContext('2d'); l2.fillStyle = '#fff'; l2.fillRect(0, 0, 512, 128); l2.fillStyle = g8(0.8);
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const c = cv.getContext('2d'), IA = c.createImageData(W, H), A = IA.data;
+    const nv = document.createElement('canvas'); nv.width = W; nv.height = H; const n = nv.getContext('2d'), IN = n.createImageData(W, H), N = IN.data;
+    const put = (o, b, tx, ty) => { const v = Math.round(255 * Math.max(0, Math.min(1, b))), l = Math.hypot(tx, ty, 1); A[o] = A[o + 1] = A[o + 2] = v; A[o + 3] = 255; N[o] = 127.5 + (tx / l) * 127; N[o + 1] = 127.5 + (ty / l) * 127; N[o + 2] = 127.5 + (1 / l) * 127; N[o + 3] = 255; }; // tx：往 u（車外），ty：往上
+    const FX = [0]; for (let k = 1; FX[FX.length - 1] < W; k++) FX.push(FX[FX.length - 1] + 9 + rr(k) * 8); // 直槽：一條 9–17 像素（3.5–6.6 公釐）
+    const BR = [H * 0.34, H * 0.7]; // 直槽橫的斷開兩條
+    const X0 = W * 0.5025, Y0 = H * (1 - 0.507), EA = W * 0.339, EB = H * 0.366, RIN = [0.15, 0.38]; // 反光碗：橢圓（中心 z 0.50、y 0.662）
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const o = (y * W + x) * 4, ex = (x + 0.5 - X0) / EA, ey = (Y0 - y - 0.5) / EB, r = Math.hypot(ex, ey), th = Math.atan2(ey, ex);
+      if (r < 1.02) { const rw = r < 1 ? r + 0.035 * Math.sin(3 * th + 1.3) + 0.025 * Math.sin(5 * th + 0.4) : r; // 一圈一圈的邊歪歪的（不是正圓）
+        if (r >= 1) { put(o, r < 1.011 ? 0.97 : 0.45, ex * 0.6, ey * 0.6); continue; } // 碗的邊：亮的一圈＋外面一條暗線
+        if (rw < RIN[0]) { const e = (RIN[0] - rw) * Math.hypot(EA * Math.cos(th), EB * Math.sin(th)); put(o, e < 1.6 ? 0.95 : 0.2, Math.cos(th) * 0.5, Math.sin(th) * 0.5); continue; } // 中間燈泡的洞
+        let q, de, fx, fy;
+        if (rw < RIN[1]) { const ns = 8, st = ((((th - 0.2) / (2 * Math.PI)) * ns) % ns + ns) % ns, s = Math.floor(st); fx = st - s - 0.5; fy = (rw - RIN[0]) / (RIN[1] - RIN[0]) - 0.5; q = s; // 燈泡旁邊一圈：8 片放射狀
+          de = Math.min((0.5 - Math.abs(fy)) * (RIN[1] - RIN[0]) * Math.hypot(EA * Math.cos(th), EB * Math.sin(th)), (0.5 - Math.abs(fx)) * ((2 * Math.PI) / ns) * rw * Math.hypot(EA * Math.sin(th), EB * Math.cos(th)));
+        } else { const NC = 9, NR = 5, gx = ex * (1 + 0.14 * ey * ey), gy = ey * (1 + 0.1 * ex * ex), cx = ((gx + 1) / 2) * NC, cy = ((gy + 1) / 2) * NR, ci = Math.floor(cx), cj = Math.floor(cy); // 外面：一格一格（照片：直的、橫的分隔線，稍微跟著碗彎）
+          fx = cx - ci - 0.5; fy = cy - cj - 0.5; q = 50 + cj * 16 + ci; de = Math.min((0.5 - Math.abs(fx)) * (2 / NC) * EA, (0.5 - Math.abs(fy)) * (2 / NR) * EB); }
+        const tx = (rr(q + 700) - 0.5) * 1.0 + fx * 0.15, ty = (rr(q + 900) - 0.5) * 1.0 + fy * 0.15; // 每一片平平的、斜的方向不一樣（照片：一塊亮一塊暗）
+        put(o, de < 0.9 ? 0.42 : de < 2.0 ? 0.98 : 0.84 + 0.12 * rr(q + 500), tx, ty); continue; }
+      let k = 0; while (FX[k + 1] <= x) k++; const t = (x + 0.5 - FX[k]) / (FX[k + 1] - FX[k]), b = y < BR[0] ? 0 : y < BR[1] ? 1 : 2; // 直槽：圓的（一條裡面從左斜到右）
+      if (Math.abs(y + 0.5 - BR[0]) < 1 || Math.abs(y + 0.5 - BR[1]) < 1) { put(o, 0.5, 0, b === 1 ? 0.5 : -0.5); continue; }
+      put(o, t < 0.07 || t > 0.93 ? 0.55 : 0.86 + 0.08 * rr(k + 50 + b * 13) - 0.08 * Math.abs(t - 0.5), (t - 0.5) * 1.2 + (rr(k + 99 + b * 7) - 0.5) * 0.25, (rr(k * 3 + b * 11) - 0.5) * 0.35); }
+    c.putImageData(IA, 0, 0); n.putImageData(IN, 0, 0);
+    // 燈罩：細細的格子線（直 12 條、橫 3 條），透明底（遊戲裡：線比較不透明，看得到燈罩上的格子）
+    const lv = document.createElement('canvas'); lv.width = 512; lv.height = 128; const l2 = lv.getContext('2d'); l2.fillStyle = 'rgba(13,15,17,0.05)'; l2.fillRect(0, 0, 512, 128); l2.fillStyle = 'rgba(120,124,128,0.3)';
     for (let i = 1; i < 13; i++) l2.fillRect(Math.round((i * 512) / 13), 0, 2, 128);
     for (const v of [0.3, 0.55, 0.8]) l2.fillRect(0, Math.round(128 * (1 - v)), 512, 1.5);
-    // 霧白：直的細紋（法線）
-    const fv = document.createElement('canvas'); fv.width = 128; fv.height = 4; const f2 = fv.getContext('2d');
-    for (let x = 0; x < 128; x++) { const t = Math.sin((x / 128) * 2 * Math.PI * 16) * 0.6; f2.fillStyle = nrm(t, 0); f2.fillRect(x, 0, 1, 4); }
-    const T = (cvs, srgb) => { const t = new THREE.CanvasTexture(cvs); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
-    return { map: T(cv, true), nrm: T(nv, false), lens: T(lv, true), rib: T(fv, false) }; })();
-  { const hl = Mt.lensClear; hl.map = HT.lens; hl.color.set(0xf6f9fb); hl.transmission = 0.94; hl.roughness = 0.02; hl.needsUpdate = true; }
+    // 霧白（角燈、下面那條）：直的圓凹槽（像玻璃的直紋，24 條）
+    const fv = document.createElement('canvas'); fv.width = 256; fv.height = 4; const f2 = fv.getContext('2d'), FI = f2.createImageData(256, 4);
+    for (let x = 0; x < 256; x++) { const t = ((x + 0.5) * 24) / 256 % 1, tx = (t - 0.5) * 1.3, l = Math.hypot(tx, 1); for (let y = 0; y < 4; y++) { const o = (y * 256 + x) * 4; FI.data[o] = 127.5 + (tx / l) * 127; FI.data[o + 1] = 127.5; FI.data[o + 2] = 127.5 + (1 / l) * 127; FI.data[o + 3] = 255; } }
+    f2.putImageData(FI, 0, 0);
+    const T = (cvs, srgb, rep) => { const t = new THREE.CanvasTexture(cvs); if (srgb) t.colorSpace = THREE.SRGBColorSpace; if (rep) t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t; };
+    return { map: T(cv, true), nrm: T(nv, false), lens: T(lv, true), rib: T(fv, false, true) }; })();
+  { const hl = Mt.lensClear; hl.map = HT.lens; hl.color.set(0xffffff); hl.transmission = 0.94; hl.roughness = 0.02; hl.needsUpdate = true; } // 第 55 批：燈罩的貼圖有透明度（底是深色、幾乎透明）
   lampBox(HOLES[2], -0.13, shrink(0.8), Mt.lensClear, () => {
     const RP = ring(HOLES[2]), xl = (z) => { let s = 0, n = 0, best = null; for (const v of RP) { if (Math.abs(v.z - z) < 0.025) { s += v.x; n++; } if (!best || Math.abs(v.z - z) < Math.abs(best.z - z)) best = v; } return n ? s / n : best.x; }; // 燈罩在 z 那邊的 x
     const xs = (z, y) => { let s = 0, w = 0; for (const v of RP) { const q = 1 / ((v.z - z) ** 2 + (v.y - y) ** 2 + 1e-6); s += v.x * q; w += q; } return s / w; }; // 燈罩在 (z, y) 的 x：邊上的點照距離平均
@@ -471,8 +500,8 @@ function build(THREE, opt = {}) {
         for (let i = 0; i <= nz; i++) { const z = a + ((b - a) * i) / nz; pp.push(xs(z, y) - dep(z, y), y, z); uu.push(...uvf(z, y)); } }
       for (let j = 0; j < ny; j++) for (let i = 0; i < nz; i++) { const a = j * (nz + 1) + i, b = a + 1, c2 = a + nz + 1, d = c2 + 1; ii.push(a, d, b, a, c2, d); }
       const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(uu, 2)); sg.setIndex(ii); sg.computeVertexNormals(); return sg; };
-    const rm = new THREE.MeshStandardMaterial({ color: 0xffffff, map: HT.map, normalMap: HT.nrm, metalness: 1, roughness: 0.1, emissive: 0xffffff, emissiveMap: HT.map, emissiveIntensity: 0.14, side: THREE.DoubleSide }); rm.userData.slot = 'reflector';
-    const frost = new THREE.MeshStandardMaterial({ color: 0xe9edf0, roughness: 0.3, metalness: 0.35, normalMap: HT.rib, emissive: 0xffffff, emissiveIntensity: 0.1, side: THREE.DoubleSide }); frost.userData.slot = 'frost';
+    const rm = new THREE.MeshStandardMaterial({ color: 0xffffff, map: HT.map, normalMap: HT.nrm, metalness: 1, roughness: 0.06, emissive: 0xffffff, emissiveMap: HT.map, emissiveIntensity: 0.03, side: THREE.DoubleSide }); rm.userData.slot = 'reflector'; // 第 55 批：白天幾乎不發光（以前 0.14：一片白）
+    const frost = new THREE.MeshStandardMaterial({ color: 0xdfe5ea, roughness: 0.16, metalness: 0.55, normalMap: HT.rib, emissive: 0xffffff, emissiveIntensity: 0.03, side: THREE.DoubleSide }); frost.userData.slot = 'frost';
     const bowl = (z, y) => { const r2 = ((z - 0.50) / 0.135) ** 2 + ((y - 0.662) / 0.052) ** 2; return 0.016 + 0.05 * Math.max(0, 1 - r2); };
     both(sheet(0, 0.698, yB, yT, 72, 28, bowl, HU), rm, 'reflector');
     both(sheet(0, 0.698, yB, yB + 0.012, 40, 2, () => 0.008, (z, y) => [(z - 0.30) / 0.1, y]), frost, 'headStrip'); // 下面一條霧白
@@ -485,11 +514,34 @@ function build(THREE, opt = {}) {
   // 保桿角上（照片）：橘色方向燈（燈罩跟著角彎、後面一片亮的反光）＋下面導風口（黑的殼、三條橘色橫條）；都挖在車身格子上，車頭彎圓的時候一起彎
   const chord = (R, yk) => { const ps = R.filter((v) => Math.abs(v.y - yk) < 0.012); if (ps.length < 2) return null; const a = ps.reduce((m, v) => (v.z < m.z ? v : m)), b = ps.reduce((m, v) => (v.z > m.z ? v : m)); return { a, b, L: Math.hypot(b.x - a.x, b.z - a.z), r: -Math.atan2(b.z - a.z, b.x - a.x) }; }; // 洞的邊在 y 那一條：最裡面、最外面兩點
   const bar = (c, w, h, d, y, back, mat, name) => { const g2 = new THREE.BoxGeometry(c.L * w, h, d); g2.rotateY(c.r); g2.translate((c.a.x + c.b.x) / 2 - back, y, (c.a.z + c.b.z) / 2); both(g2, mat, name); };
+  // 第 55 批：橘色燈罩裡面一格一格的小稜鏡（照片：約 3 公釐的小方格，每格四面斜的）；方向燈、側邊的小燈共用（燈罩的 uv＝公尺，一張圖 4×4 格＝1.2 公分）
+  { const S = 128, K = 4, cs = S / K, mk = () => { const c = document.createElement('canvas'); c.width = c.height = S; return c; }, ca = mk(), cn = mk(), ga = ca.getContext('2d'), gn = cn.getContext('2d'), IA = ga.createImageData(S, S), IN = gn.createImageData(S, S);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const o = (y * S + x) * 4, dx = ((x + 0.5) % cs) / cs - 0.5, dy = 0.5 - ((y + 0.5) % cs) / cs, edge = Math.max(Math.abs(dx), Math.abs(dy)) > 0.44; // dy 往上
+      const tx = Math.abs(dx) > Math.abs(dy) ? Math.sign(dx) * 0.42 : 0, ty = Math.abs(dx) > Math.abs(dy) ? 0 : Math.sign(dy) * 0.42, l = Math.hypot(tx, ty, 1);
+      const b = edge ? 200 : 255; IA.data[o] = IA.data[o + 1] = IA.data[o + 2] = b; IA.data[o + 3] = 255; IN.data[o] = 127.5 + (tx / l) * 127; IN.data[o + 1] = 127.5 + (ty / l) * 127; IN.data[o + 2] = 127.5 + (1 / l) * 127; IN.data[o + 3] = 255; }
+    ga.putImageData(IA, 0, 0); gn.putImageData(IN, 0, 0);
+    const T = (cv, srgb) => { const t = new THREE.CanvasTexture(cv); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / 0.012, 1 / 0.012); t.anisotropy = 8; return t; };
+    Mt.lensAmber.map = T(ca, true); Mt.lensAmber.normalMap = T(cn, false); Mt.lensAmber.needsUpdate = true; }
   lampBox(HOLES[6], -0.03, shrink(0.85), Mt.lensAmber, (cx, d, cy) => { const c = chord(ring(HOLES[6]), cy); if (c) bar(c, 0.9, 0.04, 0.004, cy, 0.016, Mt.chrome, 'turnRefl'); }, null, 0.006);
-  lampBox(HOLES[7], -0.035, shrink(0.85), null, () => { const R7 = ring(HOLES[7]); for (let k = 0; k < 3; k++) { const yk = 0.333 + k * 0.016, c = chord(R7, yk); if (c) bar(c, 0.92, 0.007, 0.012, yk, 0.012, Mt.lensAmber, 'ductSlat'); } });
+  { const R6 = ring(HOLES[6]), p = R6.reduce((m, v) => (Math.hypot(v.z - 0.643, v.y - 0.478) < Math.hypot(m.z - 0.643, m.y - 0.478) ? v : m)), sc = new THREE.CylinderGeometry(0.0034, 0.0034, 0.003, 16); // 燈罩裡面那頭上角的小螺絲（照片）
+    sc.rotateZ(PI / 2); sc.translate(p.x + 0.0025, 0.478, 0.643); both(sc, Mt.chrome, 'turnScrew'); }
+  { const slat = new THREE.MeshStandardMaterial({ color: 0xd98a2e, roughness: 0.45, metalness: 0.05 }); slat.userData.slot = 'trim'; // 導風口：6 片斜斜的橘色塑膠百葉（照片；以前 3 條透明橘色的棒子）
+    lampBox(HOLES[7], -0.035, shrink(0.85), null, () => { const R7 = ring(HOLES[7]); for (let k = 0; k < 6; k++) { const yk = 0.3435 + k * 0.0078, c = chord(R7, yk); if (!c) continue;
+      const g2 = new THREE.BoxGeometry(c.L * 0.93, 0.0035, 0.016); g2.rotateX(-0.45); g2.rotateY(c.r); g2.translate((c.a.x + c.b.x) / 2 - 0.012, yk, (c.a.z + c.b.z) / 2); both(g2, slat, 'ductSlat'); } }); }
   // 尾燈：一片燈罩，上面紅、下面一條透明（照片）＋橫的紋路；裡面一格一格的反光
-  const tailMat = (() => { const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128; const c2 = cv.getContext('2d'); c2.fillStyle = '#c80c18'; c2.fillRect(0, 0, 512, 128); c2.fillStyle = '#5e0a10'; c2.fillRect(0, 70, 512, 4); c2.fillStyle = '#cdd0d2'; c2.fillRect(0, 74, 512, 54); // 照片：上面紅、下面一條透明（銀白），沒有橘色
-    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; const nc = document.createElement('canvas'); nc.width = 64; nc.height = 128; const n2 = nc.getContext('2d'); const img = n2.createImageData(64, 128); for (let y = 0; y < 128; y++) for (let x = 0; x < 64; x++) { const f = ((y % 10) / 10 - 0.5) * 1.2, o = (y * 64 + x) * 4; img.data[o] = 128; img.data[o + 1] = (0.5 - f * 0.5) * 255; img.data[o + 2] = 220; img.data[o + 3] = 255; } n2.putImageData(img, 0, 0); const nt = new THREE.CanvasTexture(nc);
+  // 尾燈：一片燈罩，上面紅、下面一條透明（照片）；第 55 批：紅色裡面兩塊暗一點的長方形（反光片）、透明那條裡面一個圓角的倒車燈框，整片細細的小稜鏡（以前一條一條橫線）
+  const tailMat = (() => { const W = 512, H = 128, mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }, cv = mk(W, H), c2 = cv.getContext('2d');
+    c2.fillStyle = '#c80c18'; c2.fillRect(0, 0, W, H);
+    c2.fillStyle = '#9a0811'; for (const [y0, y1] of [[12, 32], [40, 60]]) { c2.beginPath(); c2.roundRect(34, y0, 270, y1 - y0, 4); c2.fill(); } // 反光片（裡面那半邊）
+    c2.fillStyle = '#5e0a10'; c2.fillRect(0, 70, W, 4); // 紅跟透明中間的線
+    const gr = c2.createLinearGradient(0, 74, 0, H); gr.addColorStop(0, '#d9dcde'); gr.addColorStop(1, '#c3c7ca'); c2.fillStyle = gr; c2.fillRect(0, 74, W, H - 74); // 照片：下面一條透明（銀白），沒有橘色
+    c2.strokeStyle = '#8e9296'; c2.lineWidth = 3; c2.beginPath(); c2.roundRect(22, 84, 190, 34, 7); c2.stroke(); c2.fillStyle = '#e6e8ea'; c2.beginPath(); c2.roundRect(26, 88, 182, 26, 5); c2.fill(); // 倒車燈的框
+    c2.fillStyle = 'rgba(0,0,0,0.07)'; for (let x = 0; x < W; x += 6) c2.fillRect(x, 0, 1, H); for (let y = 0; y < H; y += 5) c2.fillRect(0, y, W, 1); // 小稜鏡的細格子
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+    const nc = mk(W, H), n2 = nc.getContext('2d'), img = n2.createImageData(W, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const dx = ((x + 0.5) % 6) / 6 - 0.5, dy = 0.5 - ((y + 0.5) % 5) / 5, tx = Math.abs(dx) * 5 > Math.abs(dy) * 6 ? Math.sign(dx) * 0.35 : 0, ty = tx ? 0 : Math.sign(dy) * 0.35, l = Math.hypot(tx, ty, 1), o = (y * W + x) * 4; // 一格四面斜的（小金字塔）
+      img.data[o] = 127.5 + (tx / l) * 127; img.data[o + 1] = 127.5 + (ty / l) * 127; img.data[o + 2] = 127.5 + (1 / l) * 127; img.data[o + 3] = 255; }
+    n2.putImageData(img, 0, 0); const nt = new THREE.CanvasTexture(nc);
     const m = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: t, normalMap: nt, roughness: 0.08, transmission: 0.45, ior: 1.5, thickness: 0.02, clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, side: THREE.DoubleSide }); m.userData.slot = 'tail'; return m; })();
   lampBox(HOLES[3], 0.10, shrink(0.6), tailMat, (xf, d) => {
     for (let k = 0; k < 7; k++) for (let m = 0; m < 2; m++) { const cube = new THREE.BoxGeometry(0.02, 0.05, 0.05); cube.translate(xf + d - 0.005, 0.68 + m * 0.075, 0.46 + k * 0.05); both(cube, Mt.chrome, 'reflCube'); } }, (z, y) => [(z - 0.43) / 0.40, (y - 0.63) / 0.18], 0.008);

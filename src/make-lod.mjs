@@ -263,7 +263,7 @@ const BK_PLATE = BODY_CLS.length; // 車牌：custom 材質（顏色跟車庫的
 const BK_PLATE_MAT = { color: '#e8e6df', roughness: 0.5, metalness: 0.1, clearcoat: 0, emissive: '#000000', ei: 1, opacity: 1 };
 const BK_ASYM = { gc8: [{ slots: ['bright', 'dark'], box: [-2.26, -1.97, 0.2, 0.31, -0.47, -0.33] }] }; // 只有一邊的東西（哪幾組、[x0, x1, y0, y1, z0, z1]）：排氣管（左後：亮的管子、裡面黑的）
 const BK_TAIL_V = 0.43; // 尾燈貼圖：v＜0.43 是倒車燈（灰），以下紅（中間一條暗線）
-async function bakedBuckets(file) { // glb 裡車身（part body）的每一組 → { slot, P, N, I, V（貼圖 v）, L（頂點色亮度）}（車子座標、公尺）
+async function bakedBuckets(file) { // glb 裡車身（part body）的每一組 → { slot, P, N, I, V（貼圖 v）, L（頂點色亮度）, Wm（頂點色紅減藍：橘色的導風口百葉，第 55 批）}（車子座標、公尺）
   const doc = await new NodeIO().registerExtensions([KHRMeshQuantization]).read(file), out = [], e = [];
   for (const nd of doc.getRoot().listNodes()) {
     const ex = nd.getExtras() || {}, mesh = nd.getMesh();
@@ -271,7 +271,7 @@ async function bakedBuckets(file) { // glb 裡車身（part body）的每一組 
     const m = nd.getWorldMatrix();
     for (const pr of mesh.listPrimitives()) {
       const pa = pr.getAttribute('POSITION'), na = pr.getAttribute('NORMAL'), ua = pr.getAttribute('TEXCOORD_0'), ca = pr.getAttribute('COLOR_0'), n = pa.getCount();
-      const P = new Float32Array(n * 3), N = new Float32Array(n * 3), V = ua && ex.uv ? new Float32Array(n) : null, L = ca ? new Float32Array(n) : null;
+      const P = new Float32Array(n * 3), N = new Float32Array(n * 3), V = ua && ex.uv ? new Float32Array(n) : null, L = ca ? new Float32Array(n) : null, Wm = ca ? new Float32Array(n) : null;
       for (let i = 0; i < n; i++) {
         pa.getElement(i, e);
         for (let k = 0; k < 3; k++) P[i * 3 + k] = m[k] * e[0] + m[4 + k] * e[1] + m[8 + k] * e[2] + m[12 + k];
@@ -279,9 +279,9 @@ async function bakedBuckets(file) { // glb 裡車身（part body）的每一組 
         const nx = m[0] * e[0] + m[4] * e[1] + m[8] * e[2], ny = m[1] * e[0] + m[5] * e[1] + m[9] * e[2], nz = m[2] * e[0] + m[6] * e[1] + m[10] * e[2], l = Math.hypot(nx, ny, nz) || 1;
         N[i * 3] = nx / l; N[i * 3 + 1] = ny / l; N[i * 3 + 2] = nz / l;
         if (V) { ua.getElement(i, e); V[i] = ex.uv[1] + ex.uv[3] * e[1]; }
-        if (L) { ca.getElement(i, e); L[i] = (e[0] + e[1] + e[2]) / 3; }
+        if (L) { ca.getElement(i, e); L[i] = (e[0] + e[1] + e[2]) / 3; Wm[i] = e[0] - e[2]; }
       }
-      out.push({ slot: ex.slot, P, N, I: Uint32Array.from(pr.getIndices().getArray()), V, L });
+      out.push({ slot: ex.slot, P, N, I: Uint32Array.from(pr.getIndices().getArray()), V, L, Wm });
     }
   }
   return out;
@@ -375,7 +375,7 @@ function bakedHalf(buckets, key) {
       b = { ...b, P: s.P, N: s.N, I: s.I }; TC = Array.from(s.S, (x) => (x ? 8 : 9));
     } else if (b.slot === 'plate') TC = Array.from({ length: b.I.length / 3 }, () => BK_PLATE); // 第 54 批：車牌自己一組（有號碼的貼圖；輕量車還是淺色的板子）
     else if (BK_CLS[b.slot] === undefined) continue; // 大燈罩、車內、車底、除霧線（第 54 批）
-    else TC = Array.from({ length: b.I.length / 3 }, (_, t) => (b.slot === 'trim' && b.L && (b.L[b.I[t * 3]] + b.L[b.I[t * 3 + 1]] + b.L[b.I[t * 3 + 2]]) / 3 > 0.3 ? BK_PLATE : BK_CLS[b.slot])); // 以前的車牌在飾條裡（淺色）
+    else TC = Array.from({ length: b.I.length / 3 }, (_, t) => { const avg = (A) => (A[b.I[t * 3]] + A[b.I[t * 3 + 1]] + A[b.I[t * 3 + 2]]) / 3; return b.slot === 'trim' && b.L ? (avg(b.Wm) > 0.2 ? BK_CLS.amber : avg(b.L) > 0.3 ? BK_PLATE : BK_CLS.trim) : BK_CLS[b.slot]; }); // 以前的車牌在飾條裡（淺色）；第 55 批：橘色的（導風口的百葉）算方向燈那一類
     const map = new Map(); // (頂點, 分類) → 新的頂點：一個頂點只能有一個分類（交界的頂點分開，簡化的時候是 seam）
     const vid = (i, c) => { const k = i * 16 + c; let v = map.get(k); if (v === undefined) { v = C.length; map.set(k, v); P.push(b.P[i * 3], b.P[i * 3 + 1], b.P[i * 3 + 2]); N.push(b.N[i * 3], b.N[i * 3 + 1], b.N[i * 3 + 2]); C.push(c); } return v; };
     for (let t = 0; t < b.I.length; t += 3) {
