@@ -536,6 +536,7 @@ function dispose(key) {
 }
 function disposeCar(S) {
   S.dmg?.dispose(); S.dmg = null; // 撞壞的網格換回原本的（先換回來，下面才會釋放到對的網格）
+  const seated = []; S.car.traverse((o) => { if (o.userData.seated) seated.push(o); }); for (const o of seated) { o.removeFromParent(); o.visible = false; } // 第 57 批：坐在車上的人（材質大家共用）先拿下來
   S.car.removeFromParent();
   S.car.traverse((o) => {
     if (o.geometry) o.geometry.dispose();

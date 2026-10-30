@@ -68,7 +68,7 @@ function netSprite(map, w, h, cy) {
 function netPeer(uid) {
   let P = NET.P.get(uid);
   if (!P) {
-    P = { uid, n: '', car: '', l: null, ch: null, col: NET_COL[0], buf: [], cur: { t: 0, x: 0, z: 0, h: 0, v: 0, o: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pk: null, pv: null }, last: 0, pkOn: false, tagW: 0, jlSeen: 0,
+    P = { uid, n: '', car: '', l: null, ch: null, col: NET_COL[0], buf: [], cur: { t: 0, x: 0, z: 0, h: 0, v: 0, o: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pk: null, pv: null, st: 0, rd: null, nr: 0 }, last: 0, pkOn: false, tagW: 0, jlSeen: 0,
       obj: null, objK: '', job: 0, chr: null, chrK: '', tag: null, bub: null, bubT: 0, roll: 0, px: null, pz: null, mk: { x: 0, z: 0, fill: NET_COL[0], ring: '#ffffff', r: 6, label: '', name: '', on: false },
       box: { t: 'box', x: 0, z: 0, hx: 2.2, hz: 0.9, rot: 0, h: 1.4, vx: 0, vz: 0, m: 1, dvx: 0, dvz: 0, noCrush: true }, vis: false }; // noCrush：越野車輾不過去（照車撞車算）
     NET.P.set(uid, P); NET.marks.push(P.mk);
@@ -78,7 +78,7 @@ function netPeer(uid) {
 function netDropObj(P) {
   P.job++;
   netUnride(P); // 第 56 批：騎在沙灘車上的人先拿下來（不跟著車一起釋放）
-  if (P.obj) { P.obj.car.removeFromParent(); P.obj.sh.removeFromParent(); P.obj.lod.dispose(); P.obj = null; }
+  if (P.obj) { seatDetach(P.obj.lod.body || P.obj.car); P.obj.car.removeFromParent(); P.obj.sh.removeFromParent(); P.obj.lod.dispose(); P.obj = null; } // 第 57 批：坐在這台車上的人先拿下來
   P.objK = '';
 }
 function netDropChr(P) { if (P.chr) { P.chr.dispose(); P.chr = null; } P.chrK = ''; P.riding = false; }
@@ -154,7 +154,7 @@ function netStep(dt) {
   netPhTick();
   const show = netWorld(), T = netNow() - NET_DELAY, now = netNow(), race = !!(NET.race && NET.race.kind !== 'out') || !!ciRace || !!orRace;
   const inPol = !!(DRIVE.on && indoor && indoor.kind === 'police' && walker && PSC); // 第 22 批：我在警察局裡面：看得到也在裡面的朋友（關在拘留室的也是）
-  const me = show ? (walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : null) : null, mx = me ? me.x : 0, mz = me ? me.z : 0;
+  const me = show ? (walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : HOP.on ? HOP.last : null) : null, mx = me ? me.x : 0, mz = me ? me.z : 0; // 第 57 批：坐朋友的車＝他的車在哪裡
   const cols = !race && !!(drv || walker);
   const myY = drv && TRAMP.on && me ? PW.heightAt(mx, mz) : null; // 第 24 批：我開在斜坡上：只撞得到跟我差不多高的
   let jin = false; // 有朋友關在拘留室（我看得到的）
@@ -291,7 +291,7 @@ function netPolBumped(P, i, dvx, dvz) { // 朋友撞到追我的警車：我這�
   NET.bumped++;
   const t = performance.now(); if (P.n && t - (P.bumpT || 0) > 4000) { P.bumpT = t; netToast(`💥 ${P.n}撞開了追你的警車！`); }
 }
-function netToast(text) { const t = walker && walker.mode !== 'off' ? walker : drv; if (t && trip) t.toast(text, 3000); else netSay(text); }
+function netToast(text) { const t = walker && walker.mode !== 'off' ? walker : drv; if (trip && (HOP.on || PAX.on)) seatToast(text, 3000); else if (t && trip) t.toast(text, 3000); else netSay(text); } // 第 57 批：坐著的時候提示在坐著的畫面上
 function netHideAll() {
   for (const k of NET_POL.cars) k.group.visible = false;
   for (const P of NET.P.values()) { if (P.obj) { P.obj.car.visible = false; P.obj.sh.visible = false; } if (P.chr) P.chr.group.visible = false; if (P.tag) P.tag.visible = false; if (P.bub) P.bub.visible = false; P.mk.on = false; }
@@ -474,16 +474,18 @@ function netGstOff() {
 // ---- 別人找你比賽：卡片（好／不要），15 秒沒按＝不要；車庫頁也看得到（卡片放在畫面上）----
 const NET_INV_S = 15;
 function netInvite(d) {
-  if (!NET.on || !d || !d.id || !(NET_KIND[d.kind] || d.kind === 'bell')) return false;
+  if (!NET.on || !d || !d.id || !(NET_KIND[d.kind] || d.kind === 'bell' || d.kind === 'ride')) return false;
+  if (d.kind === 'ride' && !seatHostOk(d)) return false; // 第 57 批：現在不能讓人坐（網站回「在忙」）
   const H = netHud();
   if (NET.inv && NET.inv.id !== d.id) return false; // 一次一張（網站排隊）
   if (NET.race && NET.race.phase !== 'done') return false; // 比賽中：網站說「在比賽」
   clearTimeout(NET.invT);
   NET.inv = { id: String(d.id) };
-  const bell = d.kind === 'bell'; // 第 23 批：有人按我家的門鈴（草稿：「有人按你家的門鈴／X想開進你的車庫／他只能看你的車，不能開走。」）
-  H.invH.hidden = !bell;
-  H.invT.textContent = bell ? `${String(d.name || '有人').slice(0, 12)}想開進你的車庫` : `🏁 ${String(d.name || '有人').slice(0, 12)}找你比${NET_KIND[d.kind].replace(' 3 圈', '')}！`;
-  H.invS.textContent = bell ? '他只能看你的車，不能開走。' : d.car ? `他開 ${String(d.car).slice(0, 24)}` : '';
+  const ride = d.kind === 'ride'; // 第 57 批：有人想坐我的車（草稿：「🚗 X想坐你的車／副駕駛座」）
+  const bell = d.kind === 'bell' || ride; // 第 23 批：有人按我家的門鈴（草稿：「有人按你家的門鈴／X想開進你的車庫／他只能看你的車，不能開走。」）
+  H.invH.hidden = d.kind !== 'bell'; // 門鈴才有上面那行「🔔 有人按你家的門鈴」
+  H.invT.textContent = ride ? `🚗 ${String(d.name || '有人').slice(0, 12)}想坐你的車` : bell ? `${String(d.name || '有人').slice(0, 12)}想開進你的車庫` : `🏁 ${String(d.name || '有人').slice(0, 12)}找你比${NET_KIND[d.kind].replace(' 3 圈', '')}！`;
+  H.invS.textContent = ride ? `${seatName(cur, d.s | 0)}（你開車，他坐著）` : bell ? '他只能看你的車，不能開走。' : d.car ? `他開 ${String(d.car).slice(0, 24)}` : '';
   H.inv.hidden = false;
   H.invI.style.transition = 'none'; H.invI.style.width = '100%'; void H.invI.offsetWidth;
   H.invI.style.transition = `width ${NET_INV_S}s linear`; H.invI.style.width = '0%';
@@ -1193,16 +1195,17 @@ NET_ME.pl = 0; // 跳燈：開的（停著的）這台燈蓋立起來＝1（town
 function netState() {
   const s = NET_ME, R = NET.race;
   s.k = cur; s.rp = null; s.rs = 0; s.o = 0; s.x = s.z = s.h = s.v = 0; s.w = 0; s.pn = 0; s.pk = null; s.pv = null; s.ph = NET_PH.out; s.jl = jailed() ? 1 : 0;
-  s.pl = 0; s.y = null;
+  s.pl = 0; s.y = null; s.st = 0; s.rd = null; s.nr = (ciRace || orRace) ? 1 : 0; // 第 57 批：st＝我坐自己的車第幾個位子、rd＝坐朋友的車 [車主, 位子, 車]、nr＝我在賽車場／泥巴賽（坐我車的人要下車）
   if (RACE.on && race) { s.o = 3; s.x = race.me.x; s.v = race.me.v; if (race.net) { s.rp = Math.round(race.me.x * 10) / 10; s.rs = race.net.seq; } return s; }
   const pv = netParked(); if (pv) s.pv = [cur, Math.round(pv.x * 100) / 100, Math.round(pv.z * 100) / 100, Math.round(pv.heading * 1000) / 1000]; // 第 22 批：停著的車（我在哪裡都送）
   if (DRIVE.on && trip && indoor && indoor.kind === 'police' && walker && walker.mode !== 'off') { const t = walker.telemetry(); s.o = 4; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed; return s; } // 第 22 批：在警察局裡面（關在拘留室也是）
-  if (!netWorld() || (HOME.in && !(GUEST.uid && !GAR.floor)) || (GV.in && GAR.floor)) return s; // 在自己車庫裡面：朋友看不到（名單寫「在車庫」）；第 23 批：有朋友來我家、我在一樓＝看得到；我在朋友家樓上＝不送（高度對不起來）
+  if (!netWorld() || (HOME.in && !(GUEST.uid && !GAR.floor)) || (GV.in && GAR.floor)) return s;
+  if (HOP.on) { seatNetHop(s); return s; } // 第 57 批：坐在朋友的車上 // 在自己車庫裡面：朋友看不到（名單寫「在車庫」）；第 23 批：有朋友來我家、我在一樓＝看得到；我在朋友家樓上＝不送（高度對不起來）
   if (walker && walker.mode !== 'off' && walker.mode !== 'seat') {
     const t = walker.telemetry(); s.o = 2; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed;
     const p = borParked(); if (p) { s.pk = [cur, Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100, Math.round(p.heading * 1000) / 1000]; s.pv = null; } // 第 19 批：下車停著的車（朋友看得到、借得到）
   }
-  else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; if (TRAMP.on) s.y = Math.round(PW.heightAt(t.x, t.z) * 100) / 100; } // 第 24 批：開在斜坡上送高度
+  else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; if (TRAMP.on) s.y = Math.round(PW.heightAt(t.x, t.z) * 100) / 100; if (PAX.on) s.st = PAX.i; } // 第 24 批：開在斜坡上送高度
   if (s.o) s.pl = popSend(); // 跳燈
   if (R && R.ci && ciRace === R.ci) { s.rp = Math.round(R.ci.me.p * 10) / 10; s.rs = R.seq; }
   if (s.o && police && police.state === 'wanted' && police.enabled) { // 通緝中：幾顆星、200 公尺內追你的警車
@@ -1312,6 +1315,7 @@ Object.assign(window.beauGame, {
     },
     leave() {
       borOff(); // 第 19 批：借來的還、借出去的拿回來
+      seatsEnd('leave'); // 第 57 批：坐朋友的車＝下車；朋友坐我的車＝拿下來
       gvEnd('leave'); netGuest(null); BELL.uid = ''; // 第 23 批：在朋友家＝出來；朋友在我家＝收掉那一條
       netRaceEnd(); netUninvite(); if (NET.goal) { NET.goal = null; if (tripDest === 'friend') setDest(null); }
       NET.on = false; NET.code = ''; NET.mem = []; NET.slot = -1; netGstOff();
@@ -1349,6 +1353,8 @@ Object.assign(window.beauGame, {
       b.push(e); if (b.length > 16) b.shift();
       const c = P.cur; c.t = s.t; c.x = e.x; c.z = e.z; c.h = e.h; c.v = e.v; c.o = s.o | 0; c.k = typeof s.k === 'string' ? s.k : ''; c.rp = e.rp; c.rs = s.rs | 0; c.w = Math.max(0, Math.min(3, s.w | 0)); c.jl = s.jl ? 1 : 0;
       c.pl = s.pl === 1 ? 1 : 0; // 跳燈
+      c.st = Number.isInteger(s.st) && s.st > 0 && s.st < 5 ? s.st : 0; c.nr = s.nr ? 1 : 0; // 第 57 批：他坐自己的車第幾個位子（0＝駕駛座）；他在賽車場／泥巴賽
+      const rd = s.rd; c.rd = Array.isArray(rd) && rd.length === 3 && typeof rd[0] === 'string' && rd[0] !== uid && Number.isInteger(rd[1]) && rd[1] > 0 && rd[1] < 5 && typeof rd[2] === 'string' && CARS[rd[2]] ? rd : null; // 第 57 批：他坐在朋友的車上 [車主, 位子, 車]
       const pk = s.pk; c.pk = Array.isArray(pk) && pk.length === 4 && typeof pk[0] === 'string' && CARS[pk[0]] && [pk[1], pk[2], pk[3]].every(Number.isFinite) ? pk : null; // 第 19 批：他停著的車
       const pv = s.pv; c.pv = Array.isArray(pv) && pv.length === 4 && typeof pv[0] === 'string' && CARS[pv[0]] && [pv[1], pv[2], pv[3]].every(Number.isFinite) ? pv : null; // 第 22 批：他停著的車（他在哪裡都有）
       const ph = s.ph; // 第 22 批：他撞到追我的警車
@@ -1379,11 +1385,13 @@ Object.assign(window.beauGame, {
     borrowing: () => !!(BOR.on || BOR.want || BOR.loading),
     lent: () => (BOR.lent ? { uid: BOR.lent.uid, k: BOR.lent.k } : null),
     bellAns: netBellAns, // 第 23 批：門鈴的回答
+    rideAns: hopAns, // 第 57 批：「可以坐你的車嗎」的回答 { uid（車主）, n, ok }
+    rideOk: seatHostOk, // 第 57 批：有人想坐我的車：現在可以嗎 { s, k }
     visitEnd(why) { gvEnd(why === 'kick' ? 'kick' : 'gone'); }, // 他請你出去／他走了
     guest: netGuest, // 朋友在我的車庫裡（null＝走了）
     place: netPlace,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
-    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, pv: P.cur.pv ? P.cur.pv[0] : null, park: !!P.pkOn, carVis: !!(P.obj && P.obj.car.visible), inPol: !!(P.chr && P.chr.group.visible && PSC && P.chr.group.parent === PSC), car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, polHits: NET_POL.hits, phSent: NET_PH.sent, bumped: NET.bumped, cellShut: NET.cellShut, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at,
+    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, pv: P.cur.pv ? P.cur.pv[0] : null, park: !!P.pkOn, carVis: !!(P.obj && P.obj.car.visible), inPol: !!(P.chr && P.chr.group.visible && PSC && P.chr.group.parent === PSC), car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, polHits: NET_POL.hits, phSent: NET_PH.sent, bumped: NET.bumped, cellShut: NET.cellShut, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at, seat: { pax: PAX.on ? PAX.i : -1, hop: HOP.on ? { uid: HOP.uid, n: HOP.n, k: HOP.k, i: HOP.i, full: !!HOP.car, spd: Math.round(HOP.spd * 10) / 10, x: HOP.last.x, z: HOP.last.z } : null, ask: !!HOP.ask, want: !!HOP.want, cam: SCAM.on ? SCAM.mode : '', peers: SEAT_PS.n, me: !!(MYSIT.C && MYSIT.C.group.visible && MYSIT.C.group.parent), act2: SEATN.own ? 'own' : SEATN.P ? SEATN.P.uid : '', sit: [...NET.P.values()].filter((P) => P.sit && P.sit.C && P.sit.C.group.visible).map((P) => ({ uid: P.uid, k: P.sit.k, i: P.sit.i })), st: [...NET.P.values()].map((P) => ({ uid: P.uid, st: P.cur.st | 0, rd: P.cur.rd || null })) },
       gstBtn: NET.hud && !NET.hud.gar.hidden ? NET.hud.gar.textContent : '', bell: BELL.uid || null, guest: GUEST.uid || null, guestBar: GUEST.ui && !GUEST.ui.bar.hidden ? GUEST.ui.t.textContent : '',
       gv: GV.on ? { uid: GV.uid, n: GV.n, slot: GV.slot, in: GV.in, want: GV.want.filter(Boolean).length, made: Object.keys(GV.objs).length, gs: HOME.gs, home: HOME.slot } : null }; },
   },

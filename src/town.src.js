@@ -467,6 +467,7 @@ function stowFull(Sx) {
   if (!Sx) return;
   if (MIR.S === Sx) mirrorSet(false); // 第 25 批：照後鏡換回原本的
   if (RIDER.S === Sx) riderOff(); // 第 56 批：沙灘車騎的人拿下來
+  seatDetach(Sx.body); // 第 57 批：坐在車上的人（你、朋友）拿下來
   scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.rotation.set(0, 0, 0); Sx.car.visible = false;
   Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0); Sx.cabin?.userData.setSteer?.(0);
 }
@@ -710,9 +711,9 @@ function leaveCar() {
   }
   outAt(spot);
 }
-function outAt(spot) {
-  const car = walker.getOut(drv, tripS, { key: cur, name: CARS[cur].btn[0], h: carH(cur) }); // 開太快、四邊都沒地方站就不下（walk.js 會說）
-  if (!car) return;
+function outAt(spot, op = null) { // 第 57 批：op＝{ seat: { side, u }, paused }（從別的位子下車）；回傳 walk.js 的那台車（null＝沒下）
+  const car = walker.getOut(drv, tripS, { key: cur, name: CARS[cur].btn[0], h: carH(cur), ...(op || {}) }); // 開太快、四邊都沒地方站就不下（walk.js 會說）
+  if (!car) return null;
   tripPose[cur] = { x: car.x, z: car.z, heading: car.heading, f: floorAt(car.x, car.z) };
   dvoice?.dispose(); dvoice = null; // 熄火（上車再發動）
   tripS?.cabin?.userData.setGauges(0, 0); tripS?.cabin?.userData.setSteer?.(0);
@@ -723,6 +724,7 @@ function outAt(spot) {
     walker.toast(`${CARS[cur].btn[0]} 停好了：${towerFlTxt(b.f)} ${b.i + 1} 號`, 2200);
   } else if (spot?.bay != null) walker.toast(`${CARS[cur].btn[0]} 停好了：越野車車庫 ${spot.bay + 1} 號格`, 2200); // 第 6 批
   arrangeCars(); keepPark();
+  return car;
 }
 // 剛下來那台的開車（停著、還沒熄掉的 drv）收掉；walk.js 記的「剛下來那台」也忘掉：上車再做一個（停進格子、走路坐電梯的時候）
 function dropDrv() { drv.dispose(); drv = null; home.open = null; obDoor.drv = null; walker.setCars([], { keepParked: false }); }
@@ -737,24 +739,29 @@ function offTower(k) {
   return pose;
 }
 // 坐進車裡了（walk.js 的 onGetIn）：剛下來那台＝接著開；出門停在電梯圓台上那台、停進格子那台（完整模型）＝開始開；別台（輕量車）＝換成完整的車開
-function onGetIn(car) {
+// 第 57 批：seat＝{ i, side, u }（選位子）：i > 0＝坐別的位子（車子不動：paxStart）；car.hop＝朋友的車（坐上去）
+function onGetIn(car, seat = null) {
   if (!trip || !DRIVE.on || !tripPose) return;
   gunner?.holster(); // 第 3 批（b3-int）：上車把槍收起來（開車不能用槍）
+  if (car.hop) { hopBoard(car, seat); return; } // 第 57 批：坐朋友的車
   if (car.borrow) { netBorrowBoard(car); return; } // 第 19 批：打對密碼，坐進朋友的車
+  const px = seat && seat.i > 0 ? seat.i : 0;
   if (car.drive) { // 剛下來那台：walk.js 已經 drv.resume() 了，引擎再發動
+    if (px) { paxStart(cur, px); arrangeCars(); return; } // 別的位子：walk.js 沒有 resume
     dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
     arrangeCars(); return;
   }
   if (car.key === tripFull && !drv) {
     const pose = offTower(car.key) || tripPose[car.key];
-    makeDrv(pose); towerHint(pose);
+    makeDrv(pose); if (px) paxStart(cur, px); else towerHint(pose);
     return;
   }
-  if (GAME.owned.has(car.key)) switchCar(car.key); else walker.resume();
+  if (GAME.owned.has(car.key)) { PAX.want = px ? { k: car.key, i: px } : null; switchCar(car.key); } else walker.resume();
 }
 // 換開別台：原本那台停在原地（換成輕量車；停在格子裡的照停），這台載入完整的車（第一次要一下子：「發動中⋯」），從停的地方開
 async function switchCar(k) {
   const tok = (boarding = { k });
+  const want = PAX.want; PAX.want = null; // 第 57 批：選了別的位子：載好再坐
   const old = tripS;
   const keep = old && !liftOK(cur) && tripPose[cur] ? { p: old.car.position.clone(), r: old.car.rotation.clone() } : null; // 第 4 批：大車（怪獸卡車：有輕量車，可是輕量車只會平平放在 y 0，在越野車場的地形上會陷下去／浮起來）停在原地：擺的樣子（地形上的高度、斜度）先記下來
   if (drv) { drv.dispose(); drv = null; } // dispose 會把車子放回原點：車庫頁收起來，村子裡換輕量車停在 tripPose
@@ -778,7 +785,7 @@ async function switchCar(k) {
   cur = k; S = car; tripS = car; save();
   const pose = offTower(k) || tripPose[k]; // 停在格子裡的：從格子開出來
   tripBox = fullBox(car);
-  makeDrv(pose); towerHint(pose);
+  makeDrv(pose); if (want && want.k === k && seatsOf(k)[want.i]) paxStart(k, want.i); else towerHint(pose); // 第 57 批
   renderWallet(); refreshCarBtns();
 }
 // 第 21 批：在圓塔裡上車：樓上＝說怎麼下去；一樓門關著＝說開鐵捲門
@@ -1690,6 +1697,7 @@ function leaveDrive() {
   if (!trip) return;
   netBorrowEnd('home'); netLendHome(); // 第 19 批：開借來的車回車庫頁＝還車；借給朋友的拿回來
   gvEnd('home'); // 第 23 批：在朋友家：塔搬回你家
+  seatsEnd('home'); // 第 57 批：坐在別的位子、坐朋友的車、朋友坐我的車：收掉
   const P = tripPose && TWR ? { mid: padCars(0, null)[0] || null, tower: TWR.slice() } : null; // 第 21 批：坐電梯中的那幾台不在裡面（normPark 再找一格）
   trip = false; DRIVE.on = false; boarding = null; ambOff(); pxStep(); VIL?.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
   panelClose(); driveBar.hidden = true;
@@ -2150,6 +2158,7 @@ function driveStep(dt) {
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
   netStep(dt); // 一起開車（net.src.js）：朋友的車、人、名字、表情、一起比賽
+  seatsStep(dt); // 第 57 批：坐別的位子、坐朋友的車、朋友坐在車上（netStep 後面：朋友的車這一格的位置才是新的）
   pxStep(); clockStep(); ambStep(); // 第 31 批：角落的時間（小地圖上面）、環境聲（風、鳥、蟲、路上的車；下車走路也有）
   mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）
@@ -2314,7 +2323,7 @@ function mirrorSet(on) {
   MIR.on = true; MIR.S = S; MIR.n = 0;
 }
 function mirrorStep() {
-  const want = !!(drv && DRIVE.on && drv.cameraMode === 'eye' && tripS?.car?.visible);
+  const want = !!(DRIVE.on && tripS?.car?.visible && !HOP.on && (PAX.on ? SCAM.mode === 'eye' : drv && drv.cameraMode === 'eye')); // 第 57 批：坐別的位子的第一人稱也照後面
   if (want !== MIR.on || (want && MIR.S !== tripS)) mirrorSet(want);
   if (!MIR.on || !MIR.list.length || MIR.n++ % 3) return; // 三格畫一次；沒有鏡子（第 56 批：沙灘車、怪獸卡車）就不畫
   const S = MIR.S, e = dEye?.eye || MIR_EYE;
@@ -2335,7 +2344,7 @@ function riderMake() { // 第一次騎、換了樣子：做（換）人、量眼
   const L = meLook();
   if (RIDER.C && RIDER.lk === L) return RIDER.C;
   try {
-    if (!RIDER.C) { RIDER.C = buildCharacter(riderLook(), { state: 'sit', shadow: false, plant: false }); RIDER.C.group.name = 'z2-rider'; }
+    if (!RIDER.C) { RIDER.C = buildCharacter(riderLook(), { state: 'sit', shadow: false, plant: false }); RIDER.C.group.name = 'z2-rider'; RIDER.C.group.userData.seated = true; } // 第 57 批：seated＝車子釋放前先拿下來（disposeCar）
     else RIDER.C.setLook(riderLook());
     RIDER.lk = L; Z2_eye(RIDER.C, RIDER.eye);
   } catch (e) { console.error(e); RIDER.C = null; }

@@ -48,6 +48,8 @@
 //   walker.getIn(car?)         上車（「上車」按鈕就是叫這個）：走到車門（站在哪一邊就走哪一邊；前後就先繞過車角）、轉身坐進去 → onGetIn(car)；推搖桿可以取消
 //   walker.getIn(car, { seat: { i, side, u } })   第 57 批：坐那個位子：走到那一邊（side −1 左、1 右）、車身長方形中間往前 u 公尺的門 → onGetIn(car, seat)
 //   walker.getOut(drv, S, { seat: { side, u }, paused: true })   第 57 批：從那個位子下車（先站那一邊）；paused＝開車的暫停著也可以（坐別的位子）
+//   walker.exitAt({ x, z, heading, hx, hz, cx, cz }, { side, u })   第 57 批：從朋友的車下來（沒有自己的 drv；車子不留給你上）→ true／false
+//   walker.follow(x, z, heading)   第 57 批：坐在朋友的車上（暫停著）：人跟著車子（telemetry 的 x、z）；不動鏡頭
 //   walker.setGarage(GAR | null, { close, doorAction })   你家（room.js，擺在村子裡；group 擺好位置以後再叫，搬了要再叫一次）：碰撞跟著鐵捲門（門開到人過得去 0.55 就不擋人；天花板、門楣、捲一半的門擋鏡頭），
 //                          走到門口（裡面、外面都可以）門關著給「開鐵捲門」；close: true 門開著多給「關鐵捲門」；doorAction: false＝門的按鈕頁面自己給（碰撞照樣跟著門）
 //   walker.setDoors(list | 'village' | null)   換要偵測的門：[{ x, z, ry, w? }]，ry＝門朝外的方向（跟 V.buildings 的 door 一樣：往 −(sin ry, cos ry) 走＝走進去），
@@ -522,6 +524,22 @@ function createWalker(o) {
     st.mode = 'out'; place();
     return car;
   }
+  // 第 57 批：從朋友的車下來（坐在他的車上，沒有自己的 drv）：car＝{ x, z, heading, hx, hz, cx, cz }（車子現在在哪裡、車身長方形），seat＝{ side, u }
+  //   跟 getOut 一樣找地方站、走出來、鏡頭接過來；那台車不留（不是你的車）→ true／false（四邊都沒地方站）
+  function exitAt(car, seat) {
+    if (!alive || st.mode !== 'off' || !car) return false;
+    const r = mkRec(car), spot = exitSpot(r, seat || null);
+    if (!spot) return false;
+    const [x0, z0, x1, z1, face] = spot;
+    st.x = x0; st.z = z0; st.th = face; st.vx = st.vz = 0; st.speed = 0; st.play = null;
+    scr = { kind: 'out', t: 0, T: calm ? 0.2 : 0.42, x0, z0, x1, z1, h0: face, h1: wrapA(face + wrapA(r.h - face) * 0.5), ax: x1, az: z1, rec: r };
+    cam.yaw = r.h; cam.pitch = PITCH0; cam.hold = 0; cam.cd = cam.want = cam.dist;
+    activate({ blend: calm ? 0.2 : 0.6 });
+    st.mode = 'out'; place();
+    return true;
+  }
+  // 第 57 批：坐在朋友的車上（走路暫停著）：人跟著車子走（頁面每一格給車子在哪裡）；地圖、路上的車和人、警察看到的「你在哪裡」照這個
+  function follow(x, z, heading) { if (active || !isFinite(x) || !isFinite(z)) return; st.x = x; st.z = z; if (isFinite(heading)) st.th = wrapA(heading); st.vx = st.vz = st.speed = 0; }
   // 第 57 批：op.seat＝{ i, side, u }（選位子）：走去那個位子那一邊的門（u＝車身長方形中間往前幾公尺）；坐進去以後 onGetIn(car, seat)
   function getIn(car, op = {}) {
     if (!alive || !active || st.mode !== 'walk' || now < lockT) return false;
@@ -998,7 +1016,7 @@ function createWalker(o) {
 
   const api = {
     update, telemetry, teleport, setAction, setAction2, setCars: (list, op = {}) => { leadCars = Array.isArray(list) ? list.slice() : []; if (op.keepParked === false && st.mode !== 'in' && st.mode !== 'seat') parked = null; rebuildCars(); },
-    getOut, getIn, setGarage, setDestination, setCamera, setCharacter, setButtons, pause, resume, dispose, toast,
+    getOut, getIn, exitAt, follow, setGarage, setDestination, setCamera, setCharacter, setButtons, pause, resume, dispose, toast,
     setDoors: (src) => { doorSrc = src; doorList = buildDoors(src); armDoors(); },
     setInput: (i) => { forced = i ? { x: clamp(+i.x || 0, -1, 1), y: clamp(+i.y || 0, -1, 1), run: i.run } : null; },
     setMovers: (list) => { movers = Array.isArray(list) ? list : null; },

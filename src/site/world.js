@@ -88,7 +88,7 @@
   }
   async function start(slot) {
     const r = rt, me = uid();
-    W = { me, slot, mem: [], all: {}, pos: {}, offs: [], last: null, lastT: 0, conn: true, seen: {}, myBl: {}, blMe: new Set(), inc: {}, showing: null, answered: {}, out: null, match: null, myCar: '', w: '', n: myName(), wT: 0, cleanT: 0, rejoin: false, lkK: lookKey(), lkT: 0, bq: null, bor: null, lent: null, tries: {}, bSeen: {}, bell: null, guest: null };
+    W = { me, slot, mem: [], all: {}, pos: {}, offs: [], last: null, lastT: 0, conn: true, seen: {}, myBl: {}, blMe: new Set(), inc: {}, showing: null, answered: {}, out: null, match: null, myCar: '', w: '', n: myName(), wT: 0, cleanT: 0, rejoin: false, lkK: lookKey(), lkT: 0, bq: null, bor: null, lent: null, tries: {}, bSeen: {}, bell: null, guest: null, ride: null };
     await discSet();
     G()?.net?.join({ code: 'world', me, host: '', name: myName(), slot });
     G()?.net?.clock(r.now() - Date.now());
@@ -136,6 +136,7 @@
     if (W.out && W.out.off) try { W.out.off(); } catch { /* 算了 */ }
     if (W.lent) rt.set(`borrow/a/${W.lent.to}/${W.me}`, { id: W.lent.id, ok: -9, t: rt.now() }).catch(() => {}); // 借出去的：拿回來
     if (W.bell) bellOff(true); // 第 23 批：按了門鈴、在朋友家：收掉（遊戲那邊 leave 自己出來）
+    if (W.ride) rideOff(true); // 第 57 批：問了「可以坐你的車嗎」還沒回答：收掉
     if (W.guest) { const id = W.guest.id; guestOff(''); rt.remove(`matches/${id}`).catch(() => {}); } // 朋友在我家：他那邊出來
     G()?.net?.leave(); // 遊戲那邊：借來的還（送 return）、借出去的收回來
     W = null; paintAll();
@@ -179,6 +180,7 @@
     if (W.bq && !here.has(W.bq.owner)) { const o = W.bq.owner; W.bq = null; G()?.net?.borrowAns({ uid: o, ok: -2 }); }
     if (W.bell && !here.has(W.bell.to)) { const b = W.bell; bellOff(true); if (b.on) G()?.net?.visitEnd?.('gone'); else G()?.net?.bellAns?.({ uid: b.to, n: b.n, ok: -5 }); } // 第 23 批：他離開世界了
     if (W.guest && !here.has(W.guest.from)) guestOff('left');
+    if (W.ride && !here.has(W.ride.to)) { const r = W.ride; rideOff(true); G()?.net?.rideAns?.({ uid: r.to, n: r.n, ok: -5 }); } // 第 57 批：他離開世界了
     invites(); paintAll();
   }
   async function block(u, n) {
@@ -190,6 +192,7 @@
     if (W.bor && W.bor.owner === u) { W.bor = null; G()?.net?.borrowAns({ uid: u, ok: -8 }); }
     if (W.bell && W.bell.to === u) { const b = W.bell; bellOff(true); if (b.on) G()?.net?.visitEnd?.('gone'); } // 第 23 批
     if (W.guest && W.guest.from === u) { rt.update(`matches/${W.guest.id}`, { ok: -9 }).catch(() => {}); guestOff(''); }
+    if (W.ride && W.ride.to === u) { const r = W.ride; rideOff(true); G()?.net?.rideAns?.({ uid: r.to, n: r.n, ok: -5 }); } // 第 57 批
     try { await rt.set(`world/bl/${W.me}/${u}`, String(n || '').slice(0, 12) || '?'); } catch (e) { fail(e, '封鎖不了，等一下再試一次。'); msg = ''; }
     paintAll();
   }
@@ -219,7 +222,8 @@
     if (s.pv) o.pv = s.pv.slice(); // 第 22 批：停著的車（我在房子裡、在警察局、被關也送）
     if (s.ph) o.ph = s.ph.slice(); // 第 22 批：我撞到朋友的警車 [朋友, 第幾台, dvx, dvz, 第幾下]
     if (s.y != null) o.y = rd(s.y, 100); // 第 24 批：在圓塔外面的斜坡上有多高
-    const L = W.last, moved = !L || L.o !== o.o || L.k !== o.k || String(L.pk) !== String(o.pk) || String(L.pv) !== String(o.pv) || String(L.ph) !== String(o.ph) || L.pl !== o.pl || L.rs !== o.rs || L.w !== o.w || L.jl !== o.jl || pcMoved(L.pc, o.pc) || Math.abs(L.x - o.x) > 0.05 || Math.abs(L.z - o.z) > 0.05 || Math.abs(L.h - o.h) > 0.01 || Math.abs(L.v - o.v) > 0.2 || L.rp !== o.rp || (L.y == null) !== (o.y == null) || Math.abs((L.y ?? 0) - (o.y ?? 0)) > 0.05;
+    if (s.st) o.st = s.st | 0; if (s.rd) o.rd = s.rd.slice(0, 3); if (s.nr) o.nr = 1; // 第 57 批：坐自己的車第幾個位子；坐在朋友的車上 [車主, 位子, 車]；在賽車場／泥巴賽
+    const L = W.last, moved = !L || L.o !== o.o || L.k !== o.k || String(L.pk) !== String(o.pk) || String(L.pv) !== String(o.pv) || String(L.ph) !== String(o.ph) || L.pl !== o.pl || L.rs !== o.rs || L.w !== o.w || L.jl !== o.jl || pcMoved(L.pc, o.pc) || Math.abs(L.x - o.x) > 0.05 || Math.abs(L.z - o.z) > 0.05 || Math.abs(L.h - o.h) > 0.01 || Math.abs(L.v - o.v) > 0.2 || L.rp !== o.rp || (L.y == null) !== (o.y == null) || Math.abs((L.y ?? 0) - (o.y ?? 0)) > 0.05 || L.st !== o.st || String(L.rd) !== String(o.rd) || L.nr !== o.nr;
     const gap = now - W.lastT;
     if (!(moved && gap > 110 || gap > (o.o ? 1500 : 3000))) return;
     o.t = rt.now(); W.last = o; W.lastT = now;
@@ -247,6 +251,7 @@
     }
     if (W.out && !W.match && now - W.out.at > INV_MS) cancelOut('他沒有回答。');
     if (W.bell && !W.bell.on && now - W.bell.at > INV_MS) { const b = W.bell; bellOff(true); G()?.net?.bellAns?.({ uid: b.to, n: b.n, ok: 0 }); } // 第 23 批：門鈴沒人回答
+    if (W.ride && now - W.ride.at > INV_MS) { const r = W.ride; rideOff(true); G()?.net?.rideAns?.({ uid: r.to, n: r.n, ok: 0 }); } // 第 57 批：沒人回答
     if (W.out && UI().view === 'wait') paintWait();
     invites(); hostTick();
     if (now - W.cleanT > 30000) { W.cleanT = now; clean(); }
@@ -272,12 +277,12 @@
     for (const [from, v] of Object.entries(W.inc)) {
       if (!v || typeof v.id !== 'string' || W.answered[v.id] || (W.showing && W.showing.id === v.id)) continue;
       const stale = !(now - (+v.t || 0) < INV_MS), m = W.mem.find((x) => x.uid === from);
-      const bell = v.kind === 'bell'; // 第 23 批：有人按我家的門鈴
+      const ride = v.kind === 'ride', bell = v.kind === 'bell' || ride; // 第 23 批：有人按我家的門鈴；第 57 批：有人想坐我的車
       if (stale || hid(from) || !here.has(from) || !(KIND[v.kind] || bell)) { W.answered[v.id] = 1; rt.remove(`world/ch/${W.me}/${from}`).catch(() => {}); continue; }
       if (!invOn) { reply(from, v.id, -1); continue; }
-      if (bell ? W.match || W.guest : W.match || W.out || W.lent || G()?.net?.borrowing?.()) { reply(from, v.id, -2); continue; } // 在比賽、在開借來的車、車借出去了；門鈴：在比賽、已經有朋友在我家
+      if (ride ? W.match || W.lent || !G()?.net?.rideOk?.({ s: v.s | 0, k: String(v.k || '') }) : bell ? W.match || W.guest : W.match || W.out || W.lent || G()?.net?.borrowing?.()) { reply(from, v.id, -2); continue; } // 在比賽、在開借來的車、車借出去了；門鈴：在比賽、已經有朋友在我家
       if (W.showing) continue; // 排隊：這張回答完再跳
-      if (G()?.net?.invite({ id: v.id, name: m.n, kind: v.kind, car: carName(m.car) })) W.showing = { id: v.id, from, kind: v.kind };
+      if (G()?.net?.invite({ id: v.id, name: m.n, kind: v.kind, car: carName(m.car), s: v.s | 0, k: String(v.k || '') })) W.showing = { id: v.id, from, kind: v.kind };
       else reply(from, v.id, -2); // 在比賽
     }
   }
@@ -292,6 +297,7 @@
     if (!ok) { reply(from, id, -1); invites(); return; }
     W.answered[id] = 1;
     rt.remove(`world/ch/${W.me}/${from}`).catch(() => {});
+    if (kind === 'ride') { try { await rt.update(`matches/${id}`, { ok: 1 }); } catch (e) { console.warn('讓他坐', e); toast('對方已經走了'); } return; } // 第 57 批：讓他坐（之後都在 world/p 裡：他送 o 5＋rd）
     if (kind === 'bell') { // 第 23 批：讓他進來
       const m = W.mem.find((x) => x.uid === from);
       try { await rt.update(`matches/${id}`, { ok: 1 }); if (W && !W.guest) guestOn({ id, from, n: m ? m.n : '' }); } catch (e) { console.warn('門鈴', e); toast('對方已經走了'); }
@@ -417,6 +423,8 @@
     else if (d.type === 'takeback') { if (W.lent && W.lent.to === String(d.uid || '')) takeBack(); }
     else if (d.type === 'bell') bellAsk(String(d.uid || '')); // 第 23 批
     else if (d.type === 'bellEnd') { if (W.bell && W.bell.to === String(d.uid || '')) bellOff(true); }
+    else if (d.type === 'ride') rideAsk(String(d.uid || ''), d.s | 0, String(d.k || '')); // 第 57 批
+    else if (d.type === 'rideEnd') { if (W.ride && W.ride.to === String(d.uid || '')) rideOff(true); }
     else if (d.type === 'kick') { const g = W.guest; if (g && g.from === String(d.uid || '')) { rt.update(`matches/${g.id}`, { ok: -9 }).catch((e) => console.warn('請他出去', e)); guestOff(''); } }
   });
 
@@ -456,6 +464,34 @@
     try { B.off && B.off(); } catch { /* 算了 */ }
     rt.remove(`world/ch/${B.to}/${W.me}`).catch(() => {});
     if (rm) { rt.discOff(`matches/${B.id}`).catch(() => {}); rt.remove(`matches/${B.id}`).catch(() => {}); }
+  }
+  // ---- 第 57 批：坐朋友的車（A 問「可以坐你的車嗎」、B 答好／不要；跟門鈴同一條路，回答以後就收掉：之後 A 送 o 5＋rd，B 那邊自己畫）----
+  async function rideAsk(to, seat, k) {
+    if (!W || W.ride) return;
+    const m = W.mem.find((x) => x.uid === to), ans = (ok) => G()?.net?.rideAns?.({ uid: to, n: m ? m.n : '', ok });
+    if (!m || hid(to) || to === W.me) { ans(-5); return; }
+    if (m.inv === 0) { ans(-3); return; }
+    const id = `${W.me.slice(0, 10)}-${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_-]/g, '');
+    const R = W.ride = { id, to, n: m.n, at: performance.now(), off: null };
+    try {
+      await rt.set(`matches/${id}`, { a: W.me, b: to, kind: 'ride', at: rt.now(), ok: 0 });
+      await rt.disc(`matches/${id}`).catch(() => {});
+      await rt.set(`world/ch/${to}/${W.me}`, { kind: 'ride', t: rt.now(), id, s: seat | 0, k: String(k || '').slice(0, 12) });
+      if (!W || W.ride !== R) return;
+      R.off = rt.on(`matches/${id}`, (v) => onRide(R, v), (e) => console.warn('坐車', e));
+    } catch (e) { console.warn('坐車', e); if (W && W.ride === R) { rideOff(true); ans(-4); } }
+  }
+  function onRide(R, v) {
+    if (!W || W.ride !== R) return;
+    if (!v) { rideOff(false); G()?.net?.rideAns?.({ uid: R.to, n: R.n, ok: 0 }); return; } // 他那邊收掉了（離開世界）
+    if (v.ok === -1 || v.ok === -2 || v.ok === 1) { rideOff(true); G()?.net?.rideAns?.({ uid: R.to, n: R.n, ok: v.ok }); }
+  }
+  function rideOff(rm) {
+    const R = W && W.ride; if (!R) return;
+    W.ride = null;
+    try { R.off && R.off(); } catch { /* 算了 */ }
+    rt.remove(`world/ch/${R.to}/${W.me}`).catch(() => {});
+    if (rm) { rt.discOff(`matches/${R.id}`).catch(() => {}); rt.remove(`matches/${R.id}`).catch(() => {}); }
   }
   function guestOn(g) {
     if (!W) return;

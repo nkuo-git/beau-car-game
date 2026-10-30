@@ -785,6 +785,84 @@ console.log('9c', el(), JSON.stringify(ramp9), bAt9, JSON.stringify(b9c));
 check(ramp9.on && ramp9.y > 3 && Math.abs(ramp9.sent - ramp9.y) < 0.02 && seen9 && Math.abs(b9c.y - ramp9.sent) < 0.02 && b9c.vis && Math.abs(b9c.carY - ramp9.y) < 0.3 && b9c.cols === 0,
   `A drives up the ramp round its tower (${ramp9.y} m up): A sends the height, B (on the ground below) gets the height (${b9c.y} m) and sees A’s car up there (${b9c.carY} m), and it does not block B (too high)`);
 await A.evaluate(() => window.__D().drv.setInput(null));
+// ---- 9e 坐朋友的車（第 57 批，Nick 2026-10-30「車子的每個位子都可以坐」）：A 停在大停車場（坐在車上），B 走到旁邊「選位子」→ A 的卡片「🚗 阿明快車手想坐你的車」
+//   不要 → B 看到「說不要」；好 → B 走過去坐進去（A 的車換成完整的車）、左上「坐在 A 的車上」、送 o 5＋rd；A 看到 B 坐在副駕駛座；A 開車 B 跟著走（開著不能下車）；換位子；停下來下車；A 回家＝B 在車旁邊下車 ----
+const seatI = (p) => p.evaluate(() => window.beauGame.net.info.seat);
+const seatToast = (p) => p.evaluate(() => [...document.querySelectorAll('#stage .ps-toast.show, #stage .wk-toast.show, #stage .dv-toast.show')].map((e) => e.textContent).join(' | '));
+const parkA = await A.evaluate(() => { const D = window.__D(), P = D.VIL.parking, T = window.__TOWN(); D.drv.teleport({ x: P.x - 8.5, z: P.z, heading: 0 }); D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); for (let i = 0; i < 200 && Math.abs(D.drv.telemetry().v) > 0.3; i++) window.__dstep(1); window.__dstep(30); D.drv.setInput({ throttle: 0, brake: 0, steer: 0, handbrake: 1 }); const t = D.drv.telemetry(); return { x: t.x, z: t.z, h: t.heading, v: +t.v.toFixed(2), ramp: T.TRAMP.on, st: window.beauGame.net.state().st }; });
+await B.evaluate((a) => { const D = window.__D(), w = D.walker; if (D.drv && w.mode === 'off') { D.drv.teleport({ x: a.x + 14, z: a.z + 8, heading: Math.PI }); D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); for (let i = 0; i < 120 && Math.abs(D.drv.telemetry().v) > 0.3; i++) window.__dstep(1); window.__TOWN().leaveCar(); for (let i = 0; i < 150 && w.mode !== 'walk'; i++) window.__dstep(1); } w.teleport({ x: a.x - Math.sin(a.h) * 2.2, z: a.z - Math.cos(a.h) * 2.2, heading: a.h }); window.__dstep(3); }, parkA); // B 走到 A 的車左邊（GC8 的副駕駛座那一邊）
+const near9e = await waitFor(B, () => window.beauGame.net.info.seat.act2 === 'u1' && document.querySelector('#stage .wk-act2')?.textContent === '選位子', null, 30000);
+const b9e = await B.evaluate(() => ({ mode: window.__D().walker.mode, act: window.__D().walker.action, act2: window.__D().walker.action2, key: !!document.querySelector('.nt-key') && !document.querySelector('.nt-key').hidden && getComputedStyle(document.querySelector('.nt-key')).display !== 'none' }));
+console.log('9e', el(), JSON.stringify(parkA), near9e, JSON.stringify(b9e));
+check(parkA.v === 0 && !parkA.ramp && parkA.st === 0 && near9e && b9e.mode === 'walk' && b9e.act2 === '選位子' && !b9e.act, `A sits in the GC8 stopped in the car park; B walks up: the dark 「選位子」 button (no 「上車」, no 借車: A is in the car)`);
+await click(B, '#stage .wk-act2');
+const pick9e = await B.evaluate(() => { const U = document.querySelector('#stage .sp'); if (!U || U.hidden) return null; return { title: U.querySelector('h3').textContent, note: U.querySelector('p').textContent, seats: [...U.querySelectorAll('.sp-seat')].map((b) => ({ i: +b.dataset.i, t: b.textContent.replace(/\s+/g, ''), tk: b.classList.contains('tk'), dis: b.disabled })) }; });
+const d9e = pick9e?.seats.find((x) => x.i === 0);
+check(pick9e && pick9e.title === '要坐大便龍車神的車哪裡？' && /問大便龍車神/.test(pick9e.note) && pick9e.seats.length === 5 && d9e?.tk && d9e.dis && /大便龍車神/.test(d9e.t) && !pick9e.seats.find((x) => x.i === 1).dis, `B’s picker: 「${pick9e?.title}」, the driver’s seat is grey (${d9e?.t}), the others free`);
+await shot(B, `${prefix}-9e-pick.png`);
+await click(B, '#stage .sp-seat[data-i="1"]');
+const cardA = await waitFor(A, () => { const c = document.querySelector('.nt-inv'); return c && !c.hidden; }, null, 15000);
+const c9e = await card(A), m9e = getAt('matches') || {}, mid9e = Object.keys(m9e)[0];
+check(cardA && /🚗 阿明快車手想坐你的車/.test(c9e) && /副駕駛座/.test(c9e) && !/門鈴/.test(c9e) && m9e[mid9e]?.kind === 'ride' && m9e[mid9e].a === 'u2' && m9e[mid9e].b === 'u1' && getAt('world/ch/u1/u2')?.s === 1, `A’s phone: 「${c9e}」 (matches/${mid9e} kind ride, seat 1 in world/ch)`);
+await shot(A, `${prefix}-9e-card.png`);
+await click(A, '.nt-inv .b'); // 不要
+const no9e = await waitFor(B, () => /說「不要」/.test([...document.querySelectorAll('#stage .wk-toast.show')].map((e) => e.textContent).join('')), null, 15000);
+check(no9e && !(await seatI(B)).ask && !(await seatI(B)).hop && getAt('matches') == null && getAt('world/ch/u1') == null, 'A taps 不要: B 「大便龍車神說「不要」。」, nothing left in the database');
+// 再問一次 → 好
+await B.waitForTimeout(600);
+await click(B, '#stage .wk-act2'); await B.waitForTimeout(300); await click(B, '#stage .sp-seat[data-i="1"]');
+await waitFor(A, () => { const c = document.querySelector('.nt-inv'); return c && !c.hidden; }, null, 15000);
+await click(A, '.nt-inv .a'); // 好
+const on9e = await waitFor(B, () => { const s = window.beauGame.net.info.seat; return s.hop && s.hop.full && window.__D().walker.mode === 'off'; }, null, 150000);
+const h9e = await B.evaluate(() => { const s = window.beauGame.net.info.seat, N = window.__NET(), P = [...N.P.values()].find((q) => q.uid === 'u1'), D = window.__D(); return { ...s, lodHidden: !P.obj.car.visible, drv: !!D.drv, who: document.querySelector('#stage .ps-who')?.textContent, whoVis: !document.querySelector('#stage .ps-who')?.hidden, hud: !document.querySelector('#stage .ps')?.hidden, bar: getComputedStyle(document.getElementById('drivebar')).display, st: window.beauGame.net.state(), pv: window.beauGame.net.state().pv }; });
+console.log('  B on board:', on9e, JSON.stringify({ ...h9e, st: undefined }), JSON.stringify(h9e.st));
+check(on9e && h9e.hop?.uid === 'u1' && h9e.hop.i === 1 && h9e.hop.k === 'gc8' && h9e.lodHidden && !h9e.drv && h9e.me, `A taps 好: B walks to the door and sits in A’s GC8 (A’s light car swapped for the full one, B’s own car parked, B sits in the passenger seat)`);
+check(h9e.whoVis && h9e.who === '🚗 坐在 大便龍車神 的車上' && h9e.hud && h9e.bar === 'none', `B’s screen: 「${h9e.who}」 pill, 換位子/下車, no 去哪裡 bar`);
+check(h9e.st.o === 5 && JSON.stringify(h9e.st.rd) === JSON.stringify(['u1', 1, 'gc8']) && Math.abs(h9e.st.x - parkA.x) < 0.3 && Array.isArray(h9e.pv) && h9e.pv[0] === 'gc8', `B sends o 5 + rd [u1, 1, gc8] at A’s car, and B’s own parked car (pv)`);
+const seenA = await waitFor(A, () => window.beauGame.net.info.seat.sit.some((q) => q.uid === 'u2' && q.i === 1 && q.k === 'gc8'), null, 20000);
+const a9e = await A.evaluate(() => { const N = window.__NET(), P = [...N.P.values()].find((q) => q.uid === 'u2'), T = window.__TOWN(); return { sitParent: P.sit?.C?.group.parent === T.tripS.body, vis: !!P.chr?.group.visible, st: P.cur.st, rd: P.cur.rd, toast: [...document.querySelectorAll('#stage .dv-toast.show')].map((e) => e.textContent).join('') }; });
+check(seenA && a9e.sitParent && a9e.vis && JSON.stringify(a9e.rd) === JSON.stringify(['u1', 1, 'gc8']), `A sees B sitting in the passenger seat of A’s own car (${JSON.stringify(a9e.rd)}) 「${a9e.toast}」`);
+await shot(A, `${prefix}-9e-a-sees.png`);
+await shot(B, `${prefix}-9e-riding.png`);
+// A 開：B 跟著走、開著不能下車
+await A.evaluate(() => window.__D().drv.setInput({ throttle: 0.5, brake: 0, steer: 0 }));
+const mov9e = await waitFor(B, (x0) => { const s = window.beauGame.net.info.seat; return s.hop && Math.abs(s.hop.x - x0) > 6 && s.hop.spd > 2; }, parkA.x, 15000);
+const off9e = await B.evaluate(() => document.querySelector('#stage .ps-out').classList.contains('off'));
+await click(B, '#stage .ps-out');
+const still9e = await B.evaluate(() => ({ hop: !!window.beauGame.net.info.seat.hop, toast: [...document.querySelectorAll('#stage .ps-toast.show')].map((e) => e.textContent).join('') }));
+const tA = await A.evaluate(() => { const D = window.__D(); D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); for (let i = 0; i < 300 && Math.abs(D.drv.telemetry().v) > 0.2; i++) window.__dstep(1); const t = D.drv.telemetry(); return { x: t.x, z: t.z, v: +t.v.toFixed(2) }; });
+const fol9e = await waitFor(B, (t) => { const s = window.beauGame.net.info.seat, w = window.__D().walker.telemetry(); return s.hop && Math.hypot(s.hop.x - t.x, s.hop.z - t.z) < 1 && Math.hypot(w.x - t.x, w.z - t.z) < 4 && s.hop.spd < 0.5; }, tA, 20000);
+check(mov9e && off9e && still9e.hop && /停下來才能下車/.test(still9e.toast) && fol9e, `A drives off: B rides along (the walking you follows too); while moving 下車 is greyed and says 「${still9e.toast}」; A stops, B is where A’s car is`);
+// 換位子 → 後座右；A 看到
+await click(B, '#stage .ps-swap');
+const sw9e = await B.evaluate(() => { const U = document.querySelector('#stage .sp'); return U && !U.hidden ? [...U.querySelectorAll('.sp-seat')].map((b) => ({ i: +b.dataset.i, t: b.textContent.replace(/\s+/g, ''), me: b.classList.contains('me'), tk: b.classList.contains('tk') })) : null; });
+await click(B, '#stage .sp-seat[data-i="4"]');
+const sw9eOk = await waitFor(A, () => window.beauGame.net.info.seat.sit.some((q) => q.uid === 'u2' && q.i === 4), null, 15000);
+check(sw9e && sw9e.find((x) => x.i === 1)?.me && sw9e.find((x) => x.i === 0)?.tk && (await seatI(B)).hop?.i === 4 && sw9eOk, 'B 換位子 → 後座右: A sees B move to the rear right seat');
+await click(B, '#stage .ps-eye');
+await B.waitForTimeout(800);
+const eye9e = await B.evaluate(() => { const s = window.beauGame.net.info.seat; return { cam: s.cam, me: s.me }; });
+check(eye9e.cam === 'eye' && !eye9e.me, 'B’s eye button: first person from the rear seat (B not drawn)');
+await shot(B, `${prefix}-9e-rear-eye.png`);
+// 停著：下車
+await click(B, '#stage .ps-out');
+const out9e = await waitFor(B, () => !window.beauGame.net.info.seat.hop && window.__D().walker.mode === 'walk', null, 15000);
+const o9e = await B.evaluate((t) => { const w = window.__D().walker.telemetry(), N = window.__NET(), P = [...N.P.values()].find((q) => q.uid === 'u1'); return { d: +Math.hypot(w.x - t.x, w.z - t.z).toFixed(1), lodVis: !!P.obj?.car.visible, hud: !document.querySelector('#stage .ps')?.hidden, o: window.beauGame.net.state().o }; }, tA);
+const gone9e = await waitFor(A, () => !window.beauGame.net.info.seat.sit.length, null, 15000);
+check(out9e && o9e.d < 4 && o9e.lodVis && !o9e.hud && o9e.o === 2 && gone9e, `B taps 下車 while stopped: B stands next to A’s car (${o9e.d} m), A’s light car is back, A sees the seat empty`);
+// 再坐上去 → A 回車庫頁：B 自己在車旁邊下車
+await B.waitForTimeout(600);
+await B.evaluate((t) => { const w = window.__D().walker; w.teleport({ x: t.x - 2.2, z: t.z, heading: 0 }); }, tA);
+await waitFor(B, () => window.beauGame.net.info.seat.act2 === 'u1', null, 15000);
+await click(B, '#stage .wk-act2'); await B.waitForTimeout(300); await click(B, '#stage .sp-seat[data-i="1"]');
+await waitFor(A, () => { const c = document.querySelector('.nt-inv'); return c && !c.hidden; }, null, 15000);
+await click(A, '.nt-inv .a');
+const on9f = await waitFor(B, () => { const s = window.beauGame.net.info.seat; return s.hop && window.__D().walker.mode === 'off'; }, null, 60000);
+await A.evaluate(() => document.getElementById('driveHome').click());
+await waitFor(A, () => !window.__D().trip && document.getElementById('status').hidden, null, 30000);
+const drop9e = await waitFor(B, () => !window.beauGame.net.info.seat.hop && window.__D().walker.mode === 'walk', null, 20000);
+const dt9e = await B.evaluate(() => ({ toast: [...document.querySelectorAll('#stage .wk-toast.show')].map((e) => e.textContent).join(''), peers: window.beauGame.net.info.peers.map((q) => q.carVis) }));
+check(on9f && drop9e && /把車開回家了，你下車了|離開了，你下車了/.test(dt9e.toast), `A goes home while B sits in the car: B gets out next to where the car was 「${dt9e.toast}」`);
 // A 也回車庫頁（後面跟以前一樣：兩個人都在車庫頁）
 await A.evaluate(() => document.getElementById('driveHome').click());
 await waitFor(A, () => !window.__D().trip && document.getElementById('status').hidden, null, 30000);
