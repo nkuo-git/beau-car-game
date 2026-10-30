@@ -67,3 +67,13 @@ seat counts follow the real cars.
 - `world-test.mjs` 9e (friend's car): 選位子 next to A's stopped car, picker with A's name on the driver's seat,
   A's card (不要 → toast; 好 → board, full car, pill, o 5 + rd, A sees B seated), A drives (B follows, 下車 greyed),
   換位子 (A sees it), eye, 下車 when stopped, A goes home → B dropped next to the car.
+
+## Numbers (2026-10-30)
+- seats-test 30 ok (95 s): walk 286 calls / 0.68M tris, picker 286 (HTML only), passenger first person 70 / 0.36M,
+  outside view 179 / 0.66M, driver (chase) 171 / 0.58M, street with you in the driver's seat 145 / 0.46M
+  (without: 144 / 0.45M → the seated driver costs 1 draw call / 3.7k triangles).
+- world-test 136 ok (≈ 8 min; 9e added 13 checks). 9e lesson: A must drive north along the stall lane
+  (`heading -π/2`); heading 0 (east) runs into the car park's middle lamp post after 6 m — that looked like
+  "B's ride ends while A drives" for three runs. The eye toggle starts in the remembered mode (`SCAM.pref`), so the
+  test flips from whatever it is.
+
