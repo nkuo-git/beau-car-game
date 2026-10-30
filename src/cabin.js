@@ -988,8 +988,67 @@ export const CABIN3D = (() => {
     camera.position.copy(body.localToWorld(e)); camera.up.set(0, 1, 0).transformDirection(body.matrixWorld); camera.lookAt(body.localToWorld(t));
     return true;
   }
-  return { build, aim, VIEW, STYLE, fitOf };
+  // ---- 第 57 批：每個位子（Nick 2026-10-30「車子的每個位子都可以坐」）----
+  // [{ i, n 名字, drv 駕駛座, rear 後座, hip [x, y, z]（椅面上屁股的地方：角色本地 (0, 0.45, 0) 放這裡）, floor 腳踩的地板 y, foot 腳踝往前到哪裡 x,
+  //    back 椅背往後倒幾度, top 頭上車頂內側多高, side 從哪一邊上下（−1 左、1 右）, wheel（駕駛座）{ c 方向盤中心, r, col 轉向柱角度 } }]
+  //   前面兩個（駕駛座、副駕駛座）；後座（bench）兩個：左、右（後座椅面凹下去的地方 |z| 0.3）；沒有後座（shelf、bulk）＝兩個位子
+  function seats(key) {
+    const st = STYLE[key], F = fitOf(key); if (!st || !F) return [];
+    const zd = (st.lhd ? -1 : 1) * st.zD, [xE, yE] = st.eye, xH = xE + 0.16, yH = yE - 0.64, yF = Math.max(F.bot + (st.floor ?? 0.065), 0.2);
+    const W = st.wheel, back = st.seat?.recline ?? 21, xFoot = Math.min(xH + 0.8, F.fa[0] - 0.2);
+    const top = (x, z) => { const t = F.top(x, z); return t > 0.3 ? t : 2; }, roof = (z) => (x) => top(x, z);
+    const out = [
+      { i: 0, n: '駕駛座', drv: true, hip: [xH, yH, zd], eye: [xE, yE, zd], floor: yF, foot: xFoot, back, top: top(xE, zd), roof: roof(zd), side: Math.sign(zd), wheel: { c: [xE + W.reach, yE - W.drop, zd], r: W.r, col: W.col } },
+      { i: 1, n: '副駕駛座', hip: [xH, yH, -zd], eye: [xE, yE, -zd], floor: yF, foot: xFoot, back, top: top(xE, -zd), roof: roof(-zd), side: -Math.sign(zd) },
+    ];
+    if (st.rear === 'bench') { // 後座的眼睛（第一人稱）：屁股往後 0.16、往上 0.64（跟前座一樣），頭上車頂留 12 公分
+      const bx = st.bench.x, yc = yF + 0.24, xe = bx - 0.26;
+      for (const s of [-1, 1]) { const t = top(xe, s * 0.3); out.push({ i: out.length, n: s < 0 ? '後座左' : '後座右', rear: true, hip: [bx - 0.1, yc - 0.02, s * 0.3], eye: [xe, Math.min(yc + 0.62, t - 0.12), s * 0.3], floor: yF, foot: xH - 0.22, back: st.bench.a ?? 24, top: t, roof: roof(s * 0.3), side: s }); }
+    }
+    return out;
+  }
+  return { build, aim, seats, VIEW, STYLE, fitOf };
 })();
+// cabinSeats(key)：這台車的每個位子（車身座標；見上面 seats）；沒有車內的車（怪獸卡車、沙灘車）＝[]
+export function cabinSeats(key) { return CABIN3D.seats(key); }
+// 人坐進位子（第 57 批）：C＝buildCharacter(look, { state: 'sit', shadow: false, plant: false })，C.group 放進車身（body）；s＝cabinSeats(key) 的一個；P＝重複用的物件
+//   屁股坐在 s.hip、往後靠（椅背的角度）、腳踩地板、駕駛座手握方向盤；頭頂碰到車頂：再往後靠（最多椅背＋10 度）→ 後座往前挪（最多 15 公分）→ 往下坐（最多 6 公分）
+//   回傳 P（C.update(dt, P) 用：state 'sit'、feet、hands）；駕駛轉方向盤：seatSteer(C, P, steer) 再 C.update
+const SP_V = new THREE.Vector3(), SP_P = new THREE.Vector3(0, 0.45, 0), SP_Z = new THREE.Vector3(0, 0, 1), SP_M = new THREE.Matrix4();
+export function seatPlace(C, s, P = {}) {
+  const g = C.group, D = Math.PI / 180;
+  P.s = s; P.state = 'sit'; P.speed = 0; P.hands = undefined; P.feet = P.feet || [0.6, 0.08, 0.15];
+  g.position.set(0, 0, 0); g.rotation.set(0, 0, 0); g.updateMatrix();
+  for (let k = 0; k < 30; k++) C.update(1 / 30, P);
+  g.updateMatrixWorld(true);
+  const e = g.worldToLocal(C.eyes.getWorldPosition(SP_V)), dx = e.x, dy = e.y + 0.13 - 0.45; // 頭頂（眼睛往上 13 公分）、椅面當原點
+  let lean = Math.max(0, s.back - 6) * D, fwd = 0, sink = 0;
+  const hx = () => s.hip[0] + fwd + dx * Math.cos(lean) - dy * Math.sin(lean), hy = () => s.hip[1] - sink + dx * Math.sin(lean) + dy * Math.cos(lean);
+  for (let it = 0; it < 60 && hy() > (s.roof ? s.roof(hx()) : s.top) - 0.03; it++) {
+    if (lean < (s.back + 10) * D) lean += D; else if (s.rear && fwd < 0.15) fwd += 0.01; else if (sink < 0.06) sink += 0.005; else break;
+  }
+  g.rotation.set(0, 0, lean); SP_V.copy(SP_P).applyAxisAngle(SP_Z, lean);
+  g.position.set(s.hip[0] + fwd - SP_V.x, s.hip[1] - sink - SP_V.y, s.hip[2] - SP_V.z); g.updateMatrix();
+  P._inv = (P._inv || new THREE.Matrix4()).copy(g.matrix).invert(); P.lean = lean; P.fwd = fwd; P.sink = sink;
+  SP_V.set(s.foot, s.floor + 0.09, s.hip[2]).applyMatrix4(P._inv); P.feet[0] = SP_V.x; P.feet[1] = SP_V.y; P.feet[2] = 0.15;
+  if (s.wheel) seatSteer(C, P, 0);
+  for (let k = 0; k < 30; k++) C.update(1 / 30, P);
+  return P;
+}
+// 駕駛的手握方向盤 9 點、3 點的地方（steer −1～1：方向盤打到底轉 90 度，手跟著轉）
+export function seatSteer(C, P, steer = 0) {
+  const w = P.s?.wheel; if (!w) return P;
+  const a = -steer * (Math.PI / 2), col = w.col * (Math.PI / 180), r = w.r * 0.96, sv = Math.sin(col), cv = Math.cos(col);
+  if (!P.hands) P.hands = [[0, 0, 0], [0, 0, 0]];
+  for (let k = 0; k < 2; k++) {
+    const sd = k ? 1 : -1, u = sd * r * Math.cos(a), v = -sd * r * Math.sin(a); // 方向盤面上：u 往右（z）、v 往上（沿著轉向柱斜）
+    SP_V.set(w.c[0] + v * sv, w.c[1] + v * cv, w.c[2] + u).applyMatrix4(P._inv);
+    P.hands[k][0] = SP_V.x; P.hands[k][1] = SP_V.y; P.hands[k][2] = SP_V.z;
+  }
+  return P;
+}
+// cabinFit(key)：量表（side(x, y)、top(x, z)、st(x)⋯，見 fitOf）；坐人的時候量頭上夠不夠高
+export function cabinFit(key) { return CABIN3D.fitOf(key); }
 export const CABIN_VIEW = CABIN3D.VIEW;
 export function buildCabin(key, spec, mats) { return CABIN3D.build(key, spec, mats); }
 // cabinCamera(camera, S.body, key, yaw, pitch)：把相機放到駕駛眼睛；yaw＝往右轉幾度（負的往左）、pitch＝往上看幾度

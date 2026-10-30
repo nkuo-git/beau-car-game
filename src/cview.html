@@ -43,18 +43,52 @@ if (Q.get('bg') !== 'none') scene.background = new THREE.Color(dark ? 0x15161a :
 const sun = new THREE.DirectionalLight(0xffffff, dark ? 1.2 : 2.2); sun.position.set(3, 6, 2); scene.add(sun, new THREE.HemisphereLight(0xffffff, 0x444444, dark ? 0.2 : 0.5));
 if (Q.get('bg') !== 'none') { const fl = new THREE.Mesh(new THREE.CircleGeometry(8, 64), new THREE.MeshStandardMaterial({ color: dark ? 0x222327 : 0xc4c7cc, roughness: 0.8 })); fl.rotation.x = -Math.PI / 2; fl.position.y = -0.001; scene.add(fl); }
 scene.add(S.car);
+// 第 57 批（每個位子都可以坐）：sit=0:me,2:kid⋯＝那個位子坐一個人（me 你一開始的樣子、kid 小孩、cap 戴帽子的小孩；cabinSeats 的號碼）；
+//   v=seat&seat=N：坐在第 N 個位子看出去（那個人不畫；yaw／pitch 往右、往上轉幾度；fov）；steer=−1～1 駕駛的手跟著方向盤；bg=sky 天空＋地面
+const SEAT_LOOKS = { kid: { body: 'm', age: 'kid', height: 1.38, hair: 'short', hairColor: '#1a1410', top: 'hoodie', topColor: '#2f6fd6', bottom: 'shorts', bottomColor: '#3a3d44' },
+  cap: { body: 'm', age: 'kid', height: 1.42, hair: 'buzz', top: 'tee', topColor: '#e23b3b', bottom: 'jeans', hat: 'cap', hatColor: '#f2c230' },
+  girl: { body: 'f', age: 'kid', height: 1.36, hair: 'ponytail', hairColor: '#2a1a12', top: 'tee', topColor: '#ff8fc0', bottom: 'skirt', bottomColor: '#5b4bb5' } };
+const SEATED = [];
+if (Q.has('sit') || v === 'seat') {
+  const CB2 = CB || await import('./cabin.js'), { buildCharacter, PLAYER_LOOK } = await import('./character.js');
+  const SE = CB2.cabinSeats(key), st = +(Q.get('steer') || 0);
+  for (const it of (Q.get('sit') || '').split(',').filter(Boolean)) {
+    const [i, nm] = it.split(':'), s = SE[+i]; if (!s) continue;
+    const L = nm === 'me' || !nm ? PLAYER_LOOK : { ...PLAYER_LOOK, ...SEAT_LOOKS[nm] };
+    const C = buildCharacter(L, { state: 'sit', shadow: false, plant: false }), g = C.group;
+    const P = CB2.seatPlace(C, s);
+    if (s.wheel && st) { CB2.seatSteer(C, P, st); for (let k = 0; k < 20; k++) C.update(1 / 30, P); }
+    window.seatFit = { ...(window.seatFit || {}), [i]: { lean: +(P.lean * 180 / Math.PI).toFixed(1), fwd: +P.fwd.toFixed(2), sink: +P.sink.toFixed(3) } };
+    S.body.add(g); SEATED[+i] = C;
+  }
+}
+if (Q.has('stand')) { // stand=x,z,度：一個人站在旁邊（你一開始的樣子；車身座標，臉朝那個角度）
+  const { buildCharacter, PLAYER_LOOK } = await import('./character.js'), [x, z, h] = Q.get('stand').split(',').map(Number);
+  const C = buildCharacter(PLAYER_LOOK, { state: 'idle' }); C.group.position.set(x, 0, z); C.group.rotation.y = h * Math.PI / 180;
+  for (let k = 0; k < 20; k++) C.update(1 / 30, { speed: 0, state: 'idle' });
+  scene.add(C.group);
+}
+if (Q.get('bg') === 'sky') { scene.background = new THREE.Color(0xa9c8e8); const gr = new THREE.Mesh(new THREE.CircleGeometry(60, 64), new THREE.MeshStandardMaterial({ color: 0x8c9a7c, roughness: 0.95 })); gr.rotation.x = -Math.PI / 2; gr.position.y = -0.002; scene.add(gr); }
 const STD = { side: { a: 90, d: 9, h: 0.65, tx: 0, ty: 0.6, fov: 30 }, front: { a: 0, d: 9, h: 0.7, tx: 0, ty: 0.65, fov: 22 }, rear: { a: 180, d: 9, h: 0.75, tx: 0, ty: 0.65, fov: 22 },
   top: { a: 90, d: 0.01, h: 14, tx: 0, ty: 0, fov: 25 }, front34: { a: 35, d: 7.5, h: 1.6, tx: 0, ty: 0.55, fov: 32 }, rear34: { a: 145, d: 7.5, h: 1.6, tx: 0, ty: 0.55, fov: 32 },
   low: { a: 30, d: 5.5, h: 0.45, tx: 0, ty: 0.6, fov: 40 } };
-const c = v === 'eye' ? { a: 0, d: 1, h: 1, tx: 0, ty: 0, fov: CB.cabinFov(key, W / H) } : v === 'custom' ? Object.fromEntries(['a', 'd', 'h', 'tx', 'ty', 'tz', 'fov', 'rl'].map((k) => [k, +(Q.get(k) || 0)])) : cams[v] || STD[v];
+const c = v === 'eye' ? { a: 0, d: 1, h: 1, tx: 0, ty: 0, fov: CB.cabinFov(key, W / H) } : v === 'seat' ? { a: 0, d: 1, h: 1, tx: 0, ty: 0, fov: +(Q.get('fov') || 72) } : v === 'custom' ? Object.fromEntries(['a', 'd', 'h', 'tx', 'ty', 'tz', 'fov', 'rl'].map((k) => [k, +(Q.get(k) || 0)])) : cams[v] || STD[v];
 if (!c) throw new Error('沒有這個視角 ' + v);
 const cam = new THREE.PerspectiveCamera(c.fov, W / H, 0.05, 200), a = c.a * Math.PI / 180;
 cam.position.set(c.tx + Math.cos(a) * c.d, c.h, (c.tz || 0) - Math.sin(a) * c.d);
 if (v === 'top') cam.up.set(-1, 0, 0);
 cam.lookAt(c.tx, c.ty, c.tz || 0);
 if (c.rl) cam.rotateZ(c.rl * Math.PI / 180);
+if (v === 'seat') { // 坐在那個位子：那個人的眼睛往前 5 公分，往前看（yaw／pitch）；那個人不畫
+  const n = +(Q.get('seat') || 0), C = SEATED[n], se = (CB || await import('./cabin.js')).cabinSeats(key)[n]; cam.near = 0.02; cam.updateProjectionMatrix(); S.car.updateMatrixWorld(true);
+  if (se) { // 眼睛＝那個位子的眼睛（cabinSeats 的 eye：前座跟駕駛座一樣高）
+    const ya = +(Q.get('yaw') || 0) * Math.PI / 180, pa = (+(Q.get('pitch') || 0) - 6) * Math.PI / 180;
+    const fw = new THREE.Vector3(Math.cos(pa) * Math.cos(ya), Math.sin(pa), Math.cos(pa) * Math.sin(ya));
+    cam.position.copy(S.body.localToWorld(new THREE.Vector3(...se.eye))); cam.lookAt(cam.position.clone().add(fw)); if (C) C.group.visible = false;
+  }
+}
 if (v === 'eye') { cam.near = 0.02; cam.updateProjectionMatrix(); S.car.updateMatrixWorld(true); CB.cabinCamera(cam, S.body, key, +(Q.get('yaw') || 0), +(Q.get('pitch') || 0)); }
 r.render(scene, cam);
-window.info = { calls: r.info.render.calls, tris: r.info.render.triangles };
+window.info = { calls: r.info.render.calls, tris: r.info.render.triangles, fit: window.seatFit };
 window.done = true;
 </script></body></html>
