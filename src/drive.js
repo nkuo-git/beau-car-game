@@ -87,7 +87,7 @@ import * as THREE from 'three';
 import { createRide } from './terrain.js'; // 第 4 批：地形（越野車場）
 
 // 打包時全部接在同一個 script 裡：只露出 createDrive
-export const { createDrive, DRIVE_DEST, tiltAngle } = (() => {
+export const { createDrive, DRIVE_DEST, tiltAngle, bodyBox } = (() => {
 const TAU = Math.PI * 2, GEARS = [3.3, 2.2, 1.62, 1.28, 1.05, 0.86];
 const AERO = 0.55, STEP = 0.25, HZ = 120; // 風阻（街機）、一步最多走幾公尺（碰撞）、物理每秒最少幾步
 const torqueAt = (x) => 0.8 + 0.4 * x - 0.4 * x * x;
@@ -237,6 +237,15 @@ const ICON = {
 
 // ---- 碰撞物的格子（8 公尺一格）：加、照 tag 拿掉、找附近的（之後的交通、警察、走路也用得到）----
 // 碰撞物：{ t: 'box', x, z, hx, hz, rot, h } | { t: 'circle', x, z, r, h }（xz 平面；h＝高度，鏡頭避開房子用）
+// 第 57 批：量車身的盒子（大小、碰撞）：坐在裡面的人（userData.seated：你、朋友；character.js 的骨架 Box3 量出來很大）先拿下來，量完放回去
+//   上車再做一個 drv 的時候人還坐在車上（比賽完、下車再上車），不拿下來的話碰撞盒變成 2.4 公尺寬、車尾多 0.4 公尺：開進圓塔的格子會卡在玻璃上轉掉（test-b1 第 7 段）
+function bodyBox(body, box = new THREE.Box3()) {
+  const off = []; body.traverse((o) => { if (o.userData.seated) off.push([o, o.parent]); });
+  for (const [o] of off) o.removeFromParent();
+  box.setFromObject(body);
+  for (const [o, par] of off) par.add(o);
+  return box;
+}
 function colGrid() {
   const CELL = 8, grid = new Map(), tags = new Map(), found = []; let stamp = 0;
   const key = (gx, gz) => gx * 65536 + gz;
@@ -372,7 +381,7 @@ function createDrive(o) {
   const info = (() => {
     const p = car.position.clone(), q = car.quaternion.clone(), bx = body.position.x, bz = body.position.z, br = body.rotation.clone();
     car.position.set(0, 0, 0); car.quaternion.identity(); body.position.x = 0; body.position.z = 0; body.rotation.set(0, 0, 0); car.updateMatrixWorld(true);
-    const b = new THREE.Box3().setFromObject(body);
+    const b = bodyBox(body); // 第 57 批：坐在裡面的人不算
     car.position.copy(p); car.quaternion.copy(q); body.position.x = bx; body.position.z = bz; body.rotation.copy(br); car.updateMatrixWorld(true);
     return { nose: b.max.x, tail: b.min.x, len: b.max.x - b.min.x, halfW: Math.max(b.max.z, -b.min.z), wheelbase: W.xf - W.xr, xr: W.xr };
   })();
@@ -1141,6 +1150,7 @@ function createDrive(o) {
     update, telemetry, setDestination, setCameraMode, teleport, parkAt, pause, resume, release, dispose, toast, setAction, setAction2,
     addColliders: (list, tag) => cw.add(Array.isArray(list) ? list : [list], tag ?? null),
     removeColliders: (tag) => cw.remove(tag),
+    colsNear: (x, z, r = 10) => cw.near(x - r, z - r, x + r, z + r).map((c) => ({ tag: c.tag, t: c.t, x: +c.x.toFixed(2), z: +c.z.toFixed(2), hx: c.hx, hz: c.hz, r: c.r, rot: c.rot, h: c.h, name: c.src.name || c.src.key || null })), // 測試：這附近有哪些碰撞物（找撞到什麼）
     setMarkers: (list, tag) => { const L = Array.isArray(list) ? list : null; if (tag == null) marks = L; else if (L) marksT[tag] = L; else delete marksT[tag]; }, // 第 3 批（b3-int）；tag：另外一組（比賽的對手）
     setMapTap: (t) => { mapTap = t && typeof t.onClick === 'function' ? { label: String(t.label || ''), onClick: t.onClick } : null; if (hud) { hud.mapBox.classList.toggle('tap', !!mapTap); hud.mapB.hidden = !mapTap || !mapTap.label; if (mapTap) hud.mapB.textContent = mapTap.label; } },
     setClock: (s) => { if (!hud) return; const on = s != null && s !== ''; if (hud.clk.hidden !== !on) hud.clk.hidden = !on; if (on && hud.clk.textContent !== s) hud.clk.textContent = s; }, // 第 31 批：小地圖上面一條字（遊戲的時間；town.src.js 給）
@@ -1158,5 +1168,5 @@ function createDrive(o) {
   setCameraMode('chase');
   return api;
 }
-return { createDrive, DRIVE_DEST: DEST, tiltAngle };
+return { createDrive, DRIVE_DEST: DEST, tiltAngle, bodyBox };
 })();

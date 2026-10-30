@@ -214,7 +214,7 @@ const RACE = { on: false, frame: raceFrame };
 function carSize(Sx) {
   const p = Sx.car.position, x = p.x, y = p.y, z = p.z;
   p.set(0, 0, 0); Sx.car.updateMatrixWorld(true);
-  const b = new THREE.Box3().setFromObject(Sx.body);
+  const b = bodyBox(Sx.body); // 第 57 批：坐在駕駛座的你不算（drive.js）
   p.set(x, y, z); Sx.car.updateMatrixWorld(true);
   return { nose: b.max.x, len: b.max.x - b.min.x, tail: b.min.x };
 }

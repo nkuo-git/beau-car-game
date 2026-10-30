@@ -999,11 +999,12 @@ check(tn7.pressed === '▶' && Math.abs(tn7.dh + Math.PI / 4) < 1e-3 && tn7.floo
 // 往前開進格子（開到車頭快碰到玻璃）→ 下車：自己開正、停進格子（掛在那一格上；存檔記著）
 const pk7 = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, d = D.drv; let n = 0;
-  for (; n < 600; n++) { const t = d.telemetry(), q = H.gl(t.x, t.z), r = Math.hypot(q.x, q.z); d.setInput(r < 9.2 ? { throttle: 0.3 } : { brake: 1 }); window.__dstep(1); if (r >= 9.2 && Math.abs(t.v) < 0.05) break; }
+  const tr = [], ts = d.telemetry(), cols = d.colsNear ? d.colsNear(ts.x, ts.z, 14).filter((c) => c.tag != null || Math.hypot(c.x - ts.x, c.z - ts.z) < 11) : null; let lb = ts.bumps; // 開進去的路（找問題用：第幾格、離中心、車頭、速度、撞到幾次）＋附近的碰撞物
+  for (; n < 600; n++) { const t = d.telemetry(), q = H.gl(t.x, t.z), r = Math.hypot(q.x, q.z); if (n % 20 === 0 || t.bumps !== lb) tr.push([n, +r.toFixed(2), +q.x.toFixed(2), +q.z.toFixed(2), +t.heading.toFixed(3), +t.v.toFixed(2), t.bumps]); lb = t.bumps; d.setInput(r < 9.2 ? { throttle: 0.3 } : { brake: 1 }); window.__dstep(1); if (r >= 9.2 && Math.abs(t.v) < 0.05) break; }
   d.setInput(null); window.__dstep(10); const t1 = d.telemetry(), q1 = H.gl(t1.x, t1.z), bumps = t1.bumps;
   const pressed = H.press2(); let m = 0; for (; m < 400 && window.__D().walker.mode !== 'walk'; m++) H.step(1); H.step(10);
   const D2 = window.__D(), i = D2.TWR.indexOf('supra'), b = D2.TOWER_BAYS[i], L = D2.tripFull === 'supra' ? D2.tripS.car : D2.LODS.supra.lod?.car; // 剛開的那台：完整的車直接掛上去（換開別台才換成輕量車）
-  return { r: +Math.hypot(q1.x, q1.z).toFixed(2), pressed, s: +(m / 60).toFixed(2), mode: D2.walker.mode, drv: !!D2.drv, i, f: b?.f, on: L?.parent?.name, lodVis: !!L?.visible, full: D2.tripFull === 'supra', pose: D2.tripPose.supra, toast: H.toast(), saved: window.__G().park?.tower?.[i], cars: D2.walker.cars.map((c) => c.key), wy: +D2.walker.character.group.position.y.toFixed(2), voice: !!D2.dvoice };
+  return { r: +Math.hypot(q1.x, q1.z).toFixed(2), pressed, s: +(m / 60).toFixed(2), mode: D2.walker.mode, drv: !!D2.drv, i, f: b?.f, on: L?.parent?.name, lodVis: !!L?.visible, full: D2.tripFull === 'supra', pose: D2.tripPose.supra, toast: H.toast(), saved: window.__G().park?.tower?.[i], cars: D2.walker.cars.map((c) => c.key), wy: +D2.walker.character.group.position.y.toFixed(2), voice: !!D2.dvoice, bumps, tr: tr.slice(0, 60), cols };
 });
 console.log('  parked in a spot:', JSON.stringify(pk7), '| lods', JSON.stringify(await lodAt()));
 check(pk7.r > 8 && pk7.pressed === '下車' && pk7.mode === 'walk' && !pk7.drv && !pk7.voice && pk7.f === 2 && pk7.on === `towerBay${pk7.i + 1}` && pk7.lodVis && pk7.pose?.tw === pk7.i && pk7.saved === 'supra' && pk7.cars.includes('supra') && Math.abs(pk7.wy - 7.7) < 0.05

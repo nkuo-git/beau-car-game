@@ -53,6 +53,12 @@ seat counts follow the real cars.
 - `race.src.js`: 400 m race shows you in the driver's seat too (`mySitOn`), removed on exit.
 
 ## Gotchas
+- **Never measure a car body with a seated character inside.** `Box3.setFromObject` on the character's skinned rig
+  comes out ~4 m wide / 3.7 m tall, so a `createDrive` or `fullBox` made while `seat-me` sits in the body gave a
+  2.4 m-wide collision box with 0.4 m extra tail: in test-b1 §7 the SUPRA (re-boarded after the race with you still
+  drawn in the driver's seat) touched the bay's glass 0.5 m early, the test kept pushing, and it ground round 120°.
+  `drive.js` `bodyBox(body)` detaches `userData.seated` children, measures, puts them back; `town.src.js fullBox`
+  and `race.src.js carSize` use it. New measurement sites must too.
 - Characters are shared-material objects: never let `disposeCar` traverse them (hence `userData.seated` + `seatDetach`).
 - `seatsStep` must run after `netStep` (camera uses the friend's car position of this frame; `hopStep` re-hides the
   light car every frame because netStep shows it).

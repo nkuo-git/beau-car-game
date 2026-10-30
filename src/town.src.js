@@ -444,7 +444,7 @@ function parkFull() {
 function fullBox(Sx, k = cur) {
   const p = Sx.car.position.clone(), r = Sx.car.rotation.clone();
   Sx.car.position.set(0, 0, 0); Sx.car.rotation.set(0, 0, 0); Sx.car.updateMatrixWorld(true);
-  const b = new THREE.Box3().setFromObject(Sx.body);
+  const b = bodyBox(Sx.body); // 第 57 批：坐在裡面的人不算（drive.js）
   Sx.car.position.copy(p); Sx.car.rotation.copy(r); Sx.car.updateMatrixWorld(true);
   return { hx: (b.max.x - b.min.x) / 2, hz: Math.max(b.max.z, -b.min.z, PERF[k]?.halfW || 0), cx: (b.max.x + b.min.x) / 2, cz: 0 }; // 第 4 批：halfW＝輪胎比車身寬的（怪獸卡車 1.905）
 }
