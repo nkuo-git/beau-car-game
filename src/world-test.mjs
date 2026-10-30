@@ -827,11 +827,11 @@ await shot(B, `${prefix}-9e-riding.png`);
 // A 開：B 跟著走、開著不能下車
 await A.evaluate(() => window.__D().drv.setInput({ throttle: 0.5, brake: 0, steer: 0 }));
 const mov9e = await waitFor(B, (x0) => { const s = window.beauGame.net.info.seat; return s.hop && Math.abs(s.hop.x - x0) > 6 && s.hop.spd > 2; }, parkA.x, 15000);
-const off9e = await B.evaluate(() => document.querySelector('#stage .ps-out').classList.contains('off'));
-await click(B, '#stage .ps-out');
-const still9e = await B.evaluate(() => ({ hop: !!window.beauGame.net.info.seat.hop, toast: [...document.querySelectorAll('#stage .ps-toast.show')].map((e) => e.textContent).join('') }));
+const still9e = await B.evaluate(() => { const o = document.querySelector('#stage .ps-out'), off = o.classList.contains('off'); o.click(); return { off, hop: !!window.beauGame.net.info.seat.hop, toast: [...document.querySelectorAll('#stage .ps-toast.show')].map((e) => e.textContent).join(''), spd: window.beauGame.net.info.seat.hop?.spd }; }); // 同一下讀（playwright 的 click 在慢的頁面會等超過提示的 1.6 秒）
+const off9e = still9e.off;
 const tA = await A.evaluate(() => { const D = window.__D(); D.drv.setInput({ throttle: 0, brake: 1, steer: 0, handbrake: 1 }); for (let i = 0; i < 300 && Math.abs(D.drv.telemetry().v) > 0.2; i++) window.__dstep(1); const t = D.drv.telemetry(); return { x: t.x, z: t.z, v: +t.v.toFixed(2) }; });
 const fol9e = await waitFor(B, (t) => { const s = window.beauGame.net.info.seat, w = window.__D().walker.telemetry(); return s.hop && Math.hypot(s.hop.x - t.x, s.hop.z - t.z) < 1 && Math.hypot(w.x - t.x, w.z - t.z) < 4 && s.hop.spd < 0.5; }, tA, 20000);
+console.log('  moving:', mov9e, JSON.stringify(still9e), 'stopped:', JSON.stringify(tA), fol9e);
 check(mov9e && off9e && still9e.hop && /停下來才能下車/.test(still9e.toast) && fol9e, `A drives off: B rides along (the walking you follows too); while moving 下車 is greyed and says 「${still9e.toast}」; A stops, B is where A’s car is`);
 // 換位子 → 後座右；A 看到
 await click(B, '#stage .ps-swap');
