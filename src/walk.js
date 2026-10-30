@@ -13,6 +13,7 @@
 //                                 zone＝{ x, z, ry, ax, az }（門、真的走得到的觸發點）；走開再回來才會再叫；叫了以後照樣在走（要不要進去、怎麼進去是頁面的事）
 //     onGetIn(car),               坐進車裡了（角色藏起來、走路暫停、HUD 收起來）；car＝setCars 給的那個（頁面要自己準備開那台）或 getOut 留下來的那台
 //                                 （car.drive＝true：walker 已經 drv.resume() 了，頁面只要把引擎聲接回去）
+//                                 第 57 批：onGetIn(car, seat)：seat＝getIn 給的 { i, side, u }（選位子）；i > 0＝坐別的位子：剛下來那台也不 resume（頁面自己管）
 //     keyboard: true,             WASD／方向鍵走（跟著鏡頭的方向）、Shift 跑、E 按大按鈕、C 換視角（第一人稱）、F／G⋯ setButtons 的鍵；滑鼠拖畫面轉頭、滾輪拉近拉遠
 //     doors: 'village',           要偵測的門：'village'＝V.buildings 關著的門（房子、店面、廟、超商、三合院、車行玻璃門；改車廠開著的大門、你的車庫是真的走進去，不算）
 //                                 ；也可以直接給 [門]（跟 setDoors 一樣）或 null
@@ -28,6 +29,7 @@
 //   walker.teleport({ x, z, heading }, { keepCamera })   把人放到那裡（鏡頭跳到後面；站在門口的門要先走開才會再觸發）
 //   walker.setAction({ label, onClick, icon } | null)   HUD 的大按鈕（跟 drive.js 同一個樣子、同一個位置；E 鍵）；icon：car | door | doorDown | key | hand | lift | bed；
 //                          頁面給的優先，沒給才輪到車庫門（開鐵捲門）、車（上車）；每一幀叫也沒關係；walker.action＝現在的字
+//   walker.setAction2({ label, onClick, icon } | null)   第 57 批：大按鈕下面第二顆（深色：「選位子」）；只有走路的時候出現；walker.action2＝現在的字；walker.nearCar＝「上車」那台（setCars 給的那個）
 //   walker.addColliders(list, tag) / removeColliders(tag)   跟 drive.js 一樣（{ t: 'box', x, z, hx, hz, rot, h, y0? } | { t: 'circle', x, z, r, h, y0? }）
 //                          world.colliders（村子的）的 tag 是 'world'：走進房子（interiors.js）removeColliders('world')，出來 addColliders(V.colliders, 'world')
 //                          y0（多的）：碰撞物的底有多高（天花板、捲起來一半的門）：比頭高的不擋人、只擋鏡頭（drive.js 不看 y0：這種不要給開車的）
@@ -44,6 +46,8 @@
 //   walker.getOut(drv, S, { key, name, h })   下車：|v| < 1 m/s 才可以（不行回傳 null）。drv.pause()（車子停在原地、影子留著），這台變成可以上的車（car.drive＝true），
 //                          人從駕駛座那邊（左）走出來 0.42 秒（左邊擋住→右邊→後面→前面），鏡頭從開車的慢慢接過來；回傳那台 car
 //   walker.getIn(car?)         上車（「上車」按鈕就是叫這個）：走到車門（站在哪一邊就走哪一邊；前後就先繞過車角）、轉身坐進去 → onGetIn(car)；推搖桿可以取消
+//   walker.getIn(car, { seat: { i, side, u } })   第 57 批：坐那個位子：走到那一邊（side −1 左、1 右）、車身長方形中間往前 u 公尺的門 → onGetIn(car, seat)
+//   walker.getOut(drv, S, { seat: { side, u }, paused: true })   第 57 批：從那個位子下車（先站那一邊）；paused＝開車的暫停著也可以（坐別的位子）
 //   walker.setGarage(GAR | null, { close, doorAction })   你家（room.js，擺在村子裡；group 擺好位置以後再叫，搬了要再叫一次）：碰撞跟著鐵捲門（門開到人過得去 0.55 就不擋人；天花板、門楣、捲一半的門擋鏡頭），
 //                          走到門口（裡面、外面都可以）門關著給「開鐵捲門」；close: true 門開著多給「關鐵捲門」；doorAction: false＝門的按鈕頁面自己給（碰撞照樣跟著門）
 //   walker.setDoors(list | 'village' | null)   換要偵測的門：[{ x, z, ry, w? }]，ry＝門朝外的方向（跟 V.buildings 的 door 一樣：往 −(sin ry, cos ry) 走＝走進去），
@@ -118,6 +122,15 @@ const CSS = `
 .wk-act.on{transform:translateY(4px);box-shadow:0 1px 0 #9E4213}
 .wk-act:focus-visible{outline:3px solid #F2F3F5;outline-offset:3px}
 .wk-act::after{content:"";position:absolute;inset:-5px;border-radius:inherit;border:3px solid #FF6A1F;opacity:0;animation:wk-ring 1.6s ease-out infinite;pointer-events:none}
+.wk-act2{top:122px;left:10px;max-width:calc(100% - 158px);height:50px;box-sizing:border-box;display:flex;align-items:center;gap:8px;margin:0;padding:0 16px 0 6px;border:0;border-radius:999px;background:rgba(14,15,18,0.62);color:#F2F3F5;font:700 18px/1 ${SANS};letter-spacing:.04em;box-shadow:0 4px 0 rgba(0,0,0,0.35);pointer-events:auto;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.wk-chip[hidden]~.wk-act2{top:74px}
+.wk-act[hidden]~.wk-act2{top:58px}
+.wk-chip[hidden]~.wk-act[hidden]~.wk-act2{top:10px}
+.wk-act2 i{flex:none;width:38px;height:38px;border-radius:50%;background:#FF6A1F;display:grid;place-items:center}
+.wk-act2 svg{width:22px;height:22px;fill:none;stroke:#1A0F07;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.wk-act2 span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wk-act2.on{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,0.35)}
+.wk-act2:focus-visible{outline:3px solid #F2F3F5;outline-offset:3px}
 @keyframes wk-ring{0%{opacity:.8;transform:scale(1)}100%{opacity:0;transform:scale(1.1,1.35)}}
 @media (hover:hover) and (pointer:fine){.wk-act kbd{display:block}}
 .wk-map{top:10px;right:10px;width:124px;height:124px;border-radius:18px;background:rgba(14,15,18,0.62);overflow:hidden}
@@ -148,6 +161,8 @@ const ICON = {
   // 第 2 批（車庫）：升降機（柱子、平台、上下箭頭）、床（睡覺）
   lift: '<svg viewBox="0 0 24 24"><path d="M3.5 20.5h17M19.5 20.5V3.5M3.5 12h16"/><path d="M6.6 7.4l2.4-2.4 2.4 2.4M9 5v4.6M12.6 15.6l2.4 2.4 2.4-2.4M15 18v-4.6"/></svg>',
   bed: '<svg viewBox="0 0 24 24"><path d="M3 19V6.5M3 15h18v4M21 15v-2.3a2.2 2.2 0 0 0-2.2-2.2H11V15"/><circle cx="7" cy="12.2" r="1.9"/><path d="M14.5 3.5h3l-3 3.2h3"/></svg>',
+  // 第 57 批：選位子（椅子：頭枕、椅背、椅墊、椅腳）
+  seat: '<svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="5.4" height="3.2" rx="1.3"/><path d="M9.4 5.7L7.6 15h9.2a1.4 1.4 0 0 1 1.4 1.4V17"/><path d="M11 17v4M7 21h8"/></svg>',
   // 自訂角色（小房子的衣櫃前面：換衣服）：T 恤
   shirt: '<svg viewBox="0 0 24 24"><path d="M9 3.5L3.5 6.6l2.2 4.1 2.1-1.1v10.9h8.4V9.6l2.1 1.1 2.2-4.1L15 3.5a3 3 0 0 1-6 0z"/></svg>',
   // 搖桿外圈：上下左右四個小三角
@@ -393,7 +408,7 @@ function createWalker(o) {
     st.x = S.x0 + (S.x1 - S.x0) * e; st.z = S.z0 + (S.z1 - S.z0) * e; st.vx = st.vz = 0;
     st.speed = Math.hypot(st.x - px, st.z - pz) / dt;
     st.th = wrapA(S.h0 + wrapA(S.h1 - S.h0) * (S.kind === 'out' ? smooth01((k - 0.45) / 0.55) : smooth01(k / 0.4)));
-    if (k >= 1) { if (S.kind === 'out') { scr = null; st.mode = 'walk'; st.speed = 0; } else finishIn(S.rec); }
+    if (k >= 1) { if (S.kind === 'out') { scr = null; st.mode = 'walk'; st.speed = 0; } else finishIn(S.rec, S.seat); }
   }
   function autoStep(dt) { // 自己走去車門（推搖桿就取消；卡住了：很近就直接坐進去，不然取消）
     const T = tgt; T.t += dt;
@@ -401,11 +416,11 @@ function createWalker(o) {
     let px = T.pts[T.i * 2], pz = T.pts[T.i * 2 + 1], dx = px - st.x, dz = pz - st.z, d = Math.hypot(dx, dz);
     if (d < 0.12) {
       if (T.i < T.n - 1) { T.i++; px = T.pts[T.i * 2]; pz = T.pts[T.i * 2 + 1]; dx = px - st.x; dz = pz - st.z; d = Math.hypot(dx, dz); }
-      else { startSeat(T.rec, T.side); return; }
+      else { startSeat(T.rec, T.side, T.u, T.seat); return; }
     }
     if (T.stuck > 0.5 || T.t > 5) { // 走不過去（中間有牆、別的車）
       const L = T.n - 1, ex = T.pts[L * 2], ez = T.pts[L * 2 + 1];
-      if (Math.hypot(ex - st.x, ez - st.z) < 0.7 && !segBlocked(st.x, st.z, ex, ez)) { st.x = ex; st.z = ez; startSeat(T.rec, T.side); return; }
+      if (Math.hypot(ex - st.x, ez - st.z) < 0.7 && !segBlocked(st.x, st.z, ex, ez)) { st.x = ex; st.z = ez; startSeat(T.rec, T.side, T.u, T.seat); return; }
       tgt = null; st.mode = 'walk'; st.vx = st.vz = 0; toast('過不去：走到車門旁邊再按一次'); return;
     }
     const v = Math.min(BRISK, d / dt); st.vx = (dx / d) * v; st.vz = (dz / d) * v;
@@ -475,10 +490,12 @@ function createWalker(o) {
     return best;
   }
   // 下車：人站哪裡（左邊駕駛座→右邊→後面→前面→再遠一點）；回傳 [起點 x, z, 終點 x, z, 臉朝]
-  function exitSpot(r) {
-    const side = R + 0.14, u = r.door;
+  //   第 57 批：坐別的位子（se＝{ side, u }）：先站那個位子那一邊的門（u＝車身長方形中間往前幾公尺），擋住了才換另一邊
+  function exitSpot(r, se) {
+    const side = R + 0.14, u = se && isFinite(se.u) ? +se.u : r.door;
     const C = [[u, -(r.hz + side), u, -(r.hz - 0.28), Math.PI / 2], [u, r.hz + side, u, r.hz - 0.28, -Math.PI / 2], [-(r.hx + side + 0.1), 0, -(r.hx - 0.3), 0, Math.PI], [r.hx + side + 0.1, 0, r.hx - 0.3, 0, 0],
       [u, -(r.hz + side + 0.5), u, -(r.hz - 0.28), Math.PI / 2], [u, r.hz + side + 0.5, u, r.hz - 0.28, -Math.PI / 2], [u - 1.2, -(r.hz + side), u - 1.2, -(r.hz - 0.28), Math.PI / 2], [u + 1.2, -(r.hz + side), u + 1.2, -(r.hz - 0.28), Math.PI / 2]];
+    if (se && se.side > 0) { [C[0], C[1]] = [C[1], C[0]]; [C[4], C[5]] = [C[5], C[4]]; } // 右邊的位子：先右邊
     const IN = [0, 0];
     for (const c of C) { // 站得下、從車門走出去中間沒有牆（車子自己的碰撞這時候還沒放）
       toWorldU(r, c[0], c[1], PT); toWorldU(r, c[2], c[3], IN);
@@ -488,12 +505,12 @@ function createWalker(o) {
   }
   function getOut(drv, S, op = {}) {
     if (!alive || !drv || st.mode !== 'off') return null;
-    const t = drv.telemetry(); if (t.paused || Math.abs(t.v) >= 1) return null;
+    const t = drv.telemetry(); if ((t.paused && !op.paused) || Math.abs(t.v) >= 1) return null; // 第 57 批：坐別的位子（車子停著、開車的暫停著）：op.paused
     const ci = drv.carInfo;
     const car = { key: op.key ?? null, name: op.name ?? null, x: t.x, z: t.z, heading: t.heading, hx: ci.len / 2, hz: ci.halfW, cx: (ci.nose + ci.tail) / 2, cz: 0, h: op.h ?? 1.4, door: op.door ?? 0, object: S ? S.car : null, drive: true, drv, S };
     const prev = parked; parked = car; rebuildCars(true); // 同一台在清單裡的舊位置拿掉；自己的碰撞先不放
-    const spot = exitSpot(recs[0]);
-    if (!spot) { parked = prev; rebuildCars(); if (drv.toast) drv.toast('這裡太擠了，下不了車', 1800); return null; } // 四邊都沒地方站：不下車
+    const spot = exitSpot(recs[0], op.seat);
+    if (!spot) { parked = prev; rebuildCars(); if (drv.toast && !op.paused) drv.toast('這裡太擠了，下不了車', 1800); return null; } // 四邊都沒地方站：不下車
     drv.pause(); // 停在原地、熄火（HUD 收起來）
     const sh = scene && scene.getObjectByName('drive-shadow'); if (sh) sh.visible = true; // 車子底下的影子留著（drive.pause 會藏起來）
     rebuildCars();
@@ -505,13 +522,15 @@ function createWalker(o) {
     st.mode = 'out'; place();
     return car;
   }
-  function getIn(car) {
+  // 第 57 批：op.seat＝{ i, side, u }（選位子）：走去那個位子那一邊的門（u＝車身長方形中間往前幾公尺）；坐進去以後 onGetIn(car, seat)
+  function getIn(car, op = {}) {
     if (!alive || !active || st.mode !== 'walk' || now < lockT) return false;
     let r = null; for (const x of recs) if (x.car === car) r = x;
     if (!r) r = nearestCar(); if (!r) return false;
+    const se = op.seat || null, u = se && isFinite(se.u) ? +se.u : r.door;
     const dx = st.x - r.bx, dz = st.z - r.bz, lu = dx * r.c - dz * r.s, lw = dx * r.s + dz * r.c;
-    const spot = (sd) => toWorldU(r, r.door, sd * (r.hz + R + 0.12), [0, 0]);
-    let side = lw > 0.2 ? 1 : -1; // 站在哪一邊就走哪一邊（中間、前後＝駕駛座）
+    const spot = (sd) => toWorldU(r, u, sd * (r.hz + R + 0.12), [0, 0]);
+    let side = se && se.side ? Math.sign(se.side) : lw > 0.2 ? 1 : -1; // 站在哪一邊就走哪一邊（中間、前後＝駕駛座）
     if (!freeAt(...spot(side), R + 0.02) && freeAt(...spot(-side), R + 0.02)) side = -side;
     const pts = [], add = (u, w) => { const p = toWorldU(r, u, w, [0, 0]); pts.push(p[0], p[1]); };
     const cu = r.hx + R + 0.25, cwd = r.hz + R + 0.25;
@@ -521,22 +540,22 @@ function createWalker(o) {
       add(su * cu, side * cwd);
     }
     const d = spot(side); pts.push(d[0], d[1]);
-    tgt = { rec: r, pts, n: pts.length / 2, i: 0, t: 0, cancel: 0, stuck: 0, side };
-    st.mode = 'in'; setEff(null);
+    tgt = { rec: r, pts, n: pts.length / 2, i: 0, t: 0, cancel: 0, stuck: 0, side, u, seat: se };
+    st.mode = 'in'; setEff(null); setEff2(null);
     return true;
   }
-  function startSeat(r, side) {
-    const [x1, z1] = toWorldU(r, r.door, side * (r.hz - 0.3), [0, 0]);
-    scr = { kind: 'seat', t: 0, T: calm ? 0.15 : 0.32, x0: st.x, z0: st.z, x1, z1, h0: st.th, h1: wrapA(r.h - side * Math.PI / 2), ax: st.x, az: st.z, rec: r };
+  function startSeat(r, side, u = r.door, seat = null) {
+    const [x1, z1] = toWorldU(r, u, side * (r.hz - 0.3), [0, 0]);
+    scr = { kind: 'seat', t: 0, T: calm ? 0.15 : 0.32, x0: st.x, z0: st.z, x1, z1, h0: st.th, h1: wrapA(r.h - side * Math.PI / 2), ax: st.x, az: st.z, rec: r, seat };
     tgt = null; st.mode = 'seat';
   }
-  function finishIn(r) { // 坐進去了：角色藏起來、走路暫停；是剛下來那台就直接接回開車
+  function finishIn(r, seat = null) { // 坐進去了：角色藏起來、走路暫停；是剛下來那台就直接接回開車（第 57 批：坐別的位子＝不開，車子照停著）
     const car = r.car;
     scr = null; tgt = null;
     handOff();
     parked = null; rebuildCars();
-    if (car.drive && car.drv) { car.drv.resume(); if (car.drv.cameraMode) car.drv.setCameraMode(car.drv.cameraMode); }
-    events.push(car);
+    if (car.drive && car.drv && !(seat && seat.i > 0)) { car.drv.resume(); if (car.drv.cameraMode) car.drv.setCameraMode(car.drv.cameraMode); }
+    events.push({ inCar: car, seat });
   }
   function handOff() { // 走路收起來（HUD、角色），鏡頭等開車的接手
     if (ch) ch.group.visible = false;
@@ -604,6 +623,21 @@ function createWalker(o) {
   function doAction() {
     if (!eff || !active || st.mode !== 'walk' || now < lockT || !alive) return;
     const f = eff.onClick; if (typeof f === 'function') f(api);
+  }
+  // 第 57 批：第二顆（大按鈕下面，深色的：「選位子」）；頁面給（setAction2），只有走路的時候出現
+  let lead2 = null, eff2 = null;
+  function setAction2(a) { lead2 = a && a.label ? a : null; }
+  function setEff2(a) {
+    const next = a && a.label ? a : null, icon = next && ICON[next.icon] ? next.icon : 'hand';
+    const same = !!eff2 && !!next && eff2.label === String(next.label) && eff2.icon === icon;
+    eff2 = next ? { label: String(next.label), icon, onClick: next.onClick } : null;
+    if (!hud || same) return;
+    hud.act2.hidden = !eff2; hud.act2.classList.remove('on');
+    if (eff2) { hud.act2Text.textContent = eff2.label; hud.act2Icon.innerHTML = ICON[eff2.icon]; hud.act2.setAttribute('aria-label', eff2.label); }
+  }
+  function doAction2() {
+    if (!eff2 || !active || st.mode !== 'walk' || now < lockT || !alive) return;
+    const f = eff2.onClick; if (typeof f === 'function') f(api);
   }
 
   // ---- 鏡頭 ----
@@ -715,11 +749,11 @@ function createWalker(o) {
     if (!document.getElementById('wk-style')) { const s = document.createElement('style'); s.id = 'wk-style'; s.textContent = CSS; document.head.append(s); }
     const root = document.createElement('div'); root.className = 'wk'; root.hidden = true;
     root.innerHTML = `<div class="wk-look"></div><div class="wk-pad"></div><div class="wk-stick rest">${ICON.ring}<div class="wk-knob"></div></div>`
-      + `<div class="wk-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="wk-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="wk-map"><canvas></canvas><b class="wk-mapt" hidden></b><b class="wk-mapb" hidden></b></div>`
+      + `<div class="wk-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="wk-act" hidden><i></i><span></span><kbd>E</kbd></button><button type="button" class="wk-act2" hidden><i></i><span></span></button><div class="wk-map"><canvas></canvas><b class="wk-mapt" hidden></b><b class="wk-mapb" hidden></b></div>`
       + `<b class="wk-cam" role="button" aria-label="換視角（第一人稱）" aria-pressed="false">${ICON.eye}</b><div class="wk-btns" hidden></div><div class="wk-toast" role="status"></div>`;
     o.hudParent.append(root);
     const q = (s) => root.querySelector(s), H = { root, look: q('.wk-look'), pad: q('.wk-pad'), stick: q('.wk-stick'), knob: q('.wk-knob'), chip: q('.wk-chip'), arrow: q('.wk-chip svg'), name: q('.wk-chip b'), dist: q('.wk-chip small'),
-      act: q('.wk-act'), actIcon: q('.wk-act i'), actText: q('.wk-act span'), map: q('.wk-map canvas'), cam: q('.wk-cam'), btns: q('.wk-btns'), toast: q('.wk-toast'), off: [], last: {}, mapT: 0, span: 80 };
+      act: q('.wk-act'), actIcon: q('.wk-act i'), actText: q('.wk-act span'), act2: q('.wk-act2'), act2Icon: q('.wk-act2 i'), act2Text: q('.wk-act2 span'), map: q('.wk-map canvas'), cam: q('.wk-cam'), btns: q('.wk-btns'), toast: q('.wk-toast'), off: [], last: {}, mapT: 0, span: 80 };
     const on = (el, t, f, opt) => { el.addEventListener(t, f, opt); H.off.push(() => el.removeEventListener(t, f, opt)); };
     on(root, 'contextmenu', (e) => e.preventDefault());
     // 搖桿：左下角按下去，搖桿跑到手指下面（外圈整個看得到）；推到外圈 92% 以上跑（放鬆到 80% 以下才變回走）
@@ -762,6 +796,9 @@ function createWalker(o) {
     on(H.act, 'pointerdown', () => H.act.classList.add('on'));
     for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.act, t, () => H.act.classList.remove('on'));
     on(H.act, 'click', (e) => { e.preventDefault(); doAction(); });
+    on(H.act2, 'pointerdown', () => H.act2.classList.add('on'));
+    for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.act2, t, () => H.act2.classList.remove('on'));
+    on(H.act2, 'click', (e) => { e.preventDefault(); doAction2(); });
     const dpr = Math.min(2, (typeof devicePixelRatio === 'number' && devicePixelRatio) || 1), px = Math.round(124 * dpr);
     H.map.width = H.map.height = px; H.mapPx = px; H.dpr = dpr; H.mctx = H.map.getContext('2d'); H.layer = null;
     return H;
@@ -879,7 +916,7 @@ function createWalker(o) {
       camera.near = 0.1; camera.updateProjectionMatrix();
       if (op.blend) { blend.on = true; blend.t = 0; blend.T = op.blend === true ? 0.6 : Math.max(0.05, +op.blend); blend.p.copy(camera.position); blend.q.copy(camera.quaternion); blend.fov = camera.fov; } else blend.on = false;
     }
-    if (hud) { hud.root.hidden = false; hud.rest(); hud.last = {}; hud.mapT = 0; setEff(null); if (hud.act) hud.act.hidden = true; }
+    if (hud) { hud.root.hidden = false; hud.rest(); hud.last = {}; hud.mapT = 0; setEff(null); setEff2(null); if (hud.act) hud.act.hidden = true; }
     // 出門那一下頁面的版面還會變（全螢幕是 body 的 class 變了以後才換的）：下一格（hudTick）再放一次搖桿
     //   （ResizeObserver 不一定會叫：藏起來再打開、大小跟上次一樣就不叫）
     if (hud) hud.reRest = true;
@@ -892,7 +929,7 @@ function createWalker(o) {
     if (hide && ch) ch.group.visible = false;
     if (camera && cam.near0 != null) { camera.near = cam.near0; camera.updateProjectionMatrix(); cam.near0 = null; }
     if (fx) fx.beacon.visible = false;
-    eff = null;
+    eff = null; eff2 = null;
   }
   function resume(op = {}) {
     if (!alive) return;
@@ -931,6 +968,7 @@ function createWalker(o) {
     if (st.mode === 'walk') doorTick(dt);
     st.near = st.mode === 'walk' ? nearestCar() : null;
     setEff(st.mode === 'walk' ? leadAct || gAct || (st.near && st.near.act) : null);
+    setEff2(st.mode === 'walk' ? lead2 : null);
     recenter(dt); camTick(dt);
     if (ch) ch.group.visible = !st.close; // 第一人稱、鏡頭貼著頭：看不到自己
     zoneTick(); routeTick(dt); beaconTick(); hudTick(dt);
@@ -941,7 +979,7 @@ function createWalker(o) {
     const ev = events.splice(0);
     for (const e of ev) {
       if (e.ref !== undefined && e.zone) { if (o.onDoor) o.onDoor(e.ref, e.zone); }
-      else if (o.onGetIn) o.onGetIn(e);
+      else if (e.inCar) { if (o.onGetIn) o.onGetIn(e.inCar, e.seat); }
     }
   }
 
@@ -959,7 +997,7 @@ function createWalker(o) {
     hidden: !ch || !ch.group.visible, zone: zoneNow, dest, destDist: routeData ? Math.max(0, routeData.len - routeS) : null });
 
   const api = {
-    update, telemetry, teleport, setAction, setCars: (list, op = {}) => { leadCars = Array.isArray(list) ? list.slice() : []; if (op.keepParked === false && st.mode !== 'in' && st.mode !== 'seat') parked = null; rebuildCars(); },
+    update, telemetry, teleport, setAction, setAction2, setCars: (list, op = {}) => { leadCars = Array.isArray(list) ? list.slice() : []; if (op.keepParked === false && st.mode !== 'in' && st.mode !== 'seat') parked = null; rebuildCars(); },
     getOut, getIn, setGarage, setDestination, setCamera, setCharacter, setButtons, pause, resume, dispose, toast,
     setDoors: (src) => { doorSrc = src; doorList = buildDoors(src); armDoors(); },
     setInput: (i) => { forced = i ? { x: clamp(+i.x || 0, -1, 1), y: clamp(+i.y || 0, -1, 1), run: i.run } : null; },
@@ -972,7 +1010,7 @@ function createWalker(o) {
     play: (state) => { if (state) st.play = String(state); },
     addColliders: (list, tag) => cw.add(Array.isArray(list) ? list : [list], tag ?? null).length,
     removeColliders: (tag) => cw.remove(tag),
-    get action() { return eff ? eff.label : null; }, get character() { return ch; }, get cars() { return recs.map((r) => r.car); }, get parked() { return parked; },
+    get action() { return eff ? eff.label : null; }, get action2() { return eff2 ? eff2.label : null; }, get nearCar() { return st.near ? st.near.car : null; }, get character() { return ch; }, get cars() { return recs.map((r) => r.car); }, get parked() { return parked; },
     get doors() { return doorList.map((d) => ({ ref: d.ref, ...d.zone, w: d.w })); }, get cameraMode() { return cam.mode; }, get cameraDist() { return cam.dist; }, get mode() { return st.mode; }, hud: hud && hud.root,
     get mapLayer() { return (hud && hud.layer) || o.mapLayer || mapLayer(world); },
   };

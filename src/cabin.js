@@ -70,7 +70,7 @@ export const CABIN3D = (() => {
         dials: [SPEED(-0.128, -0.004, 0.057, 260), TACH(0, 0.002, 0.066, 9, 7), SMALL(0.13, 0.028, 0.03, 'E', 'F', 0.72), SMALL(0.13, -0.036, 0.03, 'C', 'H', 0.45)] },
       stack: { w: 0.27, x1: 0.50, y1: 0.40, turn: 12, kind: 'radio' },
       wheel: { r: 0.185, reach: 0.43, drop: 0.29, col: 23, spokes: [90, 270, 180], hub: 'pad' },
-      shift: 'manual', hand: true, pedals: 3, rear: 'shelf', bulk: -0.88, cage: true,
+      shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -1.04, L: 0.46, h: 0.12, a: 22 }, bulk: -0.88, cage: true, // 第 57 批：真的 Supra（A80）是 2+2：後面兩個小小的位子（低低的椅墊，在防滾籠後面）
     },
     gtr: {
       lhd: false, zD: 0.36, eye: [-0.27, 1.17], fov: 72,
@@ -93,7 +93,7 @@ export const CABIN3D = (() => {
         dials: [SMALL(-0.135, 0.03, 0.03, 'C', 'H', 0.45), SMALL(-0.135, -0.035, 0.03, 'E', 'F', 0.8), TACH(0, 0, 0.068, 9, 8, { face: '#e8e8e4', ink: '#111111' }), SPEED(0.135, 0, 0.058, 180)] },
       stack: { w: 0.25, x1: 0.50, y1: 0.40, kind: 'knobs' },
       wheel: { r: 0.18, reach: 0.42, drop: 0.30, col: 22, spokes: [90, 270, 180], sw: 0.03, hub: 'round' },
-      shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.92, L: 0.56 },
+      shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.92, L: 0.56, n: 3 }, // 第 57 批：n 3＝後座三個位子（真的車 5 人座）
     },
     yaris: {
       lhd: false, zD: 0.36, eye: [-0.20, 1.26], fov: 72,
@@ -190,7 +190,7 @@ export const CABIN3D = (() => {
       scr: { w: 0.22, h: 0.13 },
       stack: { w: 0.25, x1: 0.56, y1: 0.46, kind: 'knobs' },
       wheel: { r: 0.185, reach: 0.43, drop: 0.30, col: 24, spokes: [90, 270, 180], hub: 'pad' },
-      shift: 'auto', hand: false, pedals: 2, rear: 'bench', bench: { x: -0.95 },
+      shift: 'auto', hand: false, pedals: 2, rear: 'bench', bench: { x: -0.95, n: 3 },
     },
     senna: { // 賽道超跑：儀表裝在轉向柱上（數位）、儀表板上一片直的螢幕；碳纖維、很少按鍵
       lhd: true, zD: 0.33, eye: [-0.25, 1.04], fov: 72, floor: 0.06,
@@ -234,7 +234,7 @@ export const CABIN3D = (() => {
         dials: [SMALL(-0.135, 0.03, 0.03, 'C', 'H', 0.45), SMALL(-0.135, -0.035, 0.03, 'E', 'F', 0.7), TACH(0, 0, 0.068, 9, 7), SPEED(0.135, 0, 0.058, 180)] },
       stack: { w: 0.25, x1: 0.58, y1: 0.42, kind: 'knobs' },
       wheel: { r: 0.18, reach: 0.42, drop: 0.30, col: 22, spokes: [90, 270, 180], hub: 'pad' },
-      shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.96 },
+      shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.96, n: 3 },
     },
     jp4: { // 第 48 批：吉普車：左駕手排；坐得高、前擋直直的、儀表板方方的；兩個大圓錶（中間油量、水溫）、黑布椅、黑色硬頂內襯；兩門（後座後面是行李廂）
       lhd: true, zD: 0.40, eye: [-0.40, 1.56], fov: 72, seat: { recline: 17 },
@@ -267,7 +267,7 @@ export const CABIN3D = (() => {
         dials: [TACH(-0.1, 0, 0.064, 7, 6), SPEED(0.1, 0, 0.064, 200), SMALL(0, 0.03, 0.024, 'E', 'F', 0.7), SMALL(0, -0.035, 0.024, 'C', 'H', 0.45)] },
       stack: { w: 0.26, x1: 0.78, y1: 0.80, kind: 'knobs' },
       wheel: { r: 0.19, reach: 0.40, drop: 0.37, col: 28, spokes: [90, 270, 180], hub: 'pad' },
-      shift: 'auto', hand: false, pedals: 2, rear: 'bench', bench: { x: -0.21, L: 0.60, a: 12, shelf: false }, roofR: -0.58, // 後座椅背（a：往後倒幾度）、車頂內襯（roofR：拉到哪裡）都停在車艙後牆前面（後面是車斗）
+      shift: 'auto', hand: false, pedals: 2, rear: 'bench', bench: { x: -0.21, L: 0.60, a: 12, shelf: false, n: 3 }, roofR: -0.58, // 後座椅背（a：往後倒幾度）、車頂內襯（roofR：拉到哪裡）都停在車艙後牆前面（後面是車斗）
     },
     laferrari: { // 油電超跑：數位儀表、像 F1 的方向盤（上下切平、紅色啟動鈕、碳纖維）、浮起來的檔位橋
       lhd: true, zD: 0.36, eye: [-0.30, 0.97], fov: 72, floor: 0.06,
@@ -825,13 +825,14 @@ export const CABIN3D = (() => {
     // ---- 後座＋置物板／隔板 ----
     {
       if (st.rear === 'bench') {
-        const bx = st.bench.x, yc = yF + 0.24, yb = yF, zs = [], zc = 0.95;
-        for (let k = 0; k <= 16; k++) zs.push(-zc + (2 * zc * k) / 16);
-        const cushion = zs.map((z) => { const q = Math.abs(z), dip = 0.02 * Math.exp(-(((q - 0.3) / 0.12) ** 2)); return insideSec(F, [[bx + 0.25, yb], [bx + 0.27, yc - 0.04], [bx + 0.2, yc - dip], [bx - 0.1, yc - 0.02 - dip], [bx - 0.22, yc - 0.05], [bx - 0.22, yb]].map(([x, y]) => [x, y, z]), 0.03); });
-        put('trim', loft(cushion, (j, i) => (Math.abs(zs[j]) > 0.12 && Math.abs(zs[j]) < 0.5 && i >= 1 && i <= 3 ? C.si : C.sb), { closed: true }));
+        const bx = st.bench.x, yc = yF + (st.bench.h ?? 0.24), yb = yF, zs = [], zc = 0.95; // 第 57 批：h＝椅墊離地板多高（Supra 的小後座低一點）
+        const zo = benchZ(st, F, yF), three = st.bench.n === 3, ins = (z) => { const q = Math.abs(z); return three ? q < 0.14 || Math.abs(q - zo) < 0.17 : q > 0.12 && q < 0.5; }; // 第 57 批：三個位子（中間也坐得下）的椅面
+        for (let k = 0; k <= (three ? 24 : 16); k++) zs.push(-zc + (2 * zc * k) / (three ? 24 : 16));
+        const cushion = zs.map((z) => { const q = Math.abs(z), dip = 0.02 * Math.exp(-(((q - zo) / 0.12) ** 2)) + (three ? 0.015 * Math.exp(-((q / 0.1) ** 2)) : 0); return insideSec(F, [[bx + 0.25, yb], [bx + 0.27, yc - 0.04], [bx + 0.2, yc - dip], [bx - 0.1, yc - 0.02 - dip], [bx - 0.22, yc - 0.05], [bx - 0.22, yb]].map(([x, y]) => [x, y, z]), 0.03); });
+        put('trim', loft(cushion, (j, i) => (ins(zs[j]) && i >= 1 && i <= 3 ? C.si : C.sb), { closed: true }));
         const a = (st.bench.a ?? 24) * D2R, L = st.bench.L ?? 0.62, x0 = bx - 0.24, y0 = yc - 0.06, dx = -Math.sin(a), dy = Math.cos(a); // 第 53 批：皮卡的後座直一點（a）
         const back = zs.map((z) => insideSec(F, [[0, 0.02], [0.03, 0.03], [L * 0.6, 0.05], [L, 0.03], [L + 0.02, -0.02], [L, -0.1], [0, -0.1]].map(([s, h]) => [x0 + dx * s + dy * h, y0 + dy * s - dx * h, z]), 0.03));
-        put('trim', loft(back, (j, i) => (Math.abs(zs[j]) > 0.12 && Math.abs(zs[j]) < 0.5 && i >= 1 && i <= 2 ? C.si : C.sb), { closed: true }));
+        put('trim', loft(back, (j, i) => (ins(zs[j]) && i >= 1 && i <= 2 ? C.si : C.sb), { closed: true }));
         if (st.bench.shelf !== false) { // 第 48 批：吉普車（shelf: false）後座後面是行李廂，沒有置物板
           const xt = x0 + dx * L - 0.03, ys = y0 + dy * L - 0.01, xg = F.rg(0) + 0.03, shelf = [];
           for (let k = 0; k <= 4; k++) { const x = lerp(xt, xg, k / 4), y = Math.min(ys, F.top(x, 0) - 0.03); shelf.push([-0.95, -0.5, 0, 0.5, 0.95].map((z) => inside(F, [x, y, z], 0.04))); }
@@ -903,7 +904,7 @@ export const CABIN3D = (() => {
         put('gloss', tint(tube([inside(F, [xh, 0.45, s], m + 0.03), inside(F, [lerp(xh, xw, 0.5), 0.48, s], m + 0.03), inside(F, [xw - 0.05, 0.5, s], m + 0.03)], r, 16, 8), C.cage));
         put('gloss', tint(tube([ht(s), inside(F, [xh - 0.35, 2, s * 0.5], m), inside(F, [F.rg(0) + 0.1, 0.94, s * 0.55], m)], r, 16, 8), C.cage));
       }
-      put('gloss', tint(tube([ht(sd), inside(F, [xh, 0.3, -sd], m)], r, 12, 8), C.cage));
+      if (st.rear !== 'bench') put('gloss', tint(tube([ht(sd), inside(F, [xh, 0.3, -sd], m)], r, 12, 8), C.cage)); // 斜的那根（第 57 批：有後座就不要，會擋到後座的人）
     }
 
     // ---- R34 的多功能螢幕、Yaris 的中控螢幕 ----
@@ -991,7 +992,13 @@ export const CABIN3D = (() => {
   // ---- 第 57 批：每個位子（Nick 2026-10-30「車子的每個位子都可以坐」）----
   // [{ i, n 名字, drv 駕駛座, rear 後座, hip [x, y, z]（椅面上屁股的地方：角色本地 (0, 0.45, 0) 放這裡）, floor 腳踩的地板 y, foot 腳踝往前到哪裡 x,
   //    back 椅背往後倒幾度, top 頭上車頂內側多高, side 從哪一邊上下（−1 左、1 右）, wheel（駕駛座）{ c 方向盤中心, r, col 轉向柱角度 } }]
-  //   前面兩個（駕駛座、副駕駛座）；後座（bench）兩個：左、右（後座椅面凹下去的地方 |z| 0.3）；沒有後座（shelf、bulk）＝兩個位子
+  //   前面兩個（駕駛座、副駕駛座）；後座（bench）兩個：左、右（後座椅面凹下去的地方 |z| 0.3）；bench.n 3＝三個（左、中、右；真的車是 5 人座）；沒有後座（shelf、bulk）＝兩個位子
+  // 後座兩邊的位子離中線多遠：兩個位子＝0.3（椅面凹下去的地方）；三個位子＝照肩膀那麼高的車寬往外挪（0.34～0.42，三個大人肩膀碰肩膀）
+  function benchZ(st, F, yF) {
+    if (st.bench?.n !== 3) return 0.3;
+    const x = st.bench.x - 0.2, y = yF + (st.bench.h ?? 0.24) + 0.45;
+    return cl(F.side(x, y) - 0.27, 0.34, 0.42);
+  }
   function seats(key) {
     const st = STYLE[key], F = fitOf(key); if (!st || !F) return [];
     const zd = (st.lhd ? -1 : 1) * st.zD, [xE, yE] = st.eye, xH = xE + 0.16, yH = yE - 0.64, yF = Math.max(F.bot + (st.floor ?? 0.065), 0.2);
@@ -1001,9 +1008,12 @@ export const CABIN3D = (() => {
       { i: 0, n: '駕駛座', drv: true, hip: [xH, yH, zd], eye: [xE, yE, zd], floor: yF, foot: xFoot, back, top: top(xE, zd), roof: roof(zd), side: Math.sign(zd), wheel: { c: [xE + W.reach, yE - W.drop, zd], r: W.r, col: W.col } },
       { i: 1, n: '副駕駛座', hip: [xH, yH, -zd], eye: [xE, yE, -zd], floor: yF, foot: xFoot, back, top: top(xE, -zd), roof: roof(-zd), side: -Math.sign(zd) },
     ];
-    if (st.rear === 'bench') { // 後座的眼睛（第一人稱）：屁股往後 0.16、往上 0.64（跟前座一樣），頭上車頂留 12 公分
-      const bx = st.bench.x, yc = yF + 0.24, xe = bx - 0.26;
-      for (const s of [-1, 1]) { const t = top(xe, s * 0.3); out.push({ i: out.length, n: s < 0 ? '後座左' : '後座右', rear: true, hip: [bx - 0.1, yc - 0.02, s * 0.3], eye: [xe, Math.min(yc + 0.62, t - 0.12), s * 0.3], floor: yF, foot: xH - 0.22, back: st.bench.a ?? 24, top: t, roof: roof(s * 0.3), side: s }); }
+    if (st.rear === 'bench') { // 後座的眼睛（第一人稱）：屁股往後 0.16、往上 0.64（跟前座一樣），頭上車頂留 12 公分；三個位子（bench.n 3）：中間多一個，兩邊往外挪
+      const bx = st.bench.x, yc = yF + (st.bench.h ?? 0.24), xe = bx - 0.26, zo = benchZ(st, F, yF), three = st.bench.n === 3;
+      for (const z of three ? [-zo, 0, zo] : [-zo, zo]) {
+        const t = top(xe, z), mid = z === 0;
+        out.push({ i: out.length, n: mid ? '後座中' : z < 0 ? '後座左' : '後座右', rear: true, mid, hip: [bx - 0.1, yc - 0.02, z], eye: [xe, Math.min(yc + 0.62, t - 0.12), z], floor: yF + (mid ? 0.1 : 0), foot: xH - 0.22, back: st.bench.a ?? 24, top: t, roof: roof(z), side: Math.sign(z) }); // 中間：腳踩在中央通道上；side 0＝站哪邊就走哪邊
+      }
     }
     return out;
   }
