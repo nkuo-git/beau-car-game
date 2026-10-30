@@ -437,6 +437,7 @@ function hopOut() { // 「下車」：車停下來才可以
 // 下車（why：out 自己下車｜gone 他離開世界｜away 他回家了｜race 他去比賽｜car 他換車｜stale 斷線｜fail 載不了車｜home 你回車庫頁｜leave 你離開世界）
 function hopEnd(why) {
   if (!HOP.on) return;
+  HOP.why = why; // 最後一次為什麼下車（測試看）
   const P = NET.P.get(HOP.uid), n = HOP.n, k = HOP.k, i = HOP.i, C = HOP.car, last = { ...HOP.last };
   HOP.on = false; HOP.job++;
   if (C && MIR.S === C) mirrorSet(false);
