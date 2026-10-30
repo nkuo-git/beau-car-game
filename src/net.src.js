@@ -1005,7 +1005,7 @@ function borParked() { // 我下車停著的那台（朋友看得到、借得到
 }
 // 第 22 批：我的車停在外面哪裡（我在走路、在房子裡、在警察局、被關都算；開著、在自己車庫裡、停在家的格子上、借出去了不算）→ { x, z, heading } | null
 function netParked() {
-  if (BOR.on || LENT_K || HOME.in || !trip || !tripPose || !walker || walker.mode === 'off') return null;
+  if (BOR.on || LENT_K || HOME.in || !trip || !tripPose || !walker || (walker.mode === 'off' && !HOP.on)) return null; // 第 57 批：坐在朋友的車上：自己的車停著（朋友看得到）
   let t = null;
   if (drv) { if (tripFull !== cur || !tripS) return null; const d = drv.telemetry(); if (!d.paused) return null; t = { x: d.x, z: d.z, heading: d.heading }; }
   else { t = tripPose[cur]; if (!t || t.tw != null || !GAME.owned.has(cur)) return null; } // 被抓：拖到警察局的停車場（完整的車）；還回來的：輕量車
