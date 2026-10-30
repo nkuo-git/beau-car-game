@@ -996,7 +996,7 @@ export const CABIN3D = (() => {
     const st = STYLE[key], F = fitOf(key); if (!st || !F) return [];
     const zd = (st.lhd ? -1 : 1) * st.zD, [xE, yE] = st.eye, xH = xE + 0.16, yH = yE - 0.64, yF = Math.max(F.bot + (st.floor ?? 0.065), 0.2);
     const W = st.wheel, back = st.seat?.recline ?? 21, xFoot = Math.min(xH + 0.8, F.fa[0] - 0.2);
-    const top = (x, z) => { const t = F.top(x, z); return t > 0.3 ? t : 2; }, roof = (z) => (x) => top(x, z);
+    const top = (x, z) => { const t = F.top(x, z); return t > 0.3 ? t : 2; }, roof = (z) => (x) => { const t = F.roof(x, z); return t > 0.3 ? t : 2; }; // roof：平順的（量頭的時候用）
     const out = [
       { i: 0, n: '駕駛座', drv: true, hip: [xH, yH, zd], eye: [xE, yE, zd], floor: yF, foot: xFoot, back, top: top(xE, zd), roof: roof(zd), side: Math.sign(zd), wheel: { c: [xE + W.reach, yE - W.drop, zd], r: W.r, col: W.col } },
       { i: 1, n: '副駕駛座', hip: [xH, yH, -zd], eye: [xE, yE, -zd], floor: yF, foot: xFoot, back, top: top(xE, -zd), roof: roof(-zd), side: -Math.sign(zd) },
@@ -1012,7 +1012,8 @@ export const CABIN3D = (() => {
 // cabinSeats(key)：這台車的每個位子（車身座標；見上面 seats）；沒有車內的車（怪獸卡車、沙灘車）＝[]
 export function cabinSeats(key) { return CABIN3D.seats(key); }
 // 人坐進位子（第 57 批）：C＝buildCharacter(look, { state: 'sit', shadow: false, plant: false })，C.group 放進車身（body）；s＝cabinSeats(key) 的一個；P＝重複用的物件
-//   屁股坐在 s.hip、往後靠（椅背的角度）、腳踩地板、駕駛座手握方向盤；頭頂碰到車頂：再往後靠（最多椅背＋10 度）→ 後座往前挪（最多 15 公分）→ 往下坐（最多 6 公分）
+//   屁股坐在 s.hip、往後靠（椅背的角度）、腳踩地板、駕駛座手握方向盤；頭頂碰到車頂（頭的前後都量）：先往下坐（5 公分）→ 再往後靠（最多椅背＋6 度）
+//   → 後座往前挪（最多 22 公分）→ 再往下坐（最多 14 公分；後座 20 公分：低的跑車、後座坐大人）
 //   回傳 P（C.update(dt, P) 用：state 'sit'、feet、hands）；駕駛轉方向盤：seatSteer(C, P, steer) 再 C.update
 const SP_V = new THREE.Vector3(), SP_P = new THREE.Vector3(0, 0.45, 0), SP_Z = new THREE.Vector3(0, 0, 1), SP_M = new THREE.Matrix4();
 export function seatPlace(C, s, P = {}) {
@@ -1024,8 +1025,12 @@ export function seatPlace(C, s, P = {}) {
   const e = g.worldToLocal(C.eyes.getWorldPosition(SP_V)), dx = e.x, dy = e.y + 0.13 - 0.45; // 頭頂（眼睛往上 13 公分）、椅面當原點
   let lean = Math.max(0, s.back - 6) * D, fwd = 0, sink = 0;
   const hx = () => s.hip[0] + fwd + dx * Math.cos(lean) - dy * Math.sin(lean), hy = () => s.hip[1] - sink + dx * Math.sin(lean) + dy * Math.cos(lean);
-  for (let it = 0; it < 60 && hy() > (s.roof ? s.roof(hx()) : s.top) - 0.03; it++) {
-    if (lean < (s.back + 10) * D) lean += D; else if (s.rear && fwd < 0.15) fwd += 0.01; else if (sink < 0.06) sink += 0.005; else break;
+  const over = () => { // 頭頂（圓的：前後 8～9 公分低 5 公分）比車頂高多少
+    const x = hx(), y = hy(); if (!s.roof) return y - (s.top - 0.03);
+    return Math.max(y - (s.roof(x) - 0.02), y - 0.055 - s.roof(x - 0.09), y - 0.055 - s.roof(x + 0.08));
+  };
+  for (let it = 0; it < 80 && over() > 0; it++) {
+    if (sink < 0.05) sink += 0.005; else if (lean < (s.back + 6) * D) lean += D; else if (s.rear && fwd < 0.22) fwd += 0.01; else if (sink < (s.rear ? 0.2 : 0.14)) sink += 0.005; else break;
   }
   g.rotation.set(0, 0, lean); SP_V.copy(SP_P).applyAxisAngle(SP_Z, lean);
   g.position.set(s.hip[0] + fwd - SP_V.x, s.hip[1] - sink - SP_V.y, s.hip[2] - SP_V.z); g.updateMatrix();

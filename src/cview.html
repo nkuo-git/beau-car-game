@@ -58,7 +58,11 @@ if (Q.has('sit') || v === 'seat') {
     const C = buildCharacter(L, { state: 'sit', shadow: false, plant: false }), g = C.group;
     const P = CB2.seatPlace(C, s);
     if (s.wheel && st) { CB2.seatSteer(C, P, st); for (let k = 0; k < 20; k++) C.update(1 / 30, P); }
-    window.seatFit = { ...(window.seatFit || {}), [i]: { lean: +(P.lean * 180 / Math.PI).toFixed(1), fwd: +P.fwd.toFixed(2), sink: +P.sink.toFixed(3) } };
+    g.updateMatrixWorld(true);
+    const hb = C.bones?.[5]?.getWorldPosition(new THREE.Vector3()), ey = C.eyes.getWorldPosition(new THREE.Vector3()); // 頭的骨頭（第 5 根）、眼睛（車身在原點，世界＝車身座標＋車身高度）
+    const by = S.body.position.y + S.car.position.y;
+    window.seatFit = { ...(window.seatFit || {}), [i]: { lean: +(P.lean * 180 / Math.PI).toFixed(1), fwd: +P.fwd.toFixed(2), sink: +P.sink.toFixed(3),
+      head: hb && [+hb.x.toFixed(2), +(hb.y - by).toFixed(2)], eye: [+ey.x.toFixed(2), +(ey.y - by).toFixed(2)], roofHead: hb && +s.roof(hb.x).toFixed(2), roofEye: +s.roof(ey.x).toFixed(2) } };
     S.body.add(g); SEATED[+i] = C;
   }
 }
