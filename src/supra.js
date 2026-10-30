@@ -259,11 +259,11 @@ function bakedBody(BK, body, { paint, glass, inside, mats }) {
       case 'trim': m = new THREE.MeshStandardMaterial({ ...base, roughness: 0.5, metalness: 0.1 }); break;
       case 'dark': m = new THREE.MeshStandardMaterial({ ...base, roughness: 0.95, metalness: 0 }); break;
       case 'bright': m = new THREE.MeshStandardMaterial({ ...base, roughness: 0.1, metalness: 1 }); break;
-      case 'reflector': m = bakedNight(new THREE.MeshStandardMaterial({ ...base, map: s.map, normalMap: s.normalMap, emissive: 0xffffff, emissiveMap: s.emissiveMap, emissiveIntensity: 0.14, roughness: 0.1, metalness: 1 }), [1.6, 1.55, 1.35]); break;
-      case 'frost': m = bakedNight(new THREE.MeshStandardMaterial({ ...base, normalMap: s.normalMap, emissive: 0xffffff, emissiveIntensity: 0.1, roughness: 0.3, metalness: 0.35 }), [1.2, 1.15, 1.0]); break;
+      case 'reflector': m = bakedNight(new THREE.MeshStandardMaterial({ ...base, map: s.map, normalMap: s.normalMap, emissive: 0xffffff, emissiveMap: s.emissiveMap, emissiveIntensity: 0.03, roughness: 0.06, metalness: 1 }), [1.6, 1.55, 1.35]); break; // 第 55 批：白天幾乎不發光（以前 0.14 一片白），亮暗交給一片一片的反光
+      case 'frost': m = bakedNight(new THREE.MeshStandardMaterial({ ...base, normalMap: s.normalMap, emissive: 0xffffff, emissiveIntensity: 0.03, roughness: 0.16, metalness: 0.55 }), [1.2, 1.15, 1.0]); break;
       case 'bulb': m = bakedNight(new THREE.MeshStandardMaterial({ ...base, emissive: 0xfff2d0, emissiveIntensity: 0.6, roughness: 0.3 }), [3.0, 2.9, 2.5]); break;
-      case 'lens': m = bakedClear(new THREE.MeshStandardMaterial({ color: 0x0d0f11, side: s.side, transparent: true, opacity: 0.05, roughness: 0.03, metalness: 0, depthWrite: false })); break; // 大燈罩：顏色要暗（只有反光讓它不透明；白色的話整片白，看不到裡面的反光碗）
-      case 'amber': m = bakedClear(new THREE.MeshStandardMaterial({ ...base, transparent: true, opacity: 0.78, roughness: 0.08, metalness: 0, depthWrite: false }), 0.6); break;
+      case 'lens': m = bakedClear(new THREE.MeshStandardMaterial({ color: 0xffffff, map: s.map, side: s.side, transparent: true, opacity: 1, roughness: 0.03, metalness: 0, depthWrite: false })); break; // 大燈罩：顏色要暗（只有反光讓它不透明；白色的話整片白，看不到裡面的反光碗）；第 55 批：貼圖＝深色幾乎透明的底＋灰色的細格線（線比較不透明）
+      case 'amber': m = bakedClear(new THREE.MeshStandardMaterial({ ...base, map: s.map, normalMap: s.normalMap, transparent: true, opacity: 0.72, roughness: 0.08, metalness: 0, depthWrite: false }), 0.6); break; // 第 55 批：裡面一格一格的小稜鏡
       case 'tail': m = bakedNight(new THREE.MeshPhysicalMaterial({ ...base, map: s.map, normalMap: s.normalMap, roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05 }), [1.3, 0.04, 0.02], 'red'); break;
       case 'net': case 'netF': m = new THREE.MeshStandardMaterial({ ...base, map: s.map, alphaTest: 0.5, roughness: 0.5, metalness: b.slot === 'net' ? 0.6 : 0.3 }); break;
       case 'plate': m = new THREE.MeshStandardMaterial({ ...base, map: s.map, normalMap: s.normalMap, roughness: 0.42, metalness: 0.15 }); break; // 第 54 批：車牌（自己編的號碼，凸字）
