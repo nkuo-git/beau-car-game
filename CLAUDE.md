@@ -162,7 +162,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - 這個機器的 GitHub 代理不給碰 Actions secrets 和 Pages 設定（403）：這兩個要 Nick（或家長）在 GitHub 網頁上設。
 - 圖示：萬能軟體的橘色車＋右下角格子旗徽章（蓋掉保桿上的貼紙字），深色底（`src/site/make-icons.py`）。
 
-## 現在的狀態（2026-10-31，內容 33）
+## 現在的狀態（2026-10-31，內容 34）
 - **main** ＝ 手機上的 0.9.37 遊戲（萬能軟體內容 37／38 的 tune.js 跟 `build-app.mjs` 產生的一模一樣）＋這次的網站（內容 1）＋APK 殼。
   - 0.9.37 有：越野車車庫（4 格，越野車專屬）、怪獸卡車輾扁東西（車、路邊小東西；人跳開）、汽車半價、怪獸卡車 100 萬、拿掉撞爛（`CRASH_DAMAGE = false`）、內湖（七個地標、路牌、離村子近）、警察、槍店、甩尾、賽車場。
 - **內容 2（2026-10-09 上線，試做頁 v25–v27）**：路變寬 1.5 倍（村子、內湖；快速道路、賽車場、直線加速沒變）；房子最多 2 層（村子、內湖；地標不變），越野車撞不倒房子，其他的（樹、電線桿、警車⋯）幾乎都輾得扁（不會輾的：人、小孩、房子、你家車庫、改車廠、車店、槍店、警察局、廟、捷運柱子⋯），輾扁的東西你離開 140 公尺 25 秒後會修好；越野車車庫搬到你的車庫前面左邊（門對著路，變大）；你的車庫變高（6 公尺、門 8×5）、裡面變寬（31.4 公尺）；路人不會再卡在門口。說明在 `notes/wide.md`、`notes/tall.md`。
@@ -362,7 +362,8 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - 測試：seats-test.mjs 30 ok（新的）、world-test 9e（123 → 136 ok）、test-b1 151、z2-test 31、mirror-test 10、drift-test 66、free-test 2。world-test 的 9e 要 A 在停車場朝北開（朝東 6 公尺就是走道中間的路燈）。
   - 效能：追車視角多畫你坐在駕駛座＝多 1 個 draw call、3.7k 三角形（街上 145 calls／0.46M）；坐副駕駛座第一人稱 70 calls／0.36M、從外面看 179／0.66M；選位子的畫面只是 HTML（不多 draw call）。
   - 2026-10-30 放上試做頁（artifact 第 71 版；修了碰撞盒以後第 72 版）。
-- **試做頁 v71（2026-10-31；第 58 批；artifact 第 73 版）＝ 越野車在山上、海邊輾東西也報警**：Nick「那些越野車撞到東西會倒但是不會被警察抓」。原因：crush.js 的 `police()` 用 `V.terrainAt` 判斷「在越野車場裡面不報警」，內容 5 的山、內容 19 的 24 座山＋沙灘＋海、內湖外面的山都讓 terrainAt 變 true → 那些地方輾倒東西都沒有星星。現在只看越野車場的格子（offroad.js `terrainAt`＝格子＋4 公尺，放進 `V.offroad`；crush.js `inPark`）。村子裡本來就有星星、警察 10 秒內抓得到（探針試過 J4）。mountain-test 兩條「山上不算犯罪」的檢查改成「有星星」。測試：mountain 42、crush 55、test-b3 56、jeep 22、test-b4 90 ok。等 Nick 說上線。
+- **內容 34（2026-10-31 上線＝試做頁 v71＋v72；Nick「上線」）**：main f6e87f8、Pages run 48；測試 site-test 24、test-app-b4 90、test-app-b1 152 ok（試做頁那邊 apt-test 25、test-b1 151、hills 39、mountain 42、circuit 38、neihu 35、test-b4 90、crush 55、test-b3 56、jeep 22）。沒改 android/，不用編新的 APK。
+- **試做頁 v71（2026-10-31；第 58 批；artifact 第 73 版）＝ 越野車在山上、海邊輾東西也報警**：Nick「那些越野車撞到東西會倒但是不會被警察抓」。原因：crush.js 的 `police()` 用 `V.terrainAt` 判斷「在越野車場裡面不報警」，內容 5 的山、內容 19 的 24 座山＋沙灘＋海、內湖外面的山都讓 terrainAt 變 true → 那些地方輾倒東西都沒有星星。現在只看越野車場的格子（offroad.js `terrainAt`＝格子＋4 公尺，放進 `V.offroad`；crush.js `inPark`）。村子裡本來就有星星、警察 10 秒內抓得到（探針試過 J4）。mountain-test 兩條「山上不算犯罪」的檢查改成「有星星」。測試：mountain 42、crush 55、test-b3 56、jeep 22、test-b4 90 ok。
 - **摩托車（第 59 批，2026-10-31 做圖中）**：Nick「你去網路上找摩托車的圖片你做一些摩托車」。先做兩台的樣子給他看：F6 仿賽（整流罩、風鏡、分離把）、N4 街車（圓燈、一字把），共用 moto-body.mjs（車殼 SDF：油箱、座墊車尾、仿賽的整流罩）→ `node make-car.mjs f6 0.008`／`n4` → body-f6-q.glb、body-n4-q.glb；零件、騎的人在 moto-spec.js（`motoBuild`、`MOTO_RIDE`、`motoRide`、`motoSteer`；跟 Z2 一樣用 character.js 的 sit），做圖頁 moto-view.html（`node shot.mjs out.png 'car=f6&v=front34&rider=1' 1000 700 moto-view.html`）。圖 /mnt/project-files/car-game/moto/moto-v1.jpg，卡片「兩台都做／只做仿賽／只做街車／要改樣子」等 Nick 選。還沒接進遊戲（buildCar 要支援一個軸一個輪子、CARS／PERF、車行、傾斜）。
 - **公寓的家（Nick 2026-10-31）**：「自己家改成在旁邊的公寓／每間房子都可以上頂樓或每一層樓／每間房間格局不一樣人裡面的人要可以動」→ 草稿 https://claude.ai/artifact/GahqJPKLLPf5FYXmHeq2wU（第 1 版：5 層公寓在圓塔旁邊、你的家在 4 樓、頂樓可以上去；房子裡有樓梯到每一層和頂樓；格局不一樣＋人會動），Nick 選「照草稿做」。順序：公寓的家（第 60 批，試做頁 v72，下面）→ 房子上樓 → 格局＋人（還沒做）。
 - **試做頁 v72（2026-10-31；第 60 批；artifact 第 74 版）＝ 公寓的家**：6 個家（圓塔）旁邊各一棟 5 層的公寓，鐵捲門那條線往左 26 公尺、正面跟塔朝同一條街（apt.js `aptLotOf`；5 號家往後退 3 公尺：`HOME_SITES[4].apt`，斜斜進來的路的護欄會頂到角）。
