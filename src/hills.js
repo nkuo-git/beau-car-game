@@ -23,6 +23,7 @@
 // 效能：山 6 個網格（照位置分）、樹 1 個、隧道 3 個（牆＋洞口、燈、路面的黑）、島 1 個、海 1 個、名牌 1 個；碰撞都是一般的盒子、圓
 import * as THREE from 'three';
 import { TOWER_RAMP } from './tower.js';
+import { APT, aptLotOf } from './apt.js'; // 第 60 批：家旁邊的公寓那塊也要平
 
 export const { buildHills, hillsFonts, HILL_TEXT, HILL_LIST, hillH, inTunnel, tunnels, COAST, coastD, coastY } = (() => {
 const TAU = Math.PI * 2;
@@ -188,8 +189,15 @@ function buildHills(V, opts = {}) {
   let tris = 0, meshes = 0;
 
   // 6 個家（塔、外面的斜坡、門口）四周是平的：山腳靠近家的地方壓到 0（內湖隧道的山東南角碰到 5 號家的後面）
-  const HOMES = (V.homeSites || []).map((q) => [q.x, q.z]), HK0 = TOWER_RAMP.R1 + 20, HK1 = TOWER_RAMP.R1 + 34; // 第 60 批：旁邊的公寓（離塔 26 公尺）也要在平的上面（本來 +8、+22）
-  const homeKeep = (x, z) => { let m = 1; for (const [hx, hz] of HOMES) { const d = Math.hypot(x - hx, z - hz); if (d < HK1) m = Math.min(m, ss(HK0, HK1, d)); } return m; };
+  const HOMES = (V.homeSites || []).map((q) => [q.x, q.z]), HK0 = TOWER_RAMP.R1 + 8, HK1 = TOWER_RAMP.R1 + 22;
+  // 第 60 批：旁邊的公寓（apt.js，離塔 26 公尺）那塊長方形（外面多 1 公尺）也壓到 0，往外 14 公尺漸變（把塔的圓放大到 +20／+34 的話，4 號家南邊那座山的邊會超過 35°）
+  const APTS = (V.homeSites || []).map((L, n) => { const q = aptLotOf(L, n); return { x: q.x, z: q.z, c: Math.cos(q.heading), s: Math.sin(q.heading), hx: APT.W / 2 + 1, hz: APT.D / 2 + 1 }; });
+  const homeKeep = (x, z) => {
+    let m = 1;
+    for (const [hx, hz] of HOMES) { const d = Math.hypot(x - hx, z - hz); if (d < HK1) m = Math.min(m, ss(HK0, HK1, d)); }
+    for (const q of APTS) { const dx = x - q.x, dz = z - q.z, lx = Math.abs(dx * q.c - dz * q.s), lz = Math.abs(dx * q.s + dz * q.c), d = Math.hypot(Math.max(lx - q.hx, 0), Math.max(lz - q.hz, 0)); if (d < 14) m = Math.min(m, ss(0, 14, d)); }
+    return m;
+  };
   // 1) 每座山一張格子
   const HS = HILL_LIST.map((H, hi) => {
     const cs = clamp(Math.min(RX(H), RZ(H)) / 14, 3.5, 13), ex = [], ez = [];
