@@ -4419,6 +4419,167 @@ const { buildRoom } = (() => {
   return { buildRoom };
 })();
 
+// ---- apt.js ----
+// ---- 公寓的家（第 60 批；Nick 2026-10-31「自己家改成在旁邊的公寓」，草稿 https://claude.ai/artifact/GahqJPKLLPf5FYXmHeq2wU 第 1 版，Nick 選「照草稿做」）----
+// 每座圓塔車庫旁邊一棟 5 層的公寓（外殼：這裡；裡面：interiors.js 的 kind 'apt'：1 樓大廳＋電梯＋樓梯、2–5 樓走廊、4 樓你的家；頂樓、4 樓的陽台是真的在外面（town.src.js））
+// 本地座標（跟 interiors.js 一樣）：原點＝一樓地板的中心、+z＝正面（大門、陽台那邊，朝街上）、+x 往右（從街上看是左邊）；放進世界：position＝(x, y, z)、rotation.y＝heading
+//   公寓的正面跟塔的鐵捲門朝同一邊（aptLotOf：heading＝塔的 heading + π/2，中心在塔的本地 (lx, lz)：HOME_SITES[n].apt，沒給＝門外那條線往左 26 公尺）
+// 【API】
+//   APT：{ W 寬 12, D 深 15, FH 一層 3.3, NF 5 層, ROOF 頂樓地板 16.5, PAR 女兒牆 1.0, BZ 陽台內牆 z 6.1, BX0 BX1 陽台 x 範圍, core（樓梯、電梯在哪：interiors.js 照這裡蓋）, door（大門本地 { x, z, ry }）}
+//   aptLotOf(L, n)：L＝HOME_SITES[n] → { x, z, heading, lx, lz }（公寓在世界的哪裡）
+//   buildApt() → { parts: [{ name, geometry, material }]（給 InstancedMesh：6 座共用）, tris, cols（本地：整棟的碰撞，給村子）, roof: { y, zone, cols, spawn, door }, balc: { y, zone, cols, spawn, door, ceil } }
+//     roof／balc：在外面走的那兩層（本地座標；town.src.js 換成世界、照塔的高度加 y）：zone＝走得到的長方形、cols＝只有在那一層的時候加的碰撞（女兒牆、樓梯間、牆）、spawn＝從裡面出來站哪、door＝回裡面的門（walk.js setDoors）
+//   aptColsAt(cols, lot)：本地的碰撞 → 世界（跟 towerColsAt 一樣）
+// 效能：一棟約 2.4k 三角形、5 個材質（磁磚、水泥、玻璃、金屬、白）；6 座 InstancedMesh＝5 個 draw call
+// 打包（build-art.mjs／build-app.mjs 拿掉 import／export）：最上層只有 APT、aptLotOf、buildApt、aptColsAt
+
+const APT = { W: 12, D: 15, FH: 3.3, NF: 5, ROOF: 16.5, PAR: 1.0, BZ: 6.1, BX0: -0.3, BX1: 5.8, T: 0.2,
+  core: { sx0: -5.8, sx1: -3.8, lx0: -3.6, lx1: -1.9, z0: -5.6, z1: -2.4, lz1: -3.7 }, // 樓梯間 x sx0…sx1、電梯 x lx0…lx1（深 z0…lz1）、都在 z0…z1；後面的走廊 z −7.3 … −5.6
+  door: { x: 0, z: 7.5, ry: 0, w: 1.0 }, // 大門（正面中間；ry＝朝外）
+  head: { x0: -5.8, x1: -1.7, z0: -5.8, z1: -2.2, h: 2.6 }, // 頂樓的樓梯間（上面放水塔）
+};
+const ROOFY = APT.ROOF, BALY = APT.FH * 3; // 4 樓的陽台地板（樓層 index 3）
+// 公寓在哪：塔的本地 (lx, lz)（lx 往門外、lz 往左）→ 世界；正面朝塔的門那邊
+function aptLotOf(L, n = 0) {
+  const o = L.apt || { lx: 4, lz: 26 }, c = Math.cos(L.heading), s = Math.sin(L.heading);
+  return { x: L.x + o.lx * c + o.lz * s, z: L.z - o.lx * s + o.lz * c, heading: L.heading + Math.PI / 2, lx: o.lx, lz: o.lz, n };
+}
+function aptColsAt(cols, lot) {
+  const c = Math.cos(lot.heading), s = Math.sin(lot.heading), y = lot.y || 0;
+  return cols.map((q) => { const o = { ...q, x: lot.x + q.x * c + q.z * s, z: lot.z - q.x * s + q.z * c }; if (o.t === 'box') o.rot = (q.rot || 0) + lot.heading; if (q.h != null) o.h = q.h + y; if (q.y0 != null) o.y0 = q.y0 + y; return o; });
+}
+const col3 = (hex) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
+// 磁磚（canvas）：8 × 8 片一張，一片 10 公分 → uv 1 ＝ 0.8 公尺
+function tileTex() {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#b8b2a6'; g.fillRect(0, 0, 128, 128);
+  for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) { const k = ((i * 7 + j * 13) % 5) / 5; g.fillStyle = `rgb(${226 + k * 14},${214 + k * 12},${196 + k * 10})`; g.fillRect(i * 16 + 1, j * 16 + 1, 14, 14); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+function mesher(uvScale) {
+  const P = [], N = [], UV = [], C = [], I = [];
+  const quad = (a, b, c, d, col, uv) => { // a b c d 逆時針（從正面看）；uv 不給：照世界尺寸（直的面：橫向＋高度；平的：x z）
+    const k = P.length / 3, ux = c[0] - a[0], uy = c[1] - a[1], uz = c[2] - a[2], vx = d[0] - b[0], vy = d[1] - b[1], vz = d[2] - b[2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    const flat = Math.abs(ny) > 0.7, us = uv || [a, b, c, d].map((p) => (flat ? [p[0] / uvScale, p[2] / uvScale] : [(Math.abs(nx) > 0.7 ? p[2] : p[0]) / uvScale, p[1] / uvScale]));
+    [a, b, c, d].forEach((p, i) => { P.push(p[0], p[1], p[2]); N.push(nx, ny, nz); UV.push(us[i][0], us[i][1]); C.push(col[0], col[1], col[2]); });
+    I.push(k, k + 1, k + 2, k, k + 2, k + 3);
+  };
+  // 盒子：faces＝要畫哪幾面（px nx py ny pz nz；不給＝全部）；cols＝每面的顏色 { pz, py, _ }
+  const bx = (x0, x1, y0, y1, z0, z1, col, faces = null, cols = null) => {
+    const F = (f) => !faces || faces.includes(f), cc = (f) => (cols && cols[f]) || (cols && cols._) || col;
+    if (F('pz')) quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], cc('pz'));
+    if (F('nz')) quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], cc('nz'));
+    if (F('px')) quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], cc('px'));
+    if (F('nx')) quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], cc('nx'));
+    if (F('py')) quad([x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], cc('py'));
+    if (F('ny')) quad([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], cc('ny'));
+  };
+  const cyl = (x, z, y0, y1, r0, r1, col, n = 12, cap = true) => {
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2, p = (r, a, y) => [x + r * Math.cos(a), y, z + r * Math.sin(a)];
+      quad(p(r0, a1, y0), p(r0, a0, y0), p(r1, a0, y1), p(r1, a1, y1), col, [[0, 0], [0.1, 0], [0.1, 0.1], [0, 0.1]]);
+      if (cap) quad([x, y1, z], p(r1, a1, y1), p(r1, a0, y1), p(r1, a0, y1), col, [[0, 0], [0.1, 0], [0.1, 0.1], [0, 0.1]]);
+    }
+  };
+  const geometry = () => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    g.setIndex(I); g.computeBoundingSphere(); return g;
+  };
+  return { quad, bx, cyl, geometry, get tris() { return I.length / 3; } };
+}
+function buildApt() {
+  const { W, D, FH, NF, PAR, BZ, BX0, BX1, T, core, head } = APT, HX = W / 2, HZ = D / 2, H = ROOFY;
+  const TI = mesher(0.8), FL = mesher(1), GL = mesher(1), MT = mesher(1), WH = mesher(1); // 磁磚、水泥、玻璃、金屬、白
+  const tile = col3('#e4d8c4'), tile2 = col3('#cdb9a0'), conc = col3('#c9c6bf'), conc2 = col3('#b4b1aa'), dark = col3('#3c4046'), al = col3('#c7ccd2'), white = col3('#f2f2ef'), under = col3('#8f8d88');
+  // ---- 主體：四面磁磚牆（正面右邊 2–4 樓凹進去是陽台）----
+  TI.bx(-HX, HX, 0, H, -HZ, HZ, tile, ['nz', 'px', 'nx'], null); // 後、左、右
+  TI.bx(-HX, BX0, 0, H, HZ - 0.01, HZ, tile, ['pz']); // 正面左半（整面）
+  TI.bx(BX0, HX, 0, FH, HZ - 0.01, HZ, tile, ['pz']); // 正面右半一樓（大廳）
+  TI.bx(BX0, HX, FH * 4, H, HZ - 0.01, HZ, tile, ['pz']); // 正面右半五樓
+  TI.bx(BX0 - 0.01, BX0, FH, FH * 4, BZ, HZ, tile2, ['px']); // 陽台左邊的牆（凹進去那段）
+  TI.bx(BX0, HX, FH, FH * 4, BZ, BZ + 0.01, tile2, ['pz']); // 陽台內牆（落地門那面）
+  FL.quad([-HX, H, HZ], [HX, H, HZ], [HX, H, -HZ], [-HX, H, -HZ], conc); // 頂樓地板
+  FL.quad([-HX, 0.01, -HZ], [HX, 0.01, -HZ], [HX, 0.01, HZ], [-HX, 0.01, HZ], conc2); // 一樓地（從外面看門口那一塊）
+  for (let f = 1; f < NF; f++) FL.bx(-HX - 0.06, HX + 0.06, f * FH - 0.12, f * FH + 0.06, -HZ - 0.06, HZ + 0.06, conc2, ['pz', 'nz', 'px', 'nx', 'py', 'ny'].filter((k) => f >= 2 || k !== 'pz')); // 每層的線腳
+  // ---- 陽台（2–4 樓，正面右邊）：地、女兒牆、天花板、落地門、冷氣 ----
+  for (let f = 1; f <= 3; f++) {
+    const y = f * FH;
+    FL.bx(BX0, HX, y - 0.14, y, BZ, HZ, conc, ['py', 'ny', 'pz']); // 樓板（陽台地＋底）
+    TI.bx(BX0, HX, y, y + PAR, HZ - 0.12, HZ, tile, ['pz', 'nz', 'py']); // 女兒牆
+    FL.bx(BX0, HX, y + PAR, y + PAR + 0.05, HZ - 0.16, HZ + 0.02, conc2); // 壓頂
+    FL.bx(BX0, HX, y + FH - 0.14, y + FH - 0.13, BZ, HZ, under, ['ny']); // 天花板（上一層的樓板底）
+    GL.bx(BX0 + 1.0, BX0 + 3.6, y, y + 2.3, BZ, BZ + 0.03, dark); MT.bx(BX0 + 1.0, BX0 + 3.6, y + 2.3, y + 2.36, BZ, BZ + 0.06, al); MT.bx(BX0 + 2.28, BX0 + 2.32, y, y + 2.3, BZ, BZ + 0.05, al); // 落地門
+    GL.bx(BX0 + 4.1, BX0 + 5.5, y + 0.9, y + 2.2, BZ, BZ + 0.03, dark); MT.bx(BX0 + 4.1, BX0 + 5.5, y + 2.2, y + 2.26, BZ, BZ + 0.06, al); // 窗
+    WH.bx(HX - 1.1, HX - 0.3, y + 0.05, y + 0.6, HZ - 0.55, HZ - 0.15, white); // 冷氣室外機
+  }
+  // ---- 窗：正面左邊、兩側、後面（每層）；玻璃貼在牆外 2 公分＋鋁框 ----
+  const win = (face, a, b, y0, y1) => { // face：'pz' z=HZ、'nz' z=−HZ、'px' x=HX、'nx' x=−HX；a…b 沿牆的位置
+    const o = 0.02, f = 0.05;
+    if (face === 'pz' || face === 'nz') { const z = face === 'pz' ? HZ + o : -HZ - o, z1 = face === 'pz' ? HZ + o + f : -HZ - o - f; GL.bx(a, b, y0, y1, Math.min(z, z1 - 0.01), Math.max(z, z1 - 0.01), dark); MT.bx(a - f, b + f, y1, y1 + f, Math.min(z, z1), Math.max(z, z1), al); MT.bx(a - f, b + f, y0 - f, y0, Math.min(z, z1), Math.max(z, z1), al); MT.bx(a - f, a, y0, y1, Math.min(z, z1), Math.max(z, z1), al); MT.bx(b, b + f, y0, y1, Math.min(z, z1), Math.max(z, z1), al); }
+    else { const x = face === 'px' ? HX + o : -HX - o, x1 = face === 'px' ? HX + o + f : -HX - o - f; GL.bx(Math.min(x, x1 - 0.01), Math.max(x, x1 - 0.01), y0, y1, a, b, dark); MT.bx(Math.min(x, x1), Math.max(x, x1), y1, y1 + f, a - f, b + f, al); MT.bx(Math.min(x, x1), Math.max(x, x1), y0 - f, y0, a - f, b + f, al); MT.bx(Math.min(x, x1), Math.max(x, x1), y0, y1, a - f, a, al); MT.bx(Math.min(x, x1), Math.max(x, x1), y0, y1, b, b + f, al); }
+  };
+  for (let f = 0; f < NF; f++) {
+    const y = f * FH + 0.95, y1 = f * FH + 2.35;
+    win('pz', -5.0, -3.4, y, y1); win('pz', -2.6, -1.0, y, y1); // 正面左半：房間、廚房的窗
+    if (f === 4) win('pz', 0.8, 2.6, y, y1), win('pz', 3.4, 5.0, y, y1); // 五樓右半
+    win('px', 1.0, 2.6, y, y1); win('px', 4.0, 5.4, y, y1); win('px', -4.6, -3.2, y, y1); // 右側
+    win('nx', -5.4, -4.0, y, y1); win('nx', -2.6, -1.0, y, y1); win('nx', 2.2, 3.8, y, y1); // 左側
+    win('nz', 1.2, 3.0, y, y1); win('nz', 4.0, 5.2, y + 0.3, y1); win('nz', -5.2, -4.4, y + 0.4, y1); // 後面：走廊、廚房、廁所的窗
+  }
+  // ---- 一樓大門：玻璃雙開門＋雨遮＋門階＋門牌燈；信箱在裡面（interiors.js）----
+  GL.bx(-1.0, 1.0, 0.05, 2.4, HZ + 0.02, HZ + 0.05, col3('#2a3440')); MT.bx(-1.08, 1.08, 2.4, 2.5, HZ, HZ + 0.08, al); MT.bx(-0.03, 0.03, 0.05, 2.4, HZ, HZ + 0.07, al); MT.bx(-1.08, -1.0, 0, 2.5, HZ, HZ + 0.08, al); MT.bx(1.0, 1.08, 0, 2.5, HZ, HZ + 0.08, al);
+  FL.bx(-1.8, 1.8, 2.75, 2.9, HZ, HZ + 1.3, conc2); FL.bx(-1.8, 1.8, 0, 0.14, HZ, HZ + 0.5, conc2, ['py', 'pz', 'px', 'nx']); // 雨遮、門階
+  WH.bx(-0.3, 0.3, 2.95, 3.1, HZ + 0.02, HZ + 0.12, white); // 門牌（字 town.src.js／net.src.js 以後再掛）
+  // ---- 頂樓：女兒牆、樓梯間（上面水塔）、曬衣架、盆栽、冷氣 ----
+  TI.bx(-HX, HX, H, H + PAR, HZ - 0.15, HZ, tile, ['pz', 'nz', 'py']); TI.bx(-HX, HX, H, H + PAR, -HZ, -HZ + 0.15, tile, ['pz', 'nz', 'py']);
+  TI.bx(-HX, -HX + 0.15, H, H + PAR, -HZ, HZ, tile, ['px', 'nx', 'py']); TI.bx(HX - 0.15, HX, H, H + PAR, -HZ, HZ, tile, ['px', 'nx', 'py']);
+  FL.bx(-HX - 0.03, HX + 0.03, H + PAR, H + PAR + 0.05, -HZ - 0.03, HZ + 0.03, conc2, ['py', 'pz', 'nz', 'px', 'nx']); // 壓頂
+  TI.bx(head.x0, head.x1, H, H + head.h, head.z0, head.z1, tile2, ['px', 'nx', 'pz', 'nz']); FL.bx(head.x0 - 0.05, head.x1 + 0.05, H + head.h, H + head.h + 0.12, head.z0 - 0.05, head.z1 + 0.05, conc2); // 樓梯間
+  MT.bx(head.x1 - 0.02, head.x1 + 0.04, H, H + 2.05, -4.5, -3.5, col3('#6f7580')); // 樓梯間的鐵門（朝 +x；走出來在 x −1.7 外面）
+  const tk = { x: (head.x0 + head.x1) / 2, z: (head.z0 + head.z1) / 2, y: H + head.h + 0.12 };
+  for (const [dx, dz] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]]) MT.bx(tk.x + dx - 0.04, tk.x + dx + 0.04, tk.y, tk.y + 0.5, tk.z + dz - 0.04, tk.z + dz + 0.04, col3('#7d8288'));
+  WH.cyl(tk.x, tk.z, tk.y + 0.5, tk.y + 1.9, 0.8, 0.8, col3('#e6e8ea'), 14); WH.cyl(tk.x, tk.z, tk.y + 1.9, tk.y + 2.15, 0.8, 0.25, col3('#d5d8db'), 14); // 水塔（不鏽鋼）
+  for (const x of [1.5, 4.5]) { // 曬衣架：兩支竿子＋三條線＋衣服
+    for (const z of [-5.5, -2.5]) MT.cyl(x, z, H, H + 1.7, 0.02, 0.02, al, 6, false);
+    for (const dy of [1.68, 1.45]) MT.bx(x - 0.01, x + 0.01, H + dy, H + dy + 0.02, -5.5, -2.5, al);
+    [['#f2c230', -5.0], ['#2f6fd6', -4.3], ['#f28cb1', -3.6], ['#e9ecef', -3.0]].forEach(([c, z]) => WH.quad([x + 0.02, H + 0.9, z], [x + 0.02, H + 0.9, z + 0.45], [x + 0.02, H + 1.66, z + 0.45], [x + 0.02, H + 1.66, z], col3(c)));
+    [['#f2c230', -5.0], ['#2f6fd6', -4.3], ['#f28cb1', -3.6], ['#e9ecef', -3.0]].forEach(([c, z]) => WH.quad([x - 0.02, H + 0.9, z + 0.45], [x - 0.02, H + 0.9, z], [x - 0.02, H + 1.66, z], [x - 0.02, H + 1.66, z + 0.45], col3(c)));
+  }
+  for (const [x, z] of [[4.9, 6.2], [-4.9, 6.2], [-4.9, 3.6]]) { WH.cyl(x, z, H, H + 0.42, 0.22, 0.26, col3('#b5694a'), 8); WH.cyl(x, z, H + 0.42, H + 1.1, 0.1, 0.42, col3('#4f8a3a'), 7); } // 盆栽（簡單的錐）
+  WH.bx(2.6, 3.4, H, H + 0.6, 6.4, 6.9, white); // 冷氣室外機
+  // ---- 碰撞（本地）----
+  const cols = [{ t: 'box', x: 0, z: 0, hx: HX, hz: HZ, rot: 0, h: H + PAR, noCrush: true }, { t: 'box', x: 0, z: HZ + 0.25, hx: 1.8, hz: 0.25, rot: 0, h: 0.14 }]; // 整棟、門階（擋車不擋人）
+  // 頂樓那一層：女兒牆、樓梯間、水塔的腳（都只在頂樓加）
+  const roofCols = [
+    { t: 'box', x: 0, z: HZ - 0.075, hx: HX, hz: 0.075, rot: 0, h: H + PAR }, { t: 'box', x: 0, z: -HZ + 0.075, hx: HX, hz: 0.075, rot: 0, h: H + PAR },
+    { t: 'box', x: -HX + 0.075, z: 0, hx: 0.075, hz: HZ, rot: 0, h: H + PAR }, { t: 'box', x: HX - 0.075, z: 0, hx: 0.075, hz: HZ, rot: 0, h: H + PAR },
+    { t: 'box', x: (head.x0 + head.x1) / 2, z: (head.z0 + head.z1) / 2, hx: (head.x1 - head.x0) / 2, hz: (head.z1 - head.z0) / 2, rot: 0, h: H + head.h + 2.3 },
+    { t: 'box', x: 3.0, z: 6.65, hx: 0.4, hz: 0.25, rot: 0, h: H + 0.6 }, ...[[4.9, 6.2], [-4.9, 6.2], [-4.9, 3.6]].map(([x, z]) => ({ t: 'circle', x, z, r: 0.3, h: H + 1.1 })),
+    ...[1.5, 4.5].flatMap((x) => [-5.5, -2.5].map((z) => ({ t: 'circle', x, z, r: 0.06, h: H + 1.7 }))),
+  ];
+  const roof = { y: H, zone: { x: 0, z: 0, hx: HX - 0.3, hz: HZ - 0.3 }, cols: roofCols, spawn: { x: head.x1 + 1.1, z: -2.2, lh: 0 }, door: { x: head.x1 + 0.02, z: -4.0, ry: Math.PI / 2, w: 0.5 }, ceil: null }; // door.ry＝門朝外（本地 +x；walk.js：往 −(sin ry, cos ry) 走＝進去）
+  // 4 樓的陽台：地 y＝BALY、內牆 z＝BZ、女兒牆 z HZ−0.12、左邊牆 x BX0、右邊＝外牆；天花板 y BALY + FH − 0.14
+  const balCols = [
+    { t: 'box', x: 0, z: (BZ - HZ) / 2, hx: HX, hz: (BZ + HZ) / 2, rot: 0, h: ROOFY }, // 落地門那面牆以後面整層（陽台只有 z BZ…HZ）
+    { t: 'box', x: 0, z: HZ - 0.06, hx: HX, hz: 0.06, rot: 0, h: BALY + PAR }, { t: 'box', x: BX0 - 0.1, z: (BZ + HZ) / 2, hx: 0.1, hz: (HZ - BZ) / 2, rot: 0, h: ROOFY }, { t: 'box', x: HX + 0.1, z: (BZ + HZ) / 2, hx: 0.1, hz: (HZ - BZ) / 2, rot: 0, h: ROOFY },
+    { t: 'box', x: HX - 0.7, z: HZ - 0.35, hx: 0.4, hz: 0.2, rot: 0, h: BALY + 0.6 }, // 冷氣
+    { t: 'box', x: 0, z: (BZ + HZ) / 2, hx: HX, hz: (HZ - BZ) / 2, rot: 0, y0: BALY + FH - 0.14, h: ROOFY }, // 天花板（只擋鏡頭）
+  ];
+  const balc = { y: BALY, zone: { x: (BX0 + HX) / 2, z: (BZ + HZ) / 2, hx: (HX - BX0) / 2 - 0.1, hz: (HZ - BZ) / 2 - 0.05 }, cols: balCols, spawn: { x: BX0 + 4.3, z: BZ + 0.85, lh: -Math.PI / 2 }, door: { x: BX0 + 2.3, z: BZ + 0.03, ry: 0, w: 1.3, lh: Math.PI / 2 }, ceil: BALY + FH - 0.3 };
+  const mk = (name, M, material) => ({ name, geometry: M.geometry(), material });
+  const parts = [
+    mk('apt-tile', TI, new THREE.MeshStandardMaterial({ map: tileTex(), vertexColors: true, roughness: 0.85, metalness: 0 })),
+    mk('apt-conc', FL, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 })),
+    mk('apt-glass', GL, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.18, metalness: 0.7 })),
+    mk('apt-metal', MT, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.6 })),
+    mk('apt-white', WH, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.05 })),
+  ];
+  return { parts, tris: TI.tris + FL.tris + GL.tris + MT.tris + WH.tris, cols, roof, balc };
+}
+
 // ---- sound.js ----
 // ---- 引擎聲音：七台車各自的引擎聲，用 Web Audio 即時合成（沒有錄音檔）----
 //
@@ -7503,7 +7664,14 @@ function buildHills(V, opts = {}) {
 
   // 6 個家（塔、外面的斜坡、門口）四周是平的：山腳靠近家的地方壓到 0（內湖隧道的山東南角碰到 5 號家的後面）
   const HOMES = (V.homeSites || []).map((q) => [q.x, q.z]), HK0 = TOWER_RAMP.R1 + 8, HK1 = TOWER_RAMP.R1 + 22;
-  const homeKeep = (x, z) => { let m = 1; for (const [hx, hz] of HOMES) { const d = Math.hypot(x - hx, z - hz); if (d < HK1) m = Math.min(m, ss(HK0, HK1, d)); } return m; };
+  // 第 60 批：旁邊的公寓（apt.js，離塔 26 公尺）那塊長方形（外面多 1 公尺）也壓到 0，往外 14 公尺漸變（把塔的圓放大到 +20／+34 的話，4 號家南邊那座山的邊會超過 35°）
+  const APTS = (V.homeSites || []).map((L, n) => { const q = aptLotOf(L, n); return { x: q.x, z: q.z, c: Math.cos(q.heading), s: Math.sin(q.heading), hx: APT.W / 2 + 1, hz: APT.D / 2 + 1 }; });
+  const homeKeep = (x, z) => {
+    let m = 1;
+    for (const [hx, hz] of HOMES) { const d = Math.hypot(x - hx, z - hz); if (d < HK1) m = Math.min(m, ss(HK0, HK1, d)); }
+    for (const q of APTS) { const dx = x - q.x, dz = z - q.z, lx = Math.abs(dx * q.c - dz * q.s), lz = Math.abs(dx * q.s + dz * q.c), d = Math.hypot(Math.max(lx - q.hx, 0), Math.max(lz - q.hz, 0)); if (d < 14) m = Math.min(m, ss(0, 14, d)); }
+    return m;
+  };
   // 1) 每座山一張格子
   const HS = HILL_LIST.map((H, hi) => {
     const cs = clamp(Math.min(RX(H), RZ(H)) / 14, 3.5, 13), ex = [], ez = [];
@@ -8703,18 +8871,21 @@ DEST_NODE.police = 'POL'; DEST_NODE.gunshop = 'GSP';
 // 第 21 批（Nick 2026-10-17「每個車庫分散各處」，草稿 https://claude.ai/artifact/EaTT7dijRcjfStUoV1SU4x「可以」；「把原本正方形的車庫直接弄掉」）：
 //   6 個人的家＝6 座圓塔車庫（tower.js），分散在地圖上；號碼不變（世界的號碼 0–5＝第幾個地方）；車庫街只留 1 號
 //   { x, z（塔的中心＝電梯中間）, heading（本地 +x＝鐵捲門朝外）, name（地方）, apron（門外的水泥地多長：到路邊）, via（回家先照哪個目的地的路線開）}
+//   第 60 批：apt { lx, lz }＝旁邊的公寓放在塔的本地哪裡（沒給＝門外那條線往左 26 公尺；apt.js aptLotOf）
 const HOME_SITES = [
   { x: -370, z: -94.6, heading: -Math.PI / 2, name: '車庫街', apron: 4.75, via: 'garst' },       // 1：原本的地方（門朝南，門外 z −82，路 z −72）
   { x: -276.25, z: -436.25, heading: -Math.PI / 2, name: '山頂', apron: 8.7, via: 'mountain' },   // 2：山頂停車場北邊（mountain.js 把這塊整平、塔整座抬到山頂的高度）
   { x: 172, z: -124.8, heading: -Math.PI / 2, name: '賽車場門口', apron: 7.7, via: 'circuit' },  // 3：賽車場聯外道路（z −100）北邊
   { x: -139.05, z: 150, heading: 0, name: '越野車場旁邊', apron: 7.7, via: 'neihu' },          // 4：往內湖的聯外道路（x −112）西邊，門朝東
-  { x: -40, z: 312.8, heading: -Math.PI / 2, name: '內湖入口', apron: 5, via: 'neihu' },        // 5：聯外道路轉往東那段的北邊
+  { x: -40, z: 312.8, heading: -Math.PI / 2, name: '內湖入口', apron: 5, via: 'neihu', apt: { lx: -3, lz: 26 } }, // 5：聯外道路轉往東那段的北邊；公寓往後退 3 公尺（第 60 批：路斜斜地從西南邊過來，護欄會頂到公寓的角）
   { x: -607.3, z: 0, heading: 0, name: '快速道路', apron: 4.75, via: 'H6' },                    // 6：快速道路一圈裡面，路口正對面（內圈護欄開一個口，一條車道進來）
 ];
 const HOME_FOOT = HOME_SITES.map(towerFoot);
 const homeFront = (n, d = 0) => { const L = HOME_SITES[n], r = TOWER.DX1 + d; return [L.x + r * Math.cos(L.heading), L.z - r * Math.sin(L.heading)]; }; // 第 n 號家門外 d 公尺（neihu.js：聯外道路的護欄在門口開一個口）
 const nearHome = (x, z, m = 0) => HOME_FOOT.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + m);
 const nearRamp = (x, z, m = 0) => HOME_FOOT.some((t) => Math.hypot(x - t.x, z - t.z) < TOWER_RAMP.R1 + 0.3 + m); // 第 24 批：塔外面的斜坡（到外面的護欄）
+const APT_LOTS = HOME_SITES.map((L, n) => aptLotOf(L, n)); // 第 60 批：公寓（apt.js）在每個家旁邊
+const nearApt = (x, z, m = 0) => APT_LOTS.some((q) => { const dx = x - q.x, dz = z - q.z, c = Math.cos(q.heading), s = Math.sin(q.heading); return Math.abs(dx * c - dz * s) < APT.W / 2 + m && Math.abs(dx * s + dz * c) < APT.D / 2 + m; });
 ROADS.push({ a: 'GW', b: 'GST', kind: 'street', w: 10.5, pts: [[-345, -72], [-392, -72]] }); // 車庫街：只剩 1 號（第 17 批到 −490）
 NODES.GST[0] = -392;
 NODES.H6 = [HOME_SITES[5].x + TOWER.DX1 + 2.5, 0]; ROADS.push({ a: 'HI', b: 'H6', kind: 'drive', w: 8, pts: [[HW.x - HW.mid, 0], NODES.H6.slice()] }); // 6 號：內圈的路口往西過護欄的口
@@ -9310,7 +9481,13 @@ function buildVillage(opts = {}) {
     // 第 24 批：外面繞圈的斜坡：低的那半圈（實心）＋起點橫的一道（mouth）；你家那座 town.src.js 照你在哪裡開關（off），別人家的一直擋
     const rg = towerRampGround(), rcol = towerColsAt(rg.wedge, lot).map((c) => ({ ...c, noCrush: true, off: false })), mcol = { ...towerColsAt([rg.mouth], lot)[0], noCrush: true, off: false }; colliders.push(...rcol, mcol);
     addPave(lot.x, lot.z, TOWER_RAMP.R1 + 0.3, TOWER_RAMP.R1 + 0.3, ry, null, 0, false); // 斜坡、門口到斜坡起點那塊：算水泥地（不畫：塔自己畫）
-    GST_SLOTS.push({ n, x: lot.x, z: lot.z, y: 0, ry, lot, name: L.name, via: L.via, tcol, pcol, rcol, mcol, sign: { x: sp[0], y: (TOWER.DH + TOWER.H1) / 2 + 0.02, z: sp[1], ry, w: 6.4, h: 0.62 }, door: { x: dp[0], z: dp[1] } }); // door：門外 2 公尺（net.src.js 走到這裡 6 公尺內跳「看他的車庫」）；sign.y：mountain.js 會加上地面高
+    GST_SLOTS.push({ n, x: lot.x, z: lot.z, y: 0, ry, lot, name: L.name, via: L.via, tcol, pcol, rcol, mcol, sign: { x: sp[0], y: (TOWER.DH + TOWER.H1) / 2 + 0.02, z: sp[1], ry, w: 6.4, h: 0.62 }, door: { x: dp[0], z: dp[1] } });
+    // 第 60 批：旁邊的公寓（apt.js 的外殼 town.src.js 擺；裡面 interiors.js kind 'apt'）：buildings 一棟（走到大門「進去」）、碰撞（整棟一個方塊：撞不倒、輾不扁）、門口到路邊的水泥地；山頂那座的高度 town.src.js 照 slots[1].y 補
+    const AP = APT_LOTS[n], ac = Math.cos(AP.heading), as = Math.sin(AP.heading), aw = (x, z) => [AP.x + x * ac + z * as, AP.z - x * as + z * ac];
+    const ad = aw(APT.door.x, APT.D / 2 + 0.6), apv = aw(0, APT.D / 2 + 2.6);
+    buildings.push({ kind: 'apt', name: `${L.name}的公寓`, x: AP.x, z: AP.z, hx: APT.W / 2, hz: APT.D / 2, rot: AP.heading, h: APT.ROOF + APT.PAR, slot: n, door: { x: ad[0], z: ad[1], ry: AP.heading } });
+    colliders.push({ t: 'box', x: AP.x, z: AP.z, hx: APT.W / 2, hz: APT.D / 2, rot: AP.heading, h: APT.ROOF + APT.PAR, noCrush: true });
+    B.at(apv[0], apv[1]); addPave(apv[0], apv[1], 3.2, 2.6, AP.heading, C('#d2d2cd'), 0.02, n !== 1); // door：門外 2 公尺（net.src.js 走到這裡 6 公尺內跳「看他的車庫」）；sign.y：mountain.js 會加上地面高
   });
   // 你家＝第 n 號：places.garage 的每一塊都照那座塔算（本地 x 往門外、z＝車頭朝門時車子的右邊）
   const homeAt = (n, P = {}) => {
@@ -9559,12 +9736,12 @@ function buildVillage(opts = {}) {
     for (let i = 0; i < 16; i++) palm(-214 + (i % 4) * 4 + rnd(), 72 + ((i / 4) | 0) * 4 + rnd(), 7 + rnd() * 3, rnd);
     for (let x = -124; x <= -80; x += 9 + rnd() * 3) palm(x, -10.5 - rnd() * 1.5, 7 + rnd() * 3, rnd);         // 往賽道的路邊（改車廠出口的東邊開始）
     for (let x = -186; x <= -120; x += 10 + rnd() * 4) { const gs = x > -168 && x < -155; if (gs) B = new Builder(200); palm(x, 8.5 + rnd(), 6.5 + rnd() * 3, rnd, !gs); B = VB; } // 第 3 批：槍店門口那棵不種（亂數照樣用掉）
-    for (let z = -100; z <= 84; z += 9 + rnd() * 3) { if (Math.abs(z) < 14) continue; const bx = -389 + rnd() * 2, gs = z < -44 || nearHome(bx, z, 2) || nearRamp(bx, z, 1.2); if (gs) B = new Builder(200); const nc = colliders.length; bamboo(bx, z, rnd); B = VB; if (gs) colliders.length = nc; } // 西邊竹林（大路穿過去）；第 16 批：車庫街那段不種（亂數照樣用掉）；第 21 批：圓塔車庫那邊也不種
-    for (let x = -505; x <= -66; x += 6 + rnd() * 3) { if (x > -320 && x < -280) continue; const tz = -112 + rnd() * 2, mt = (x > -260 && x < -241) || nearHome(x, tz, 2.5) || nearRamp(x, tz, 1.5); if (mt) B = new Builder(200); tree(x, tz, 1.2 + rnd() * 0.4, rnd, !mt); B = VB; } // 北邊一排樹（車庫後面空著）// 第 14 批：上山的路穿過去的那兩棵不種（亂數照樣用掉）；第 21 批：圓塔車庫那幾棵也不種
+    for (let z = -100; z <= 84; z += 9 + rnd() * 3) { if (Math.abs(z) < 14) continue; const bx = -389 + rnd() * 2, gs = z < -44 || nearHome(bx, z, 2) || nearRamp(bx, z, 1.2) || nearApt(bx, z, 2); if (gs) B = new Builder(200); const nc = colliders.length; bamboo(bx, z, rnd); B = VB; if (gs) colliders.length = nc; } // 西邊竹林（大路穿過去）；第 16 批：車庫街那段不種（亂數照樣用掉）；第 21 批：圓塔車庫那邊也不種
+    for (let x = -505; x <= -66; x += 6 + rnd() * 3) { if (x > -320 && x < -280) continue; const tz = -112 + rnd() * 2, mt = (x > -260 && x < -241) || nearHome(x, tz, 2.5) || nearRamp(x, tz, 1.5) || nearApt(x, tz, 2.5); if (mt) B = new Builder(200); tree(x, tz, 1.2 + rnd() * 0.4, rnd, !mt); B = VB; } // 北邊一排樹（車庫後面空著）// 第 14 批：上山的路穿過去的那兩棵不種（亂數照樣用掉）；第 21 批：圓塔車庫那幾棵也不種
     for (let x = -505; x <= -66; x += 6 + rnd() * 3) { const g4 = x > -121 && x < -103; if (g4) B = new Builder(200); tree(x, 91 + rnd() * 2, 1.2 + rnd() * 0.4, rnd, !g4); B = VB; } // 南邊一排樹 // ==== 第 4 批：往越野車場的水泥路穿過去的那兩棵不種（亂數照樣用掉）====
     // 第 2 批（路上的車）：農路邊的兩棵原本種在路面上（(-248.5, 30) 在往北的車道正中間、(-244, 60) 樹幹壓到轉角的路邊）→ 移到路邊的草地上（離路 2 公尺以上、不在稻田裡；亂數照樣用）
     for (const [x, z] of [[-352, -8], [-351, 12], [-255.5, 27], [-228, 30], [-192, -20], [-196, 40], [-245, 64.5], [-192, -48], [-186, -62], [-194, -80]]) tree(x, z, 1 + rnd() * 0.3, rnd);
-    for (const [x, z] of [[-396, -12], [-396, -30], [-395, -41], [-424, -52], [-426, -46], [-424, -34], [-406, 14], [-398, 18], [-476, 14], [-488, 16], [-500, 12], [-510, 18], [-509, -40], [-510, -22]]) { const gt = nearHome(x, z, 2.5) || nearRamp(x, z, 1.5); if (gt) B = new Builder(200); tree(x, z, 1 + rnd() * 0.35, rnd, !gt); B = VB; } // 車店、往快速道路那段的空地；第 21 批：圓塔車庫裡那棵不種（亂數照樣用掉）
+    for (const [x, z] of [[-396, -12], [-396, -30], [-395, -41], [-424, -52], [-426, -46], [-424, -34], [-406, 14], [-398, 18], [-476, 14], [-488, 16], [-500, 12], [-510, 18], [-509, -40], [-510, -22]]) { const gt = nearHome(x, z, 2.5) || nearRamp(x, z, 1.5) || nearApt(x, z, 2.5); if (gt) B = new Builder(200); tree(x, z, 1 + rnd() * 0.35, rnd, !gt); B = VB; } // 車店、往快速道路那段的空地；第 21 批：圓塔車庫裡那棵不種（亂數照樣用掉）
   }
 
   // ---- 電線桿（每條路一排）、路口反光鏡 ----
@@ -9900,7 +10077,7 @@ function buildVillage(opts = {}) {
       for (const b of NBOX) if (x > b[0] - 0.4 && x < b[2] + 0.4 && z > b[1] - 0.4 && z < b[3] + 0.4) return true;
       for (const r of dr) { const m = (Array.isArray(r.w) ? r.w[0] : r.w) / 2 + 0.7; for (let i = 0; i < r.pts.length - 1; i++) if (segDist(x, z, r.pts[i][0], r.pts[i][1], r.pts[i + 1][0], r.pts[i + 1][1])[0] < m) return true; }
       if (PARK && x > PARK.x - PARK.hx - 0.6 && x < PARK.x + PARK.hx + 0.6 && z > PARK.z - PARK.hz - 0.6 && z < PARK.z + PARK.hz + 0.6) return true;
-      if (nearHome(x, z, 9)) return true;
+      if (nearHome(x, z, 9) || nearApt(x, z, 4)) return true; // 第 60 批：公寓門口也不放路緣石
       if (z < -74 && z > -80 && x > -342 && x < -318) return true; // 越野車車庫的門口（orbay.js PLACE）
       return false;
     };
@@ -12197,11 +12374,178 @@ function farmFloor(b) {
   return F;
 }
 
+// ---- 公寓（第 60 批；外殼在 apt.js）：1 樓大廳（大門、信箱、佈告欄、電梯、樓梯）、2／3／5 樓走廊（鄰居的門關著）、4 樓你的家（玄關、客廳＋陽台、房間、廚房、廁所）----
+//   每一層：後面一條走廊（z −7.3 … −5.6）、左邊樓梯間＋電梯（z −5.6 … −2.4）、右邊玄關（x −1.7 … 5.8）、前面房間
+//   頂樓從 5 樓的樓梯上去（exit to 'roof'）、4 樓客廳的落地門出去陽台（to 'balc'）：都是真的在外面（town.src.js 換到世界、照 apt.js 的 roof／balc）
+//   電梯：走進電梯（floors[i].lift 那個長方形）town.src.js 出面板按樓層
+const AL = { X0: -5.8, X1: 5.8, ZB: -7.3, ZF: 7.3, zC: -5.6, zK: -2.4, xL: -1.7, xS: -3.7, xB: -0.4, zR: 1.5, xT: -3.4, BX0: -0.3, BZ: 6.0 };
+const APT_ROOF_SPAWN = { x: -0.6, z: -2.2, lh: 0 }, APT_BALC_SPAWN = { x: 4.0, z: 6.95, lh: -HP }; // 站在門的旁邊（walk.js：給門的時候站在門的範圍裡面＝那扇門先不觸發，要走開 1.65 公尺才會再觸發；陽台只有 1.4 公尺深） // 跟 apt.js 的 roof.spawn、balc.spawn 一樣（本地）
+function aptInfo(b) {
+  const R = rng(seedOf(b));
+  return { b, R, N: 5, mine: 3, ss: -1, X: (u) => AL.X0 + u, XR: (u0, u1) => [AL.X0 + u0, AL.X0 + u1], zSB: AL.zC, zS1: AL.zK, hx: 6, hz: 7.5 };
+}
+// 信箱（一排小鐵箱，靠牆：T 在牆面中間、+z 朝房間）
+function mailboxes(F, T, cols = 4, rows = 3) {
+  const B = F.B, w = 0.36, h = 0.32, W2 = cols * w, y0 = 0.85;
+  bx(F, 'metal', T, [-W2 / 2 - 0.02, y0 - 0.02, 0.02, W2 / 2 + 0.02, y0 + rows * h + 0.02, 0.3], C('#aeb4ba'));
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const x = -W2 / 2 + i * w, y = y0 + j * h;
+    bx(F, 'shiny', T, [x + 0.01, y + 0.01, 0.3, x + w - 0.01, y + h - 0.01, 0.315], C('#c9cfd5'));
+    bx(F, 'prop', T, [x + 0.05, y + h - 0.1, 0.315, x + w - 0.05, y + h - 0.08, 0.325], C('#2a2c30')); // 投信口
+    bx(F, 'metal', T, [x + w / 2 - 0.02, y + 0.06, 0.315, x + w / 2 + 0.02, y + 0.1, 0.33], C('#5a5f66')); // 鎖
+  }
+  colT(F, T, -W2 / 2 - 0.02, 0, W2 / 2 + 0.02, 0.32, y0 + rows * h); blob(F, -W2 / 2, 0, W2 / 2, 0.32, 0.8, T);
+}
+// 佈告欄（軟木板＋幾張紙）
+function noticeBoard(F, T, w = 1.6, h = 1.0, y = 1.1) {
+  bx(F, 'prop', T, [-w / 2, y, 0.01, w / 2, y + h, 0.04], C('#7a5a3a')); bx(F, 'prop', T, [-w / 2 + 0.04, y + 0.04, 0.04, w / 2 - 0.04, y + h - 0.04, 0.05], C('#c9a070'));
+  const R = rng(((T.x * 97) ^ (T.z * 31)) >>> 0);
+  for (let k = 0; k < 5; k++) { const x = -w / 2 + 0.12 + R() * (w - 0.5), yy = y + 0.1 + R() * (h - 0.5); bx(F, 'prop', T, [x, yy, 0.05, x + 0.25 + R() * 0.1, yy + 0.3, 0.056], pick(R, [WHITE, C('#fff6c8'), C('#dff1ff'), C('#ffe0e6')])); }
+}
+// 廁所：浴缸（靠後牆）、馬桶、洗手台＋鏡子
+function bathroom(F, x0, x1, z0, z1) {
+  const B = F.B, rm = '廁所', wht = C('#f6f7f7');
+  bx(F, 'shiny', F0, [x0 + 0.08, 0, z0 + 0.08, x1 - 0.08, 0.55, z0 + 0.78], wht); bx(F, 'shiny', F0, [x0 + 0.18, 0.4, z0 + 0.16, x1 - 0.18, 0.56, z0 + 0.7], C('#dfe9ee')); // 浴缸、裡面的水
+  tube(B, 'metal', [x0 + 0.5, 0.55, z0 + 0.04], [x0 + 0.5, 0.95, z0 + 0.04], 0.012, 0.012, 5, C('#c9cfd5')); ball(B, 'metal', F0, x0 + 0.5, 0.95, z0 + 0.16, 0.05, 0.03, 0.05, C('#c9cfd5')); // 水龍頭
+  colBox(F, x0, z0, x1, z0 + 0.8, 0.55);
+  const tx = x1 - 0.45, tz = z0 + 1.45; // 馬桶
+  cyl(B, 'shiny', F0, tx, tz, 0, 0.4, 0.2, 0.23, 12, wht); cyl(B, 'shiny', F0, tx, tz, 0.4, 0.44, 0.24, 0.24, 12, C('#eef0f1')); bx(F, 'shiny', F0, [tx - 0.2, 0.4, tz + 0.18, tx + 0.2, 0.82, tz + 0.36], wht);
+  bx(F, 'metal', F0, [tx - 0.05, 0.75, tz + 0.2, tx + 0.05, 0.78, tz + 0.3], C('#c9cfd5')); colC(F, tx, tz, 0.3, 0.8);
+  const sx = x0 + 0.45, sz = z1 - 0.25; // 洗手台（靠前牆）、鏡子
+  bx(F, 'shiny', F0, [sx - 0.3, 0.78, sz - 0.22, sx + 0.3, 0.86, sz + 0.22], wht); cyl(B, 'shiny', F0, sx, sz, 0, 0.78, 0.1, 0.12, 10, wht); colC(F, sx, sz, 0.32, 0.86);
+  vq(B, 'shiny', F0, [sx - 0.3, z1 - 0.012], [sx + 0.3, z1 - 0.012], 1.15, 1.85, dotUV(PU('white')), C('#cfe3f2'));
+  spot(F, 'stand', F0, tx, tz - 0.6, HP, null, rm);
+}
+function aptFloor(A, n) {
+  const { X0, X1, ZB, ZF, zC, zK, xL, xS, xB, zR, xT, BX0, BZ } = AL, R = A.R, mine = n === A.mine, lobby = n === 0, top = n === A.N - 1;
+  const F = newFloor({ index: n, label: n + 1 + 'F' }); F.paths = []; F.occ = []; F.spots.dress = [];
+  const skirt = (c) => mul(C(c), 0.72);
+  const S_cor = sf('plaster', '#efece4', 'wall', { skirt: skirt('#efece4') }), S_shaft = sf('plaster', '#efece4', 'wall'), S_lift = sf('plaster', '#cdd2d8', 'shiny');
+  const S_liv = sf('plaster', '#f6efe2', 'wall', { skirt: skirt('#f6efe2') }), S_bed = sf('plaster', '#e4edf6', 'wall', { skirt: skirt('#e4edf6') }), S_hall = sf('plaster', lobby ? '#f3efe6' : '#f6efe2', 'wall', { skirt: skirt('#f3efe6') });
+  const S_kit = sf('plaster', '#f5f3ec', 'wall', { wain: { h: 1.6, s: sf('ktile', WHITE, 'wall', { noSkirt: true }) } }), S_bath = sf('ktile', WHITE, 'wall', { noSkirt: true });
+  const ceilP = sf('plaster', '#fbfbf8'), flCor = sf('terrazzo', WHITE, 'floor'), flLiv = sf('wood', WHITE, 'floor'), flBed = sf('wood', WHITE, 'floor'), flKit = sf('tileB', WHITE, 'floor'), flBath = sf('tileW', WHITE, 'floor'), flLob = sf('granite', WHITE, 'floor');
+  // 房間（陰影、地板、天花板）
+  room(F, lobby ? '大廳' : '走廊', X0, X1, ZB, zC, { floor: lobby ? flLob : flCor, ceil: ceilP, probe: [2.0, (ZB + zC) / 2] });
+  room(F, null, X0, xS, zC, zK, { h: top ? F.ch : 4.8 }); // 樓梯間（stairShaft 畫）
+  room(F, '電梯', xS, xL, zC, -3.6, { floor: sf('granite', WHITE, 'floor'), ceil: sf('plaster', '#f4f6f8'), probe: [(xS + xL) / 2, -4.6] });
+  room(F, lobby ? null : mine ? '玄關' : '走廊', xL, X1, zC, zK, { floor: lobby ? flLob : mine ? flLiv : flCor, ceil: ceilP, probe: [2.0, (zC + zK) / 2] });
+  if (lobby) room(F, null, X0, X1, zK, ZF, { floor: flLob, ceil: ceilP, probe: [0, 3] });
+  else if (mine) {
+    room(F, '客廳', BX0, X1, zK, BZ, { floor: flLiv, ceil: ceilP, probe: [2.5, 0.5] });
+    room(F, '房間', X0, xB, zR, ZF, { floor: flBed, ceil: ceilP, probe: [-2.0, 4.5] });
+    room(F, '廚房', xT, xB, zK, zR, { floor: flKit, ceil: ceilP, probe: [-1.9, -0.5] });
+    room(F, '廁所', X0, xT, zK, zR, { floor: flBath, ceil: sf('plaster', '#f4f6f8'), probe: [-4.6, 0.2] });
+  }
+  // 外牆：後面（走廊的窗）、左、右、前
+  wall(F, 'x', ZB - 0.1, X0, X1, { t: 0.2, p: S_cor, out: -1, view: n <= 1 ? 'green' : 'roofs', voff: 0.3 + n * 0.17, ops: [{ a: 1.2, b: 3.0, y0: 0.95, y1: 2.35, k: 'win', grille: 'grille1' }, { a: 4.0, b: 5.2, y0: 1.25, y1: 2.35, k: 'win', grille: 'grille2' }] });
+  wall(F, 'z', X0 - 0.1, ZB, zC, { t: 0.2, p: S_cor, n: null, col: false }); // 左：走廊那段（樓梯那段 stairShaft 自己畫）
+  const sideOps = (seg) => (seg === 'bath' ? [{ a: -2.1, b: -1.3, y0: 1.4, y1: 2.2, k: 'win', grille: 'grille2' }] : seg === 'bed' ? [{ a: 2.2, b: 3.8, y0: 0.9, y1: 2.3, k: 'win', curtain: '#d7e6f2', grille: 'grille1' }] : [{ a: -1.8, b: -0.6, y0: 0.95, y1: 2.35, k: 'win', grille: 'grille1' }, { a: 2.2, b: 3.8, y0: 0.95, y1: 2.35, k: 'win', grille: 'grille1' }]);
+  if (lobby) wall(F, 'z', X0 - 0.1, zK, ZF, { t: 0.2, p: S_hall, n: null, out: -1, view: 'street2', ops: sideOps('lobby') });
+  else if (mine) { wall(F, 'z', X0 - 0.1, zK, zR, { t: 0.2, p: S_bath, n: null, out: -1, view: 'green', ops: sideOps('bath') }); wall(F, 'z', X0 - 0.1, zR, ZF, { t: 0.2, p: S_bed, n: null, out: -1, view: 'street2', voff: 0.6, ops: sideOps('bed') }); }
+  const rOps = [{ a: -4.6, b: -3.2, y0: 0.95, y1: 2.35, k: 'win', grille: 'grille1' }], rOps2 = [{ a: 1.0, b: 2.6, y0: 0.9, y1: 2.3, k: 'win', curtain: lobby ? null : '#f3e6c8', grille: 'grille2' }, { a: 4.0, b: 5.4, y0: 0.9, y1: 2.3, k: 'win', curtain: lobby ? null : '#f3e6c8', grille: 'grille2' }];
+  wall(F, 'z', X1 + 0.1, ZB, zC, { t: 0.2, n: S_cor, p: null, col: false });
+  wall(F, 'z', X1 + 0.1, zC, zK, { t: 0.2, n: S_hall, p: null, out: 1, view: 'green', voff: 0.5, ops: rOps });
+  if (lobby || mine) wall(F, 'z', X1 + 0.1, zK, lobby ? ZF : BZ, { t: 0.2, n: lobby ? S_hall : S_liv, p: null, out: 1, view: 'street2', voff: 0.2, ops: rOps2 });
+  colBox(F, -A.hx - 0.3, -A.hz, X0, A.hz, 3); colBox(F, X1, -A.hz, A.hx + 0.3, A.hz, 3); colBox(F, -A.hx, -A.hz - 0.3, A.hx, ZB, 3);
+  const doors = [];
+  if (lobby) { // 正面：玻璃大門＋三個窗
+    const d = { a: -1.0, b: 1.0, y0: 0, y1: 2.4, k: 'door', leaves: 2, frame: '#9aa0a6' }; doors.push(d);
+    wall(F, 'x', ZF + 0.1, X0, X1, { t: 0.2, p: null, n: S_hall, out: 1, view: 'street', voff: 0.1, ops: [d, { a: -5.0, b: -3.4, y0: 0.95, y1: 2.35, k: 'win', grille: false }, { a: -2.6, b: -1.0, y0: 0.95, y1: 2.35, k: 'win', grille: false }, { a: 3.4, b: 5.0, y0: 0.95, y1: 2.35, k: 'win', grille: false }] });
+  } else if (mine) { // 正面：房間的兩個窗；客廳那段凹進去（陽台）：落地門＋窗
+    wall(F, 'x', ZF + 0.1, X0, BX0, { t: 0.2, p: null, n: S_bed, out: 1, view: 'street', voff: 0.1, ops: [{ a: -5.0, b: -3.4, y0: 0.95, y1: 2.35, k: 'win', curtain: '#d7e6f2', grille: 'grille1' }, { a: -2.6, b: -1.0, y0: 0.95, y1: 2.35, k: 'win', curtain: '#d7e6f2', grille: 'grille1' }] });
+    wall(F, 'x', BZ + 0.1, BX0, X1, { t: 0.2, p: null, n: S_liv, out: 1, view: 'street', voff: 0.1, vdist: 1.5, ops: [{ a: 0.7, b: 3.3, y0: 0, y1: 2.3, k: 'balc' }, { a: 3.8, b: 5.2, y0: 0.85, y1: 2.3, k: 'win', curtain: '#f3e6c8', grille: 'grille1' }] });
+    wall(F, 'z', BX0 - 0.1, BZ, ZF, { t: 0.2, n: S_bed, p: null, col: false }); // 陽台左邊那截（房間這面）
+    exitZone(F, 0.85, BZ - 0.6, 3.15, BZ + 0.3, 'balc', APT_BALC_SPAWN); // 落地門：走出去到陽台（town.src.js）
+  }
+  // 走廊前面的牆：樓梯的兩個口、電梯門、玄關（4 樓：你家的門；2／3／5 樓：開著走過去；1 樓：沒有牆）
+  const up = !top || true, down = n > 0, [ha0, ha1] = A.XR(1.05, 2.0), [hb0, hb1] = A.XR(0, 0.95), [st0, st1] = A.XR(0, 2.0);
+  wall(F, 'x', zC - 0.05, st0, st1, { t: 0.1, n: S_cor, p: S_shaft, ops: [
+    up ? { a: ha0, b: ha1, y0: 0, y1: 2.3, k: 'open' } : { a: ha0 + 0.08, b: ha1 - 0.08, y0: 0, y1: 2.05, k: 'closed', leafCol: '#c8b8a0' },
+    down ? { a: hb0, b: hb1, y0: 0, y1: 2.3, k: 'open' } : { a: hb0 + 0.1, b: hb1 - 0.06, y0: 0, y1: 2.0, k: 'closed', leafCol: '#e8e2d6' }] });
+  const LD = { a: -3.3, b: -2.2, y0: 0, y1: 2.15, k: 'open' };
+  wall(F, 'x', zC - 0.05, st1, xL, { t: 0.1, n: S_cor, p: S_lift, ops: [LD] });
+  if (mine) wall(F, 'x', zC - 0.05, xL, X1, { t: 0.1, n: S_cor, p: S_hall, ops: [{ a: -0.2, b: 0.75, y0: 0, y1: 2.1, k: 'idoor', leaf: true, hinge: 'a', swing: 1 }] });
+  // 樓梯間、電梯後面那面牆（朝前面）；電梯的三面；電梯跟玄關中間的牆
+  wall(F, 'x', zK + 0.06, X0, xL, { t: 0.12, p: lobby ? S_hall : mine ? S_kit : S_cor, n: null, ops: lobby ? [{ a: -5.2, b: -4.3, y0: 0, y1: 2.05, k: 'closed', leafCol: '#9aa0a6', tex: 'door' }] : [] });
+  wall(F, 'z', xS + 0.05, zC, zK, { t: 0.1, p: S_lift, n: null });
+  wall(F, 'x', -3.65, xS, xL, { t: 0.1, n: S_lift, p: null });
+  wall(F, 'z', xL, zC, zK, { t: 0.12, p: S_hall, n: S_lift, ops: lobby || mine ? [] : [] });
+  if (!lobby && !mine) wall(F, 'x', zK, xL, X1, { t: 0.12, n: S_cor, p: null, ops: [{ a: 0.0, b: 0.95, y0: 0, y1: 2.05, k: 'closed', leafCol: pick(R, ['#c89c6a', '#9aa0a6', '#6e5a44']) }, { a: 3.4, b: 4.35, y0: 0, y1: 2.05, k: 'closed', leafCol: pick(R, ['#c89c6a', '#b9c2c8', '#8f7a5e']) }] });
+  if (mine) { // 你家的隔間：房間｜客廳、廚房｜客廳、房間｜廚房＋廁所、廚房｜廁所
+    wall(F, 'z', xB, zR, ZF, { t: 0.2, p: S_liv, n: S_bed, ops: [{ a: 2.0, b: 2.9, y0: 0, y1: 2.1, k: 'idoor', leaf: true, hinge: 'a', swing: -1 }] });
+    wall(F, 'z', xB, zK, zR, { t: 0.2, p: S_liv, n: S_kit, ops: [{ a: -1.9, b: -0.6, y0: 0, y1: 2.2, k: 'open' }] });
+    wall(F, 'x', zR, X0, xB, { t: 0.12, p: S_bed, n: S_kit, ops: [{ a: -5.1, b: -4.2, y0: 0, y1: 2.05, k: 'idoor', leaf: true, hinge: 'b', swing: 1 }] });
+    wall(F, 'z', xT, zK, zR, { t: 0.12, p: S_kit, n: S_bath });
+  }
+  ready(F);
+  // 電梯裡面：扶手、按鈕板（發光）、天花板的燈
+  const B = F.B;
+  tube(B, 'metal', [xS + 0.12, 0.9, zC + 0.1], [xS + 0.12, 0.9, -3.75], 0.018, 0.018, 6, C('#c9cfd5'));
+  bx(F, 'metal', F0, [xL - 0.09, 0.9, -4.3, xL - 0.06, 1.5, -3.95], C('#b9bfc5')); for (let k = 0; k < 6; k++) vq(B, 'glow', F0, [xL - 0.061, -4.22 + (k % 2) * 0.16], [xL - 0.061, -4.12 + (k % 2) * 0.16], 1.0 + ((k / 2) | 0) * 0.15, 1.08 + ((k / 2) | 0) * 0.15, dotUV(GU('s_white')), [1.3, 1.3, 1.1]);
+  hq(B, 'glow', F0, xS + 0.3, -5.3, xL - 0.3, -3.9, F.ch - 0.02, dotUV(GU('s_white')), [1.4, 1.42, 1.38]);
+  for (const x of [LD.a - 0.06, LD.b]) bx(F, 'metal', F0, [x, 0, zC - 0.12, x + 0.06, LD.y1 + 0.06, zC + 0.02], C('#aeb4ba')); bx(F, 'metal', F0, [LD.a - 0.06, LD.y1, zC - 0.12, LD.b + 0.06, LD.y1 + 0.06, zC + 0.02], C('#aeb4ba')); // 電梯門框
+  vq(B, 'glow', F0, [(LD.a + LD.b) / 2 - 0.12, zC - 0.121], [(LD.a + LD.b) / 2 + 0.12, zC - 0.121], LD.y1 + 0.12, LD.y1 + 0.3, dotUV(GU('s_red')), [1.3, 0.6, 0.5]); // 門上面的樓層燈
+  F.lift = { x0: xS + 0.2, z0: zC + 0.15, x1: xL - 0.2, z1: -3.8 };
+  stairShaft(F, { ...A, N: A.N + 1 }, n, S_shaft); // N＋1：五樓也有往上的樓梯（到頂樓）
+  for (const e of F.exits) if (e.to === A.N) { e.to = 'roof'; e.spawn = APT_ROOF_SPAWN; } // 五樓往上＝頂樓（外面）
+  // 大門：出口、外面擋住、進來站的地方
+  for (const d of doors) { exitZone(F, d.a + 0.12, ZF - 0.55, d.b - 0.12, A.hz + 0.35, 'outside', null); colBox(F, d.a - 0.3, A.hz + 0.3, d.b + 0.3, A.hz + 0.8, 2.6); }
+  if (lobby) F.spawnIn = { x: 0, z: ZF - 1.15, lh: HP };
+  // 走道（家具不擋）：走廊一整條、電梯口、樓梯口、大門→走廊、玄關→客廳→房間→廁所、廚房
+  path(F, X0 + 0.5, (ZB + zC) / 2, X1 - 0.5, (ZB + zC) / 2, 0.5); path(F, (LD.a + LD.b) / 2, zC - 0.8, (LD.a + LD.b) / 2, -4.0, 0.4);
+  path(F, A.X(0.35), zC - 0.8, A.X(1.9), zC - 0.8, 0.5); path(F, A.X(0.7), zC - 0.8, A.X(0.7), zC - 1.5, 0.4); path(F, A.X(1.525), zC - 0.8, A.X(1.525), zC - 1.5, 0.4);
+  if (lobby) { path(F, 0, ZF - 0.9, 0, zC - 0.6, 0.5); path(F, 0, 0, X0 + 1.2, 4.0, 0.4); }
+  if (mine) { path(F, 0.3, zC - 0.6, 0.3, zR + 1.0, 0.45); path(F, 0.3, 2.45, xB - 0.6, 2.45, 0.45); path(F, xB - 0.6, 2.45, xB - 0.6, 5.5, 0.45); path(F, xB - 0.6, 2.45, -4.65, 2.45, 0.42); path(F, -4.65, 2.45, -4.65, zR - 0.6, 0.42); path(F, 0.3, -1.25, xB - 0.6, -1.25, 0.45); path(F, xB - 0.6, -1.25, xT + 0.5, -1.25, 0.4); path(F, 2.0, BZ - 0.3, 2.0, zK + 0.6, 0.45); }
+  if (!lobby && !mine) { path(F, 0.5, zC - 0.6, 0.5, zK + 0.6, 0.45); path(F, 3.9, zC - 0.6, 3.9, zK + 0.6, 0.45); }
+  // 燈
+  lamp(F, 0, (ZB + zC) / 2, 2.4, '#fff4e6'); fixture(F, -3.5, (ZB + zC) / 2, 'tube', { L: 1.2 }); fixture(F, 2.5, (ZB + zC) / 2, 'tube', { L: 1.2 });
+  if (lobby) { lamp(F, 0, 2.5, 4.5, '#f4f8ff'); fixture(F, -2.5, 2.5, 'panel', { L: 1.2, W: 0.6 }); fixture(F, 2.5, 2.5, 'panel', { L: 1.2, W: 0.6 }); fixture(F, 2.0, (zC + zK) / 2, 'round'); }
+  else if (mine) { lamp(F, 2.8, 1.8, 3.4, '#fff1dc'); fixture(F, 2.8, 1.8, 'round'); fixture(F, -3.0, 4.4, 'round'); fixture(F, -1.9, -0.5, 'tube', { L: 1.0 }); fixture(F, -4.6, -0.3, 'round'); fixture(F, 2.0, (zC + zK) / 2, 'round'); }
+  else { lamp(F, 2.0, (zC + zK) / 2, 2.4, '#fff4e6'); fixture(F, 2.0, (zC + zK) / 2, 'round'); }
+  F.sun = { from: [0.3, 0.75, 1], I: 0.8 }; F.hemi = { sky: '#fffaf2', ground: '#c8b89c', I: 1.55 };
+  F.cam = { maxDist: 3.2, ceiling: F.ch - 0.18, near: 0.1 };
+  // 家具
+  walkInit(F, [lobby ? F.spawnIn : F.stairArrive.fromBelow, F.stairArrive.fromAbove]);
+  if (lobby) {
+    mailboxes(F, frame(X0, 0, 3.6, HP), 4, 3);
+    noticeBoard(F, frame(-3.5, 0, zK + 0.12, 0), 1.6, 1.0, 1.1);
+    place(F, [frame(-2.6, 0, ZF - 1.1, HP), frame(-3.6, 0, ZF - 1.1, HP)], [-0.85, -0.32, 0.8, 0.32], (T) => scooter(F, T, { col: pick(R, ['#f2f3f5', '#2f6fd6', '#d0342c']), helmet: '#f2c230' }));
+    place(F, [frame(X1 - 0.35, 0, ZF - 0.4), frame(X1 - 0.35, 0, zK + 0.5)], [-0.25, -0.25, 0.25, 0.25], (T) => plant(F, T, 1.2));
+    place(F, [frame(X0 + 0.35, 0, ZF - 0.4)], [-0.25, -0.25, 0.25, 0.25], (T) => plant(F, T, 1.0));
+    place(F, [frame(X1, 0, 3.0, -HP)], [-0.9, 0, 0.9, 0.5], (T) => { bx(F, 'prop', T, [-0.8, 0.4, 0.04, 0.8, 0.46, 0.44], C('#8a6a4a')); for (const x of [-0.7, 0.65]) bx(F, 'prop', T, [x, 0, 0.06, x + 0.06, 0.4, 0.42], C('#5a4030')); colT(F, T, -0.8, 0, 0.8, 0.46, 0.46); spot(F, 'sit', T, -0.4, 0.25, 0, 0.46).edge = true; spot(F, 'sit', T, 0.4, 0.25, 0, 0.46).edge = true; }); // 長椅
+    wallPic(F, frame(1.2, 0, zK + 0.06, 0).sub(0, 0, 0.001), 'clock', 0.34, 0.34, 2.0);
+    framedPic(F, frame(3.5, 0, ZF, Math.PI).sub(0, 0, 0.001), 'photo', 0.7, 0.55, 1.5);
+  } else if (mine) {
+    const rmL = '客廳', rmB = '房間';
+    const sofaT = frame(X1, 0, 2.2, -HP); sofa(F, sofaT, { n: 3, col: '#4f6b8a', room: rmL }); occupy(F, X1 - 0.82, 2.2 - 1.05, X1, 2.2 + 1.05); sofaTable(F, sofaT, 1.02, 2.0);
+    tvSet(F, frame(xB + 0.1, 0, 2.2, HP), { L: 1.6, tv: 'tvB' }); occupy(F, xB + 0.1, 1.4, xB + 0.56, 3.0);
+    place(F, [frame(3.0, 0, -1.0, 0), frame(2.2, 0, -1.0, 0)], [-0.9, -0.75, 0.9, 0.75], (T) => dining(F, T, { w: 1.2, d: 0.75, chairs: true, room: rmL }));
+    place(F, [frame(1.7, 0, zC + 0.12, 0), frame(2.6, 0, zC + 0.12, 0)], [-0.47, 0, 0.47, 0.68], (T) => shoeCab(F, T, { L: 0.9, seed: 2 }));
+    place(F, [frame(BX0 + 0.4, 0, BZ - 0.4), frame(X1 - 0.4, 0, BZ - 0.4)], [-0.25, -0.25, 0.25, 0.25], (T) => plant(F, T, 1.1));
+    wallPic(F, frame(X1, 0, 0.3, -HP).sub(0, 0, 0.001), 'calendar', 0.34, 0.5, 1.5); wallPic(F, frame(X1, 0, 4.6, -HP).sub(0, 0, 0.001), 'clock', 0.34, 0.34, 1.95); framedPic(F, frame(xB + 0.1, 0, 4.6, HP).sub(0, 0, 0.001), 'photo', 0.7, 0.55, 1.4);
+    acUnit(F, frame(X1, 0, 5.0, -HP), 2.35);
+    bed(F, frame(-3.3, 0, zR + 0.07, 0), { w: 1.5, quilt: '#9ec9ea', side: 'r', room: rmB }); occupy(F, -4.1, zR, -2.0, zR + 2.2);
+    const wT = frame(X0, 0, 5.3, HP); wardrobe(F, wT, { w: 1.4, col: '#f3efe6' }); occupy(F, X0, 4.6, X0 + 0.62, 6.0); spot(F, 'dress', wT, 0, 1.0, HP, null, rmB);
+    place(F, [frame(-1.6, 0, ZF, Math.PI), frame(-2.2, 0, ZF, Math.PI)], [-0.55, 0, 0.55, 1.2], (T) => desk(F, T, { w: 1.0, pc: true, room: rmB }));
+    place(F, [frame(X0 + 0.35, 0, ZF - 0.35, 0.3)], [-0.25, -0.25, 0.25, 0.25], (T) => fan(F, T, {}));
+    wallPic(F, frame(-2.0, 0, zR + 0.06, 0).sub(0, 0, 0.001), 'fu', 0.4, 0.4, 1.7); acUnit(F, frame(xB, 0, 5.5, -HP).sub(0, 0, 0.001), 2.35);
+    kitchen(F, frame(xT + 0.1, 0, zK + 0.06, 0), 2.1, { stove: 'r', upper: true, rice: '#d8342c', room: '廚房' }); occupy(F, xT, zK, xT + 2.2, zK + 0.65);
+    fridge(F, frame(xB - 0.5, 0, zK + 0.06, 0), { col: '#eef0f1' }); occupy(F, xB - 0.9, zK, xB - 0.1, zK + 0.75);
+    wallPic(F, frame(xT + 0.06, 0, 0.3, HP).sub(0, 0, 0.001), 'calendar', 0.3, 0.45, 1.5);
+    bathroom(F, X0, xT, zK, zR);
+  } else { // 鄰居的樓層：走廊上一盆植物、鞋櫃、腳踏車？（簡單）
+    place(F, [frame(X1 - 0.35, 0, zK + 0.4), frame(X1 - 0.35, 0, zC - 0.4)], [-0.25, -0.25, 0.25, 0.25], (T) => plant(F, T, 1.0));
+    place(F, [frame(2.2, 0, zK + 0.12, 0)], [-0.47, 0, 0.47, 0.68], (T) => shoeCab(F, T, { L: 0.9, seed: n }));
+    wallPic(F, frame(2.0, 0, zK + 0.06, 0).sub(0, 0, 0.001), 'calendar', 0.3, 0.45, 1.5);
+  }
+  return F;
+}
 // ---- 對外：interiorFor（便宜的說明）、buildInterior（蓋出來）----
 // 哪些房子走得進去：透天厝（含一樓的店）、超商、廟、三合院；車庫、車店、改車廠本來就有自己的（null）
 function kindOf(b) {
   if (!b || !isFinite(b.x) || !isFinite(b.z)) return null;
   if (b.kind === 'house') return 'house';
+  if (b.kind === 'apt') return 'apt'; // 第 60 批：公寓（apt.js 的外殼；每一層 aptFloor）
   if (b.kind === 'shop') return (b.name || '').includes('改車') || b.hx > 8 ? null : 'house';
   if (b.kind === 'store' || b.kind === 'temple' || b.kind === 'farmhouse') return b.kind;
   return null;
@@ -12217,6 +12561,7 @@ function planOf(b, kind) {
     return { kind, biz: H.biz, name: H.biz ? shopName(b, H.biz) : b.name || `透天厝（${CNUM[H.N] || H.N}樓）`, floors: H.N, size: { w: b.hx * 2, d: b.hz * 2 }, rooms,
       enter: wide ? { x: 0, z: H.hz + 0.28, hx: H.hx - 0.4, hz: 0.27 } : { x: dx, z: H.hz + 0.28, hx: 0.65, hz: 0.27 }, outside: { x: dx, z: H.hz + 1.35, lh: -HP } };
   }
+  if (kind === 'apt') return { kind, biz: null, name: b.name || '公寓', floors: 5, size: { w: 12, d: 15 }, rooms: [['大廳'], ['走廊'], ['走廊'], ['玄關', '客廳', '房間', '廚房', '廁所'], ['走廊']], enter: { x: 0, z: 7.5 + 0.28, hx: 0.9, hz: 0.27 }, outside: { x: 0, z: 7.5 + 1.35, lh: -HP } };
   if (kind === 'store') return { kind, biz: 'store', name: b.name || '村口超商', floors: 1, size: { w: 18, d: 13 }, rooms: [[b.name || '村口超商']], enter: { x: 0, z: 6.78, hx: 1.1, hz: 0.27 }, outside: { x: 0, z: 7.95, lh: -HP } };
   if (kind === 'temple') return { kind, biz: 'temple', name: b.name || '福德宮', floors: 1, size: { w: 12.4, d: 7.4 }, rooms: [[b.name || '福德宮']], enter: { x: 0, z: 7.4, hx: 2.4, hz: 0.45 }, outside: { x: 0, z: 8.55, lh: -HP } };
   return { kind, biz: 'farm', name: b.name || '三合院', floors: 1, size: { w: 18, d: 6 }, rooms: [['正廳', '房間', '灶腳']], enter: { x: 0, z: 3.28, hx: 0.9, hz: 0.27 }, outside: { x: 0, z: 4.15, lh: -HP } };
@@ -12243,6 +12588,7 @@ function buildInterior(b, o = {}) {
   const P = planOf(b, kind), W = toWorld(b), rot = b.rot || 0;
   let Fs;
   if (kind === 'house') { const H = houseInfo(b); Fs = []; for (let n = 0; n < H.N; n++) Fs.push(houseFloor(H, n)); }
+  else if (kind === 'apt') { const A = aptInfo(b); Fs = []; for (let n = 0; n < A.N; n++) Fs.push(aptFloor(A, n)); }
   else Fs = [kind === 'store' ? storeFloor(b) : kind === 'temple' ? templeFloor(b) : farmFloor(b)];
   const group = new THREE.Group(); group.name = 'interior:' + P.name; group.position.set(b.x, 0, b.z); group.rotation.y = rot;
   const xz = (x, z) => { const p = W(x, z); return { x: p[0], z: p[1] }; };
@@ -12261,6 +12607,7 @@ function buildInterior(b, o = {}) {
       exits: F.exits.map((e) => ({ ...xz(e.x, e.z), hx: e.hx, hz: e.hz, rot, to: e.to, spawn: e.to === 'outside' ? { ...outside } : pose(e.spawn), door: { ...xz(e.x, e.z + e.hz - 0.35), ry: wrapA(Math.PI + rot), w: e.hx } })),
       spots, rooms: F.named.map((r) => ({ name: r.name, ...xz((r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2), hx: (r.x1 - r.x0) / 2, hz: (r.z1 - r.z0) / 2, rot, probe: xz(r.probe[0], r.probe[1]) })),
       camera: { maxDist: 3, ceiling: F.ch - 0.2, near: 0.1, ...(F.cam || {}) },
+      lift: F.lift ? { ...xz((F.lift.x0 + F.lift.x1) / 2, (F.lift.z0 + F.lift.z1) / 2), hx: (F.lift.x1 - F.lift.x0) / 2, hz: (F.lift.z1 - F.lift.z0) / 2, rot } : null, // 第 60 批：公寓的電梯（站進去出面板）
       bounds: { ...xz((bx0 + bx1) / 2, (bz0 + bz1) / 2), hx: (bx1 - bx0) / 2, hz: (bz1 - bz0) / 2, rot },
     };
   });
@@ -12270,7 +12617,7 @@ function buildInterior(b, o = {}) {
     setFloor(i) {
       i = clamp(i | 0, 0, floors.length - 1); I.floor = i;
       floors.forEach((f, k) => { f.group.visible = k === i; });
-      const f = floors[i]; I.colliders = f.colliders; I.exits = f.exits; I.spots = f.spots; I.rooms = f.rooms; I.camera = f.camera; I.bounds = f.bounds;
+      const f = floors[i]; I.colliders = f.colliders; I.exits = f.exits; I.spots = f.spots; I.rooms = f.rooms; I.camera = f.camera; I.bounds = f.bounds; I.lift = f.lift || null;
       return f;
     },
     dispose() { group.traverse((m) => { if (m.isMesh) m.geometry.dispose(); }); group.removeFromParent(); group.clear(); floors.length = 0; },
@@ -14647,7 +14994,7 @@ function buildOffroad(V, opts = {}) {
   const info = { meshes: 3 + 2 + bp.meshes + (apron ? 1 : 0), tris: terrTris + B.tris + ACCESS.length * 4 + apron, terrainTris: terrTris, props: B.tris, ms: 0 };
   if (V.info) V.info.offroad = info;
   const P = {
-    group, places, course: CR, checkpoints: cps, grid: GRID.map(([x, z]) => ({ x, z, heading: 0 })), fenceDist, inPark, heightAt, normalAt, surfaceAt, info, trees: trees.length, rocks: ROCKS.length,
+    group, places, course: CR, checkpoints: cps, grid: GRID.map(([x, z]) => ({ x, z, heading: 0 })), fenceDist, inPark, terrainAt, heightAt, normalAt, surfaceAt, info, // terrainAt＝越野車場的格子（＋4 公尺）：crush.js 第 58 批只有這裡面輾東西不報警 trees: trees.length, rocks: ROCKS.length,
     show: { x0: SHOW.x0, x1: SHOW.x1, z0: SHOW.z0, z1: SHOW.z1, cx: (SHOW.x0 + SHOW.x1) / 2, cz: SHOW.z, ramp: [SHOW.rx0, SHOW.rtop, SHOW.rx1, SHOW.h], cars: SHOW_CARS }, // 第 7 批（輾扁）：表演場（crush.js 照這個擺垃圾車）
     dispose() {
       group.removeFromParent();
@@ -15182,7 +15529,7 @@ const JX = -51; // 聯外道路接直線加速賽道入口的地方（x −51、
 const ACC_POLY = [[JX, -3, 0], [JX, -100, 35], [300, -100, 0]]; // 聯外道路（9 公尺寬）
 const ACC_W = 9;
 // 樹（race.src.js 的 buildTrack）不要種的地方：聯外道路 [x0, z0, x1, z1]
-const CIRCUIT_KEEP = [[-64, -116, 4, -5], [-10, -112, 310, -86], [151, -147, 193, -104]]; // 第 21 批：＋3 號家（圓塔車庫，village.js HOME_SITES[2]）；第 24 批：外面繞圈的斜坡（半徑 17.5）也不種樹
+const CIRCUIT_KEEP = [[-64, -116, 4, -5], [-10, -112, 310, -86], [138, -147, 193, -104]]; // 第 21 批：＋3 號家（圓塔車庫，village.js HOME_SITES[2]）；第 24 批：外面繞圈的斜坡（半徑 17.5）也不種樹
 // 對手開車的功力：lat＝過彎抓地（你的 1）、brk＝煞車、react＝起跑反應（秒）
 const SKILL = { slow: { lat: 0.62, brk: 0.7, react: 0.8 }, rookie: { lat: 0.68, brk: 0.75, react: 0.65 }, ok: { lat: 0.74, brk: 0.8, react: 0.5 }, good: { lat: 0.8, brk: 0.86, react: 0.4 }, pro: { lat: 0.86, brk: 0.9, react: 0.3 } };
 const AERO = 0.55; // 跟 drive.js 一樣（街機的風阻）
@@ -17543,7 +17890,7 @@ return { buildNeihu, neihuFonts, NEIHU_TEXT, NEIHU_KEEP };
 //   每一段路往兩邊「看」：碰到上面（或下面）那一段路就照兩段路的高度差算坡（兩段路中間的山坡剛好接起來），看不到路的那邊照山的外形（橢圓、圓圓的山頭）往下；
 //   很多段路的推估用距離加權平均（近的比較重）→ 平順的山坡；路上 6.5 公尺以內是平的（跟路面一樣高）、13.5 公尺以外照山坡；格子 2.5 公尺（heightAt 跟畫出來的三角形一模一樣）
 // 效能：地形 1 個 draw call（約 6.9 萬個三角形）、山路 1 個、護欄／樹／涼亭照材質、100 公尺一格合併；碰撞都是一般的盒子、圓（drive.js、walk.js 照舊）
-// 輾扁（crush.js）：山上的樹、護欄、路牌、反光鏡越野車輾得扁（涼亭、觀景台的欄杆不輾）；山上輾東西不報警（跟越野車場一樣：terrainAt）
+// 輾扁（crush.js）：山上的樹、護欄、路牌、反光鏡越野車輾得扁（涼亭、觀景台的欄杆不輾）；山上輾東西也報警（第 58 批；以前跟越野車場一樣不報）
 
 const { buildMountain, mountainFonts, MOUNT_TEXT, mountainLayout } = (() => {
 const TAU = Math.PI * 2;
@@ -17572,7 +17919,7 @@ const CORNER = [-250, -72]; // 村子的路（G → C）在這裡轉彎：山路
 const CTRL = [[-250, -80, 0], [-250, -134, 24], [-160, -166, 14], [-158, -197, 14], [-418, -226, 14], [-420, -257, 14], [-178, -290, 14], [-176, -321, 14], [-362, -352, 14], [-364, -383, 14], [-318, -401, 18], [-304, -404, 0]];
 const SUMMIT = { x0: -306, x1: -230, z0: -418, z1: -391 }; // 山頂平的地方：停車場（x −302…−252）＋涼亭（東邊）
 const PARK = { x0: -301, x1: -253, z0: -415, z1: -394 };
-const HOMEPAD = { x0: -290, x1: -260, z0: -450, z1: -415 }; // 第 21 批：2 號家（圓塔車庫，village.js HOME_SITES[1]，中心 (−276.25, −436.25)、門朝南）：停車場北邊整平成山頂的高度（邊在 2.5 公尺的格子上）
+const HOMEPAD = { x0: -312.5, x1: -260, z0: -450, z1: -415 }; // 第 60 批：西邊加寬到 −312.5（公寓 x −308…−296） // 第 21 批：2 號家（圓塔車庫，village.js HOME_SITES[1]，中心 (−276.25, −436.25)、門朝南）：停車場北邊整平成山頂的高度（邊在 2.5 公尺的格子上）
 const PAV = { x: -241, z: -404.5, hw: 3.4 }; // 涼亭（柱子中心到中心 6.8 公尺）
 const PEAK = { x: -284, z: -428 }; // 山的外形（看不到路的那邊）：橢圓的山頭
 const TRAIL = [[-224, -150], [-226, -168], [-236, -200], [-252, -232], [-262, -262], [-268, -292], [-276, -326], [-282, -356], [-286, -384], [-282, -394]]; // 越野車的泥土捷徑（直直往上，穿過每一段山路）
@@ -34878,7 +35225,7 @@ return { createTraffic, createPedestrians, npcGraphs };
 //     bail(x, z, dx, dz) → n,          車上的人跳車往 (dx, dz) 跑掉（npc.js peds.bail）
 //     sound(kind, x, z, k),            'crunch'（壓扁的咖啦聲）、'glass'（玻璃碎）
 //     toast(text),                     第一次在表演場輾扁：「輾扁了！」
-//     crime(x, z),                     村子裡輾東西＝報警（police.crime('crush')，1★）；越野車場裡面不叫
+//     crime(x, z),                     輾東西＝報警（police.crime('crush')，1★）；只有越野車場裡面（V.offroad.inPark）不叫（第 58 批：山上也報）
 //   })
 //   crush.heightAt(x, z)      墊子的高度（0＝沒有）：drive.js 的 crush.height
 //   crush.can(c)              這個碰撞物輾得過去嗎（drive.js 的 crush.can）：垃圾桶、燈箱、機車、板凳、矮柱、小招牌、垃圾車⋯
@@ -34952,6 +35299,7 @@ function can(c) { return canAny(c, false, null); }
 function createCrush(o = {}) {
   const V = o.world || {}, SHOW = V.offroad && V.offroad.show ? V.offroad.show : null;
   const terrainAt = typeof V.terrainAt === 'function' ? V.terrainAt : () => false;
+  const inPark = V.offroad && typeof V.offroad.terrainAt === 'function' ? V.offroad.terrainAt : terrainAt; // 第 58 批：只有越野車場裡面（offroad.js 的格子＋4 公尺）輾東西不報警（以前看 V.terrainAt：山、海邊、每座山都算成越野車場，輾倒樹警察都不來）
   const heightOf = typeof V.heightAt === 'function' ? V.heightAt : () => 0;
   let alive = true, colVer = 0, jN = 0, jBusy = false, awayT = 0, toldPark = false, crimeT = -99, clock = 0;
   const ME = { x: -0, z: -0, heading: -0, v: -0, hx: 2.8, hz: 1.9, big: false };
@@ -35358,8 +35706,8 @@ function createCrush(o = {}) {
   // ---- 輾到了 ----
   const label = (c) => (c.junk ? 'junk' : c.t === 'circle' ? (c.r <= 0.1 ? 'pole' : 'bin') : c.hz <= 0.45 ? 'scooter' : 'bench');
   function note(kind) { st.types.push(kind); if (st.types.length > 40) st.types.shift(); }
-  function police(x, z) { // 越野車場裡面不算犯罪；一路輾過去（8 秒內）只報一次
-    if (terrainAt(x, z) || !o.crime || clock - crimeT < CRIME_GAP) return;
+  function police(x, z) { // 越野車場裡面不算犯罪（第 58 批：山上、海邊、別的山都算）；一路輾過去（8 秒內）只報一次
+    if (inPark(x, z) || !o.crime || clock - crimeT < CRIME_GAP) return;
     crimeT = clock;
     try { o.crime(x, z); } catch (e) { console.warn(e); }
   }
@@ -42534,8 +42882,8 @@ let impounded = false; // 這次被抓：車子有沒有拖到警察局的停車
 const OPEN_ACT = { label: '開鐵捲門', icon: 'door', onClick: () => openDoor() };
 const CLOSE_ACT = { label: '關鐵捲門', icon: 'doorDown', onClick: () => closeDoor() }; // 第 3 批（b3-int）：通緝中躲回車庫（門關了＝警察找不到你）
 const OUT_ACT = { label: '下車', icon: 'walk', onClick: () => leaveCar() }; // 開車 HUD 的第二顆（右邊、換視角下面）：不會被「開鐵捲門」蓋掉
-const SLEEP_ACT = { label: '睡覺', icon: 'bed', onClick: () => goSleep() };
-const DRESS_ACT = { label: '換衣服', icon: 'shirt', onClick: () => openLook('cabin') }; // 小房子的衣櫃前面：自訂角色（garage.src.html）
+const SLEEP_ACT = { label: '睡覺', icon: 'bed', onClick: () => goSleep(towerBed()) };
+const DRESS_ACT = { label: '換衣服', icon: 'shirt', onClick: () => openLook('cabin') }; // 小房子的衣櫃前面：自訂角色（garage.src.html）；第 60 批：公寓 4 樓的衣櫃也是
 const LIFT_BUSY = { label: '電梯動作中⋯', icon: 'lift', onClick: () => {} }; // 電梯在動的時候站在電梯井旁邊：按了不會怎樣
 const CABIN_EYE = true; // 走進小房子自動換第一人稱（房間 5 × 4.2 公尺、斜天花板：第三人稱鏡頭一直被牆推到貼著頭）；走出來換回去
 $('shopName').textContent = SHOP_NAME;
@@ -42837,7 +43185,7 @@ function townFog(on) {
 const meCols = () => [...stripColliders(), ...(TR?.trees || []), ...(VIL?.hills ? VIL.hills.layerCols : [])];
 // 走路的（walk.js）：第一次出門做（村子、你家蓋好以後），之後一直用同一個
 function makeWalker() {
-  walker = createWalker({ scene: TR.scene, camera: dcam, world: PW, colliders: meCols(), bounds: VIL.hills?.walkBounds, character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
+  walker = createWalker({ scene: TR.scene, camera: dcam, world: walkWorld(), colliders: meCols(), bounds: VIL.hills?.walkBounds, character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
   walker.setGarage(GAR); // 鐵捲門：碰撞跟著門、門口給「開鐵捲門」
   if (NPC) { walker.addColliders(NPC.peds.props.colliders, 'npc-props'); walker.setMovers(NPC.MOV); } // 板凳、椅子；路上的車、居民（npcStep 每一格換）
   makeGuns(); // 第 3 批（b3-int）：槍、「揍」的按鈕、警車和警察擋人、小地圖上的警車
@@ -43259,10 +43607,11 @@ const CLOSED = {};
 const DEALER_DOOR = [{ t: 'box', x: -437.4, z: -26.125, hx: 1.45, hz: 0.18, rot: 0, h: 3 }];
 function atDoor(d) {
   if (!walker || walker.mode !== 'walk' || doorFade || sleep || !DRIVE.on) return;
+  if (d && d.aptIn) { if (APTU.on) goDoor(() => aptIn()); return; } // 第 60 批：頂樓、陽台回裡面的門
   if (indoor) { // 裡面的出口（setDoors 給的是 I.exits 的 door）：大門、樓梯口
     if (indoor.t < 0.4 || indoor.jail) return; // 剛換過來（站在樓梯口旁邊）；關在拘留室裡（門給的是空的，保險）
     const e = (indoor.exits || indoor.I.exits).find((x) => x.door === d); if (!e) return;
-    goDoor(() => (e.to === 'outside' ? leaveHouse(e) : houseFloor(e)));
+    goDoor(() => (e.to === 'outside' ? leaveHouse(e) : e.to === 'roof' || e.to === 'balc' ? aptOut(e) : houseFloor(e))); // 第 60 批：公寓的頂樓、陽台
     return;
   }
   if (d.kind === 'police') { // 第 3 批（b3-int）：警察局：通緝中走進去＝自首（一樣關、一樣罰）；平常走進去看看（拘留室的門開著）
@@ -43318,7 +43667,7 @@ function enterHouse(b) {
   try { I = buildInterior(b, { renderer, quality: roomQ }); } catch (e) { console.error(e); I = null; }
   if (!I) return { say: `${b.name ? b.name + '：' : ''}門鎖著` };
   const sc = new THREE.Scene(); sc.name = 'indoor'; sc.background = I.background; sc.add(I.group);
-  indoor = { b, I, scene: sc, t: 0, dist0: walker.cameraDist, folks: [], kind: 'house' };
+  indoor = { b, I, scene: sc, t: 0, dist0: walker.cameraDist, folks: [], kind: I.kind === 'apt' ? 'apt' : 'house' }; // 第 60 批：公寓
   sc.add(walker.character.group); // 你搬進房子的場景（出去再搬回村子）
   walker.removeColliders('world'); walker.setCarReach(false); // 村子的碰撞（蓋住房子的地板）拿掉；車停在外面（隔著牆）不給「上車」
   houseSet(I.spawn);
@@ -43328,7 +43677,7 @@ function enterHouse(b) {
 function houseSet(spawn) {
   const I = indoor.I;
   walker.removeColliders('interior'); walker.addColliders(I.colliders, 'interior');
-  if (indoor.kind === 'police') stationFolks(); else if (indoor.kind === 'house') houseFolks(); // 槍店的店員 gunshop.js 自己有
+  if (indoor.kind === 'police') stationFolks(); else if (indoor.kind === 'house' || indoor.kind === 'apt') houseFolks(); // 槍店的店員 gunshop.js 自己有
   walker.setDoors(indoor.jail ? [] : (indoor.exits || I.exits).map((e) => e.door)); // 關在拘留室：沒有門
   walker.setCamera({ maxY: I.camera.ceiling, dist: Math.min(indoor.dist0, I.camera.maxDist) });
   walker.teleport(spawn); indoor.t = 0;
@@ -43554,27 +43903,127 @@ function garCamCols() {
 }
 
 // ---- 小房子：床邊按「睡覺」→ 躺到床上、畫面黑掉 →「睡飽了！」站在床邊 ----
-function goSleep() {
-  if (sleep || !walker || walker.mode !== 'walk' || !DRIVE.on || !GAR) return;
+const towerBed = () => (GAR ? { ...GAR.spots.bed, wake: GAR.spots.wake, w: garWorld, by: GAR.group.position.y } : null); // 圓塔一樓小房子的床（by：塔的一樓多高（山頂那間））
+function goSleep(B) { // B＝{ feet, head, y, heading（頭 → 腳）, wake, w（本地 → 世界）, by（地板高度）}：小房子（towerBed）或公寓 4 樓（aptBed，第 60 批）
+  if (sleep || !walker || walker.mode !== 'walk' || !DRIVE.on || !B) return;
   walker.pause(); // HUD 收起來、不吃按鍵（角色還在）：躺到床上
-  const B = GAR.spots.bed, w = garWorld({ x: B.feet.x, z: B.feet.z, heading: B.heading }), ch = walker.character, by = GAR.group.position.y; // by：塔的一樓多高（山頂那間）
+  const w = B.w({ x: B.feet.x, z: B.feet.z, heading: B.heading }), ch = walker.character, by = B.by;
   ch.group.visible = true; ch.group.position.set(w.x, by + B.y, w.z); ch.group.rotation.set(0, w.heading, 0); ch.update(1 / 60, { speed: 0, state: 'fall' });
   // 鏡頭（走路的停住了不會動）：站在床尾、靠門那邊高一點，斜斜看著躺在床上的你（第一人稱的時候眼睛前面是牆）
   const hx = B.feet.x - B.head.x, hz = B.feet.z - B.head.z, l = Math.hypot(hx, hz) || 1, ux = hx / l, uz = hz / l;
-  const cv = garWorld({ x: B.feet.x + ux * 1.25 - uz * 1.2, z: B.feet.z + uz * 1.25 + ux * 1.2 }), cl = garWorld({ x: (B.x + B.head.x) / 2, z: (B.z + B.head.z) / 2 });
+  const cv = B.w({ x: B.feet.x + ux * 1.25 - uz * 1.2, z: B.feet.z + uz * 1.25 + ux * 1.2 }), cl = B.w({ x: (B.x + B.head.x) / 2, z: (B.z + B.head.z) / 2 });
   dcam.position.set(cv.x, by + 1.75, cv.z); dcam.lookAt(cl.x, by + B.y + 0.15, cl.z);
   fader('Zzz⋯').style.opacity = '0';
-  sleep = { t: 0, woke: false };
+  sleep = { t: 0, woke: false, wake: B.w(B.wake) };
 }
 function sleepStep(dt) {
   const s = sleep, T1 = calm ? 0.4 : 1.2, T2 = T1 + 1.3, T3 = T2 + (calm ? 0.3 : 0.9); // 慢慢黑掉、黑著、慢慢亮
   s.t += dt;
   if (!s.woke) walker.character.update(dt, { speed: 0, state: 'fall' });
   fadeEl.style.opacity = (s.t < T1 ? s.t / T1 : s.t < T2 ? 1 : Math.max(0, 1 - (s.t - T2) / (T3 - T2))).toFixed(3);
-  if (!s.woke && s.t >= T2) { s.woke = true; walker.teleport(garWorld(GAR.spots.wake)); walker.resume(); walker.toast('睡飽了！', 2400); }
+  if (!s.woke && s.t >= T2) { s.woke = true; walker.teleport(s.wake); walker.resume(); walker.toast('睡飽了！', 2400); }
   if (s.t >= T3) { sleep = null; fadeEl.style.display = 'none'; }
 }
 function endSleep() { sleep = null; if (fadeEl) fadeEl.style.display = 'none'; }
+// ==== 第 60 批：公寓的家（Nick 2026-10-31「自己家改成在旁邊的公寓」，草稿 https://claude.ai/artifact/GahqJPKLLPf5FYXmHeq2wU，Nick 選「照草稿做」）====
+//   每個家（6 座圓塔）旁邊一棟 5 層的公寓：外殼 apt.js（aptExt：6 座 InstancedMesh）；走進大門＝房子裡面那一套（interiors.js kind 'apt'：1 樓大廳、電梯、樓梯、4 樓你的家）
+//   電梯：站進電梯（I.lift）出面板（aptPanel：4F 5F 頂樓／1F 2F 3F）；頂樓（5 樓樓梯上去、或電梯按頂樓）、4 樓的陽台（客廳落地門）＝真的走到外面（APTU）：
+//   換回世界的場景、只加那一層的碰撞（女兒牆、樓梯間）、走路的地板＝那一層的高度（walkWorld）、門＝回裡面的門（aptIn）；睡覺、換衣服在 4 樓的床、衣櫃（圓塔一樓的小房子照舊也可以）
+const APTU = { on: false, b: null, lvl: null, y: 0, floor: 0, A: null, ext: null, panel: null };
+const SLEEP_ACT_APT = { label: '睡覺', icon: 'bed', onClick: () => goSleep(aptBed()) };
+function aptExt() { // 6 座公寓的外殼（蓋一次，InstancedMesh）＋ V.buildings 那幾棟的高度（山頂那座）
+  const SL = VIL.places.garst.slots;
+  for (const b of VIL.buildings) if (b.kind === 'apt' && SL[b.slot]) b.y = SL[b.slot].y || 0;
+  if (APTU.ext) return;
+  const A = (APTU.A = buildApt()), M = new THREE.Matrix4();
+  APTU.ext = A.parts.map((P) => { const m = new THREE.InstancedMesh(P.geometry, P.material, SL.length); m.name = P.name; m.matrixAutoUpdate = false; m.renderOrder = P.name === 'apt-glass' ? 2 : 0; TR.scene.add(m); return m; });
+  SL.forEach((q, i) => { const L = aptLotOf(VIL.homeSites[i], i); M.makeRotationY(L.heading).setPosition(L.x, q.y || 0, L.z); for (const m of APTU.ext) m.setMatrixAt(i, M); });
+  for (const m of APTU.ext) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
+}
+const aptW = (b, x, z) => { const c = Math.cos(b.rot), s = Math.sin(b.rot); return { x: b.x + x * c + z * s, z: b.z - x * s + z * c }; }; // 公寓本地 → 世界（b＝V.buildings 那一棟）
+const inApt = (x, z, m = 0) => { const b = APTU.b; if (!b) return false; const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot), s = Math.sin(b.rot); return Math.abs(dx * c - dz * s) < b.hx + m && Math.abs(dx * s + dz * c) < b.hz + m; };
+// 走路用的世界：房子裡面地板都在 0（公寓蓋在山頂那座也是）；在頂樓、陽台＝那一層的高度；其他照 PW
+function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? 0 : APTU.on && inApt(x, z, 0.6) ? APTU.y : PW.heightAt(x, z)); return W; }
+// 從裡面走出去：頂樓（5 樓的樓梯、電梯按頂樓）、陽台（4 樓客廳的落地門）
+function aptOut(e) {
+  const H = indoor; if (!H || H.kind !== 'apt') return null;
+  const b = H.b, A = APTU.A || (APTU.A = buildApt()), roof = e.to === 'roof', lvl = roof ? A.roof : A.balc;
+  indoor = null;
+  walker.removeColliders('interior'); for (const f of H.folks) f.C.dispose(); H.I.dispose();
+  TR.scene.add(walker.character.group);
+  const lot = { x: b.x, z: b.z, heading: b.rot, y: b.y || 0 };
+  Object.assign(APTU, { on: true, b, lvl, y: lot.y + lvl.y, floor: roof ? 4 : 3 });
+  walker.addColliders(aptColsAt(lvl.cols, lot), 'aptout');
+  const dw = aptW(b, lvl.door.x, lvl.door.z), sp = aptW(b, lvl.spawn.x, lvl.spawn.z);
+  walker.teleport({ x: sp.x, z: sp.z, heading: wrapPi(lvl.spawn.lh + b.rot) }); // 先站好再給門（walk.js：給門的時候站在門的範圍裡面＝那扇門先不觸發；站的地方在門的旁邊 2 公尺）
+  walker.setDoors([{ x: dw.x, z: dw.z, ry: wrapPi(lvl.door.ry + b.rot), w: lvl.door.w, aptIn: true }]);
+  walker.setCamera({ maxY: lvl.ceil != null ? lot.y + lvl.ceil : null, dist: Math.min(H.dist0, 3.4) });
+  walker.setAction(null); walker.setAction2(null);
+  walker.toast('', 1);
+  return { say: roof ? '頂樓' : '陽台' };
+}
+// 從頂樓、陽台走回裡面（門：aptOut 給的 aptIn）：頂樓 → 五樓的樓梯口；陽台 → 客廳的落地門裡面
+function aptIn() {
+  const b = APTU.b, roof = APTU.floor === 4;
+  aptDown();
+  return enterApt(b, APTU.floor, roof ? { x: -4.275, z: -6.4, lh: Math.PI / 2 } : { x: 2.0, z: 5.1, lh: Math.PI / 2 });
+}
+function enterApt(b, floor, spawnL) { // 走進公寓的某一層（spawnL：公寓本地）
+  const r = enterHouse(b); if (!indoor) return r;
+  const f = indoor.I.setFloor(floor), p = aptW(b, spawnL.x, spawnL.z);
+  houseSet({ x: p.x, z: p.z, heading: wrapPi(spawnL.lh + b.rot) });
+  return { wait: r.wait, say: f.label };
+}
+function aptDown() { // 頂樓、陽台那一層收掉（走回裡面、直接回車庫、被抓）
+  if (!APTU.on) return;
+  APTU.on = false; APTU.lvl = null;
+  walker.removeColliders('aptout'); walker.addColliders(VIL.colliders, 'world'); walker.setDoors('village'); walker.setCarReach(true); walker.setCamera({ maxY: null });
+}
+// 電梯的面板（跟圓塔的同一個樣子：4F 5F 頂樓／1F 2F 3F）：站進電梯才出現
+function aptPanel() {
+  if (APTU.panel) return APTU.panel;
+  const el = document.createElement('div'); el.className = 'elpanel apt'; el.hidden = true; el.innerHTML = '<div class="elg"></div>';
+  const g = el.querySelector('.elg'), btn = {};
+  for (const f of [3, 4, 'roof', 0, 1, 2]) { const b = document.createElement('button'); b.type = 'button'; b.dataset.f = f; b.textContent = f === 'roof' ? '頂樓' : `${f + 1}F`; g.appendChild(b); btn[f] = b; }
+  el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; aptLiftGo(b.dataset.f === 'roof' ? 'roof' : +b.dataset.f); });
+  for (const ev of ['pointerdown', 'touchstart']) el.addEventListener(ev, (e) => e.stopPropagation(), { passive: true });
+  stage.appendChild(el);
+  return (APTU.panel = { el, btn, cur: -1 });
+}
+function aptLiftWho() { // 站在公寓的電梯裡面（走路、沒在換樓層）
+  if (!indoor || indoor.kind !== 'apt' || doorFade || sleep || !walker || walker.mode !== 'walk' || indoor.t < 0.4) return false;
+  const L = indoor.I.lift; if (!L) return false;
+  const t = walker.telemetry(), dx = t.x - L.x, dz = t.z - L.z, c = Math.cos(L.rot), s = Math.sin(L.rot);
+  return Math.abs(dx * c - dz * s) < L.hx && Math.abs(dx * s + dz * c) < L.hz;
+}
+function aptPanelStep() {
+  const w = aptLiftWho(); if (!w && !APTU.panel) return;
+  const P = aptPanel(); if (P.el.hidden === !!w) { P.el.hidden = !w; stage.classList.toggle('el-on', !!w); P.cur = -1; }
+  if (!w) return;
+  const f = indoor.I.floor; if (f === P.cur) return; P.cur = f;
+  for (const k in P.btn) P.btn[k].classList.toggle('on', String(f) === k);
+}
+function aptLiftGo(f) {
+  if (!aptLiftWho()) return;
+  const I = indoor.I, b = indoor.b;
+  if (f === I.floor) { walker.toast(`這裡就是 ${f + 1} 樓`, 1600); return; }
+  if (f === 'roof') { goDoor(() => aptOut({ to: 'roof' })); return; }
+  goDoor(() => { const fl = I.setFloor(f), p = aptW(b, -2.75, -6.4); houseSet({ x: p.x, z: p.z, heading: wrapPi(b.rot) }); return { say: fl.label }; });
+}
+// 4 樓你的家：床邊「睡覺」、衣櫃前面「換衣服」
+function aptBed() {
+  const s = indoor?.I?.spots?.sleep?.[0]; if (!s) return null;
+  const c = Math.cos(s.heading), d = -Math.sin(s.heading); // s.heading＝腳 → 頭
+  return { x: s.x, z: s.z, y: s.y ?? 0.58, heading: wrapPi(s.heading + Math.PI), head: { x: s.x + c * 0.85, z: s.z + d * 0.85 }, feet: { x: s.x - c * 0.8, z: s.z - d * 0.8 }, wake: { x: s.x - c * 1.5, z: s.z - d * 1.5, heading: s.heading }, w: (p) => p, by: 0 };
+}
+function aptWalk() {
+  const I = indoor.I; let act = null;
+  if (I.floor === 3) {
+    const t = walker.telemetry(), s = I.spots.sleep?.[0], d = I.spots.dress?.[0];
+    if (s && Math.hypot(t.x - s.x, t.z - s.z) < 1.9) act = SLEEP_ACT_APT; else if (d && Math.hypot(t.x - d.x, t.z - d.z) < 0.95) act = DRESS_ACT;
+  }
+  walker.setAction(act);
+}
 // 走路在你家裡面：床邊（睡覺）、衣櫃前面（換衣服）、電梯井旁邊（叫電梯）的大按鈕；頭上多高有東西（鏡頭別穿過天花板）；小房子裡面自動第一人稱
 function homeWalk() {
   const t = walker.telemetry(), q = garLocal(t.x, t.z), Z = GAR.zones, inT = GAR.isInside(q.x, q.z);
@@ -43695,7 +44144,7 @@ function homePlace() {
   const q = VIL.places.garst.slots[g] || VIL.places.garst.slots[n], L = q.lot;
   HOME.gs = g; HOME.lot = { x: L.x, z: L.z, heading: L.heading };
   GAR.group.position.set(L.x, q.y || 0, L.z); GAR.group.rotation.y = L.heading; GAR.group.updateMatrixWorld(true);
-  homeExt();
+  homeExt(); aptExt(); // 第 60 批：公寓的外殼
   if (trip && tripPose) { if (swap) liftChanged(); else homeMove(L0); }
   if (drv && tripDest === 'garage') drv.setDestination('garage'); else if (walker && tripDest === 'garage') walker.setDestination('garage');
   shaftCut();
@@ -44159,6 +44608,7 @@ function leaveDrive() {
   dvoice?.dispose(); dvoice = null;
   stopLiftSnd(); endSleep(); elEnd();
   if (doorFade) { doorFade = null; fadeEl.style.display = 'none'; }
+  aptDown(); // 第 60 批：在公寓的頂樓、陽台
   if (indoor) leaveHouse(null); // 在房子裡面按「直接回車庫」：碰撞、門、鏡頭換回村子的，你搬回村子的場景
   crushFx?.reset(); junkVer = -1; // 第 7 批（輾扁）：墊子清掉、輾扁的車收回車流的池子、表演場的垃圾車擺回來
   oLeave(); // 第 4 批：越野賽、越野車行展示台的車收掉
@@ -44399,7 +44849,7 @@ function onArrest(i) { // 畫面全黑：車拖到警察局的停車場、人關
   if (!DRIVE.on || !walker || !trip) return;
   if (doorFade) { doorFade = null; fadeEl.style.display = 'none'; }
   endSleep(); elEnd(); // 第 21 批：坐電梯中被抓
-  if (indoor) leaveHouse(null);
+  aptDown(); if (indoor) leaveHouse(null);
   impounded = false;
   if (drv) { // 開的那台（或剛下車停著的那台）：開車的收掉，完整的車停到停車場
     drv.setInput(null); drv.dispose(); drv = null; dvoice?.dispose(); dvoice = null; if (home) home.open = null; obDoor.drv = null;
@@ -44574,7 +45024,7 @@ function townReset() { police?.clear(); gunner?.holster(); gunner?.refresh(); }
 function driveStep(dt) {
   GAR.update(dt); // 門、升降機在動（開、關、升、降）每一格都要跟著（停好的時候 onLift 換碰撞）
   OB?.update(dt); // 第 6 批：越野車車庫的鐵捲門
-  homeTick(); doorStep(); rampStep(); orbayStep(); elPanelStep(); // 第 17 批：換號碼就把你家搬過去；別人那幾間的外殼、碰撞；第 21 批：電梯的面板
+  homeTick(); doorStep(); rampStep(); orbayStep(); elPanelStep(); aptPanelStep(); // 第 17 批：換號碼就把你家搬過去；別人那幾間的外殼、碰撞；第 21 批：電梯的面板
   hillsStep(dt); // 第 27 批：隧道的哪一層、海的波浪、隧道裡面暗一點、開進深水
   if (drv) {
     drv.update(dt); // 開進賽道、快速道路的事（arrive）在這裡面叫
@@ -44604,7 +45054,8 @@ function driveStep(dt) {
   if (doorFade) fadeStep(dt); // 走進門口：黑掉 → 換成房子裡面（樓上、外面）→ 亮起來
   if (indoor) { indoor.t += dt; for (const f of indoor.folks) f.C.update(dt, FOLK_POSE); } // 裡面的人：站著、坐著會動一動
   if (indoor?.kind === 'police') PI.update(dt); else if (indoor?.kind === 'gunshop' && walker) gsStep(dt); // 第 3 批：拘留室的鐵門；槍店的靶、店員、櫃台／靶場的按鈕
-  if (walker && walker.mode === 'walk' && DRIVE.on && !indoor) { homeWalk(); oTick(walker.telemetry()); } // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）
+  if (walker && walker.mode === 'walk' && DRIVE.on && !indoor && !APTU.on) { homeWalk(); oTick(walker.telemetry()); }
+  else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.kind === 'apt') aptWalk(); // 第 60 批：公寓 4 樓的床、衣櫃 // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）
   if (DRIVE.on) npcStep(dt); // 路上的車、居民（走路的碰撞要在 walker.update 前面放好）
   if (DRIVE.on) crushStep(dt); // 第 7 批（輾扁）：怪獸卡車壓扁的東西（墊子、壓扁、表演場的垃圾車）
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
@@ -47192,7 +47643,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 33; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 34; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
