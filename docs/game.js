@@ -2206,7 +2206,7 @@ const CABIN3D = (() => {
         dials: [SPEED(-0.128, -0.004, 0.057, 260), TACH(0, 0.002, 0.066, 9, 7), SMALL(0.13, 0.028, 0.03, 'E', 'F', 0.72), SMALL(0.13, -0.036, 0.03, 'C', 'H', 0.45)] },
       stack: { w: 0.27, x1: 0.50, y1: 0.40, turn: 12, kind: 'radio' },
       wheel: { r: 0.185, reach: 0.43, drop: 0.29, col: 23, spokes: [90, 270, 180], hub: 'pad' },
-      shift: 'manual', hand: true, pedals: 3, rear: 'shelf', bulk: -0.88, cage: true,
+      shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -1.04, L: 0.46, h: 0.12, a: 22 }, bulk: -0.88, cage: true, // 第 57 批：真的 Supra（A80）是 2+2：後面兩個小小的位子（低低的椅墊，在防滾籠後面）
     },
     gtr: {
       lhd: false, zD: 0.36, eye: [-0.27, 1.17], fov: 72,
@@ -2229,7 +2229,7 @@ const CABIN3D = (() => {
         dials: [SMALL(-0.135, 0.03, 0.03, 'C', 'H', 0.45), SMALL(-0.135, -0.035, 0.03, 'E', 'F', 0.8), TACH(0, 0, 0.068, 9, 8, { face: '#e8e8e4', ink: '#111111' }), SPEED(0.135, 0, 0.058, 180)] },
       stack: { w: 0.25, x1: 0.50, y1: 0.40, kind: 'knobs' },
       wheel: { r: 0.18, reach: 0.42, drop: 0.30, col: 22, spokes: [90, 270, 180], sw: 0.03, hub: 'round' },
-      shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.92, L: 0.56 },
+      shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.92, L: 0.56, n: 3 }, // 第 57 批：n 3＝後座三個位子（真的車 5 人座）
     },
     yaris: {
       lhd: false, zD: 0.36, eye: [-0.20, 1.26], fov: 72,
@@ -2326,7 +2326,7 @@ const CABIN3D = (() => {
       scr: { w: 0.22, h: 0.13 },
       stack: { w: 0.25, x1: 0.56, y1: 0.46, kind: 'knobs' },
       wheel: { r: 0.185, reach: 0.43, drop: 0.30, col: 24, spokes: [90, 270, 180], hub: 'pad' },
-      shift: 'auto', hand: false, pedals: 2, rear: 'bench', bench: { x: -0.95 },
+      shift: 'auto', hand: false, pedals: 2, rear: 'bench', bench: { x: -0.95, n: 3 },
     },
     senna: { // 賽道超跑：儀表裝在轉向柱上（數位）、儀表板上一片直的螢幕；碳纖維、很少按鍵
       lhd: true, zD: 0.33, eye: [-0.25, 1.04], fov: 72, floor: 0.06,
@@ -2370,7 +2370,7 @@ const CABIN3D = (() => {
         dials: [SMALL(-0.135, 0.03, 0.03, 'C', 'H', 0.45), SMALL(-0.135, -0.035, 0.03, 'E', 'F', 0.7), TACH(0, 0, 0.068, 9, 7), SPEED(0.135, 0, 0.058, 180)] },
       stack: { w: 0.25, x1: 0.58, y1: 0.42, kind: 'knobs' },
       wheel: { r: 0.18, reach: 0.42, drop: 0.30, col: 22, spokes: [90, 270, 180], hub: 'pad' },
-      shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.96 },
+      shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.96, n: 3 },
     },
     jp4: { // 第 48 批：吉普車：左駕手排；坐得高、前擋直直的、儀表板方方的；兩個大圓錶（中間油量、水溫）、黑布椅、黑色硬頂內襯；兩門（後座後面是行李廂）
       lhd: true, zD: 0.40, eye: [-0.40, 1.56], fov: 72, seat: { recline: 17 },
@@ -2403,7 +2403,7 @@ const CABIN3D = (() => {
         dials: [TACH(-0.1, 0, 0.064, 7, 6), SPEED(0.1, 0, 0.064, 200), SMALL(0, 0.03, 0.024, 'E', 'F', 0.7), SMALL(0, -0.035, 0.024, 'C', 'H', 0.45)] },
       stack: { w: 0.26, x1: 0.78, y1: 0.80, kind: 'knobs' },
       wheel: { r: 0.19, reach: 0.40, drop: 0.37, col: 28, spokes: [90, 270, 180], hub: 'pad' },
-      shift: 'auto', hand: false, pedals: 2, rear: 'bench', bench: { x: -0.21, L: 0.60, a: 12, shelf: false }, roofR: -0.58, // 後座椅背（a：往後倒幾度）、車頂內襯（roofR：拉到哪裡）都停在車艙後牆前面（後面是車斗）
+      shift: 'auto', hand: false, pedals: 2, rear: 'bench', bench: { x: -0.21, L: 0.60, a: 12, shelf: false, n: 3 }, roofR: -0.58, // 後座椅背（a：往後倒幾度）、車頂內襯（roofR：拉到哪裡）都停在車艙後牆前面（後面是車斗）
     },
     laferrari: { // 油電超跑：數位儀表、像 F1 的方向盤（上下切平、紅色啟動鈕、碳纖維）、浮起來的檔位橋
       lhd: true, zD: 0.36, eye: [-0.30, 0.97], fov: 72, floor: 0.06,
@@ -2961,13 +2961,14 @@ const CABIN3D = (() => {
     // ---- 後座＋置物板／隔板 ----
     {
       if (st.rear === 'bench') {
-        const bx = st.bench.x, yc = yF + 0.24, yb = yF, zs = [], zc = 0.95;
-        for (let k = 0; k <= 16; k++) zs.push(-zc + (2 * zc * k) / 16);
-        const cushion = zs.map((z) => { const q = Math.abs(z), dip = 0.02 * Math.exp(-(((q - 0.3) / 0.12) ** 2)); return insideSec(F, [[bx + 0.25, yb], [bx + 0.27, yc - 0.04], [bx + 0.2, yc - dip], [bx - 0.1, yc - 0.02 - dip], [bx - 0.22, yc - 0.05], [bx - 0.22, yb]].map(([x, y]) => [x, y, z]), 0.03); });
-        put('trim', loft(cushion, (j, i) => (Math.abs(zs[j]) > 0.12 && Math.abs(zs[j]) < 0.5 && i >= 1 && i <= 3 ? C.si : C.sb), { closed: true }));
+        const bx = st.bench.x, yc = yF + (st.bench.h ?? 0.24), yb = yF, zs = [], zc = 0.95; // 第 57 批：h＝椅墊離地板多高（Supra 的小後座低一點）
+        const zo = benchZ(st, F, yF), three = st.bench.n === 3, ins = (z) => { const q = Math.abs(z); return three ? q < 0.14 || Math.abs(q - zo) < 0.17 : q > 0.12 && q < 0.5; }; // 第 57 批：三個位子（中間也坐得下）的椅面
+        for (let k = 0; k <= (three ? 24 : 16); k++) zs.push(-zc + (2 * zc * k) / (three ? 24 : 16));
+        const cushion = zs.map((z) => { const q = Math.abs(z), dip = 0.02 * Math.exp(-(((q - zo) / 0.12) ** 2)) + (three ? 0.015 * Math.exp(-((q / 0.1) ** 2)) : 0); return insideSec(F, [[bx + 0.25, yb], [bx + 0.27, yc - 0.04], [bx + 0.2, yc - dip], [bx - 0.1, yc - 0.02 - dip], [bx - 0.22, yc - 0.05], [bx - 0.22, yb]].map(([x, y]) => [x, y, z]), 0.03); });
+        put('trim', loft(cushion, (j, i) => (ins(zs[j]) && i >= 1 && i <= 3 ? C.si : C.sb), { closed: true }));
         const a = (st.bench.a ?? 24) * D2R, L = st.bench.L ?? 0.62, x0 = bx - 0.24, y0 = yc - 0.06, dx = -Math.sin(a), dy = Math.cos(a); // 第 53 批：皮卡的後座直一點（a）
         const back = zs.map((z) => insideSec(F, [[0, 0.02], [0.03, 0.03], [L * 0.6, 0.05], [L, 0.03], [L + 0.02, -0.02], [L, -0.1], [0, -0.1]].map(([s, h]) => [x0 + dx * s + dy * h, y0 + dy * s - dx * h, z]), 0.03));
-        put('trim', loft(back, (j, i) => (Math.abs(zs[j]) > 0.12 && Math.abs(zs[j]) < 0.5 && i >= 1 && i <= 2 ? C.si : C.sb), { closed: true }));
+        put('trim', loft(back, (j, i) => (ins(zs[j]) && i >= 1 && i <= 2 ? C.si : C.sb), { closed: true }));
         if (st.bench.shelf !== false) { // 第 48 批：吉普車（shelf: false）後座後面是行李廂，沒有置物板
           const xt = x0 + dx * L - 0.03, ys = y0 + dy * L - 0.01, xg = F.rg(0) + 0.03, shelf = [];
           for (let k = 0; k <= 4; k++) { const x = lerp(xt, xg, k / 4), y = Math.min(ys, F.top(x, 0) - 0.03); shelf.push([-0.95, -0.5, 0, 0.5, 0.95].map((z) => inside(F, [x, y, z], 0.04))); }
@@ -3039,7 +3040,7 @@ const CABIN3D = (() => {
         put('gloss', tint(tube([inside(F, [xh, 0.45, s], m + 0.03), inside(F, [lerp(xh, xw, 0.5), 0.48, s], m + 0.03), inside(F, [xw - 0.05, 0.5, s], m + 0.03)], r, 16, 8), C.cage));
         put('gloss', tint(tube([ht(s), inside(F, [xh - 0.35, 2, s * 0.5], m), inside(F, [F.rg(0) + 0.1, 0.94, s * 0.55], m)], r, 16, 8), C.cage));
       }
-      put('gloss', tint(tube([ht(sd), inside(F, [xh, 0.3, -sd], m)], r, 12, 8), C.cage));
+      if (st.rear !== 'bench') put('gloss', tint(tube([ht(sd), inside(F, [xh, 0.3, -sd], m)], r, 12, 8), C.cage)); // 斜的那根（第 57 批：有後座就不要，會擋到後座的人）
     }
 
     // ---- R34 的多功能螢幕、Yaris 的中控螢幕 ----
@@ -3124,8 +3125,81 @@ const CABIN3D = (() => {
     camera.position.copy(body.localToWorld(e)); camera.up.set(0, 1, 0).transformDirection(body.matrixWorld); camera.lookAt(body.localToWorld(t));
     return true;
   }
-  return { build, aim, VIEW, STYLE, fitOf };
+  // ---- 第 57 批：每個位子（Nick 2026-10-30「車子的每個位子都可以坐」）----
+  // [{ i, n 名字, drv 駕駛座, rear 後座, hip [x, y, z]（椅面上屁股的地方：角色本地 (0, 0.45, 0) 放這裡）, floor 腳踩的地板 y, foot 腳踝往前到哪裡 x,
+  //    back 椅背往後倒幾度, top 頭上車頂內側多高, side 從哪一邊上下（−1 左、1 右）, wheel（駕駛座）{ c 方向盤中心, r, col 轉向柱角度 } }]
+  //   前面兩個（駕駛座、副駕駛座）；後座（bench）兩個：左、右（後座椅面凹下去的地方 |z| 0.3）；bench.n 3＝三個（左、中、右；真的車是 5 人座）；沒有後座（shelf、bulk）＝兩個位子
+  // 後座兩邊的位子離中線多遠：兩個位子＝0.3（椅面凹下去的地方）；三個位子＝照肩膀那麼高的車寬往外挪（0.34～0.42，三個大人肩膀碰肩膀）
+  function benchZ(st, F, yF) {
+    if (st.bench?.n !== 3) return 0.3;
+    const x = st.bench.x - 0.2, y = yF + (st.bench.h ?? 0.24) + 0.45;
+    return cl(F.side(x, y) - 0.27, 0.34, 0.42);
+  }
+  function seats(key) {
+    const st = STYLE[key], F = fitOf(key); if (!st || !F) return [];
+    const zd = (st.lhd ? -1 : 1) * st.zD, [xE, yE] = st.eye, xH = xE + 0.16, yH = yE - 0.64, yF = Math.max(F.bot + (st.floor ?? 0.065), 0.2);
+    const W = st.wheel, back = st.seat?.recline ?? 21, xFoot = Math.min(xH + 0.8, F.fa[0] - 0.2);
+    const top = (x, z) => { const t = F.top(x, z); return t > 0.3 ? t : 2; }, roof = (z) => (x) => { const t = F.roof(x, z); return t > 0.3 ? t : 2; }; // roof：平順的（量頭的時候用）
+    const out = [
+      { i: 0, n: '駕駛座', drv: true, hip: [xH, yH, zd], eye: [xE, yE, zd], floor: yF, foot: xFoot, back, top: top(xE, zd), roof: roof(zd), side: Math.sign(zd), wheel: { c: [xE + W.reach, yE - W.drop, zd], r: W.r, col: W.col } },
+      { i: 1, n: '副駕駛座', hip: [xH, yH, -zd], eye: [xE, yE, -zd], floor: yF, foot: xFoot, back, top: top(xE, -zd), roof: roof(-zd), side: -Math.sign(zd) },
+    ];
+    if (st.rear === 'bench') { // 後座的眼睛（第一人稱）：屁股往後 0.16、往上 0.64（跟前座一樣），頭上車頂留 12 公分；三個位子（bench.n 3）：中間多一個，兩邊往外挪
+      const bx = st.bench.x, yc = yF + (st.bench.h ?? 0.24), xe = bx - 0.26, zo = benchZ(st, F, yF), three = st.bench.n === 3;
+      for (const z of three ? [-zo, 0, zo] : [-zo, zo]) {
+        const t = top(xe, z), mid = z === 0;
+        out.push({ i: out.length, n: mid ? '後座中' : z < 0 ? '後座左' : '後座右', rear: true, mid, hip: [bx - 0.1, yc - 0.02, z], eye: [xe, Math.min(yc + 0.62, t - 0.12), z], floor: yF + (mid ? 0.1 : 0), foot: xH - 0.22, back: st.bench.a ?? 24, top: t, roof: roof(z), side: Math.sign(z) }); // 中間：腳踩在中央通道上；side 0＝站哪邊就走哪邊
+      }
+    }
+    return out;
+  }
+  return { build, aim, seats, VIEW, STYLE, fitOf };
 })();
+// cabinSeats(key)：這台車的每個位子（車身座標；見上面 seats）；沒有車內的車（怪獸卡車、沙灘車）＝[]
+function cabinSeats(key) { return CABIN3D.seats(key); }
+// 人坐進位子（第 57 批）：C＝buildCharacter(look, { state: 'sit', shadow: false, plant: false })，C.group 放進車身（body）；s＝cabinSeats(key) 的一個；P＝重複用的物件
+//   屁股坐在 s.hip、往後靠（椅背的角度）、腳踩地板、駕駛座手握方向盤；頭頂碰到車頂（頭的前後都量）：先往下坐（5 公分）→ 再往後靠（最多椅背＋6 度）
+//   → 後座往前挪（最多 22 公分）→ 再往下坐（最多 14 公分；後座 20 公分：低的跑車、後座坐大人）
+//   回傳 P（C.update(dt, P) 用：state 'sit'、feet、hands）；駕駛轉方向盤：seatSteer(C, P, steer) 再 C.update
+const SP_V = new THREE.Vector3(), SP_P = new THREE.Vector3(0, 0.45, 0), SP_Z = new THREE.Vector3(0, 0, 1), SP_M = new THREE.Matrix4();
+function seatPlace(C, s, P = {}) {
+  const g = C.group, D = Math.PI / 180;
+  P.s = s; P.state = 'sit'; P.speed = 0; P.hands = undefined; P.feet = P.feet || [0.6, 0.08, 0.15];
+  g.position.set(0, 0, 0); g.rotation.set(0, 0, 0); g.updateMatrix();
+  for (let k = 0; k < 30; k++) C.update(1 / 30, P);
+  g.updateMatrixWorld(true);
+  const e = g.worldToLocal(C.eyes.getWorldPosition(SP_V)), dx = e.x, dy = e.y + 0.13 - 0.45; // 頭頂（眼睛往上 13 公分）、椅面當原點
+  let lean = Math.max(0, s.back - 6) * D, fwd = 0, sink = 0;
+  const hx = () => s.hip[0] + fwd + dx * Math.cos(lean) - dy * Math.sin(lean), hy = () => s.hip[1] - sink + dx * Math.sin(lean) + dy * Math.cos(lean);
+  const over = () => { // 頭頂（圓的：前後 8～9 公分低 5 公分）比車頂高多少
+    const x = hx(), y = hy(); if (!s.roof) return y - (s.top - 0.03);
+    return Math.max(y - (s.roof(x) - 0.02), y - 0.055 - s.roof(x - 0.09), y - 0.055 - s.roof(x + 0.08));
+  };
+  for (let it = 0; it < 80 && over() > 0; it++) {
+    if (sink < 0.05) sink += 0.005; else if (lean < (s.back + 6) * D) lean += D; else if (s.rear && fwd < 0.22) fwd += 0.01; else if (sink < (s.rear ? 0.2 : 0.14)) sink += 0.005; else break;
+  }
+  g.rotation.set(0, 0, lean); SP_V.copy(SP_P).applyAxisAngle(SP_Z, lean);
+  g.position.set(s.hip[0] + fwd - SP_V.x, s.hip[1] - sink - SP_V.y, s.hip[2] - SP_V.z); g.updateMatrix();
+  P._inv = (P._inv || new THREE.Matrix4()).copy(g.matrix).invert(); P.lean = lean; P.fwd = fwd; P.sink = sink;
+  SP_V.set(s.foot, s.floor + 0.09, s.hip[2]).applyMatrix4(P._inv); P.feet[0] = SP_V.x; P.feet[1] = SP_V.y; P.feet[2] = 0.15;
+  if (s.wheel) seatSteer(C, P, 0);
+  for (let k = 0; k < 30; k++) C.update(1 / 30, P);
+  return P;
+}
+// 駕駛的手握方向盤 9 點、3 點的地方（steer −1～1：方向盤打到底轉 90 度，手跟著轉）
+function seatSteer(C, P, steer = 0) {
+  const w = P.s?.wheel; if (!w) return P;
+  const a = -steer * (Math.PI / 2), col = w.col * (Math.PI / 180), r = w.r * 0.96, sv = Math.sin(col), cv = Math.cos(col);
+  if (!P.hands) P.hands = [[0, 0, 0], [0, 0, 0]];
+  for (let k = 0; k < 2; k++) {
+    const sd = k ? 1 : -1, u = sd * r * Math.cos(a), v = -sd * r * Math.sin(a); // 方向盤面上：u 往右（z）、v 往上（沿著轉向柱斜）
+    SP_V.set(w.c[0] + v * sv, w.c[1] + v * cv, w.c[2] + u).applyMatrix4(P._inv);
+    P.hands[k][0] = SP_V.x; P.hands[k][1] = SP_V.y; P.hands[k][2] = SP_V.z;
+  }
+  return P;
+}
+// cabinFit(key)：量表（side(x, y)、top(x, z)、st(x)⋯，見 fitOf）；坐人的時候量頭上夠不夠高
+function cabinFit(key) { return CABIN3D.fitOf(key); }
 const CABIN_VIEW = CABIN3D.VIEW;
 function buildCabin(key, spec, mats) { return CABIN3D.build(key, spec, mats); }
 // cabinCamera(camera, S.body, key, yaw, pitch)：把相機放到駕駛眼睛；yaw＝往右轉幾度（負的往左）、pitch＝往上看幾度
@@ -12583,7 +12657,7 @@ return { createRide, RIDE: { CLS, SURF } };
 //         看得到聽得到：輪胎冒煙、地上的胎痕（慢慢淡掉）、輪胎叫（跟著滑多少）、鏡頭往走的方向轉一點、畫面上「甩尾 35°」
 
 // 打包時全部接在同一個 script 裡：只露出 createDrive
-const { createDrive, DRIVE_DEST, tiltAngle } = (() => {
+const { createDrive, DRIVE_DEST, tiltAngle, bodyBox } = (() => {
 const TAU = Math.PI * 2, GEARS = [3.3, 2.2, 1.62, 1.28, 1.05, 0.86];
 const AERO = 0.55, STEP = 0.25, HZ = 120; // 風阻（街機）、一步最多走幾公尺（碰撞）、物理每秒最少幾步
 const torqueAt = (x) => 0.8 + 0.4 * x - 0.4 * x * x;
@@ -12733,6 +12807,15 @@ const ICON = {
 
 // ---- 碰撞物的格子（8 公尺一格）：加、照 tag 拿掉、找附近的（之後的交通、警察、走路也用得到）----
 // 碰撞物：{ t: 'box', x, z, hx, hz, rot, h } | { t: 'circle', x, z, r, h }（xz 平面；h＝高度，鏡頭避開房子用）
+// 第 57 批：量車身的盒子（大小、碰撞）：坐在裡面的人（userData.seated：你、朋友；character.js 的骨架 Box3 量出來很大）先拿下來，量完放回去
+//   上車再做一個 drv 的時候人還坐在車上（比賽完、下車再上車），不拿下來的話碰撞盒變成 2.4 公尺寬、車尾多 0.4 公尺：開進圓塔的格子會卡在玻璃上轉掉（test-b1 第 7 段）
+function bodyBox(body, box = new THREE.Box3()) {
+  const off = []; body.traverse((o) => { if (o.userData.seated) off.push([o, o.parent]); });
+  for (const [o] of off) o.removeFromParent();
+  box.setFromObject(body);
+  for (const [o, par] of off) par.add(o);
+  return box;
+}
 function colGrid() {
   const CELL = 8, grid = new Map(), tags = new Map(), found = []; let stamp = 0;
   const key = (gx, gz) => gx * 65536 + gz;
@@ -12868,7 +12951,7 @@ function createDrive(o) {
   const info = (() => {
     const p = car.position.clone(), q = car.quaternion.clone(), bx = body.position.x, bz = body.position.z, br = body.rotation.clone();
     car.position.set(0, 0, 0); car.quaternion.identity(); body.position.x = 0; body.position.z = 0; body.rotation.set(0, 0, 0); car.updateMatrixWorld(true);
-    const b = new THREE.Box3().setFromObject(body);
+    const b = bodyBox(body); // 第 57 批：坐在裡面的人不算
     car.position.copy(p); car.quaternion.copy(q); body.position.x = bx; body.position.z = bz; body.rotation.copy(br); car.updateMatrixWorld(true);
     return { nose: b.max.x, tail: b.min.x, len: b.max.x - b.min.x, halfW: Math.max(b.max.z, -b.min.z), wheelbase: W.xf - W.xr, xr: W.xr };
   })();
@@ -13637,6 +13720,7 @@ function createDrive(o) {
     update, telemetry, setDestination, setCameraMode, teleport, parkAt, pause, resume, release, dispose, toast, setAction, setAction2,
     addColliders: (list, tag) => cw.add(Array.isArray(list) ? list : [list], tag ?? null),
     removeColliders: (tag) => cw.remove(tag),
+    colsNear: (x, z, r = 10) => cw.near(x - r, z - r, x + r, z + r).map((c) => ({ tag: c.tag, t: c.t, x: +c.x.toFixed(2), z: +c.z.toFixed(2), hx: c.hx, hz: c.hz, r: c.r, rot: c.rot, h: c.h, name: c.src.name || c.src.key || null })), // 測試：這附近有哪些碰撞物（找撞到什麼）
     setMarkers: (list, tag) => { const L = Array.isArray(list) ? list : null; if (tag == null) marks = L; else if (L) marksT[tag] = L; else delete marksT[tag]; }, // 第 3 批（b3-int）；tag：另外一組（比賽的對手）
     setMapTap: (t) => { mapTap = t && typeof t.onClick === 'function' ? { label: String(t.label || ''), onClick: t.onClick } : null; if (hud) { hud.mapBox.classList.toggle('tap', !!mapTap); hud.mapB.hidden = !mapTap || !mapTap.label; if (mapTap) hud.mapB.textContent = mapTap.label; } },
     setClock: (s) => { if (!hud) return; const on = s != null && s !== ''; if (hud.clk.hidden !== !on) hud.clk.hidden = !on; if (on && hud.clk.textContent !== s) hud.clk.textContent = s; }, // 第 31 批：小地圖上面一條字（遊戲的時間；town.src.js 給）
@@ -13654,7 +13738,7 @@ function createDrive(o) {
   setCameraMode('chase');
   return api;
 }
-return { createDrive, DRIVE_DEST: DEST, tiltAngle };
+return { createDrive, DRIVE_DEST: DEST, tiltAngle, bodyBox };
 })();
 
 // ---- offroad.js ----
@@ -20161,6 +20245,7 @@ void main() {
 //                                 zone＝{ x, z, ry, ax, az }（門、真的走得到的觸發點）；走開再回來才會再叫；叫了以後照樣在走（要不要進去、怎麼進去是頁面的事）
 //     onGetIn(car),               坐進車裡了（角色藏起來、走路暫停、HUD 收起來）；car＝setCars 給的那個（頁面要自己準備開那台）或 getOut 留下來的那台
 //                                 （car.drive＝true：walker 已經 drv.resume() 了，頁面只要把引擎聲接回去）
+//                                 第 57 批：onGetIn(car, seat)：seat＝getIn 給的 { i, side, u }（選位子）；i > 0＝坐別的位子：剛下來那台也不 resume（頁面自己管）
 //     keyboard: true,             WASD／方向鍵走（跟著鏡頭的方向）、Shift 跑、E 按大按鈕、C 換視角（第一人稱）、F／G⋯ setButtons 的鍵；滑鼠拖畫面轉頭、滾輪拉近拉遠
 //     doors: 'village',           要偵測的門：'village'＝V.buildings 關著的門（房子、店面、廟、超商、三合院、車行玻璃門；改車廠開著的大門、你的車庫是真的走進去，不算）
 //                                 ；也可以直接給 [門]（跟 setDoors 一樣）或 null
@@ -20176,6 +20261,7 @@ void main() {
 //   walker.teleport({ x, z, heading }, { keepCamera })   把人放到那裡（鏡頭跳到後面；站在門口的門要先走開才會再觸發）
 //   walker.setAction({ label, onClick, icon } | null)   HUD 的大按鈕（跟 drive.js 同一個樣子、同一個位置；E 鍵）；icon：car | door | doorDown | key | hand | lift | bed；
 //                          頁面給的優先，沒給才輪到車庫門（開鐵捲門）、車（上車）；每一幀叫也沒關係；walker.action＝現在的字
+//   walker.setAction2({ label, onClick, icon } | null)   第 57 批：大按鈕下面第二顆（深色：「選位子」）；只有走路的時候出現；walker.action2＝現在的字；walker.nearCar＝「上車」那台（setCars 給的那個）
 //   walker.addColliders(list, tag) / removeColliders(tag)   跟 drive.js 一樣（{ t: 'box', x, z, hx, hz, rot, h, y0? } | { t: 'circle', x, z, r, h, y0? }）
 //                          world.colliders（村子的）的 tag 是 'world'：走進房子（interiors.js）removeColliders('world')，出來 addColliders(V.colliders, 'world')
 //                          y0（多的）：碰撞物的底有多高（天花板、捲起來一半的門）：比頭高的不擋人、只擋鏡頭（drive.js 不看 y0：這種不要給開車的）
@@ -20192,6 +20278,10 @@ void main() {
 //   walker.getOut(drv, S, { key, name, h })   下車：|v| < 1 m/s 才可以（不行回傳 null）。drv.pause()（車子停在原地、影子留著），這台變成可以上的車（car.drive＝true），
 //                          人從駕駛座那邊（左）走出來 0.42 秒（左邊擋住→右邊→後面→前面），鏡頭從開車的慢慢接過來；回傳那台 car
 //   walker.getIn(car?)         上車（「上車」按鈕就是叫這個）：走到車門（站在哪一邊就走哪一邊；前後就先繞過車角）、轉身坐進去 → onGetIn(car)；推搖桿可以取消
+//   walker.getIn(car, { seat: { i, side, u } })   第 57 批：坐那個位子：走到那一邊（side −1 左、1 右）、車身長方形中間往前 u 公尺的門 → onGetIn(car, seat)
+//   walker.getOut(drv, S, { seat: { side, u }, paused: true })   第 57 批：從那個位子下車（先站那一邊）；paused＝開車的暫停著也可以（坐別的位子）
+//   walker.exitAt({ x, z, heading, hx, hz, cx, cz }, { side, u })   第 57 批：從朋友的車下來（沒有自己的 drv；車子不留給你上）→ true／false
+//   walker.follow(x, z, heading)   第 57 批：坐在朋友的車上（暫停著）：人跟著車子（telemetry 的 x、z）；不動鏡頭
 //   walker.setGarage(GAR | null, { close, doorAction })   你家（room.js，擺在村子裡；group 擺好位置以後再叫，搬了要再叫一次）：碰撞跟著鐵捲門（門開到人過得去 0.55 就不擋人；天花板、門楣、捲一半的門擋鏡頭），
 //                          走到門口（裡面、外面都可以）門關著給「開鐵捲門」；close: true 門開著多給「關鐵捲門」；doorAction: false＝門的按鈕頁面自己給（碰撞照樣跟著門）
 //   walker.setDoors(list | 'village' | null)   換要偵測的門：[{ x, z, ry, w? }]，ry＝門朝外的方向（跟 V.buildings 的 door 一樣：往 −(sin ry, cos ry) 走＝走進去），
@@ -20265,6 +20355,15 @@ const CSS = `
 .wk-act.on{transform:translateY(4px);box-shadow:0 1px 0 #9E4213}
 .wk-act:focus-visible{outline:3px solid #F2F3F5;outline-offset:3px}
 .wk-act::after{content:"";position:absolute;inset:-5px;border-radius:inherit;border:3px solid #FF6A1F;opacity:0;animation:wk-ring 1.6s ease-out infinite;pointer-events:none}
+.wk-act2{top:122px;left:10px;max-width:calc(100% - 158px);height:50px;box-sizing:border-box;display:flex;align-items:center;gap:8px;margin:0;padding:0 16px 0 6px;border:0;border-radius:999px;background:rgba(14,15,18,0.62);color:#F2F3F5;font:700 18px/1 ${SANS};letter-spacing:.04em;box-shadow:0 4px 0 rgba(0,0,0,0.35);pointer-events:auto;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.wk-chip[hidden]~.wk-act2{top:74px}
+.wk-act[hidden]~.wk-act2{top:58px}
+.wk-chip[hidden]~.wk-act[hidden]~.wk-act2{top:10px}
+.wk-act2 i{flex:none;width:38px;height:38px;border-radius:50%;background:#FF6A1F;display:grid;place-items:center}
+.wk-act2 svg{width:22px;height:22px;fill:none;stroke:#1A0F07;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.wk-act2 span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wk-act2.on{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,0.35)}
+.wk-act2:focus-visible{outline:3px solid #F2F3F5;outline-offset:3px}
 @keyframes wk-ring{0%{opacity:.8;transform:scale(1)}100%{opacity:0;transform:scale(1.1,1.35)}}
 @media (hover:hover) and (pointer:fine){.wk-act kbd{display:block}}
 .wk-map{top:10px;right:10px;width:124px;height:124px;border-radius:18px;background:rgba(14,15,18,0.62);overflow:hidden}
@@ -20295,6 +20394,8 @@ const ICON = {
   // 第 2 批（車庫）：升降機（柱子、平台、上下箭頭）、床（睡覺）
   lift: '<svg viewBox="0 0 24 24"><path d="M3.5 20.5h17M19.5 20.5V3.5M3.5 12h16"/><path d="M6.6 7.4l2.4-2.4 2.4 2.4M9 5v4.6M12.6 15.6l2.4 2.4 2.4-2.4M15 18v-4.6"/></svg>',
   bed: '<svg viewBox="0 0 24 24"><path d="M3 19V6.5M3 15h18v4M21 15v-2.3a2.2 2.2 0 0 0-2.2-2.2H11V15"/><circle cx="7" cy="12.2" r="1.9"/><path d="M14.5 3.5h3l-3 3.2h3"/></svg>',
+  // 第 57 批：選位子（椅子：頭枕、椅背、椅墊、椅腳）
+  seat: '<svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="5.4" height="3.2" rx="1.3"/><path d="M9.4 5.7L7.6 15h9.2a1.4 1.4 0 0 1 1.4 1.4V17"/><path d="M11 17v4M7 21h8"/></svg>',
   // 自訂角色（小房子的衣櫃前面：換衣服）：T 恤
   shirt: '<svg viewBox="0 0 24 24"><path d="M9 3.5L3.5 6.6l2.2 4.1 2.1-1.1v10.9h8.4V9.6l2.1 1.1 2.2-4.1L15 3.5a3 3 0 0 1-6 0z"/></svg>',
   // 搖桿外圈：上下左右四個小三角
@@ -20540,7 +20641,7 @@ function createWalker(o) {
     st.x = S.x0 + (S.x1 - S.x0) * e; st.z = S.z0 + (S.z1 - S.z0) * e; st.vx = st.vz = 0;
     st.speed = Math.hypot(st.x - px, st.z - pz) / dt;
     st.th = wrapA(S.h0 + wrapA(S.h1 - S.h0) * (S.kind === 'out' ? smooth01((k - 0.45) / 0.55) : smooth01(k / 0.4)));
-    if (k >= 1) { if (S.kind === 'out') { scr = null; st.mode = 'walk'; st.speed = 0; } else finishIn(S.rec); }
+    if (k >= 1) { if (S.kind === 'out') { scr = null; st.mode = 'walk'; st.speed = 0; } else finishIn(S.rec, S.seat); }
   }
   function autoStep(dt) { // 自己走去車門（推搖桿就取消；卡住了：很近就直接坐進去，不然取消）
     const T = tgt; T.t += dt;
@@ -20548,11 +20649,11 @@ function createWalker(o) {
     let px = T.pts[T.i * 2], pz = T.pts[T.i * 2 + 1], dx = px - st.x, dz = pz - st.z, d = Math.hypot(dx, dz);
     if (d < 0.12) {
       if (T.i < T.n - 1) { T.i++; px = T.pts[T.i * 2]; pz = T.pts[T.i * 2 + 1]; dx = px - st.x; dz = pz - st.z; d = Math.hypot(dx, dz); }
-      else { startSeat(T.rec, T.side); return; }
+      else { startSeat(T.rec, T.side, T.u, T.seat); return; }
     }
     if (T.stuck > 0.5 || T.t > 5) { // 走不過去（中間有牆、別的車）
       const L = T.n - 1, ex = T.pts[L * 2], ez = T.pts[L * 2 + 1];
-      if (Math.hypot(ex - st.x, ez - st.z) < 0.7 && !segBlocked(st.x, st.z, ex, ez)) { st.x = ex; st.z = ez; startSeat(T.rec, T.side); return; }
+      if (Math.hypot(ex - st.x, ez - st.z) < 0.7 && !segBlocked(st.x, st.z, ex, ez)) { st.x = ex; st.z = ez; startSeat(T.rec, T.side, T.u, T.seat); return; }
       tgt = null; st.mode = 'walk'; st.vx = st.vz = 0; toast('過不去：走到車門旁邊再按一次'); return;
     }
     const v = Math.min(BRISK, d / dt); st.vx = (dx / d) * v; st.vz = (dz / d) * v;
@@ -20622,10 +20723,12 @@ function createWalker(o) {
     return best;
   }
   // 下車：人站哪裡（左邊駕駛座→右邊→後面→前面→再遠一點）；回傳 [起點 x, z, 終點 x, z, 臉朝]
-  function exitSpot(r) {
-    const side = R + 0.14, u = r.door;
+  //   第 57 批：坐別的位子（se＝{ side, u }）：先站那個位子那一邊的門（u＝車身長方形中間往前幾公尺），擋住了才換另一邊
+  function exitSpot(r, se) {
+    const side = R + 0.14, u = se && isFinite(se.u) ? +se.u : r.door;
     const C = [[u, -(r.hz + side), u, -(r.hz - 0.28), Math.PI / 2], [u, r.hz + side, u, r.hz - 0.28, -Math.PI / 2], [-(r.hx + side + 0.1), 0, -(r.hx - 0.3), 0, Math.PI], [r.hx + side + 0.1, 0, r.hx - 0.3, 0, 0],
       [u, -(r.hz + side + 0.5), u, -(r.hz - 0.28), Math.PI / 2], [u, r.hz + side + 0.5, u, r.hz - 0.28, -Math.PI / 2], [u - 1.2, -(r.hz + side), u - 1.2, -(r.hz - 0.28), Math.PI / 2], [u + 1.2, -(r.hz + side), u + 1.2, -(r.hz - 0.28), Math.PI / 2]];
+    if (se && se.side > 0) { [C[0], C[1]] = [C[1], C[0]]; [C[4], C[5]] = [C[5], C[4]]; } // 右邊的位子：先右邊
     const IN = [0, 0];
     for (const c of C) { // 站得下、從車門走出去中間沒有牆（車子自己的碰撞這時候還沒放）
       toWorldU(r, c[0], c[1], PT); toWorldU(r, c[2], c[3], IN);
@@ -20635,12 +20738,12 @@ function createWalker(o) {
   }
   function getOut(drv, S, op = {}) {
     if (!alive || !drv || st.mode !== 'off') return null;
-    const t = drv.telemetry(); if (t.paused || Math.abs(t.v) >= 1) return null;
+    const t = drv.telemetry(); if ((t.paused && !op.paused) || Math.abs(t.v) >= 1) return null; // 第 57 批：坐別的位子（車子停著、開車的暫停著）：op.paused
     const ci = drv.carInfo;
     const car = { key: op.key ?? null, name: op.name ?? null, x: t.x, z: t.z, heading: t.heading, hx: ci.len / 2, hz: ci.halfW, cx: (ci.nose + ci.tail) / 2, cz: 0, h: op.h ?? 1.4, door: op.door ?? 0, object: S ? S.car : null, drive: true, drv, S };
     const prev = parked; parked = car; rebuildCars(true); // 同一台在清單裡的舊位置拿掉；自己的碰撞先不放
-    const spot = exitSpot(recs[0]);
-    if (!spot) { parked = prev; rebuildCars(); if (drv.toast) drv.toast('這裡太擠了，下不了車', 1800); return null; } // 四邊都沒地方站：不下車
+    const spot = exitSpot(recs[0], op.seat);
+    if (!spot) { parked = prev; rebuildCars(); if (drv.toast && !op.paused) drv.toast('這裡太擠了，下不了車', 1800); return null; } // 四邊都沒地方站：不下車
     drv.pause(); // 停在原地、熄火（HUD 收起來）
     const sh = scene && scene.getObjectByName('drive-shadow'); if (sh) sh.visible = true; // 車子底下的影子留著（drive.pause 會藏起來）
     rebuildCars();
@@ -20652,13 +20755,31 @@ function createWalker(o) {
     st.mode = 'out'; place();
     return car;
   }
-  function getIn(car) {
+  // 第 57 批：從朋友的車下來（坐在他的車上，沒有自己的 drv）：car＝{ x, z, heading, hx, hz, cx, cz }（車子現在在哪裡、車身長方形），seat＝{ side, u }
+  //   跟 getOut 一樣找地方站、走出來、鏡頭接過來；那台車不留（不是你的車）→ true／false（四邊都沒地方站）
+  function exitAt(car, seat) {
+    if (!alive || st.mode !== 'off' || !car) return false;
+    const r = mkRec(car), spot = exitSpot(r, seat || null);
+    if (!spot) return false;
+    const [x0, z0, x1, z1, face] = spot;
+    st.x = x0; st.z = z0; st.th = face; st.vx = st.vz = 0; st.speed = 0; st.play = null;
+    scr = { kind: 'out', t: 0, T: calm ? 0.2 : 0.42, x0, z0, x1, z1, h0: face, h1: wrapA(face + wrapA(r.h - face) * 0.5), ax: x1, az: z1, rec: r };
+    cam.yaw = r.h; cam.pitch = PITCH0; cam.hold = 0; cam.cd = cam.want = cam.dist;
+    activate({ blend: calm ? 0.2 : 0.6 });
+    st.mode = 'out'; place();
+    return true;
+  }
+  // 第 57 批：坐在朋友的車上（走路暫停著）：人跟著車子走（頁面每一格給車子在哪裡）；地圖、路上的車和人、警察看到的「你在哪裡」照這個
+  function follow(x, z, heading) { if (active || !isFinite(x) || !isFinite(z)) return; st.x = x; st.z = z; if (isFinite(heading)) st.th = wrapA(heading); st.vx = st.vz = st.speed = 0; }
+  // 第 57 批：op.seat＝{ i, side, u }（選位子）：走去那個位子那一邊的門（u＝車身長方形中間往前幾公尺）；坐進去以後 onGetIn(car, seat)
+  function getIn(car, op = {}) {
     if (!alive || !active || st.mode !== 'walk' || now < lockT) return false;
     let r = null; for (const x of recs) if (x.car === car) r = x;
     if (!r) r = nearestCar(); if (!r) return false;
+    const se = op.seat || null, u = se && isFinite(se.u) ? +se.u : r.door;
     const dx = st.x - r.bx, dz = st.z - r.bz, lu = dx * r.c - dz * r.s, lw = dx * r.s + dz * r.c;
-    const spot = (sd) => toWorldU(r, r.door, sd * (r.hz + R + 0.12), [0, 0]);
-    let side = lw > 0.2 ? 1 : -1; // 站在哪一邊就走哪一邊（中間、前後＝駕駛座）
+    const spot = (sd) => toWorldU(r, u, sd * (r.hz + R + 0.12), [0, 0]);
+    let side = se && se.side ? Math.sign(se.side) : lw > 0.2 ? 1 : -1; // 站在哪一邊就走哪一邊（中間、前後＝駕駛座）
     if (!freeAt(...spot(side), R + 0.02) && freeAt(...spot(-side), R + 0.02)) side = -side;
     const pts = [], add = (u, w) => { const p = toWorldU(r, u, w, [0, 0]); pts.push(p[0], p[1]); };
     const cu = r.hx + R + 0.25, cwd = r.hz + R + 0.25;
@@ -20668,22 +20789,22 @@ function createWalker(o) {
       add(su * cu, side * cwd);
     }
     const d = spot(side); pts.push(d[0], d[1]);
-    tgt = { rec: r, pts, n: pts.length / 2, i: 0, t: 0, cancel: 0, stuck: 0, side };
-    st.mode = 'in'; setEff(null);
+    tgt = { rec: r, pts, n: pts.length / 2, i: 0, t: 0, cancel: 0, stuck: 0, side, u, seat: se };
+    st.mode = 'in'; setEff(null); setEff2(null);
     return true;
   }
-  function startSeat(r, side) {
-    const [x1, z1] = toWorldU(r, r.door, side * (r.hz - 0.3), [0, 0]);
-    scr = { kind: 'seat', t: 0, T: calm ? 0.15 : 0.32, x0: st.x, z0: st.z, x1, z1, h0: st.th, h1: wrapA(r.h - side * Math.PI / 2), ax: st.x, az: st.z, rec: r };
+  function startSeat(r, side, u = r.door, seat = null) {
+    const [x1, z1] = toWorldU(r, u, side * (r.hz - 0.3), [0, 0]);
+    scr = { kind: 'seat', t: 0, T: calm ? 0.15 : 0.32, x0: st.x, z0: st.z, x1, z1, h0: st.th, h1: wrapA(r.h - side * Math.PI / 2), ax: st.x, az: st.z, rec: r, seat };
     tgt = null; st.mode = 'seat';
   }
-  function finishIn(r) { // 坐進去了：角色藏起來、走路暫停；是剛下來那台就直接接回開車
+  function finishIn(r, seat = null) { // 坐進去了：角色藏起來、走路暫停；是剛下來那台就直接接回開車（第 57 批：坐別的位子＝不開，車子照停著）
     const car = r.car;
     scr = null; tgt = null;
     handOff();
     parked = null; rebuildCars();
-    if (car.drive && car.drv) { car.drv.resume(); if (car.drv.cameraMode) car.drv.setCameraMode(car.drv.cameraMode); }
-    events.push(car);
+    if (car.drive && car.drv && !(seat && seat.i > 0)) { car.drv.resume(); if (car.drv.cameraMode) car.drv.setCameraMode(car.drv.cameraMode); }
+    events.push({ inCar: car, seat });
   }
   function handOff() { // 走路收起來（HUD、角色），鏡頭等開車的接手
     if (ch) ch.group.visible = false;
@@ -20751,6 +20872,21 @@ function createWalker(o) {
   function doAction() {
     if (!eff || !active || st.mode !== 'walk' || now < lockT || !alive) return;
     const f = eff.onClick; if (typeof f === 'function') f(api);
+  }
+  // 第 57 批：第二顆（大按鈕下面，深色的：「選位子」）；頁面給（setAction2），只有走路的時候出現
+  let lead2 = null, eff2 = null;
+  function setAction2(a) { lead2 = a && a.label ? a : null; }
+  function setEff2(a) {
+    const next = a && a.label ? a : null, icon = next && ICON[next.icon] ? next.icon : 'hand';
+    const same = !!eff2 && !!next && eff2.label === String(next.label) && eff2.icon === icon;
+    eff2 = next ? { label: String(next.label), icon, onClick: next.onClick } : null;
+    if (!hud || same) return;
+    hud.act2.hidden = !eff2; hud.act2.classList.remove('on');
+    if (eff2) { hud.act2Text.textContent = eff2.label; hud.act2Icon.innerHTML = ICON[eff2.icon]; hud.act2.setAttribute('aria-label', eff2.label); }
+  }
+  function doAction2() {
+    if (!eff2 || !active || st.mode !== 'walk' || now < lockT || !alive) return;
+    const f = eff2.onClick; if (typeof f === 'function') f(api);
   }
 
   // ---- 鏡頭 ----
@@ -20862,11 +20998,11 @@ function createWalker(o) {
     if (!document.getElementById('wk-style')) { const s = document.createElement('style'); s.id = 'wk-style'; s.textContent = CSS; document.head.append(s); }
     const root = document.createElement('div'); root.className = 'wk'; root.hidden = true;
     root.innerHTML = `<div class="wk-look"></div><div class="wk-pad"></div><div class="wk-stick rest">${ICON.ring}<div class="wk-knob"></div></div>`
-      + `<div class="wk-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="wk-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="wk-map"><canvas></canvas><b class="wk-mapt" hidden></b><b class="wk-mapb" hidden></b></div>`
+      + `<div class="wk-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="wk-act" hidden><i></i><span></span><kbd>E</kbd></button><button type="button" class="wk-act2" hidden><i></i><span></span></button><div class="wk-map"><canvas></canvas><b class="wk-mapt" hidden></b><b class="wk-mapb" hidden></b></div>`
       + `<b class="wk-cam" role="button" aria-label="換視角（第一人稱）" aria-pressed="false">${ICON.eye}</b><div class="wk-btns" hidden></div><div class="wk-toast" role="status"></div>`;
     o.hudParent.append(root);
     const q = (s) => root.querySelector(s), H = { root, look: q('.wk-look'), pad: q('.wk-pad'), stick: q('.wk-stick'), knob: q('.wk-knob'), chip: q('.wk-chip'), arrow: q('.wk-chip svg'), name: q('.wk-chip b'), dist: q('.wk-chip small'),
-      act: q('.wk-act'), actIcon: q('.wk-act i'), actText: q('.wk-act span'), map: q('.wk-map canvas'), cam: q('.wk-cam'), btns: q('.wk-btns'), toast: q('.wk-toast'), off: [], last: {}, mapT: 0, span: 80 };
+      act: q('.wk-act'), actIcon: q('.wk-act i'), actText: q('.wk-act span'), act2: q('.wk-act2'), act2Icon: q('.wk-act2 i'), act2Text: q('.wk-act2 span'), map: q('.wk-map canvas'), cam: q('.wk-cam'), btns: q('.wk-btns'), toast: q('.wk-toast'), off: [], last: {}, mapT: 0, span: 80 };
     const on = (el, t, f, opt) => { el.addEventListener(t, f, opt); H.off.push(() => el.removeEventListener(t, f, opt)); };
     on(root, 'contextmenu', (e) => e.preventDefault());
     // 搖桿：左下角按下去，搖桿跑到手指下面（外圈整個看得到）；推到外圈 92% 以上跑（放鬆到 80% 以下才變回走）
@@ -20909,6 +21045,9 @@ function createWalker(o) {
     on(H.act, 'pointerdown', () => H.act.classList.add('on'));
     for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.act, t, () => H.act.classList.remove('on'));
     on(H.act, 'click', (e) => { e.preventDefault(); doAction(); });
+    on(H.act2, 'pointerdown', () => H.act2.classList.add('on'));
+    for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(H.act2, t, () => H.act2.classList.remove('on'));
+    on(H.act2, 'click', (e) => { e.preventDefault(); doAction2(); });
     const dpr = Math.min(2, (typeof devicePixelRatio === 'number' && devicePixelRatio) || 1), px = Math.round(124 * dpr);
     H.map.width = H.map.height = px; H.mapPx = px; H.dpr = dpr; H.mctx = H.map.getContext('2d'); H.layer = null;
     return H;
@@ -21026,7 +21165,7 @@ function createWalker(o) {
       camera.near = 0.1; camera.updateProjectionMatrix();
       if (op.blend) { blend.on = true; blend.t = 0; blend.T = op.blend === true ? 0.6 : Math.max(0.05, +op.blend); blend.p.copy(camera.position); blend.q.copy(camera.quaternion); blend.fov = camera.fov; } else blend.on = false;
     }
-    if (hud) { hud.root.hidden = false; hud.rest(); hud.last = {}; hud.mapT = 0; setEff(null); if (hud.act) hud.act.hidden = true; }
+    if (hud) { hud.root.hidden = false; hud.rest(); hud.last = {}; hud.mapT = 0; setEff(null); setEff2(null); if (hud.act) hud.act.hidden = true; }
     // 出門那一下頁面的版面還會變（全螢幕是 body 的 class 變了以後才換的）：下一格（hudTick）再放一次搖桿
     //   （ResizeObserver 不一定會叫：藏起來再打開、大小跟上次一樣就不叫）
     if (hud) hud.reRest = true;
@@ -21039,7 +21178,7 @@ function createWalker(o) {
     if (hide && ch) ch.group.visible = false;
     if (camera && cam.near0 != null) { camera.near = cam.near0; camera.updateProjectionMatrix(); cam.near0 = null; }
     if (fx) fx.beacon.visible = false;
-    eff = null;
+    eff = null; eff2 = null;
   }
   function resume(op = {}) {
     if (!alive) return;
@@ -21078,6 +21217,7 @@ function createWalker(o) {
     if (st.mode === 'walk') doorTick(dt);
     st.near = st.mode === 'walk' ? nearestCar() : null;
     setEff(st.mode === 'walk' ? leadAct || gAct || (st.near && st.near.act) : null);
+    setEff2(st.mode === 'walk' ? lead2 : null);
     recenter(dt); camTick(dt);
     if (ch) ch.group.visible = !st.close; // 第一人稱、鏡頭貼著頭：看不到自己
     zoneTick(); routeTick(dt); beaconTick(); hudTick(dt);
@@ -21088,7 +21228,7 @@ function createWalker(o) {
     const ev = events.splice(0);
     for (const e of ev) {
       if (e.ref !== undefined && e.zone) { if (o.onDoor) o.onDoor(e.ref, e.zone); }
-      else if (o.onGetIn) o.onGetIn(e);
+      else if (e.inCar) { if (o.onGetIn) o.onGetIn(e.inCar, e.seat); }
     }
   }
 
@@ -21106,8 +21246,8 @@ function createWalker(o) {
     hidden: !ch || !ch.group.visible, zone: zoneNow, dest, destDist: routeData ? Math.max(0, routeData.len - routeS) : null });
 
   const api = {
-    update, telemetry, teleport, setAction, setCars: (list, op = {}) => { leadCars = Array.isArray(list) ? list.slice() : []; if (op.keepParked === false && st.mode !== 'in' && st.mode !== 'seat') parked = null; rebuildCars(); },
-    getOut, getIn, setGarage, setDestination, setCamera, setCharacter, setButtons, pause, resume, dispose, toast,
+    update, telemetry, teleport, setAction, setAction2, setCars: (list, op = {}) => { leadCars = Array.isArray(list) ? list.slice() : []; if (op.keepParked === false && st.mode !== 'in' && st.mode !== 'seat') parked = null; rebuildCars(); },
+    getOut, getIn, exitAt, follow, setGarage, setDestination, setCamera, setCharacter, setButtons, pause, resume, dispose, toast,
     setDoors: (src) => { doorSrc = src; doorList = buildDoors(src); armDoors(); },
     setInput: (i) => { forced = i ? { x: clamp(+i.x || 0, -1, 1), y: clamp(+i.y || 0, -1, 1), run: i.run } : null; },
     setMovers: (list) => { movers = Array.isArray(list) ? list : null; },
@@ -21119,7 +21259,7 @@ function createWalker(o) {
     play: (state) => { if (state) st.play = String(state); },
     addColliders: (list, tag) => cw.add(Array.isArray(list) ? list : [list], tag ?? null).length,
     removeColliders: (tag) => cw.remove(tag),
-    get action() { return eff ? eff.label : null; }, get character() { return ch; }, get cars() { return recs.map((r) => r.car); }, get parked() { return parked; },
+    get action() { return eff ? eff.label : null; }, get action2() { return eff2 ? eff2.label : null; }, get nearCar() { return st.near ? st.near.car : null; }, get character() { return ch; }, get cars() { return recs.map((r) => r.car); }, get parked() { return parked; },
     get doors() { return doorList.map((d) => ({ ref: d.ref, ...d.zone, w: d.w })); }, get cameraMode() { return cam.mode; }, get cameraDist() { return cam.dist; }, get mode() { return st.mode; }, hud: hud && hud.root,
     get mapLayer() { return (hud && hud.layer) || o.mapLayer || mapLayer(world); },
   };
@@ -41311,6 +41451,7 @@ function dispose(key) {
 }
 function disposeCar(S) {
   S.dmg?.dispose(); S.dmg = null; // 撞壞的網格換回原本的（先換回來，下面才會釋放到對的網格）
+  const seated = []; S.car.traverse((o) => { if (o.userData.seated) seated.push(o); }); for (const o of seated) { o.removeFromParent(); o.visible = false; } // 第 57 批：坐在車上的人（材質大家共用）先拿下來
   S.car.removeFromParent();
   S.car.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
@@ -41912,7 +42053,7 @@ const RACE = { on: false, frame: raceFrame };
 function carSize(Sx) {
   const p = Sx.car.position, x = p.x, y = p.y, z = p.z;
   p.set(0, 0, 0); Sx.car.updateMatrixWorld(true);
-  const b = new THREE.Box3().setFromObject(Sx.body);
+  const b = bodyBox(Sx.body); // 第 57 批：坐在駕駛座的你不算（drive.js）
   p.set(x, y, z); Sx.car.updateMatrixWorld(true);
   return { nose: b.max.x, len: b.max.x - b.min.x, tail: b.min.x };
 }
@@ -42022,7 +42163,7 @@ async function enterRace() {
   race.meInfo = carSize(S);
   snd.me?.dispose(); snd.me = engineAudio.voice(cur, { parts: partsOf(cur) });
   TR.scene.add(S.car); S.car.visible = true; S.body.position.y = +CARS[cur].state.height;
-  if (cur === 'z2') riderOn(S); // 第 56 批：沙灘車：你騎在上面（town.src.js；車庫頁直接來比也一樣）
+  if (cur === 'z2') riderOn(S); else mySitOn(S, cur, 0, true); // 第 56 批：沙灘車：你騎在上面（town.src.js；車庫頁直接來比也一樣）；第 57 批：別的車：你坐在駕駛座
   putCar(S, race.me, LANE, race.meInfo);
   hudIdle();
   if (!netDragInit(race)) showOpp(); // 一起比賽（net.src.js）：對手是朋友，不放 AI
@@ -42035,7 +42176,7 @@ function exitRace(village = false) {
   RACE.on = false; controls.enabled = !village;
   document.body.classList.remove('racing'); raceLive(false);
   raceEl.hidden = true; hudEl.hidden = true;
-  if (!village) riderOff(); // 第 56 批：回車庫頁：沙灘車騎的人拿下來
+  if (!village) { riderOff(); mySitOff(); } // 第 56 批：回車庫頁：沙灘車騎的人拿下來；第 57 批：駕駛座的你也拿下來
   if (!village) for (const Sx of [race.meS]) {
     if (!Sx || !Object.values(built).includes(Sx)) continue;
     scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.visible = Sx === S; Sx.wheels.forEach((w) => (w.rotation.z = 0));
@@ -42757,7 +42898,7 @@ function parkFull() {
 function fullBox(Sx, k = cur) {
   const p = Sx.car.position.clone(), r = Sx.car.rotation.clone();
   Sx.car.position.set(0, 0, 0); Sx.car.rotation.set(0, 0, 0); Sx.car.updateMatrixWorld(true);
-  const b = new THREE.Box3().setFromObject(Sx.body);
+  const b = bodyBox(Sx.body); // 第 57 批：坐在裡面的人不算（drive.js）
   Sx.car.position.copy(p); Sx.car.rotation.copy(r); Sx.car.updateMatrixWorld(true);
   return { hx: (b.max.x - b.min.x) / 2, hz: Math.max(b.max.z, -b.min.z, PERF[k]?.halfW || 0), cx: (b.max.x + b.min.x) / 2, cz: 0 }; // 第 4 批：halfW＝輪胎比車身寬的（怪獸卡車 1.905）
 }
@@ -42780,6 +42921,7 @@ function stowFull(Sx) {
   if (!Sx) return;
   if (MIR.S === Sx) mirrorSet(false); // 第 25 批：照後鏡換回原本的
   if (RIDER.S === Sx) riderOff(); // 第 56 批：沙灘車騎的人拿下來
+  seatDetach(Sx.body); // 第 57 批：坐在車上的人（你、朋友）拿下來
   scene.add(Sx.car); Sx.car.position.set(0, 0, 0); Sx.car.rotation.set(0, 0, 0); Sx.car.visible = false;
   Sx.wheels.forEach((w) => (w.rotation.z = 0)); Sx.cabin?.userData.setGauges(0.13, 0); Sx.cabin?.userData.setSteer?.(0);
 }
@@ -43023,9 +43165,9 @@ function leaveCar() {
   }
   outAt(spot);
 }
-function outAt(spot) {
-  const car = walker.getOut(drv, tripS, { key: cur, name: CARS[cur].btn[0], h: carH(cur) }); // 開太快、四邊都沒地方站就不下（walk.js 會說）
-  if (!car) return;
+function outAt(spot, op = null) { // 第 57 批：op＝{ seat: { side, u }, paused }（從別的位子下車）；回傳 walk.js 的那台車（null＝沒下）
+  const car = walker.getOut(drv, tripS, { key: cur, name: CARS[cur].btn[0], h: carH(cur), ...(op || {}) }); // 開太快、四邊都沒地方站就不下（walk.js 會說）
+  if (!car) return null;
   tripPose[cur] = { x: car.x, z: car.z, heading: car.heading, f: floorAt(car.x, car.z) };
   dvoice?.dispose(); dvoice = null; // 熄火（上車再發動）
   tripS?.cabin?.userData.setGauges(0, 0); tripS?.cabin?.userData.setSteer?.(0);
@@ -43036,6 +43178,7 @@ function outAt(spot) {
     walker.toast(`${CARS[cur].btn[0]} 停好了：${towerFlTxt(b.f)} ${b.i + 1} 號`, 2200);
   } else if (spot?.bay != null) walker.toast(`${CARS[cur].btn[0]} 停好了：越野車車庫 ${spot.bay + 1} 號格`, 2200); // 第 6 批
   arrangeCars(); keepPark();
+  return car;
 }
 // 剛下來那台的開車（停著、還沒熄掉的 drv）收掉；walk.js 記的「剛下來那台」也忘掉：上車再做一個（停進格子、走路坐電梯的時候）
 function dropDrv() { drv.dispose(); drv = null; home.open = null; obDoor.drv = null; walker.setCars([], { keepParked: false }); }
@@ -43050,24 +43193,29 @@ function offTower(k) {
   return pose;
 }
 // 坐進車裡了（walk.js 的 onGetIn）：剛下來那台＝接著開；出門停在電梯圓台上那台、停進格子那台（完整模型）＝開始開；別台（輕量車）＝換成完整的車開
-function onGetIn(car) {
+// 第 57 批：seat＝{ i, side, u }（選位子）：i > 0＝坐別的位子（車子不動：paxStart）；car.hop＝朋友的車（坐上去）
+function onGetIn(car, seat = null) {
   if (!trip || !DRIVE.on || !tripPose) return;
   gunner?.holster(); // 第 3 批（b3-int）：上車把槍收起來（開車不能用槍）
+  if (car.hop) { hopBoard(car, seat); return; } // 第 57 批：坐朋友的車
   if (car.borrow) { netBorrowBoard(car); return; } // 第 19 批：打對密碼，坐進朋友的車
+  const px = seat && seat.i > 0 ? seat.i : 0;
   if (car.drive) { // 剛下來那台：walk.js 已經 drv.resume() 了，引擎再發動
+    if (px) { paxStart(cur, px); arrangeCars(); return; } // 別的位子：walk.js 沒有 resume
     dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
     arrangeCars(); return;
   }
   if (car.key === tripFull && !drv) {
     const pose = offTower(car.key) || tripPose[car.key];
-    makeDrv(pose); towerHint(pose);
+    makeDrv(pose); if (px) paxStart(cur, px); else towerHint(pose);
     return;
   }
-  if (GAME.owned.has(car.key)) switchCar(car.key); else walker.resume();
+  if (GAME.owned.has(car.key)) { PAX.want = px ? { k: car.key, i: px } : null; switchCar(car.key); } else walker.resume();
 }
 // 換開別台：原本那台停在原地（換成輕量車；停在格子裡的照停），這台載入完整的車（第一次要一下子：「發動中⋯」），從停的地方開
 async function switchCar(k) {
   const tok = (boarding = { k });
+  const want = PAX.want; PAX.want = null; // 第 57 批：選了別的位子：載好再坐
   const old = tripS;
   const keep = old && !liftOK(cur) && tripPose[cur] ? { p: old.car.position.clone(), r: old.car.rotation.clone() } : null; // 第 4 批：大車（怪獸卡車：有輕量車，可是輕量車只會平平放在 y 0，在越野車場的地形上會陷下去／浮起來）停在原地：擺的樣子（地形上的高度、斜度）先記下來
   if (drv) { drv.dispose(); drv = null; } // dispose 會把車子放回原點：車庫頁收起來，村子裡換輕量車停在 tripPose
@@ -43091,7 +43239,7 @@ async function switchCar(k) {
   cur = k; S = car; tripS = car; save();
   const pose = offTower(k) || tripPose[k]; // 停在格子裡的：從格子開出來
   tripBox = fullBox(car);
-  makeDrv(pose); towerHint(pose);
+  makeDrv(pose); if (want && want.k === k && seatsOf(k)[want.i]) paxStart(k, want.i); else towerHint(pose); // 第 57 批
   renderWallet(); refreshCarBtns();
 }
 // 第 21 批：在圓塔裡上車：樓上＝說怎麼下去；一樓門關著＝說開鐵捲門
@@ -44003,6 +44151,7 @@ function leaveDrive() {
   if (!trip) return;
   netBorrowEnd('home'); netLendHome(); // 第 19 批：開借來的車回車庫頁＝還車；借給朋友的拿回來
   gvEnd('home'); // 第 23 批：在朋友家：塔搬回你家
+  seatsEnd('home'); // 第 57 批：坐在別的位子、坐朋友的車、朋友坐我的車：收掉
   const P = tripPose && TWR ? { mid: padCars(0, null)[0] || null, tower: TWR.slice() } : null; // 第 21 批：坐電梯中的那幾台不在裡面（normPark 再找一格）
   trip = false; DRIVE.on = false; boarding = null; ambOff(); pxStep(); VIL?.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
   panelClose(); driveBar.hidden = true;
@@ -44463,6 +44612,7 @@ function driveStep(dt) {
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
   netStep(dt); // 一起開車（net.src.js）：朋友的車、人、名字、表情、一起比賽
+  seatsStep(dt); // 第 57 批：坐別的位子、坐朋友的車、朋友坐在車上（netStep 後面：朋友的車這一格的位置才是新的）
   pxStep(); clockStep(); ambStep(); // 第 31 批：角落的時間（小地圖上面）、環境聲（風、鳥、蟲、路上的車；下車走路也有）
   mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）
@@ -44627,7 +44777,7 @@ function mirrorSet(on) {
   MIR.on = true; MIR.S = S; MIR.n = 0;
 }
 function mirrorStep() {
-  const want = !!(drv && DRIVE.on && drv.cameraMode === 'eye' && tripS?.car?.visible);
+  const want = !!(DRIVE.on && tripS?.car?.visible && !HOP.on && (PAX.on ? SCAM.mode === 'eye' : drv && drv.cameraMode === 'eye')); // 第 57 批：坐別的位子的第一人稱也照後面
   if (want !== MIR.on || (want && MIR.S !== tripS)) mirrorSet(want);
   if (!MIR.on || !MIR.list.length || MIR.n++ % 3) return; // 三格畫一次；沒有鏡子（第 56 批：沙灘車、怪獸卡車）就不畫
   const S = MIR.S, e = dEye?.eye || MIR_EYE;
@@ -44648,7 +44798,7 @@ function riderMake() { // 第一次騎、換了樣子：做（換）人、量眼
   const L = meLook();
   if (RIDER.C && RIDER.lk === L) return RIDER.C;
   try {
-    if (!RIDER.C) { RIDER.C = buildCharacter(riderLook(), { state: 'sit', shadow: false, plant: false }); RIDER.C.group.name = 'z2-rider'; }
+    if (!RIDER.C) { RIDER.C = buildCharacter(riderLook(), { state: 'sit', shadow: false, plant: false }); RIDER.C.group.name = 'z2-rider'; RIDER.C.group.userData.seated = true; } // 第 57 批：seated＝車子釋放前先拿下來（disposeCar）
     else RIDER.C.setLook(riderLook());
     RIDER.lk = L; Z2_eye(RIDER.C, RIDER.eye);
   } catch (e) { console.error(e); RIDER.C = null; }
@@ -45062,7 +45212,7 @@ function netSprite(map, w, h, cy) {
 function netPeer(uid) {
   let P = NET.P.get(uid);
   if (!P) {
-    P = { uid, n: '', car: '', l: null, ch: null, col: NET_COL[0], buf: [], cur: { t: 0, x: 0, z: 0, h: 0, v: 0, o: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pk: null, pv: null }, last: 0, pkOn: false, tagW: 0, jlSeen: 0,
+    P = { uid, n: '', car: '', l: null, ch: null, col: NET_COL[0], buf: [], cur: { t: 0, x: 0, z: 0, h: 0, v: 0, o: 0, k: '', rp: null, rs: 0, w: 0, jl: 0, pk: null, pv: null, st: 0, rd: null, nr: 0 }, last: 0, pkOn: false, tagW: 0, jlSeen: 0,
       obj: null, objK: '', job: 0, chr: null, chrK: '', tag: null, bub: null, bubT: 0, roll: 0, px: null, pz: null, mk: { x: 0, z: 0, fill: NET_COL[0], ring: '#ffffff', r: 6, label: '', name: '', on: false },
       box: { t: 'box', x: 0, z: 0, hx: 2.2, hz: 0.9, rot: 0, h: 1.4, vx: 0, vz: 0, m: 1, dvx: 0, dvz: 0, noCrush: true }, vis: false }; // noCrush：越野車輾不過去（照車撞車算）
     NET.P.set(uid, P); NET.marks.push(P.mk);
@@ -45072,7 +45222,7 @@ function netPeer(uid) {
 function netDropObj(P) {
   P.job++;
   netUnride(P); // 第 56 批：騎在沙灘車上的人先拿下來（不跟著車一起釋放）
-  if (P.obj) { P.obj.car.removeFromParent(); P.obj.sh.removeFromParent(); P.obj.lod.dispose(); P.obj = null; }
+  if (P.obj) { seatDetach(P.obj.lod.body || P.obj.car); P.obj.car.removeFromParent(); P.obj.sh.removeFromParent(); P.obj.lod.dispose(); P.obj = null; } // 第 57 批：坐在這台車上的人先拿下來
   P.objK = '';
 }
 function netDropChr(P) { if (P.chr) { P.chr.dispose(); P.chr = null; } P.chrK = ''; P.riding = false; }
@@ -45148,7 +45298,7 @@ function netStep(dt) {
   netPhTick();
   const show = netWorld(), T = netNow() - NET_DELAY, now = netNow(), race = !!(NET.race && NET.race.kind !== 'out') || !!ciRace || !!orRace;
   const inPol = !!(DRIVE.on && indoor && indoor.kind === 'police' && walker && PSC); // 第 22 批：我在警察局裡面：看得到也在裡面的朋友（關在拘留室的也是）
-  const me = show ? (walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : null) : null, mx = me ? me.x : 0, mz = me ? me.z : 0;
+  const me = show ? (walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : HOP.on ? HOP.last : null) : null, mx = me ? me.x : 0, mz = me ? me.z : 0; // 第 57 批：坐朋友的車＝他的車在哪裡
   const cols = !race && !!(drv || walker);
   const myY = drv && TRAMP.on && me ? PW.heightAt(mx, mz) : null; // 第 24 批：我開在斜坡上：只撞得到跟我差不多高的
   let jin = false; // 有朋友關在拘留室（我看得到的）
@@ -45285,7 +45435,7 @@ function netPolBumped(P, i, dvx, dvz) { // 朋友撞到追我的警車：我這�
   NET.bumped++;
   const t = performance.now(); if (P.n && t - (P.bumpT || 0) > 4000) { P.bumpT = t; netToast(`💥 ${P.n}撞開了追你的警車！`); }
 }
-function netToast(text) { const t = walker && walker.mode !== 'off' ? walker : drv; if (t && trip) t.toast(text, 3000); else netSay(text); }
+function netToast(text) { const t = walker && walker.mode !== 'off' ? walker : drv; if (trip && (HOP.on || PAX.on)) seatToast(text, 3000); else if (t && trip) t.toast(text, 3000); else netSay(text); } // 第 57 批：坐著的時候提示在坐著的畫面上
 function netHideAll() {
   for (const k of NET_POL.cars) k.group.visible = false;
   for (const P of NET.P.values()) { if (P.obj) { P.obj.car.visible = false; P.obj.sh.visible = false; } if (P.chr) P.chr.group.visible = false; if (P.tag) P.tag.visible = false; if (P.bub) P.bub.visible = false; P.mk.on = false; }
@@ -45468,16 +45618,18 @@ function netGstOff() {
 // ---- 別人找你比賽：卡片（好／不要），15 秒沒按＝不要；車庫頁也看得到（卡片放在畫面上）----
 const NET_INV_S = 15;
 function netInvite(d) {
-  if (!NET.on || !d || !d.id || !(NET_KIND[d.kind] || d.kind === 'bell')) return false;
+  if (!NET.on || !d || !d.id || !(NET_KIND[d.kind] || d.kind === 'bell' || d.kind === 'ride')) return false;
+  if (d.kind === 'ride' && !seatHostOk(d)) return false; // 第 57 批：現在不能讓人坐（網站回「在忙」）
   const H = netHud();
   if (NET.inv && NET.inv.id !== d.id) return false; // 一次一張（網站排隊）
   if (NET.race && NET.race.phase !== 'done') return false; // 比賽中：網站說「在比賽」
   clearTimeout(NET.invT);
   NET.inv = { id: String(d.id) };
-  const bell = d.kind === 'bell'; // 第 23 批：有人按我家的門鈴（草稿：「有人按你家的門鈴／X想開進你的車庫／他只能看你的車，不能開走。」）
-  H.invH.hidden = !bell;
-  H.invT.textContent = bell ? `${String(d.name || '有人').slice(0, 12)}想開進你的車庫` : `🏁 ${String(d.name || '有人').slice(0, 12)}找你比${NET_KIND[d.kind].replace(' 3 圈', '')}！`;
-  H.invS.textContent = bell ? '他只能看你的車，不能開走。' : d.car ? `他開 ${String(d.car).slice(0, 24)}` : '';
+  const ride = d.kind === 'ride'; // 第 57 批：有人想坐我的車（草稿：「🚗 X想坐你的車／副駕駛座」）
+  const bell = d.kind === 'bell' || ride; // 第 23 批：有人按我家的門鈴（草稿：「有人按你家的門鈴／X想開進你的車庫／他只能看你的車，不能開走。」）
+  H.invH.hidden = d.kind !== 'bell'; // 門鈴才有上面那行「🔔 有人按你家的門鈴」
+  H.invT.textContent = ride ? `🚗 ${String(d.name || '有人').slice(0, 12)}想坐你的車` : bell ? `${String(d.name || '有人').slice(0, 12)}想開進你的車庫` : `🏁 ${String(d.name || '有人').slice(0, 12)}找你比${NET_KIND[d.kind].replace(' 3 圈', '')}！`;
+  H.invS.textContent = ride ? `${seatName(cur, d.s | 0)}（你開車，他坐著）` : bell ? '他只能看你的車，不能開走。' : d.car ? `他開 ${String(d.car).slice(0, 24)}` : '';
   H.inv.hidden = false;
   H.invI.style.transition = 'none'; H.invI.style.width = '100%'; void H.invI.offsetWidth;
   H.invI.style.transition = `width ${NET_INV_S}s linear`; H.invI.style.width = '0%';
@@ -45997,7 +46149,7 @@ function borParked() { // 我下車停著的那台（朋友看得到、借得到
 }
 // 第 22 批：我的車停在外面哪裡（我在走路、在房子裡、在警察局、被關都算；開著、在自己車庫裡、停在家的格子上、借出去了不算）→ { x, z, heading } | null
 function netParked() {
-  if (BOR.on || LENT_K || HOME.in || !trip || !tripPose || !walker || walker.mode === 'off') return null;
+  if (BOR.on || LENT_K || HOME.in || !trip || !tripPose || !walker || (walker.mode === 'off' && !HOP.on)) return null; // 第 57 批：坐在朋友的車上：自己的車停著（朋友看得到）
   let t = null;
   if (drv) { if (tripFull !== cur || !tripS) return null; const d = drv.telemetry(); if (!d.paused) return null; t = { x: d.x, z: d.z, heading: d.heading }; }
   else { t = tripPose[cur]; if (!t || t.tw != null || !GAME.owned.has(cur)) return null; } // 被抓：拖到警察局的停車場（完整的車）；還回來的：輕量車
@@ -46187,16 +46339,17 @@ NET_ME.pl = 0; // 跳燈：開的（停著的）這台燈蓋立起來＝1（town
 function netState() {
   const s = NET_ME, R = NET.race;
   s.k = cur; s.rp = null; s.rs = 0; s.o = 0; s.x = s.z = s.h = s.v = 0; s.w = 0; s.pn = 0; s.pk = null; s.pv = null; s.ph = NET_PH.out; s.jl = jailed() ? 1 : 0;
-  s.pl = 0; s.y = null;
+  s.pl = 0; s.y = null; s.st = 0; s.rd = null; s.nr = (ciRace || orRace) ? 1 : 0; // 第 57 批：st＝我坐自己的車第幾個位子、rd＝坐朋友的車 [車主, 位子, 車]、nr＝我在賽車場／泥巴賽（坐我車的人要下車）
   if (RACE.on && race) { s.o = 3; s.x = race.me.x; s.v = race.me.v; if (race.net) { s.rp = Math.round(race.me.x * 10) / 10; s.rs = race.net.seq; } return s; }
   const pv = netParked(); if (pv) s.pv = [cur, Math.round(pv.x * 100) / 100, Math.round(pv.z * 100) / 100, Math.round(pv.heading * 1000) / 1000]; // 第 22 批：停著的車（我在哪裡都送）
   if (DRIVE.on && trip && indoor && indoor.kind === 'police' && walker && walker.mode !== 'off') { const t = walker.telemetry(); s.o = 4; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed; return s; } // 第 22 批：在警察局裡面（關在拘留室也是）
-  if (!netWorld() || (HOME.in && !(GUEST.uid && !GAR.floor)) || (GV.in && GAR.floor)) return s; // 在自己車庫裡面：朋友看不到（名單寫「在車庫」）；第 23 批：有朋友來我家、我在一樓＝看得到；我在朋友家樓上＝不送（高度對不起來）
+  if (!netWorld() || (HOME.in && !(GUEST.uid && !GAR.floor)) || (GV.in && GAR.floor)) return s;
+  if (HOP.on) { seatNetHop(s); return s; } // 第 57 批：坐在朋友的車上 // 在自己車庫裡面：朋友看不到（名單寫「在車庫」）；第 23 批：有朋友來我家、我在一樓＝看得到；我在朋友家樓上＝不送（高度對不起來）
   if (walker && walker.mode !== 'off' && walker.mode !== 'seat') {
     const t = walker.telemetry(); s.o = 2; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed;
     const p = borParked(); if (p) { s.pk = [cur, Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100, Math.round(p.heading * 1000) / 1000]; s.pv = null; } // 第 19 批：下車停著的車（朋友看得到、借得到）
   }
-  else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; if (TRAMP.on) s.y = Math.round(PW.heightAt(t.x, t.z) * 100) / 100; } // 第 24 批：開在斜坡上送高度
+  else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; if (TRAMP.on) s.y = Math.round(PW.heightAt(t.x, t.z) * 100) / 100; if (PAX.on) s.st = PAX.i; } // 第 24 批：開在斜坡上送高度
   if (s.o) s.pl = popSend(); // 跳燈
   if (R && R.ci && ciRace === R.ci) { s.rp = Math.round(R.ci.me.p * 10) / 10; s.rs = R.seq; }
   if (s.o && police && police.state === 'wanted' && police.enabled) { // 通緝中：幾顆星、200 公尺內追你的警車
@@ -46306,6 +46459,7 @@ Object.assign(window.beauGame, {
     },
     leave() {
       borOff(); // 第 19 批：借來的還、借出去的拿回來
+      seatsEnd('leave'); // 第 57 批：坐朋友的車＝下車；朋友坐我的車＝拿下來
       gvEnd('leave'); netGuest(null); BELL.uid = ''; // 第 23 批：在朋友家＝出來；朋友在我家＝收掉那一條
       netRaceEnd(); netUninvite(); if (NET.goal) { NET.goal = null; if (tripDest === 'friend') setDest(null); }
       NET.on = false; NET.code = ''; NET.mem = []; NET.slot = -1; netGstOff();
@@ -46343,6 +46497,8 @@ Object.assign(window.beauGame, {
       b.push(e); if (b.length > 16) b.shift();
       const c = P.cur; c.t = s.t; c.x = e.x; c.z = e.z; c.h = e.h; c.v = e.v; c.o = s.o | 0; c.k = typeof s.k === 'string' ? s.k : ''; c.rp = e.rp; c.rs = s.rs | 0; c.w = Math.max(0, Math.min(3, s.w | 0)); c.jl = s.jl ? 1 : 0;
       c.pl = s.pl === 1 ? 1 : 0; // 跳燈
+      c.st = Number.isInteger(s.st) && s.st > 0 && s.st < 5 ? s.st : 0; c.nr = s.nr ? 1 : 0; // 第 57 批：他坐自己的車第幾個位子（0＝駕駛座）；他在賽車場／泥巴賽
+      const rd = s.rd; c.rd = Array.isArray(rd) && rd.length === 3 && typeof rd[0] === 'string' && rd[0] !== uid && Number.isInteger(rd[1]) && rd[1] > 0 && rd[1] < 5 && typeof rd[2] === 'string' && CARS[rd[2]] ? rd : null; // 第 57 批：他坐在朋友的車上 [車主, 位子, 車]
       const pk = s.pk; c.pk = Array.isArray(pk) && pk.length === 4 && typeof pk[0] === 'string' && CARS[pk[0]] && [pk[1], pk[2], pk[3]].every(Number.isFinite) ? pk : null; // 第 19 批：他停著的車
       const pv = s.pv; c.pv = Array.isArray(pv) && pv.length === 4 && typeof pv[0] === 'string' && CARS[pv[0]] && [pv[1], pv[2], pv[3]].every(Number.isFinite) ? pv : null; // 第 22 批：他停著的車（他在哪裡都有）
       const ph = s.ph; // 第 22 批：他撞到追我的警車
@@ -46373,11 +46529,13 @@ Object.assign(window.beauGame, {
     borrowing: () => !!(BOR.on || BOR.want || BOR.loading),
     lent: () => (BOR.lent ? { uid: BOR.lent.uid, k: BOR.lent.k } : null),
     bellAns: netBellAns, // 第 23 批：門鈴的回答
+    rideAns: hopAns, // 第 57 批：「可以坐你的車嗎」的回答 { uid（車主）, n, ok }
+    rideOk: seatHostOk, // 第 57 批：有人想坐我的車：現在可以嗎 { s, k }
     visitEnd(why) { gvEnd(why === 'kick' ? 'kick' : 'gone'); }, // 他請你出去／他走了
     guest: netGuest, // 朋友在我的車庫裡（null＝走了）
     place: netPlace,
     where: () => (RACE.on && !trip ? 'race' : trip ? 'out' : 'garage'),
-    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, pv: P.cur.pv ? P.cur.pv[0] : null, park: !!P.pkOn, carVis: !!(P.obj && P.obj.car.visible), inPol: !!(P.chr && P.chr.group.visible && PSC && P.chr.group.parent === PSC), car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, polHits: NET_POL.hits, phSent: NET_PH.sent, bumped: NET.bumped, cellShut: NET.cellShut, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at,
+    get info() { return { on: NET.on, code: NET.code, peers: [...NET.P.values()].map((P) => ({ uid: P.uid, n: P.n, vis: P.vis, o: P.cur.o, pk: P.cur.pk ? P.cur.pk[0] : null, pv: P.cur.pv ? P.cur.pv[0] : null, park: !!P.pkOn, carVis: !!(P.obj && P.obj.car.visible), inPol: !!(P.chr && P.chr.group.visible && PSC && P.chr.group.parent === PSC), car: !!P.obj, paint: P.obj ? P.objPaint : null, walk: !!P.chr, w: P.cur.w, jl: P.cur.jl, tagW: P.tagW })), pol: NET_POL.n, polHits: NET_POL.hits, phSent: NET_PH.sent, bumped: NET.bumped, cellShut: NET.cellShut, race: NET.race && { seq: NET.race.seq, kind: NET.race.kind, phase: NET.race.phase, go: NET.race.go, runAt: NET.race.runAt || 0, runGap: NET.race.runGap || 0, myT: NET.race.myT, res: { ...NET.race.res } }, marks: NET.marks.filter((m) => m.on).length, bor: { on: BOR.on && { uid: BOR.on.uid, k: BOR.on.k }, want: !!BOR.want, loading: !!BOR.loading, lent: BOR.lent && { uid: BOR.lent.uid, k: BOR.lent.k }, near: BOR.near ? BOR.near.uid : null, pad: BOR.pad && { uid: BOR.pad.uid, state: BOR.pad.state, lock: BOR.pad.lockT > performance.now() }, msg: BOR.ui ? BOR.ui.msg.textContent : '' }, cols: NET.cols.length, gst: NET_GST.own.map((o) => (o ? o.n : null)), gstAt: NET_GST.at, seat: { why: HOP.why || '', pax: PAX.on ? PAX.i : -1, hop: HOP.on ? { uid: HOP.uid, n: HOP.n, k: HOP.k, i: HOP.i, full: !!HOP.car, spd: Math.round(HOP.spd * 10) / 10, x: HOP.last.x, z: HOP.last.z } : null, ask: !!HOP.ask, want: !!HOP.want, cam: SCAM.on ? SCAM.mode : '', peers: SEAT_PS.n, me: !!(MYSIT.C && MYSIT.C.group.visible && MYSIT.C.group.parent), act2: SEATN.own ? 'own' : SEATN.P ? SEATN.P.uid : '', sit: [...NET.P.values()].filter((P) => P.sit && P.sit.C && P.sit.C.group.visible).map((P) => ({ uid: P.uid, k: P.sit.k, i: P.sit.i })), st: [...NET.P.values()].map((P) => ({ uid: P.uid, st: P.cur.st | 0, rd: P.cur.rd || null })) },
       gstBtn: NET.hud && !NET.hud.gar.hidden ? NET.hud.gar.textContent : '', bell: BELL.uid || null, guest: GUEST.uid || null, guestBar: GUEST.ui && !GUEST.ui.bar.hidden ? GUEST.ui.t.textContent : '',
       gv: GV.on ? { uid: GV.uid, n: GV.n, slot: GV.slot, in: GV.in, want: GV.want.filter(Boolean).length, made: Object.keys(GV.objs).length, gs: HOME.gs, home: HOME.slot } : null }; },
   },
@@ -46385,6 +46543,566 @@ Object.assign(window.beauGame, {
 });
 // Object.assign 會把 getter 當下的值抄過去，所以這個要用 defineProperty
 Object.defineProperty(window.beauGame, 'visiting', { configurable: true, get: () => (NV ? { car: NV.key(), loaded: !!NV.car } : null) });
+
+// ---- seat.src.js ----
+// ==== 第 57 批：每個位子都可以坐（Nick 2026-10-30「車子的每個位子都可以坐」；草稿 /mnt/project-files/car-game/seats/seats-v1.jpg，卡片選「好，照圖做」）====
+// 走到車子旁邊：「上車」＝開（照舊）；新的「選位子」（深色那顆）＝挑要坐哪裡（上面看下去的車，車頭朝上；駕駛座＝開車；有人坐的灰色、你坐的黃色）
+// 坐別的位子：車子不會動；右上 👁 換第一人稱／從外面看（拖畫面：轉頭、繞著車看）；右邊「換位子」「下車」；換到駕駛座＝開
+// 開車的時候從外面看得到你坐在駕駛座（手握方向盤、跟著轉）；駕駛座視角不畫自己（沙灘車照第 56 批騎的人）
+// 大家的世界：朋友的車停著（他下車走路）或停下來（他在開、停住了）→「選位子」→ 他的手機跳「🚗 X想坐你的車」好／不要 → 好：你走過去坐進去，他開車你跟著走
+//   你這邊：他的車換成完整的車（看得到車裡），你坐在那個位子；左上「🚗 坐在 X 的車上」；車停下來才能下車；他回家、去比賽、離開世界、換車：你在他的車旁邊下車
+//   大家那邊：坐在車上的人畫在那台車的位子上（開的人坐駕駛座、手握方向盤；以前朋友的車裡面是空的）
+//   送的：world/p 多 st（我在我自己的車坐第幾個位子）、o 5＋rd [車主, 位子, 車]（坐在朋友的車上）、nr（我在比賽：坐我車的人要下車）
+//   網站（site/world.js）：matches/{id}（kind 'ride'）＋ world/ch（s、k）：跟按門鈴同一條路（封鎖、關掉邀請的問不到）；規則不用改
+// 接在 net.src.js 後面（同一個 module）；town.src.js driveStep 在 netStep 後面叫 seatsStep（朋友的車這一格的位置才是新的）
+const seClamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const sm01 = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+const SEAT_CACHE = {};
+function seatsOf(k) { if (!k || !CARS[k]) return []; return SEAT_CACHE[k] || (SEAT_CACHE[k] = cabinSeats(k) || []); } // 沙灘車、怪獸卡車：沒有（cabin.js 沒有車內）
+const seatName = (k, i) => seatsOf(k)[i]?.n || '位子';
+function seatGo(k, i, cx) { const s = seatsOf(k)[i]; return s ? { i, side: s.side || 0, u: s.hip[0] + 0.1 - (+cx || 0) } : null; } // walk.js getIn 的 seat：走去那一邊、屁股前面一點的門
+
+// ---- 你自己坐在車上（另外一個人：走路的那個藏起來了）----
+const MYSIT = { C: null, lk: null, S: null, k: '', i: -1, P: {}, st: 9 };
+function mySitMake() {
+  const L = meLook();
+  if (MYSIT.C && MYSIT.lk === L) return MYSIT.C;
+  try {
+    if (!MYSIT.C) { MYSIT.C = buildCharacter(L, { state: 'sit', shadow: false, plant: false }); MYSIT.C.group.name = 'seat-me'; MYSIT.C.group.userData.seated = true; }
+    else { MYSIT.C.setLook(L); MYSIT.S = null; } // 換了樣子（身高可能不一樣）：重新坐
+    MYSIT.lk = L;
+  } catch (e) { console.error(e); MYSIT.C = null; }
+  return MYSIT.C;
+}
+function mySitOn(Sx, k, i, vis) {
+  const s = seatsOf(k)[i], C = s && Sx?.body ? mySitMake() : null;
+  if (!C) { mySitOff(); return null; }
+  if (MYSIT.S !== Sx || MYSIT.k !== k || MYSIT.i !== i || C.group.parent !== Sx.body) { Sx.body.add(C.group); seatPlace(C, s, MYSIT.P); MYSIT.S = Sx; MYSIT.k = k; MYSIT.i = i; MYSIT.st = 0; }
+  C.group.visible = !!vis;
+  return C;
+}
+function mySitOff() { const C = MYSIT.C; if (C) { C.group.removeFromParent(); C.group.visible = false; } MYSIT.S = null; MYSIT.k = ''; MYSIT.i = -1; }
+function mySitSteer(steer) { // 開車：手跟著方向盤（變了才算）
+  const C = MYSIT.C; if (!C || !C.group.visible || !MYSIT.P.s?.wheel || Math.abs(steer - MYSIT.st) < 0.01) return;
+  MYSIT.st = steer; seatSteer(C, MYSIT.P, steer); C.update(1 / 30, MYSIT.P);
+}
+// 車子要收掉（釋放、搬回車庫頁）：坐在上面的人先拿下來（人的材質大家共用，不能跟著車一起釋放）
+function seatDetach(body) {
+  if (!body) return;
+  for (const o of [...body.children]) if (o.userData.seated) { o.removeFromParent(); o.visible = false; }
+  if (MYSIT.S && MYSIT.S.body === body) MYSIT.S = null;
+  if (typeof NET !== 'undefined') for (const P of NET.P.values()) if (P.sit && P.sit.B === body) P.sit.B = null;
+}
+
+// ---- 坐在哪台車的哪個位子（有人坐的：名字）----
+function seatTaken(host, k, hn) {
+  const T = [];
+  if (NET.on) for (const P of NET.P.values()) {
+    const c = P.cur; if (netNow() - P.last > 6000) continue;
+    if (c.o === 5 && c.rd && c.rd[0] === host && c.rd[2] === k) T[c.rd[1]] = P.n || '朋友';
+    else if (P.uid === host && c.o === 1 && c.k === k) T[c.st | 0] = P.n || '朋友';
+  }
+  if (hn && !T[0]) T[0] = hn; // 朋友的車：駕駛座是他的（他下車走路也一樣）
+  if (HOP.on && HOP.uid === host && HOP.k === k) T[HOP.i] = '你';
+  return T;
+}
+
+// ---- 畫面：選位子（上面看下去的車）、坐著的時候（左上誰的車、右上 👁、右邊換位子／下車、提示）----
+const SEAT_SVG = {
+  seat: '<svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="5.4" height="3.2" rx="1.3"/><path d="M9.4 5.7L7.6 15h9.2a1.4 1.4 0 0 1 1.4 1.4V17"/><path d="M11 17v4M7 21h8"/></svg>',
+  car: '<svg viewBox="0 0 24 24"><path d="M3.5 16.5v-3.2l1.8-4.4a1.6 1.6 0 0 1 1.5-1h10.4a1.6 1.6 0 0 1 1.5 1l1.8 4.4v3.2z"/><path d="M3.5 13.3h17"/><circle cx="7.6" cy="18.2" r="1.7"/><circle cx="16.4" cy="18.2" r="1.7"/></svg>',
+  eye: '<svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.2 9.5-6.2 9.5 6.2 9.5 6.2-3.5 6.2-9.5 6.2S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>',
+};
+let SEATUI = null;
+function seatUi() {
+  if (SEATUI) return SEATUI;
+  const F = '"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif';
+  const st = document.createElement('style'); st.id = 'seat-style';
+  st.textContent = `.sp{position:absolute;inset:0;z-index:12;display:grid;place-items:center;background:rgba(0,0,0,0.38);font-family:${F};color:#F2F3F5;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.sp[hidden],.ps[hidden],.ps [hidden]{display:none!important}
+.sp-box{position:relative;width:min(300px,calc(100% - 24px));box-sizing:border-box;padding:12px 14px 14px;border-radius:18px;background:#202227;box-shadow:0 10px 30px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:9px;align-items:center}
+.sp-box h3{margin:0;padding:4px 36px 0;font-size:21px;font-weight:700;text-align:center;text-wrap:balance}
+.sp-x{position:absolute;top:8px;right:8px;width:36px;height:36px;border:0;border-radius:50%;background:#2c2e33;color:#c4c7cc;font:700 16px/1 ${F};cursor:pointer;touch-action:manipulation}
+.sp-car{position:relative;flex:none;width:170px;height:250px;border-radius:60px 60px 46px 46px;background:#2c4fb8;box-shadow:inset 0 0 0 4px #1b2f73}
+.sp-car.two{height:196px}
+.sp-ws{position:absolute;left:20px;right:20px;top:38px;height:26px;border-radius:12px 12px 4px 4px;background:#8fb3d9;opacity:.8}
+.sp-seat{position:absolute;width:60px;height:56px;box-sizing:border-box;margin:0;padding:2px;border:0;border-radius:12px;background:#FF6A1F;color:#1A0F07;font:700 14px/1.1 ${F};white-space:pre-line;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;text-align:center;box-shadow:0 3px 0 #9E4213;cursor:pointer;touch-action:manipulation}
+.sp-seat.n3{font-size:13px}
+.sp-seat small{font-size:11px;font-weight:700;opacity:.85;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.sp-seat.tk{background:#55585f;color:#e8e8e8;box-shadow:0 3px 0 #2c2e33;cursor:default}
+.sp-seat.me{background:#ffd84a;color:#1A0F07;box-shadow:0 3px 0 #a88a12;cursor:default}
+.sp-seat:not(.tk):not(.me):active{transform:translateY(2px);box-shadow:0 1px 0 #9E4213}
+.sp-seat:focus-visible,.sp-x:focus-visible,.ps-btn:focus-visible,.ps-eye:focus-visible{outline:3px solid #F2F3F5;outline-offset:2px}
+.sp-box p{margin:0;font-size:14px;color:#c4c7cc;text-align:center;text-wrap:balance}
+.ps{position:absolute;inset:0;z-index:3;pointer-events:none;color:#F2F3F5;font-family:${F};-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overflow:hidden}
+.ps>*{position:absolute}
+.ps-look{inset:0;pointer-events:auto;touch-action:none;cursor:grab}
+.ps-look.on{cursor:grabbing}
+.ps-who{left:10px;top:10px;max-width:calc(100% - 82px);box-sizing:border-box;padding:7px 14px;border-radius:999px;background:rgba(14,15,18,.72);font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps-eye{right:10px;top:10px;width:44px;height:44px;margin:0;padding:0;border:0;border-radius:50%;background:rgba(14,15,18,.62);display:grid;place-items:center;pointer-events:auto;cursor:pointer;touch-action:manipulation}
+.ps-eye svg{width:24px;height:24px;fill:none;stroke:#F2F3F5;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ps-eye[aria-pressed="true"]{background:#FF6A1F}
+.ps-eye[aria-pressed="true"] svg{stroke:#1A0F07}
+.ps-btn{right:10px;height:50px;box-sizing:border-box;display:flex;align-items:center;gap:8px;margin:0;padding:0 16px 0 6px;border:0;border-radius:999px;background:rgba(14,15,18,0.62);color:#F2F3F5;font:700 18px/1 ${F};letter-spacing:.04em;box-shadow:0 4px 0 rgba(0,0,0,0.35);pointer-events:auto;cursor:pointer;touch-action:manipulation}
+.ps-btn i{flex:none;width:38px;height:38px;border-radius:50%;background:#FF6A1F;display:grid;place-items:center}
+.ps-btn svg{width:22px;height:22px;fill:none;stroke:#1A0F07;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.ps-btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,0.35)}
+.ps-btn.off{opacity:.5}
+.ps-swap{top:max(196px,calc(34% - 16px))}
+.ps-out{top:max(256px,calc(34% + 44px))}
+.ps-toast{top:22%;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:9px 20px;border-radius:22px;background:rgba(14,15,18,0.78);font-size:19px;font-weight:700;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,-50%) scale(.92);transition:opacity .15s,transform .15s}
+.ps-toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+body.seated #drivebar{display:none!important}
+body.fs #stage .ps{inset:var(--fs-t) var(--fs-r) var(--fs-b) var(--fs-l)}
+body.fs #stage .ps>:not(.ps-look),body.fs #stage .sp-box{zoom:var(--hudz)}
+@media (prefers-reduced-motion:reduce){.ps-toast{transition:none}}`;
+  document.head.appendChild(st);
+  const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const sp = mk('div', 'sp'), box = mk('div', 'sp-box'), h3 = mk('h3', null, '要坐哪裡？'), x = mk('button', 'sp-x', '✕'), car = mk('div', 'sp-car'), note = mk('p');
+  sp.hidden = true; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', '要坐哪裡？'); x.type = 'button'; x.setAttribute('aria-label', '關掉');
+  car.append(mk('i', 'sp-ws')); box.append(h3, x, car, note); sp.append(box);
+  const ps = mk('div', 'ps'), look = mk('div', 'ps-look'), who = mk('b', 'ps-who'), eye = mk('button', 'ps-eye'), swap = mk('button', 'ps-btn ps-swap'), out = mk('button', 'ps-btn ps-out'), toast = mk('div', 'ps-toast');
+  ps.hidden = true; who.hidden = true; toast.setAttribute('role', 'status');
+  eye.type = swap.type = out.type = 'button'; eye.setAttribute('aria-label', '換視角'); eye.innerHTML = SEAT_SVG.eye;
+  swap.innerHTML = `<i>${SEAT_SVG.seat}</i><span>換位子</span>`; out.innerHTML = `<i>${SEAT_SVG.car}</i><span>下車</span>`;
+  ps.append(look, who, eye, swap, out, toast);
+  stage.append(ps, sp);
+  const U = (SEATUI = { sp, box, h3, car, note, ps, look, who, eye, swap, out, toast, tT: 0, pick: null });
+  sp.addEventListener('click', (e) => { if (e.target === sp) seatPickClose(); });
+  x.addEventListener('click', () => seatPickClose());
+  car.addEventListener('click', (e) => { const b = e.target.closest('.sp-seat'); if (!b || b.disabled || !U.pick) return; const o = U.pick, i = +b.dataset.i; seatPickClose(); o.pick(i); });
+  eye.addEventListener('click', () => seatEye());
+  swap.addEventListener('click', () => seatSwap());
+  out.addEventListener('click', () => (HOP.on ? hopOut() : paxOut()));
+  look.addEventListener('pointerdown', (e) => { if (e.button > 0 || !SCAM.on) return; SCAM.drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; look.classList.add('on'); try { look.setPointerCapture(e.pointerId); } catch { /* 算了 */ } });
+  look.addEventListener('pointermove', (e) => { const d = SCAM.drag; if (!d || d.id !== e.pointerId) return; const dx = e.clientX - d.x, dy = e.clientY - d.y; d.x = e.clientX; d.y = e.clientY; seatLook(dx, dy); });
+  const up = (e) => { if (SCAM.drag && SCAM.drag.id === e.pointerId) { SCAM.drag = null; look.classList.remove('on'); } };
+  look.addEventListener('pointerup', up); look.addEventListener('pointercancel', up);
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && U.pick) seatPickClose(); else if ((e.key === 'c' || e.key === 'C') && SCAM.on && !U.pick && !e.repeat && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) seatEye(); });
+  return U;
+}
+// o：{ k, own（你的車：駕駛座寫「開車」）, taken[i]＝誰坐了, me（你現在坐的）, title, note, valid()（不對了就收起來）, pick(i) }
+function seatPickOpen(o) {
+  const U = seatUi(), L = seatsOf(o.k); if (L.length < 2) return;
+  U.pick = o;
+  for (const b of [...U.car.querySelectorAll('.sp-seat')]) b.remove();
+  const front = L.filter((s) => !s.rear), rear = L.filter((s) => s.rear), two = !rear.length;
+  U.car.classList.toggle('two', two);
+  const row = (list, top) => {
+    const n = list.length, w = n >= 3 ? 46 : 60, gap = n >= 3 ? 52 : 76;
+    list.slice().sort((a, b) => a.hip[2] - b.hip[2]).forEach((s, j) => { // 車頭朝上：右邊的位子（z > 0）在右邊
+      const b = document.createElement('button'), tk = o.taken[s.i], me = o.me === s.i;
+      b.type = 'button'; b.className = `sp-seat${n >= 3 ? ' n3' : ''}${me ? ' me' : tk ? ' tk' : ''}`; b.dataset.i = s.i; b.disabled = !!(me || tk);
+      b.style.left = `${85 + (j - (n - 1) / 2) * gap - w / 2}px`; b.style.top = `${top}px`; b.style.width = `${w}px`;
+      const lab = document.createElement('span'); lab.textContent = s.n.length === 4 ? `${s.n.slice(0, 2)}\n${s.n.slice(2)}` : s.n; b.append(lab);
+      const sub = me ? '你' : tk ? String(tk).slice(0, 6) : s.drv && o.own ? '（開車）' : '';
+      if (sub) { const sm = document.createElement('small'); sm.textContent = sub; b.append(sm); }
+      b.setAttribute('aria-label', `${s.n}${me ? '（你坐這裡）' : tk ? `（${tk}坐了）` : s.drv && o.own ? '（開車）' : ''}`);
+      U.car.append(b);
+    });
+  };
+  row(front, two ? 92 : 84); if (!two) row(rear, 166);
+  U.h3.textContent = o.title || '要坐哪裡？'; U.box.setAttribute('aria-label', U.h3.textContent);
+  U.note.textContent = o.note || '點一個位子就走過去坐';
+  U.sp.hidden = false;
+}
+function seatPickClose() { if (!SEATUI) return; SEATUI.pick = null; SEATUI.sp.hidden = true; }
+function seatToast(t, ms = 2200) {
+  const U = seatUi(); U.toast.textContent = t; U.toast.classList.add('show');
+  clearTimeout(U.tT); U.tT = setTimeout(() => U.toast.classList.remove('show'), ms);
+}
+function seatHud(on) {
+  const U = seatUi();
+  U.ps.hidden = !on;
+  if (on) { destOpen(false); moreOpen(false); } bodyFlag('seated', !!on); // 坐著：「去哪裡」「⋯」那一排收起來（開車的人才用）
+  if (!on) { U.toast.classList.remove('show'); SCAM.drag = null; U.look.classList.remove('on'); return; }
+  U.who.hidden = !HOP.on; if (HOP.on) U.who.textContent = `🚗 坐在 ${HOP.n} 的車上`;
+  U.eye.setAttribute('aria-pressed', String(SCAM.mode === 'eye'));
+  U.out.classList.remove('off');
+}
+
+// ---- 鏡頭（坐著的時候）：第一人稱＝那個位子的眼睛（拖：轉頭）；從外面看＝繞著車（拖：繞、高低）；換的時候慢慢移過去 ----
+const SCAM = { on: false, mode: 'eye', pref: 'eye', lod: false, cx: 0, yaw: 0, pitch: 0, oyaw: 0, opit: 0.32, hs: 0, hsOk: false, drag: null, near0: 0.2 };
+const SBL = { on: false, t: 0, T: 0.5, p: new THREE.Vector3(), q: new THREE.Quaternion(), f: 60 };
+const SC_V = new THREE.Vector3(), SC_W = new THREE.Vector3(), SC_Q = new THREE.Quaternion(), SC_Q2 = new THREE.Quaternion(), SC_E = new THREE.Euler(0, 0, 0, 'YXZ');
+function seatBlendFrom(T = 0.5) { if (!dcam) return; SBL.on = true; SBL.t = 0; SBL.T = calm ? Math.min(T, 0.15) : T; SBL.p.copy(dcam.position); SBL.q.copy(dcam.quaternion); SBL.f = dcam.fov; }
+function seatBlendTick(dt) { // 這一格的鏡頭擺好以後：從記下來的慢慢移過去
+  if (!SBL.on || !dcam) return;
+  SBL.t += dt; const e = sm01(SBL.t / SBL.T);
+  SC_V.copy(dcam.position); dcam.position.copy(SBL.p).lerp(SC_V, e);
+  SC_Q2.copy(dcam.quaternion); dcam.quaternion.copy(SBL.q).slerp(SC_Q2, e);
+  const f = SBL.f + (dcam.fov - SBL.f) * e; if (Math.abs(f - dcam.fov) > 0.01) { dcam.fov = f; dcam.updateProjectionMatrix(); }
+  if (e >= 1) SBL.on = false;
+}
+function seatCamStart(mode, cx) {
+  if (!SCAM.on) { SCAM.on = true; SCAM.near0 = dcam.near; }
+  seatBlendFrom();
+  SCAM.mode = mode; SCAM.cx = +cx || 0; SCAM.yaw = SCAM.pitch = 0; SCAM.oyaw = 0; SCAM.opit = 0.32; SCAM.hsOk = false; SCAM.drag = null;
+}
+function seatCamEnd() { if (!SCAM.on) return; SCAM.on = false; SCAM.drag = null; dcam.near = SCAM.near0 || 0.2; dcam.updateProjectionMatrix(); }
+function seatEye() { // 👁：第一人稱 ↔ 從外面看（記住：下次坐也是這個）
+  if (!SCAM.on) return;
+  seatBlendFrom(0.45);
+  SCAM.mode = SCAM.mode === 'eye' ? 'out' : 'eye'; SCAM.pref = SCAM.mode; SCAM.yaw = SCAM.pitch = 0; SCAM.oyaw = 0; SCAM.hsOk = false;
+  SEATUI?.eye.setAttribute('aria-pressed', String(SCAM.mode === 'eye'));
+}
+function seatLook(dx, dy) { // 拖畫面：跟走路一樣（往右拖＝往右看、往下拖＝往下看）
+  if (SCAM.mode === 'eye' && !SCAM.lod) { const k = (dcam.fov * Math.PI) / 180 / Math.max(240, stage.clientHeight); SCAM.yaw = seClamp(SCAM.yaw - dx * k, -2.5, 2.5); SCAM.pitch = seClamp(SCAM.pitch - dy * k, -0.75, 0.6); }
+  else { SCAM.oyaw = wrapPi(SCAM.oyaw - dx * 0.0068); SCAM.opit = seClamp(SCAM.opit + dy * 0.0052, 0.04, 1.2); }
+}
+function seatFov(f, near) {
+  let ch = false;
+  if (Math.abs(dcam.fov - f) > 0.01) { dcam.fov = f; ch = true; }
+  if (dcam.near !== near) { dcam.near = near; ch = true; }
+  if (ch) dcam.updateProjectionMatrix();
+}
+function seatChaseFov() { // 跟 drive.js 追車鏡頭停著的時候一樣（直的長畫面看多一點）
+  const a = dcam.aspect || 1, tall = 93 * seClamp(0.6 - a, 0, 0.2);
+  return seClamp((2 * Math.atan(Math.tan((56 * Math.PI) / 360) / a) * 180) / Math.PI, 50, 72 + tall);
+}
+function seatCeil(x, z) { // 鏡頭最高到哪（跟開車的一樣：越野車車庫、隧道裡、圓塔每一層的天花板下面）
+  if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75;
+  if (VIL.hills && !VIL.hills.high && VIL.hills.tunAt(x, z) >= 0) return VIL.hills.ceil;
+  const c = GAR.ceilingAt(x, z, true); return c < 50 ? GAR.group.position.y + c - 0.75 : Infinity;
+}
+function seatCamTick(dt, body, k, i, heading) {
+  const s = seatsOf(k)[i]; if (!s || !body || !dcam) return;
+  body.updateMatrixWorld(true);
+  if (SCAM.mode === 'eye' && !SCAM.lod) {
+    dcam.position.set(s.eye[0] + 0.05, s.eye[1], s.eye[2]).applyMatrix4(body.matrixWorld);
+    body.getWorldQuaternion(SC_Q);
+    dcam.quaternion.copy(SC_Q).multiply(SC_Q2.setFromEuler(SC_E.set(SCAM.pitch, -Math.PI / 2 + SCAM.yaw, 0, 'YXZ'))); // 車身：x 往前（相機看 −z：轉 −90°）
+    seatFov(cabinFov(k, dcam.aspect), 0.05);
+    return;
+  }
+  SC_W.set(SCAM.cx, 0.85, 0).applyMatrix4(body.matrixWorld); // 看車子中間
+  if (!SCAM.hsOk) { SCAM.hs = heading; SCAM.hsOk = true; } else SCAM.hs += wrapPi(heading - SCAM.hs) * (1 - Math.exp(-dt * 2.5));
+  const tw = GAR && inTower(SC_W.x, SC_W.z, 0.5), tight = tw || !!OB?.inside(SC_W.x, SC_W.z, 0.6), D = tight ? 3.6 : 6.3, a = SCAM.hs + SCAM.oyaw + Math.PI, ce = Math.cos(SCAM.opit);
+  let x = SC_W.x + Math.cos(a) * ce * D, z = SC_W.z - Math.sin(a) * ce * D, y = SC_W.y + Math.sin(SCAM.opit) * D;
+  if (tw) { const L = garLot(), dx = x - L.x, dz = z - L.z, r = Math.hypot(dx, dz), R = TOWER.RW - 0.7; if (r > R) { x = L.x + (dx * R) / r; z = L.z + (dz * R) / r; } } // 圓塔裡面：不要穿出玻璃（地下室外面是土）
+  const g = PW ? PW.heightAt(x, z) || 0 : 0; if (y < g + 0.35) y = g + 0.35;
+  const c = seatCeil(x, z); if (y > c) y = c;
+  dcam.position.set(x, y, z); dcam.up.set(0, 1, 0); dcam.lookAt(SC_W);
+  seatFov(seatChaseFov(), 0.2);
+}
+
+// ---- 坐自己的車的別的位子（車子停著；開車的 drv 暫停著，跟剛下車一樣）----
+const PAX = { on: false, k: '', i: 0, want: null };
+function paxStart(k, i) {
+  if (!drv || !tripS || !seatsOf(k)[i]) return;
+  PAX.want = null;
+  drv.pause(); const sh = TR.scene.getObjectByName('drive-shadow'); if (sh) sh.visible = true; // 影子留著（drive.pause 會藏起來）
+  dvoice?.dispose(); dvoice = null; // 熄火
+  tripS.cabin?.userData.setGauges(0, 0); tripS.cabin?.userData.setSteer?.(0);
+  PAX.on = true; PAX.k = k; PAX.i = i;
+  const ci = drv.carInfo; seatCamStart(SCAM.pref, (ci.nose + ci.tail) / 2);
+  seatHud(true);
+  seatToast(`坐在${seatName(k, i)}。要開車就換到駕駛座`, 2600);
+}
+function paxEnd() { if (!PAX.on) return; PAX.on = false; seatCamEnd(); seatHud(false); seatPickClose(); }
+function paxTo(j) {
+  if (!PAX.on || !drv || j === PAX.i || !seatsOf(PAX.k)[j]) return;
+  if (j === 0) { // 換到駕駛座：開
+    const eye = SCAM.mode === 'eye';
+    seatBlendFrom(0.45); paxEnd();
+    drv.resume(); drv.setCameraMode(eye ? 'eye' : 'chase');
+    dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
+    drv.toast('換到駕駛座了，可以開了', 1800);
+    return;
+  }
+  seatBlendFrom(0.4); PAX.i = j; SCAM.yaw = SCAM.pitch = 0;
+  seatToast(`換到${seatName(PAX.k, j)}`, 1500);
+}
+function paxOut() {
+  if (!PAX.on || !drv || !walker) return;
+  const t = drv.telemetry(), s = seatsOf(PAX.k)[PAX.i]; if (!s) return;
+  const ci = drv.carInfo, cx = (ci.nose + ci.tail) / 2;
+  const sp = BORROW_K ? null : parkSpot(t), spot = sp && Math.hypot(sp.x - t.x, sp.z - t.z) < 0.05 && Math.abs(wrapPi(sp.heading - t.heading)) < 0.02 ? sp : null; // 本來就停在格子裡：照樣掛回格子
+  const car = outAt(spot, { seat: { side: s.side || 1, u: s.hip[0] + 0.1 - cx }, paused: true });
+  if (!car) { seatToast('這裡太擠了，下不了車', 1800); return; }
+  paxEnd();
+}
+
+// ---- 換位子（自己的車、朋友的車）----
+function seatSwap() {
+  if (PAX.on) { seatPickOpen({ k: PAX.k, own: true, taken: seatTaken(NET.me, PAX.k), me: PAX.i, title: '換到哪裡？', note: '點一個位子就換過去', valid: () => PAX.on, pick: (j) => paxTo(j) }); return; }
+  if (!HOP.on) return;
+  const T = seatTaken(HOP.uid, HOP.k, HOP.n); T[HOP.i] = undefined;
+  seatPickOpen({ k: HOP.k, own: false, taken: T, me: HOP.i, title: '換到哪裡？', note: '駕駛座是開車的人坐的', valid: () => HOP.on, pick: (j) => { if (!HOP.on || j === HOP.i || !seatsOf(HOP.k)[j]) return; seatBlendFrom(0.4); HOP.i = j; SCAM.yaw = SCAM.pitch = 0; seatToast(`換到${seatName(HOP.k, j)}`, 1500); } });
+}
+
+// ---- 走路的時候：「選位子」（你的車：走到「上車」那台旁邊；朋友的車：停著、或他在開但停住了，2.4 公尺內）----
+const SEATN = { own: null, P: null };
+const SEAT_ACT = { label: '選位子', icon: 'seat', onClick: () => seatWalkGo() };
+function seatOwnCar(car) { return !!car && !car.borrow && !car.hop && !BORROW_K && (car.drive || GAME.owned.has(car.key)) && seatsOf(car.key).length > 1; }
+function seatHopKey(P) { const c = P.cur; return c.o === 1 ? c.k : P.pkOn && (c.pk || c.pv) ? (c.pk || c.pv)[0] : null; } // 他現在開的、停著的那台
+function seatNearFriend(me) {
+  if (!NET.on || HOP.ask || HOP.want || BOR.on || BOR.want || BOR.loading || !netWorld()) return null;
+  let best = null, bd = 2.4;
+  for (const P of NET.P.values()) {
+    const c = P.cur, O = P.obj; if (!O || !O.car.visible || netNow() - P.last > 6000) continue;
+    const k = seatHopKey(P); if (!k || P.objK !== k || seatsOf(k).length < 2) continue;
+    if (c.o === 1 && (Math.abs(c.v) > 1 || c.nr)) continue; // 開著的：停住了才可以
+    const h = O.car.rotation.y, cs = Math.cos(h), sn = Math.sin(h), bx = O.car.position.x + cs * O.cx, bz = O.car.position.z - sn * O.cx, dx = me.x - bx, dz = me.z - bz;
+    const eu = Math.abs(dx * cs - dz * sn) - (O.nose - O.tail) / 2, ew = Math.abs(dx * sn + dz * cs) - O.hw, d = Math.hypot(Math.max(0, eu), Math.max(0, ew));
+    if (d < bd) { bd = d; best = P; }
+  }
+  return best;
+}
+function seatWalk() {
+  SEATN.own = null; SEATN.P = null;
+  if (!walker) return;
+  const ok = walker.mode === 'walk' && !indoor && !doorFade && !sleep && !jailed() && !BOR.pad && !(police && police.state === 'wanted') && !RACE.on;
+  if (ok) {
+    const car = walker.nearCar;
+    if (seatOwnCar(car)) SEATN.own = car; else SEATN.P = seatNearFriend(walker.telemetry());
+  }
+  walker.setAction2(SEATN.own || SEATN.P ? SEAT_ACT : null);
+}
+function seatWalkGo() {
+  const car = SEATN.own, near = (x, z) => { if (!walker || walker.mode !== 'walk') return false; const t = walker.telemetry(); return Math.hypot(t.x - x, t.z - z) < 7; };
+  if (car) {
+    const k = car.key;
+    seatPickOpen({ k, own: true, taken: seatTaken(NET.me, k), me: -1, note: '點一個位子就走過去坐', valid: () => near(car.x, car.z), pick: (i) => { if (!walker || walker.mode !== 'walk') return; if (i === 0) walker.getIn(car); else walker.getIn(car, { seat: seatGo(k, i, car.cx) }); } });
+    return;
+  }
+  const P = SEATN.P; if (!P) return;
+  const k = seatHopKey(P), n = P.n || '朋友'; if (!k) return;
+  seatPickOpen({ k, own: false, taken: seatTaken(P.uid, k, n), me: -1, title: `要坐${n}的車哪裡？`, note: `點一個位子，問${n}可不可以坐`, valid: () => !!P.obj && P.obj.car.visible && near(P.obj.car.position.x, P.obj.car.position.z), pick: (i) => hopAsk(P, k, i) });
+}
+
+// ---- 坐朋友的車 ----
+const HOP = { on: false, ask: null, want: null, uid: '', n: '', k: '', i: 1, car: null, lodS: null, job: 0, voice: null, lost: 0, last: { x: 0, z: 0, heading: 0 }, hx: 2.2, hz: 0.9, cx: 0, roll: 0, px: null, pz: null, ph: 0, kap: 0, vd: 0, spd: 0, hubs: null, hub0: null, RF: 0.33, RR: 0.33 };
+function hopAsk(P, k, i) {
+  if (HOP.ask || HOP.on || !NET.on || !walker) return;
+  if (police && police.state === 'wanted') { walker.toast('被警察追的時候不能坐朋友的車', 2200); return; }
+  if (BOR.on || BOR.want || BOR.loading) { walker.toast('先還車才能坐朋友的車', 2200); return; }
+  HOP.ask = { uid: P.uid, n: P.n || '朋友', k, i, t: performance.now() };
+  netEv('ride', { uid: P.uid, s: i, k });
+  walker.toast(`🚗 等${HOP.ask.n}回答⋯`, 2600);
+}
+function hopAns(a) { // 網站：他的回答 { uid, n, ok：1 好｜-1 不要｜-2 在忙｜-3 關掉邀請｜-4 送不出去｜-5 不在線上｜0 沒有回答 }
+  const A = HOP.ask; if (!a || !A || String(a.uid) !== A.uid) return 'gone';
+  HOP.ask = null;
+  const n = String(a.n || A.n || '朋友').slice(0, 12);
+  if ((a.ok | 0) === 1) return hopGo(A, n) ? 'ok' : 'far';
+  const m = { [-1]: `${n}說「不要」。`, [-2]: `${n}在忙，等一下再試。`, [-3]: `${n}關掉了邀請。`, [-4]: '問不到，等一下再試一次。', [-5]: `${n}已經不在線上了。`, 0: `${n}沒有回答。` }[a.ok | 0];
+  if (m) netToast(m);
+  return 'ok';
+}
+function hopGo(A, n) { // 他說好了：走過去坐（他的車的車門）
+  const P = NET.P.get(A.uid), O = P && P.obj;
+  if (!trip || !DRIVE.on || !walker || walker.mode !== 'walk' || indoor) { netToast(`${n}說好了，可是你現在不能上車`); return false; }
+  if (!O || !O.car.visible || P.objK !== A.k) { netToast(`${n}說好了，可是他的車不見了`); return false; }
+  const me = walker.telemetry(); if (Math.hypot(O.car.position.x - me.x, O.car.position.z - me.z) > 9) { netToast(`${n}說好了，可是你已經走遠了`); return false; }
+  let i = A.i; const T = seatTaken(P.uid, A.k, n);
+  if (T[i] || !seatsOf(A.k)[i]) { i = seatsOf(A.k).findIndex((s, j) => j > 0 && !T[j]); if (i < 0) { netToast(`${n}的車坐滿了`); return false; } } // 那個位子剛好有人坐了：換一個空的
+  const e = { key: A.k, name: `${n}的 ${borCarName(A.k)}`, x: O.car.position.x, z: O.car.position.z, heading: O.car.rotation.y, hx: (O.nose - O.tail) / 2, hz: O.hw, cx: O.cx, cz: 0, h: O.top, object: O.car, hop: true, solid: false };
+  HOP.want = { uid: P.uid, n, k: A.k, i, entry: e, t: performance.now() };
+  walker.setCars([...walkCars(), e]);
+  if (!walker.getIn(e, { seat: seatGo(A.k, i, O.cx) })) { HOP.want = null; walker.setCars(walkCars()); netToast('上不了車，再試一次'); return false; }
+  walker.toast(`${n}說好！走過去坐${seatName(A.k, i)}`, 2000);
+  return true;
+}
+function hopWantOff() { if (!HOP.want) return; HOP.want = null; if (walker && trip) walker.setCars(walkCars()); } // 走去車門的時候推搖桿取消了
+// 坐進去了（town.src.js onGetIn）：你原本那台停好（跟借車一樣）、坐在他的車上（先坐在輕量車上、從外面看；完整的車載好換過去）
+function hopBoard(e, seat) {
+  const W = HOP.want; HOP.want = null;
+  const P = W && W.entry === e ? NET.P.get(W.uid) : null, O = P && P.obj;
+  const fail = (t) => { if (walker && trip) { walker.setCars(walkCars()); walker.resume(); walker.toast(t, 2200); } };
+  if (!P) { fail(W ? `${W.n}不在了` : '上不了車'); return; }
+  if (!O || !O.car.visible || P.objK !== W.k || Math.hypot(O.car.position.x - e.x, O.car.position.z - e.z) > 3) { fail(`${W.n}開走了`); return; }
+  if (drv) borParkMine(); // 你原本那台（剛下來的）停好
+  Object.assign(HOP, { on: true, uid: W.uid, n: W.n, k: W.k, i: seat && seat.i > 0 ? seat.i : W.i, car: null, lodS: { body: O.lod.body || O.car }, lost: 0, last: { x: e.x, z: e.z, heading: e.heading }, hx: (O.nose - O.tail) / 2, hz: O.hw, cx: O.cx, roll: 0, px: null, pz: null, ph: e.heading, kap: 0, vd: 0, spd: 0 });
+  walker.setCars(walkCars());
+  seatCamStart('out', O.cx); SCAM.lod = true;
+  seatHud(true);
+  seatToast(`坐在 ${W.n} 的車上`, 2200);
+  hopLoad();
+}
+async function hopLoad() {
+  const job = ++HOP.job, k = HOP.k, P = NET.P.get(HOP.uid), look = netLook(k, P ? P.l : null);
+  let car = null; try { car = await loadCar(k, look); } catch (e) { console.error(e); }
+  if (!HOP.on || HOP.job !== job || !trip || !DRIVE.on) { if (car) disposeCar(car); return; }
+  if (!car) { hopEnd('fail'); return; }
+  HOP.car = car; car.car.rotation.order = 'YXZ'; car.body.position.y = +look.height || 0; car.car.visible = true; TR.scene.add(car.car);
+  car.cabin?.userData.setGauges(0.13, 0); car.cabin?.userData.setSteer?.(0);
+  HOP.hubs = car.wheels.map((w) => w.parent); HOP.hub0 = HOP.hubs.map((h) => h.rotation.y);
+  const W = car.spec?.wheels || {}; HOP.RF = W.RF ?? W.R ?? 0.33; HOP.RR = W.RR ?? W.R ?? 0.33;
+  try { HOP.voice?.dispose(); HOP.voice = engineAudio.input ? engineAudio.voice(k, { parts: [] }) : null; } catch (e) { HOP.voice = null; }
+  seatBlendFrom(0.5); SCAM.lod = false; SCAM.mode = SCAM.pref; SCAM.yaw = SCAM.pitch = 0; SCAM.hsOk = false;
+  seatHud(true);
+}
+// 要下車了嗎（每一格）：'' 照坐；'wait' 他的車這一格沒畫（重做中）；其他＝下車的原因
+function hopWhy(P, dt) {
+  if (!P) return 'gone';
+  const c = P.cur;
+  if (netNow() - P.last > 6000) return 'stale';
+  if (c.o === 3 || (c.o === 1 && c.nr)) return 'race';
+  const k = c.o === 1 ? c.k : c.pk || c.pv ? (c.pk || c.pv)[0] : null;
+  if (!k) return 'away';
+  if (k !== HOP.k) return 'car';
+  const O = P.obj;
+  if (!O || P.objK !== HOP.k || !O.car.parent || !(O.car.visible || HOP.lost < 0)) { HOP.lost += dt; return HOP.lost > 2.5 ? 'away' : 'wait'; }
+  HOP.lost = 0;
+  return '';
+}
+const hopRpm = (kmh) => { if (kmh < 2) return 0.13; const G = [0, 45, 80, 115, 155, 200, 260, 420]; let g = 0; while (g < G.length - 2 && kmh > G[g + 1]) g++; return 0.28 + 0.62 * seClamp((kmh - G[g]) / (G[g + 1] - G[g]), 0, 1); };
+function hopStep(dt) {
+  const P = NET.P.get(HOP.uid), why = hopWhy(P, dt);
+  if (why && why !== 'wait') { hopEnd(why); return; }
+  if (why === 'wait') return;
+  const O = P.obj, src = O.car, C = HOP.car;
+  if (!C && HOP.lodS.body !== (O.lod.body || O.car)) HOP.lodS = { body: O.lod.body || O.car }; // 他的輕量車重做了
+  let d = 0;
+  if (HOP.px != null) {
+    d = Math.hypot(src.position.x - HOP.px, src.position.z - HOP.pz) * (P.cur.v < 0 ? -1 : 1);
+    const dh = wrapPi(src.rotation.y - HOP.ph); if (Math.abs(d) > 0.01) HOP.kap += (seClamp(-dh / d, -0.3, 0.3) - HOP.kap) * 0.3; else HOP.kap *= 0.9; // 往右轉＝正的
+    if (dt > 0) HOP.spd += (Math.abs(d) / dt - HOP.spd) * Math.min(1, dt * 6);
+  }
+  HOP.px = src.position.x; HOP.pz = src.position.z; HOP.ph = src.rotation.y; HOP.roll += d;
+  HOP.last.x = src.position.x; HOP.last.z = src.position.z; HOP.last.heading = src.rotation.y;
+  const vis = seClamp(Math.atan(HOP.kap * 2.6), -0.6, 0.6); HOP.vd += (vis - HOP.vd) * Math.min(1, dt * 8);
+  const steer = seClamp(HOP.vd / 0.45, -1, 1), kmh = HOP.spd * 3.6, rpm = hopRpm(kmh);
+  if (C) {
+    C.car.position.copy(src.position); C.car.rotation.set(src.rotation.x, src.rotation.y, src.rotation.z, 'YXZ');
+    src.visible = false; // 輕量車藏起來（影子 O.sh 留著）
+    C.wheels.forEach((w, j) => { w.rotation.z = (j % 2 === 0 ? 1 : -1) * (HOP.roll / (j < 2 ? HOP.RF : HOP.RR)); });
+    if (HOP.hubs?.length > 1) { HOP.hubs[0].rotation.y = HOP.hub0[0] - HOP.vd; HOP.hubs[1].rotation.y = HOP.hub0[1] - HOP.vd; }
+    C.cabin?.userData.setGauges(rpm, kmh); C.cabin?.userData.setSteer?.(steer);
+  }
+  walker?.follow(src.position.x, src.position.z, src.rotation.y); // 地圖、路上的車和人、警察看到的你在哪裡
+  HOP.voice?.set({ rpm, throttle: kmh > 3 ? 0.5 : 0.1, speed: HOP.spd });
+  if (SEATUI) SEATUI.out.classList.toggle('off', HOP.spd > 1 || Math.abs(P.cur.v) > 1);
+}
+function hopOut() { // 「下車」：車停下來才可以
+  if (!HOP.on) return;
+  const P = NET.P.get(HOP.uid);
+  if (HOP.spd > 1 || (P && Math.abs(P.cur.v) > 1)) { seatToast('車子停下來才能下車', 1600); return; }
+  hopEnd('out');
+}
+// 下車（why：out 自己下車｜gone 他離開世界｜away 他回家了｜race 他去比賽｜car 他換車｜stale 斷線｜fail 載不了車｜home 你回車庫頁｜leave 你離開世界）
+function hopEnd(why) {
+  if (!HOP.on) return;
+  HOP.why = why; // 最後一次為什麼下車（測試看）
+  const P = NET.P.get(HOP.uid), n = HOP.n, k = HOP.k, i = HOP.i, C = HOP.car, last = { ...HOP.last };
+  HOP.on = false; HOP.job++;
+  if (C && MIR.S === C) mirrorSet(false);
+  mySitOff();
+  if (C) seatDetach(C.body);
+  HOP.voice?.dispose(); HOP.voice = null;
+  if (C) disposeCar(C);
+  HOP.car = null; HOP.lodS = null; HOP.hubs = HOP.hub0 = null;
+  if (P?.obj && P.objK === k) P.obj.car.visible = true;
+  seatCamEnd(); seatHud(false); seatPickClose();
+  if (why === 'home' || !walker || !trip || !DRIVE.on) return;
+  const s = seatsOf(k)[i], box = { x: last.x, z: last.z, heading: last.heading, hx: HOP.hx, hz: HOP.hz, cx: HOP.cx, cz: 0 };
+  walker.removeColliders('net'); NET.wkT = 0; // 他的車的碰撞先拿掉（車門那一段才不會算擋住）；下一格 netStep 再放
+  if (!walker.exitAt(box, { side: s?.side || 1, u: (s ? s.hip[0] + 0.1 : 0) - HOP.cx })) { // 四邊都沒地方站：站到左邊
+    const c = Math.cos(last.heading), sn = Math.sin(last.heading), dd = HOP.hz + 0.9;
+    walker.teleport({ x: last.x - sn * dd, z: last.z - c * dd, heading: last.heading - Math.PI / 2 }, { keepCamera: false });
+    walker.resume({ blend: 0.4 });
+  }
+  walker.setCars(walkCars());
+  const m = { gone: `${n}離開了，你下車了`, away: `${n}把車開回家了，你下車了`, race: `${n}去比賽了，你下車了`, car: `${n}換車了，你下車了`, stale: `${n}斷線了，你下車了`, fail: '坐不進去，等一下再試一次' }[why];
+  if (m) walker.toast(m, 2600);
+}
+
+// ---- 朋友坐在車上（他開車＝駕駛座；坐在別人的車上＝那個位子）：他的人（netChr）放進那台車的車身（輕量車或完整的車），坐好一次；手跟著方向盤 ----
+const SEAT_PS = { n: 0 };
+function seatPeerBody(P) { // → [車身, 車, 位子] | null
+  const c = P.cur; if (netNow() - P.last > 6000 || !netWorld()) return null;
+  if (c.o === 1) {
+    if (!c.k || c.k === 'z2') return null; // 沙灘車：第 56 批騎的人
+    if (HOP.on && HOP.uid === P.uid && HOP.car && HOP.k === c.k) return [HOP.car.body, c.k, c.st | 0];
+    const O = P.obj; if (!O || !O.car.visible || P.objK !== c.k) return null;
+    return [O.lod.body || O.car, c.k, c.st | 0];
+  }
+  if (c.o === 5 && c.rd) {
+    const h = c.rd[0], i = c.rd[1], k = c.rd[2];
+    if (h === NET.me) return tripFull === cur && cur === k && !BORROW_K && tripS?.car?.visible && tripS.car.parent === TR.scene ? [tripS.body, k, i] : null; // 坐我的車
+    if (HOP.on && HOP.uid === h && HOP.k === k) { if (HOP.car) return [HOP.car.body, k, i]; }
+    const H = NET.P.get(h), O = H && H.obj; if (!O || H.objK !== k || !O.car.visible) return null;
+    return [O.lod.body || O.car, k, i];
+  }
+  return null;
+}
+function seatPeerSteer(P) { // 朋友開車：照他轉彎多快估方向盤（右轉＝正的）
+  const b = P.buf, n = b.length; if (n < 2) return 0;
+  const a = b[n - 2], c = b[n - 1], ds = Math.hypot(c.x - a.x, c.z - a.z) * (c.v < 0 ? -1 : 1);
+  if (Math.abs(ds) < 0.05) return P.stE || 0;
+  const want = seClamp(Math.atan((-wrapPi(c.h - a.h) / ds) * 2.6) / 0.45, -1, 1);
+  P.stE = (P.stE || 0) + (want - (P.stE || 0)) * 0.25;
+  return P.stE;
+}
+function seatUnpeer(P) {
+  const S = P.sit; P.sit = null; const C = P.chr; if (!C || !S || S.C !== C) return;
+  C.group.userData.seated = false;
+  if (C.group.parent !== TR.scene && C.group.parent !== PSC) { TR.scene.add(C.group); C.group.visible = false; } // 還在車上（他回車庫頁了）：拿下來；在走路（netStep 已經拿到場景上了）就照它的
+  C.group.rotation.x = 0; C.group.rotation.z = 0;
+  if (C.shadow) C.shadow.visible = true;
+  C.update(0, { state: 'idle', hands: 'lap', feet: null });
+}
+function seatPeers() {
+  let n = 0;
+  for (const P of NET.P.values()) {
+    const t = seatPeerBody(P);
+    if (!t) { if (P.sit) seatUnpeer(P); continue; }
+    const [B, k, i] = t, s = seatsOf(k)[i];
+    if (!s) { if (P.sit) seatUnpeer(P); continue; }
+    if (!P.chr) netChr(P);
+    const C = P.chr; if (!C) continue;
+    const S = P.sit || (P.sit = { B: null, k: '', i: -1, C: null, P: {}, st: 9 });
+    if (S.B !== B || S.k !== k || S.i !== i || S.C !== C || C.group.parent !== B) {
+      B.add(C.group); C.group.userData.seated = true; if (C.shadow) C.shadow.visible = false;
+      seatPlace(C, s, S.P); S.B = B; S.k = k; S.i = i; S.C = C; S.st = 0;
+    }
+    C.group.visible = true; n++;
+    if (s.wheel && P.cur.o === 1) { const st = seatPeerSteer(P); if (Math.abs(st - S.st) > 0.02) { S.st = st; seatSteer(C, S.P, st); C.update(1 / 30, S.P); } }
+  }
+  SEAT_PS.n = n;
+  for (const P of NET.P.values()) { // 我是車主：有人坐上來、下車了
+    const c = P.cur, on = netNow() - P.last < 6000 && c.o === 5 && !!c.rd && c.rd[0] === NET.me;
+    if (on !== !!P.rideMe) { P.rideMe = on; if (P.n) netToast(on ? `🚗 ${P.n}坐上你的車了` : `${P.n}下車了`); }
+  }
+}
+
+// ---- 每一格（town.src.js driveStep：netStep 後面）----
+function seatsStep(dt) {
+  if (!trip || !DRIVE.on || !TR) return;
+  if (HOP.on) hopStep(dt);
+  if (HOP.want && walker && walker.mode === 'walk' && performance.now() - HOP.want.t > 600) hopWantOff();
+  if (PAX.on && (!drv || !tripS || !walker || walker.mode !== 'off')) paxEnd(); // 被換掉了（回車庫頁、被抓⋯）
+  if (PAX.on) { mySitOn(tripS, PAX.k, PAX.i, SCAM.mode !== 'eye'); seatCamTick(dt, tripS.body, PAX.k, PAX.i, tripS.car.rotation.y); }
+  else if (HOP.on) { const Sx = HOP.car || HOP.lodS; mySitOn(Sx, HOP.k, HOP.i, SCAM.mode !== 'eye' || !HOP.car); seatCamTick(dt, Sx?.body, HOP.k, HOP.i, HOP.last.heading); }
+  else if (drv && walker && walker.mode === 'off' && cur !== 'z2' && tripS?.car?.visible && tripS.car.parent === TR.scene && !(walker.character && walker.character.group.visible) && seatsOf(cur).length) { // 開車：你坐在駕駛座（從外面看得到）
+    mySitOn(tripS, cur, 0, drv.cameraMode !== 'eye'); mySitSteer(drv.telemetry().steer);
+  } else if (MYSIT.S) mySitOff();
+  if (NET.on) seatPeers();
+  seatWalk();
+  if (SEATUI?.pick && SEATUI.pick.valid && !SEATUI.pick.valid()) seatPickClose();
+  seatBlendTick(dt);
+}
+// 回車庫頁（leaveDrive）、離開世界：全部收掉（why 'home'＝不用下車走路）
+function seatsEnd(why = 'home') {
+  seatPickClose();
+  if (HOP.ask) { netEv('rideEnd', { uid: HOP.ask.uid }); HOP.ask = null; }
+  hopWantOff();
+  if (HOP.on) hopEnd(why);
+  if (PAX.on) paxEnd();
+  if (why === 'home') mySitOff();
+  for (const P of NET.P.values()) if (P.sit) seatUnpeer(P);
+  SBL.on = false;
+}
+// 送給朋友的（net.src.js netState）：坐在朋友的車上＝o 5、他的車在哪裡、rd [車主, 位子, 車]
+function seatNetHop(s) { s.o = 5; s.x = HOP.last.x; s.z = HOP.last.z; s.h = HOP.last.heading; s.v = HOP.spd; s.rd = [HOP.uid, HOP.i, HOP.k]; }
+// 車主：別人問「可以坐你的車嗎」：現在可以嗎（不行＝網站回「在忙」）
+function seatHostOk(d) {
+  if (!trip || !DRIVE.on || !tripPose || BOR.on || LENT_K || HOP.on || RACE.on || ciRace || orRace || jailed() || indoor) return false;
+  const k = String(d.k || ''), i = d.s | 0;
+  if (k && k !== cur) return false;
+  return i > 0 && !!seatsOf(cur)[i];
+}
 
 
 // ---- 全螢幕（Nick 2026-09-28：「可以全螢幕」）----
@@ -46474,7 +47192,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 32; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 33; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -47230,7 +47948,7 @@ renderer.setAnimationLoop((now) => {
   }
   async function start(slot) {
     const r = rt, me = uid();
-    W = { me, slot, mem: [], all: {}, pos: {}, offs: [], last: null, lastT: 0, conn: true, seen: {}, myBl: {}, blMe: new Set(), inc: {}, showing: null, answered: {}, out: null, match: null, myCar: '', w: '', n: myName(), wT: 0, cleanT: 0, rejoin: false, lkK: lookKey(), lkT: 0, bq: null, bor: null, lent: null, tries: {}, bSeen: {}, bell: null, guest: null };
+    W = { me, slot, mem: [], all: {}, pos: {}, offs: [], last: null, lastT: 0, conn: true, seen: {}, myBl: {}, blMe: new Set(), inc: {}, showing: null, answered: {}, out: null, match: null, myCar: '', w: '', n: myName(), wT: 0, cleanT: 0, rejoin: false, lkK: lookKey(), lkT: 0, bq: null, bor: null, lent: null, tries: {}, bSeen: {}, bell: null, guest: null, ride: null };
     await discSet();
     G()?.net?.join({ code: 'world', me, host: '', name: myName(), slot });
     G()?.net?.clock(r.now() - Date.now());
@@ -47278,6 +47996,7 @@ renderer.setAnimationLoop((now) => {
     if (W.out && W.out.off) try { W.out.off(); } catch { /* 算了 */ }
     if (W.lent) rt.set(`borrow/a/${W.lent.to}/${W.me}`, { id: W.lent.id, ok: -9, t: rt.now() }).catch(() => {}); // 借出去的：拿回來
     if (W.bell) bellOff(true); // 第 23 批：按了門鈴、在朋友家：收掉（遊戲那邊 leave 自己出來）
+    if (W.ride) rideOff(true); // 第 57 批：問了「可以坐你的車嗎」還沒回答：收掉
     if (W.guest) { const id = W.guest.id; guestOff(''); rt.remove(`matches/${id}`).catch(() => {}); } // 朋友在我家：他那邊出來
     G()?.net?.leave(); // 遊戲那邊：借來的還（送 return）、借出去的收回來
     W = null; paintAll();
@@ -47321,6 +48040,7 @@ renderer.setAnimationLoop((now) => {
     if (W.bq && !here.has(W.bq.owner)) { const o = W.bq.owner; W.bq = null; G()?.net?.borrowAns({ uid: o, ok: -2 }); }
     if (W.bell && !here.has(W.bell.to)) { const b = W.bell; bellOff(true); if (b.on) G()?.net?.visitEnd?.('gone'); else G()?.net?.bellAns?.({ uid: b.to, n: b.n, ok: -5 }); } // 第 23 批：他離開世界了
     if (W.guest && !here.has(W.guest.from)) guestOff('left');
+    if (W.ride && !here.has(W.ride.to)) { const r = W.ride; rideOff(true); G()?.net?.rideAns?.({ uid: r.to, n: r.n, ok: -5 }); } // 第 57 批：他離開世界了
     invites(); paintAll();
   }
   async function block(u, n) {
@@ -47332,6 +48052,7 @@ renderer.setAnimationLoop((now) => {
     if (W.bor && W.bor.owner === u) { W.bor = null; G()?.net?.borrowAns({ uid: u, ok: -8 }); }
     if (W.bell && W.bell.to === u) { const b = W.bell; bellOff(true); if (b.on) G()?.net?.visitEnd?.('gone'); } // 第 23 批
     if (W.guest && W.guest.from === u) { rt.update(`matches/${W.guest.id}`, { ok: -9 }).catch(() => {}); guestOff(''); }
+    if (W.ride && W.ride.to === u) { const r = W.ride; rideOff(true); G()?.net?.rideAns?.({ uid: r.to, n: r.n, ok: -5 }); } // 第 57 批
     try { await rt.set(`world/bl/${W.me}/${u}`, String(n || '').slice(0, 12) || '?'); } catch (e) { fail(e, '封鎖不了，等一下再試一次。'); msg = ''; }
     paintAll();
   }
@@ -47361,7 +48082,8 @@ renderer.setAnimationLoop((now) => {
     if (s.pv) o.pv = s.pv.slice(); // 第 22 批：停著的車（我在房子裡、在警察局、被關也送）
     if (s.ph) o.ph = s.ph.slice(); // 第 22 批：我撞到朋友的警車 [朋友, 第幾台, dvx, dvz, 第幾下]
     if (s.y != null) o.y = rd(s.y, 100); // 第 24 批：在圓塔外面的斜坡上有多高
-    const L = W.last, moved = !L || L.o !== o.o || L.k !== o.k || String(L.pk) !== String(o.pk) || String(L.pv) !== String(o.pv) || String(L.ph) !== String(o.ph) || L.pl !== o.pl || L.rs !== o.rs || L.w !== o.w || L.jl !== o.jl || pcMoved(L.pc, o.pc) || Math.abs(L.x - o.x) > 0.05 || Math.abs(L.z - o.z) > 0.05 || Math.abs(L.h - o.h) > 0.01 || Math.abs(L.v - o.v) > 0.2 || L.rp !== o.rp || (L.y == null) !== (o.y == null) || Math.abs((L.y ?? 0) - (o.y ?? 0)) > 0.05;
+    if (s.st) o.st = s.st | 0; if (s.rd) o.rd = s.rd.slice(0, 3); if (s.nr) o.nr = 1; // 第 57 批：坐自己的車第幾個位子；坐在朋友的車上 [車主, 位子, 車]；在賽車場／泥巴賽
+    const L = W.last, moved = !L || L.o !== o.o || L.k !== o.k || String(L.pk) !== String(o.pk) || String(L.pv) !== String(o.pv) || String(L.ph) !== String(o.ph) || L.pl !== o.pl || L.rs !== o.rs || L.w !== o.w || L.jl !== o.jl || pcMoved(L.pc, o.pc) || Math.abs(L.x - o.x) > 0.05 || Math.abs(L.z - o.z) > 0.05 || Math.abs(L.h - o.h) > 0.01 || Math.abs(L.v - o.v) > 0.2 || L.rp !== o.rp || (L.y == null) !== (o.y == null) || Math.abs((L.y ?? 0) - (o.y ?? 0)) > 0.05 || L.st !== o.st || String(L.rd) !== String(o.rd) || L.nr !== o.nr;
     const gap = now - W.lastT;
     if (!(moved && gap > 110 || gap > (o.o ? 1500 : 3000))) return;
     o.t = rt.now(); W.last = o; W.lastT = now;
@@ -47389,6 +48111,7 @@ renderer.setAnimationLoop((now) => {
     }
     if (W.out && !W.match && now - W.out.at > INV_MS) cancelOut('他沒有回答。');
     if (W.bell && !W.bell.on && now - W.bell.at > INV_MS) { const b = W.bell; bellOff(true); G()?.net?.bellAns?.({ uid: b.to, n: b.n, ok: 0 }); } // 第 23 批：門鈴沒人回答
+    if (W.ride && now - W.ride.at > INV_MS) { const r = W.ride; rideOff(true); G()?.net?.rideAns?.({ uid: r.to, n: r.n, ok: 0 }); } // 第 57 批：沒人回答
     if (W.out && UI().view === 'wait') paintWait();
     invites(); hostTick();
     if (now - W.cleanT > 30000) { W.cleanT = now; clean(); }
@@ -47414,12 +48137,12 @@ renderer.setAnimationLoop((now) => {
     for (const [from, v] of Object.entries(W.inc)) {
       if (!v || typeof v.id !== 'string' || W.answered[v.id] || (W.showing && W.showing.id === v.id)) continue;
       const stale = !(now - (+v.t || 0) < INV_MS), m = W.mem.find((x) => x.uid === from);
-      const bell = v.kind === 'bell'; // 第 23 批：有人按我家的門鈴
+      const ride = v.kind === 'ride', bell = v.kind === 'bell' || ride; // 第 23 批：有人按我家的門鈴；第 57 批：有人想坐我的車
       if (stale || hid(from) || !here.has(from) || !(KIND[v.kind] || bell)) { W.answered[v.id] = 1; rt.remove(`world/ch/${W.me}/${from}`).catch(() => {}); continue; }
       if (!invOn) { reply(from, v.id, -1); continue; }
-      if (bell ? W.match || W.guest : W.match || W.out || W.lent || G()?.net?.borrowing?.()) { reply(from, v.id, -2); continue; } // 在比賽、在開借來的車、車借出去了；門鈴：在比賽、已經有朋友在我家
+      if (ride ? W.match || W.lent || !G()?.net?.rideOk?.({ s: v.s | 0, k: String(v.k || '') }) : bell ? W.match || W.guest : W.match || W.out || W.lent || G()?.net?.borrowing?.()) { reply(from, v.id, -2); continue; } // 在比賽、在開借來的車、車借出去了；門鈴：在比賽、已經有朋友在我家
       if (W.showing) continue; // 排隊：這張回答完再跳
-      if (G()?.net?.invite({ id: v.id, name: m.n, kind: v.kind, car: carName(m.car) })) W.showing = { id: v.id, from, kind: v.kind };
+      if (G()?.net?.invite({ id: v.id, name: m.n, kind: v.kind, car: carName(m.car), s: v.s | 0, k: String(v.k || '') })) W.showing = { id: v.id, from, kind: v.kind };
       else reply(from, v.id, -2); // 在比賽
     }
   }
@@ -47434,6 +48157,7 @@ renderer.setAnimationLoop((now) => {
     if (!ok) { reply(from, id, -1); invites(); return; }
     W.answered[id] = 1;
     rt.remove(`world/ch/${W.me}/${from}`).catch(() => {});
+    if (kind === 'ride') { try { await rt.update(`matches/${id}`, { ok: 1 }); } catch (e) { console.warn('讓他坐', e); toast('對方已經走了'); } return; } // 第 57 批：讓他坐（之後都在 world/p 裡：他送 o 5＋rd）
     if (kind === 'bell') { // 第 23 批：讓他進來
       const m = W.mem.find((x) => x.uid === from);
       try { await rt.update(`matches/${id}`, { ok: 1 }); if (W && !W.guest) guestOn({ id, from, n: m ? m.n : '' }); } catch (e) { console.warn('門鈴', e); toast('對方已經走了'); }
@@ -47559,6 +48283,8 @@ renderer.setAnimationLoop((now) => {
     else if (d.type === 'takeback') { if (W.lent && W.lent.to === String(d.uid || '')) takeBack(); }
     else if (d.type === 'bell') bellAsk(String(d.uid || '')); // 第 23 批
     else if (d.type === 'bellEnd') { if (W.bell && W.bell.to === String(d.uid || '')) bellOff(true); }
+    else if (d.type === 'ride') rideAsk(String(d.uid || ''), d.s | 0, String(d.k || '')); // 第 57 批
+    else if (d.type === 'rideEnd') { if (W.ride && W.ride.to === String(d.uid || '')) rideOff(true); }
     else if (d.type === 'kick') { const g = W.guest; if (g && g.from === String(d.uid || '')) { rt.update(`matches/${g.id}`, { ok: -9 }).catch((e) => console.warn('請他出去', e)); guestOff(''); } }
   });
 
@@ -47598,6 +48324,34 @@ renderer.setAnimationLoop((now) => {
     try { B.off && B.off(); } catch { /* 算了 */ }
     rt.remove(`world/ch/${B.to}/${W.me}`).catch(() => {});
     if (rm) { rt.discOff(`matches/${B.id}`).catch(() => {}); rt.remove(`matches/${B.id}`).catch(() => {}); }
+  }
+  // ---- 第 57 批：坐朋友的車（A 問「可以坐你的車嗎」、B 答好／不要；跟門鈴同一條路，回答以後就收掉：之後 A 送 o 5＋rd，B 那邊自己畫）----
+  async function rideAsk(to, seat, k) {
+    if (!W || W.ride) return;
+    const m = W.mem.find((x) => x.uid === to), ans = (ok) => G()?.net?.rideAns?.({ uid: to, n: m ? m.n : '', ok });
+    if (!m || hid(to) || to === W.me) { ans(-5); return; }
+    if (m.inv === 0) { ans(-3); return; }
+    const id = `${W.me.slice(0, 10)}-${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_-]/g, '');
+    const R = W.ride = { id, to, n: m.n, at: performance.now(), off: null };
+    try {
+      await rt.set(`matches/${id}`, { a: W.me, b: to, kind: 'ride', at: rt.now(), ok: 0 });
+      await rt.disc(`matches/${id}`).catch(() => {});
+      await rt.set(`world/ch/${to}/${W.me}`, { kind: 'ride', t: rt.now(), id, s: seat | 0, k: String(k || '').slice(0, 12) });
+      if (!W || W.ride !== R) return;
+      R.off = rt.on(`matches/${id}`, (v) => onRide(R, v), (e) => console.warn('坐車', e));
+    } catch (e) { console.warn('坐車', e); if (W && W.ride === R) { rideOff(true); ans(-4); } }
+  }
+  function onRide(R, v) {
+    if (!W || W.ride !== R) return;
+    if (!v) { rideOff(false); G()?.net?.rideAns?.({ uid: R.to, n: R.n, ok: 0 }); return; } // 他那邊收掉了（離開世界）
+    if (v.ok === -1 || v.ok === -2 || v.ok === 1) { rideOff(true); G()?.net?.rideAns?.({ uid: R.to, n: R.n, ok: v.ok }); }
+  }
+  function rideOff(rm) {
+    const R = W && W.ride; if (!R) return;
+    W.ride = null;
+    try { R.off && R.off(); } catch { /* 算了 */ }
+    rt.remove(`world/ch/${R.to}/${W.me}`).catch(() => {});
+    if (rm) { rt.discOff(`matches/${R.id}`).catch(() => {}); rt.remove(`matches/${R.id}`).catch(() => {}); }
   }
   function guestOn(g) {
     if (!W) return;

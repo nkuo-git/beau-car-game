@@ -161,7 +161,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - 這個機器的 GitHub 代理不給碰 Actions secrets 和 Pages 設定（403）：這兩個要 Nick（或家長）在 GitHub 網頁上設。
 - 圖示：萬能軟體的橘色車＋右下角格子旗徽章（蓋掉保桿上的貼紙字），深色底（`src/site/make-icons.py`）。
 
-## 現在的狀態（2026-10-30，內容 32）
+## 現在的狀態（2026-10-31，內容 33）
 - **main** ＝ 手機上的 0.9.37 遊戲（萬能軟體內容 37／38 的 tune.js 跟 `build-app.mjs` 產生的一模一樣）＋這次的網站（內容 1）＋APK 殼。
   - 0.9.37 有：越野車車庫（4 格，越野車專屬）、怪獸卡車輾扁東西（車、路邊小東西；人跳開）、汽車半價、怪獸卡車 100 萬、拿掉撞爛（`CRASH_DAMAGE = false`）、內湖（七個地標、路牌、離村子近）、警察、槍店、甩尾、賽車場。
 - **內容 2（2026-10-09 上線，試做頁 v25–v27）**：路變寬 1.5 倍（村子、內湖；快速道路、賽車場、直線加速沒變）；房子最多 2 層（村子、內湖；地標不變），越野車撞不倒房子，其他的（樹、電線桿、警車⋯）幾乎都輾得扁（不會輾的：人、小孩、房子、你家車庫、改車廠、車店、槍店、警察局、廟、捷運柱子⋯），輾扁的東西你離開 140 公尺 25 秒後會修好；越野車車庫搬到你的車庫前面左邊（門對著路，變大）；你的車庫變高（6 公尺、門 8×5）、裡面變寬（31.4 公尺）；路人不會再卡在門口。說明在 `notes/wide.md`、`notes/tall.md`。
@@ -352,7 +352,8 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - 2026-10-30 放上試做頁（頁面＋car-z2.txt、car-z2-lod.txt；artifact 第 70 版）。測試：z2-test.mjs 31 ok（新的）、test-b4 90、test-b1 151、jeep-test 22、k2-test 22、p8-test 22、crush-test 55、mirror-test 10、drift-test 66、top-test 5、bump-test 7、free-test 2。
   - 效能：車庫頁 162 calls／0.68M 三角形、3 樓 177／0.74M、B1 194／0.76M、快速道路 97／0.40M、第一人稱 64／0.35M、泥巴 139／0.49M；輕量車車身 1.8 萬三角形。
   - 說明在 `notes/cars.md` 最後一段。
-- **試做頁 v70（2026-10-30；第 57 批）＝ 每個位子都可以坐**（還沒上線）：Nick「車子的每個位子都可以坐」→ 先給看圖（/mnt/project-files/car-game/seats/seats-v1.jpg），卡片選「好，照圖做」；Nick「你去網路上查有一些車本來就只有兩個座位」→ 位子數照真的車（GC8、P8、ALTIS、EVO 5 個；大部分 4 個；SUPRA 2+2；RX-7 和超跑 2 個；Z2、怪獸卡車沒有）。GC8、YARIS、RX-7 是右駕（駕駛座在右邊）。
+- **內容 33（2026-10-31 上線＝試做頁 v70；Nick「上線」）**：測試 site-test 24、test-app-b4 90、world-test 136、test-app-b1 152 ok（試做頁那邊 seats-test 30、test-b1 151、z2 31、mirror 10、drift 66、free 2）。沒改 android/，不用編新的 APK。
+- **試做頁 v70（2026-10-30；第 57 批；內容 33）＝ 每個位子都可以坐**：Nick「車子的每個位子都可以坐」→ 先給看圖（/mnt/project-files/car-game/seats/seats-v1.jpg），卡片選「好，照圖做」；Nick「你去網路上查有一些車本來就只有兩個座位」→ 位子數照真的車（GC8、P8、ALTIS、EVO 5 個；大部分 4 個；SUPRA 2+2；RX-7 和超跑 2 個；Z2、怪獸卡車沒有）。GC8、YARIS、RX-7 是右駕（駕駛座在右邊）。
   - **自己的車**：走到車旁邊「上車」下面多一顆深色的「選位子」→「要坐哪裡？」（車從上面看、車頭朝上，每個位子一顆橘色按鈕、照真的那一邊；駕駛座寫「（開車）」；灰＝有人坐、黃＝你）。選駕駛座＝照舊開車；選別的位子＝走到那一邊的門坐進去、車不動（跟下車一樣停著）。坐著的畫面：「換位子」「下車」＋右上角眼睛（第一人稱從那個位子的眼睛看 ↔ 從外面看、拖畫面繞車；記在 `SCAM.pref`）；第一人稱的後照鏡照舊有。「換位子」→ 駕駛座＝開車。追車視角現在看得到你坐在駕駛座、手跟著方向盤轉（第一人稱不畫）；Z2 照舊是騎的人；怪獸卡車沒有駕駛艙＝沒有位子。
   - **朋友的車**（大家的世界）：朋友停著的車（他走路或停著沒動）旁邊「選位子」→「要坐X的車哪裡？」（駕駛座灰、寫他的名字）→ 他的手機跳卡片「🚗 X想坐你的車 / 副駕駛座（你開車，他坐著）」好／不要（跟門鈴同一條路：`matches` kind `ride`＋`world/ch` 多 `s`、`k`；**規則不用改**；封鎖、關掉邀請的人問不到）。好 → 你走過去坐進去、你自己的車停在原地（`pv`）、他的輕量車換成完整的車（看得到車內）、左上「🚗 坐在 X 的車上」；他開車你跟著走（走路的你也跟著，地圖、車流、警察都看得到你在那裡）；開著的時候「下車」灰掉「車子停下來才能下車」，「換位子」隨時可以；他回家／比賽／離開世界／換車／斷線＝你被放在車旁邊（跳提示）。車主看到「🚗 X坐上你的車了」「X下車了」，大家都看得到坐在車裡的人（`seatPeers`）。
   - 程式：cabin.js `cabinSeats`／`seatPlace`／`seatSteer`（後座）；walk.js `getIn(car, { seat })`、`getOut(…, { seat, paused })`、`exitAt`、`follow`、`setAction2`；**seat.src.js**（新，接在 net.src.js 後面：選位子畫面、坐著的畫面、`SCAM` 鏡頭、`PAX` 自己的車、`HOP` 朋友的車、`MYSIT` 你坐著的樣子、`seatPeers`、`seatsStep`／`seatsEnd`）；town.src.js `onGetIn(car, seat)`、`outAt`、`stowFull` → `seatDetach`、`mirrorStep`；net.src.js `world/p` 多 `st`（自己車上的位子）、`o 5`＋`rd [車主, 位子, 車]`、`nr`，`netInvite` 收 `ride`，API `rideAns`／`rideOk`／`info.seat`；site/world.js `rideAsk`／`onRide`／`rideOff`；garage.src.html `disposeCar` 先拆掉 `userData.seated`（角色共用材質）；race.src.js 400 公尺也看得到你坐在駕駛座。說明在 `notes/seats.md`。
