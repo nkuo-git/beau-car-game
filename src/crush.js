@@ -15,7 +15,7 @@
 //     bail(x, z, dx, dz) → n,          車上的人跳車往 (dx, dz) 跑掉（npc.js peds.bail）
 //     sound(kind, x, z, k),            'crunch'（壓扁的咖啦聲）、'glass'（玻璃碎）
 //     toast(text),                     第一次在表演場輾扁：「輾扁了！」
-//     crime(x, z),                     村子裡輾東西＝報警（police.crime('crush')，1★）；越野車場裡面不叫
+//     crime(x, z),                     輾東西＝報警（police.crime('crush')，1★）；只有越野車場裡面（V.offroad.inPark）不叫（第 58 批：山上也報）
 //   })
 //   crush.heightAt(x, z)      墊子的高度（0＝沒有）：drive.js 的 crush.height
 //   crush.can(c)              這個碰撞物輾得過去嗎（drive.js 的 crush.can）：垃圾桶、燈箱、機車、板凳、矮柱、小招牌、垃圾車⋯
@@ -90,6 +90,7 @@ function can(c) { return canAny(c, false, null); }
 function createCrush(o = {}) {
   const V = o.world || {}, SHOW = V.offroad && V.offroad.show ? V.offroad.show : null;
   const terrainAt = typeof V.terrainAt === 'function' ? V.terrainAt : () => false;
+  const inPark = V.offroad && typeof V.offroad.terrainAt === 'function' ? V.offroad.terrainAt : terrainAt; // 第 58 批：只有越野車場裡面（offroad.js 的格子＋4 公尺）輾東西不報警（以前看 V.terrainAt：山、海邊、每座山都算成越野車場，輾倒樹警察都不來）
   const heightOf = typeof V.heightAt === 'function' ? V.heightAt : () => 0;
   let alive = true, colVer = 0, jN = 0, jBusy = false, awayT = 0, toldPark = false, crimeT = -99, clock = 0;
   const ME = { x: -0, z: -0, heading: -0, v: -0, hx: 2.8, hz: 1.9, big: false };
@@ -496,8 +497,8 @@ function createCrush(o = {}) {
   // ---- 輾到了 ----
   const label = (c) => (c.junk ? 'junk' : c.t === 'circle' ? (c.r <= 0.1 ? 'pole' : 'bin') : c.hz <= 0.45 ? 'scooter' : 'bench');
   function note(kind) { st.types.push(kind); if (st.types.length > 40) st.types.shift(); }
-  function police(x, z) { // 越野車場裡面不算犯罪；一路輾過去（8 秒內）只報一次
-    if (terrainAt(x, z) || !o.crime || clock - crimeT < CRIME_GAP) return;
+  function police(x, z) { // 越野車場裡面不算犯罪（第 58 批：山上、海邊、別的山都算）；一路輾過去（8 秒內）只報一次
+    if (inPark(x, z) || !o.crime || clock - crimeT < CRIME_GAP) return;
     crimeT = clock;
     try { o.crime(x, z); } catch (e) { console.warn(e); }
   }

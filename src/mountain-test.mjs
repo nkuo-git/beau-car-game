@@ -334,7 +334,7 @@ const trail = await p.evaluate(() => {
 });
 console.log('5', el(), 'shortcut:', JSON.stringify(trail));
 check(trail.r.until && trail.y > 90, `the monster truck climbs the dirt shortcut to the top (${trail.r.s} s, min speed ${trail.r.minV.toFixed ? trail.r.minV.toFixed(1) : trail.r.minV} m/s)`);
-check(trail.wanted === 0, `crushing on the mountain is not a crime (${trail.big} things flattened on the way, stars +${trail.wanted})`);
+check(trail.wanted >= (trail.big ? 1 : 0), `crushing on the mountain IS a crime since 第 58 批 (${trail.big} things flattened on the shortcut, stars +${trail.wanted}; the tree below checks it when the shortcut flattened nothing)`);
 const crush = await p.evaluate(() => {
   const D = window.__D(), V = D.VIL, M = V.mountain, H = window.__H, C = window.__C();
   const out = {};
@@ -375,7 +375,7 @@ const crush = await p.evaluate(() => {
 console.log('  crush:', JSON.stringify(crush));
 check(crush.tree.crushed && crush.tree.flat > 0 && crush.tree.n > 0 && crush.tree.top < 1.2 && crush.tree.low > -0.4, `a mountain tree gets flattened onto the slope (top ${crush.tree.top} m above the ground, lowest ${crush.tree.low} m)`);
 check(crush.rail.crushed && crush.rail.flat > 0 && crush.rail.top < 0.5 && crush.rail.low > -0.4, `a guardrail gets flattened onto the road (top ${crush.rail.top} m, lowest ${crush.rail.low} m)`);
-check(crush.tree.stars === 0 && crush.rail.stars === 0, 'no stars for crushing on the mountain');
+check(crush.tree.stars + crush.rail.stars >= 1, `stars for crushing on the mountain (第 58 批: tree +${crush.tree.stars}, rail +${crush.rail.stars}; one crime per 8 s)`);
 check(crush.pavNoCrush && !crush.pavCan, 'the pavilion cannot be crushed');
 await drawAndShot('5-crushed');
 

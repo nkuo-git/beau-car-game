@@ -904,7 +904,7 @@ function buildOffroad(V, opts = {}) {
   const info = { meshes: 3 + 2 + bp.meshes + (apron ? 1 : 0), tris: terrTris + B.tris + ACCESS.length * 4 + apron, terrainTris: terrTris, props: B.tris, ms: 0 };
   if (V.info) V.info.offroad = info;
   const P = {
-    group, places, course: CR, checkpoints: cps, grid: GRID.map(([x, z]) => ({ x, z, heading: 0 })), fenceDist, inPark, heightAt, normalAt, surfaceAt, info, trees: trees.length, rocks: ROCKS.length,
+    group, places, course: CR, checkpoints: cps, grid: GRID.map(([x, z]) => ({ x, z, heading: 0 })), fenceDist, inPark, terrainAt, heightAt, normalAt, surfaceAt, info, // terrainAt＝越野車場的格子（＋4 公尺）：crush.js 第 58 批只有這裡面輾東西不報警 trees: trees.length, rocks: ROCKS.length,
     show: { x0: SHOW.x0, x1: SHOW.x1, z0: SHOW.z0, z1: SHOW.z1, cx: (SHOW.x0 + SHOW.x1) / 2, cz: SHOW.z, ramp: [SHOW.rx0, SHOW.rtop, SHOW.rx1, SHOW.h], cars: SHOW_CARS }, // 第 7 批（輾扁）：表演場（crush.js 照這個擺垃圾車）
     dispose() {
       group.removeFromParent();

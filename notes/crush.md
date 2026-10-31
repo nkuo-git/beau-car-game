@@ -34,7 +34,7 @@ farthest person (> 25 m, not one that is falling/getting up/going through a door
 out. Pedestrians keep today's fall-and-get-up, children are never hit (npc.js already never lets a car hit a kid), and the
 crush never reports a 'hit' crime.
 
-**Police**: a crush on the village streets reports a `'crush'` crime, +1★, toast 「你把別人的東西輾扁了！警察來了」. Inside the
+**Police**: a crush on the village streets reports a `'crush'` crime, +1★, toast 「你把別人的東西輾扁了！警察來了」. (Batch 58, 2026-10-31: the no-crime zone used to be `V.terrainAt`, which the mountain, the 24 hills, the beach and the sea later made true far outside the park, so crushing there never called the police — Nick noticed with the off-roaders. It is now only the off-road park's own grid: offroad.js exports `terrainAt` in `V.offroad`, crush.js `inPark`.) Inside the
 off-road park (`world.terrainAt`) it is free. Driving along flattening a whole row would otherwise be 1★ every 1.5 s, so
 crush.js only reports **one crime per 8 s** (CRIME_GAP) — one crush, or one spree, is 1★.
 
