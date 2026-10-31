@@ -48,3 +48,5 @@ android/*.iml
 .idea/
 .DS_Store
 !src/site/icons/*.png
+src/body-f6.glb
+src/body-n4.glb
