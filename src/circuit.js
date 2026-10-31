@@ -68,7 +68,7 @@ const JX = -51; // 聯外道路接直線加速賽道入口的地方（x −51、
 const ACC_POLY = [[JX, -3, 0], [JX, -100, 35], [300, -100, 0]]; // 聯外道路（9 公尺寬）
 const ACC_W = 9;
 // 樹（race.src.js 的 buildTrack）不要種的地方：聯外道路 [x0, z0, x1, z1]
-const CIRCUIT_KEEP = [[-64, -116, 4, -5], [-10, -112, 310, -86], [151, -147, 193, -104]]; // 第 21 批：＋3 號家（圓塔車庫，village.js HOME_SITES[2]）；第 24 批：外面繞圈的斜坡（半徑 17.5）也不種樹
+const CIRCUIT_KEEP = [[-64, -116, 4, -5], [-10, -112, 310, -86], [138, -147, 193, -104]]; // 第 21 批：＋3 號家（圓塔車庫，village.js HOME_SITES[2]）；第 24 批：外面繞圈的斜坡（半徑 17.5）也不種樹
 // 對手開車的功力：lat＝過彎抓地（你的 1）、brk＝煞車、react＝起跑反應（秒）
 const SKILL = { slow: { lat: 0.62, brk: 0.7, react: 0.8 }, rookie: { lat: 0.68, brk: 0.75, react: 0.65 }, ok: { lat: 0.74, brk: 0.8, react: 0.5 }, good: { lat: 0.8, brk: 0.86, react: 0.4 }, pro: { lat: 0.86, brk: 0.9, react: 0.3 } };
 const AERO = 0.55; // 跟 drive.js 一樣（街機的風阻）

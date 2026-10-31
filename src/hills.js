@@ -188,7 +188,7 @@ function buildHills(V, opts = {}) {
   let tris = 0, meshes = 0;
 
   // 6 個家（塔、外面的斜坡、門口）四周是平的：山腳靠近家的地方壓到 0（內湖隧道的山東南角碰到 5 號家的後面）
-  const HOMES = (V.homeSites || []).map((q) => [q.x, q.z]), HK0 = TOWER_RAMP.R1 + 8, HK1 = TOWER_RAMP.R1 + 22;
+  const HOMES = (V.homeSites || []).map((q) => [q.x, q.z]), HK0 = TOWER_RAMP.R1 + 20, HK1 = TOWER_RAMP.R1 + 34; // 第 60 批：旁邊的公寓（離塔 26 公尺）也要在平的上面（本來 +8、+22）
   const homeKeep = (x, z) => { let m = 1; for (const [hx, hz] of HOMES) { const d = Math.hypot(x - hx, z - hz); if (d < HK1) m = Math.min(m, ss(HK0, HK1, d)); } return m; };
   // 1) 每座山一張格子
   const HS = HILL_LIST.map((H, hi) => {

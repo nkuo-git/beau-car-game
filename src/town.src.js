@@ -80,8 +80,8 @@ let impounded = false; // 這次被抓：車子有沒有拖到警察局的停車
 const OPEN_ACT = { label: '開鐵捲門', icon: 'door', onClick: () => openDoor() };
 const CLOSE_ACT = { label: '關鐵捲門', icon: 'doorDown', onClick: () => closeDoor() }; // 第 3 批（b3-int）：通緝中躲回車庫（門關了＝警察找不到你）
 const OUT_ACT = { label: '下車', icon: 'walk', onClick: () => leaveCar() }; // 開車 HUD 的第二顆（右邊、換視角下面）：不會被「開鐵捲門」蓋掉
-const SLEEP_ACT = { label: '睡覺', icon: 'bed', onClick: () => goSleep() };
-const DRESS_ACT = { label: '換衣服', icon: 'shirt', onClick: () => openLook('cabin') }; // 小房子的衣櫃前面：自訂角色（garage.src.html）
+const SLEEP_ACT = { label: '睡覺', icon: 'bed', onClick: () => goSleep(towerBed()) };
+const DRESS_ACT = { label: '換衣服', icon: 'shirt', onClick: () => openLook('cabin') }; // 小房子的衣櫃前面：自訂角色（garage.src.html）；第 60 批：公寓 4 樓的衣櫃也是
 const LIFT_BUSY = { label: '電梯動作中⋯', icon: 'lift', onClick: () => {} }; // 電梯在動的時候站在電梯井旁邊：按了不會怎樣
 const CABIN_EYE = true; // 走進小房子自動換第一人稱（房間 5 × 4.2 公尺、斜天花板：第三人稱鏡頭一直被牆推到貼著頭）；走出來換回去
 $('shopName').textContent = SHOP_NAME;
@@ -383,7 +383,7 @@ function townFog(on) {
 const meCols = () => [...stripColliders(), ...(TR?.trees || []), ...(VIL?.hills ? VIL.hills.layerCols : [])];
 // 走路的（walk.js）：第一次出門做（村子、你家蓋好以後），之後一直用同一個
 function makeWalker() {
-  walker = createWalker({ scene: TR.scene, camera: dcam, world: PW, colliders: meCols(), bounds: VIL.hills?.walkBounds, character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
+  walker = createWalker({ scene: TR.scene, camera: dcam, world: walkWorld(), colliders: meCols(), bounds: VIL.hills?.walkBounds, character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
   walker.setGarage(GAR); // 鐵捲門：碰撞跟著門、門口給「開鐵捲門」
   if (NPC) { walker.addColliders(NPC.peds.props.colliders, 'npc-props'); walker.setMovers(NPC.MOV); } // 板凳、椅子；路上的車、居民（npcStep 每一格換）
   makeGuns(); // 第 3 批（b3-int）：槍、「揍」的按鈕、警車和警察擋人、小地圖上的警車
@@ -805,10 +805,11 @@ const CLOSED = {};
 const DEALER_DOOR = [{ t: 'box', x: -437.4, z: -26.125, hx: 1.45, hz: 0.18, rot: 0, h: 3 }];
 function atDoor(d) {
   if (!walker || walker.mode !== 'walk' || doorFade || sleep || !DRIVE.on) return;
+  if (d && d.aptIn) { if (APTU.on) goDoor(() => aptIn()); return; } // 第 60 批：頂樓、陽台回裡面的門
   if (indoor) { // 裡面的出口（setDoors 給的是 I.exits 的 door）：大門、樓梯口
     if (indoor.t < 0.4 || indoor.jail) return; // 剛換過來（站在樓梯口旁邊）；關在拘留室裡（門給的是空的，保險）
     const e = (indoor.exits || indoor.I.exits).find((x) => x.door === d); if (!e) return;
-    goDoor(() => (e.to === 'outside' ? leaveHouse(e) : houseFloor(e)));
+    goDoor(() => (e.to === 'outside' ? leaveHouse(e) : e.to === 'roof' || e.to === 'balc' ? aptOut(e) : houseFloor(e))); // 第 60 批：公寓的頂樓、陽台
     return;
   }
   if (d.kind === 'police') { // 第 3 批（b3-int）：警察局：通緝中走進去＝自首（一樣關、一樣罰）；平常走進去看看（拘留室的門開著）
@@ -864,7 +865,7 @@ function enterHouse(b) {
   try { I = buildInterior(b, { renderer, quality: roomQ }); } catch (e) { console.error(e); I = null; }
   if (!I) return { say: `${b.name ? b.name + '：' : ''}門鎖著` };
   const sc = new THREE.Scene(); sc.name = 'indoor'; sc.background = I.background; sc.add(I.group);
-  indoor = { b, I, scene: sc, t: 0, dist0: walker.cameraDist, folks: [], kind: 'house' };
+  indoor = { b, I, scene: sc, t: 0, dist0: walker.cameraDist, folks: [], kind: I.kind === 'apt' ? 'apt' : 'house' }; // 第 60 批：公寓
   sc.add(walker.character.group); // 你搬進房子的場景（出去再搬回村子）
   walker.removeColliders('world'); walker.setCarReach(false); // 村子的碰撞（蓋住房子的地板）拿掉；車停在外面（隔著牆）不給「上車」
   houseSet(I.spawn);
@@ -874,7 +875,7 @@ function enterHouse(b) {
 function houseSet(spawn) {
   const I = indoor.I;
   walker.removeColliders('interior'); walker.addColliders(I.colliders, 'interior');
-  if (indoor.kind === 'police') stationFolks(); else if (indoor.kind === 'house') houseFolks(); // 槍店的店員 gunshop.js 自己有
+  if (indoor.kind === 'police') stationFolks(); else if (indoor.kind === 'house' || indoor.kind === 'apt') houseFolks(); // 槍店的店員 gunshop.js 自己有
   walker.setDoors(indoor.jail ? [] : (indoor.exits || I.exits).map((e) => e.door)); // 關在拘留室：沒有門
   walker.setCamera({ maxY: I.camera.ceiling, dist: Math.min(indoor.dist0, I.camera.maxDist) });
   walker.teleport(spawn); indoor.t = 0;
@@ -1100,27 +1101,127 @@ function garCamCols() {
 }
 
 // ---- 小房子：床邊按「睡覺」→ 躺到床上、畫面黑掉 →「睡飽了！」站在床邊 ----
-function goSleep() {
-  if (sleep || !walker || walker.mode !== 'walk' || !DRIVE.on || !GAR) return;
+const towerBed = () => (GAR ? { ...GAR.spots.bed, wake: GAR.spots.wake, w: garWorld, by: GAR.group.position.y } : null); // 圓塔一樓小房子的床（by：塔的一樓多高（山頂那間））
+function goSleep(B) { // B＝{ feet, head, y, heading（頭 → 腳）, wake, w（本地 → 世界）, by（地板高度）}：小房子（towerBed）或公寓 4 樓（aptBed，第 60 批）
+  if (sleep || !walker || walker.mode !== 'walk' || !DRIVE.on || !B) return;
   walker.pause(); // HUD 收起來、不吃按鍵（角色還在）：躺到床上
-  const B = GAR.spots.bed, w = garWorld({ x: B.feet.x, z: B.feet.z, heading: B.heading }), ch = walker.character, by = GAR.group.position.y; // by：塔的一樓多高（山頂那間）
+  const w = B.w({ x: B.feet.x, z: B.feet.z, heading: B.heading }), ch = walker.character, by = B.by;
   ch.group.visible = true; ch.group.position.set(w.x, by + B.y, w.z); ch.group.rotation.set(0, w.heading, 0); ch.update(1 / 60, { speed: 0, state: 'fall' });
   // 鏡頭（走路的停住了不會動）：站在床尾、靠門那邊高一點，斜斜看著躺在床上的你（第一人稱的時候眼睛前面是牆）
   const hx = B.feet.x - B.head.x, hz = B.feet.z - B.head.z, l = Math.hypot(hx, hz) || 1, ux = hx / l, uz = hz / l;
-  const cv = garWorld({ x: B.feet.x + ux * 1.25 - uz * 1.2, z: B.feet.z + uz * 1.25 + ux * 1.2 }), cl = garWorld({ x: (B.x + B.head.x) / 2, z: (B.z + B.head.z) / 2 });
+  const cv = B.w({ x: B.feet.x + ux * 1.25 - uz * 1.2, z: B.feet.z + uz * 1.25 + ux * 1.2 }), cl = B.w({ x: (B.x + B.head.x) / 2, z: (B.z + B.head.z) / 2 });
   dcam.position.set(cv.x, by + 1.75, cv.z); dcam.lookAt(cl.x, by + B.y + 0.15, cl.z);
   fader('Zzz⋯').style.opacity = '0';
-  sleep = { t: 0, woke: false };
+  sleep = { t: 0, woke: false, wake: B.w(B.wake) };
 }
 function sleepStep(dt) {
   const s = sleep, T1 = calm ? 0.4 : 1.2, T2 = T1 + 1.3, T3 = T2 + (calm ? 0.3 : 0.9); // 慢慢黑掉、黑著、慢慢亮
   s.t += dt;
   if (!s.woke) walker.character.update(dt, { speed: 0, state: 'fall' });
   fadeEl.style.opacity = (s.t < T1 ? s.t / T1 : s.t < T2 ? 1 : Math.max(0, 1 - (s.t - T2) / (T3 - T2))).toFixed(3);
-  if (!s.woke && s.t >= T2) { s.woke = true; walker.teleport(garWorld(GAR.spots.wake)); walker.resume(); walker.toast('睡飽了！', 2400); }
+  if (!s.woke && s.t >= T2) { s.woke = true; walker.teleport(s.wake); walker.resume(); walker.toast('睡飽了！', 2400); }
   if (s.t >= T3) { sleep = null; fadeEl.style.display = 'none'; }
 }
 function endSleep() { sleep = null; if (fadeEl) fadeEl.style.display = 'none'; }
+// ==== 第 60 批：公寓的家（Nick 2026-10-31「自己家改成在旁邊的公寓」，草稿 https://claude.ai/artifact/GahqJPKLLPf5FYXmHeq2wU，Nick 選「照草稿做」）====
+//   每個家（6 座圓塔）旁邊一棟 5 層的公寓：外殼 apt.js（aptExt：6 座 InstancedMesh）；走進大門＝房子裡面那一套（interiors.js kind 'apt'：1 樓大廳、電梯、樓梯、4 樓你的家）
+//   電梯：站進電梯（I.lift）出面板（aptPanel：4F 5F 頂樓／1F 2F 3F）；頂樓（5 樓樓梯上去、或電梯按頂樓）、4 樓的陽台（客廳落地門）＝真的走到外面（APTU）：
+//   換回世界的場景、只加那一層的碰撞（女兒牆、樓梯間）、走路的地板＝那一層的高度（walkWorld）、門＝回裡面的門（aptIn）；睡覺、換衣服在 4 樓的床、衣櫃（圓塔一樓的小房子照舊也可以）
+const APTU = { on: false, b: null, lvl: null, y: 0, floor: 0, A: null, ext: null, panel: null };
+const SLEEP_ACT_APT = { label: '睡覺', icon: 'bed', onClick: () => goSleep(aptBed()) };
+function aptExt() { // 6 座公寓的外殼（蓋一次，InstancedMesh）＋ V.buildings 那幾棟的高度（山頂那座）
+  const SL = VIL.places.garst.slots;
+  for (const b of VIL.buildings) if (b.kind === 'apt' && SL[b.slot]) b.y = SL[b.slot].y || 0;
+  if (APTU.ext) return;
+  const A = (APTU.A = buildApt()), M = new THREE.Matrix4();
+  APTU.ext = A.parts.map((P) => { const m = new THREE.InstancedMesh(P.geometry, P.material, SL.length); m.name = P.name; m.matrixAutoUpdate = false; m.renderOrder = P.name === 'apt-glass' ? 2 : 0; TR.scene.add(m); return m; });
+  SL.forEach((q, i) => { const L = aptLotOf(VIL.homeSites[i], i); M.makeRotationY(L.heading).setPosition(L.x, q.y || 0, L.z); for (const m of APTU.ext) m.setMatrixAt(i, M); });
+  for (const m of APTU.ext) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
+}
+const aptW = (b, x, z) => { const c = Math.cos(b.rot), s = Math.sin(b.rot); return { x: b.x + x * c + z * s, z: b.z - x * s + z * c }; }; // 公寓本地 → 世界（b＝V.buildings 那一棟）
+const inApt = (x, z, m = 0) => { const b = APTU.b; if (!b) return false; const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot), s = Math.sin(b.rot); return Math.abs(dx * c - dz * s) < b.hx + m && Math.abs(dx * s + dz * c) < b.hz + m; };
+// 走路用的世界：房子裡面地板都在 0（公寓蓋在山頂那座也是）；在頂樓、陽台＝那一層的高度；其他照 PW
+function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? 0 : APTU.on && inApt(x, z, 0.6) ? APTU.y : PW.heightAt(x, z)); return W; }
+// 從裡面走出去：頂樓（5 樓的樓梯、電梯按頂樓）、陽台（4 樓客廳的落地門）
+function aptOut(e) {
+  const H = indoor; if (!H || H.kind !== 'apt') return null;
+  const b = H.b, A = APTU.A || (APTU.A = buildApt()), roof = e.to === 'roof', lvl = roof ? A.roof : A.balc;
+  indoor = null;
+  walker.removeColliders('interior'); for (const f of H.folks) f.C.dispose(); H.I.dispose();
+  TR.scene.add(walker.character.group);
+  const lot = { x: b.x, z: b.z, heading: b.rot, y: b.y || 0 };
+  Object.assign(APTU, { on: true, b, lvl, y: lot.y + lvl.y, floor: roof ? 4 : 3 });
+  walker.addColliders(aptColsAt(lvl.cols, lot), 'aptout');
+  const dw = aptW(b, lvl.door.x, lvl.door.z), sp = aptW(b, lvl.spawn.x, lvl.spawn.z);
+  walker.teleport({ x: sp.x, z: sp.z, heading: wrapPi(lvl.spawn.lh + b.rot) }); // 先站好再給門（walk.js：給門的時候站在門的範圍裡面＝那扇門先不觸發；站的地方在門的旁邊 2 公尺）
+  walker.setDoors([{ x: dw.x, z: dw.z, ry: wrapPi(lvl.door.ry + b.rot), w: lvl.door.w, aptIn: true }]);
+  walker.setCamera({ maxY: lvl.ceil != null ? lot.y + lvl.ceil : null, dist: Math.min(H.dist0, 3.4) });
+  walker.setAction(null); walker.setAction2(null);
+  walker.toast('', 1);
+  return { say: roof ? '頂樓' : '陽台' };
+}
+// 從頂樓、陽台走回裡面（門：aptOut 給的 aptIn）：頂樓 → 五樓的樓梯口；陽台 → 客廳的落地門裡面
+function aptIn() {
+  const b = APTU.b, roof = APTU.floor === 4;
+  aptDown();
+  return enterApt(b, APTU.floor, roof ? { x: -4.275, z: -6.4, lh: Math.PI / 2 } : { x: 2.0, z: 5.1, lh: Math.PI / 2 });
+}
+function enterApt(b, floor, spawnL) { // 走進公寓的某一層（spawnL：公寓本地）
+  const r = enterHouse(b); if (!indoor) return r;
+  const f = indoor.I.setFloor(floor), p = aptW(b, spawnL.x, spawnL.z);
+  houseSet({ x: p.x, z: p.z, heading: wrapPi(spawnL.lh + b.rot) });
+  return { wait: r.wait, say: f.label };
+}
+function aptDown() { // 頂樓、陽台那一層收掉（走回裡面、直接回車庫、被抓）
+  if (!APTU.on) return;
+  APTU.on = false; APTU.lvl = null;
+  walker.removeColliders('aptout'); walker.addColliders(VIL.colliders, 'world'); walker.setDoors('village'); walker.setCarReach(true); walker.setCamera({ maxY: null });
+}
+// 電梯的面板（跟圓塔的同一個樣子：4F 5F 頂樓／1F 2F 3F）：站進電梯才出現
+function aptPanel() {
+  if (APTU.panel) return APTU.panel;
+  const el = document.createElement('div'); el.className = 'elpanel apt'; el.hidden = true; el.innerHTML = '<div class="elg"></div>';
+  const g = el.querySelector('.elg'), btn = {};
+  for (const f of [3, 4, 'roof', 0, 1, 2]) { const b = document.createElement('button'); b.type = 'button'; b.dataset.f = f; b.textContent = f === 'roof' ? '頂樓' : `${f + 1}F`; g.appendChild(b); btn[f] = b; }
+  el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; aptLiftGo(b.dataset.f === 'roof' ? 'roof' : +b.dataset.f); });
+  for (const ev of ['pointerdown', 'touchstart']) el.addEventListener(ev, (e) => e.stopPropagation(), { passive: true });
+  stage.appendChild(el);
+  return (APTU.panel = { el, btn, cur: -1 });
+}
+function aptLiftWho() { // 站在公寓的電梯裡面（走路、沒在換樓層）
+  if (!indoor || indoor.kind !== 'apt' || doorFade || sleep || !walker || walker.mode !== 'walk' || indoor.t < 0.4) return false;
+  const L = indoor.I.lift; if (!L) return false;
+  const t = walker.telemetry(), dx = t.x - L.x, dz = t.z - L.z, c = Math.cos(L.rot), s = Math.sin(L.rot);
+  return Math.abs(dx * c - dz * s) < L.hx && Math.abs(dx * s + dz * c) < L.hz;
+}
+function aptPanelStep() {
+  const w = aptLiftWho(); if (!w && !APTU.panel) return;
+  const P = aptPanel(); if (P.el.hidden === !!w) { P.el.hidden = !w; stage.classList.toggle('el-on', !!w); P.cur = -1; }
+  if (!w) return;
+  const f = indoor.I.floor; if (f === P.cur) return; P.cur = f;
+  for (const k in P.btn) P.btn[k].classList.toggle('on', String(f) === k);
+}
+function aptLiftGo(f) {
+  if (!aptLiftWho()) return;
+  const I = indoor.I, b = indoor.b;
+  if (f === I.floor) { walker.toast(`這裡就是 ${f + 1} 樓`, 1600); return; }
+  if (f === 'roof') { goDoor(() => aptOut({ to: 'roof' })); return; }
+  goDoor(() => { const fl = I.setFloor(f), p = aptW(b, -2.75, -6.4); houseSet({ x: p.x, z: p.z, heading: wrapPi(b.rot) }); return { say: fl.label }; });
+}
+// 4 樓你的家：床邊「睡覺」、衣櫃前面「換衣服」
+function aptBed() {
+  const s = indoor?.I?.spots?.sleep?.[0]; if (!s) return null;
+  const c = Math.cos(s.heading), d = -Math.sin(s.heading); // s.heading＝腳 → 頭
+  return { x: s.x, z: s.z, y: s.y ?? 0.58, heading: wrapPi(s.heading + Math.PI), head: { x: s.x + c * 0.85, z: s.z + d * 0.85 }, feet: { x: s.x - c * 0.8, z: s.z - d * 0.8 }, wake: { x: s.x - c * 1.5, z: s.z - d * 1.5, heading: s.heading }, w: (p) => p, by: 0 };
+}
+function aptWalk() {
+  const I = indoor.I; let act = null;
+  if (I.floor === 3) {
+    const t = walker.telemetry(), s = I.spots.sleep?.[0], d = I.spots.dress?.[0];
+    if (s && Math.hypot(t.x - s.x, t.z - s.z) < 1.9) act = SLEEP_ACT_APT; else if (d && Math.hypot(t.x - d.x, t.z - d.z) < 0.95) act = DRESS_ACT;
+  }
+  walker.setAction(act);
+}
 // 走路在你家裡面：床邊（睡覺）、衣櫃前面（換衣服）、電梯井旁邊（叫電梯）的大按鈕；頭上多高有東西（鏡頭別穿過天花板）；小房子裡面自動第一人稱
 function homeWalk() {
   const t = walker.telemetry(), q = garLocal(t.x, t.z), Z = GAR.zones, inT = GAR.isInside(q.x, q.z);
@@ -1241,7 +1342,7 @@ function homePlace() {
   const q = VIL.places.garst.slots[g] || VIL.places.garst.slots[n], L = q.lot;
   HOME.gs = g; HOME.lot = { x: L.x, z: L.z, heading: L.heading };
   GAR.group.position.set(L.x, q.y || 0, L.z); GAR.group.rotation.y = L.heading; GAR.group.updateMatrixWorld(true);
-  homeExt();
+  homeExt(); aptExt(); // 第 60 批：公寓的外殼
   if (trip && tripPose) { if (swap) liftChanged(); else homeMove(L0); }
   if (drv && tripDest === 'garage') drv.setDestination('garage'); else if (walker && tripDest === 'garage') walker.setDestination('garage');
   shaftCut();
@@ -1705,6 +1806,7 @@ function leaveDrive() {
   dvoice?.dispose(); dvoice = null;
   stopLiftSnd(); endSleep(); elEnd();
   if (doorFade) { doorFade = null; fadeEl.style.display = 'none'; }
+  aptDown(); // 第 60 批：在公寓的頂樓、陽台
   if (indoor) leaveHouse(null); // 在房子裡面按「直接回車庫」：碰撞、門、鏡頭換回村子的，你搬回村子的場景
   crushFx?.reset(); junkVer = -1; // 第 7 批（輾扁）：墊子清掉、輾扁的車收回車流的池子、表演場的垃圾車擺回來
   oLeave(); // 第 4 批：越野賽、越野車行展示台的車收掉
@@ -1945,7 +2047,7 @@ function onArrest(i) { // 畫面全黑：車拖到警察局的停車場、人關
   if (!DRIVE.on || !walker || !trip) return;
   if (doorFade) { doorFade = null; fadeEl.style.display = 'none'; }
   endSleep(); elEnd(); // 第 21 批：坐電梯中被抓
-  if (indoor) leaveHouse(null);
+  aptDown(); if (indoor) leaveHouse(null);
   impounded = false;
   if (drv) { // 開的那台（或剛下車停著的那台）：開車的收掉，完整的車停到停車場
     drv.setInput(null); drv.dispose(); drv = null; dvoice?.dispose(); dvoice = null; if (home) home.open = null; obDoor.drv = null;
@@ -2120,7 +2222,7 @@ function townReset() { police?.clear(); gunner?.holster(); gunner?.refresh(); }
 function driveStep(dt) {
   GAR.update(dt); // 門、升降機在動（開、關、升、降）每一格都要跟著（停好的時候 onLift 換碰撞）
   OB?.update(dt); // 第 6 批：越野車車庫的鐵捲門
-  homeTick(); doorStep(); rampStep(); orbayStep(); elPanelStep(); // 第 17 批：換號碼就把你家搬過去；別人那幾間的外殼、碰撞；第 21 批：電梯的面板
+  homeTick(); doorStep(); rampStep(); orbayStep(); elPanelStep(); aptPanelStep(); // 第 17 批：換號碼就把你家搬過去；別人那幾間的外殼、碰撞；第 21 批：電梯的面板
   hillsStep(dt); // 第 27 批：隧道的哪一層、海的波浪、隧道裡面暗一點、開進深水
   if (drv) {
     drv.update(dt); // 開進賽道、快速道路的事（arrive）在這裡面叫
@@ -2150,7 +2252,8 @@ function driveStep(dt) {
   if (doorFade) fadeStep(dt); // 走進門口：黑掉 → 換成房子裡面（樓上、外面）→ 亮起來
   if (indoor) { indoor.t += dt; for (const f of indoor.folks) f.C.update(dt, FOLK_POSE); } // 裡面的人：站著、坐著會動一動
   if (indoor?.kind === 'police') PI.update(dt); else if (indoor?.kind === 'gunshop' && walker) gsStep(dt); // 第 3 批：拘留室的鐵門；槍店的靶、店員、櫃台／靶場的按鈕
-  if (walker && walker.mode === 'walk' && DRIVE.on && !indoor) { homeWalk(); oTick(walker.telemetry()); } // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）
+  if (walker && walker.mode === 'walk' && DRIVE.on && !indoor && !APTU.on) { homeWalk(); oTick(walker.telemetry()); }
+  else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.kind === 'apt') aptWalk(); // 第 60 批：公寓 4 樓的床、衣櫃 // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）
   if (DRIVE.on) npcStep(dt); // 路上的車、居民（走路的碰撞要在 walker.update 前面放好）
   if (DRIVE.on) crushStep(dt); // 第 7 批（輾扁）：怪獸卡車壓扁的東西（墊子、壓扁、表演場的垃圾車）
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
