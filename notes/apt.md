@@ -14,7 +14,7 @@ then stairs/roofs in every village house, then varied layouts + residents that m
   1F glass double door with canopy, step and name plate, roof parapet, stair head with steel door, water tank, two clothes racks, planters.
 - Village side (village.js, HOME_SITES loop): one `buildings` entry `{ kind: 'apt', name: 'X的公寓', slot, door }`, one solid box collider
   (noCrush, 17.5 m high — nothing crushes or knocks it over), a concrete pad from the door to the street, and `nearApt()` so bamboo/trees/kerbs
-  skip it. hills.js `homeKeep` flattening widened (R1+20 … R1+34), mountain.js `HOMEPAD` widened west to x −312.5 (home 2 sits at the
+  skip it. hills.js `homeKeep` also flattens the apartment rectangle (+1 m margin, 14 m blend; widening the tower circle instead made the hill south of home 4 steeper than 35°), mountain.js `HOMEPAD` widened west to x −312.5 (home 2 sits at the
   summit height; `b.y` copied from `slots[1].y`), circuit.js keep box widened west to x 138 (home 3).
 - Inside: interiors.js `kind 'apt'` (`aptFloor`): 1F lobby (mailboxes, notice board, bench, scooter, plants, 管理室 door), lift + stairs
   reaching every floor, 2F/3F/5F corridors with neighbours' closed doors, **4F = Nick's flat**: 玄關, 客廳 (sofa, TV, dining table), 房間
