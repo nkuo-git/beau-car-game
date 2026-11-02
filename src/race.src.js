@@ -324,7 +324,7 @@ async function enterRace() {
   race.meInfo = carSize(S);
   snd.me?.dispose(); snd.me = engineAudio.voice(cur, { parts: partsOf(cur) });
   TR.scene.add(S.car); S.car.visible = true; S.body.position.y = +CARS[cur].state.height;
-  if (cur === 'z2') riderOn(S); else mySitOn(S, cur, 0, true); // 第 56 批：沙灘車：你騎在上面（town.src.js；車庫頁直接來比也一樣）；第 57 批：別的車：你坐在駕駛座
+  if (RIDES[cur]) riderOn(S); else mySitOn(S, cur, 0, true); // 第 56 批：沙灘車：你騎在上面（town.src.js；車庫頁直接來比也一樣）；第 57 批：別的車：你坐在駕駛座
   putCar(S, race.me, LANE, race.meInfo);
   hudIdle();
   if (!netDragInit(race)) showOpp(); // 一起比賽（net.src.js）：對手是朋友，不放 AI

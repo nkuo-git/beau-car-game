@@ -386,6 +386,7 @@ function createDrive(o) {
     return { nose: b.max.x, tail: b.min.x, len: b.max.x - b.min.x, halfW: Math.max(b.max.z, -b.min.z), wheelbase: W.xf - W.xr, xr: W.xr };
   })();
   const HL = info.len / 2 - 0.04, HW = Math.max(info.halfW, +o.halfW || 0) - 0.04, CX = (info.nose + info.tail) / 2, L = info.wheelbase;
+  const LEAN = P.lean ? 0.7 : 0; // 第 62 批：摩托車（perf.lean）：車身繞輪子著地的地方往彎裡面倒，最多 40 度
   const hubs = S.wheels.map((w) => w.parent), hub0 = hubs.map((h) => h.rotation.y), RF = W.RF ?? W.R, RR = W.RR ?? W.R;
   const base = { bx: body.position.x, bz: body.position.z };
   // 引擎、齒比、起步抓地：跟 race.src.js 的 racer() 一樣；尾速長一點點（六檔紅線＝極速 ×1.012）：跑極速的時候轉速 0.99，不會一直撞斷油
@@ -654,7 +655,7 @@ function createDrive(o) {
   }
   function springs(h) { // 車身：轉彎往外傾、加速抬頭、煞車點頭（彈簧）；草地、稻田抖一抖
     st.jitT -= h; if (st.jitT <= 0) { st.jitT = 0.09 + Math.random() * 0.06; st.jit = st.surf === 1 || st.surf === 2 ? (Math.random() - 0.5) * 0.014 * Math.min(1, Math.abs(st.v) / 3) : 0; }
-    const rT = clamp(-0.0053 * st.alat, -0.06, 0.06) + st.jit * 0.6, pT = clamp(0.0042 * st.along, -0.045, 0.035) + st.jit;
+    const rT = LEAN ? clamp(Math.atan(st.alat / 9.81), -LEAN, LEAN) * Math.min(1, Math.abs(st.v) / 4) : clamp(-0.0053 * st.alat, -0.06, 0.06) + st.jit * 0.6, pT = clamp(0.0042 * st.along, -0.045, 0.035) + st.jit; // 第 62 批：摩托車往彎裡面倒（停著的時候正的）
     st.rollV += (90 * (rT - st.roll) - 11 * st.rollV) * h; st.roll += st.rollV * h;
     st.pitchV += (90 * (pT - st.pitch) - 11 * st.pitchV) * h; st.pitch += st.pitchV * h;
   }
@@ -687,7 +688,7 @@ function createDrive(o) {
     const vd = st.dm > 0 ? vis + (clamp(st.steer * 0.32 - st.slip, -0.62, 0.62) - vis) * st.dm : vis; // 第 3 批：甩尾的時候前輪朝走的方向（看得到反打）
     hubs[0].rotation.y = hub0[0] - vd; hubs[1].rotation.y = hub0[1] - vd;
     body.rotation.x = st.roll; body.rotation.z = st.pitch;
-    body.position.z = base.bz - 0.45 * Math.sin(st.roll); body.position.x = base.bx + 0.45 * Math.sin(st.pitch); // 繞離地 0.45 公尺那點轉（不動 y：y 是車高）
+    body.position.z = base.bz - (LEAN ? 0 : 0.45) * Math.sin(st.roll); body.position.x = base.bx + 0.45 * Math.sin(st.pitch); // 繞離地 0.45 公尺那點轉（不動 y：y 是車高）
     const cx = st.x + Math.cos(st.th) * CX, cz = st.z - Math.sin(st.th) * CX;
     fx.shadow.position.set(cx, 0.06, cz); fx.shadow.rotation.y = st.th;
     if (ride && ride.on) ride.pose(vd, fx.shadow, cx, cz); // 第 4 批：高度、傾斜、懸吊、四輪轉向、影子貼地

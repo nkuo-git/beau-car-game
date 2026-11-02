@@ -466,7 +466,7 @@ const SEAT_PS = { n: 0 };
 function seatPeerBody(P) { // → [車身, 車, 位子] | null
   const c = P.cur; if (netNow() - P.last > 6000 || !netWorld()) return null;
   if (c.o === 1) {
-    if (!c.k || c.k === 'z2') return null; // 沙灘車：第 56 批騎的人
+    if (!c.k || RIDES[c.k]) return null; // 沙灘車：第 56 批騎的人
     if (HOP.on && HOP.uid === P.uid && HOP.car && HOP.k === c.k) return [HOP.car.body, c.k, c.st | 0];
     const O = P.obj; if (!O || !O.car.visible || P.objK !== c.k) return null;
     return [O.lod.body || O.car, c.k, c.st | 0];
@@ -528,7 +528,7 @@ function seatsStep(dt) {
   if (PAX.on && (!drv || !tripS || !walker || walker.mode !== 'off')) paxEnd(); // 被換掉了（回車庫頁、被抓⋯）
   if (PAX.on) { mySitOn(tripS, PAX.k, PAX.i, SCAM.mode !== 'eye'); seatCamTick(dt, tripS.body, PAX.k, PAX.i, tripS.car.rotation.y); }
   else if (HOP.on) { const Sx = HOP.car || HOP.lodS; mySitOn(Sx, HOP.k, HOP.i, SCAM.mode !== 'eye' || !HOP.car); seatCamTick(dt, Sx?.body, HOP.k, HOP.i, HOP.last.heading); }
-  else if (drv && walker && walker.mode === 'off' && cur !== 'z2' && tripS?.car?.visible && tripS.car.parent === TR.scene && !(walker.character && walker.character.group.visible) && seatsOf(cur).length) { // 開車：你坐在駕駛座（從外面看得到）
+  else if (drv && walker && walker.mode === 'off' && !RIDES[cur] && tripS?.car?.visible && tripS.car.parent === TR.scene && !(walker.character && walker.character.group.visible) && seatsOf(cur).length) { // 開車：你坐在駕駛座（從外面看得到）
     mySitOn(tripS, cur, 0, drv.cameraMode !== 'eye'); mySitSteer(drv.telemetry().steer);
   } else if (MYSIT.S) mySitOff();
   if (NET.on) seatPeers();

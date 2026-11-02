@@ -477,7 +477,7 @@ function makeDrv(pose) {
   TR.scene.add(Sx.car); Sx.car.visible = true; Sx.body.position.y = +CARS[cur].state.height;
   // 駕駛座視角：車內（cabin.js）的眼睛；手機直拿畫面窄，視角放大一點（跟車庫的「車內」一樣）
   const eye = CABIN_VIEW[cur] ? { ...CABIN_VIEW[cur], fov: cabinFov(cur, dcam.aspect) } : undefined;
-  if (cur === 'z2' && eye && riderMake()) eye.eye = [RIDER.eye[0] + 0.06, RIDER.eye[1], 0]; // 第 56 批：沙灘車：騎的人的眼睛往前 6 公分（人不畫）
+  if (RIDES[cur] && eye && riderMake()) eye.eye = [RIDER.eye[0] + 0.06, RIDER.eye[1], 0]; // 第 56 批：沙灘車：騎的人的眼睛往前 6 公分（人不畫）；第 62 批：街車也是
   dEye = eye;
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
@@ -2019,7 +2019,7 @@ function makeCrush() {
       return true;
     },
     makeJunk: async (i) => { // 表演場的舊車：輕量車（一次做一台）
-      const keys = Object.keys(LOD_CARS).filter((k) => !PERF[k]?.big);
+      const keys = Object.keys(LOD_CARS).filter((k) => !PERF[k]?.big && !PERF[k]?.lean); // 第 62 批：街車不當舊車
       const k = keys[i % keys.length]; if (!k || !TR) return null;
       const l = buildLodCar(k, await LOD_CARS[k].load(), JUNK_LOOK[i % JUNK_LOOK.length]);
       TR.scene.add(l.car);
@@ -2486,31 +2486,33 @@ function mirrorStep() {
 // ==== 第 56 批：沙灘車（Z2）騎的人：你自己的樣子＋安全帽，坐在座椅上、手握把手（跟著轉）、腳踩腳踏板（z2-spec.js：Z2_RIDE、Z2_ride、Z2_steer）====
 //   騎著（walker 收起來、你的人藏起來＝坐在車上）才放上去；第一人稱不畫人（鏡頭在眼睛往前 6 公分）；下車、回車庫頁就拿下來
 //   400 公尺直線加速（race.src.js enterRace）也騎在上面：riderOn(S)；比完回車庫頁 riderOff()
-const RIDER = { C: null, lk: null, S: null, eye: [0, 0, 0] };
+//   第 62 批：N4 街車也是騎的（moto-spec.js：MOTO_RIDE、motoRide、motoSteer，n4-spec.js 包成一樣的介面）：RIDES[key]；換車就重新量眼睛
+const RIDES = { z2: { R: Z2_RIDE, ride: Z2_ride, steer: Z2_steer, eye: Z2_eye }, n4: { R: N4_RIDE, ride: N4_ride, steer: N4_steer, eye: N4_eye } };
+const RIDER = { C: null, lk: null, k: null, S: null, SK: null, eye: [0, 0, 0] };
 const riderLook = () => { const L = meLook(); return { ...L, ...Z2_helmet(L) }; }; // 騎沙灘車戴安全帽（你自己的帽子就是安全帽：照它的顏色）
-function riderMake() { // 第一次騎、換了樣子：做（換）人、量眼睛（第一人稱的鏡頭）
-  const L = meLook();
-  if (RIDER.C && RIDER.lk === L) return RIDER.C;
+function riderMake(k = cur) { // 第一次騎、換了樣子、換了車：做（換）人、量眼睛（第一人稱的鏡頭）
+  const L = meLook(), RD = RIDES[k] || RIDES.z2;
+  if (RIDER.C && RIDER.lk === L && RIDER.k === k) return RIDER.C;
   try {
     if (!RIDER.C) { RIDER.C = buildCharacter(riderLook(), { state: 'sit', shadow: false, plant: false }); RIDER.C.group.name = 'z2-rider'; RIDER.C.group.userData.seated = true; } // 第 57 批：seated＝車子釋放前先拿下來（disposeCar）
     else RIDER.C.setLook(riderLook());
-    RIDER.lk = L; Z2_eye(RIDER.C, RIDER.eye);
+    RIDER.lk = L; RIDER.k = k; RD.eye(RIDER.C, RIDER.eye);
   } catch (e) { console.error(e); RIDER.C = null; }
   return RIDER.C;
 }
-function riderOn(Sx, vis = true) { // 人放到這台車上（車身底下，跟著懸吊晃）
-  const C = riderMake(); if (!C || !Sx?.body) return null;
-  if (C.group.parent !== Sx.body) { if (RIDER.S && RIDER.S !== Sx) riderOff(); Sx.body.add(C.group); C.group.position.fromArray(Z2_RIDE.at); C.group.rotation.set(0, 0, 0); Z2_ride(C, 0, 1); }
-  C.group.visible = vis; RIDER.S = Sx;
+function riderOn(Sx, vis = true, k = cur) { // 人放到這台車上（車身底下，跟著懸吊晃；街車跟著車身往彎裡面倒）
+  const RD = RIDES[k] || RIDES.z2, C = riderMake(k); if (!C || !Sx?.body) return null;
+  if (C.group.parent !== Sx.body) { if (RIDER.S && RIDER.S !== Sx) riderOff(); Sx.body.add(C.group); C.group.position.fromArray(RD.R.at); C.group.rotation.set(0, 0, 0); RD.ride(C, 0, 1); }
+  C.group.visible = vis; RIDER.S = Sx; RIDER.SK = k;
   return C;
 }
-function riderOff() { if (RIDER.C) { RIDER.C.group.removeFromParent(); RIDER.C.group.visible = false; } if (RIDER.S?.body) Z2_steer(RIDER.S.body, 0); RIDER.S = null; }
+function riderOff() { if (RIDER.C) { RIDER.C.group.removeFromParent(); RIDER.C.group.visible = false; } if (RIDER.S?.body) (RIDES[RIDER.SK] || RIDES.z2).steer(RIDER.S.body, 0); RIDER.S = null; }
 function riderStep(dt) {
-  const ride = cur === 'z2' && DRIVE.on && !!drv && !!tripS?.body && tripS.car.visible && walker?.mode === 'off' && walker.character && !walker.character.group.visible;
+  const ride = !!RIDES[cur] && DRIVE.on && !!drv && !!tripS?.body && tripS.car.visible && walker?.mode === 'off' && walker.character && !walker.character.group.visible;
   if (!ride) { if (RIDER.S) riderOff(); return; }
   const C = riderOn(tripS, drv.cameraMode !== 'eye'); if (!C) return;
-  const s = drv.telemetry().steer; Z2_steer(tripS.body, s);
-  if (C.group.visible) Z2_ride(C, s, dt);
+  const RD = RIDES[cur], s = drv.telemetry().steer; RD.steer(tripS.body, s);
+  if (C.group.visible) RD.ride(C, s, dt);
 }
 function driveFrame(now) {
   const w = stage.clientWidth, h = stage.clientHeight;

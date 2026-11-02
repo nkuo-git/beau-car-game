@@ -124,6 +124,13 @@ export function buildCar(spec, geos, opt = {}) {
   const W = spec.wheels, wheels = [], rims = [];
   for (const [x, track, w, R, rim] of [[W.xf, W.trackF, W.wF, W.RF ?? W.R, W.rimF ?? W.rim], [W.xr, W.trackR, W.wR, W.RR ?? W.R, W.rimR ?? W.rim]]) {
     for (const s of [-1, 1]) {
+      if (W.moto) { // 第 62 批：摩托車：輪子是 spec.build 做的（前輪跟著把手轉）；這裡只放看不到的點（drive.js 轉向、terrain.js 四個角照舊），右邊那個的 rotation＝真的輪子的
+        const hub = new THREE.Group(); hub.position.set(x, R, s * track); if (s < 0) hub.rotation.y = Math.PI;
+        const wh = new THREE.Object3D(), real = s > 0 ? body.getObjectByName(x > 0 ? 'wheelF' : 'wheelR') : null;
+        if (real) Object.defineProperty(wh, 'rotation', { value: real.rotation, configurable: true, enumerable: true }); // 只改 rotation（轉動），四元數跟著真的輪子
+        hub.add(wh); car.add(hub); wheels.push(wh); hubs.push({ hub, s, track, ax: x > 0 ? 'f' : 'r' });
+        continue;
+      }
       const { wheel: wh, brake, rotor } = wheel({ R, width: w, rim, mats, style: W.style, side: s, rotor: true });
       wh.add(rotor); // 碟盤跟著輪子轉（第 54 批：有打洞）
       rims.push({ wh, rim, w, s });

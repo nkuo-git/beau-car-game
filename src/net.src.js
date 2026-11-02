@@ -164,7 +164,7 @@ function netStep(dt) {
     if (c.jl !== P.jlSeen) { P.jlSeen = c.jl; if (c.jl && P.n) netToast(`🚓 ${P.n}被警察抓走了！`); } // 朋友被警察抓走
     const tw = fresh && (c.o === 1 || c.o === 2) ? c.w : 0; if (tw !== P.tagW) { P.tagW = tw; if (P.n) netTag(P); } // 名字旁邊的星星
     const near = !!s && (c.o === 4 || !me || (s.x - mx) * (s.x - mx) + (s.z - mz) * (s.z - mz) < NET_FAR * NET_FAR); // 遠的：只有地圖上的點
-    const car = near && c.o === 1, walkin = near && (c.o === 2 || c.o === 4), inside = c.o === 4, ride = car && c.k === 'z2'; // 第 56 批：騎沙灘車＝人也要畫
+    const car = near && c.o === 1, walkin = near && (c.o === 2 || c.o === 4), inside = c.o === 4, ride = car && !!RIDES[c.k]; // 第 56 批：騎沙灘車＝人也要畫；第 62 批：街車也是
     // 第 19 批：他下車停著的車（走路的時候）：畫在停的地方、會擋；借給你了（你在開、在載入）就不畫這台
     // 第 22 批（Nick「他的車不管在哪裡你都要看得到」）：他在房子裡、在警察局、被關（車拖到警察局的停車場）也畫（pv）
     const pq = c.pk || c.pv;
@@ -193,10 +193,10 @@ function netStep(dt) {
         k.vx = Math.cos(oh) * ov; k.vz = -Math.sin(oh) * ov; k.dvx = k.dvz = 0; NET.cols.push(k);
       }
     }
-    if (ride && O && P.chr && P.objK === 'z2') { // 第 56 批：騎在沙灘車上（輕量車的車身底下，跟著車走）
+    if (ride && O && P.chr && RIDES[P.objK]) { // 第 56 批：騎在沙灘車上（輕量車的車身底下，跟著車走）
       const body = O.lod.body || O.car;
-      if (P.chr.group.parent !== body) { body.add(P.chr.group); P.chr.group.position.fromArray(Z2_RIDE.at); P.chr.group.rotation.set(0, 0, 0); P.riding = true; P.hat0 = { hat: P.chr.look.hat, hatColor: P.chr.look.hatColor }; P.chr.setLook(Z2_helmet(P.chr.look)); } // 戴上安全帽
-      P.chr.group.visible = true; Z2_ride(P.chr, 0, dt);
+      if (P.chr.group.parent !== body) { body.add(P.chr.group); P.chr.group.position.fromArray(RIDES[P.objK].R.at); P.chr.group.rotation.set(0, 0, 0); P.riding = true; P.hat0 = { hat: P.chr.look.hat, hatColor: P.chr.look.hatColor }; P.chr.setLook(Z2_helmet(P.chr.look)); } // 戴上安全帽
+      P.chr.group.visible = true; RIDES[P.objK].ride(P.chr, 0, dt);
     } else netUnride(P);
     if (C) {
       const scn = inside ? PSC : TR.scene, y = inside ? 0 : netH(s.x, s.z); // 第 22 批：警察局裡面＝它自己的場景（地板 0）

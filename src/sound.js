@@ -589,6 +589,10 @@ SND_CARS.p8 = { ...SND_CARS.jp4, name: '5.0 V8 自然進氣', red: 6000, swap: n
 SND_CARS.z2 = { ...SND_CARS.yaris, name: '686 cc 單缸自然進氣', red: 8500, idle: 0.16, fire: [0], bank: [0], cylAmp: [1], turbo: null, gain: 1.3, idleGain: 3.4,
   width: 210, rise: 0.06, decay: 0.85, vari: 0.09, jit: 1.6, wob: 0.022, drive: 1.6, rasp: 0.34, raspHz: 1900, lp: 2600, eq: [[120, 1, 4], [520, 1.4, 3], [1600, 2, 1.5]],
   intake: { ...SND_CARS.yaris.intake, lvl: 0.24, f: 520, tone: 0.45, hiss: 0.1 }, pops: { ...SND_CARS.yaris.pops, lift: 0.3, shift: 0.2, lvl: 0.5, rate: 9 } };
+// 第 62 批：街車：948 cc 直列四缸（180 度曲軸、平均點火）：轉得很高（紅線 11000）、尖尖的、進氣聲大；一缸小，整體 gain 大一點
+SND_CARS.n4 = { ...SND_CARS.yaris, name: '948 cc 直列四缸自然進氣', red: 11000, idle: 0.11, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.97, 1, 0.98], turbo: null, gain: 1.2, idleGain: 2.6,
+  width: 110, vari: 0.04, jit: 0.6, drive: 1.5, rasp: 0.42, raspHz: 3200, lp: 4200, eq: [[180, 1, 2], [900, 1.4, 3], [2600, 2, 2.5]],
+  intake: { ...SND_CARS.yaris.intake, lvl: 0.34, f: 700, tone: 0.55, hiss: 0.14 }, pops: { ...SND_CARS.yaris.pops, lift: 0.35, shift: 0.25, lvl: 0.55, rate: 12 } };
 // 車庫的引擎零件會改變聲音
 function SND_profile(key, parts) {
   const B = SND_CARS[key] || SND_CARS.supra;

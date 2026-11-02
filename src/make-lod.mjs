@@ -24,10 +24,11 @@ import { Document, NodeIO } from '@gltf-transform/core';
 import { KHRMeshQuantization } from '@gltf-transform/extensions';
 import { serve, browser, DIR } from './lod-serve.mjs';
 
-const ALL = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'rx7', 'evo', 'civic', 'laferrari', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron', 'jp4', 'k2', 'p8', 'z2']; // 第 48 批：吉普車（車身是遮罩座標，B.mask）；第 51 批：K2 小越野車（也是遮罩座標）；第 53 批：P8 皮卡（也是）；第 56 批：Z2 沙灘車（公尺座標，零件很多很細）
+const ALL = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'rx7', 'evo', 'civic', 'laferrari', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron', 'jp4', 'k2', 'p8', 'z2', 'n4']; // 第 48 批：吉普車（車身是遮罩座標，B.mask）；第 51 批：K2 小越野車（也是遮罩座標）；第 53 批：P8 皮卡（也是）；第 56 批：Z2 沙灘車（公尺座標，零件很多很細）
 const arg = (k, d) => { const a = process.argv.find((s) => s.startsWith(`--${k}=`)); return a ? a.split('=')[1] : d; };
 const KEYS = (process.argv.slice(2).find((s) => !s.startsWith('--')) || ALL.join(',')).split(',');
-const HALF = +arg('half', 9000); // 半邊車身（含車頭）目標三角形數
+const HALF0 = +arg('half', 0) || 9000; // 半邊車身（含車頭）目標三角形數
+const HALF_CAR = { n4: 4000 }; // 第 62 批：街車的車殼很小（油箱＋座墊車尾）：4000 就夠（沒給 --half 的時候）
 const PART_ERR = +arg('perr', 0.002); // 零件簡化誤差（公尺）
 const PART_ERR_CAR = { jp4: 0.004, k2: 0.004, p8: 0.004, z2: 0.003 }; // 第 48 批：吉普車的零件又多又大（輪弧、保桿、備胎、車底），誤差 4 公釐（沒給 --perr 的時候）
 const WIDE_ERR = +arg('werr', 0.004); // 寬體葉子板（大片、平順）
@@ -447,6 +448,7 @@ for (const key of KEYS) {
   const out = { body: 0, noses: {}, parts: {} };
   if (B.baked) { // 第 49 批：烘焙的車身（gc8-bake.mjs）：每一組就是分類 → 右半邊 → 整台一起簡化（太小的碎片拿掉）
     const { M: H, lock, asym } = bakedHalf(await bakedBuckets(path.join(DIR, B.glb)), key);
+    const HALF = arg('half') ? HALF0 : HALF_CAR[key] ?? HALF0;
     const s = simplify(H, HALF, lock, { pre: [{ cls: 3, err: MATTE_ERR }], flags: ['Prune'] });
     out.mix = { lens: 1, wire: 0.45 }; // 沒有燈裡的暗玻璃、網子（網子是黑的，當黑飾條）
     const lists = [...BODY_CLS.map((role) => ({ role, idx: [], x: role === 'lens' || role === 'wire' ? { mix: out.mix[role] } : null })), { role: 'custom', mat: BK_PLATE_MAT, idx: [] }];
@@ -472,6 +474,7 @@ for (const key of KEYS) {
       const cls = classifier({ ...M, front }, B.U, B.mask ? -Infinity : LOW_LAMP); // 吉普車：大燈的下半圈在遮罩座標 0.48 以下，不能當成低的鍍鉻（晚上會不亮）
       const cut = cutByClass(f32(g.pos), f32(g.nor), u32(g.idx), cls);
       mixes(cut, cls, acc);
+      const HALF = arg('half') ? HALF0 : HALF_CAR[key] ?? HALF0;
       const share = u32(g.idx).length / 3 / totalIn; // 目標三角形照原本的比例分（Supra：車身＋任一個車頭 ≈ HALF）
       const s = simplify(cut, Math.round(HALF * share), seam ? (x) => seam(x) : null, { pre: [{ cls: 3, err: MATTE_ERR }] });
       done.push({ name, g, cut, s });
