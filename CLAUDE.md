@@ -379,7 +379,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - 2–5 樓都是你的家（跟 4 樓一樣的格局，每層牆、沙發、棉被顏色不一樣：interiors.js `APT_PAL`）；2–4 樓有陽台（真的在外面：town.src.js `aptOut` 照樓層 `dy = (樓層 − 3)·3.3`），5 樓沒有；每層都能睡覺、換衣服（`aptWalk` `I.floor >= 1`）。
   - 樓梯不再傳送：interiors.js `stairShaft` 兩頭打開、給 `F.stair`（上樓那一跑、下樓那一跑、平台；`I.stair`）；town.src.js `stairY`（同一個位置上下兩跑：挑最接近上一格高度的那一面）＋`stairStep`／`stairSwap`（走過半層換成上／下一層、y ∓3.3、不黑掉）；5 樓往上走過 0.82 層＝上頂樓。walk.js `teleport` 多 `keepMotion`。1 樓沒有往下。透天厝也用同一個 `stairShaft`（現在都 1 層，沒變）。
   - 測試：apt-test 31 ok、test-b1 151 ok。說明在 `notes/apt.md` 第 61 批。
-- **試做頁 v74（2026-11-02；第 62 批）＝ N4 街車**：第 59 批的兩台摩托車圖，Nick 卡片選「只做街車」（F6 仿賽先不做，車殼、零件還在 moto-body.mjs／moto-spec.js）。
+- **試做頁 v74（2026-11-02；第 62 批；artifact 第 76 版）＝ N4 街車**：第 59 批的兩台摩托車圖，Nick 卡片選「只做街車」（F6 仿賽先不做，車殼、零件還在 moto-body.mjs／moto-spec.js）。
   - 自己設計的 948 cc 直四街車（圓燈、一字把、油箱上「N4」、四合一排氣到右邊、鋁合金雙翼樑車架、倒立式前叉、五輻輪框；沒有真的牌子）：moto-spec.js（`motoBuild`，第 59 批的零件，現在接進遊戲；裡面的名字加 `MO_`，`MOTO` 尺寸自己寫一份）、n4-look.js、n4-spec.js、body-n4-q.glb、body-n4-lod.glb。拉花：比賽號碼（預設）、條紋、沒有；後箱；運動套件＝風鏡＋下導流；高度只有原廠。
   - **兩個輪子**：supra.js `buildCar` 看到 `wheels.moto` 就做四個看不到的輪子位置（左右 ±0.12 公尺），drive.js、terrain.js、圓塔的程式都不用改；右邊那兩個的 rotation 就是真的輪子的（前輪在手把那組裡面，跟著轉）。輕量車自己畫兩個輪子（`N4_lodWheels`；make-lod.mjs `HALF_CAR`、lod-bake.html 不烘真的輪子）。
   - **轉彎往裡面倒**：PERF `lean: 1` → drive.js 最多 0.7 弧度（40°）、照側向加速度、停下來是正的；騎的人一起倒。朋友騎的輕量車不會倒、手把不會轉。
