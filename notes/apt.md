@@ -48,5 +48,25 @@ street by the door 104 / 0.44M · shell 4.4k tris per block, 5 draw calls for al
 room (no wall/furniture penetration, camera under ceiling), 睡覺 (lie down, dark, 睡飽了！, wake beside the bed), 換衣服, balcony (height,
 parapet, back in), roof via lift and via the 5F stairs (height, parapets on all four sides, back to 5F), lift 1F and out the front door.
 
+## Batch 61 (trial v73): the whole block is my home, stairs are walked
+Nick 2026-11-02: 「整棟公寓都是我家／樓梯要自己走」.
+- Floors 2–5 are all my flat (same plan as 4F; per-floor colours in interiors.js `APT_PAL`: walls, sofa, quilt). 2F–4F have the
+  balcony (`hasBalc`), 5F has a plain front wall. Every floor has 睡覺 / 換衣服 (town.src.js `aptWalk`: `I.floor >= 1`).
+- Balconies on 2F–4F are real: `aptOut` offsets apt.js's 4F balcony level by `dy = (floor − 3)·3.3` (height, colliders, camera ceiling).
+- Stairs: the old stair exit zones (teleport to the next floor) are gone. interiors.js `stairShaft` now leaves the flight ends open and
+  publishes `F.stair` (local box of side a = up flight, side b = down flight, zSB / zL / zS1, up, down, rise 3.3, top 'roof' on 5F);
+  `buildInterior` copies it per floor, `setFloor` sets `I.stair`.
+- town.src.js `walkWorld().heightAt` indoors = `stairY(x, z)`: a two-flight U stair has an upper and a lower flight over the same xz,
+  so it returns the candidate surface nearest the previous frame's height (`STAIR.y`). `stairStep()` (after `walker.update`) swaps the
+  visible floor once you are past half a storey (`rise/2 + 0.12`, up or down): `I.setFloor`, swap colliders, folks, doors, then
+  `walker.teleport(same xz, { keepCamera, keepMotion })` — y shifts by ∓3.3 and the stair geometry of the next floor lines up, so it is
+  seamless (no fade). On 5F going up past 0.82·rise → `goDoor(aptOut({ to: 'roof' }))`. In the shaft the camera may rise to 4.6 m.
+- walk.js `teleport(…, { keepMotion: true })` keeps the speed (new option; default unchanged).
+- 1F has no way down (the down side is walled at zSB).
+- Village houses use the same `stairShaft`; they are all 1 floor now, so nothing changes there until they get floors again.
+
+apt-test (31 ok): stairs 1F → landing (1.65 m) → 2F and back down (one floor swap each way, biggest height step 0.019 m per frame, no fade),
+no way down from 1F, 2F flat + real 2F balcony (3.3 m), 5F flat without balcony, 5F stairs walk out onto the roof.
+
 ## Still to do (later batches)
 Stairs in every village house to each floor and the roof (some houses 2–3 floors again), different layouts per house, residents moving inside.

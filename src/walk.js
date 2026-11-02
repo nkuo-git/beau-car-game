@@ -26,7 +26,7 @@
 //   walker.telemetry() → { x, z, heading, speed（真的走多快 m/s）, vx, vz, state（動作 idle|walk|run⋯）, mode（off 開車中／out 下車中／walk／in 走去車門／seat 坐進去中）,
 //                          running, paused, near（伸手可及的車 key，沒有＝null）, action（大按鈕的字）, camMode（follow|eye）, camYaw, camPitch, camDist（現在離角色多遠）,
 //                          camWant（沒被擋的話想要多遠）, hidden（角色藏起來了：開車中、第一人稱、鏡頭貼著頭）, zone（在哪個 places 的 zone 裡）, dest, destDist }
-//   walker.teleport({ x, z, heading }, { keepCamera })   把人放到那裡（鏡頭跳到後面；站在門口的門要先走開才會再觸發）
+//   walker.teleport({ x, z, heading }, { keepCamera, keepMotion })   把人放到那裡（鏡頭跳到後面；站在門口的門要先走開才會再觸發）
 //   walker.setAction({ label, onClick, icon } | null)   HUD 的大按鈕（跟 drive.js 同一個樣子、同一個位置；E 鍵）；icon：car | door | doorDown | key | hand | lift | bed；
 //                          頁面給的優先，沒給才輪到車庫門（開鐵捲門）、車（上車）；每一幀叫也沒關係；walker.action＝現在的字
 //   walker.setAction2({ label, onClick, icon } | null)   第 57 批：大按鈕下面第二顆（深色：「選位子」）；只有走路的時候出現；walker.action2＝現在的字；walker.nearCar＝「上車」那台（setCars 給的那個）
@@ -958,7 +958,7 @@ function createWalker(o) {
   }
   function pause(op = {}) { if (!alive) return; scr = null; tgt = null; deactivate(!!op.hide); st.speed = 0; }
   function teleport(p, op = {}) {
-    st.x = +p.x || 0; st.z = +p.z || 0; if (p.heading != null) st.th = wrapA(+p.heading); st.vx = st.vz = st.speed = 0; scr = null; tgt = null;
+    st.x = +p.x || 0; st.z = +p.z || 0; if (p.heading != null) st.th = wrapA(+p.heading); if (!op.keepMotion) st.vx = st.vz = st.speed = 0; scr = null; tgt = null; // 第 61 批：keepMotion＝樓梯走到一半換樓層（照樣走著）
     if (st.mode === 'in' || st.mode === 'seat' || st.mode === 'out') st.mode = active ? 'walk' : 'off';
     if (!op.keepCamera) { cam.yaw = st.th; cam.pitch = PITCH0; cam.hold = 0; }
     cam.cd = cam.want = cam.dist; blend.on = false;

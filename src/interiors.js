@@ -29,6 +29,7 @@
 //       to 'outside'：回村子，人站到 spawn（門外、面朝外；＝interiorFor(b).outside）；to 數字：I.setFloor(to)，人站到 spawn（那一層的樓梯口，面朝離開樓梯的方向）
 //       spawn 都在任何 exit 外面（不會一出現又被傳走）；建議換完 0.4 秒內不要再判斷
 //       door：{ x, z, ry, w }：同一個出口寫成 walk.js setDoors 的門（ry 朝房間裡面：往 −(sin ry, cos ry) 走＝出去／上下樓；w＝半寬）
+//     I.stair（第 61 批）：{ xa0 xa1（第一跑：往上）, xb0 xb1（第二跑）, xs0 xs1, zSB（樓梯口）, zL（平台）, zS1, up, down, rise 3.3, top（'roof'＝走上去到頂樓）, ch }（本地）：樓梯真的走得上去（town.src.js stairY 算腳下多高、過了平台換到上一層／下一層、人的高度加減 3.3）；下面舊的說明：以前樓梯口是 exit
 //     樓梯：每一層是自己的空間，樓梯口是 exit（不是真的一階一階走上去）：透天厝是兩跑樓梯（樓梯間 2 × 3.2 公尺，靠一邊的牆），
 //       一樓只有「上樓」、頂樓只有「下樓」、中間的樓層兩個口並排（左上右下或相反）；看得到往上的樓梯、往下的樓梯、轉角平台、扶手
 //     spots：{ stand: [], sit: [], sleep: [], pray: [], counter: [] }：放居民用（世界座標）：{ x, z, heading, y?, room }
@@ -1572,11 +1573,11 @@ function stairShaft(F, H, n, S) {
     for (let k = 1; k <= 8; k++) tread(xa0, xa1, zL - k * g, zL - (k - 1) * g, -9 * r - k * r, zL - (k - 1) * g, 1);
     rail(X(0.06), X(0), zSB + 0.05, 0.92 - r, zL, 0.92 - 9 * r);
   }
-  // 碰撞＋出口
-  colBox(F, xd0, zSB, xd1, zS1, 3);
-  const zo = [zSB - 0.45, zSB + 0.45];
-  if (up) { colBox(F, xa0, zSB + 0.45, xa1, zS1, 3); exitZone(F, xa0 + 0.06, zo[0], xa1 - 0.06, zo[1], n + 1, { x: X(0.7), z: zSB - 0.8, lh: HP }); }
-  if (down) { colBox(F, xb0, zSB + 0.45, xb1, zS1, 3); exitZone(F, xb0 + 0.06, zo[0], xb1 - 0.06, zo[1], n - 1, { x: X(1.525), z: zSB - 0.8, lh: HP }); }
+  // 碰撞（第 61 批：樓梯自己走上去、走下去＝town.src.js 照 F.stair 算腳下多高、走到一半換到上一層／下一層；不再是一碰就換樓層的出口）
+  colBox(F, xd0, zSB, xd1, zL, 3); // 中間那道牆（平台那段空著，才轉得過去）
+  if (!up) colBox(F, xa0, zSB - 0.06, xa1, zSB + 0.08, 3); // 沒有往上的：那個口是關著的門
+  if (!down) colBox(F, xb0, zSB - 0.06, xb1, zSB + 0.08, 3);
+  if (up || down) F.stair = { xa0: Math.min(xa0, xa1), xa1: Math.max(xa0, xa1), xb0: Math.min(xb0, xb1), xb1: Math.max(xb0, xb1), xs0: Math.min(xs0, xs1), xs1: Math.max(xs0, xs1), zSB, zL, zS1, up, down, rise: 3.3, top: up && n === N - 2 && H.roofUp ? 'roof' : null };
   F.stairArrive = { fromBelow: { x: X(0.7), z: zSB - 0.8, lh: HP }, fromAbove: { x: X(1.525), z: zSB - 0.8, lh: HP } };
 }
 // 陽台：地、欄杆（女兒牆）、兩邊的牆；冷氣室外機、盆栽
@@ -2202,6 +2203,7 @@ function farmFloor(b) {
 //   頂樓從 5 樓的樓梯上去（exit to 'roof'）、4 樓客廳的落地門出去陽台（to 'balc'）：都是真的在外面（town.src.js 換到世界、照 apt.js 的 roof／balc）
 //   電梯：走進電梯（floors[i].lift 那個長方形）town.src.js 出面板按樓層
 const AL = { X0: -5.8, X1: 5.8, ZB: -7.3, ZF: 7.3, zC: -5.6, zK: -2.4, xL: -1.7, xS: -3.7, xB: -0.4, zR: 1.5, xT: -3.4, BX0: -0.3, BZ: 6.0 };
+const APT_PAL = [null, { liv: '#eef3e6', bed: '#f6e7dc', sofa: '#7a5a3c', quilt: '#f2b880' }, { liv: '#f3ece0', bed: '#e3eee6', sofa: '#3f6e5e', quilt: '#a8d8b4' }, { liv: '#f6efe2', bed: '#e4edf6', sofa: '#4f6b8a', quilt: '#9ec9ea' }, { liv: '#eae8f3', bed: '#f4ecd4', sofa: '#8a3f4a', quilt: '#e8c75a' }]; // 第 61 批：2–5 樓你家每層的牆、沙發、被子（4 樓＝原本的）
 const APT_ROOF_SPAWN = { x: -0.6, z: -2.2, lh: 0 }, APT_BALC_SPAWN = { x: 4.0, z: 6.95, lh: -HP }; // 站在門的旁邊（walk.js：給門的時候站在門的範圍裡面＝那扇門先不觸發，要走開 1.65 公尺才會再觸發；陽台只有 1.4 公尺深） // 跟 apt.js 的 roof.spawn、balc.spawn 一樣（本地）
 function aptInfo(b) {
   const R = rng(seedOf(b));
@@ -2240,11 +2242,12 @@ function bathroom(F, x0, x1, z0, z1) {
   spot(F, 'stand', F0, tx, tz - 0.6, HP, null, rm);
 }
 function aptFloor(A, n) {
-  const { X0, X1, ZB, ZF, zC, zK, xL, xS, xB, zR, xT, BX0, BZ } = AL, R = A.R, mine = n === A.mine, lobby = n === 0, top = n === A.N - 1;
+  const { X0, X1, ZB, ZF, zC, zK, xL, xS, xB, zR, xT, BX0 } = AL, R = A.R, mine = n >= 1, lobby = n === 0, top = n === A.N - 1;
+  const hasBalc = n >= 1 && n <= 3, BZ = hasBalc ? AL.BZ : ZF, P = APT_PAL[n] || APT_PAL[3]; // 第 61 批：整棟都是你家（2–5 樓都是你家；陽台只有 2–4 樓，外殼是這樣蓋的）；每層顏色不一樣
   const F = newFloor({ index: n, label: n + 1 + 'F' }); F.paths = []; F.occ = []; F.spots.dress = [];
   const skirt = (c) => mul(C(c), 0.72);
   const S_cor = sf('plaster', '#efece4', 'wall', { skirt: skirt('#efece4') }), S_shaft = sf('plaster', '#efece4', 'wall'), S_lift = sf('plaster', '#cdd2d8', 'shiny');
-  const S_liv = sf('plaster', '#f6efe2', 'wall', { skirt: skirt('#f6efe2') }), S_bed = sf('plaster', '#e4edf6', 'wall', { skirt: skirt('#e4edf6') }), S_hall = sf('plaster', lobby ? '#f3efe6' : '#f6efe2', 'wall', { skirt: skirt('#f3efe6') });
+  const S_liv = sf('plaster', P.liv, 'wall', { skirt: skirt(P.liv) }), S_bed = sf('plaster', P.bed, 'wall', { skirt: skirt(P.bed) }), S_hall = sf('plaster', lobby ? '#f3efe6' : '#f6efe2', 'wall', { skirt: skirt('#f3efe6') });
   const S_kit = sf('plaster', '#f5f3ec', 'wall', { wain: { h: 1.6, s: sf('ktile', WHITE, 'wall', { noSkirt: true }) } }), S_bath = sf('ktile', WHITE, 'wall', { noSkirt: true });
   const ceilP = sf('plaster', '#fbfbf8'), flCor = sf('terrazzo', WHITE, 'floor'), flLiv = sf('wood', WHITE, 'floor'), flBed = sf('wood', WHITE, 'floor'), flKit = sf('tileB', WHITE, 'floor'), flBath = sf('tileW', WHITE, 'floor'), flLob = sf('granite', WHITE, 'floor');
   // 房間（陰影、地板、天花板）
@@ -2276,9 +2279,11 @@ function aptFloor(A, n) {
     wall(F, 'x', ZF + 0.1, X0, X1, { t: 0.2, p: null, n: S_hall, out: 1, view: 'street', voff: 0.1, ops: [d, { a: -5.0, b: -3.4, y0: 0.95, y1: 2.35, k: 'win', grille: false }, { a: -2.6, b: -1.0, y0: 0.95, y1: 2.35, k: 'win', grille: false }, { a: 3.4, b: 5.0, y0: 0.95, y1: 2.35, k: 'win', grille: false }] });
   } else if (mine) { // 正面：房間的兩個窗；客廳那段凹進去（陽台）：落地門＋窗
     wall(F, 'x', ZF + 0.1, X0, BX0, { t: 0.2, p: null, n: S_bed, out: 1, view: 'street', voff: 0.1, ops: [{ a: -5.0, b: -3.4, y0: 0.95, y1: 2.35, k: 'win', curtain: '#d7e6f2', grille: 'grille1' }, { a: -2.6, b: -1.0, y0: 0.95, y1: 2.35, k: 'win', curtain: '#d7e6f2', grille: 'grille1' }] });
-    wall(F, 'x', BZ + 0.1, BX0, X1, { t: 0.2, p: null, n: S_liv, out: 1, view: 'street', voff: 0.1, vdist: 1.5, ops: [{ a: 0.7, b: 3.3, y0: 0, y1: 2.3, k: 'balc' }, { a: 3.8, b: 5.2, y0: 0.85, y1: 2.3, k: 'win', curtain: '#f3e6c8', grille: 'grille1' }] });
-    wall(F, 'z', BX0 - 0.1, BZ, ZF, { t: 0.2, n: S_bed, p: null, col: false }); // 陽台左邊那截（房間這面）
-    exitZone(F, 0.85, BZ - 0.6, 3.15, BZ + 0.3, 'balc', APT_BALC_SPAWN); // 落地門：走出去到陽台（town.src.js）
+    if (hasBalc) {
+      wall(F, 'x', BZ + 0.1, BX0, X1, { t: 0.2, p: null, n: S_liv, out: 1, view: 'street', voff: 0.1, vdist: 1.5, ops: [{ a: 0.7, b: 3.3, y0: 0, y1: 2.3, k: 'balc' }, { a: 3.8, b: 5.2, y0: 0.85, y1: 2.3, k: 'win', curtain: '#f3e6c8', grille: 'grille1' }] });
+      wall(F, 'z', BX0 - 0.1, BZ, ZF, { t: 0.2, n: S_bed, p: null, col: false }); // 陽台左邊那截（房間這面）
+      exitZone(F, 0.85, BZ - 0.6, 3.15, BZ + 0.3, 'balc', APT_BALC_SPAWN); // 落地門：走出去到陽台（town.src.js；2–4 樓都有）
+    } else wall(F, 'x', ZF + 0.1, BX0, X1, { t: 0.2, p: null, n: S_liv, out: 1, view: 'street', voff: 0.1, ops: [{ a: 0.9, b: 2.9, y0: 0.9, y1: 2.3, k: 'win', curtain: '#f3e6c8', grille: 'grille1' }, { a: 3.6, b: 5.2, y0: 0.9, y1: 2.3, k: 'win', curtain: '#f3e6c8', grille: 'grille1' }] }); // 五樓沒有陽台：兩個窗
   }
   // 走廊前面的牆：樓梯的兩個口、電梯門、玄關（4 樓：你家的門；2／3／5 樓：開著走過去；1 樓：沒有牆）
   const up = !top || true, down = n > 0, [ha0, ha1] = A.XR(1.05, 2.0), [hb0, hb1] = A.XR(0, 0.95), [st0, st1] = A.XR(0, 2.0);
@@ -2309,8 +2314,7 @@ function aptFloor(A, n) {
   for (const x of [LD.a - 0.06, LD.b]) bx(F, 'metal', F0, [x, 0, zC - 0.12, x + 0.06, LD.y1 + 0.06, zC + 0.02], C('#aeb4ba')); bx(F, 'metal', F0, [LD.a - 0.06, LD.y1, zC - 0.12, LD.b + 0.06, LD.y1 + 0.06, zC + 0.02], C('#aeb4ba')); // 電梯門框
   vq(B, 'glow', F0, [(LD.a + LD.b) / 2 - 0.12, zC - 0.121], [(LD.a + LD.b) / 2 + 0.12, zC - 0.121], LD.y1 + 0.12, LD.y1 + 0.3, dotUV(GU('s_red')), [1.3, 0.6, 0.5]); // 門上面的樓層燈
   F.lift = { x0: xS + 0.2, z0: zC + 0.15, x1: xL - 0.2, z1: -3.8 };
-  stairShaft(F, { ...A, N: A.N + 1 }, n, S_shaft); // N＋1：五樓也有往上的樓梯（到頂樓）
-  for (const e of F.exits) if (e.to === A.N) { e.to = 'roof'; e.spawn = APT_ROOF_SPAWN; } // 五樓往上＝頂樓（外面）
+  stairShaft(F, { ...A, N: A.N + 1, roofUp: true }, n, S_shaft); // N＋1：五樓也有往上的樓梯（走上去＝頂樓，town.src.js）
   // 大門：出口、外面擋住、進來站的地方
   for (const d of doors) { exitZone(F, d.a + 0.12, ZF - 0.55, d.b - 0.12, A.hz + 0.35, 'outside', null); colBox(F, d.a - 0.3, A.hz + 0.3, d.b + 0.3, A.hz + 0.8, 2.6); }
   if (lobby) F.spawnIn = { x: 0, z: ZF - 1.15, lh: HP };
@@ -2340,14 +2344,14 @@ function aptFloor(A, n) {
     framedPic(F, frame(3.5, 0, ZF, Math.PI).sub(0, 0, 0.001), 'photo', 0.7, 0.55, 1.5);
   } else if (mine) {
     const rmL = '客廳', rmB = '房間';
-    const sofaT = frame(X1, 0, 2.2, -HP); sofa(F, sofaT, { n: 3, col: '#4f6b8a', room: rmL }); occupy(F, X1 - 0.82, 2.2 - 1.05, X1, 2.2 + 1.05); sofaTable(F, sofaT, 1.02, 2.0);
+    const sofaT = frame(X1, 0, 2.2, -HP); sofa(F, sofaT, { n: 3, col: P.sofa, room: rmL }); occupy(F, X1 - 0.82, 2.2 - 1.05, X1, 2.2 + 1.05); sofaTable(F, sofaT, 1.02, 2.0);
     tvSet(F, frame(xB + 0.1, 0, 2.2, HP), { L: 1.6, tv: 'tvB' }); occupy(F, xB + 0.1, 1.4, xB + 0.56, 3.0);
     place(F, [frame(3.0, 0, -1.0, 0), frame(2.2, 0, -1.0, 0)], [-0.9, -0.75, 0.9, 0.75], (T) => dining(F, T, { w: 1.2, d: 0.75, chairs: true, room: rmL }));
     place(F, [frame(1.7, 0, zC + 0.12, 0), frame(2.6, 0, zC + 0.12, 0)], [-0.47, 0, 0.47, 0.68], (T) => shoeCab(F, T, { L: 0.9, seed: 2 }));
     place(F, [frame(BX0 + 0.4, 0, BZ - 0.4), frame(X1 - 0.4, 0, BZ - 0.4)], [-0.25, -0.25, 0.25, 0.25], (T) => plant(F, T, 1.1));
     wallPic(F, frame(X1, 0, 0.3, -HP).sub(0, 0, 0.001), 'calendar', 0.34, 0.5, 1.5); wallPic(F, frame(X1, 0, 4.6, -HP).sub(0, 0, 0.001), 'clock', 0.34, 0.34, 1.95); framedPic(F, frame(xB + 0.1, 0, 4.6, HP).sub(0, 0, 0.001), 'photo', 0.7, 0.55, 1.4);
     acUnit(F, frame(X1, 0, 5.0, -HP), 2.35);
-    bed(F, frame(-3.3, 0, zR + 0.07, 0), { w: 1.5, quilt: '#9ec9ea', side: 'r', room: rmB }); occupy(F, -4.1, zR, -2.0, zR + 2.2);
+    bed(F, frame(-3.3, 0, zR + 0.07, 0), { w: 1.5, quilt: P.quilt, side: 'r', room: rmB }); occupy(F, -4.1, zR, -2.0, zR + 2.2);
     const wT = frame(X0, 0, 5.3, HP); wardrobe(F, wT, { w: 1.4, col: '#f3efe6' }); occupy(F, X0, 4.6, X0 + 0.62, 6.0); spot(F, 'dress', wT, 0, 1.0, HP, null, rmB);
     place(F, [frame(-1.6, 0, ZF, Math.PI), frame(-2.2, 0, ZF, Math.PI)], [-0.55, 0, 0.55, 1.2], (T) => desk(F, T, { w: 1.0, pc: true, room: rmB }));
     place(F, [frame(X0 + 0.35, 0, ZF - 0.35, 0.3)], [-0.25, -0.25, 0.25, 0.25], (T) => fan(F, T, {}));
@@ -2384,7 +2388,7 @@ function planOf(b, kind) {
     return { kind, biz: H.biz, name: H.biz ? shopName(b, H.biz) : b.name || `透天厝（${CNUM[H.N] || H.N}樓）`, floors: H.N, size: { w: b.hx * 2, d: b.hz * 2 }, rooms,
       enter: wide ? { x: 0, z: H.hz + 0.28, hx: H.hx - 0.4, hz: 0.27 } : { x: dx, z: H.hz + 0.28, hx: 0.65, hz: 0.27 }, outside: { x: dx, z: H.hz + 1.35, lh: -HP } };
   }
-  if (kind === 'apt') return { kind, biz: null, name: b.name || '公寓', floors: 5, size: { w: 12, d: 15 }, rooms: [['大廳'], ['走廊'], ['走廊'], ['玄關', '客廳', '房間', '廚房', '廁所'], ['走廊']], enter: { x: 0, z: 7.5 + 0.28, hx: 0.9, hz: 0.27 }, outside: { x: 0, z: 7.5 + 1.35, lh: -HP } };
+  if (kind === 'apt') return { kind, biz: null, name: b.name || '公寓', floors: 5, size: { w: 12, d: 15 }, rooms: [['大廳'], ...[1, 2, 3, 4].map(() => ['玄關', '客廳', '房間', '廚房', '廁所'])], enter: { x: 0, z: 7.5 + 0.28, hx: 0.9, hz: 0.27 }, outside: { x: 0, z: 7.5 + 1.35, lh: -HP } };
   if (kind === 'store') return { kind, biz: 'store', name: b.name || '村口超商', floors: 1, size: { w: 18, d: 13 }, rooms: [[b.name || '村口超商']], enter: { x: 0, z: 6.78, hx: 1.1, hz: 0.27 }, outside: { x: 0, z: 7.95, lh: -HP } };
   if (kind === 'temple') return { kind, biz: 'temple', name: b.name || '福德宮', floors: 1, size: { w: 12.4, d: 7.4 }, rooms: [[b.name || '福德宮']], enter: { x: 0, z: 7.4, hx: 2.4, hz: 0.45 }, outside: { x: 0, z: 8.55, lh: -HP } };
   return { kind, biz: 'farm', name: b.name || '三合院', floors: 1, size: { w: 18, d: 6 }, rooms: [['正廳', '房間', '灶腳']], enter: { x: 0, z: 3.28, hx: 0.9, hz: 0.27 }, outside: { x: 0, z: 4.15, lh: -HP } };
@@ -2430,6 +2434,7 @@ function buildInterior(b, o = {}) {
       exits: F.exits.map((e) => ({ ...xz(e.x, e.z), hx: e.hx, hz: e.hz, rot, to: e.to, spawn: e.to === 'outside' ? { ...outside } : pose(e.spawn), door: { ...xz(e.x, e.z + e.hz - 0.35), ry: wrapA(Math.PI + rot), w: e.hx } })),
       spots, rooms: F.named.map((r) => ({ name: r.name, ...xz((r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2), hx: (r.x1 - r.x0) / 2, hz: (r.z1 - r.z0) / 2, rot, probe: xz(r.probe[0], r.probe[1]) })),
       camera: { maxDist: 3, ceiling: F.ch - 0.2, near: 0.1, ...(F.cam || {}) },
+      stair: F.stair ? { ...F.stair, ch: F.ch } : null, // 第 61 批：樓梯（本地座標；town.src.js stairY、樓梯走到一半換樓層）
       lift: F.lift ? { ...xz((F.lift.x0 + F.lift.x1) / 2, (F.lift.z0 + F.lift.z1) / 2), hx: (F.lift.x1 - F.lift.x0) / 2, hz: (F.lift.z1 - F.lift.z0) / 2, rot } : null, // 第 60 批：公寓的電梯（站進去出面板）
       bounds: { ...xz((bx0 + bx1) / 2, (bz0 + bz1) / 2), hx: (bx1 - bx0) / 2, hz: (bz1 - bz0) / 2, rot },
     };
@@ -2440,7 +2445,7 @@ function buildInterior(b, o = {}) {
     setFloor(i) {
       i = clamp(i | 0, 0, floors.length - 1); I.floor = i;
       floors.forEach((f, k) => { f.group.visible = k === i; });
-      const f = floors[i]; I.colliders = f.colliders; I.exits = f.exits; I.spots = f.spots; I.rooms = f.rooms; I.camera = f.camera; I.bounds = f.bounds; I.lift = f.lift || null;
+      const f = floors[i]; I.colliders = f.colliders; I.exits = f.exits; I.spots = f.spots; I.rooms = f.rooms; I.camera = f.camera; I.bounds = f.bounds; I.lift = f.lift || null; I.stair = f.stair || null;
       return f;
     },
     dispose() { group.traverse((m) => { if (m.isMesh) m.geometry.dispose(); }); group.removeFromParent(); group.clear(); floors.length = 0; },

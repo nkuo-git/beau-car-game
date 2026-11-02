@@ -878,6 +878,7 @@ function houseSet(spawn) {
   if (indoor.kind === 'police') stationFolks(); else if (indoor.kind === 'house' || indoor.kind === 'apt') houseFolks(); // 槍店的店員 gunshop.js 自己有
   walker.setDoors(indoor.jail ? [] : (indoor.exits || I.exits).map((e) => e.door)); // 關在拘留室：沒有門
   walker.setCamera({ maxY: I.camera.ceiling, dist: Math.min(indoor.dist0, I.camera.maxDist) });
+  STAIR.y = 0; STAIR.cam = I.camera.ceiling; STAIR.busy = false; // 第 61 批
   walker.teleport(spawn); indoor.t = 0;
 }
 function houseFloor(e) {
@@ -1141,21 +1142,64 @@ function aptExt() { // 6 座公寓的外殼（蓋一次，InstancedMesh）＋ V.
 const aptW = (b, x, z) => { const c = Math.cos(b.rot), s = Math.sin(b.rot); return { x: b.x + x * c + z * s, z: b.z - x * s + z * c }; }; // 公寓本地 → 世界（b＝V.buildings 那一棟）
 const inApt = (x, z, m = 0) => { const b = APTU.b; if (!b) return false; const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot), s = Math.sin(b.rot); return Math.abs(dx * c - dz * s) < b.hx + m && Math.abs(dx * s + dz * c) < b.hz + m; };
 // 走路用的世界：房子裡面地板都在 0（公寓蓋在山頂那座也是）；在頂樓、陽台＝那一層的高度；其他照 PW
-function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? 0 : APTU.on && inApt(x, z, 0.6) ? APTU.y : PW.heightAt(x, z)); return W; }
+function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? stairY(x, z) : APTU.on && inApt(x, z, 0.6) ? APTU.y : PW.heightAt(x, z)); return W; }
+// 第 61 批：樓梯自己走（interiors.js 的 I.stair，本地）：兩跑樓梯，同一個 xz 上面一跑、下面一跑 → 挑最接近上一格人的高度（STAIR.y）的那一面；
+//   過了平台一點（高度 > 一層的一半 + 0.12）就換到上一層（人的高度 −3.3，畫面一樣）、往下也一樣；五樓往上走到 8 成＝頂樓（aptOut）
+const STAIR = { y: 0, cam: null, busy: false };
+function stairLocal(x, z) { const b = indoor.b, dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot || 0), s = Math.sin(b.rot || 0); return [dx * c - dz * s, dx * s + dz * c]; }
+function stairY(x, z) {
+  const S = indoor?.I?.stair; if (!S) return 0;
+  const [lx, lz] = stairLocal(x, z);
+  if (lx < S.xs0 - 0.05 || lx > S.xs1 + 0.05 || lz < S.zSB || lz > S.zS1 + 0.3) return 0;
+  const H = S.rise / 2, prev = STAIR.y; let best = null;
+  const cand = (y) => { if (best === null || Math.abs(y - prev) < Math.abs(best - prev)) best = y; };
+  if (lz >= S.zL) { if (S.up) cand(H); if (S.down) cand(-H); }
+  else {
+    const t = (lz - S.zSB) / (S.zL - S.zSB), sideA = Math.abs(lx - (S.xa0 + S.xa1) / 2) < Math.abs(lx - (S.xb0 + S.xb1) / 2);
+    if (sideA) { if (S.up) cand(t * H); if (S.down) cand(-H - (1 - t) * H); } // 第一跑往上；下面那層上來的第二跑
+    else { if (S.up) cand(H + (1 - t) * H); if (S.down) cand(-t * H); } // 第二跑往上；往下的第一跑
+  }
+  return best ?? 0;
+}
+function stairInShaft(x, z) { const S = indoor?.I?.stair; if (!S) return false; const [lx, lz] = stairLocal(x, z); return lx > S.xs0 - 0.1 && lx < S.xs1 + 0.1 && lz > S.zSB - 0.2 && lz < S.zS1 + 0.3; }
+function stairStep() {
+  const I = indoor.I, S = I.stair, y = walker.character.group.position.y; STAIR.y = y;
+  if (!S || doorFade || sleep || walker.mode !== 'walk') return;
+  const t = walker.telemetry(), cy = S.up && stairInShaft(t.x, t.z) ? Math.max(I.camera.ceiling, 4.6) : I.camera.ceiling; // 樓梯間上面是空的（到上一層）：鏡頭可以高一點
+  if (cy !== STAIR.cam) { STAIR.cam = cy; walker.setCamera({ maxY: cy }); }
+  const T = S.rise / 2 + 0.12;
+  if (y > T && S.up) {
+    if (S.top !== 'roof') stairSwap(+1);
+    else if (y > S.rise * 0.82 && !STAIR.busy && indoor.kind === 'apt') { STAIR.busy = true; goDoor(() => aptOut({ to: 'roof' })); }
+  } else if (y < -T && S.down) stairSwap(-1);
+}
+function stairSwap(dir) {
+  const I = indoor.I, f = I.floor + dir; if (f < 0 || f >= I.floors.length) return;
+  const t = walker.telemetry(), rise = I.stair.rise;
+  I.setFloor(f);
+  walker.removeColliders('interior'); walker.addColliders(I.colliders, 'interior');
+  if (indoor.kind === 'house' || indoor.kind === 'apt') houseFolks();
+  walker.setDoors((indoor.exits || I.exits).map((e) => e.door));
+  STAIR.y = walker.character.group.position.y - dir * rise; STAIR.cam = null;
+  walker.teleport({ x: t.x, z: t.z, heading: t.heading }, { keepCamera: true, keepMotion: true });
+  STAIR.y = walker.character.group.position.y;
+  walker.toast(I.floors[f].label, 1200);
+}
 // 從裡面走出去：頂樓（5 樓的樓梯、電梯按頂樓）、陽台（4 樓客廳的落地門）
 function aptOut(e) {
   const H = indoor; if (!H || H.kind !== 'apt') return null;
   const b = H.b, A = APTU.A || (APTU.A = buildApt()), roof = e.to === 'roof', lvl = roof ? A.roof : A.balc;
+  const bf = roof ? 4 : H.I.floor, dy = roof ? 0 : (bf - 3) * 3.3; // 第 61 批：2–4 樓都有陽台（apt.js 的 balc 是 4 樓的：上下差一層 3.3）
   indoor = null;
   walker.removeColliders('interior'); for (const f of H.folks) f.C.dispose(); H.I.dispose();
   TR.scene.add(walker.character.group);
   const lot = { x: b.x, z: b.z, heading: b.rot, y: b.y || 0 };
-  Object.assign(APTU, { on: true, b, lvl, y: lot.y + lvl.y, floor: roof ? 4 : 3 });
-  walker.addColliders(aptColsAt(lvl.cols, lot), 'aptout');
+  Object.assign(APTU, { on: true, b, lvl, y: lot.y + lvl.y + dy, floor: bf });
+  walker.addColliders(aptColsAt(lvl.cols, { ...lot, y: lot.y + dy }), 'aptout');
   const dw = aptW(b, lvl.door.x, lvl.door.z), sp = aptW(b, lvl.spawn.x, lvl.spawn.z);
   walker.teleport({ x: sp.x, z: sp.z, heading: wrapPi(lvl.spawn.lh + b.rot) }); // 先站好再給門（walk.js：給門的時候站在門的範圍裡面＝那扇門先不觸發；站的地方在門的旁邊 2 公尺）
   walker.setDoors([{ x: dw.x, z: dw.z, ry: wrapPi(lvl.door.ry + b.rot), w: lvl.door.w, aptIn: true }]);
-  walker.setCamera({ maxY: lvl.ceil != null ? lot.y + lvl.ceil : null, dist: Math.min(H.dist0, 3.4) });
+  walker.setCamera({ maxY: lvl.ceil != null ? lot.y + dy + lvl.ceil : null, dist: Math.min(H.dist0, 3.4) });
   walker.setAction(null); walker.setAction2(null);
   walker.toast('', 1);
   return { say: roof ? '頂樓' : '陽台' };
@@ -1216,7 +1260,7 @@ function aptBed() {
 }
 function aptWalk() {
   const I = indoor.I; let act = null;
-  if (I.floor === 3) {
+  if (I.floor >= 1) { // 第 61 批：2–5 樓都是你家
     const t = walker.telemetry(), s = I.spots.sleep?.[0], d = I.spots.dress?.[0];
     if (s && Math.hypot(t.x - s.x, t.z - s.z) < 1.9) act = SLEEP_ACT_APT; else if (d && Math.hypot(t.x - d.x, t.z - d.z) < 0.95) act = DRESS_ACT;
   }
@@ -2257,6 +2301,7 @@ function driveStep(dt) {
   if (DRIVE.on) npcStep(dt); // 路上的車、居民（走路的碰撞要在 walker.update 前面放好）
   if (DRIVE.on) crushStep(dt); // 第 7 批（輾扁）：怪獸卡車壓扁的東西（墊子、壓扁、表演場的垃圾車）
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
+  if (indoor && walker && DRIVE.on) stairStep(); // 第 61 批：樓梯自己走（走到一半換樓層）
   riderStep(dt); // 第 56 批：沙灘車騎的人（walker 後面：上車那一格就坐上去）
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）

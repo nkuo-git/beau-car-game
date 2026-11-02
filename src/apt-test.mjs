@@ -404,9 +404,64 @@ check(!d1.none && d1.fade && i1.in && i1.kind === 'apt' && i1.floors === 5 && i1
 await drawAndShot('1-lobby');
 const r1 = await p.evaluate(() => window.__rinfo());
 check(r1.calls < 60, `lobby: ${r1.calls} draw calls / ${r1.tris} triangles`);
-const lob = await p.evaluate(() => { const I = window.__IN().indoor.I, F = I.floors[0]; return { rooms: F.rooms.map((r) => r.name), lift: !!I.lift, label: F.label, exits: F.exits.map((e) => e.to) }; });
+const lob = await p.evaluate(() => { const I = window.__IN().indoor.I, F = I.floors[0]; return { rooms: F.rooms.map((r) => r.name), lift: !!I.lift, label: F.label, exits: F.exits.map((e) => e.to), stair: F.stair && { up: F.stair.up, down: F.stair.down }, s5: I.floors[4].stair?.top }; });
 console.log('  1F:', JSON.stringify(lob));
-check(lob.rooms.includes('大廳') && lob.lift && lob.exits.includes('outside') && lob.exits.filter((e) => e === 1).length >= 1, `1F has the lobby, the lift and the stairs up (exits: ${lob.exits.join(',')})`);
+check(lob.rooms.includes('大廳') && lob.lift && lob.exits.includes('outside') && !lob.exits.some((e) => typeof e === 'number' || e === 'roof') && lob.stair?.up && !lob.stair.down && lob.s5 === 'roof',
+  `1F has the lobby, the lift and stairs going up (no teleporting stair doors; exits: ${lob.exits.join(',')}; 5F stairs go to the roof)`);
+// ---- 1b 樓梯自己走（第 61 批）：1F → 2F（走上去、轉彎平台、再上去；中間換樓層不黑掉、高度一路連起來）→ 2F 也是我家 → 走下來回 1F ----
+await p.evaluate(() => {
+  const H = window.__H;
+  H.aptW = (lx, lz) => { const b = window.__IN().indoor.b, c = Math.cos(b.rot || 0), s = Math.sin(b.rot || 0); return [b.x + lx * c + lz * s, b.z - lx * s + lz * c]; };
+  // 沿著本地的點走（跟 walkTo 一樣推搖桿），每一格記「整棟的高度」＝y＋樓層×3.3：最大跳多少、換了幾次樓層、有沒有黑掉
+  H.stairWalk = (pts, { maxS = 30 } = {}) => {
+    const W = window.__D().walker, X = { get indoor() { return window.__IN().indoor; }, get doorFade() { return window.__IN().doorFade; } }, ch = W.character.group;
+    const e0 = () => (X.indoor ? ch.position.y + X.indoor.I.floor * 3.3 : NaN);
+    let last = e0(), jump = 0, swaps = 0, f0 = X.indoor.I.floor, fl = f0, maxE = last, minE = last, fade = 0, n = 0, stuck = 0, lx = 0, lz = 0, cam = 0, ok = true, at = null;
+    for (const [px, pz] of pts) {
+      const [x, z] = H.aptW(px, pz); let k = 0;
+      for (; k < maxS * 60; k++, n++) {
+        if (!X.indoor) break;
+        const t = W.telemetry(), dx = x - t.x, dz = z - t.z; if (Math.hypot(dx, dz) < 0.3) break;
+        const a = Math.atan2(-dz, dx) - t.camYaw; W.setInput({ x: -Math.sin(a) * 0.7, y: Math.cos(a) * 0.7 }); H.step(1);
+        if (!X.indoor) break;
+        const e = e0(); jump = Math.max(jump, Math.abs(e - last)); last = e; maxE = Math.max(maxE, e); minE = Math.min(minE, e);
+        if (X.indoor.I.floor !== fl) { swaps++; fl = X.indoor.I.floor; }
+        if (X.doorFade) fade++;
+        const q = window.__D().dcam.position.y - ch.position.y; cam = Math.max(cam, q);
+        if (k % 60 === 59) { if (Math.hypot(t.x - lx, t.z - lz) < 0.15) stuck++; else stuck = 0; lx = t.x; lz = t.z; if (stuck >= 3) { ok = false; at = [px, pz]; break; } }
+      }
+      if (!ok || !X.indoor) break;
+    }
+    W.setInput({ x: 0, y: 0 }); H.step(20); W.setInput(null);
+    return { ok, at, from: f0, floor: X.indoor ? X.indoor.I.floor : null, y: +ch.position.y.toFixed(2), jump: +jump.toFixed(3), swaps, maxE: +maxE.toFixed(2), minE: +minE.toFixed(2), fade, s: +(n / 60).toFixed(1), toast: H.toast(), in: !!X.indoor };
+  };
+  // 上樓：a 那一跑（x −4.275）往後走到平台、轉到 b 那一跑（x −5.325）走回走廊；下樓反過來
+  H.UP = [[-4.275, -6.4], [-4.275, -5.2], [-4.275, -2.95], [-5.325, -2.95], [-5.325, -5.3], [-5.325, -6.4]];
+  H.DOWN = [[-5.325, -6.4], [-5.325, -5.2], [-5.325, -2.95], [-4.275, -2.95], [-4.275, -5.3], [-4.275, -6.4]];
+  H.toStairFoot = (side) => { const W = window.__D().walker, [x, z] = H.aptW(side === 'up' ? -4.275 : -5.325, -6.6); W.teleport({ x, z, heading: 0 }); H.step(10); };
+});
+const su0 = await p.evaluate(() => { const H = window.__H; H.toStairFoot('up'); return H.stairWalk(H.UP.slice(0, 4)); }); // 走到平台（轉角）先截一張
+await drawAndShot('1b-stairs-landing');
+const su1 = await p.evaluate(() => window.__H.stairWalk(window.__H.UP.slice(4)));
+const su = { ...su1, ok: su0.ok && su1.ok, from: su0.from, jump: Math.max(su0.jump, su1.jump), swaps: su0.swaps + su1.swaps, maxE: Math.max(su0.maxE, su1.maxE), fade: su0.fade + su1.fade, s: +(su0.s + su1.s).toFixed(1), landing: su0.y };
+console.log('  stairs 1F → 2F:', JSON.stringify(su));
+check(su.ok && Math.abs(su.landing - 1.65) < 0.05 && su.from === 0 && su.floor === 1 && su.swaps === 1 && Math.abs(su.y) < 0.05 && su.jump < 0.12 && su.maxE > 3.25 && su.fade === 0,
+  `walking up the stairs from the lobby: one flight, the landing, the next flight → 2F (${su.s} s, 「${su.toast}」); height climbs smoothly (biggest step ${su.jump} m), no fade`);
+const fl2 = await p.evaluate(() => { const I = window.__IN().indoor.I, F = I.floors[1]; return { rooms: F.rooms.map((r) => r.name), exits: F.exits.map((e) => e.to), sleep: I.spots.sleep?.length, dress: I.spots.dress?.length }; });
+check(['玄關', '客廳', '房間', '廚房', '廁所'].every((r) => fl2.rooms.includes(r)) && fl2.exits.includes('balc') && fl2.sleep === 1 && fl2.dress === 1, `2F is also my flat: ${fl2.rooms.join('、')}; balcony, bed, wardrobe`);
+await drawAndShot('1b-stairs-2f');
+const bb = await p.evaluate(() => { const I = window.__IN().indoor.I, e = I.exits.find((x) => x.to === 'balc'); return e ? window.__H.toExit(e) : { none: true }; });
+await doorDone();
+const b2f = await p.evaluate(() => { const U = window.__APT().APTU, W = window.__D().walker; return { on: U.on, floor: U.floor, y: +W.character.group.position.y.toFixed(2), want: +((U.b.y || 0) + 3.3).toFixed(2) }; });
+await drawAndShot('1b-balcony-2f');
+await toBack(); await doorDone(); const i2b = await inInfo();
+console.log('  2F balcony:', JSON.stringify(bb), JSON.stringify(b2f), i2b.floor);
+check(!bb.none && bb.fade && b2f.on && b2f.floor === 1 && Math.abs(b2f.y - b2f.want) < 0.05 && i2b.in && i2b.floor === 1, `the 2F balcony is real too (${b2f.y} m) and its door brings you back to 2F`);
+const sd = await p.evaluate(() => { const H = window.__H; H.toStairFoot('down'); return H.stairWalk(H.DOWN); });
+console.log('  stairs 2F → 1F:', JSON.stringify(sd));
+check(sd.ok && sd.from === 1 && sd.floor === 0 && sd.swaps === 1 && Math.abs(sd.y) < 0.05 && sd.jump < 0.12 && sd.minE < 0.05 && sd.fade === 0, `and walking back down to the lobby (${sd.s} s; biggest step ${sd.jump} m, no fade)`);
+const sb = await p.evaluate(() => { const H = window.__H, W = window.__D().walker, b = window.__IN().indoor.b, S = window.__IN().indoor.I.stair; H.toStairFoot('down'); const r = H.stairWalk([[-5.325, -4.6]], { maxS: 4 }), t = W.telemetry(); return { ...r, lz: +((t.x - b.x) * Math.sin(b.rot || 0) + (t.z - b.z) * Math.cos(b.rot || 0)).toFixed(2), zSB: S.zSB }; });
+check(!sb.ok && sb.floor === 0 && Math.abs(sb.y) < 0.05 && sb.lz < sb.zSB - 0.2, `on 1F there is no way down (the down side is walled off: stopped at z ${sb.lz}, the stairs start at ${sb.zSB})`);
 // ---- 2 電梯：站進去 → 面板（4F 5F 頂樓／1F 2F 3F，1F 亮）→ 按 4F → 黑掉 → 4 樓（玄關）----
 const e1 = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, W = D.walker, I = window.__IN().indoor.I, L = I.lift;
@@ -509,11 +564,13 @@ const rk = await toBack();
 const f7 = await doorDone(); const i7 = await inInfo();
 console.log('  roof door:', JSON.stringify(rk), f7 * 2, JSON.stringify(i7));
 check(rk.fade && i7.in && i7.floor === 4 && i7.mode === 'walk', `the roof door takes you back inside to 5F (${i7.toast})`);
-const st = await p.evaluate(() => { const I = window.__IN().indoor.I, e = I.floors[4].exits.find((x) => x.to === 'roof'); return e ? window.__H.toExit(e) : { none: true }; });
+const fl5 = await p.evaluate(() => { const I = window.__IN().indoor.I, F = I.floors[4]; return { rooms: F.rooms.map((r) => r.name), exits: F.exits.map((e) => e.to) }; });
+check(['玄關', '客廳', '房間', '廚房', '廁所'].every((r) => fl5.rooms.includes(r)) && !fl5.exits.includes('balc'), `5F is my flat too (${fl5.rooms.join('、')}; no balcony up here)`);
+const st = await p.evaluate(() => { const H = window.__H; H.toStairFoot('up'); return H.stairWalk(H.UP); });
 const f8 = await doorDone();
 const s8 = await p.evaluate(() => { const U = window.__APT().APTU, W = window.__D().walker; return { on: U.on, floor: U.floor, y: +W.character.group.position.y.toFixed(2) }; });
 console.log('  stairs to roof:', JSON.stringify(st), f8 * 2, JSON.stringify(s8));
-check(!st.none && st.fade && s8.on && s8.floor === 4 && Math.abs(s8.y - r6.want) < 0.05, 'the 5F stairs also lead up to the roof');
+check(st.from === 4 && !st.in && st.maxE > 4 * 3.3 + 2.3 && s8.on && s8.floor === 4 && Math.abs(s8.y - r6.want) < 0.05, `walking up the 5F stairs takes you out onto the roof (${s8.y} m)`);
 // 回 5 樓 → 電梯 1F → 走出大門：回到街上（公寓門口），高度、場景、門都回來
 await toBack(); await doorDone();
 const l1 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker, L = window.__IN().indoor.I.lift; W.teleport({ x: L.x, z: L.z, heading: L.rot }); H.step(30); return H.elClick('1F'); });
