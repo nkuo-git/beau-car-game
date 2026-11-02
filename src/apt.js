@@ -8,8 +8,8 @@
 //   buildApt() → { parts: [{ name, geometry, material }]（給 InstancedMesh：6 座共用）, tris, cols（本地：整棟的碰撞，給村子）, roof: { y, zone, cols, spawn, door }, balc: { y, zone, cols, spawn, door, ceil } }
 //     roof／balc：在外面走的那兩層（本地座標；town.src.js 換成世界、照塔的高度加 y）：zone＝走得到的長方形、cols＝只有在那一層的時候加的碰撞（女兒牆、樓梯間、牆）、spawn＝從裡面出來站哪、door＝回裡面的門（walk.js setDoors）
 //   aptColsAt(cols, lot)：本地的碰撞 → 世界（跟 towerColsAt 一樣）
-// 效能：一棟約 2.4k 三角形、5 個材質（磁磚、水泥、玻璃、金屬、白）；6 座 InstancedMesh＝5 個 draw call
-// 打包（build-art.mjs／build-app.mjs 拿掉 import／export）：最上層只有 APT、aptLotOf、buildApt、aptColsAt
+// 效能：一棟約 2.4k 三角形、5 個材質（大理石（第 63 批以前是磁磚）、水泥、玻璃、金屬、白）；6 座 InstancedMesh＝5 個 draw call
+// 打包（build-art.mjs／build-app.mjs 拿掉 import／export）：最上層只有 APT、aptLotOf、buildApt、aptColsAt、aptMarble（第 63 批）
 import * as THREE from 'three';
 
 export const APT = { W: 12, D: 15, FH: 3.3, NF: 5, ROOF: 16.5, PAR: 1.0, BZ: 6.1, BX0: -0.3, BX1: 5.8, T: 0.2,
@@ -28,11 +28,38 @@ export function aptColsAt(cols, lot) {
   return cols.map((q) => { const o = { ...q, x: lot.x + q.x * c + q.z * s, z: lot.z - q.x * s + q.z * c }; if (o.t === 'box') o.rot = (q.rot || 0) + lot.heading; if (q.h != null) o.h = q.h + y; if (q.y0 != null) o.y0 = q.y0 + y; return o; });
 }
 const col3 = (hex) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
-// 磁磚（canvas）：8 × 8 片一張，一片 10 公分 → uv 1 ＝ 0.8 公尺
-function tileTex() {
-  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
-  g.fillStyle = '#b8b2a6'; g.fillRect(0, 0, 128, 128);
-  for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) { const k = ((i * 7 + j * 13) % 5) / 5; g.fillStyle = `rgb(${226 + k * 14},${214 + k * 12},${196 + k * 10})`; g.fillRect(i * 16 + 1, j * 16 + 1, 14, 14); }
+// 第 63 批（Nick 2026-11-02「公寓改大理石風格」）：白色大理石（卡拉拉白：白底、淡灰的紋、偶爾一條深一點的；一片一片，縫在格子線上：
+// 貼圖重複的接縫剛好落在石板的縫上，紋接不起來也自然）。interiors.js 的 surfAtlas 也用這個畫（大廳、走廊、你家的地板和牆）。
+// g＝canvas 2d、(w, h)＝畫多大、nx × ny 片、rnd＝亂數（0…1）、o：{ base 底色 [r, g, b], vein 紋的深淺 0…1, seam 縫的顏色 }
+export function aptMarble(g, w, h, nx, ny, rnd, o = {}) {
+  const base = o.base || [243, 241, 236], vein = o.vein ?? 1, sw = w / nx, shh = h / ny;
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { // 每片底色差一點點
+    const k = (rnd() - 0.5) * 7; g.fillStyle = `rgb(${(base[0] + k) | 0},${(base[1] + k) | 0},${(base[2] + k * 1.2) | 0})`; g.fillRect(i * sw, j * shh, sw, shh);
+  }
+  g.save(); g.beginPath(); g.rect(0, 0, w, h); g.clip();
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { // 每片自己的紋（斜斜的、彎彎的；裁在那一片裡面）
+    const x0 = i * sw, y0 = j * shh; g.save(); g.beginPath(); g.rect(x0, y0, sw, shh); g.clip();
+    const a = -0.7 + rnd() * 0.5, L = Math.hypot(sw, shh) * 1.3, n = 3 + ((rnd() * 3) | 0);
+    for (let v = 0; v < n; v++) {
+      const cx = x0 + rnd() * sw, cy = y0 + rnd() * shh, dx = Math.cos(a) * L / 2, dy = Math.sin(a) * L / 2, big = v === 0 && rnd() < 0.6;
+      g.strokeStyle = `rgba(${big ? '118,116,112' : '150,148,145'},${((big ? 0.32 : 0.16) * vein * (0.6 + rnd() * 0.6)).toFixed(3)})`; g.lineWidth = (big ? 1.4 : 0.7) * (w / 128) * (0.7 + rnd() * 0.8);
+      g.beginPath(); g.moveTo(cx - dx, cy - dy);
+      g.bezierCurveTo(cx - dx / 3 + (rnd() - 0.5) * sw * 0.5, cy - dy / 3 + (rnd() - 0.5) * shh * 0.5, cx + dx / 3 + (rnd() - 0.5) * sw * 0.5, cy + dy / 3 + (rnd() - 0.5) * shh * 0.5, cx + dx, cy + dy); g.stroke();
+      for (let b = 0; b < 2; b++) { // 小分岔
+        const t = rnd(), px = cx - dx + dx * 2 * t, py = cy - dy + dy * 2 * t; g.lineWidth *= 0.6; g.beginPath(); g.moveTo(px, py); g.quadraticCurveTo(px + (rnd() - 0.5) * sw * 0.4, py + (rnd() - 0.5) * shh * 0.4, px + (rnd() - 0.5) * sw * 0.6, py + (rnd() - 0.5) * shh * 0.6); g.stroke();
+      }
+    }
+    g.fillStyle = `rgba(255,255,255,${(0.05 + rnd() * 0.05).toFixed(3)})`; g.beginPath(); g.arc(x0 + rnd() * sw, y0 + rnd() * shh, Math.max(sw, shh) * 0.4, 0, Math.PI * 2); g.fill(); // 一團亮一點的
+    g.restore();
+  }
+  g.restore();
+  g.fillStyle = o.seam || 'rgba(150,146,140,0.55)'; const lw = Math.max(0.8, w / 160); // 縫（每片的左邊、上面）
+  for (let i = 0; i < nx; i++) g.fillRect(i * sw, 0, lw, h); for (let j = 0; j < ny; j++) g.fillRect(0, j * shh, w, lw);
+}
+// 外牆的大理石（canvas）：2 × 4 片一張（一片 80 × 40 公分）→ uv 1 ＝ 1.6 公尺
+function marbleTex() {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); let sd = 6011; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  aptMarble(g, 256, 256, 2, 4, rnd);
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 function mesher(uvScale) {
@@ -71,8 +98,8 @@ function mesher(uvScale) {
 }
 export function buildApt() {
   const { W, D, FH, NF, PAR, BZ, BX0, BX1, T, core, head } = APT, HX = W / 2, HZ = D / 2, H = ROOFY;
-  const TI = mesher(0.8), FL = mesher(1), GL = mesher(1), MT = mesher(1), WH = mesher(1); // 磁磚、水泥、玻璃、金屬、白
-  const tile = col3('#e4d8c4'), tile2 = col3('#cdb9a0'), conc = col3('#c9c6bf'), conc2 = col3('#b4b1aa'), dark = col3('#3c4046'), al = col3('#c7ccd2'), white = col3('#f2f2ef'), under = col3('#8f8d88');
+  const TI = mesher(1.6), FL = mesher(1), GL = mesher(1), MT = mesher(1), WH = mesher(1); // 磁磚、水泥、玻璃、金屬、白
+  const tile = col3('#ffffff'), tile2 = col3('#e9e6e0'), conc = col3('#c9c6bf'), conc2 = col3('#b4b1aa'), dark = col3('#3c4046'), al = col3('#c7ccd2'), white = col3('#f2f2ef'), under = col3('#8f8d88');
   // ---- 主體：四面磁磚牆（正面右邊 2–4 樓凹進去是陽台）----
   TI.bx(-HX, HX, 0, H, -HZ, HZ, tile, ['nz', 'px', 'nx'], null); // 後、左、右
   TI.bx(-HX, BX0, 0, H, HZ - 0.01, HZ, tile, ['pz']); // 正面左半（整面）
@@ -150,7 +177,7 @@ export function buildApt() {
   const balc = { y: BALY, zone: { x: (BX0 + HX) / 2, z: (BZ + HZ) / 2, hx: (HX - BX0) / 2 - 0.1, hz: (HZ - BZ) / 2 - 0.05 }, cols: balCols, spawn: { x: BX0 + 4.3, z: BZ + 0.85, lh: -Math.PI / 2 }, door: { x: BX0 + 2.3, z: BZ + 0.03, ry: 0, w: 1.3, lh: Math.PI / 2 }, ceil: BALY + FH - 0.3 };
   const mk = (name, M, material) => ({ name, geometry: M.geometry(), material });
   const parts = [
-    mk('apt-tile', TI, new THREE.MeshStandardMaterial({ map: tileTex(), vertexColors: true, roughness: 0.85, metalness: 0 })),
+    mk('apt-tile', TI, new THREE.MeshStandardMaterial({ map: marbleTex(), vertexColors: true, roughness: 0.32, metalness: 0 })), // 第 63 批：白色大理石
     mk('apt-conc', FL, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 })),
     mk('apt-glass', GL, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.18, metalness: 0.7 })),
     mk('apt-metal', MT, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.6 })),
