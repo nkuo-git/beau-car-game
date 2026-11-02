@@ -46,6 +46,7 @@
 //   燈：每一層一樣的組合（半球光＋平行光＋兩個點光源，沒有陰影）：換房子、換樓層不會重新編譯 shader；牆角、牆腳的陰影算在頂點色裡；家具底下一片軟影子
 // 打包（build-art.mjs）：拿掉 import、export 變一般宣告：這個檔全部包在一個函式裡，只露出 buildInterior、interiorFor、interiorFonts、disposeInteriorCache
 import * as THREE from 'three';
+import { aptMarble } from './apt.js'; // 第 63 批：公寓的大理石（打包的時候 apt.js 在前面）
 
 export const { buildInterior, interiorFor, interiorFonts, disposeInteriorCache } = (() => {
 const TAU = Math.PI * 2, HP = Math.PI / 2, FH = 3.3, CH = 3.0; // 透天厝一層樓高（跟 village.js 一樣）、天花板高
@@ -118,9 +119,10 @@ const subUV = (r, a, b, c, d) => [r[0] + (r[2] - r[0]) * a, r[1] + (r[3] - r[1])
 
 // 地板、牆、天花板：可以接起來的，120 像素一格（四邊各留 4 像素），4 × 4 格；PER＝一格是幾公尺（[u, v]）
 const PER = { terrazzo: [1, 1], tileW: [1.2, 1.2], tileB: [1.2, 1.2], wood: [1.2, 1.2], ktile: [0.6, 0.6], plaster: [1.6, 1.6], ceil: [1.2, 1.2], granite: [1.6, 1.6],
-  rbrick: [1.4, 1.4], wbrick: [1, 1], slats: [0.6, 0.6], timber: [1.2, 1.2], tatami: [1.8, 1.8], storeT: [1.2, 1.2], mosaic: [0.6, 0.6], white: [1, 1] };
+  rbrick: [1.4, 1.4], wbrick: [1, 1], slats: [0.6, 0.6], timber: [1.2, 1.2], tatami: [1.8, 1.8], storeT: [1.2, 1.2], mosaic: [0.6, 0.6], white: [1, 1],
+  marble: [1.6, 1.6], marbleW: [2.4, 2.4] }; // 第 63 批：大理石地板（80 公分一片）、牆（120 × 60 公分一片）
 function surfAtlas(R) {
-  const S = sheet(512, 512), T = (name, i, draw) => S.tile(name, (i % 4) * 128 + 4, ((i / 4) | 0) * 128 + 4, 120, 120, draw);
+  const S = sheet(512, 640), T = (name, i, draw) => S.tile(name, (i % 4) * 128 + 4, ((i / 4) | 0) * 128 + 4, 120, 120, draw); // 第 63 批：多一排（大理石）
   const grid = (g, w, h, n, col, lw = 1.2) => { g.fillStyle = col; for (let k = 0; k < n; k++) { g.fillRect((k * w) / n, 0, lw, h); g.fillRect(0, (k * h) / n, w, lw); } };
   T('terrazzo', 0, (g, w, h) => { // 磨石子（1 公尺一格，邊上銅條）
     g.fillStyle = '#d9d5cc'; g.fillRect(0, 0, w, h);
@@ -204,6 +206,8 @@ function surfAtlas(R) {
     for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++) { g.fillStyle = pick(R, cs); g.fillRect(i * 10 + 0.8, j * 10 + 0.8, 8.4, 8.4); }
   });
   T('white', 15, (g, w, h) => { g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); });
+  T('marble', 16, (g, w, h) => aptMarble(g, w, h, 2, 2, R, { base: [244, 242, 238] })); // 第 63 批：公寓的白色大理石地板（亮面，縫細細的）
+  T('marbleW', 17, (g, w, h) => aptMarble(g, w, h, 2, 4, R, { base: [246, 244, 240], vein: 0.8 })); // 牆（石板橫的）
   return S;
 }
 
@@ -1547,7 +1551,8 @@ function stairShaft(F, H, n, S) {
   if (yt > F.ch) wallFace(F, fx, zSB, 1, xs0, xs1, F.ch, yt, S);
   box(B, 'wall', F0, [xd0, down ? yb : 0, zSB, xd1, yt, zL], S.c, { py: false, _: dotUV(SU('plaster')) });
   hq(B, 'wall', F0, xs0, zSB, xs1, zS1, yt, dotUV(SU('plaster')), S.c, false);
-  const TU = subUV(SU('terrazzo'), 0.05, 0.05, 0.95, 0.3), tc = WHITE, rc = C('#d6d2ca'), nose = C('#6a665f');
+  const TU = subUV(SU(H.tread || 'terrazzo'), 0.05, 0.05, 0.95, 0.3), tc = WHITE, // 第 63 批：公寓的樓梯是大理石（H.tread）
+    rc = C('#d6d2ca'), nose = C('#6a665f');
   const tread = (x0, x1, z0, z1, y, riserZ, rdir) => {
     hq(B, 'floor', F0, x0, z0, x1, z1, y, TU, tc);
     if (riserZ != null) vqN(B, 'floor', [x0, riserZ], [x1, riserZ], y - r, y, 0, rdir, TU, rc);
@@ -2246,14 +2251,15 @@ function aptFloor(A, n) {
   const hasBalc = n >= 1 && n <= 3, BZ = hasBalc ? AL.BZ : ZF, P = APT_PAL[n] || APT_PAL[3]; // 第 61 批：整棟都是你家（2–5 樓都是你家；陽台只有 2–4 樓，外殼是這樣蓋的）；每層顏色不一樣
   const F = newFloor({ index: n, label: n + 1 + 'F' }); F.paths = []; F.occ = []; F.spots.dress = [];
   const skirt = (c) => mul(C(c), 0.72);
-  const S_cor = sf('plaster', '#efece4', 'wall', { skirt: skirt('#efece4') }), S_shaft = sf('plaster', '#efece4', 'wall'), S_lift = sf('plaster', '#cdd2d8', 'shiny');
-  const S_liv = sf('plaster', P.liv, 'wall', { skirt: skirt(P.liv) }), S_bed = sf('plaster', P.bed, 'wall', { skirt: skirt(P.bed) }), S_hall = sf('plaster', lobby ? '#f3efe6' : '#f6efe2', 'wall', { skirt: skirt('#f3efe6') });
+  // 第 63 批（Nick「公寓改大理石風格／不用電梯」）：大廳、走廊、樓梯間、玄關、客廳＝白色大理石（牆、地板；亮面）；房間的牆照每層的顏色（地板也是大理石）；廚房、廁所照舊磁磚
+  const MW = (c = '#ffffff') => sf('marbleW', c, 'floor', { skirt: mul(C('#d9d5ce'), 1) });
+  const S_cor = MW(), S_shaft = sf('marbleW', '#ffffff', 'floor');
+  const S_liv = MW(), S_bed = sf('plaster', P.bed, 'wall', { skirt: skirt(P.bed) }), S_hall = MW();
   const S_kit = sf('plaster', '#f5f3ec', 'wall', { wain: { h: 1.6, s: sf('ktile', WHITE, 'wall', { noSkirt: true }) } }), S_bath = sf('ktile', WHITE, 'wall', { noSkirt: true });
-  const ceilP = sf('plaster', '#fbfbf8'), flCor = sf('terrazzo', WHITE, 'floor'), flLiv = sf('wood', WHITE, 'floor'), flBed = sf('wood', WHITE, 'floor'), flKit = sf('tileB', WHITE, 'floor'), flBath = sf('tileW', WHITE, 'floor'), flLob = sf('granite', WHITE, 'floor');
+  const ceilP = sf('plaster', '#fbfbf8'), flCor = sf('marble', WHITE, 'floor'), flLiv = sf('marble', WHITE, 'floor'), flBed = sf('marble', C('#f4efe8'), 'floor'), flKit = sf('tileB', WHITE, 'floor'), flBath = sf('tileW', WHITE, 'floor'), flLob = sf('marble', WHITE, 'floor');
   // 房間（陰影、地板、天花板）
   room(F, lobby ? '大廳' : '走廊', X0, X1, ZB, zC, { floor: lobby ? flLob : flCor, ceil: ceilP, probe: [2.0, (ZB + zC) / 2] });
   room(F, null, X0, xS, zC, zK, { h: top ? F.ch : 4.8 }); // 樓梯間（stairShaft 畫）
-  room(F, '電梯', xS, xL, zC, -3.6, { floor: sf('granite', WHITE, 'floor'), ceil: sf('plaster', '#f4f6f8'), probe: [(xS + xL) / 2, -4.6] });
   room(F, lobby ? null : mine ? '玄關' : '走廊', xL, X1, zC, zK, { floor: lobby ? flLob : mine ? flLiv : flCor, ceil: ceilP, probe: [2.0, (zC + zK) / 2] });
   if (lobby) room(F, null, X0, X1, zK, ZF, { floor: flLob, ceil: ceilP, probe: [0, 3] });
   else if (mine) {
@@ -2290,14 +2296,12 @@ function aptFloor(A, n) {
   wall(F, 'x', zC - 0.05, st0, st1, { t: 0.1, n: S_cor, p: S_shaft, ops: [
     up ? { a: ha0, b: ha1, y0: 0, y1: 2.3, k: 'open' } : { a: ha0 + 0.08, b: ha1 - 0.08, y0: 0, y1: 2.05, k: 'closed', leafCol: '#c8b8a0' },
     down ? { a: hb0, b: hb1, y0: 0, y1: 2.3, k: 'open' } : { a: hb0 + 0.1, b: hb1 - 0.06, y0: 0, y1: 2.0, k: 'closed', leafCol: '#e8e2d6' }] });
-  const LD = { a: -3.3, b: -2.2, y0: 0, y1: 2.15, k: 'open' };
-  wall(F, 'x', zC - 0.05, st1, xL, { t: 0.1, n: S_cor, p: S_lift, ops: [LD] });
+  wall(F, 'x', zC - 0.05, st1, xL, { t: 0.1, n: S_cor, p: null }); // 第 63 批：沒有電梯（以前電梯的地方：牆後面空著）
   if (mine) wall(F, 'x', zC - 0.05, xL, X1, { t: 0.1, n: S_cor, p: S_hall, ops: [{ a: -0.2, b: 0.75, y0: 0, y1: 2.1, k: 'idoor', leaf: true, hinge: 'a', swing: 1 }] });
-  // 樓梯間、電梯後面那面牆（朝前面）；電梯的三面；電梯跟玄關中間的牆
+  // 樓梯間後面那面牆（朝前面）；玄關左邊的牆
   wall(F, 'x', zK + 0.06, X0, xL, { t: 0.12, p: lobby ? S_hall : mine ? S_kit : S_cor, n: null, ops: lobby ? [{ a: -5.2, b: -4.3, y0: 0, y1: 2.05, k: 'closed', leafCol: '#9aa0a6', tex: 'door' }] : [] });
-  wall(F, 'z', xS + 0.05, zC, zK, { t: 0.1, p: S_lift, n: null });
-  wall(F, 'x', -3.65, xS, xL, { t: 0.1, n: S_lift, p: null });
-  wall(F, 'z', xL, zC, zK, { t: 0.12, p: S_hall, n: S_lift, ops: lobby || mine ? [] : [] });
+  wall(F, 'z', xS + 0.05, zC, zK, { t: 0.1, p: null, n: null });
+  wall(F, 'z', xL, zC, zK, { t: 0.12, p: S_hall, n: null });
   if (!lobby && !mine) wall(F, 'x', zK, xL, X1, { t: 0.12, n: S_cor, p: null, ops: [{ a: 0.0, b: 0.95, y0: 0, y1: 2.05, k: 'closed', leafCol: pick(R, ['#c89c6a', '#9aa0a6', '#6e5a44']) }, { a: 3.4, b: 4.35, y0: 0, y1: 2.05, k: 'closed', leafCol: pick(R, ['#c89c6a', '#b9c2c8', '#8f7a5e']) }] });
   if (mine) { // 你家的隔間：房間｜客廳、廚房｜客廳、房間｜廚房＋廁所、廚房｜廁所
     wall(F, 'z', xB, zR, ZF, { t: 0.2, p: S_liv, n: S_bed, ops: [{ a: 2.0, b: 2.9, y0: 0, y1: 2.1, k: 'idoor', leaf: true, hinge: 'a', swing: -1 }] });
@@ -2306,20 +2310,13 @@ function aptFloor(A, n) {
     wall(F, 'z', xT, zK, zR, { t: 0.12, p: S_kit, n: S_bath });
   }
   ready(F);
-  // 電梯裡面：扶手、按鈕板（發光）、天花板的燈
   const B = F.B;
-  tube(B, 'metal', [xS + 0.12, 0.9, zC + 0.1], [xS + 0.12, 0.9, -3.75], 0.018, 0.018, 6, C('#c9cfd5'));
-  bx(F, 'metal', F0, [xL - 0.09, 0.9, -4.3, xL - 0.06, 1.5, -3.95], C('#b9bfc5')); for (let k = 0; k < 6; k++) vq(B, 'glow', F0, [xL - 0.061, -4.22 + (k % 2) * 0.16], [xL - 0.061, -4.12 + (k % 2) * 0.16], 1.0 + ((k / 2) | 0) * 0.15, 1.08 + ((k / 2) | 0) * 0.15, dotUV(GU('s_white')), [1.3, 1.3, 1.1]);
-  hq(B, 'glow', F0, xS + 0.3, -5.3, xL - 0.3, -3.9, F.ch - 0.02, dotUV(GU('s_white')), [1.4, 1.42, 1.38]);
-  for (const x of [LD.a - 0.06, LD.b]) bx(F, 'metal', F0, [x, 0, zC - 0.12, x + 0.06, LD.y1 + 0.06, zC + 0.02], C('#aeb4ba')); bx(F, 'metal', F0, [LD.a - 0.06, LD.y1, zC - 0.12, LD.b + 0.06, LD.y1 + 0.06, zC + 0.02], C('#aeb4ba')); // 電梯門框
-  vq(B, 'glow', F0, [(LD.a + LD.b) / 2 - 0.12, zC - 0.121], [(LD.a + LD.b) / 2 + 0.12, zC - 0.121], LD.y1 + 0.12, LD.y1 + 0.3, dotUV(GU('s_red')), [1.3, 0.6, 0.5]); // 門上面的樓層燈
-  F.lift = { x0: xS + 0.2, z0: zC + 0.15, x1: xL - 0.2, z1: -3.8 };
-  stairShaft(F, { ...A, N: A.N + 1, roofUp: true }, n, S_shaft); // N＋1：五樓也有往上的樓梯（走上去＝頂樓，town.src.js）
+  stairShaft(F, { ...A, N: A.N + 1, roofUp: true, tread: 'marble' }, n, S_shaft); // N＋1：五樓也有往上的樓梯（走上去＝頂樓，town.src.js）
   // 大門：出口、外面擋住、進來站的地方
   for (const d of doors) { exitZone(F, d.a + 0.12, ZF - 0.55, d.b - 0.12, A.hz + 0.35, 'outside', null); colBox(F, d.a - 0.3, A.hz + 0.3, d.b + 0.3, A.hz + 0.8, 2.6); }
   if (lobby) F.spawnIn = { x: 0, z: ZF - 1.15, lh: HP };
   // 走道（家具不擋）：走廊一整條、電梯口、樓梯口、大門→走廊、玄關→客廳→房間→廁所、廚房
-  path(F, X0 + 0.5, (ZB + zC) / 2, X1 - 0.5, (ZB + zC) / 2, 0.5); path(F, (LD.a + LD.b) / 2, zC - 0.8, (LD.a + LD.b) / 2, -4.0, 0.4);
+  path(F, X0 + 0.5, (ZB + zC) / 2, X1 - 0.5, (ZB + zC) / 2, 0.5);
   path(F, A.X(0.35), zC - 0.8, A.X(1.9), zC - 0.8, 0.5); path(F, A.X(0.7), zC - 0.8, A.X(0.7), zC - 1.5, 0.4); path(F, A.X(1.525), zC - 0.8, A.X(1.525), zC - 1.5, 0.4);
   if (lobby) { path(F, 0, ZF - 0.9, 0, zC - 0.6, 0.5); path(F, 0, 0, X0 + 1.2, 4.0, 0.4); }
   if (mine) { path(F, 0.3, zC - 0.6, 0.3, zR + 1.0, 0.45); path(F, 0.3, 2.45, xB - 0.6, 2.45, 0.45); path(F, xB - 0.6, 2.45, xB - 0.6, 5.5, 0.45); path(F, xB - 0.6, 2.45, -4.65, 2.45, 0.42); path(F, -4.65, 2.45, -4.65, zR - 0.6, 0.42); path(F, 0.3, -1.25, xB - 0.6, -1.25, 0.45); path(F, xB - 0.6, -1.25, xT + 0.5, -1.25, 0.4); path(F, 2.0, BZ - 0.3, 2.0, zK + 0.6, 0.45); }

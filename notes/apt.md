@@ -68,5 +68,17 @@ Nick 2026-11-02: 「整棟公寓都是我家／樓梯要自己走」.
 apt-test (31 ok): stairs 1F → landing (1.65 m) → 2F and back down (one floor swap each way, biggest height step 0.019 m per frame, no fade),
 no way down from 1F, 2F flat + real 2F balcony (3.3 m), 5F flat without balcony, 5F stairs walk out onto the roof.
 
+## Batch 63 (trial v75): marble, no lift
+Nick 2026-11-02: 「公寓改大理石風格／不用電梯」.
+- Shell (apt.js): the tile texture is now white marble (`aptMarble(g, w, h, nx, ny, rnd, o)` draws slab-by-slab veins clipped to each slab, seams on
+  the slab lines so texture repeats hide behind seams; outside = 2 × 4 slabs of 80 × 40 cm per 1.6 m, roughness 0.32).
+- Inside (interiors.js): `surfAtlas` sheet is 512 × 640 (one more row): `marble` (floor, 80 cm slabs, PER 1.6) and `marbleW` (wall, 120 × 60 cm,
+  PER 2.4), both drawn with apt.js `aptMarble` (interiors.js imports it; apt.js comes first in the bundle). Lobby, corridors, stair shaft, entry
+  and living room: marble walls (material 'floor' = the shiny standard one) and floors; bedrooms keep the per-floor wall colour on a marble floor;
+  kitchen / bathroom keep their tiles. Stair treads use `stairShaft(…, { tread: 'marble' })`.
+- The lift is gone: no lift room, no `F.lift` (so no lift panel; town.src.js's apt panel code just never fires), the corridor wall where the lift
+  door was is solid. Stairs are the only way up (batch 61 walked stairs); the roof is reached from the 5F stairs.
+- apt-test: lift checks replaced by stairs 1F → 4F (three flights), 4F → 5F → roof, and 5F → 1F (four flights) before leaving.
+
 ## Still to do (later batches)
 Stairs in every village house to each floor and the roof (some houses 2–3 floors again), different layouts per house, residents moving inside.
