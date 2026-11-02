@@ -78,7 +78,7 @@ Nick 2026-11-02: 「公寓改大理石風格／不用電梯」.
   kitchen / bathroom keep their tiles. Stair treads use `stairShaft(…, { tread: 'marble' })`.
 - The lift is gone: no lift room, no `F.lift` (so no lift panel; town.src.js's apt panel code just never fires), the corridor wall where the lift
   door was is solid. Stairs are the only way up (batch 61 walked stairs); the roof is reached from the 5F stairs.
-- apt-test: lift checks replaced by stairs 1F → 4F (three flights), 4F → 5F → roof, and 5F → 1F (four flights) before leaving.
+- apt-test (27 ok): lift checks replaced by stairs 1F → 4F (three flights), 4F → 5F → roof, and 5F → 1F (four flights) before leaving; shell screenshot `apt-0-shell.png`.
 
 ## Still to do (later batches)
 Stairs in every village house to each floor and the roof (some houses 2–3 floors again), different layouts per house, residents moving inside.

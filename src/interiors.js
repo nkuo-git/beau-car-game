@@ -1562,7 +1562,7 @@ function stairShaft(F, H, n, S) {
   if (up) {
     for (let i = 1; i <= 8; i++) tread(xa0, xa1, zSB + (i - 1) * g, zSB + i * g, i * r, zSB + (i - 1) * g, -1);
     vqN(B, 'floor', [xa0, zL], [xa1, zL], 8 * r, 9 * r, 0, -1, TU, rc);
-    plane(B, 'floor', [xs0, 9 * r, zS1], [1, 0, 0], [0, 0, -1], xs1 - xs0, zS1 - zL, SU('terrazzo'), PER.terrazzo, WHITE, [], [], xs0, -zS1);
+    plane(B, 'floor', [xs0, 9 * r, zS1], [1, 0, 0], [0, 0, -1], xs1 - xs0, zS1 - zL, SU(H.tread || 'terrazzo'), PER[H.tread || 'terrazzo'], WHITE, [], [], xs0, -zS1); // 平台（第 63 批：照 H.tread）
     for (let j = 1; j <= 8; j++) tread(xb0, xb1, zL - j * g, zL - (j - 1) * g, 9 * r + j * r, zL - (j - 1) * g, 1); // 第二跑（平台往後爬）
     rail(X(1.94), X(2.0), zSB + 0.05, 0.92, zL, 0.92 + 8 * r); rail(X(0.06), X(0), zL, 0.92 + 9 * r, zSB, 0.92 + 17 * r);
     if (down) { // 下面看上來：第一跑、平台、第二跑的斜底
@@ -1574,7 +1574,7 @@ function stairShaft(F, H, n, S) {
   }
   if (down) {
     for (let j = 1; j <= 8; j++) tread(xb0, xb1, zSB + (j - 1) * g, zSB + j * g, -j * r, zSB + j * g, 1);
-    plane(B, 'floor', [xs0, -9 * r, zS1], [1, 0, 0], [0, 0, -1], xs1 - xs0, zS1 - zL, SU('terrazzo'), PER.terrazzo, WHITE, [], [], xs0, -zS1);
+    plane(B, 'floor', [xs0, -9 * r, zS1], [1, 0, 0], [0, 0, -1], xs1 - xs0, zS1 - zL, SU(H.tread || 'terrazzo'), PER[H.tread || 'terrazzo'], WHITE, [], [], xs0, -zS1); // 平台（第 63 批：照 H.tread）
     for (let k = 1; k <= 8; k++) tread(xa0, xa1, zL - k * g, zL - (k - 1) * g, -9 * r - k * r, zL - (k - 1) * g, 1);
     rail(X(0.06), X(0), zSB + 0.05, 0.92 - r, zL, 0.92 - 9 * r);
   }

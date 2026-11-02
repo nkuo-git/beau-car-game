@@ -390,6 +390,10 @@ console.log('1', el(), JSON.stringify(a1));
 check(a1.n === 6 && a1.names.every((n) => /的公寓$/.test(n)) && a1.ext.length === 5 && a1.ext.every((s) => /:6$/.test(s)) && a1.cols === 6, `6 apartments (one per home, kind 'apt', ${a1.names.join('、')}), shells are 5 InstancedMesh × 6, 6 solid footprint colliders`);
 check(a1.y2 > 90 && Math.abs(a1.y2 - a1.slotY) < 1e-6 && a1.matY.every((y) => Math.abs(y - a1.y2) < 0.01), `the 山頂 apartment sits at the summit height (${a1.y2} m) like its tower`);
 check(Math.abs(a1.mine.x - a1.lot.x) < 1e-6 && Math.abs(a1.mine.z - a1.lot.z) < 1e-6 && Math.abs(a1.mine.rot - a1.lot.heading) < 1e-6 && a1.dT > 24 && a1.dT < 28 && a1.lx > 2 && a1.lx < 6 && a1.walker === 'walk', `my apartment is ${a1.dT} m beside my tower (home ${a1.slot + 1}), facing the same street (${a1.lx} m toward the door line); I start on foot in the tower`);
+// 外殼的樣子（第 63 批：白色大理石）：站在公寓前面 17 公尺看過去
+await p.evaluate(() => { const D = window.__D(), W = D.walker, HM = window.__HOME(), b = D.VIL.buildings.find((q) => q.kind === 'apt' && q.slot === HM.slot), sx = Math.sin(b.rot), cz = Math.cos(b.rot), h = Math.atan2(cz, -sx);
+  W.teleport({ x: b.x + sx * 17, z: b.z + cz * 17, heading: h }); W.setCamera({ yaw: h, pitch: 0.32 }); window.__H.step(20); });
+await drawAndShot('0-shell');
 // 走到公寓門口（村子的門：walker.doors 裡 kind 'apt' 那扇）→ 推進去 → 黑掉 → 1 樓大廳
 const d1 = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, W = D.walker, HM = window.__HOME(), X = window.__IN();
