@@ -31,6 +31,13 @@ if (Q.has('rimc')) { const [c, m, ro] = { chrome: [0xe8eaec, 1, 0.07], gunmetal:
 if (Q.has('liv')) S.tex.setLivery?.(Q.get('liv') === '0' ? 'none' : Q.get('liv'));
 if (Q.has('caliper')) S.mats.caliper.color.set(Q.get('caliper'));
 if (Q.has('ride')) S.body.position.y = +Q.get('ride');
+if (Q.has('camber') || Q.has('poke') || Q.has('stretch')) { // 海拉風的樣子（只給做圖用）：camber＝外八幾度、poke＝輪子往外推幾公尺、stretch＝輪胎寬幾倍
+  const cb = +(Q.get('camber') || 0) * Math.PI / 180, pk = +(Q.get('poke') || 0), st = +(Q.get('stretch') || 1);
+  for (const wh of S.wheels) {
+    const h = wh.parent, s = Math.sign(h.position.z); h.rotation.x = -s * cb; h.position.z += s * pk;
+    const t = wh.getObjectByName('tire'); if (t && st !== 1) { t.geometry.computeBoundingBox(); const bx = t.geometry.boundingBox, d = [bx.max.x - bx.min.x, bx.max.y - bx.min.y, bx.max.z - bx.min.z], ax = d.indexOf(Math.min(...d)); t.scale.setComponent(ax, st); }
+  }
+}
 const v = Q.get('v') || 'front34', CB = Q.has('cab') || v === 'eye' ? await import('./cabin.js') : null;
 if (CB) { const cb = CB.buildCabin(key, spec, S.mats); if (cb.children.length) { const old = S.body.getObjectByName('interior'); if (old) S.body.remove(old); S.body.add(cb); cb.userData.setGauges(0.13, 0); } }
 const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
