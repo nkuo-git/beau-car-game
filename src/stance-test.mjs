@@ -139,8 +139,8 @@ const lod = await p.evaluate(async () => {
   const D = window.__D(), sc = await D.LOD_CARS.gc8.load();
   const meas = (l) => {
     const m = l.car.getObjectByName('lod-wheels'), r = l.car.getObjectByName('lod-rims'); l.car.updateMatrixWorld(true);
-    const box = (mm) => { const a = mm.geometry.attributes.position, v = new D.camera.position.constructor(); let zt = -1e9, zb = -1e9, zmax = -1e9; for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i); if (v.z < 0.3) continue; zmax = Math.max(zmax, v.z); if (v.y > 0.6) zt = Math.max(zt, v.z); if (v.y < 0.05) zb = Math.max(zb, v.z); /* 輪子最上面、最下面那一圈（GC8 輪子半徑 0.32） */ } return { zmax: +zmax.toFixed(3), top: +zt.toFixed(3), bot: +zb.toFixed(3) }; };
-    return { w: box(m), r: box(r), tris: l.tris, draws: l.draws };
+    const box = (mm, yt, yb) => { const a = mm.geometry.attributes.position, v = new D.camera.position.constructor(); let zt = -1e9, zb = -1e9, zmax = -1e9; for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i); if (v.z < 0.3) continue; zmax = Math.max(zmax, v.z); if (v.y > yt) zt = Math.max(zt, v.z); if (v.y < yb) zb = Math.max(zb, v.z); } return { zmax: +zmax.toFixed(3), top: +zt.toFixed(3), bot: +zb.toFixed(3) }; }; // 右邊的輪子：上面那一段、下面那一段最外面的 z
+    return { w: box(m, 0.6, 0.05), r: box(r, 0.5, 0.15), tris: l.tris, draws: l.draws }; // 輪胎半徑 0.32、輪框 0.23（GC8）
   };
   const off = D.buildLodCar('gc8', sc, { ...D.CARS.gc8.state, stance: 'off' }), a = meas(off);
   off.setLook({ stance: 'on' }); const b = meas(off);
@@ -148,7 +148,8 @@ const lod = await p.evaluate(async () => {
   return { off: a, on: b, back: c };
 });
 console.log('4', el(), 'LOD:', JSON.stringify(lod));
-check(lod.on.w.bot - lod.on.w.top > 0.06 && Math.abs(lod.off.w.bot - lod.off.w.top) < 0.01 && lod.on.r.bot > lod.off.r.bot + 0.03, `light-weight car: the wheels lean in at the top (outer edge top ${lod.on.w.top} vs bottom ${lod.on.w.bot} m; straight ${lod.off.w.top} / ${lod.off.w.bot}) and the rims sit further out`);
+const tilt = (k) => +((lod.on[k].bot - lod.off[k].bot) - (lod.on[k].top - lod.off[k].top)).toFixed(3), push = +((lod.on.r.bot - lod.off.r.bot + lod.on.r.top - lod.off.r.top) / 2).toFixed(3); // 往外推、拉胎上下一樣（相減就沒了），剩外八：下面往外、上面往裡
+check(tilt('w') > 0.05 && tilt('r') > 0.05 && Math.abs(push - 0.035) < 0.01, `light-weight car: tyres and rims lean in at the top (bottom moves out more than the top: ${tilt('w')} / ${tilt('r')} m) and the rims are pushed out ${push} m`);
 check(lod.on.tris === lod.off.tris && lod.on.draws === lod.off.draws && JSON.stringify(lod.back) === JSON.stringify(lod.off), `same triangles (${lod.on.tris}) and draw calls (${lod.on.draws}); switching back gives exactly the straight wheels again`);
 
 // ---- 5 出門開車：外八還在、轉彎也在（drive.js 只改轉向）、快速道路照常跑 ----
