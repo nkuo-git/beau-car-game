@@ -389,7 +389,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - 改裝頁「車身高度」有「貼地」的車（17 台）多一格「海拉風」：車身比貼地再低 1.5 公分、輪子上面往裡倒 9 度（外八）、往外推 3.5 公分、輪胎拉窄 0.8 倍（看得到輪框邊）；免費、不影響速度（parts.js `STANCE`）。越野車、怪獸卡車、N4 沒有。
   - 高度還是一個數字（`state.height`＝貼地−0.015，出門、比賽、朋友的車照舊 `+height`）；外八是另一個外觀鍵 `state.stance`（'on'／'off'，跟 wide 一樣送給朋友），跟著高度那一格（garage.src.html `hfOf`；讀檔照高度修好：舊存檔不用搬）。
   - 完整的車：supra.js `setStance`（`placeHubs`：hub.rotation.x＝外八、position.z＝寬體＋海拉風、tire.scale.z；drive.js 只改 rotation.y 轉向，不衝突）。輕量車：carlod.js `cur.stance` → `wheelGeo`／`rimGeo` 做外八的網格（`camber`），三角形、draw calls 一樣。參觀車庫的說明多「海拉風」。
-  - 測試 stance-test.mjs（新的）。效能：車庫頁 142 calls 前後一樣；輕量 GC8 22404 三角形、4 calls 前後一樣。
+  - 測試 stance-test.mjs 16 ok（新的）、test-b1 151、drift-test 都過。效能：車庫頁 142 calls 前後一樣；輕量 GC8 22404 三角形、4 calls 前後一樣。2026-11-02 放上試做頁（只換頁面；artifact 第 78 版）。
 - **試做頁 v74（2026-11-02；第 62 批；artifact 第 76 版）＝ N4 街車**：第 59 批的兩台摩托車圖，Nick 卡片選「只做街車」（F6 仿賽先不做，車殼、零件還在 moto-body.mjs／moto-spec.js）。
   - 自己設計的 948 cc 直四街車（圓燈、一字把、油箱上「N4」、四合一排氣到右邊、鋁合金雙翼樑車架、倒立式前叉、五輻輪框；沒有真的牌子）：moto-spec.js（`motoBuild`，第 59 批的零件，現在接進遊戲；裡面的名字加 `MO_`，`MOTO` 尺寸自己寫一份）、n4-look.js、n4-spec.js、body-n4-q.glb、body-n4-lod.glb。拉花：比賽號碼（預設）、條紋、沒有；後箱；運動套件＝風鏡＋下導流；高度只有原廠。
   - **兩個輪子**：supra.js `buildCar` 看到 `wheels.moto` 就做四個看不到的輪子位置（左右 ±0.12 公尺），drive.js、terrain.js、圓塔的程式都不用改；右邊那兩個的 rotation 就是真的輪子的（前輪在手把那組裡面，跟著轉）。輕量車自己畫兩個輪子（`N4_lodWheels`；make-lod.mjs `HALF_CAR`、lod-bake.html 不烘真的輪子）。
