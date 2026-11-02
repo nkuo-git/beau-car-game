@@ -42,6 +42,9 @@ const base = `http://127.0.0.1:${srv.address().port}/`;
 const b = await pw.chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
 const p = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 p.setDefaultTimeout(300000);
+const errs = [], fails = [];
+p.on('pageerror', (e) => { errs.push(e.message); console.log('pageerror', e.message); });
+p.on('console', (m) => { if ((m.type() === 'error' || m.type() === 'warning') && !/ERR_CERT|404|GPU stall|AudioContext was not allowed|ScriptProcessorNode|worklet timeout|ERR_TUNNEL|ERR_NAME|ERR_CONNECTION|fonts\.g/.test(m.text())) console.log('console', m.type(), m.text().slice(0, 240)); });
 const T0 = Date.now(), el = () => `${((Date.now() - T0) / 1000).toFixed(0)}s`;
 const check = (ok, what) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) fails.push(what); };
 const ready = () => p.waitForFunction(() => document.getElementById('status').hidden, null, { timeout: 300000 });
@@ -72,7 +75,7 @@ await p.addInitScript(() => {
 await p.addInitScript(() => {
   window.__hubs = (S) => S.wheels.map((w) => { const h = w.parent, s = Math.sign(h.position.z), t = w.getObjectByName('tire'); return [+((s * -h.rotation.x * 180) / Math.PI).toFixed(2), +Math.abs(h.position.z).toFixed(4), t ? +t.scale.z.toFixed(3) : null]; });
   window.__seg = (key, label) => { const b = [...document.querySelectorAll(`.seg[data-opt="${key}"] button`)].find((x) => x.textContent === label); if (b) b.click(); return !!b; };
-  window.__settle = () => new Promise((r) => { const t0 = performance.now(); const f = () => { const D = window.__D(); if (Math.abs(D.S.body.position.y - +D.CARS[D.cur].state.height) < 2e-4 || performance.now() - t0 > 15000) r(); else requestAnimationFrame(f); }; f(); });
+  window.__settle = () => new Promise((r) => { const t0 = performance.now(); const f = () => { const D = window.__D(); if (Math.abs(D.S.body.position.y - +D.CARS[D.cur].state.height) < 3e-4 || performance.now() - t0 > 120000) r(); else requestAnimationFrame(f); }; f(); });
 });
 
 await p.goto(base, { waitUntil: 'domcontentloaded' });
@@ -136,7 +139,7 @@ const lod = await p.evaluate(async () => {
   const D = window.__D(), sc = await D.LOD_CARS.gc8.load();
   const meas = (l) => {
     const m = l.car.getObjectByName('lod-wheels'), r = l.car.getObjectByName('lod-rims'); l.car.updateMatrixWorld(true);
-    const box = (mm) => { const a = mm.geometry.attributes.position, v = new D.camera.position.constructor(); let zt = -1e9, zb = -1e9, zmax = -1e9; for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i); if (v.z < 0.3) continue; zmax = Math.max(zmax, v.z); if (v.y > 0.5) zt = Math.max(zt, v.z); if (v.y < 0.15) zb = Math.max(zb, v.z); } return { zmax: +zmax.toFixed(3), top: +zt.toFixed(3), bot: +zb.toFixed(3) }; };
+    const box = (mm) => { const a = mm.geometry.attributes.position, v = new D.camera.position.constructor(); let zt = -1e9, zb = -1e9, zmax = -1e9; for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i); if (v.z < 0.3) continue; zmax = Math.max(zmax, v.z); if (v.y > 0.6) zt = Math.max(zt, v.z); if (v.y < 0.05) zb = Math.max(zb, v.z); /* 輪子最上面、最下面那一圈（GC8 輪子半徑 0.32） */ } return { zmax: +zmax.toFixed(3), top: +zt.toFixed(3), bot: +zb.toFixed(3) }; };
     return { w: box(m), r: box(r), tris: l.tris, draws: l.draws };
   };
   const off = D.buildLodCar('gc8', sc, { ...D.CARS.gc8.state, stance: 'off' }), a = meas(off);
@@ -162,7 +165,7 @@ const out = await p.evaluate(() => {
 console.log('5', el(), JSON.stringify(out));
 check(out.ok && out.mode === 'off' && out.hubs.every((h) => Math.abs(h[0] - 9) < 0.01 && h[2] === 0.8), `in the GC8 on the lobby lift: still cambered, stretched tyres`);
 const riOn = await shot('5-on');
-const hw = await p.evaluate(() => {
+await p.evaluate(() => { window.__hwRun = () => {
   const D = window.__D(), d = D.drv, H = D.VIL.places.highway, L = D.VIL.highway.out;
   d.teleport(H.spawn); window.__dstep(30);
   let k = 0, vmax = 0, air = 0; const b0 = d.telemetry().bumps, l0 = d.telemetry().lands;
@@ -178,9 +181,12 @@ const hw = await p.evaluate(() => {
   const hubs = window.__hubs(D.tripS), yaw = D.tripS.wheels.slice(0, 2).map((w) => +w.parent.rotation.y.toFixed(3));
   d.setInput(null); const t = d.telemetry();
   return { vmax: Math.round(vmax), air, bumps: t.bumps - b0, lands: t.lands - l0, hubs, yaw };
-});
-console.log('  highway:', JSON.stringify(hw));
-check(hw.vmax > 180 && hw.air === 0 && hw.bumps === 0 && hw.lands === 0, `flat out on the expressway for 15 s: ${hw.vmax} km/h, never in the air, no bumps (looks only, no speed change)`);
+}; });
+const hw = await p.evaluate(() => window.__hwRun());
+// 一樣的路、一樣的開法，輪子換回正的（車身照舊）：速度、撞到幾次要一樣（只是外觀）
+const hw0 = await p.evaluate(() => { const S = window.__D().tripS; S.setStance(false); const r = window.__hwRun(); S.setStance(true); return r; });
+console.log('  highway:', JSON.stringify(hw), 'straight wheels:', JSON.stringify(hw0));
+check(hw.vmax > 180 && hw.air === 0 && hw.lands === 0 && hw.vmax === hw0.vmax && hw.bumps === hw0.bumps, `flat out on the expressway for 15 s: ${hw.vmax} km/h, never in the air; the same run with straight wheels: ${hw0.vmax} km/h, bumps ${hw.bumps} / ${hw0.bumps} (looks only, no speed change)`);
 check(hw.hubs.every((h) => Math.abs(h[0] - 9) < 0.01) && hw.yaw.every((y, i) => Math.abs(y - (i === 0 ? Math.PI : 0)) > 0.05), `steering: the front wheels turn (${hw.yaw}) and keep their camber`);
 const riHw = await shot('5-highway');
 
