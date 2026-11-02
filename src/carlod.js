@@ -23,7 +23,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { SUPRA_SPEC, GTR_SPEC } from './supra.js';
-import { wheel, neonPad, WIDE_PUSH, RIM_POLISH } from './parts.js';
+import { wheel, neonPad, WIDE_PUSH, STANCE, RIM_POLISH } from './parts.js';
 import { GC8_SPEC, GC8_GARAGE } from './gc8-spec.js';
 import { YARIS_SPEC, YARIS_GARAGE } from './yaris-spec.js';
 import { P918_SPEC, P918_GARAGE, P918_FINISH } from './p918-spec.js';
@@ -57,7 +57,7 @@ export const { buildLodCar, LOD_CARS } = (() => {
     case 'gtr': return { paint: '#1d4fc9', rim: 'gunmetal', caliper: '#c8141e', wing: 'stock', kit: 'bomex', height: '-0.03', livery: 'none', tint: 'light' };
     case 'gc8': return GC8_GARAGE.state; case 'yaris': return YARIS_GARAGE.state; case 'p918': return P918_GARAGE.state; case 'sp3': return SP3_GARAGE.state; case 'jesko': return JESKO_GARAGE.state; case 'monster': return MONSTER_GARAGE.state; case 'rx7': return RX7_GARAGE.state; case 'evo': return EVO_GARAGE.state; case 'civic': return CIVIC_GARAGE.state; case 'laferrari': return LAFERRARI_GARAGE.state; case 'huayra': return HUAYRA_GARAGE.state; case 'senna': return SENNA_GARAGE.state; case 'altis': return ALTIS_GARAGE.state; case 'aventador': return AVENTADOR_GARAGE.state; case 'ae86': return AE86_GARAGE.state; case 'chiron': return CHIRON_GARAGE.state; case 'jp4': return JP4_GARAGE.state; case 'k2': return K2_GARAGE.state; case 'p8': return P8_GARAGE.state; case 'z2': return Z2_GARAGE.state; case 'n4': return N4_GARAGE.state;
   } return {}; };
-  const BASE = { wide: 'off', finish: 'stock', rimStyle: 'stock', glow: 'none', lights: false, brake: false };
+  const BASE = { wide: 'off', finish: 'stock', rimStyle: 'stock', glow: 'none', stance: 'off', lights: false, brake: false };
   const FILES = { supra: 'car-supra-lod.txt', gtr: 'car-gtr-lod.txt', gc8: 'car-gc8-lod.txt', yaris: 'car-yaris-lod.txt', p918: 'car-p918-lod.txt', sp3: 'car-sp3-lod.txt', jesko: 'car-jesko-lod.txt', monster: 'car-monster-lod.txt', rx7: 'car-rx7-lod.txt', chiron: 'car-chiron-lod.txt', ae86: 'car-ae86-lod.txt', aventador: 'car-aventador-lod.txt', altis: 'car-altis-lod.txt', senna: 'car-senna-lod.txt', huayra: 'car-huayra-lod.txt', laferrari: 'car-laferrari-lod.txt', civic: 'car-civic-lod.txt', evo: 'car-evo-lod.txt', jp4: 'car-jp4-lod.txt', k2: 'car-k2-lod.txt', p8: 'car-p8-lod.txt', z2: 'car-z2-lod.txt', n4: 'car-n4-lod.txt' };
   const SIZES = {/*__LOD_SIZES__*/};
   const LOADED = new Map(); // key → Promise<gltf.scene>
@@ -188,10 +188,18 @@ export const { buildLodCar, LOD_CARS } = (() => {
 
   // ---- 輪子（低面數）：輪胎、輪框筒內側、碟盤＋帽、卡鉗 → 跟車身同一個材質（類別表）；輪框：輪唇＋輪框面（貼輪框圖）----
   // 右輪外側朝 +z；左輪是右輪對 z 鏡射（跟完整的車一樣：卡鉗都在碟盤後上方）
-  function axles(spec, wide) {
+  function axles(spec, wide, st = false) { // st：海拉風（第 64 批）輪子再往外推
     const W = spec.wheels;
     return [[W.xf, W.trackF, W.wF, W.RF ?? W.R, W.rimF ?? W.rim, 'f'], [W.xr, W.trackR, W.wR, W.RR ?? W.R, W.rimR ?? W.rim, 'r']]
-      .map(([x, track, w, Rr, rim, ax]) => ({ x, z: track + (wide ? WIDE_PUSH[ax] : 0), w, R: Rr, rim, ax }));
+      .map(([x, track, w, Rr, rim, ax]) => ({ x, z: track + (wide ? WIDE_PUSH[ax] : 0) + (st ? STANCE.poke : 0), w, R: Rr, rim, ax }));
+  }
+  // 海拉風：一個輪子做好的點（從第 o 個點到最後）繞輪子中心 c、車子的前後軸轉 −s·camber（上面往裡倒）；法線一起轉
+  function camber(B, o, c, s) {
+    const a = -s * STANCE.camber, ca = Math.cos(a), sa = Math.sin(a), P = B.P, N = B.N;
+    for (let i = o * 3; i < P.length; i += 3) {
+      const y = P[i + 1] - c.y, z = P[i + 2] - c.z; P[i + 1] = c.y + y * ca - z * sa; P[i + 2] = c.z + y * sa + z * ca;
+      const ny = N[i + 1], nz = N[i + 2]; N[i + 1] = ny * ca - nz * sa; N[i + 2] = ny * sa + nz * ca;
+    }
   }
   function builder() {
     const P = [], N = [], C = [], U = [], K = [], I = [];
@@ -227,17 +235,17 @@ export const { buildLodCar, LOD_CARS } = (() => {
     };
   }
   const WGEO = new Map(); // 輪子網格：同一台車、同樣寬體共用（怪獸卡車：還要同樣胎紋、車身高度）
-  function wheelGeo(key, spec, wide, own = '', rr = R) { // own：spec.lod.wheels 的「胎紋|車身高度」；rr：角色 → 類別（多了 spec.lod.cls）
-    const k = `${key}|${wide}|${own}`;
+  function wheelGeo(key, spec, wide, own = '', rr = R, st = false) { // own：spec.lod.wheels 的「胎紋|車身高度」；rr：角色 → 類別（多了 spec.lod.cls）；st：海拉風
+    const k = `${key}|${wide}|${own}|${st}`;
     let e = WGEO.get(k);
     if (e) { e.refs++; return e; }
     const B = builder();
     if (spec.lod?.wheels) { const [kit, lift] = own.split('|'); spec.lod.wheels(B, rr, kit, axles(spec, wide), +lift || 0); } // 怪獸卡車：自己的輪子、懸吊
-    else for (const A of axles(spec, wide)) for (const s of [1, -1]) {
-      const c = { x: A.x, y: A.R, z: s * A.z }, w = A.w, Rr = A.R, rim = A.rim;
+    else for (const A of axles(spec, wide, st)) for (const s of [1, -1]) {
+      const c = { x: A.x, y: A.R, z: s * A.z }, w = A.w, Rr = A.R, rim = A.rim, o0 = B.P.length / 3, tz = st ? STANCE.stretch : 1; // tz：海拉風的輪胎拉窄（跟完整的車 tire.scale.z 一樣）
       // 輪胎剖面（跟 parts.js wheel() 一樣，少幾個點）：內側胎唇 → 胎壁 → 胎面 → 外側胎壁 → 外側胎唇
       B.lathe([[rim + 0.004, -w / 2 + 0.012], [Rr - 0.045, -w / 2], [Rr - 0.006, -w / 2 + 0.024], [Rr, -w / 2 + 0.05], [Rr, w / 2 - 0.05], [Rr - 0.006, w / 2 - 0.024],
-        [Rr - 0.03, w / 2 - 0.004], [Rr - 0.055, w / 2], [rim + 0.02, w / 2 - 0.002], [rim + 0.004, w / 2 - 0.012]], 32, c, s, R.rubber);
+        [Rr - 0.03, w / 2 - 0.004], [Rr - 0.055, w / 2], [rim + 0.02, w / 2 - 0.002], [rim + 0.004, w / 2 - 0.012]].map(([r, z]) => [r, z * tz]), 32, c, s, R.rubber);
       // 輪框筒內側（從輪框的縫、斜斜的看進去；完整的車從外面看進去是背面、畫不出來，看到的是後面暗暗的輪胎內側、煞車，所以用暗灰）
       B.lathe([[rim - 0.012, w / 2 - 0.004], [rim - 0.018, w / 2 - 0.03], [rim - 0.018, -w / 2 + 0.03]], 24, c, s, R.hub);
       // 碟盤（正面）＋碟盤帽
@@ -257,6 +265,7 @@ export const { buildLodCar, LOD_CARS } = (() => {
         for (const [r, z] of [[0.118, zb], [0.198, zb], [0.198, zf], [0.118, zf]]) { B.P.push(c.x + e0[0] * r, c.y + e0[1] * r, c.z + s * z); B.N.push(nx, ny, 0); B.C.push(R.caliper); B.U.push(0, 0); B.K.push(0); }
         if ((sgn > 0) === (s > 0)) B.I.push(o, o + 2, o + 1, o, o + 3, o + 2); else B.I.push(o, o + 1, o + 2, o, o + 2, o + 3);
       }
+      if (st) camber(B, o0, c, s);
     }
     e = { geo: B.geo(false), refs: 1, key: k };
     WGEO.set(k, e);
@@ -267,14 +276,15 @@ export const { buildLodCar, LOD_CARS } = (() => {
     e.geo.dispose(); WGEO.delete(e.key);
   }
   // 輪框：每個輪子一片輪唇（輪框筒外緣，r rim±0.013，貼在胎唇前面）＋一片輪框面（r＜rim−0.013，在輻條的平均深度）
-  function rimGeo(spec, wide, zFace) {
+  function rimGeo(spec, wide, zFace, st = false) {
     const B = builder();
-    for (const A of axles(spec, wide)) {
+    for (const A of axles(spec, wide, st)) {
       const Rt = A.rim + 0.015, z = zFace + (A.w - spec.wheels.wF) / 2; // 輪框面的深度跟外緣走（後輪比較寬就往外）
       for (const s of [1, -1]) {
-        const c = { x: A.x, y: A.R, z: s * A.z };
+        const c = { x: A.x, y: A.R, z: s * A.z }, o0 = B.P.length / 3;
         B.lathe([[A.rim + 0.013, A.w / 2 + 0.001], [A.rim - 0.013, A.w / 2 + 0.001]], 32, c, s, 0, { uvR: Rt, k: 1 / A.R });
         B.lathe([[A.rim - 0.013, z], [0.0001, z]], 32, c, s, 0, { uvR: Rt, k: 1 / A.R });
+        if (st) camber(B, o0, c, s);
       }
     }
     return B.geo(true);
@@ -535,12 +545,12 @@ export const { buildLodCar, LOD_CARS } = (() => {
     function rimStyle() { // 輪框樣式（貼圖）、寬體（輪框位置）有變才重做
       if (spec.lod?.wheels) { rimMesh.visible = false; return; } // 怪獸卡車：輪框筒在輪子網格裡（rim 類），不用輪框圖
       const k = cur.rimStyle && cur.rimStyle !== 'stock' ? cur.rimStyle : 'stock';
-      if (applied.rimStyle === k && applied.rimWide === applied.wideOn) return;
+      if (applied.rimStyle === k && applied.rimWide === applied.wideOn && applied.rimSt === applied.st) return;
       const A = axles(spec, false)[0], f = rimTex(k === 'stock' ? key + ':stock' : k, k === 'stock' ? spec.wheels.style : k, A.R, A.w, A.rim);
       rm.map = f.map; rm.normalMap = f.nmap; rm.needsUpdate = true;
       if (rimMesh.geometry) rimMesh.geometry.dispose();
-      rimMesh.geometry = rimGeo(spec, applied.wideOn, f.z);
-      applied.rimStyle = k; applied.rimWide = applied.wideOn;
+      rimMesh.geometry = rimGeo(spec, applied.wideOn, f.z, applied.st);
+      applied.rimStyle = k; applied.rimWide = applied.wideOn; applied.rimSt = applied.st;
     }
     function shape() { // 套件、尾翼、寬體 → 車身網格；寬體 → 輪子往外
       const wide = cur.wide === 'on' && d.pieces.some((p) => p.wide);
@@ -551,12 +561,13 @@ export const { buildLodCar, LOD_CARS } = (() => {
         geo = g; bodyMesh.geometry = g.opaque; glassMesh.geometry = g.glass;
       }
       const own = spec.lod?.wheels ? `${kit}|${+cur.height || 0}` : ''; // 怪獸卡車：胎紋、車身高度（懸吊拉長）換了，輪子網格重做
-      if (!wgeo || applied.wideOn !== wide || applied.own !== own) {
-        const w = wheelGeo(key, spec, wide, own, RR);
+      const st = cur.stance === 'on' && !spec.lod?.wheels && !spec.wheels.moto; // 第 64 批：海拉風（怪獸卡車、摩托車沒有）
+      if (!wgeo || applied.wideOn !== wide || applied.own !== own || applied.st !== st) {
+        const w = wheelGeo(key, spec, wide, own, RR, st);
         if (wgeo) releaseWheel(wgeo);
         wgeo = w; wheelMesh.geometry = w.geo;
       }
-      applied.kit = kit; applied.wing = wing; applied.wideOn = wide; applied.own = own;
+      applied.kit = kit; applied.wing = wing; applied.wideOn = wide; applied.own = own; applied.st = st;
     }
     function setLook(l = {}) {
       Object.assign(cur, l);

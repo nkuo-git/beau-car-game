@@ -1,7 +1,7 @@
 // 組一台 3D 車：車身（三層：車漆、車內、玻璃）＋輪子＋尾翼＋後照鏡＋車內＋套件
 // 每台車的不同都寫在 SPEC 裡（Supra、GT-R）
 import * as THREE from 'three';
-import { MAT, wheel, gtWing, mirror, interior, aeroKit, AERO_SUPRA, lip, r34Wing, mirrorR34, exhaust, wideKit, WIDE_PUSH, mk4Wing, rimFace, RIM_POLISH, neonPad } from './parts.js';
+import { MAT, wheel, gtWing, mirror, interior, aeroKit, AERO_SUPRA, lip, r34Wing, mirrorR34, exhaust, wideKit, WIDE_PUSH, STANCE, mk4Wing, rimFace, RIM_POLISH, neonPad } from './parts.js';
 import { makeMaskTextures, patchPaint, patchGlass, patchInside, SUPRA_LOOK, PAINT_NIGHT } from './masks.js';
 import { GTR_LOOK } from './gtr-look.js';
 
@@ -139,15 +139,25 @@ export function buildCar(spec, geos, opt = {}) {
       if (s < 0) { hub.rotation.y = Math.PI; brake.scale.x = -1; } // 左邊的卡鉗也要在碟盤後面
       hub.add(wh, brake);
       car.add(hub);
-      wheels.push(wh); hubs.push({ hub, s, track, ax: x > 0 ? 'f' : 'r' });
+      wheels.push(wh); hubs.push({ hub, s, track, ax: x > 0 ? 'f' : 'r', tire: wh.getObjectByName('tire') });
     }
   }
-  let wideOn = false;
+  let wideOn = false, stanceOn = false;
+  const placeHubs = () => { // 寬體、海拉風（第 64 批）：輪子往外推；海拉風再外八、輪胎拉窄
+    for (const h of hubs) {
+      h.hub.position.z = h.s * (h.track + (wideOn ? WIDE_PUSH[h.ax] : 0) + (stanceOn ? STANCE.poke : 0));
+      h.hub.rotation.x = stanceOn ? -h.s * STANCE.camber : 0; // Euler XYZ：x 在最外層＝繞車子的前後軸（drive.js 只改 rotation.y 轉向）
+      const t = h.tire; if (t) t.scale.z = stanceOn ? STANCE.stretch : 1;
+    }
+  };
   const setWide = (on) => {
     if (!wide) return;
     wide.visible = wideOn = on;
-    for (const h of hubs) h.hub.position.z = h.s * (h.track + (on ? WIDE_PUSH[h.ax] : 0));
-    fitGlow();
+    placeHubs(); fitGlow();
+  };
+  const setStance = (on) => { // 摩托車沒有（輪子是看不到的點）
+    if (W.moto || stanceOn === !!on) return;
+    stanceOn = !!on; placeHubs();
   };
 
   // 輪框樣式：'stock'（這台車自己的）、'five'、'multi'、'mesh'、'six'、'fan'、'dish'；只換輪框面（輻條＋中心蓋＋螺帽），輪胎、輪框筒、煞車不動
@@ -192,7 +202,7 @@ export function buildCar(spec, geos, opt = {}) {
     const cl = BK.find((b) => b.slot === 'paint').clean || [0.5, 0.5];
     car.traverse((o) => { if (o.isMesh && !o.geometry.attributes.uv && [].concat(o.material).includes(paint)) { const n = o.geometry.attributes.position.count, U = new Float32Array(n * 2); for (let i = 0; i < n; i++) { U[i * 2] = cl[0]; U[i * 2 + 1] = cl[1]; } o.geometry.setAttribute('uv', new THREE.BufferAttribute(U, 2)); } });
   }
-  return { car, body, paint, glass, wheels, wings, setWing, noses, setKit, setWide, setRim, setGlow, setFinish, mats, tex, spec };
+  return { car, body, paint, glass, wheels, wings, setWing, noses, setKit, setWide, setStance, setRim, setGlow, setFinish, mats, tex, spec };
 }
 
 // ---- 第 49 批：烘焙好的車身（gc8-bake.mjs → body-<key>-q.glb）：每個材質（slot）一組網格，不用投影遮罩 ----

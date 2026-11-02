@@ -433,13 +433,13 @@ const hpOf = (k) => PERF[k].hp + PERF[k].parts.reduce((a, p) => a + (partsOf(k).
 const vmaxOf = (k, hp = hpOf(k)) => { const P = PERF[k], add = P.parts.reduce((a, p) => a + p[3], 0); return Math.round(P.vmax + ((P.top ?? P.vmax) - P.vmax) * Math.min(1, Math.max(0, (hp - P.hp) / add))); };
 const money = (w) => (w >= 10000 ? `${+(w / 10000).toFixed(2)} 億` : `${w.toLocaleString('en-US')} 萬`);
 const byPrice = (keys) => [...keys].sort((a, b) => PERF[a].price - PERF[b].price); // 照價錢排（便宜的在前面）
-const COMMON_OPTS = { wide: [['off', '原廠'], ['on', '寬體']], tint: [['light', '淺'], ['dark', '深']], studio: [['room', '豪華車庫'], ['light', '亮攝影棚'], ['dark', '暗攝影棚']],
+const COMMON_OPTS = { wide: [['off', '原廠'], ['on', '寬體']], stance: [['off', '不要'], ['on', '海拉風']], tint: [['light', '淺'], ['dark', '深']], studio: [['room', '豪華車庫'], ['light', '亮攝影棚'], ['dark', '暗攝影棚']],
   finish: [['stock', '原廠'], ['gloss', '亮面'], ['metal', '金屬'], ['matte', '消光'], ['pearl', '珍珠']],
   rimStyle: [['stock', '原廠'], ['five', '五輻'], ['six', '六輻'], ['multi', '多輻'], ['mesh', '網狀'], ['dish', '深碟'], ['fan', '風扇']] };
 // 底盤燈：車底下地上的光（'none'＝不要）
 const GLOWS = [['none', '不要', 'linear-gradient(135deg, transparent 44%, #e0413b 44% 56%, transparent 56%), #2a2c31'],
   ...[['#2f7bff', '藍'], ['#9b4dff', '紫'], ['#22e07a', '綠'], ['#ff2d3d', '紅'], ['#ff7a1a', '橘'], ['#f2f3f5', '白']].map(([c, n]) => [c, n, `radial-gradient(circle, #fff 0 14%, ${c} 44%, #15161a 100%)`])];
-for (const C of Object.values(CARS)) Object.assign(C.state, { wide: 'off', finish: 'stock', rimStyle: 'stock', glow: 'none', ...C.state }); // 寬體、烤漆、輪框樣式、底盤燈每台都有，預設原廠／不要（加在最後，套用順序跟以前一樣）
+for (const C of Object.values(CARS)) Object.assign(C.state, { wide: 'off', finish: 'stock', rimStyle: 'stock', glow: 'none', stance: 'off', ...C.state }); // 寬體、烤漆、輪框樣式、底盤燈每台都有，預設原廠／不要（加在最後，套用順序跟以前一樣）
 // 每台車都多幾個顏色（那台車本來就有很像的顏色、或同名的就不重複加）
 const EXTRA_PAINTS = [['#ff5fa2', '粉紅'], ['#39a7ff', '天空藍'], ['#9bea1a', '螢光綠'], ['#c8a45d', '香檳金'], ['#ff7414', '橘'], ['#5b2d9e', '紫']];
 const rgbOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -453,6 +453,13 @@ for (const [k, C] of Object.entries(CARS)) {
   const i = C.opts.wing.findIndex((o) => o[0] === 'none');
   C.opts.wing = [...C.opts.wing.slice(0, i < 0 ? undefined : i), ...more, ...(i < 0 ? [] : C.opts.wing.slice(i))];
 }
+// 第 64 批（Nick 2026-11-02「改裝要可以改海拉風」，看了圖說「直接做」）：「車身高度」有「貼地」的車多一格「海拉風」＝比貼地再低 STANCE.drop＋外八、輪子往外、拉胎（state.stance＝'on'）
+//   高度還是一個數字（出門、比賽、朋友的車都照舊用 +height）；stance 跟 wide 一樣是一個外觀鍵（輕量車、朋友看得到）。越野車、摩托車沒有「貼地」＝沒有海拉風
+for (const C of Object.values(CARS)) {
+  const H = C.opts.height, low = H && H.find((o) => o[1] === '貼地');
+  if (low && !H.some((o) => o[1] === '海拉風')) H.push([String(+(+low[0] - STANCE.drop).toFixed(3)), '海拉風']);
+}
+const hfOf = (k) => (CARS[k].opts.height || []).find((o) => o[1] === '海拉風')?.[0]; // 這台車海拉風的高度（沒有＝undefined）
 for (const C of Object.values(CARS)) C.opts.livery = livOptions(C.opts.livery); // 通用拉花：火焰、賽車條紋、大便龍車隊（名字撞到車子自己的，用 'gen:' 開頭）
 const DEFAULT_LOOK = Object.fromEntries(Object.entries(CARS).map(([k, C]) => [k, { ...C.state }])); // 每台車原本的樣子（對手的車從這個改）
 const CALIPERS = [['#9da1a6', '銀'], ['#c8141e', '紅'], ['#f2b705', '黃'], ['#1f54c9', '藍'], ['#ff6a1f', '橘'], ['#9bd400', '螢光綠'], ['#17181b', '黑']];
@@ -492,6 +499,7 @@ function okValue(k, o, v) { // 存的值還是現在有的選項才用（改版�
   for (const [k, st] of Object.entries(d.cars || {})) { // 外觀
     if (!CARS[k] || !st) continue;
     for (const [o, v] of Object.entries(st)) if (o in CARS[k].state && okValue(k, o, v)) CARS[k].state[o] = v;
+    CARS[k].state.stance = CARS[k].state.height === hfOf(k) ? 'on' : 'off'; // 第 64 批：海拉風跟著高度那一格（舊存檔沒有＝不要）
   }
   const lk = validLook(d.look); if (lk) GAME.look = { ...PLAYER_LOOK, ...lk }; // 你自己的樣子（外觀：舊存檔也留著）
   if (d.v !== 2) return; // 舊版（內容 30）只存了外觀：錢、車、零件從頭開始，開局只有 GC8
@@ -529,6 +537,7 @@ function apply(S, key, v) {
   if (key === 'tint') S.glass.opacity = v === 'dark' ? 0.66 : 0.34;
   if (key === 'kit') S.setKit(v);
   if (key === 'wide') S.setWide(v === 'on');
+  if (key === 'stance') S.setStance?.(v === 'on');
   if (key === 'rimStyle') S.setRim(v);
   if (key === 'finish') S.setFinish(v);
   if (key === 'glow') S.setGlow(v);
@@ -770,7 +779,7 @@ function seg(el) {
       el.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true');
       if (key === 'studio') { studioKind = v; setStudio(v); camMax(); save(); return; }
       CARS[cur].state[key] = v; save();
-      if (key === 'height') { rideY = +v; return; }
+      if (key === 'height') { rideY = +v; const st = v === hfOf(cur) ? 'on' : 'off'; CARS[cur].state.stance = st; if (S) apply(S, 'stance', st); return; } // 第 64 批：海拉風那一格＝高度＋外八
       if (S) apply(S, key, v);
     });
     el.append(b);

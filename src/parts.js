@@ -705,6 +705,9 @@ export function interior(mats, o = {}) {
 // W＝WIDE[key]（make-wide.mjs 從車身 SDF 量的）：每個輪拱每個角度 th，從輪拱邊緣 ra 往外每 dr 公尺車身側面的 z
 // 葉子板邊緣凸到輪胎外推後再往外 1.2 公分，往外 15 公分慢慢收回車身；外緣比車身高 8 公釐、一圈鉚釘，兩端和最下面切平
 export const WIDE_PUSH = { f: 0.05, r: 0.065 };
+// 第 64 批（Nick 2026-11-02「改裝要可以改海拉風」）：海拉風＝車身比「貼地」再低 drop、輪子上面往裡倒 camber（外八）、往外推 poke、輪胎拉窄 stretch 倍（看得到輪框邊）
+//   只是外觀（不影響速度）；完整的車 supra.js setStance、輕量車 carlod.js（cur.stance）
+export const STANCE = { camber: (9 * Math.PI) / 180, poke: 0.035, stretch: 0.8, drop: 0.015 };
 export function wideKit(paint, W, mats) {
   const g = new THREE.Group(); g.name = 'wide';
   const ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };

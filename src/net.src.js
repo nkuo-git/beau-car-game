@@ -1255,6 +1255,7 @@ body.visiting .stage{aspect-ratio:auto;height:min(78vh,640px);max-height:none}`;
   function paint() {
     const c = cars[V.i], L = netLook(c.k, c.l), bits = [CARS[c.k].btn[0]];
     if (L.wide === 'on') bits.push('寬體');
+    if (L.stance === 'on') bits.push('海拉風');
     if (L.wing && L.wing !== 'none' && L.wing !== 'stock') bits.push(WING_NAMES[L.wing] || '尾翼');
     const rim = RIMS.find((r) => r[0] === L.rim); if (rim && L.rim !== 'chrome') bits.push(`${rim[1]}色輪框`);
     if (L.glow && L.glow !== 'none') bits.push('底盤燈');
