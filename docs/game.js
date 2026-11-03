@@ -1513,6 +1513,9 @@ function interior(mats, o = {}) {
 // W＝WIDE[key]（make-wide.mjs 從車身 SDF 量的）：每個輪拱每個角度 th，從輪拱邊緣 ra 往外每 dr 公尺車身側面的 z
 // 葉子板邊緣凸到輪胎外推後再往外 1.2 公分，往外 15 公分慢慢收回車身；外緣比車身高 8 公釐、一圈鉚釘，兩端和最下面切平
 const WIDE_PUSH = { f: 0.05, r: 0.065 };
+// 第 64 批（Nick 2026-11-02「改裝要可以改海拉風」）：海拉風＝車身比「貼地」再低 drop、輪子上面往裡倒 camber（外八）、往外推 poke、輪胎拉窄 stretch 倍（看得到輪框邊）
+//   只是外觀（不影響速度）；完整的車 supra.js setStance、輕量車 carlod.js（cur.stance）
+const STANCE = { camber: (9 * Math.PI) / 180, poke: 0.035, stretch: 0.8, drop: 0.015 };
 function wideKit(paint, W, mats) {
   const g = new THREE.Group(); g.name = 'wide';
   const ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -1737,6 +1740,13 @@ function buildCar(spec, geos, opt = {}) {
   const W = spec.wheels, wheels = [], rims = [];
   for (const [x, track, w, R, rim] of [[W.xf, W.trackF, W.wF, W.RF ?? W.R, W.rimF ?? W.rim], [W.xr, W.trackR, W.wR, W.RR ?? W.R, W.rimR ?? W.rim]]) {
     for (const s of [-1, 1]) {
+      if (W.moto) { // 第 62 批：摩托車：輪子是 spec.build 做的（前輪跟著把手轉）；這裡只放看不到的點（drive.js 轉向、terrain.js 四個角照舊），右邊那個的 rotation＝真的輪子的
+        const hub = new THREE.Group(); hub.position.set(x, R, s * track); if (s < 0) hub.rotation.y = Math.PI;
+        const wh = new THREE.Object3D(), real = s > 0 ? body.getObjectByName(x > 0 ? 'wheelF' : 'wheelR') : null;
+        if (real) Object.defineProperty(wh, 'rotation', { value: real.rotation, configurable: true, enumerable: true }); // 只改 rotation（轉動），四元數跟著真的輪子
+        hub.add(wh); car.add(hub); wheels.push(wh); hubs.push({ hub, s, track, ax: x > 0 ? 'f' : 'r' });
+        continue;
+      }
       const { wheel: wh, brake, rotor } = wheel({ R, width: w, rim, mats, style: W.style, side: s, rotor: true });
       wh.add(rotor); // 碟盤跟著輪子轉（第 54 批：有打洞）
       rims.push({ wh, rim, w, s });
@@ -1745,15 +1755,25 @@ function buildCar(spec, geos, opt = {}) {
       if (s < 0) { hub.rotation.y = Math.PI; brake.scale.x = -1; } // 左邊的卡鉗也要在碟盤後面
       hub.add(wh, brake);
       car.add(hub);
-      wheels.push(wh); hubs.push({ hub, s, track, ax: x > 0 ? 'f' : 'r' });
+      wheels.push(wh); hubs.push({ hub, s, track, ax: x > 0 ? 'f' : 'r', tire: wh.getObjectByName('tire') });
     }
   }
-  let wideOn = false;
+  let wideOn = false, stanceOn = false;
+  const placeHubs = () => { // 寬體、海拉風（第 64 批）：輪子往外推；海拉風再外八、輪胎拉窄
+    for (const h of hubs) {
+      h.hub.position.z = h.s * (h.track + (wideOn ? WIDE_PUSH[h.ax] : 0) + (stanceOn ? STANCE.poke : 0));
+      h.hub.rotation.x = stanceOn ? -h.s * STANCE.camber : 0; // Euler XYZ：x 在最外層＝繞車子的前後軸（drive.js 只改 rotation.y 轉向）
+      const t = h.tire; if (t) t.scale.z = stanceOn ? STANCE.stretch : 1;
+    }
+  };
   const setWide = (on) => {
     if (!wide) return;
     wide.visible = wideOn = on;
-    for (const h of hubs) h.hub.position.z = h.s * (h.track + (on ? WIDE_PUSH[h.ax] : 0));
-    fitGlow();
+    placeHubs(); fitGlow();
+  };
+  const setStance = (on) => { // 摩托車沒有（輪子是看不到的點）
+    if (W.moto || stanceOn === !!on) return;
+    stanceOn = !!on; placeHubs();
   };
 
   // 輪框樣式：'stock'（這台車自己的）、'five'、'multi'、'mesh'、'six'、'fan'、'dish'；只換輪框面（輻條＋中心蓋＋螺帽），輪胎、輪框筒、煞車不動
@@ -1798,7 +1818,7 @@ function buildCar(spec, geos, opt = {}) {
     const cl = BK.find((b) => b.slot === 'paint').clean || [0.5, 0.5];
     car.traverse((o) => { if (o.isMesh && !o.geometry.attributes.uv && [].concat(o.material).includes(paint)) { const n = o.geometry.attributes.position.count, U = new Float32Array(n * 2); for (let i = 0; i < n; i++) { U[i * 2] = cl[0]; U[i * 2 + 1] = cl[1]; } o.geometry.setAttribute('uv', new THREE.BufferAttribute(U, 2)); } });
   }
-  return { car, body, paint, glass, wheels, wings, setWing, noses, setKit, setWide, setRim, setGlow, setFinish, mats, tex, spec };
+  return { car, body, paint, glass, wheels, wings, setWing, noses, setKit, setWide, setStance, setRim, setGlow, setFinish, mats, tex, spec };
 }
 
 // ---- 第 49 批：烘焙好的車身（gc8-bake.mjs → body-<key>-q.glb）：每個材質（slot）一組網格，不用投影遮罩 ----
@@ -4430,8 +4450,8 @@ const { buildRoom } = (() => {
 //   buildApt() → { parts: [{ name, geometry, material }]（給 InstancedMesh：6 座共用）, tris, cols（本地：整棟的碰撞，給村子）, roof: { y, zone, cols, spawn, door }, balc: { y, zone, cols, spawn, door, ceil } }
 //     roof／balc：在外面走的那兩層（本地座標；town.src.js 換成世界、照塔的高度加 y）：zone＝走得到的長方形、cols＝只有在那一層的時候加的碰撞（女兒牆、樓梯間、牆）、spawn＝從裡面出來站哪、door＝回裡面的門（walk.js setDoors）
 //   aptColsAt(cols, lot)：本地的碰撞 → 世界（跟 towerColsAt 一樣）
-// 效能：一棟約 2.4k 三角形、5 個材質（磁磚、水泥、玻璃、金屬、白）；6 座 InstancedMesh＝5 個 draw call
-// 打包（build-art.mjs／build-app.mjs 拿掉 import／export）：最上層只有 APT、aptLotOf、buildApt、aptColsAt
+// 效能：一棟約 2.4k 三角形、5 個材質（大理石（第 63 批以前是磁磚）、水泥、玻璃、金屬、白）；6 座 InstancedMesh＝5 個 draw call
+// 打包（build-art.mjs／build-app.mjs 拿掉 import／export）：最上層只有 APT、aptLotOf、buildApt、aptColsAt、aptMarble（第 63 批）
 
 const APT = { W: 12, D: 15, FH: 3.3, NF: 5, ROOF: 16.5, PAR: 1.0, BZ: 6.1, BX0: -0.3, BX1: 5.8, T: 0.2,
   core: { sx0: -5.8, sx1: -3.8, lx0: -3.6, lx1: -1.9, z0: -5.6, z1: -2.4, lz1: -3.7 }, // 樓梯間 x sx0…sx1、電梯 x lx0…lx1（深 z0…lz1）、都在 z0…z1；後面的走廊 z −7.3 … −5.6
@@ -4449,11 +4469,38 @@ function aptColsAt(cols, lot) {
   return cols.map((q) => { const o = { ...q, x: lot.x + q.x * c + q.z * s, z: lot.z - q.x * s + q.z * c }; if (o.t === 'box') o.rot = (q.rot || 0) + lot.heading; if (q.h != null) o.h = q.h + y; if (q.y0 != null) o.y0 = q.y0 + y; return o; });
 }
 const col3 = (hex) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
-// 磁磚（canvas）：8 × 8 片一張，一片 10 公分 → uv 1 ＝ 0.8 公尺
-function tileTex() {
-  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
-  g.fillStyle = '#b8b2a6'; g.fillRect(0, 0, 128, 128);
-  for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) { const k = ((i * 7 + j * 13) % 5) / 5; g.fillStyle = `rgb(${226 + k * 14},${214 + k * 12},${196 + k * 10})`; g.fillRect(i * 16 + 1, j * 16 + 1, 14, 14); }
+// 第 63 批（Nick 2026-11-02「公寓改大理石風格」）：白色大理石（卡拉拉白：白底、淡灰的紋、偶爾一條深一點的；一片一片，縫在格子線上：
+// 貼圖重複的接縫剛好落在石板的縫上，紋接不起來也自然）。interiors.js 的 surfAtlas 也用這個畫（大廳、走廊、你家的地板和牆）。
+// g＝canvas 2d、(w, h)＝畫多大、nx × ny 片、rnd＝亂數（0…1）、o：{ base 底色 [r, g, b], vein 紋的深淺 0…1, seam 縫的顏色 }
+function aptMarble(g, w, h, nx, ny, rnd, o = {}) {
+  const base = o.base || [243, 241, 236], vein = o.vein ?? 1, sw = w / nx, shh = h / ny;
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { // 每片底色差一點點
+    const k = (rnd() - 0.5) * 7; g.fillStyle = `rgb(${(base[0] + k) | 0},${(base[1] + k) | 0},${(base[2] + k * 1.2) | 0})`; g.fillRect(i * sw, j * shh, sw, shh);
+  }
+  g.save(); g.beginPath(); g.rect(0, 0, w, h); g.clip();
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { // 每片自己的紋（斜斜的、彎彎的；裁在那一片裡面）
+    const x0 = i * sw, y0 = j * shh; g.save(); g.beginPath(); g.rect(x0, y0, sw, shh); g.clip();
+    const a = -0.7 + rnd() * 0.5, L = Math.hypot(sw, shh) * 1.3, n = 3 + ((rnd() * 3) | 0);
+    for (let v = 0; v < n; v++) {
+      const cx = x0 + rnd() * sw, cy = y0 + rnd() * shh, dx = Math.cos(a) * L / 2, dy = Math.sin(a) * L / 2, big = v === 0 && rnd() < 0.6;
+      g.strokeStyle = `rgba(${big ? '118,116,112' : '150,148,145'},${((big ? 0.32 : 0.16) * vein * (0.6 + rnd() * 0.6)).toFixed(3)})`; g.lineWidth = (big ? 1.4 : 0.7) * (w / 128) * (0.7 + rnd() * 0.8);
+      g.beginPath(); g.moveTo(cx - dx, cy - dy);
+      g.bezierCurveTo(cx - dx / 3 + (rnd() - 0.5) * sw * 0.5, cy - dy / 3 + (rnd() - 0.5) * shh * 0.5, cx + dx / 3 + (rnd() - 0.5) * sw * 0.5, cy + dy / 3 + (rnd() - 0.5) * shh * 0.5, cx + dx, cy + dy); g.stroke();
+      for (let b = 0; b < 2; b++) { // 小分岔
+        const t = rnd(), px = cx - dx + dx * 2 * t, py = cy - dy + dy * 2 * t; g.lineWidth *= 0.6; g.beginPath(); g.moveTo(px, py); g.quadraticCurveTo(px + (rnd() - 0.5) * sw * 0.4, py + (rnd() - 0.5) * shh * 0.4, px + (rnd() - 0.5) * sw * 0.6, py + (rnd() - 0.5) * shh * 0.6); g.stroke();
+      }
+    }
+    g.fillStyle = `rgba(255,255,255,${(0.05 + rnd() * 0.05).toFixed(3)})`; g.beginPath(); g.arc(x0 + rnd() * sw, y0 + rnd() * shh, Math.max(sw, shh) * 0.4, 0, Math.PI * 2); g.fill(); // 一團亮一點的
+    g.restore();
+  }
+  g.restore();
+  g.fillStyle = o.seam || 'rgba(150,146,140,0.55)'; const lw = Math.max(0.8, w / 160); // 縫（每片的左邊、上面）
+  for (let i = 0; i < nx; i++) g.fillRect(i * sw, 0, lw, h); for (let j = 0; j < ny; j++) g.fillRect(0, j * shh, w, lw);
+}
+// 外牆的大理石（canvas）：2 × 4 片一張（一片 80 × 40 公分）→ uv 1 ＝ 1.6 公尺
+function marbleTex() {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); let sd = 6011; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  aptMarble(g, 256, 256, 2, 4, rnd);
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 function mesher(uvScale) {
@@ -4492,8 +4539,8 @@ function mesher(uvScale) {
 }
 function buildApt() {
   const { W, D, FH, NF, PAR, BZ, BX0, BX1, T, core, head } = APT, HX = W / 2, HZ = D / 2, H = ROOFY;
-  const TI = mesher(0.8), FL = mesher(1), GL = mesher(1), MT = mesher(1), WH = mesher(1); // 磁磚、水泥、玻璃、金屬、白
-  const tile = col3('#e4d8c4'), tile2 = col3('#cdb9a0'), conc = col3('#c9c6bf'), conc2 = col3('#b4b1aa'), dark = col3('#3c4046'), al = col3('#c7ccd2'), white = col3('#f2f2ef'), under = col3('#8f8d88');
+  const TI = mesher(1.6), FL = mesher(1), GL = mesher(1), MT = mesher(1), WH = mesher(1); // 磁磚、水泥、玻璃、金屬、白
+  const tile = col3('#ffffff'), tile2 = col3('#e9e6e0'), conc = col3('#c9c6bf'), conc2 = col3('#b4b1aa'), dark = col3('#3c4046'), al = col3('#c7ccd2'), white = col3('#f2f2ef'), under = col3('#8f8d88');
   // ---- 主體：四面磁磚牆（正面右邊 2–4 樓凹進去是陽台）----
   TI.bx(-HX, HX, 0, H, -HZ, HZ, tile, ['nz', 'px', 'nx'], null); // 後、左、右
   TI.bx(-HX, BX0, 0, H, HZ - 0.01, HZ, tile, ['pz']); // 正面左半（整面）
@@ -4571,7 +4618,7 @@ function buildApt() {
   const balc = { y: BALY, zone: { x: (BX0 + HX) / 2, z: (BZ + HZ) / 2, hx: (HX - BX0) / 2 - 0.1, hz: (HZ - BZ) / 2 - 0.05 }, cols: balCols, spawn: { x: BX0 + 4.3, z: BZ + 0.85, lh: -Math.PI / 2 }, door: { x: BX0 + 2.3, z: BZ + 0.03, ry: 0, w: 1.3, lh: Math.PI / 2 }, ceil: BALY + FH - 0.3 };
   const mk = (name, M, material) => ({ name, geometry: M.geometry(), material });
   const parts = [
-    mk('apt-tile', TI, new THREE.MeshStandardMaterial({ map: tileTex(), vertexColors: true, roughness: 0.85, metalness: 0 })),
+    mk('apt-tile', TI, new THREE.MeshStandardMaterial({ map: marbleTex(), vertexColors: true, roughness: 0.32, metalness: 0 })), // 第 63 批：白色大理石
     mk('apt-conc', FL, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 })),
     mk('apt-glass', GL, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.18, metalness: 0.7 })),
     mk('apt-metal', MT, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.6 })),
@@ -5172,6 +5219,10 @@ SND_CARS.p8 = { ...SND_CARS.jp4, name: '5.0 V8 自然進氣', red: 6000, swap: n
 SND_CARS.z2 = { ...SND_CARS.yaris, name: '686 cc 單缸自然進氣', red: 8500, idle: 0.16, fire: [0], bank: [0], cylAmp: [1], turbo: null, gain: 1.3, idleGain: 3.4,
   width: 210, rise: 0.06, decay: 0.85, vari: 0.09, jit: 1.6, wob: 0.022, drive: 1.6, rasp: 0.34, raspHz: 1900, lp: 2600, eq: [[120, 1, 4], [520, 1.4, 3], [1600, 2, 1.5]],
   intake: { ...SND_CARS.yaris.intake, lvl: 0.24, f: 520, tone: 0.45, hiss: 0.1 }, pops: { ...SND_CARS.yaris.pops, lift: 0.3, shift: 0.2, lvl: 0.5, rate: 9 } };
+// 第 62 批：街車：948 cc 直列四缸（180 度曲軸、平均點火）：轉得很高（紅線 11000）、尖尖的、進氣聲大；一缸小，整體 gain 大一點
+SND_CARS.n4 = { ...SND_CARS.yaris, name: '948 cc 直列四缸自然進氣', red: 11000, idle: 0.11, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.97, 1, 0.98], turbo: null, gain: 1.2, idleGain: 2.6,
+  width: 110, vari: 0.04, jit: 0.6, drive: 1.5, rasp: 0.42, raspHz: 3200, lp: 4200, eq: [[180, 1, 2], [900, 1.4, 3], [2600, 2, 2.5]],
+  intake: { ...SND_CARS.yaris.intake, lvl: 0.34, f: 700, tone: 0.55, hiss: 0.14 }, pops: { ...SND_CARS.yaris.pops, lift: 0.35, shift: 0.25, lvl: 0.55, rate: 12 } };
 // 車庫的引擎零件會改變聲音
 function SND_profile(key, parts) {
   const B = SND_CARS[key] || SND_CARS.supra;
@@ -10207,6 +10258,7 @@ return { buildVillage, stripColliders, villageFonts, HOME_SITES, homeFront };
 //       to 'outside'：回村子，人站到 spawn（門外、面朝外；＝interiorFor(b).outside）；to 數字：I.setFloor(to)，人站到 spawn（那一層的樓梯口，面朝離開樓梯的方向）
 //       spawn 都在任何 exit 外面（不會一出現又被傳走）；建議換完 0.4 秒內不要再判斷
 //       door：{ x, z, ry, w }：同一個出口寫成 walk.js setDoors 的門（ry 朝房間裡面：往 −(sin ry, cos ry) 走＝出去／上下樓；w＝半寬）
+//     I.stair（第 61 批）：{ xa0 xa1（第一跑：往上）, xb0 xb1（第二跑）, xs0 xs1, zSB（樓梯口）, zL（平台）, zS1, up, down, rise 3.3, top（'roof'＝走上去到頂樓）, ch }（本地）：樓梯真的走得上去（town.src.js stairY 算腳下多高、過了平台換到上一層／下一層、人的高度加減 3.3）；下面舊的說明：以前樓梯口是 exit
 //     樓梯：每一層是自己的空間，樓梯口是 exit（不是真的一階一階走上去）：透天厝是兩跑樓梯（樓梯間 2 × 3.2 公尺，靠一邊的牆），
 //       一樓只有「上樓」、頂樓只有「下樓」、中間的樓層兩個口並排（左上右下或相反）；看得到往上的樓梯、往下的樓梯、轉角平台、扶手
 //     spots：{ stand: [], sit: [], sleep: [], pray: [], counter: [] }：放居民用（世界座標）：{ x, z, heading, y?, room }
@@ -10294,9 +10346,10 @@ const subUV = (r, a, b, c, d) => [r[0] + (r[2] - r[0]) * a, r[1] + (r[3] - r[1])
 
 // 地板、牆、天花板：可以接起來的，120 像素一格（四邊各留 4 像素），4 × 4 格；PER＝一格是幾公尺（[u, v]）
 const PER = { terrazzo: [1, 1], tileW: [1.2, 1.2], tileB: [1.2, 1.2], wood: [1.2, 1.2], ktile: [0.6, 0.6], plaster: [1.6, 1.6], ceil: [1.2, 1.2], granite: [1.6, 1.6],
-  rbrick: [1.4, 1.4], wbrick: [1, 1], slats: [0.6, 0.6], timber: [1.2, 1.2], tatami: [1.8, 1.8], storeT: [1.2, 1.2], mosaic: [0.6, 0.6], white: [1, 1] };
+  rbrick: [1.4, 1.4], wbrick: [1, 1], slats: [0.6, 0.6], timber: [1.2, 1.2], tatami: [1.8, 1.8], storeT: [1.2, 1.2], mosaic: [0.6, 0.6], white: [1, 1],
+  marble: [1.6, 1.6], marbleW: [2.4, 2.4] }; // 第 63 批：大理石地板（80 公分一片）、牆（120 × 60 公分一片）
 function surfAtlas(R) {
-  const S = sheet(512, 512), T = (name, i, draw) => S.tile(name, (i % 4) * 128 + 4, ((i / 4) | 0) * 128 + 4, 120, 120, draw);
+  const S = sheet(512, 640), T = (name, i, draw) => S.tile(name, (i % 4) * 128 + 4, ((i / 4) | 0) * 128 + 4, 120, 120, draw); // 第 63 批：多一排（大理石）
   const grid = (g, w, h, n, col, lw = 1.2) => { g.fillStyle = col; for (let k = 0; k < n; k++) { g.fillRect((k * w) / n, 0, lw, h); g.fillRect(0, (k * h) / n, w, lw); } };
   T('terrazzo', 0, (g, w, h) => { // 磨石子（1 公尺一格，邊上銅條）
     g.fillStyle = '#d9d5cc'; g.fillRect(0, 0, w, h);
@@ -10380,6 +10433,8 @@ function surfAtlas(R) {
     for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++) { g.fillStyle = pick(R, cs); g.fillRect(i * 10 + 0.8, j * 10 + 0.8, 8.4, 8.4); }
   });
   T('white', 15, (g, w, h) => { g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); });
+  T('marble', 16, (g, w, h) => aptMarble(g, w, h, 2, 2, R, { base: [244, 242, 238] })); // 第 63 批：公寓的白色大理石地板（亮面，縫細細的）
+  T('marbleW', 17, (g, w, h) => aptMarble(g, w, h, 2, 4, R, { base: [246, 244, 240], vein: 0.8 })); // 牆（石板橫的）
   return S;
 }
 
@@ -11723,7 +11778,8 @@ function stairShaft(F, H, n, S) {
   if (yt > F.ch) wallFace(F, fx, zSB, 1, xs0, xs1, F.ch, yt, S);
   box(B, 'wall', F0, [xd0, down ? yb : 0, zSB, xd1, yt, zL], S.c, { py: false, _: dotUV(SU('plaster')) });
   hq(B, 'wall', F0, xs0, zSB, xs1, zS1, yt, dotUV(SU('plaster')), S.c, false);
-  const TU = subUV(SU('terrazzo'), 0.05, 0.05, 0.95, 0.3), tc = WHITE, rc = C('#d6d2ca'), nose = C('#6a665f');
+  const TU = subUV(SU(H.tread || 'terrazzo'), 0.05, 0.05, 0.95, 0.3), tc = WHITE, // 第 63 批：公寓的樓梯是大理石（H.tread）
+    rc = C('#d6d2ca'), nose = C('#6a665f');
   const tread = (x0, x1, z0, z1, y, riserZ, rdir) => {
     hq(B, 'floor', F0, x0, z0, x1, z1, y, TU, tc);
     if (riserZ != null) vqN(B, 'floor', [x0, riserZ], [x1, riserZ], y - r, y, 0, rdir, TU, rc);
@@ -11733,7 +11789,7 @@ function stairShaft(F, H, n, S) {
   if (up) {
     for (let i = 1; i <= 8; i++) tread(xa0, xa1, zSB + (i - 1) * g, zSB + i * g, i * r, zSB + (i - 1) * g, -1);
     vqN(B, 'floor', [xa0, zL], [xa1, zL], 8 * r, 9 * r, 0, -1, TU, rc);
-    plane(B, 'floor', [xs0, 9 * r, zS1], [1, 0, 0], [0, 0, -1], xs1 - xs0, zS1 - zL, SU('terrazzo'), PER.terrazzo, WHITE, [], [], xs0, -zS1);
+    plane(B, 'floor', [xs0, 9 * r, zS1], [1, 0, 0], [0, 0, -1], xs1 - xs0, zS1 - zL, SU(H.tread || 'terrazzo'), PER[H.tread || 'terrazzo'], WHITE, [], [], xs0, -zS1); // 平台（第 63 批：照 H.tread）
     for (let j = 1; j <= 8; j++) tread(xb0, xb1, zL - j * g, zL - (j - 1) * g, 9 * r + j * r, zL - (j - 1) * g, 1); // 第二跑（平台往後爬）
     rail(X(1.94), X(2.0), zSB + 0.05, 0.92, zL, 0.92 + 8 * r); rail(X(0.06), X(0), zL, 0.92 + 9 * r, zSB, 0.92 + 17 * r);
     if (down) { // 下面看上來：第一跑、平台、第二跑的斜底
@@ -11745,15 +11801,15 @@ function stairShaft(F, H, n, S) {
   }
   if (down) {
     for (let j = 1; j <= 8; j++) tread(xb0, xb1, zSB + (j - 1) * g, zSB + j * g, -j * r, zSB + j * g, 1);
-    plane(B, 'floor', [xs0, -9 * r, zS1], [1, 0, 0], [0, 0, -1], xs1 - xs0, zS1 - zL, SU('terrazzo'), PER.terrazzo, WHITE, [], [], xs0, -zS1);
+    plane(B, 'floor', [xs0, -9 * r, zS1], [1, 0, 0], [0, 0, -1], xs1 - xs0, zS1 - zL, SU(H.tread || 'terrazzo'), PER[H.tread || 'terrazzo'], WHITE, [], [], xs0, -zS1); // 平台（第 63 批：照 H.tread）
     for (let k = 1; k <= 8; k++) tread(xa0, xa1, zL - k * g, zL - (k - 1) * g, -9 * r - k * r, zL - (k - 1) * g, 1);
     rail(X(0.06), X(0), zSB + 0.05, 0.92 - r, zL, 0.92 - 9 * r);
   }
-  // 碰撞＋出口
-  colBox(F, xd0, zSB, xd1, zS1, 3);
-  const zo = [zSB - 0.45, zSB + 0.45];
-  if (up) { colBox(F, xa0, zSB + 0.45, xa1, zS1, 3); exitZone(F, xa0 + 0.06, zo[0], xa1 - 0.06, zo[1], n + 1, { x: X(0.7), z: zSB - 0.8, lh: HP }); }
-  if (down) { colBox(F, xb0, zSB + 0.45, xb1, zS1, 3); exitZone(F, xb0 + 0.06, zo[0], xb1 - 0.06, zo[1], n - 1, { x: X(1.525), z: zSB - 0.8, lh: HP }); }
+  // 碰撞（第 61 批：樓梯自己走上去、走下去＝town.src.js 照 F.stair 算腳下多高、走到一半換到上一層／下一層；不再是一碰就換樓層的出口）
+  colBox(F, xd0, zSB, xd1, zL, 3); // 中間那道牆（平台那段空著，才轉得過去）
+  if (!up) colBox(F, xa0, zSB - 0.06, xa1, zSB + 0.08, 3); // 沒有往上的：那個口是關著的門
+  if (!down) colBox(F, xb0, zSB - 0.06, xb1, zSB + 0.08, 3);
+  if (up || down) F.stair = { xa0: Math.min(xa0, xa1), xa1: Math.max(xa0, xa1), xb0: Math.min(xb0, xb1), xb1: Math.max(xb0, xb1), xs0: Math.min(xs0, xs1), xs1: Math.max(xs0, xs1), zSB, zL, zS1, up, down, rise: 3.3, top: up && n === N - 2 && H.roofUp ? 'roof' : null };
   F.stairArrive = { fromBelow: { x: X(0.7), z: zSB - 0.8, lh: HP }, fromAbove: { x: X(1.525), z: zSB - 0.8, lh: HP } };
 }
 // 陽台：地、欄杆（女兒牆）、兩邊的牆；冷氣室外機、盆栽
@@ -12379,6 +12435,7 @@ function farmFloor(b) {
 //   頂樓從 5 樓的樓梯上去（exit to 'roof'）、4 樓客廳的落地門出去陽台（to 'balc'）：都是真的在外面（town.src.js 換到世界、照 apt.js 的 roof／balc）
 //   電梯：走進電梯（floors[i].lift 那個長方形）town.src.js 出面板按樓層
 const AL = { X0: -5.8, X1: 5.8, ZB: -7.3, ZF: 7.3, zC: -5.6, zK: -2.4, xL: -1.7, xS: -3.7, xB: -0.4, zR: 1.5, xT: -3.4, BX0: -0.3, BZ: 6.0 };
+const APT_PAL = [null, { liv: '#eef3e6', bed: '#f6e7dc', sofa: '#7a5a3c', quilt: '#f2b880' }, { liv: '#f3ece0', bed: '#e3eee6', sofa: '#3f6e5e', quilt: '#a8d8b4' }, { liv: '#f6efe2', bed: '#e4edf6', sofa: '#4f6b8a', quilt: '#9ec9ea' }, { liv: '#eae8f3', bed: '#f4ecd4', sofa: '#8a3f4a', quilt: '#e8c75a' }]; // 第 61 批：2–5 樓你家每層的牆、沙發、被子（4 樓＝原本的）
 const APT_ROOF_SPAWN = { x: -0.6, z: -2.2, lh: 0 }, APT_BALC_SPAWN = { x: 4.0, z: 6.95, lh: -HP }; // 站在門的旁邊（walk.js：給門的時候站在門的範圍裡面＝那扇門先不觸發，要走開 1.65 公尺才會再觸發；陽台只有 1.4 公尺深） // 跟 apt.js 的 roof.spawn、balc.spawn 一樣（本地）
 function aptInfo(b) {
   const R = rng(seedOf(b));
@@ -12417,17 +12474,19 @@ function bathroom(F, x0, x1, z0, z1) {
   spot(F, 'stand', F0, tx, tz - 0.6, HP, null, rm);
 }
 function aptFloor(A, n) {
-  const { X0, X1, ZB, ZF, zC, zK, xL, xS, xB, zR, xT, BX0, BZ } = AL, R = A.R, mine = n === A.mine, lobby = n === 0, top = n === A.N - 1;
+  const { X0, X1, ZB, ZF, zC, zK, xL, xS, xB, zR, xT, BX0 } = AL, R = A.R, mine = n >= 1, lobby = n === 0, top = n === A.N - 1;
+  const hasBalc = n >= 1 && n <= 3, BZ = hasBalc ? AL.BZ : ZF, P = APT_PAL[n] || APT_PAL[3]; // 第 61 批：整棟都是你家（2–5 樓都是你家；陽台只有 2–4 樓，外殼是這樣蓋的）；每層顏色不一樣
   const F = newFloor({ index: n, label: n + 1 + 'F' }); F.paths = []; F.occ = []; F.spots.dress = [];
   const skirt = (c) => mul(C(c), 0.72);
-  const S_cor = sf('plaster', '#efece4', 'wall', { skirt: skirt('#efece4') }), S_shaft = sf('plaster', '#efece4', 'wall'), S_lift = sf('plaster', '#cdd2d8', 'shiny');
-  const S_liv = sf('plaster', '#f6efe2', 'wall', { skirt: skirt('#f6efe2') }), S_bed = sf('plaster', '#e4edf6', 'wall', { skirt: skirt('#e4edf6') }), S_hall = sf('plaster', lobby ? '#f3efe6' : '#f6efe2', 'wall', { skirt: skirt('#f3efe6') });
+  // 第 63 批（Nick「公寓改大理石風格／不用電梯」）：大廳、走廊、樓梯間、玄關、客廳＝白色大理石（牆、地板；亮面）；房間的牆照每層的顏色（地板也是大理石）；廚房、廁所照舊磁磚
+  const MW = (c = '#ffffff') => sf('marbleW', c, 'floor', { skirt: mul(C('#d9d5ce'), 1) });
+  const S_cor = MW(), S_shaft = sf('marbleW', '#ffffff', 'floor');
+  const S_liv = MW(), S_bed = sf('plaster', P.bed, 'wall', { skirt: skirt(P.bed) }), S_hall = MW();
   const S_kit = sf('plaster', '#f5f3ec', 'wall', { wain: { h: 1.6, s: sf('ktile', WHITE, 'wall', { noSkirt: true }) } }), S_bath = sf('ktile', WHITE, 'wall', { noSkirt: true });
-  const ceilP = sf('plaster', '#fbfbf8'), flCor = sf('terrazzo', WHITE, 'floor'), flLiv = sf('wood', WHITE, 'floor'), flBed = sf('wood', WHITE, 'floor'), flKit = sf('tileB', WHITE, 'floor'), flBath = sf('tileW', WHITE, 'floor'), flLob = sf('granite', WHITE, 'floor');
+  const ceilP = sf('plaster', '#fbfbf8'), flCor = sf('marble', WHITE, 'floor'), flLiv = sf('marble', WHITE, 'floor'), flBed = sf('marble', C('#f4efe8'), 'floor'), flKit = sf('tileB', WHITE, 'floor'), flBath = sf('tileW', WHITE, 'floor'), flLob = sf('marble', WHITE, 'floor');
   // 房間（陰影、地板、天花板）
   room(F, lobby ? '大廳' : '走廊', X0, X1, ZB, zC, { floor: lobby ? flLob : flCor, ceil: ceilP, probe: [2.0, (ZB + zC) / 2] });
   room(F, null, X0, xS, zC, zK, { h: top ? F.ch : 4.8 }); // 樓梯間（stairShaft 畫）
-  room(F, '電梯', xS, xL, zC, -3.6, { floor: sf('granite', WHITE, 'floor'), ceil: sf('plaster', '#f4f6f8'), probe: [(xS + xL) / 2, -4.6] });
   room(F, lobby ? null : mine ? '玄關' : '走廊', xL, X1, zC, zK, { floor: lobby ? flLob : mine ? flLiv : flCor, ceil: ceilP, probe: [2.0, (zC + zK) / 2] });
   if (lobby) room(F, null, X0, X1, zK, ZF, { floor: flLob, ceil: ceilP, probe: [0, 3] });
   else if (mine) {
@@ -12453,23 +12512,23 @@ function aptFloor(A, n) {
     wall(F, 'x', ZF + 0.1, X0, X1, { t: 0.2, p: null, n: S_hall, out: 1, view: 'street', voff: 0.1, ops: [d, { a: -5.0, b: -3.4, y0: 0.95, y1: 2.35, k: 'win', grille: false }, { a: -2.6, b: -1.0, y0: 0.95, y1: 2.35, k: 'win', grille: false }, { a: 3.4, b: 5.0, y0: 0.95, y1: 2.35, k: 'win', grille: false }] });
   } else if (mine) { // 正面：房間的兩個窗；客廳那段凹進去（陽台）：落地門＋窗
     wall(F, 'x', ZF + 0.1, X0, BX0, { t: 0.2, p: null, n: S_bed, out: 1, view: 'street', voff: 0.1, ops: [{ a: -5.0, b: -3.4, y0: 0.95, y1: 2.35, k: 'win', curtain: '#d7e6f2', grille: 'grille1' }, { a: -2.6, b: -1.0, y0: 0.95, y1: 2.35, k: 'win', curtain: '#d7e6f2', grille: 'grille1' }] });
-    wall(F, 'x', BZ + 0.1, BX0, X1, { t: 0.2, p: null, n: S_liv, out: 1, view: 'street', voff: 0.1, vdist: 1.5, ops: [{ a: 0.7, b: 3.3, y0: 0, y1: 2.3, k: 'balc' }, { a: 3.8, b: 5.2, y0: 0.85, y1: 2.3, k: 'win', curtain: '#f3e6c8', grille: 'grille1' }] });
-    wall(F, 'z', BX0 - 0.1, BZ, ZF, { t: 0.2, n: S_bed, p: null, col: false }); // 陽台左邊那截（房間這面）
-    exitZone(F, 0.85, BZ - 0.6, 3.15, BZ + 0.3, 'balc', APT_BALC_SPAWN); // 落地門：走出去到陽台（town.src.js）
+    if (hasBalc) {
+      wall(F, 'x', BZ + 0.1, BX0, X1, { t: 0.2, p: null, n: S_liv, out: 1, view: 'street', voff: 0.1, vdist: 1.5, ops: [{ a: 0.7, b: 3.3, y0: 0, y1: 2.3, k: 'balc' }, { a: 3.8, b: 5.2, y0: 0.85, y1: 2.3, k: 'win', curtain: '#f3e6c8', grille: 'grille1' }] });
+      wall(F, 'z', BX0 - 0.1, BZ, ZF, { t: 0.2, n: S_bed, p: null, col: false }); // 陽台左邊那截（房間這面）
+      exitZone(F, 0.85, BZ - 0.6, 3.15, BZ + 0.3, 'balc', APT_BALC_SPAWN); // 落地門：走出去到陽台（town.src.js；2–4 樓都有）
+    } else wall(F, 'x', ZF + 0.1, BX0, X1, { t: 0.2, p: null, n: S_liv, out: 1, view: 'street', voff: 0.1, ops: [{ a: 0.9, b: 2.9, y0: 0.9, y1: 2.3, k: 'win', curtain: '#f3e6c8', grille: 'grille1' }, { a: 3.6, b: 5.2, y0: 0.9, y1: 2.3, k: 'win', curtain: '#f3e6c8', grille: 'grille1' }] }); // 五樓沒有陽台：兩個窗
   }
   // 走廊前面的牆：樓梯的兩個口、電梯門、玄關（4 樓：你家的門；2／3／5 樓：開著走過去；1 樓：沒有牆）
   const up = !top || true, down = n > 0, [ha0, ha1] = A.XR(1.05, 2.0), [hb0, hb1] = A.XR(0, 0.95), [st0, st1] = A.XR(0, 2.0);
   wall(F, 'x', zC - 0.05, st0, st1, { t: 0.1, n: S_cor, p: S_shaft, ops: [
     up ? { a: ha0, b: ha1, y0: 0, y1: 2.3, k: 'open' } : { a: ha0 + 0.08, b: ha1 - 0.08, y0: 0, y1: 2.05, k: 'closed', leafCol: '#c8b8a0' },
     down ? { a: hb0, b: hb1, y0: 0, y1: 2.3, k: 'open' } : { a: hb0 + 0.1, b: hb1 - 0.06, y0: 0, y1: 2.0, k: 'closed', leafCol: '#e8e2d6' }] });
-  const LD = { a: -3.3, b: -2.2, y0: 0, y1: 2.15, k: 'open' };
-  wall(F, 'x', zC - 0.05, st1, xL, { t: 0.1, n: S_cor, p: S_lift, ops: [LD] });
+  wall(F, 'x', zC - 0.05, st1, xL, { t: 0.1, n: S_cor, p: null }); // 第 63 批：沒有電梯（以前電梯的地方：牆後面空著）
   if (mine) wall(F, 'x', zC - 0.05, xL, X1, { t: 0.1, n: S_cor, p: S_hall, ops: [{ a: -0.2, b: 0.75, y0: 0, y1: 2.1, k: 'idoor', leaf: true, hinge: 'a', swing: 1 }] });
-  // 樓梯間、電梯後面那面牆（朝前面）；電梯的三面；電梯跟玄關中間的牆
+  // 樓梯間後面那面牆（朝前面）；玄關左邊的牆
   wall(F, 'x', zK + 0.06, X0, xL, { t: 0.12, p: lobby ? S_hall : mine ? S_kit : S_cor, n: null, ops: lobby ? [{ a: -5.2, b: -4.3, y0: 0, y1: 2.05, k: 'closed', leafCol: '#9aa0a6', tex: 'door' }] : [] });
-  wall(F, 'z', xS + 0.05, zC, zK, { t: 0.1, p: S_lift, n: null });
-  wall(F, 'x', -3.65, xS, xL, { t: 0.1, n: S_lift, p: null });
-  wall(F, 'z', xL, zC, zK, { t: 0.12, p: S_hall, n: S_lift, ops: lobby || mine ? [] : [] });
+  wall(F, 'z', xS + 0.05, zC, zK, { t: 0.1, p: null, n: null });
+  wall(F, 'z', xL, zC, zK, { t: 0.12, p: S_hall, n: null });
   if (!lobby && !mine) wall(F, 'x', zK, xL, X1, { t: 0.12, n: S_cor, p: null, ops: [{ a: 0.0, b: 0.95, y0: 0, y1: 2.05, k: 'closed', leafCol: pick(R, ['#c89c6a', '#9aa0a6', '#6e5a44']) }, { a: 3.4, b: 4.35, y0: 0, y1: 2.05, k: 'closed', leafCol: pick(R, ['#c89c6a', '#b9c2c8', '#8f7a5e']) }] });
   if (mine) { // 你家的隔間：房間｜客廳、廚房｜客廳、房間｜廚房＋廁所、廚房｜廁所
     wall(F, 'z', xB, zR, ZF, { t: 0.2, p: S_liv, n: S_bed, ops: [{ a: 2.0, b: 2.9, y0: 0, y1: 2.1, k: 'idoor', leaf: true, hinge: 'a', swing: -1 }] });
@@ -12478,21 +12537,13 @@ function aptFloor(A, n) {
     wall(F, 'z', xT, zK, zR, { t: 0.12, p: S_kit, n: S_bath });
   }
   ready(F);
-  // 電梯裡面：扶手、按鈕板（發光）、天花板的燈
   const B = F.B;
-  tube(B, 'metal', [xS + 0.12, 0.9, zC + 0.1], [xS + 0.12, 0.9, -3.75], 0.018, 0.018, 6, C('#c9cfd5'));
-  bx(F, 'metal', F0, [xL - 0.09, 0.9, -4.3, xL - 0.06, 1.5, -3.95], C('#b9bfc5')); for (let k = 0; k < 6; k++) vq(B, 'glow', F0, [xL - 0.061, -4.22 + (k % 2) * 0.16], [xL - 0.061, -4.12 + (k % 2) * 0.16], 1.0 + ((k / 2) | 0) * 0.15, 1.08 + ((k / 2) | 0) * 0.15, dotUV(GU('s_white')), [1.3, 1.3, 1.1]);
-  hq(B, 'glow', F0, xS + 0.3, -5.3, xL - 0.3, -3.9, F.ch - 0.02, dotUV(GU('s_white')), [1.4, 1.42, 1.38]);
-  for (const x of [LD.a - 0.06, LD.b]) bx(F, 'metal', F0, [x, 0, zC - 0.12, x + 0.06, LD.y1 + 0.06, zC + 0.02], C('#aeb4ba')); bx(F, 'metal', F0, [LD.a - 0.06, LD.y1, zC - 0.12, LD.b + 0.06, LD.y1 + 0.06, zC + 0.02], C('#aeb4ba')); // 電梯門框
-  vq(B, 'glow', F0, [(LD.a + LD.b) / 2 - 0.12, zC - 0.121], [(LD.a + LD.b) / 2 + 0.12, zC - 0.121], LD.y1 + 0.12, LD.y1 + 0.3, dotUV(GU('s_red')), [1.3, 0.6, 0.5]); // 門上面的樓層燈
-  F.lift = { x0: xS + 0.2, z0: zC + 0.15, x1: xL - 0.2, z1: -3.8 };
-  stairShaft(F, { ...A, N: A.N + 1 }, n, S_shaft); // N＋1：五樓也有往上的樓梯（到頂樓）
-  for (const e of F.exits) if (e.to === A.N) { e.to = 'roof'; e.spawn = APT_ROOF_SPAWN; } // 五樓往上＝頂樓（外面）
+  stairShaft(F, { ...A, N: A.N + 1, roofUp: true, tread: 'marble' }, n, S_shaft); // N＋1：五樓也有往上的樓梯（走上去＝頂樓，town.src.js）
   // 大門：出口、外面擋住、進來站的地方
   for (const d of doors) { exitZone(F, d.a + 0.12, ZF - 0.55, d.b - 0.12, A.hz + 0.35, 'outside', null); colBox(F, d.a - 0.3, A.hz + 0.3, d.b + 0.3, A.hz + 0.8, 2.6); }
   if (lobby) F.spawnIn = { x: 0, z: ZF - 1.15, lh: HP };
   // 走道（家具不擋）：走廊一整條、電梯口、樓梯口、大門→走廊、玄關→客廳→房間→廁所、廚房
-  path(F, X0 + 0.5, (ZB + zC) / 2, X1 - 0.5, (ZB + zC) / 2, 0.5); path(F, (LD.a + LD.b) / 2, zC - 0.8, (LD.a + LD.b) / 2, -4.0, 0.4);
+  path(F, X0 + 0.5, (ZB + zC) / 2, X1 - 0.5, (ZB + zC) / 2, 0.5);
   path(F, A.X(0.35), zC - 0.8, A.X(1.9), zC - 0.8, 0.5); path(F, A.X(0.7), zC - 0.8, A.X(0.7), zC - 1.5, 0.4); path(F, A.X(1.525), zC - 0.8, A.X(1.525), zC - 1.5, 0.4);
   if (lobby) { path(F, 0, ZF - 0.9, 0, zC - 0.6, 0.5); path(F, 0, 0, X0 + 1.2, 4.0, 0.4); }
   if (mine) { path(F, 0.3, zC - 0.6, 0.3, zR + 1.0, 0.45); path(F, 0.3, 2.45, xB - 0.6, 2.45, 0.45); path(F, xB - 0.6, 2.45, xB - 0.6, 5.5, 0.45); path(F, xB - 0.6, 2.45, -4.65, 2.45, 0.42); path(F, -4.65, 2.45, -4.65, zR - 0.6, 0.42); path(F, 0.3, -1.25, xB - 0.6, -1.25, 0.45); path(F, xB - 0.6, -1.25, xT + 0.5, -1.25, 0.4); path(F, 2.0, BZ - 0.3, 2.0, zK + 0.6, 0.45); }
@@ -12517,14 +12568,14 @@ function aptFloor(A, n) {
     framedPic(F, frame(3.5, 0, ZF, Math.PI).sub(0, 0, 0.001), 'photo', 0.7, 0.55, 1.5);
   } else if (mine) {
     const rmL = '客廳', rmB = '房間';
-    const sofaT = frame(X1, 0, 2.2, -HP); sofa(F, sofaT, { n: 3, col: '#4f6b8a', room: rmL }); occupy(F, X1 - 0.82, 2.2 - 1.05, X1, 2.2 + 1.05); sofaTable(F, sofaT, 1.02, 2.0);
+    const sofaT = frame(X1, 0, 2.2, -HP); sofa(F, sofaT, { n: 3, col: P.sofa, room: rmL }); occupy(F, X1 - 0.82, 2.2 - 1.05, X1, 2.2 + 1.05); sofaTable(F, sofaT, 1.02, 2.0);
     tvSet(F, frame(xB + 0.1, 0, 2.2, HP), { L: 1.6, tv: 'tvB' }); occupy(F, xB + 0.1, 1.4, xB + 0.56, 3.0);
     place(F, [frame(3.0, 0, -1.0, 0), frame(2.2, 0, -1.0, 0)], [-0.9, -0.75, 0.9, 0.75], (T) => dining(F, T, { w: 1.2, d: 0.75, chairs: true, room: rmL }));
     place(F, [frame(1.7, 0, zC + 0.12, 0), frame(2.6, 0, zC + 0.12, 0)], [-0.47, 0, 0.47, 0.68], (T) => shoeCab(F, T, { L: 0.9, seed: 2 }));
     place(F, [frame(BX0 + 0.4, 0, BZ - 0.4), frame(X1 - 0.4, 0, BZ - 0.4)], [-0.25, -0.25, 0.25, 0.25], (T) => plant(F, T, 1.1));
     wallPic(F, frame(X1, 0, 0.3, -HP).sub(0, 0, 0.001), 'calendar', 0.34, 0.5, 1.5); wallPic(F, frame(X1, 0, 4.6, -HP).sub(0, 0, 0.001), 'clock', 0.34, 0.34, 1.95); framedPic(F, frame(xB + 0.1, 0, 4.6, HP).sub(0, 0, 0.001), 'photo', 0.7, 0.55, 1.4);
     acUnit(F, frame(X1, 0, 5.0, -HP), 2.35);
-    bed(F, frame(-3.3, 0, zR + 0.07, 0), { w: 1.5, quilt: '#9ec9ea', side: 'r', room: rmB }); occupy(F, -4.1, zR, -2.0, zR + 2.2);
+    bed(F, frame(-3.3, 0, zR + 0.07, 0), { w: 1.5, quilt: P.quilt, side: 'r', room: rmB }); occupy(F, -4.1, zR, -2.0, zR + 2.2);
     const wT = frame(X0, 0, 5.3, HP); wardrobe(F, wT, { w: 1.4, col: '#f3efe6' }); occupy(F, X0, 4.6, X0 + 0.62, 6.0); spot(F, 'dress', wT, 0, 1.0, HP, null, rmB);
     place(F, [frame(-1.6, 0, ZF, Math.PI), frame(-2.2, 0, ZF, Math.PI)], [-0.55, 0, 0.55, 1.2], (T) => desk(F, T, { w: 1.0, pc: true, room: rmB }));
     place(F, [frame(X0 + 0.35, 0, ZF - 0.35, 0.3)], [-0.25, -0.25, 0.25, 0.25], (T) => fan(F, T, {}));
@@ -12561,7 +12612,7 @@ function planOf(b, kind) {
     return { kind, biz: H.biz, name: H.biz ? shopName(b, H.biz) : b.name || `透天厝（${CNUM[H.N] || H.N}樓）`, floors: H.N, size: { w: b.hx * 2, d: b.hz * 2 }, rooms,
       enter: wide ? { x: 0, z: H.hz + 0.28, hx: H.hx - 0.4, hz: 0.27 } : { x: dx, z: H.hz + 0.28, hx: 0.65, hz: 0.27 }, outside: { x: dx, z: H.hz + 1.35, lh: -HP } };
   }
-  if (kind === 'apt') return { kind, biz: null, name: b.name || '公寓', floors: 5, size: { w: 12, d: 15 }, rooms: [['大廳'], ['走廊'], ['走廊'], ['玄關', '客廳', '房間', '廚房', '廁所'], ['走廊']], enter: { x: 0, z: 7.5 + 0.28, hx: 0.9, hz: 0.27 }, outside: { x: 0, z: 7.5 + 1.35, lh: -HP } };
+  if (kind === 'apt') return { kind, biz: null, name: b.name || '公寓', floors: 5, size: { w: 12, d: 15 }, rooms: [['大廳'], ...[1, 2, 3, 4].map(() => ['玄關', '客廳', '房間', '廚房', '廁所'])], enter: { x: 0, z: 7.5 + 0.28, hx: 0.9, hz: 0.27 }, outside: { x: 0, z: 7.5 + 1.35, lh: -HP } };
   if (kind === 'store') return { kind, biz: 'store', name: b.name || '村口超商', floors: 1, size: { w: 18, d: 13 }, rooms: [[b.name || '村口超商']], enter: { x: 0, z: 6.78, hx: 1.1, hz: 0.27 }, outside: { x: 0, z: 7.95, lh: -HP } };
   if (kind === 'temple') return { kind, biz: 'temple', name: b.name || '福德宮', floors: 1, size: { w: 12.4, d: 7.4 }, rooms: [[b.name || '福德宮']], enter: { x: 0, z: 7.4, hx: 2.4, hz: 0.45 }, outside: { x: 0, z: 8.55, lh: -HP } };
   return { kind, biz: 'farm', name: b.name || '三合院', floors: 1, size: { w: 18, d: 6 }, rooms: [['正廳', '房間', '灶腳']], enter: { x: 0, z: 3.28, hx: 0.9, hz: 0.27 }, outside: { x: 0, z: 4.15, lh: -HP } };
@@ -12607,6 +12658,7 @@ function buildInterior(b, o = {}) {
       exits: F.exits.map((e) => ({ ...xz(e.x, e.z), hx: e.hx, hz: e.hz, rot, to: e.to, spawn: e.to === 'outside' ? { ...outside } : pose(e.spawn), door: { ...xz(e.x, e.z + e.hz - 0.35), ry: wrapA(Math.PI + rot), w: e.hx } })),
       spots, rooms: F.named.map((r) => ({ name: r.name, ...xz((r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2), hx: (r.x1 - r.x0) / 2, hz: (r.z1 - r.z0) / 2, rot, probe: xz(r.probe[0], r.probe[1]) })),
       camera: { maxDist: 3, ceiling: F.ch - 0.2, near: 0.1, ...(F.cam || {}) },
+      stair: F.stair ? { ...F.stair, ch: F.ch } : null, // 第 61 批：樓梯（本地座標；town.src.js stairY、樓梯走到一半換樓層）
       lift: F.lift ? { ...xz((F.lift.x0 + F.lift.x1) / 2, (F.lift.z0 + F.lift.z1) / 2), hx: (F.lift.x1 - F.lift.x0) / 2, hz: (F.lift.z1 - F.lift.z0) / 2, rot } : null, // 第 60 批：公寓的電梯（站進去出面板）
       bounds: { ...xz((bx0 + bx1) / 2, (bz0 + bz1) / 2), hx: (bx1 - bx0) / 2, hz: (bz1 - bz0) / 2, rot },
     };
@@ -12617,7 +12669,7 @@ function buildInterior(b, o = {}) {
     setFloor(i) {
       i = clamp(i | 0, 0, floors.length - 1); I.floor = i;
       floors.forEach((f, k) => { f.group.visible = k === i; });
-      const f = floors[i]; I.colliders = f.colliders; I.exits = f.exits; I.spots = f.spots; I.rooms = f.rooms; I.camera = f.camera; I.bounds = f.bounds; I.lift = f.lift || null;
+      const f = floors[i]; I.colliders = f.colliders; I.exits = f.exits; I.spots = f.spots; I.rooms = f.rooms; I.camera = f.camera; I.bounds = f.bounds; I.lift = f.lift || null; I.stair = f.stair || null;
       return f;
     },
     dispose() { group.traverse((m) => { if (m.isMesh) m.geometry.dispose(); }); group.removeFromParent(); group.clear(); floors.length = 0; },
@@ -13303,6 +13355,7 @@ function createDrive(o) {
     return { nose: b.max.x, tail: b.min.x, len: b.max.x - b.min.x, halfW: Math.max(b.max.z, -b.min.z), wheelbase: W.xf - W.xr, xr: W.xr };
   })();
   const HL = info.len / 2 - 0.04, HW = Math.max(info.halfW, +o.halfW || 0) - 0.04, CX = (info.nose + info.tail) / 2, L = info.wheelbase;
+  const LEAN = P.lean ? 0.7 : 0; // 第 62 批：摩托車（perf.lean）：車身繞輪子著地的地方往彎裡面倒，最多 40 度
   const hubs = S.wheels.map((w) => w.parent), hub0 = hubs.map((h) => h.rotation.y), RF = W.RF ?? W.R, RR = W.RR ?? W.R;
   const base = { bx: body.position.x, bz: body.position.z };
   // 引擎、齒比、起步抓地：跟 race.src.js 的 racer() 一樣；尾速長一點點（六檔紅線＝極速 ×1.012）：跑極速的時候轉速 0.99，不會一直撞斷油
@@ -13571,7 +13624,7 @@ function createDrive(o) {
   }
   function springs(h) { // 車身：轉彎往外傾、加速抬頭、煞車點頭（彈簧）；草地、稻田抖一抖
     st.jitT -= h; if (st.jitT <= 0) { st.jitT = 0.09 + Math.random() * 0.06; st.jit = st.surf === 1 || st.surf === 2 ? (Math.random() - 0.5) * 0.014 * Math.min(1, Math.abs(st.v) / 3) : 0; }
-    const rT = clamp(-0.0053 * st.alat, -0.06, 0.06) + st.jit * 0.6, pT = clamp(0.0042 * st.along, -0.045, 0.035) + st.jit;
+    const rT = LEAN ? clamp(Math.atan(st.alat / 9.81), -LEAN, LEAN) * Math.min(1, Math.abs(st.v) / 4) : clamp(-0.0053 * st.alat, -0.06, 0.06) + st.jit * 0.6, pT = clamp(0.0042 * st.along, -0.045, 0.035) + st.jit; // 第 62 批：摩托車往彎裡面倒（停著的時候正的）
     st.rollV += (90 * (rT - st.roll) - 11 * st.rollV) * h; st.roll += st.rollV * h;
     st.pitchV += (90 * (pT - st.pitch) - 11 * st.pitchV) * h; st.pitch += st.pitchV * h;
   }
@@ -13604,7 +13657,7 @@ function createDrive(o) {
     const vd = st.dm > 0 ? vis + (clamp(st.steer * 0.32 - st.slip, -0.62, 0.62) - vis) * st.dm : vis; // 第 3 批：甩尾的時候前輪朝走的方向（看得到反打）
     hubs[0].rotation.y = hub0[0] - vd; hubs[1].rotation.y = hub0[1] - vd;
     body.rotation.x = st.roll; body.rotation.z = st.pitch;
-    body.position.z = base.bz - 0.45 * Math.sin(st.roll); body.position.x = base.bx + 0.45 * Math.sin(st.pitch); // 繞離地 0.45 公尺那點轉（不動 y：y 是車高）
+    body.position.z = base.bz - (LEAN ? 0 : 0.45) * Math.sin(st.roll); body.position.x = base.bx + 0.45 * Math.sin(st.pitch); // 繞離地 0.45 公尺那點轉（不動 y：y 是車高）
     const cx = st.x + Math.cos(st.th) * CX, cz = st.z - Math.sin(st.th) * CX;
     fx.shadow.position.set(cx, 0.06, cz); fx.shadow.rotation.y = st.th;
     if (ride && ride.on) ride.pose(vd, fx.shadow, cx, cz); // 第 4 批：高度、傾斜、懸吊、四輪轉向、影子貼地
@@ -20605,7 +20658,7 @@ void main() {
 //   walker.telemetry() → { x, z, heading, speed（真的走多快 m/s）, vx, vz, state（動作 idle|walk|run⋯）, mode（off 開車中／out 下車中／walk／in 走去車門／seat 坐進去中）,
 //                          running, paused, near（伸手可及的車 key，沒有＝null）, action（大按鈕的字）, camMode（follow|eye）, camYaw, camPitch, camDist（現在離角色多遠）,
 //                          camWant（沒被擋的話想要多遠）, hidden（角色藏起來了：開車中、第一人稱、鏡頭貼著頭）, zone（在哪個 places 的 zone 裡）, dest, destDist }
-//   walker.teleport({ x, z, heading }, { keepCamera })   把人放到那裡（鏡頭跳到後面；站在門口的門要先走開才會再觸發）
+//   walker.teleport({ x, z, heading }, { keepCamera, keepMotion })   把人放到那裡（鏡頭跳到後面；站在門口的門要先走開才會再觸發）
 //   walker.setAction({ label, onClick, icon } | null)   HUD 的大按鈕（跟 drive.js 同一個樣子、同一個位置；E 鍵）；icon：car | door | doorDown | key | hand | lift | bed；
 //                          頁面給的優先，沒給才輪到車庫門（開鐵捲門）、車（上車）；每一幀叫也沒關係；walker.action＝現在的字
 //   walker.setAction2({ label, onClick, icon } | null)   第 57 批：大按鈕下面第二顆（深色：「選位子」）；只有走路的時候出現；walker.action2＝現在的字；walker.nearCar＝「上車」那台（setCars 給的那個）
@@ -21536,7 +21589,7 @@ function createWalker(o) {
   }
   function pause(op = {}) { if (!alive) return; scr = null; tgt = null; deactivate(!!op.hide); st.speed = 0; }
   function teleport(p, op = {}) {
-    st.x = +p.x || 0; st.z = +p.z || 0; if (p.heading != null) st.th = wrapA(+p.heading); st.vx = st.vz = st.speed = 0; scr = null; tgt = null;
+    st.x = +p.x || 0; st.z = +p.z || 0; if (p.heading != null) st.th = wrapA(+p.heading); if (!op.keepMotion) st.vx = st.vz = st.speed = 0; scr = null; tgt = null; // 第 61 批：keepMotion＝樓梯走到一半換樓層（照樣走著）
     if (st.mode === 'in' || st.mode === 'seat' || st.mode === 'out') st.mode = active ? 'walk' : 'off';
     if (!op.keepCamera) { cam.yaw = st.th; cam.pitch = PITCH0; cam.hold = 0; }
     cam.cd = cam.want = cam.dist; blend.on = false;
@@ -32370,6 +32423,403 @@ const Z2_GARAGE = {
   state: { paint: '#f2c21b', rim: 'black', caliper: '#17181b', wing: 'rack', kit: 'stock', height: '0', livery: 'race', tint: 'dark' },
 };
 
+// ---- n4-look.js ----
+// N4 街車（第 62 批）的表面細節（投影貼圖）：車殼網格就是公尺座標（n4-body.mjs → moto-body.mjs，沒有整流罩：油箱＋座墊車尾）。
+// 自己設計的街車（沒有照片、沒有真的車標）：大燈、儀表、水箱、引擎都是零件（moto-spec.js），車殼上只有拉花；整個車殼都是車漆。
+
+const N4_LOOK = (() => {
+  const rr = (g, x0, y0, x1, y1, r) => { g.beginPath(); g.roundRect(x0, y0, x1 - x0, y1 - y0, r); };
+  const none = (b) => () => layers(b, [null, null, null, null]); // 車殼上沒有玻璃、黑、縫
+
+  // ---- 拉花：race＝油箱側面「N4」＋車尾白底號碼牌「4」；stripe＝油箱到車尾兩條細線＋「N4」；none＝不要 ----
+  // （油箱側面 x −0.06～0.44、y 0.72～0.98；車尾 x −0.85～−0.30、y 0.74～0.90；騎的人的腿擋住座墊下面那一段）
+  function livery(sd, style = 'race') {
+    const { c, g } = canvas(BOX.side);
+    g.clearRect(-3, -1, 6, 3);
+    if (style === 'none') return c;
+    const ink = '#f4f5f6';
+    if (style === 'race') {
+      g.fillStyle = ink; rr(g, -0.80, 0.80, -0.60, 0.875, 0.02); g.fill(); // 號碼牌（車尾側面）
+      g.fillStyle = '#16171a'; text(g, '4', -0.70, 0.838, 0.066, { mirror: sd < 0, italic: true });
+      g.fillStyle = ink; text(g, 'N4', 0.20, 0.86, 0.075, { mirror: sd < 0, italic: true });
+      poly(g, [[0.02, 0.785], [0.40, 0.80], [0.40, 0.812], [0.02, 0.797]]); g.fill(); // 油箱下面一條斜線
+    } else {
+      g.fillStyle = ink;
+      for (const dy of [0, 0.022]) poly(g, [[0.42, 0.905 - dy], [-0.05, 0.835 - dy], [-0.30, 0.815 - dy], [-0.84, 0.86 - dy], [-0.84, 0.868 - dy], [-0.30, 0.825 - dy], [-0.05, 0.845 - dy], [0.42, 0.915 - dy]]), g.fill();
+      text(g, 'N4', 0.18, 0.80, 0.06, { mirror: sd < 0 });
+    }
+    return c;
+  }
+  function frontLivery() { const { c, g } = canvas(BOX.front); g.clearRect(-2, -1, 4, 3); return c; }
+
+  return {
+    side: none(BOX.side), rear: none(BOX.rear), top: none(BOX.top),
+    fronts: { base: none(BOX.front) },
+    livery, frontLivery,
+    livDefault: 1,
+    nose: () => 'base',
+    // 前後軸；車頭面、車尾面放到很遠（車殼沒有正面、背面的投影）；輪拱內側不塗黑（半徑 0）；沒有玻璃
+    U: { uXr: -0.68, uXf: 0.70, uFx: [3.0, 3.1], uRx: [-3.0, -3.1], uWell: [0.30, 0.0, 0.0], uWellR: [0.315, 0.0, 0.0], uGlassY: 3 },
+  };
+})();
+
+// ---- moto-spec.js ----
+// 摩托車（第 59 批）的零件：F6 仿賽、N4 街車共用（自己設計的，沒有真的牌子）。
+// 車殼＝moto-body.mjs 切出來的 body-f6(-q).glb／body-n4(-q).glb（公尺座標）。這裡做：車架（鋁合金雙翼樑）、後搖臂、倒立式前叉＋三角台、前土除、後土除、
+// 把手（仿賽分離式、街車一字把）＋握把、拉桿、後照鏡、引擎（直四：曲軸箱、往前傾的汽缸、側蓋）、水箱、排氣管（四合一到右邊的尾段）、腳踏、鏈條＋齒盤、
+// 側柱、座墊、油箱蓋、風鏡（仿賽）、圓燈（街車）、大燈的燈片、尾燈、車牌架、兩個輪子（圓胎、輪框、碟盤、卡鉗）；騎的人（跟 Z2 一樣：character.js 的 sit）。
+// 車子的尺寸（跟 moto-body.mjs 的 MOTO 一樣；這裡另外寫一份：試做頁把模組接在一起，不能 import 產生車殼的程式）
+const MOTO = { xf: 0.70, xr: -0.68, RF: 0.30, RR: 0.315, rim: 0.2159, wF: 0.12, wR: 0.18, head: [0.42, 0.90], rake: 24 * Math.PI / 180 };
+
+const MO_sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+function MO_merge(list) {
+  const P = [], N = []; let n = 0;
+  for (let g of list) { if (g.index) g = g.toNonIndexed(); P.push(g.attributes.position.array); N.push(g.attributes.normal.array); n += g.attributes.position.count; }
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3); let o = 0;
+  for (let i = 0; i < P.length; i++) { pos.set(P[i], o); nor.set(N[i], o); o += P[i].length; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  return geo;
+}
+function MO_box(sx, sy, sz, x, y, z, rx = 0, ry = 0, rz = 0) {
+  const g = new THREE.BoxGeometry(sx, sy, sz);
+  g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(1, 1, 1)));
+  return g;
+}
+const MO_tube = (pts, r, seg = 40, rs = 10) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((q) => new THREE.Vector3(...q)), false, 'catmullrom', 0.2), seg, r, rs, false);
+function MO_rod(a, b, r, seg = 12, r2 = r) {
+  const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), d = B.clone().sub(A), g = new THREE.CylinderGeometry(r2, r, d.length(), seg);
+  g.applyMatrix4(new THREE.Matrix4().compose(A.clone().add(B).multiplyScalar(0.5), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()), new THREE.Vector3(1, 1, 1)));
+  return g;
+}
+function MO_side(pts, z0, z1, bevel = 0.008, smooth = false) { // 側面的形狀（[x, y]）往 z 拉
+  const sh = new THREE.Shape(); sh.moveTo(...pts[0]);
+  if (smooth) sh.splineThru(pts.slice(1).map((p) => new THREE.Vector2(...p))); else for (const p of pts.slice(1)) sh.lineTo(...p);
+  sh.closePath();
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: z1 - z0 - 2 * bevel, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 24 });
+  geo.translate(0, 0, z0 + bevel);
+  return geo;
+}
+const MO_mirrorZ = (geo) => { const g = geo.clone(); g.scale(1, 1, -1); const ix = g.index; if (ix) { const a = ix.array; for (let i = 0; i < a.length; i += 3) { const t = a[i + 1]; a[i + 1] = a[i + 2]; a[i + 2] = t; } } else { const p = g.attributes.position, n = g.attributes.normal; for (let i = 0; i < p.count; i += 3) for (const at of [p, n]) { for (let c = 0; c < 3; c++) { const t = at.getComponent(i + 1, c); at.setComponent(i + 1, c, at.getComponent(i + 2, c)); at.setComponent(i + 2, c, t); } } } return g; };
+const MO_both = (geo) => [geo, MO_mirrorZ(geo)];
+// 輪子上面的弧形土除：半徑 r，角度 a0～a1（度，0＝車頭方向、90＝正上方），寬 ±hw，厚 t
+function MO_arcFender(cx, cy, r, a0, a1, hw, t = 0.01) {
+  const sh = new THREE.Shape(), n = 24;
+  for (let i = 0; i <= n; i++) { const a = (a0 + (a1 - a0) * i / n) * Math.PI / 180; const p = [Math.cos(a) * (r + t), Math.sin(a) * (r + t)]; if (i) sh.lineTo(...p); else sh.moveTo(...p); }
+  for (let i = n; i >= 0; i--) { const a = (a0 + (a1 - a0) * i / n) * Math.PI / 180; sh.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+  sh.closePath();
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: 2 * hw - 0.016, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 2, curveSegments: 8 });
+  geo.translate(cx, cy, -hw + 0.008);
+  const p = geo.attributes.position; // 兩邊往下包一點（圓的）
+  for (let i = 0; i < p.count; i++) { const z = p.getZ(i), k = (Math.abs(z) / hw) ** 2; p.setY(i, p.getY(i) - 0.035 * k * (p.getY(i) > cy ? 1 : 0.3)); }
+  geo.computeVertexNormals();
+  return geo;
+}
+// 圓胎：剖面是圓的（半徑 w/2 的弧），胎壁到輪框
+function MO_tyreGeo(R, w, rim) {
+  const pts = [], hw = w / 2, c = R - hw * 0.9; // 胎冠的圓心
+  pts.push(new THREE.Vector2(rim + 0.004, -hw * 0.92), new THREE.Vector2(rim + 0.03, -hw * 0.98));
+  for (let i = 0; i <= 16; i++) { const a = -Math.PI / 2 + Math.PI * i / 16; pts.push(new THREE.Vector2(c + Math.cos(a) * hw * 0.9 + 0.0001 * i, Math.sin(a) * hw)); }
+  pts.push(new THREE.Vector2(rim + 0.03, hw * 0.98), new THREE.Vector2(rim + 0.004, hw * 0.92));
+  const g = new THREE.LatheGeometry(pts, 96); g.rotateX(Math.PI / 2); // 輪軸＝z
+  return g;
+}
+// 一個輪子：圓胎、輪框（兩面都有輻條）、碟盤（兩邊）
+function motoWheel({ R, w, rim, mats, style = 'five', discs = 2, discR = 0.15 }) {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(MO_tyreGeo(R, w, rim), mats.rubber));
+  const bp = [[rim - 0.012, -w / 2 + 0.006], [rim + 0.006, -w / 2 + 0.002], [rim + 0.012, -w / 2 + 0.012], [rim + 0.012, w / 2 - 0.012], [rim + 0.006, w / 2 - 0.002], [rim - 0.012, w / 2 - 0.006]].map(([r, y]) => new THREE.Vector2(r, y));
+  const barrel = new THREE.Mesh(new THREE.LatheGeometry(bp, 96), mats.chrome); barrel.geometry.rotateX(Math.PI / 2); g.add(barrel);
+  const f1 = rimFace(style, rim, w, mats, 1); f1.position.z = 0.02; g.add(f1); // 輻條：兩面（摩托車兩邊都看得到）
+  const f2 = rimFace(style, rim, w, mats, -1); f2.rotation.y = Math.PI; f2.position.z = -0.02; g.add(f2);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, w + 0.06, 24), mats.alu); hub.geometry.rotateX(Math.PI / 2); g.add(hub);
+  // 碟盤：打洞的環（薄）
+  const disc = new THREE.Shape(); disc.absarc(0, 0, discR, 0, Math.PI * 2, false); const hole = new THREE.Path(); hole.absarc(0, 0, discR - 0.038, 0, Math.PI * 2, true); disc.holes.push(hole);
+  for (let j = 0; j < 24; j++) { const a = j * Math.PI / 12, r = discR - 0.019; const h = new THREE.Path(); h.absarc(Math.cos(a) * r, Math.sin(a) * r, 0.004, 0, Math.PI * 2, true); disc.holes.push(h); }
+  const dg = new THREE.ExtrudeGeometry(disc, { depth: 0.005, bevelEnabled: false, curveSegments: 48 });
+  for (let k = 0; k < discs; k++) { const s = k ? -1 : 1, m = new THREE.Mesh(dg, mats.disc); m.position.z = s * (w / 2 + 0.018) - 0.0025; g.add(m); const car = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.012, 24), mats.alu); car.geometry.rotateX(Math.PI / 2); car.position.z = s * (w / 2 + 0.012); g.add(car); }
+  return g;
+}
+
+// 騎的人（跟 z2-spec.js 的 Z2_RIDE 一樣的欄位）：at＝屁股下面（座墊面 0.81 − 0.446）、grip 右手握把、foot 右腳的腳踝（腳踏上面 7 公分）、piv／ax 把手繞的龍頭軸（倒 24 度）
+const MO_U = [-Math.sin(MOTO.rake), Math.cos(MOTO.rake), 0];
+const MOTO_RIDE = {
+  f6: { at: [-0.27, 0.364, 0], grip: [0.325, 0.99, 0.31], foot: [-0.13, 0.49, 0.225], piv: [0.42, 0.90, 0], ax: MO_U, max: 0.4, view: { eye: [0.0, 1.45, 0], look: [3.2, 0.7, 0], fov: 72 } },
+  n4: { at: [-0.25, 0.364, 0], grip: [0.31, 1.065, 0.345], foot: [-0.08, 0.47, 0.225], piv: [0.42, 0.90, 0], ax: MO_U, max: 0.5, view: { eye: [0.0, 1.55, 0], look: [3.2, 0.7, 0], fov: 72 } },
+};
+const MO_QS = new THREE.Quaternion(), MO_VS = new THREE.Vector3(), MO_PV = new THREE.Vector3(), MO_AX = new THREE.Vector3();
+function motoSteer(body, s, key) {
+  const b = body.userData.bars || (body.userData.bars = body.getObjectByName('bars')); if (!b) return;
+  const R = MOTO_RIDE[key]; MO_PV.fromArray(R.piv); MO_AX.fromArray(R.ax).normalize();
+  b.quaternion.setFromAxisAngle(MO_AX, -s * R.max);
+  b.position.copy(MO_PV).sub(MO_VS.copy(MO_PV).applyQuaternion(b.quaternion));
+}
+const MO_HD = [[0, 0, 0], [0, 0, 0]], MO_FT = [0, 0, 0], MO_UP = { state: 'sit', hands: MO_HD, feet: MO_FT };
+function motoRide(C, s, dt, key) {
+  const R = MOTO_RIDE[key], at = R.at, G = R.grip; MO_PV.fromArray(R.piv); MO_AX.fromArray(R.ax).normalize();
+  MO_QS.setFromAxisAngle(MO_AX, -s * R.max);
+  for (let k = 0; k < 2; k++) {
+    MO_VS.set(G[0], G[1], (k ? 1 : -1) * G[2]).sub(MO_PV).applyQuaternion(MO_QS).add(MO_PV);
+    MO_HD[k][0] = MO_VS.x - at[0]; MO_HD[k][1] = MO_VS.y - at[1]; MO_HD[k][2] = MO_VS.z - at[2];
+  }
+  MO_FT[0] = R.foot[0] - at[0]; MO_FT[1] = R.foot[1] - at[1]; MO_FT[2] = R.foot[2];
+  C.update(dt, MO_UP);
+}
+
+// 零件：key＝'f6'（仿賽）／'n4'（街車）；body＝車殼（paint 材質）；回傳 { setKit }
+function motoBuild(key, body, paint, mats) {
+  const fair = key === 'f6';
+  const steel = new THREE.MeshStandardMaterial({ color: 0x1c1d20, roughness: 0.55, metalness: 0.4 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.5, metalness: 0.6 });
+  const plastic = new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.85, metalness: 0 });
+  const aluF = new THREE.MeshStandardMaterial({ color: 0xb9bcc0, roughness: 0.4, metalness: 0.85 }); // 車架、搖臂（鑄鋁）
+  const gold = new THREE.MeshStandardMaterial({ color: 0xc9a24a, roughness: 0.25, metalness: 1 }); // 前叉內管（鍍鈦金色）
+  const brushed = new THREE.MeshStandardMaterial({ color: 0xa9adb2, roughness: 0.3, metalness: 1 });
+  const bronze = new THREE.MeshStandardMaterial({ color: 0x8f7f66, roughness: 0.35, metalness: 1 });
+  const fin = new THREE.MeshStandardMaterial({ color: 0x8e9298, roughness: 0.45, metalness: 0.9 });
+  const seatM = new THREE.MeshPhysicalMaterial({ color: 0x141518, roughness: 0.55, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.5 });
+  const grip = new THREE.MeshStandardMaterial({ color: 0x0e0e10, roughness: 0.9 });
+  const lens = new THREE.MeshStandardMaterial({ color: 0xf2f5f8, roughness: 0.1, metalness: 0.3, emissive: 0xffffff, emissiveIntensity: 0.3 });
+  const red = new THREE.MeshStandardMaterial({ color: 0xd4202a, roughness: 0.2, metalness: 0.2, emissive: 0xaa0a10, emissiveIntensity: 0.4 });
+  const glass = new THREE.MeshPhysicalMaterial({ color: 0x9fb4c8, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.35, clearcoat: 1, side: THREE.DoubleSide });
+  const spring = new THREE.MeshStandardMaterial({ color: 0xe0c020, roughness: 0.35, metalness: 0.3 });
+  const chainM = new THREE.MeshStandardMaterial({ color: 0x3a3c40, roughness: 0.5, metalness: 0.8 });
+  const screenM = new THREE.MeshPhysicalMaterial({ color: 0x0b0f14, roughness: 0.08, metalness: 0, clearcoat: 1, emissive: 0x0b3346, emissiveIntensity: 0.35 });
+  const shell = new THREE.MeshPhysicalMaterial({ roughness: 0.35, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.05 }); shell.color = paint.color;
+  const A = [MOTO.xf, MOTO.RF], u = MO_U, fk = (t) => [A[0] + u[0] * t, A[1] + u[1] * t]; // 前叉線上（從前軸往上 t 公尺）
+  const tL = 0.613, tT = 0.766; // 下三角台 y 0.86、上三角台 y 1.00
+  // ---- 車架：雙翼樑（兩片鑄鋁，從龍頭到搖臂樞軸）＋副車架 ----
+  const sparP = [[0.40, 0.95], [0.32, 0.93], [0.04, 0.78], [-0.15, 0.60], [-0.245, 0.47], [-0.245, 0.37], [-0.145, 0.37], [-0.12, 0.49], [0.06, 0.66], [0.36, 0.835], [0.43, 0.86]];
+  const spars = [MO_side(sparP, 0.118, 0.148, 0.006), MO_side(sparP, -0.148, -0.118, 0.006)];
+  spars.push(MO_rod([-0.19, 0.42, -0.15], [-0.19, 0.42, 0.15], 0.018, 12), MO_rod([0.0, 0.73, -0.12], [0.0, 0.73, 0.12], 0.014, 10)); // 樞軸、橫樑
+  const head = MO_rod(fk(0.58).concat([0]), fk(0.80).concat([0]), 0.032, 16); spars.push(head); // 龍頭管
+  body.add(new THREE.Mesh(MO_merge(spars), aluF));
+  const sub = []; for (const s of [1, -1]) { sub.push(MO_tube([[-0.08, 0.74, s * 0.115], [-0.45, 0.76, s * 0.10], [-0.80, 0.80, s * 0.06]], 0.011, 20, 8), MO_tube([[-0.20, 0.58, s * 0.12], [-0.50, 0.70, s * 0.10]], 0.009, 10, 8)); }
+  body.add(new THREE.Mesh(MO_merge(sub), steel));
+  // ---- 後搖臂（鋁、兩邊）＋後土除＋後避震 ----
+  const swP = [[-0.20, 0.49], [-0.20, 0.40], [-0.64, 0.345], [-0.72, 0.345], [-0.72, 0.285], [-0.64, 0.285], [-0.24, 0.36]];
+  const sw = [MO_side(swP, 0.108, 0.14, 0.006), MO_side(swP, -0.14, -0.108, 0.006), MO_box(0.08, 0.08, 0.26, -0.30, 0.43, 0), MO_box(0.025, 0.05, 0.05, -0.69, 0.315, 0.165), MO_box(0.025, 0.05, 0.05, -0.69, 0.315, -0.165)];
+  body.add(new THREE.Mesh(MO_merge(sw), aluF));
+  body.add(new THREE.Mesh(MO_arcFender(MOTO.xr, MOTO.RR, 0.355, 50, 130, 0.105), plastic)); // 後土除（搖臂上）
+  { // 後避震：筒（鋁）＋黃色彈簧，在引擎後面中間
+    const a = [-0.33, 0.44, 0.0], b = [-0.27, 0.76, 0.0], A3 = new THREE.Vector3(...a), B3 = new THREE.Vector3(...b), d = B3.clone().sub(A3), len = d.length(); d.normalize();
+    const L = [MO_rod(a, A3.clone().addScaledVector(d, len * 0.55).toArray(), 0.024, 16), MO_rod(a, b, 0.009, 8)];
+    const pts = [], turns = 8, v = new THREE.Vector3(0, 0, 1), w = d.clone().cross(v).normalize(), v2 = d.clone().cross(w);
+    for (let i = 0; i <= turns * 16; i++) { const t = i / (turns * 16), an = t * turns * 2 * Math.PI; pts.push(A3.clone().addScaledVector(d, len * (0.15 + 0.7 * t)).addScaledVector(w, Math.cos(an) * 0.04).addScaledVector(v2, Math.sin(an) * 0.04)); }
+    body.add(new THREE.Mesh(MO_merge(L), mats.alu), new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), turns * 24, 0.007, 6, false), spring));
+  }
+  // ---- 前叉（倒立式：上面粗的外管＋金色內管）、三角台、前土除、卡鉗；這一組跟著把手轉（bars）----
+  const bars = new THREE.Group(); bars.name = 'bars';
+  const outer = [], inner = [], clampL = [];
+  for (const s of [1, -1]) {
+    const z = s * 0.105;
+    outer.push(MO_rod(fk(0.26).concat([z]), fk(0.80).concat([z]), 0.027, 16), MO_rod(fk(0.24).concat([z]), fk(0.27).concat([z]), 0.031, 16)); // 外管＋下面的油封蓋
+    inner.push(MO_rod(fk(-0.02).concat([z]), fk(0.26).concat([z]), 0.019, 14));
+    clampL.push(MO_box(0.09, 0.07, 0.05, ...fk(0.0).concat([z]), 0, 0, 0)); // 叉腳（軸的座）
+    clampL.push(MO_box(0.085, 0.045, 0.03, A[0] - Math.cos(0.35) * 0.015 - 0.06, A[1] - 0.055, s * 0.062, 0, 0, 0.35)); // 卡鉗（軸後下方）
+  }
+  const rk = MOTO.rake;
+  clampL.push(MO_box(0.085, 0.03, 0.275, ...fk(tL).concat([0]), 0, 0, -rk), MO_box(0.075, 0.026, 0.255, ...fk(tT).concat([0]), 0, 0, -rk)); // 下、上三角台
+  clampL.push(MO_rod(fk(tL).concat([0]), fk(tT).concat([0]), 0.034, 16)); // 龍頭軸（看得到的那段）
+  bars.add(new THREE.Mesh(MO_merge(outer), dark), new THREE.Mesh(MO_merge(inner), gold), new THREE.Mesh(MO_merge(clampL), aluF));
+  bars.add(new THREE.Mesh(MO_arcFender(MOTO.xf, MOTO.RF, 0.335, 20, 150, 0.075), shell)); // 前土除（車身色）
+  // 把手：仿賽＝分離式（夾在外管上，上三角台下面）；街車＝一字把（上三角台的座上）＋後照鏡
+  const barG = [], gr = [], lv = [], mir = [], mirG = [], mirB = [], mirGl = [];
+  if (fair) {
+    for (const s of [1, -1]) {
+      barG.push(MO_rod(fk(tT - 0.03).concat([s * 0.105]), [0.355, 0.985, s * 0.22], 0.012, 10), MO_rod([0.355, 0.985, s * 0.22], [0.31, 0.983, s * 0.345], 0.011, 10));
+      barG.push(MO_rod(fk(tT - 0.03).concat([s * 0.105]), fk(tT - 0.03).concat([s * 0.105]), 0.04, 16)); // 夾座
+      gr.push(MO_rod([0.337, 0.984, s * 0.27], [0.312, 0.983, s * 0.335], 0.017, 14), MO_rod([0.312, 0.983, s * 0.335], [0.305, 0.983, s * 0.355], 0.02, 14));
+      lv.push(MO_rod([0.37, 0.99, s * 0.25], [0.44, 1.0, s * 0.34], 0.005, 6), MO_box(0.03, 0.03, 0.03, 0.36, 0.99, s * 0.245));
+      mir.push(MO_tube([[0.73, 1.00, s * 0.22], [0.70, 1.05, s * 0.30], [0.66, 1.08, s * 0.37]], 0.009, 10, 8)); // 後照鏡：整流罩上的（殼車身色）
+      const h = new THREE.SphereGeometry(0.07, 18, 12); h.scale(0.28, 0.6, 1); h.translate(0.645, 1.095, s * 0.41); mirG.push(h);
+      const gl = new THREE.CircleGeometry(0.062, 20); gl.scale(1, 0.58, 1); gl.rotateY(-Math.PI / 2); gl.translate(0.628, 1.095, s * 0.41); mirGl.push(gl);
+    }
+  } else {
+    barG.push(MO_tube([[0.31, 1.065, -0.37], [0.355, 1.06, -0.20], [0.36, 1.055, 0], [0.355, 1.06, 0.20], [0.31, 1.065, 0.37]], 0.012, 60, 10));
+    for (const s of [1, -1]) {
+      barG.push(MO_rod(fk(tT).concat([s * 0.05]), [0.36, 1.05, s * 0.05], 0.014, 10)); // 把手座
+      gr.push(MO_rod([0.338, 1.062, s * 0.265], [0.312, 1.065, s * 0.355], 0.017, 14), MO_rod([0.312, 1.065, s * 0.355], [0.306, 1.065, s * 0.375], 0.02, 14));
+      lv.push(MO_rod([0.37, 1.07, s * 0.25], [0.44, 1.08, s * 0.34], 0.005, 6), MO_box(0.03, 0.03, 0.03, 0.36, 1.07, s * 0.245));
+      mir.push(MO_tube([[0.35, 1.07, s * 0.22], [0.33, 1.14, s * 0.27], [0.30, 1.19, s * 0.31]], 0.008, 10, 8));
+      const h = new THREE.SphereGeometry(0.05, 16, 10); h.scale(0.3, 1, 1); h.translate(0.30, 1.20, s * 0.33); mirB.push(h); // 圓鏡（黑殼）
+      const gl = new THREE.CircleGeometry(0.045, 24); gl.rotateY(-Math.PI / 2); gl.translate(0.285, 1.20, s * 0.33); mirGl.push(gl);
+    }
+    // 圓燈（街車）：鍍鉻燈殼＋燈片，架在前叉上；儀表（圓的）在把手前面
+    const bucket = new THREE.CylinderGeometry(0.095, 0.085, 0.11, 32); bucket.rotateZ(-Math.PI / 2); bucket.translate(0.555, 0.96, 0);
+    bars.add(new THREE.Mesh(bucket, mats.chrome));
+    const lp = new THREE.CircleGeometry(0.088, 32); lp.rotateY(Math.PI / 2); lp.translate(0.611, 0.96, 0); bars.add(new THREE.Mesh(lp, lens));
+    const brk = []; for (const s of [1, -1]) brk.push(MO_rod(fk(0.70).concat([s * 0.105]), [0.52, 0.96, s * 0.07], 0.007, 8));
+    bars.add(new THREE.Mesh(MO_merge(brk), steel));
+    const dial = new THREE.CylinderGeometry(0.055, 0.055, 0.04, 28); dial.rotateX(Math.PI / 2 - 0.5); dial.translate(0.42, 1.10, 0); bars.add(new THREE.Mesh(dial, plastic));
+    const face = new THREE.CircleGeometry(0.05, 28); face.rotateX(-0.5); face.translate(0.43, 1.12, 0); bars.add(new THREE.Mesh(face, screenM));
+  }
+  bars.add(new THREE.Mesh(MO_merge(barG), dark), new THREE.Mesh(MO_merge(gr), grip), new THREE.Mesh(MO_merge(lv), mats.alu), new THREE.Mesh(MO_merge(mir), steel), new THREE.Mesh(MO_merge(mirGl), mats.alu)); // 鏡面：一般的亮金屬（不用 mirrorGlass：第一人稱不畫後照鏡那一遍，跟 Z2 一樣）
+  if (mirG.length) (fair ? body : bars).add(new THREE.Mesh(MO_merge(mirG), shell)); if (mirB.length) bars.add(new THREE.Mesh(MO_merge(mirB), plastic));
+  if (fair) { const fm = new THREE.Mesh(MO_merge(mir), steel); bars.remove(bars.children[bars.children.length - 2]); body.add(fm); } // 仿賽的後照鏡裝在整流罩上：不跟著把手轉
+  body.add(bars);
+  if (fair) { // 風鏡（透明）、兩顆大燈的燈片、儀表（風鏡底下的螢幕）
+    const seg = 18, pts = [], norm = [], idx = [];
+    for (let i = 0; i <= seg; i++) { const v = i / seg, x = 0.62 - 0.22 * v + 0.03 * Math.sin(v * Math.PI), y = 1.02 + 0.15 * v; for (let j = 0; j <= 10; j++) { const z = -0.17 + 0.34 * j / 10, k = (z / 0.17) ** 2; pts.push(x - 0.07 * k - 0.02 * k * v, y - 0.03 * k, z); norm.push(0.7, 0.7, 0); } }
+    for (let i = 0; i < seg; i++) for (let j = 0; j < 10; j++) { const a = i * 11 + j; idx.push(a, a + 1, a + 11, a + 1, a + 12, a + 11); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); sg.setIndex(idx); sg.computeVertexNormals();
+    body.add(new THREE.Mesh(sg, glass));
+    for (const s of [1, -1]) { const l = new THREE.PlaneGeometry(0.135, 0.045); l.rotateY(Math.PI / 2); l.rotateX(s * Math.atan(0.25)); l.translate(0.975, 0.86, s * 0.105); body.add(new THREE.Mesh(l, lens)); }
+    const dash = MO_box(0.08, 0.05, 0.16, 0.50, 0.985, 0, 0, 0, 0.4); body.add(new THREE.Mesh(dash, plastic));
+    const scr = new THREE.PlaneGeometry(0.13, 0.04); scr.lookAt(new THREE.Vector3(-0.6, 0.8, 0)); scr.translate(0.47, 1.01, 0); body.add(new THREE.Mesh(scr, screenM));
+  }
+  // ---- 引擎：曲軸箱、往前傾 20 度的汽缸＋散熱片、汽缸頭蓋、兩邊的側蓋；水箱 ----
+  const eng = [MO_box(0.44, 0.26, 0.36, 0.03, 0.46, 0), MO_box(0.30, 0.10, 0.32, -0.12, 0.40, 0)];
+  const cyl = MO_box(0.26, 0.24, 0.33, 0.21, 0.65, 0, 0, 0, -0.35); eng.push(cyl);
+  const cov = MO_box(0.22, 0.05, 0.30, 0.27, 0.78, 0, 0, 0, -0.35); eng.push(cov);
+  for (const s of [1, -1]) { const c = new THREE.CylinderGeometry(s > 0 ? 0.105 : 0.09, s > 0 ? 0.105 : 0.09, 0.03, 32); c.rotateX(Math.PI / 2); c.translate(-0.02, 0.46, s * 0.19); eng.push(c); }
+  body.add(new THREE.Mesh(MO_merge(eng), dark));
+  const fins = []; for (let k = 0; k < 5; k++) fins.push(MO_box(0.20, 0.006, 0.34, 0.235 + 0.012 * k, 0.56 + k * 0.045, 0, 0, 0, -0.35));
+  body.add(new THREE.Mesh(MO_merge(fins), fin));
+  const rad = MO_box(0.04, 0.30, 0.34, 0.40, 0.58, 0, 0, 0, -0.15); body.add(new THREE.Mesh(rad, plastic)); // 水箱
+  const radF = MO_box(0.006, 0.28, 0.32, 0.422, 0.585, 0, 0, 0, -0.15); body.add(new THREE.Mesh(radF, fin));
+  // ---- 排氣管：四支頭段從汽缸頭前面下來、合成一支到右邊的尾段（仿賽短的翹起來、街車長的）----
+  const ex = [];
+  for (const z of [-0.12, -0.04, 0.04, 0.12]) ex.push(MO_tube([[0.33, 0.57, z], [0.42, 0.44, z * 0.9], [0.36, 0.30, z * 0.6], [0.10, 0.27, z * 0.3 + 0.06], [-0.10, 0.29, 0.10]], 0.016, 30, 8));
+  ex.push(MO_tube([[-0.10, 0.29, 0.10], [-0.28, 0.33, 0.16], [-0.40, 0.42, 0.19]], 0.03, 20, 10));
+  body.add(new THREE.Mesh(MO_merge(ex), bronze));
+  const can = fair ? MO_rod([-0.40, 0.42, 0.19], [-0.74, 0.60, 0.215], 0.052, 24, 0.045) : MO_rod([-0.40, 0.42, 0.19], [-0.82, 0.53, 0.21], 0.05, 24, 0.045);
+  body.add(new THREE.Mesh(can, brushed));
+  const tip = fair ? MO_rod([-0.74, 0.60, 0.215], [-0.78, 0.62, 0.215], 0.03, 16) : MO_rod([-0.82, 0.53, 0.21], [-0.86, 0.54, 0.21], 0.03, 16);
+  body.add(new THREE.Mesh(tip, steel));
+  // ---- 腳踏（兩邊）：踏桿＋三角板、煞車踏板（右）、排檔桿（左）；側柱（左）----
+  const fp = [], px = fair ? -0.13 : -0.08, py = 0.42;
+  for (const s of [1, -1]) {
+    fp.push(MO_rod([px, py, s * 0.17], [px, py, s * 0.25], 0.012, 10), MO_side([[px - 0.06, py + 0.02], [px + 0.04, py - 0.01], [px + 0.02, py + 0.16], [px - 0.08, py + 0.14]], s * 0.15 - 0.005, s * 0.15 + 0.005, 0.002));
+    fp.push(MO_rod([px + 0.03, py - 0.02, s * 0.17], [px + 0.20, py - 0.06, s * 0.19], 0.007, 8), MO_rod([px + 0.20, py - 0.06, s * 0.19], [px + 0.22, py - 0.06, s * 0.26], 0.01, 8)); // 踏板／排檔桿
+  }
+  fp.push(MO_rod([-0.30, 0.40, -0.14], [-0.36, 0.05, -0.24], 0.011, 8), MO_box(0.05, 0.015, 0.05, -0.36, 0.04, -0.24)); // 側柱
+  body.add(new THREE.Mesh(MO_merge(fp), steel));
+  // ---- 鏈條（左邊）：前齒盤、後齒盤、上下兩條 ----
+  const ch = [], zc = -0.15, fs = [-0.19, 0.42], rs = [MOTO.xr, MOTO.RR], rF = 0.045, rR = 0.11;
+  for (const [c, r] of [[fs, rF], [rs, rR]]) { const g = new THREE.CylinderGeometry(r, r, 0.008, 36); g.rotateX(Math.PI / 2); g.translate(c[0], c[1], zc); ch.push(g); }
+  const dx = rs[0] - fs[0], dy = rs[1] - fs[1], L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L;
+  for (const s of [1, -1]) { const a = [fs[0] + nx * rF * s, fs[1] + ny * rF * s, zc], b = [rs[0] + nx * rR * s, rs[1] + ny * rR * s, zc]; ch.push(MO_box(L, 0.012, 0.016, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, zc, 0, 0, Math.atan2(b[1] - a[1], b[0] - a[0]))); }
+  body.add(new THREE.Mesh(MO_merge(ch), chainM));
+  body.add(new THREE.Mesh(MO_box(0.30, 0.03, 0.02, -0.50, 0.40, zc - 0.012, 0, 0, 0.25), plastic)); // 鏈條蓋
+  // ---- 座墊（黑）、油箱蓋、尾燈、車牌架 ----
+  const seatP = [[-0.03, 0.845], [-0.15, 0.825], [-0.30, 0.812], [-0.42, 0.825], [-0.47, 0.842], [-0.47, 0.80], [-0.30, 0.785], [-0.03, 0.80]];
+  const sg = MO_side(seatP, -0.155, 0.155, 0.014, true); const sp = sg.attributes.position; for (let i = 0; i < sp.count; i++) { const f = 1 - 0.25 * MO_sstep(-0.2, -0.47, sp.getX(i)); sp.setZ(i, sp.getZ(i) * f); } sg.computeVertexNormals();
+  const seat = new THREE.Mesh(sg, seatM); seat.name = 'seat'; body.add(seat);
+  const cap = new THREE.CylinderGeometry(0.045, 0.048, 0.012, 32); cap.translate(0.20, 0.985, 0); body.add(new THREE.Mesh(cap, mats.chrome));
+  const tl = new THREE.PlaneGeometry(0.11, 0.028); tl.rotateY(-Math.PI / 2); tl.translate(-0.805, 0.83, 0); body.add(new THREE.Mesh(tl, red));
+  body.add(new THREE.Mesh(MO_merge([MO_box(0.015, 0.28, 0.03, -0.72, 0.65, 0, 0, 0, 0.5), MO_box(0.012, 0.11, 0.17, -0.80, 0.56, 0, 0, 0, 0.25)]), plastic));
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.09), new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.5 })); plate.rotation.y = -Math.PI / 2; plate.rotation.x = 0; plate.position.set(-0.808, 0.56, 0); plate.rotateY(0); plate.rotation.set(0, -Math.PI / 2, 0.25); body.add(plate);
+  // ---- 輪子 ----
+  const wf = motoWheel({ R: MOTO.RF, w: MOTO.wF, rim: MOTO.rim, mats, discs: 2, discR: 0.155 }); wf.position.set(MOTO.xf, MOTO.RF, 0); wf.name = 'wheelF'; bars.add(wf);
+  const wr = motoWheel({ R: MOTO.RR, w: MOTO.wR, rim: MOTO.rim, mats, discs: 1, discR: 0.11 }); wr.position.set(MOTO.xr, MOTO.RR, 0); wr.name = 'wheelR'; body.add(wr);
+  return { bars, wheels: [wf, wr] };
+}
+
+// ---- n4-spec.js ----
+// N4 街車（第 62 批；Nick 2026-11-02 卡片「只做街車」）：自己設計的直四街車（圓燈、一字把、倒立前叉、雙翼樑鋁車架、四合一排氣；沒有真的牌子，只有「N4」）。
+// 車殼＝body-n4(-q).glb（n4-body.mjs → moto-body.mjs，公尺座標），零件和騎的人在 moto-spec.js（motoBuild、MOTO_RIDE、motoRide、motoSteer）。
+// 兩個輪子（motoBuild 做的：前輪在 bars 這組裡面，跟著把手轉）：buildCar 不做四個輪子（spec.wheels.moto）；S.wheels 給四個看不到的點（drive.js 的轉向、
+// terrain.js 的四個角照舊），右邊那兩個（[1] 前、[3] 後）的 rotation 就是真的輪子的 rotation（轉動跟著走）。
+// 套件：wing＝後箱（none／box）；kit＝原廠／運動（大燈上面的小風鏡＋引擎下面的導流罩，車身色）；沒有升高、降低（輪子在車身裡面）。
+
+// 後箱（上面那個行李箱）：黑色塑膠殼＋車身色的蓋子邊、底下的架子
+function N4_box(paint) {
+  const g = new THREE.Group();
+  const plastic = new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.6, metalness: 0 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.4, metalness: 0.8 });
+  const shell = new THREE.MeshPhysicalMaterial({ roughness: 0.35, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.05 }); shell.color = paint.color;
+  const box = new THREE.BoxGeometry(0.36, 0.24, 0.40, 2, 2, 2); const p = box.attributes.position; // 圓圓的箱子：角往內收
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = 1 - 0.18 * (Math.abs(x) / 0.18) * (Math.abs(z) / 0.2); p.setXYZ(i, x * k, y, z * (1 - 0.12 * (y + 0.12) / 0.24)); }
+  box.computeVertexNormals(); box.translate(-0.66, 1.05, 0);
+  g.add(new THREE.Mesh(box, plastic));
+  const lid = new THREE.BoxGeometry(0.30, 0.03, 0.30); lid.translate(-0.66, 1.172, 0); g.add(new THREE.Mesh(lid, shell));
+  const rk = []; for (const s of [1, -1]) { const r = new THREE.CylinderGeometry(0.009, 0.009, 0.30, 8); r.rotateZ(Math.PI / 2); r.translate(-0.66, 0.925, s * 0.09); rk.push(r); }
+  const pl = new THREE.BoxGeometry(0.30, 0.012, 0.22); pl.translate(-0.66, 0.935, 0); rk.push(pl);
+  for (const r of rk) g.add(new THREE.Mesh(r, steel));
+  const lens = new THREE.MeshStandardMaterial({ color: 0xd4202a, roughness: 0.2, metalness: 0.2, emissive: 0xaa0a10, emissiveIntensity: 0.3 });
+  const rf = new THREE.PlaneGeometry(0.16, 0.025); rf.rotateY(-Math.PI / 2); rf.translate(-0.842, 1.06, 0); g.add(new THREE.Mesh(rf, lens)); // 後面一條紅色反光片
+  return g;
+}
+
+const N4_SPEC = {
+  look: N4_LOOK, paint: '#2a2b2e', metal: 0.3, seat: 0x141518,
+  // 前 120/70-17（半徑 0.30）、後 180/55-17（0.315）、17 吋框；moto：buildCar 不做輪子（motoBuild 做），track 只給看不到的點用
+  wheels: { xf: MOTO.xf, xr: MOTO.xr, R: MOTO.RF, RF: MOTO.RF, RR: MOTO.RR, rim: MOTO.rim, trackF: 0.12, trackR: 0.12, wF: MOTO.wF, wR: MOTO.wR, style: 'five', moto: true },
+  wings: { none: () => new THREE.Group(), box: (paint) => N4_box(paint) },
+  wing: 'none',
+  interior: {},
+  build(body, paint, mats) {
+    const cab = body.getObjectByName('interior'); if (cab) body.remove(cab); // 沒有車內（騎的）
+    const B = motoBuild('n4', body, paint, mats);
+    const shell = new THREE.MeshPhysicalMaterial({ roughness: 0.3, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.04 }); shell.color = paint.color;
+    // 運動套件：圓燈上面的小風鏡（跟著把手轉：放在 bars）＋引擎下面的導流罩
+    const fly = new THREE.Group(); fly.name = 'n4-sport';
+    { const sh = new THREE.Shape(); sh.moveTo(-0.11, 0); sh.quadraticCurveTo(-0.115, 0.11, -0.05, 0.16); sh.lineTo(0.05, 0.16); sh.quadraticCurveTo(0.115, 0.11, 0.11, 0); sh.closePath();
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.006, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 1, curveSegments: 10 });
+      const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i); p.setZ(i, p.getZ(i) - 0.5 * x * x); } g.computeVertexNormals(); // 往兩邊彎
+      g.rotateY(Math.PI / 2); g.rotateZ(-0.45); g.translate(0.60, 1.0, 0); const m = new THREE.Mesh(g, shell); B.bars.add(m); fly.userData.screen = m; }
+    { const pts = [[0.42, 0.42], [0.36, 0.30], [0.22, 0.25], [-0.10, 0.25], [-0.17, 0.32], [0.05, 0.335], [0.30, 0.37], [0.38, 0.46]];
+      const sh = new THREE.Shape(); sh.moveTo(...pts[0]); sh.splineThru(pts.slice(1).map((q) => new THREE.Vector2(...q))); sh.closePath();
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.36, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.015, bevelSegments: 3, curveSegments: 16 }); g.translate(0, 0, -0.18);
+      const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i), k = 1 - 0.25 * Math.max(0, (0.34 - y) / 0.09); p.setZ(i, p.getZ(i) * k); } g.computeVertexNormals();
+      fly.add(new THREE.Mesh(g, shell)); }
+    body.add(fly);
+    return (kit) => { const on = kit === 'sport'; fly.visible = on; fly.userData.screen.visible = on; };
+  },
+  kit: 'stock',
+  lod: { wheels: N4_lodWheels },
+};
+
+// 輕量車的兩個輪子（carlod.js 的 builder：B.lathe／B.cap；R＝角色 → 類別）：圓胎、兩面輪框（輪框色）、碟盤；輪子都在中間（z 0）
+function N4_lodWheels(B, R, kit, axles) {
+  for (const A of axles) {
+    const c = { x: A.x, y: A.R, z: 0 }, w = A.w, Rr = A.R, rim = A.rim, hw = w / 2, cc = Rr - hw * 0.9, prof = [[rim + 0.004, -hw * 0.92], [rim + 0.03, -hw * 0.98]];
+    for (let i = 0; i <= 8; i++) { const a = -Math.PI / 2 + Math.PI * i / 8; prof.push([cc + Math.cos(a) * hw * 0.9, Math.sin(a) * hw]); }
+    prof.push([rim + 0.03, hw * 0.98], [rim + 0.004, hw * 0.92]);
+    B.lathe(prof, 32, c, 1, R.rubber);
+    const disc = []; for (let j = 0; j < 20; j++) { const a = (j / 20) * Math.PI * 2; disc.push([Math.cos(a) * (rim + 0.005), Math.sin(a) * (rim + 0.005)]); }
+    B.cap(disc, hw * 0.6, c, 1, R.rim); B.cap(disc, -hw * 0.6, c, 1, R.rim, true); // 輪框兩面
+    const rot = []; for (let j = 0; j < 20; j++) { const a = (j / 20) * Math.PI * 2; rot.push([Math.cos(a) * 0.15, Math.sin(a) * 0.15]); }
+    B.cap(rot, hw + 0.02, c, 1, R.disc); B.cap(rot, -hw - 0.02, c, 1, R.disc, true);
+  }
+}
+
+// 騎的人：跟 z2-spec.js 一樣的介面（town.src.js 的 RIDES）
+const N4_RIDE = MOTO_RIDE.n4;
+const N4_steer = (body, s) => motoSteer(body, s, 'n4');
+const N4_ride = (C, s = 0, dt = 1 / 60) => motoRide(C, s, dt, 'n4');
+const N4_V = new THREE.Vector3();
+function N4_eye(C, out = [0, 0, 0]) { // 騎的人的眼睛（車身座標）：坐好以後量（跟 Z2_eye 一樣）
+  for (let i = 0; i < 30; i++) N4_ride(C, 0, 1 / 30);
+  const g = C.group, p = g.parent; if (p) p.remove(g);
+  const P0 = g.position.clone(), R0 = g.rotation.clone(); g.position.set(0, 0, 0); g.rotation.set(0, 0, 0);
+  g.updateMatrixWorld(true); C.eyes.getWorldPosition(N4_V);
+  g.position.copy(P0); g.rotation.copy(R0); if (p) p.add(g);
+  const at = N4_RIDE.at; out[0] = N4_V.x + at[0]; out[1] = N4_V.y + at[1]; out[2] = N4_V.z + at[2];
+  return out;
+}
+
+// 這台車的標準視角（車很小；cview.html 用）
+const N4_CAMS = {
+  front34: { a: 35, d: 4.4, h: 1.4, tx: 0, ty: 0.62, fov: 32 }, rear34: { a: 145, d: 4.4, h: 1.4, tx: -0.05, ty: 0.62, fov: 32 },
+  side: { a: 90, d: 6.0, h: 0.72, tx: 0, ty: 0.6, fov: 26 }, front: { a: 0, d: 6, h: 0.75, tx: 0, ty: 0.6, fov: 20 }, rear: { a: 180, d: 6, h: 0.75, tx: 0, ty: 0.6, fov: 20 },
+  low: { a: 28, d: 3.4, h: 0.45, tx: 0.2, ty: 0.55, fov: 40 }, top: { a: 90, d: 0.01, h: 8, tx: 0, ty: 0, fov: 25 },
+};
+
+const N4_GARAGE = {
+  name: 'N4 街車', sub: '直四街車 · 3D 試做版',
+  paints: [['#2a2b2e', '消光灰'], ['#d42a2a', '紅'], ['#1d5fc4', '藍'], ['#f2c21b', '黃'], ['#7ac943', '萊姆綠'], ['#ef6c1a', '橘'], ['#f2f2ee', '白'], ['#121315', '黑']],
+  opts: {
+    wing: [['none', '不要'], ['box', '後箱']],
+    kit: [['stock', '原廠'], ['sport', '運動套件']],
+    height: [['0', '原廠']],
+    livery: [['race', '號碼'], ['stripe', '條紋'], ['none', '不要']],
+    rimStyle: [['stock', '原廠']],
+    wide: [['off', '原廠']],
+  },
+  state: { paint: '#2a2b2e', rim: 'black', caliper: '#17181b', wing: 'none', kit: 'stock', height: '0', livery: 'race', tint: 'dark' },
+};
+
 // ---- carlod.js ----
 // 輕量車（LOD）：車庫六個車位停的車、車行展示的車、之後路上別人開的車用的「輕的整台車」
 // 一台約 2～2.5 萬個三角形、4 個 draw call（車身＋零件、玻璃、輪胎＋煞車、輪框），沒有車內（深色玻璃擋住，看進去是暗的車殼）
@@ -32397,16 +32847,16 @@ const Z2_GARAGE = {
 const { buildLodCar, LOD_CARS } = (() => {
   // spec、預設外觀用 switch 拿（只算到用到的那一個）：沒打包 Yaris 的版本（build-art.mjs 沒加 --yaris）拿 YARIS_SPEC 會丟 ReferenceError → 那台就不列在 LOD_CARS
   // 打包時這個檔要接在每台車的 spec 後面（build-art.mjs／build-app.mjs 是這樣接的）
-  const SPEC = (k) => { switch (k) { case 'supra': return SUPRA_SPEC; case 'gtr': return GTR_SPEC; case 'gc8': return GC8_SPEC; case 'yaris': return YARIS_SPEC; case 'p918': return P918_SPEC; case 'sp3': return SP3_SPEC; case 'jesko': return JESKO_SPEC; case 'monster': return MONSTER_SPEC; case 'rx7': return RX7_SPEC; case 'chiron': return CHIRON_SPEC; case 'ae86': return AE86_SPEC; case 'aventador': return AVENTADOR_SPEC; case 'altis': return ALTIS_SPEC; case 'senna': return SENNA_SPEC; case 'huayra': return HUAYRA_SPEC; case 'laferrari': return LAFERRARI_SPEC; case 'civic': return CIVIC_SPEC; case 'evo': return EVO_SPEC; case 'jp4': return JP4_SPEC; case 'k2': return K2_SPEC; case 'p8': return P8_SPEC; case 'z2': return Z2_SPEC; } return null; };
-  const KEYS = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'monster', 'rx7', 'evo', 'civic', 'laferrari', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron', 'jp4', 'k2', 'p8', 'z2'].filter((k) => { try { return !!SPEC(k); } catch { return false; } });
+  const SPEC = (k) => { switch (k) { case 'supra': return SUPRA_SPEC; case 'gtr': return GTR_SPEC; case 'gc8': return GC8_SPEC; case 'yaris': return YARIS_SPEC; case 'p918': return P918_SPEC; case 'sp3': return SP3_SPEC; case 'jesko': return JESKO_SPEC; case 'monster': return MONSTER_SPEC; case 'rx7': return RX7_SPEC; case 'chiron': return CHIRON_SPEC; case 'ae86': return AE86_SPEC; case 'aventador': return AVENTADOR_SPEC; case 'altis': return ALTIS_SPEC; case 'senna': return SENNA_SPEC; case 'huayra': return HUAYRA_SPEC; case 'laferrari': return LAFERRARI_SPEC; case 'civic': return CIVIC_SPEC; case 'evo': return EVO_SPEC; case 'jp4': return JP4_SPEC; case 'k2': return K2_SPEC; case 'p8': return P8_SPEC; case 'z2': return Z2_SPEC; case 'n4': return N4_SPEC; } return null; };
+  const KEYS = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'monster', 'rx7', 'evo', 'civic', 'laferrari', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron', 'jp4', 'k2', 'p8', 'z2', 'n4'].filter((k) => { try { return !!SPEC(k); } catch { return false; } });
   const DEF = (k) => { switch (k) { // Supra、GT-R 的預設寫在車庫頁（garage.src.html CARS），這裡抄一份；其他台用 <KEY>_GARAGE.state
     case 'supra': return { paint: '#ff7414', rim: 'chrome', caliper: '#9da1a6', wing: 'gt', kit: 'bomex', height: '0', livery: 'ff', tint: 'light' };
     case 'gtr': return { paint: '#1d4fc9', rim: 'gunmetal', caliper: '#c8141e', wing: 'stock', kit: 'bomex', height: '-0.03', livery: 'none', tint: 'light' };
-    case 'gc8': return GC8_GARAGE.state; case 'yaris': return YARIS_GARAGE.state; case 'p918': return P918_GARAGE.state; case 'sp3': return SP3_GARAGE.state; case 'jesko': return JESKO_GARAGE.state; case 'monster': return MONSTER_GARAGE.state; case 'rx7': return RX7_GARAGE.state; case 'evo': return EVO_GARAGE.state; case 'civic': return CIVIC_GARAGE.state; case 'laferrari': return LAFERRARI_GARAGE.state; case 'huayra': return HUAYRA_GARAGE.state; case 'senna': return SENNA_GARAGE.state; case 'altis': return ALTIS_GARAGE.state; case 'aventador': return AVENTADOR_GARAGE.state; case 'ae86': return AE86_GARAGE.state; case 'chiron': return CHIRON_GARAGE.state; case 'jp4': return JP4_GARAGE.state; case 'k2': return K2_GARAGE.state; case 'p8': return P8_GARAGE.state; case 'z2': return Z2_GARAGE.state;
+    case 'gc8': return GC8_GARAGE.state; case 'yaris': return YARIS_GARAGE.state; case 'p918': return P918_GARAGE.state; case 'sp3': return SP3_GARAGE.state; case 'jesko': return JESKO_GARAGE.state; case 'monster': return MONSTER_GARAGE.state; case 'rx7': return RX7_GARAGE.state; case 'evo': return EVO_GARAGE.state; case 'civic': return CIVIC_GARAGE.state; case 'laferrari': return LAFERRARI_GARAGE.state; case 'huayra': return HUAYRA_GARAGE.state; case 'senna': return SENNA_GARAGE.state; case 'altis': return ALTIS_GARAGE.state; case 'aventador': return AVENTADOR_GARAGE.state; case 'ae86': return AE86_GARAGE.state; case 'chiron': return CHIRON_GARAGE.state; case 'jp4': return JP4_GARAGE.state; case 'k2': return K2_GARAGE.state; case 'p8': return P8_GARAGE.state; case 'z2': return Z2_GARAGE.state; case 'n4': return N4_GARAGE.state;
   } return {}; };
-  const BASE = { wide: 'off', finish: 'stock', rimStyle: 'stock', glow: 'none', lights: false, brake: false };
-  const FILES = { supra: 'tune/supra-lod.glb?h=1ff75170', gtr: 'tune/gtr-lod.glb?h=4bd6b3dc', gc8: 'tune/gc8-lod.glb?h=f63e2346', yaris: 'tune/yaris-lod.glb?h=d9db9130', p918: 'tune/p918-lod.glb?h=0ee9057b', sp3: 'tune/sp3-lod.glb?h=312b720a', jesko: 'tune/jesko-lod.glb?h=f98af4da', monster: 'tune/monster-lod.glb?h=91f92e5f', rx7: 'tune/rx7-lod.glb?h=bb2bb64f', chiron: 'tune/chiron-lod.glb?h=e0d0c2bc', ae86: 'tune/ae86-lod.glb?h=3fb036ca', aventador: 'tune/aventador-lod.glb?h=22667281', altis: 'tune/altis-lod.glb?h=9d7d94e7', senna: 'tune/senna-lod.glb?h=cfb7020b', huayra: 'tune/huayra-lod.glb?h=3de6ad69', laferrari: 'tune/laferrari-lod.glb?h=fd056f38', civic: 'tune/civic-lod.glb?h=2063796a', evo: 'tune/evo-lod.glb?h=ac2423ab', jp4: 'tune/jp4-lod.glb?h=2ea13b09', k2: 'tune/k2-lod.glb?h=e1dc3fed', p8: 'tune/p8-lod.glb?h=fbf23d55', z2: 'tune/z2-lod.glb?h=71d51db4' };
-  const SIZES = {"supra":245812,"gtr":224380,"sp3":246392,"jesko":242384,"yaris":240240,"gc8":211448,"p918":224292,"rx7":174108,"chiron":196068,"ae86":148768,"aventador":168704,"altis":169972,"senna":187460,"huayra":209052,"laferrari":190012,"civic":182588,"evo":163172,"monster":190612,"jp4":274324,"k2":205848,"p8":224804,"z2":305528};
+  const BASE = { wide: 'off', finish: 'stock', rimStyle: 'stock', glow: 'none', stance: 'off', lights: false, brake: false };
+  const FILES = { supra: 'tune/supra-lod.glb?h=1ff75170', gtr: 'tune/gtr-lod.glb?h=4bd6b3dc', gc8: 'tune/gc8-lod.glb?h=f63e2346', yaris: 'tune/yaris-lod.glb?h=d9db9130', p918: 'tune/p918-lod.glb?h=0ee9057b', sp3: 'tune/sp3-lod.glb?h=312b720a', jesko: 'tune/jesko-lod.glb?h=f98af4da', monster: 'tune/monster-lod.glb?h=91f92e5f', rx7: 'tune/rx7-lod.glb?h=bb2bb64f', chiron: 'tune/chiron-lod.glb?h=e0d0c2bc', ae86: 'tune/ae86-lod.glb?h=3fb036ca', aventador: 'tune/aventador-lod.glb?h=22667281', altis: 'tune/altis-lod.glb?h=9d7d94e7', senna: 'tune/senna-lod.glb?h=cfb7020b', huayra: 'tune/huayra-lod.glb?h=3de6ad69', laferrari: 'tune/laferrari-lod.glb?h=fd056f38', civic: 'tune/civic-lod.glb?h=2063796a', evo: 'tune/evo-lod.glb?h=ac2423ab', jp4: 'tune/jp4-lod.glb?h=2ea13b09', k2: 'tune/k2-lod.glb?h=e1dc3fed', p8: 'tune/p8-lod.glb?h=fbf23d55', z2: 'tune/z2-lod.glb?h=71d51db4', n4: 'tune/n4-lod.glb?h=426a9fa9' };
+  const SIZES = {"supra":245812,"gtr":224380,"sp3":246392,"jesko":242384,"yaris":240240,"gc8":211448,"p918":224292,"rx7":174108,"chiron":196068,"ae86":148768,"aventador":168704,"altis":169972,"senna":187460,"huayra":209052,"laferrari":190012,"civic":182588,"evo":163172,"monster":190612,"jp4":274324,"k2":205848,"p8":224804,"z2":305528,"n4":167676};
   const LOADED = new Map(); // key → Promise<gltf.scene>
   function load(k) { // 下載（.txt＝base64、.glb 直接用）＋解析；失敗了下次再試
     if (!LOADED.has(k)) {
@@ -32535,10 +32985,18 @@ const { buildLodCar, LOD_CARS } = (() => {
 
   // ---- 輪子（低面數）：輪胎、輪框筒內側、碟盤＋帽、卡鉗 → 跟車身同一個材質（類別表）；輪框：輪唇＋輪框面（貼輪框圖）----
   // 右輪外側朝 +z；左輪是右輪對 z 鏡射（跟完整的車一樣：卡鉗都在碟盤後上方）
-  function axles(spec, wide) {
+  function axles(spec, wide, st = false) { // st：海拉風（第 64 批）輪子再往外推
     const W = spec.wheels;
     return [[W.xf, W.trackF, W.wF, W.RF ?? W.R, W.rimF ?? W.rim, 'f'], [W.xr, W.trackR, W.wR, W.RR ?? W.R, W.rimR ?? W.rim, 'r']]
-      .map(([x, track, w, Rr, rim, ax]) => ({ x, z: track + (wide ? WIDE_PUSH[ax] : 0), w, R: Rr, rim, ax }));
+      .map(([x, track, w, Rr, rim, ax]) => ({ x, z: track + (wide ? WIDE_PUSH[ax] : 0) + (st ? STANCE.poke : 0), w, R: Rr, rim, ax }));
+  }
+  // 海拉風：一個輪子做好的點（從第 o 個點到最後）繞輪子中心 c、車子的前後軸轉 −s·camber（上面往裡倒）；法線一起轉
+  function camber(B, o, c, s) {
+    const a = -s * STANCE.camber, ca = Math.cos(a), sa = Math.sin(a), P = B.P, N = B.N;
+    for (let i = o * 3; i < P.length; i += 3) {
+      const y = P[i + 1] - c.y, z = P[i + 2] - c.z; P[i + 1] = c.y + y * ca - z * sa; P[i + 2] = c.z + y * sa + z * ca;
+      const ny = N[i + 1], nz = N[i + 2]; N[i + 1] = ny * ca - nz * sa; N[i + 2] = ny * sa + nz * ca;
+    }
   }
   function builder() {
     const P = [], N = [], C = [], U = [], K = [], I = [];
@@ -32574,17 +33032,17 @@ const { buildLodCar, LOD_CARS } = (() => {
     };
   }
   const WGEO = new Map(); // 輪子網格：同一台車、同樣寬體共用（怪獸卡車：還要同樣胎紋、車身高度）
-  function wheelGeo(key, spec, wide, own = '', rr = R) { // own：spec.lod.wheels 的「胎紋|車身高度」；rr：角色 → 類別（多了 spec.lod.cls）
-    const k = `${key}|${wide}|${own}`;
+  function wheelGeo(key, spec, wide, own = '', rr = R, st = false) { // own：spec.lod.wheels 的「胎紋|車身高度」；rr：角色 → 類別（多了 spec.lod.cls）；st：海拉風
+    const k = `${key}|${wide}|${own}|${st}`;
     let e = WGEO.get(k);
     if (e) { e.refs++; return e; }
     const B = builder();
     if (spec.lod?.wheels) { const [kit, lift] = own.split('|'); spec.lod.wheels(B, rr, kit, axles(spec, wide), +lift || 0); } // 怪獸卡車：自己的輪子、懸吊
-    else for (const A of axles(spec, wide)) for (const s of [1, -1]) {
-      const c = { x: A.x, y: A.R, z: s * A.z }, w = A.w, Rr = A.R, rim = A.rim;
+    else for (const A of axles(spec, wide, st)) for (const s of [1, -1]) {
+      const c = { x: A.x, y: A.R, z: s * A.z }, w = A.w, Rr = A.R, rim = A.rim, o0 = B.P.length / 3, tz = st ? STANCE.stretch : 1; // tz：海拉風的輪胎拉窄（跟完整的車 tire.scale.z 一樣）
       // 輪胎剖面（跟 parts.js wheel() 一樣，少幾個點）：內側胎唇 → 胎壁 → 胎面 → 外側胎壁 → 外側胎唇
       B.lathe([[rim + 0.004, -w / 2 + 0.012], [Rr - 0.045, -w / 2], [Rr - 0.006, -w / 2 + 0.024], [Rr, -w / 2 + 0.05], [Rr, w / 2 - 0.05], [Rr - 0.006, w / 2 - 0.024],
-        [Rr - 0.03, w / 2 - 0.004], [Rr - 0.055, w / 2], [rim + 0.02, w / 2 - 0.002], [rim + 0.004, w / 2 - 0.012]], 32, c, s, R.rubber);
+        [Rr - 0.03, w / 2 - 0.004], [Rr - 0.055, w / 2], [rim + 0.02, w / 2 - 0.002], [rim + 0.004, w / 2 - 0.012]].map(([r, z]) => [r, z * tz]), 32, c, s, R.rubber);
       // 輪框筒內側（從輪框的縫、斜斜的看進去；完整的車從外面看進去是背面、畫不出來，看到的是後面暗暗的輪胎內側、煞車，所以用暗灰）
       B.lathe([[rim - 0.012, w / 2 - 0.004], [rim - 0.018, w / 2 - 0.03], [rim - 0.018, -w / 2 + 0.03]], 24, c, s, R.hub);
       // 碟盤（正面）＋碟盤帽
@@ -32604,6 +33062,7 @@ const { buildLodCar, LOD_CARS } = (() => {
         for (const [r, z] of [[0.118, zb], [0.198, zb], [0.198, zf], [0.118, zf]]) { B.P.push(c.x + e0[0] * r, c.y + e0[1] * r, c.z + s * z); B.N.push(nx, ny, 0); B.C.push(R.caliper); B.U.push(0, 0); B.K.push(0); }
         if ((sgn > 0) === (s > 0)) B.I.push(o, o + 2, o + 1, o, o + 3, o + 2); else B.I.push(o, o + 1, o + 2, o, o + 2, o + 3);
       }
+      if (st) camber(B, o0, c, s);
     }
     e = { geo: B.geo(false), refs: 1, key: k };
     WGEO.set(k, e);
@@ -32614,14 +33073,15 @@ const { buildLodCar, LOD_CARS } = (() => {
     e.geo.dispose(); WGEO.delete(e.key);
   }
   // 輪框：每個輪子一片輪唇（輪框筒外緣，r rim±0.013，貼在胎唇前面）＋一片輪框面（r＜rim−0.013，在輻條的平均深度）
-  function rimGeo(spec, wide, zFace) {
+  function rimGeo(spec, wide, zFace, st = false) {
     const B = builder();
-    for (const A of axles(spec, wide)) {
+    for (const A of axles(spec, wide, st)) {
       const Rt = A.rim + 0.015, z = zFace + (A.w - spec.wheels.wF) / 2; // 輪框面的深度跟外緣走（後輪比較寬就往外）
       for (const s of [1, -1]) {
-        const c = { x: A.x, y: A.R, z: s * A.z };
+        const c = { x: A.x, y: A.R, z: s * A.z }, o0 = B.P.length / 3;
         B.lathe([[A.rim + 0.013, A.w / 2 + 0.001], [A.rim - 0.013, A.w / 2 + 0.001]], 32, c, s, 0, { uvR: Rt, k: 1 / A.R });
         B.lathe([[A.rim - 0.013, z], [0.0001, z]], 32, c, s, 0, { uvR: Rt, k: 1 / A.R });
+        if (st) camber(B, o0, c, s);
       }
     }
     return B.geo(true);
@@ -32882,12 +33342,12 @@ const { buildLodCar, LOD_CARS } = (() => {
     function rimStyle() { // 輪框樣式（貼圖）、寬體（輪框位置）有變才重做
       if (spec.lod?.wheels) { rimMesh.visible = false; return; } // 怪獸卡車：輪框筒在輪子網格裡（rim 類），不用輪框圖
       const k = cur.rimStyle && cur.rimStyle !== 'stock' ? cur.rimStyle : 'stock';
-      if (applied.rimStyle === k && applied.rimWide === applied.wideOn) return;
+      if (applied.rimStyle === k && applied.rimWide === applied.wideOn && applied.rimSt === applied.st) return;
       const A = axles(spec, false)[0], f = rimTex(k === 'stock' ? key + ':stock' : k, k === 'stock' ? spec.wheels.style : k, A.R, A.w, A.rim);
       rm.map = f.map; rm.normalMap = f.nmap; rm.needsUpdate = true;
       if (rimMesh.geometry) rimMesh.geometry.dispose();
-      rimMesh.geometry = rimGeo(spec, applied.wideOn, f.z);
-      applied.rimStyle = k; applied.rimWide = applied.wideOn;
+      rimMesh.geometry = rimGeo(spec, applied.wideOn, f.z, applied.st);
+      applied.rimStyle = k; applied.rimWide = applied.wideOn; applied.rimSt = applied.st;
     }
     function shape() { // 套件、尾翼、寬體 → 車身網格；寬體 → 輪子往外
       const wide = cur.wide === 'on' && d.pieces.some((p) => p.wide);
@@ -32898,12 +33358,13 @@ const { buildLodCar, LOD_CARS } = (() => {
         geo = g; bodyMesh.geometry = g.opaque; glassMesh.geometry = g.glass;
       }
       const own = spec.lod?.wheels ? `${kit}|${+cur.height || 0}` : ''; // 怪獸卡車：胎紋、車身高度（懸吊拉長）換了，輪子網格重做
-      if (!wgeo || applied.wideOn !== wide || applied.own !== own) {
-        const w = wheelGeo(key, spec, wide, own, RR);
+      const st = cur.stance === 'on' && !spec.lod?.wheels && !spec.wheels.moto; // 第 64 批：海拉風（怪獸卡車、摩托車沒有）
+      if (!wgeo || applied.wideOn !== wide || applied.own !== own || applied.st !== st) {
+        const w = wheelGeo(key, spec, wide, own, RR, st);
         if (wgeo) releaseWheel(wgeo);
         wgeo = w; wheelMesh.geometry = w.geo;
       }
-      applied.kit = kit; applied.wing = wing; applied.wideOn = wide; applied.own = own;
+      applied.kit = kit; applied.wing = wing; applied.wideOn = wide; applied.own = own; applied.st = st;
     }
     function setLook(l = {}) {
       Object.assign(cur, l);
@@ -41387,7 +41848,7 @@ return { createLook, LOOK_NAMES, lookCaps };
 })();
 
 // ==== 第 4 批：越野車（offroad.js）：駕駛座視角、引擎聲接到車內（cabin.js）、引擎聲（sound.js）的表 ====
-Object.assign(CABIN_VIEW, OFFROAD_EYE, { z2: Z2_RIDE.view }); if (createEngineAudio.cars) Object.assign(createEngineAudio.cars, OFFROAD_SOUND); // 第 56 批：沙灘車的第一人稱（騎的人的眼睛）
+Object.assign(CABIN_VIEW, OFFROAD_EYE, { z2: Z2_RIDE.view, n4: N4_RIDE.view }); if (createEngineAudio.cars) Object.assign(createEngineAudio.cars, OFFROAD_SOUND); // 第 56 批：沙灘車的第一人稱（騎的人的眼睛）
 
 const stage = document.getElementById('stage');
 const msg = document.getElementById('msg'), prog = document.getElementById('prog'), status = document.getElementById('status'), hint = document.getElementById('hint');
@@ -41523,7 +41984,7 @@ view(38);
 
 // 兩台車：各自的模型檔、名字、選項、預設值；改過的選項各自記住，切回來還是一樣
 const PAINT_COMMON = [['#f2f3f5', '白'], ['#141518', '黑'], ['#c3c8ce', '銀'], ['#d0202a', '紅'], ['#f4c21b', '黃'], ['#5b2d9e', '紫'], ['#1e8f4e', '綠']];
-const SIZES = {"supra":1304976,"gtr":1707668,"sp3":1379416,"jesko":1696900,"yaris":1544848,"gc8":2659380,"p918":1745044,"rx7":1428492,"chiron":1783564,"ae86":1340704,"aventador":1777496,"altis":1599208,"senna":1650428,"huayra":1724012,"laferrari":1775872,"civic":1742452,"evo":1619536,"monster":138756,"jp4":1325416,"k2":1070412,"p8":1657880,"z2":422064};
+const SIZES = {"supra":1304976,"gtr":1707668,"sp3":1379416,"jesko":1696900,"yaris":1544848,"gc8":2659380,"p918":1745044,"rx7":1428492,"chiron":1783564,"ae86":1340704,"aventador":1777496,"altis":1599208,"senna":1650428,"huayra":1724012,"laferrari":1775872,"civic":1742452,"evo":1619536,"monster":138756,"jp4":1325416,"k2":1070412,"p8":1657880,"z2":422064,"n4":342112};
 const CARS = {
   supra: {
     file: 'tune/supra.glb?h=f69628b4', size: SIZES.supra, spec: SUPRA_SPEC, btn: ['SUPRA', '橘 · 玩命關頭'], name: 'Toyota Supra', sub: '玩命關頭那台 · 3D 試做版',
@@ -41569,6 +42030,7 @@ const CARS = {
   k2: { file: 'tune/k2.glb?h=47659174', size: SIZES.k2, spec: K2_SPEC, btn: ['K2', '小越野車 · 薄荷綠'], ...K2_GARAGE }, // 第 51 批（Nick 2026-10-29 卡片「好，做進去」）：三門小越野車（自己設計的，沒有真的牌子），越野車行賣
   p8: { file: 'tune/p8.glb?h=b055377e', size: SIZES.p8, spec: P8_SPEC, btn: ['P8', '皮卡 · 火山紅'], ...P8_GARAGE }, // 第 53 批（Nick 2026-10-29「越野車 繼續做」→ 看圖卡片「好，做進去」）：四門雙排座皮卡（自己設計的，沒有真的牌子），越野車行賣
   z2: { file: 'tune/z2.glb?h=880b690d', size: SIZES.z2, spec: Z2_SPEC, btn: ['Z2', '沙灘車 · 閃電黃'], ...Z2_GARAGE }, // 第 56 批（Nick 2026-10-29「繼續做其他的」→ 看圖卡片「好，做進去」）：四輪沙灘車（騎的；自己設計的，沒有真的牌子），越野車行賣
+  n4: { file: 'tune/n4.glb?h=828ae1ca', size: SIZES.n4, spec: N4_SPEC, btn: ['N4', '街車 · 消光灰'], ...N4_GARAGE }, // 第 62 批（Nick 2026-11-02 卡片「只做街車」）：直四街車（騎的；自己設計的，沒有真的牌子），阿財車行賣
 };
 // 性能（約略照真車）：馬力、重量、四驅、紅線、極速（vmax 原廠；top＝零件全裝，第 46 批 vmaxOf）、風阻；drive＝後驅的車起步時後輪壓到多少重量（引擎在中間的比較會起步）
 // price＝大概行情價的一半（Nick 2026-10-07「所有車都半價」；怪獸卡車他說 100 萬）（新台幣「萬」，二手車看車況差很多）；tyres＝半熱熔胎、直線加速胎的價錢（萬）
@@ -41670,6 +42132,11 @@ const PERF = {
   z2: { price: 30, hp: 48, kg: 300, awd: 1, red: 8500, vmax: 105, top: 105, cda: 1.0, offroad: 1, light: 1, eng: '686 cc 單缸 自然進氣（四輪驅動）', tyres: [1, 2], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 3, 1], ['exhaust', '不鏽鋼排氣', '單缸叫得更有精神', 4, 2], ['ecu', 'ECU 調校', '重寫點火和噴油', 4, 2],
     ['header', '不鏽鋼頭段', '排氣更順', 3, 2], ['cams', '高角度凸輪軸', '高轉更有力', 5, 3], ['stroker', '加大缸徑', '686 cc 擴到 750 cc', 6, 4]] },
+  // 第 62 批：N4 街車（騎的，2.1 公尺：停得進圓塔、坐得了電梯、開得上斜坡）：照 900 cc 直四街車（約 125 匹、212 公斤、極速約 240）；lean：轉彎往裡面倒；
+  //   top＝vmax：找了一次（改裝過的 900 cc 直四街車），只有原廠的數字，沒有改裝過再量極速的紀錄（notes/cars.md）→ 零件只加馬力
+  n4: { price: 40, hp: 125, kg: 212, red: 11000, vmax: 240, top: 240, cda: 0.42, drive: 0.9, lean: 1, eng: '948 cc 直列四缸 自然進氣', tyres: [1, 2], parts: [
+    ['intake', '高流量進氣', '空濾換成高流量的', 4, 1], ['exhaust', '鈦合金排氣', '直四叫得更尖', 6, 2], ['ecu', 'ECU 調校', '重寫點火和噴油', 7, 2],
+    ['header', '不鏽鋼頭段', '四合一更順', 5, 2], ['cams', '高角度凸輪軸', '高轉更有力', 9, 4], ['quick', '快排', '換檔不用收油門', 4, 3]] },
 };
 const TYRES = [[0, '原廠胎', '原本的輪胎'], [1, '半熱熔胎', '起步抓地 +8%'], [2, '直線加速胎', '起步抓地 +16%']];
 // 遊戲進度：錢（萬）、有哪些車、每台裝了哪些零件、輪胎（買過哪些、現在用哪個）、每個對手贏過幾次、車子停在車庫哪裡（park：town.src.js 的 normPark）、
@@ -41690,13 +42157,13 @@ const hpOf = (k) => PERF[k].hp + PERF[k].parts.reduce((a, p) => a + (partsOf(k).
 const vmaxOf = (k, hp = hpOf(k)) => { const P = PERF[k], add = P.parts.reduce((a, p) => a + p[3], 0); return Math.round(P.vmax + ((P.top ?? P.vmax) - P.vmax) * Math.min(1, Math.max(0, (hp - P.hp) / add))); };
 const money = (w) => (w >= 10000 ? `${+(w / 10000).toFixed(2)} 億` : `${w.toLocaleString('en-US')} 萬`);
 const byPrice = (keys) => [...keys].sort((a, b) => PERF[a].price - PERF[b].price); // 照價錢排（便宜的在前面）
-const COMMON_OPTS = { wide: [['off', '原廠'], ['on', '寬體']], tint: [['light', '淺'], ['dark', '深']], studio: [['room', '豪華車庫'], ['light', '亮攝影棚'], ['dark', '暗攝影棚']],
+const COMMON_OPTS = { wide: [['off', '原廠'], ['on', '寬體']], stance: [['off', '不要'], ['on', '海拉風']], tint: [['light', '淺'], ['dark', '深']], studio: [['room', '豪華車庫'], ['light', '亮攝影棚'], ['dark', '暗攝影棚']],
   finish: [['stock', '原廠'], ['gloss', '亮面'], ['metal', '金屬'], ['matte', '消光'], ['pearl', '珍珠']],
   rimStyle: [['stock', '原廠'], ['five', '五輻'], ['six', '六輻'], ['multi', '多輻'], ['mesh', '網狀'], ['dish', '深碟'], ['fan', '風扇']] };
 // 底盤燈：車底下地上的光（'none'＝不要）
 const GLOWS = [['none', '不要', 'linear-gradient(135deg, transparent 44%, #e0413b 44% 56%, transparent 56%), #2a2c31'],
   ...[['#2f7bff', '藍'], ['#9b4dff', '紫'], ['#22e07a', '綠'], ['#ff2d3d', '紅'], ['#ff7a1a', '橘'], ['#f2f3f5', '白']].map(([c, n]) => [c, n, `radial-gradient(circle, #fff 0 14%, ${c} 44%, #15161a 100%)`])];
-for (const C of Object.values(CARS)) Object.assign(C.state, { wide: 'off', finish: 'stock', rimStyle: 'stock', glow: 'none', ...C.state }); // 寬體、烤漆、輪框樣式、底盤燈每台都有，預設原廠／不要（加在最後，套用順序跟以前一樣）
+for (const C of Object.values(CARS)) Object.assign(C.state, { wide: 'off', finish: 'stock', rimStyle: 'stock', glow: 'none', stance: 'off', ...C.state }); // 寬體、烤漆、輪框樣式、底盤燈每台都有，預設原廠／不要（加在最後，套用順序跟以前一樣）
 // 每台車都多幾個顏色（那台車本來就有很像的顏色、或同名的就不重複加）
 const EXTRA_PAINTS = [['#ff5fa2', '粉紅'], ['#39a7ff', '天空藍'], ['#9bea1a', '螢光綠'], ['#c8a45d', '香檳金'], ['#ff7414', '橘'], ['#5b2d9e', '紫']];
 const rgbOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -41710,6 +42177,13 @@ for (const [k, C] of Object.entries(CARS)) {
   const i = C.opts.wing.findIndex((o) => o[0] === 'none');
   C.opts.wing = [...C.opts.wing.slice(0, i < 0 ? undefined : i), ...more, ...(i < 0 ? [] : C.opts.wing.slice(i))];
 }
+// 第 64 批（Nick 2026-11-02「改裝要可以改海拉風」，看了圖說「直接做」）：「車身高度」有「貼地」的車多一格「海拉風」＝比貼地再低 STANCE.drop＋外八、輪子往外、拉胎（state.stance＝'on'）
+//   高度還是一個數字（出門、比賽、朋友的車都照舊用 +height）；stance 跟 wide 一樣是一個外觀鍵（輕量車、朋友看得到）。越野車、摩托車沒有「貼地」＝沒有海拉風
+for (const C of Object.values(CARS)) {
+  const H = C.opts.height, low = H && H.find((o) => o[1] === '貼地');
+  if (low && !H.some((o) => o[1] === '海拉風')) H.push([String(+(+low[0] - STANCE.drop).toFixed(3)), '海拉風']);
+}
+const hfOf = (k) => (CARS[k].opts.height || []).find((o) => o[1] === '海拉風')?.[0]; // 這台車海拉風的高度（沒有＝undefined）
 for (const C of Object.values(CARS)) C.opts.livery = livOptions(C.opts.livery); // 通用拉花：火焰、賽車條紋、大便龍車隊（名字撞到車子自己的，用 'gen:' 開頭）
 const DEFAULT_LOOK = Object.fromEntries(Object.entries(CARS).map(([k, C]) => [k, { ...C.state }])); // 每台車原本的樣子（對手的車從這個改）
 const CALIPERS = [['#9da1a6', '銀'], ['#c8141e', '紅'], ['#f2b705', '黃'], ['#1f54c9', '藍'], ['#ff6a1f', '橘'], ['#9bd400', '螢光綠'], ['#17181b', '黑']];
@@ -41749,6 +42223,7 @@ function okValue(k, o, v) { // 存的值還是現在有的選項才用（改版�
   for (const [k, st] of Object.entries(d.cars || {})) { // 外觀
     if (!CARS[k] || !st) continue;
     for (const [o, v] of Object.entries(st)) if (o in CARS[k].state && okValue(k, o, v)) CARS[k].state[o] = v;
+    CARS[k].state.stance = CARS[k].state.height === hfOf(k) ? 'on' : 'off'; // 第 64 批：海拉風跟著高度那一格（舊存檔沒有＝不要）
   }
   const lk = validLook(d.look); if (lk) GAME.look = { ...PLAYER_LOOK, ...lk }; // 你自己的樣子（外觀：舊存檔也留著）
   if (d.v !== 2) return; // 舊版（內容 30）只存了外觀：錢、車、零件從頭開始，開局只有 GC8
@@ -41786,6 +42261,7 @@ function apply(S, key, v) {
   if (key === 'tint') S.glass.opacity = v === 'dark' ? 0.66 : 0.34;
   if (key === 'kit') S.setKit(v);
   if (key === 'wide') S.setWide(v === 'on');
+  if (key === 'stance') S.setStance?.(v === 'on');
   if (key === 'rimStyle') S.setRim(v);
   if (key === 'finish') S.setFinish(v);
   if (key === 'glow') S.setGlow(v);
@@ -42027,7 +42503,7 @@ function seg(el) {
       el.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true');
       if (key === 'studio') { studioKind = v; setStudio(v); camMax(); save(); return; }
       CARS[cur].state[key] = v; save();
-      if (key === 'height') { rideY = +v; return; }
+      if (key === 'height') { rideY = +v; const st = v === hfOf(cur) ? 'on' : 'off'; CARS[cur].state.stance = st; if (S) apply(S, 'stance', st); return; } // 第 64 批：海拉風那一格＝高度＋外八
       if (S) apply(S, key, v);
     });
     el.append(b);
@@ -42511,7 +42987,7 @@ async function enterRace() {
   race.meInfo = carSize(S);
   snd.me?.dispose(); snd.me = engineAudio.voice(cur, { parts: partsOf(cur) });
   TR.scene.add(S.car); S.car.visible = true; S.body.position.y = +CARS[cur].state.height;
-  if (cur === 'z2') riderOn(S); else mySitOn(S, cur, 0, true); // 第 56 批：沙灘車：你騎在上面（town.src.js；車庫頁直接來比也一樣）；第 57 批：別的車：你坐在駕駛座
+  if (RIDES[cur]) riderOn(S); else mySitOn(S, cur, 0, true); // 第 56 批：沙灘車：你騎在上面（town.src.js；車庫頁直接來比也一樣）；第 57 批：別的車：你坐在駕駛座
   putCar(S, race.me, LANE, race.meInfo);
   hudIdle();
   if (!netDragInit(race)) showOpp(); // 一起比賽（net.src.js）：對手是朋友，不放 AI
@@ -43279,7 +43755,7 @@ function makeDrv(pose) {
   TR.scene.add(Sx.car); Sx.car.visible = true; Sx.body.position.y = +CARS[cur].state.height;
   // 駕駛座視角：車內（cabin.js）的眼睛；手機直拿畫面窄，視角放大一點（跟車庫的「車內」一樣）
   const eye = CABIN_VIEW[cur] ? { ...CABIN_VIEW[cur], fov: cabinFov(cur, dcam.aspect) } : undefined;
-  if (cur === 'z2' && eye && riderMake()) eye.eye = [RIDER.eye[0] + 0.06, RIDER.eye[1], 0]; // 第 56 批：沙灘車：騎的人的眼睛往前 6 公分（人不畫）
+  if (RIDES[cur] && eye && riderMake()) eye.eye = [RIDER.eye[0] + 0.06, RIDER.eye[1], 0]; // 第 56 批：沙灘車：騎的人的眼睛往前 6 公分（人不畫）；第 62 批：街車也是
   dEye = eye;
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
@@ -43680,6 +44156,7 @@ function houseSet(spawn) {
   if (indoor.kind === 'police') stationFolks(); else if (indoor.kind === 'house' || indoor.kind === 'apt') houseFolks(); // 槍店的店員 gunshop.js 自己有
   walker.setDoors(indoor.jail ? [] : (indoor.exits || I.exits).map((e) => e.door)); // 關在拘留室：沒有門
   walker.setCamera({ maxY: I.camera.ceiling, dist: Math.min(indoor.dist0, I.camera.maxDist) });
+  STAIR.y = 0; STAIR.cam = I.camera.ceiling; STAIR.busy = false; // 第 61 批
   walker.teleport(spawn); indoor.t = 0;
 }
 function houseFloor(e) {
@@ -43943,21 +44420,64 @@ function aptExt() { // 6 座公寓的外殼（蓋一次，InstancedMesh）＋ V.
 const aptW = (b, x, z) => { const c = Math.cos(b.rot), s = Math.sin(b.rot); return { x: b.x + x * c + z * s, z: b.z - x * s + z * c }; }; // 公寓本地 → 世界（b＝V.buildings 那一棟）
 const inApt = (x, z, m = 0) => { const b = APTU.b; if (!b) return false; const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot), s = Math.sin(b.rot); return Math.abs(dx * c - dz * s) < b.hx + m && Math.abs(dx * s + dz * c) < b.hz + m; };
 // 走路用的世界：房子裡面地板都在 0（公寓蓋在山頂那座也是）；在頂樓、陽台＝那一層的高度；其他照 PW
-function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? 0 : APTU.on && inApt(x, z, 0.6) ? APTU.y : PW.heightAt(x, z)); return W; }
+function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? stairY(x, z) : APTU.on && inApt(x, z, 0.6) ? APTU.y : PW.heightAt(x, z)); return W; }
+// 第 61 批：樓梯自己走（interiors.js 的 I.stair，本地）：兩跑樓梯，同一個 xz 上面一跑、下面一跑 → 挑最接近上一格人的高度（STAIR.y）的那一面；
+//   過了平台一點（高度 > 一層的一半 + 0.12）就換到上一層（人的高度 −3.3，畫面一樣）、往下也一樣；五樓往上走到 8 成＝頂樓（aptOut）
+const STAIR = { y: 0, cam: null, busy: false };
+function stairLocal(x, z) { const b = indoor.b, dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot || 0), s = Math.sin(b.rot || 0); return [dx * c - dz * s, dx * s + dz * c]; }
+function stairY(x, z) {
+  const S = indoor?.I?.stair; if (!S) return 0;
+  const [lx, lz] = stairLocal(x, z);
+  if (lx < S.xs0 - 0.05 || lx > S.xs1 + 0.05 || lz < S.zSB || lz > S.zS1 + 0.3) return 0;
+  const H = S.rise / 2, prev = STAIR.y; let best = null;
+  const cand = (y) => { if (best === null || Math.abs(y - prev) < Math.abs(best - prev)) best = y; };
+  if (lz >= S.zL) { if (S.up) cand(H); if (S.down) cand(-H); }
+  else {
+    const t = (lz - S.zSB) / (S.zL - S.zSB), sideA = Math.abs(lx - (S.xa0 + S.xa1) / 2) < Math.abs(lx - (S.xb0 + S.xb1) / 2);
+    if (sideA) { if (S.up) cand(t * H); if (S.down) cand(-H - (1 - t) * H); } // 第一跑往上；下面那層上來的第二跑
+    else { if (S.up) cand(H + (1 - t) * H); if (S.down) cand(-t * H); } // 第二跑往上；往下的第一跑
+  }
+  return best ?? 0;
+}
+function stairInShaft(x, z) { const S = indoor?.I?.stair; if (!S) return false; const [lx, lz] = stairLocal(x, z); return lx > S.xs0 - 0.1 && lx < S.xs1 + 0.1 && lz > S.zSB - 0.2 && lz < S.zS1 + 0.3; }
+function stairStep() {
+  const I = indoor.I, S = I.stair, y = walker.character.group.position.y; STAIR.y = y;
+  if (!S || doorFade || sleep || walker.mode !== 'walk') return;
+  const t = walker.telemetry(), cy = S.up && stairInShaft(t.x, t.z) ? Math.max(I.camera.ceiling, 4.6) : I.camera.ceiling; // 樓梯間上面是空的（到上一層）：鏡頭可以高一點
+  if (cy !== STAIR.cam) { STAIR.cam = cy; walker.setCamera({ maxY: cy }); }
+  const T = S.rise / 2 + 0.12;
+  if (y > T && S.up) {
+    if (S.top !== 'roof') stairSwap(+1);
+    else if (y > S.rise * 0.82 && !STAIR.busy && indoor.kind === 'apt') { STAIR.busy = true; goDoor(() => aptOut({ to: 'roof' })); }
+  } else if (y < -T && S.down) stairSwap(-1);
+}
+function stairSwap(dir) {
+  const I = indoor.I, f = I.floor + dir; if (f < 0 || f >= I.floors.length) return;
+  const t = walker.telemetry(), rise = I.stair.rise;
+  I.setFloor(f);
+  walker.removeColliders('interior'); walker.addColliders(I.colliders, 'interior');
+  if (indoor.kind === 'house' || indoor.kind === 'apt') houseFolks();
+  walker.setDoors((indoor.exits || I.exits).map((e) => e.door));
+  STAIR.y = walker.character.group.position.y - dir * rise; STAIR.cam = null;
+  walker.teleport({ x: t.x, z: t.z, heading: t.heading }, { keepCamera: true, keepMotion: true });
+  STAIR.y = walker.character.group.position.y;
+  walker.toast(I.floors[f].label, 1200);
+}
 // 從裡面走出去：頂樓（5 樓的樓梯、電梯按頂樓）、陽台（4 樓客廳的落地門）
 function aptOut(e) {
   const H = indoor; if (!H || H.kind !== 'apt') return null;
   const b = H.b, A = APTU.A || (APTU.A = buildApt()), roof = e.to === 'roof', lvl = roof ? A.roof : A.balc;
+  const bf = roof ? 4 : H.I.floor, dy = roof ? 0 : (bf - 3) * 3.3; // 第 61 批：2–4 樓都有陽台（apt.js 的 balc 是 4 樓的：上下差一層 3.3）
   indoor = null;
   walker.removeColliders('interior'); for (const f of H.folks) f.C.dispose(); H.I.dispose();
   TR.scene.add(walker.character.group);
   const lot = { x: b.x, z: b.z, heading: b.rot, y: b.y || 0 };
-  Object.assign(APTU, { on: true, b, lvl, y: lot.y + lvl.y, floor: roof ? 4 : 3 });
-  walker.addColliders(aptColsAt(lvl.cols, lot), 'aptout');
+  Object.assign(APTU, { on: true, b, lvl, y: lot.y + lvl.y + dy, floor: bf });
+  walker.addColliders(aptColsAt(lvl.cols, { ...lot, y: lot.y + dy }), 'aptout');
   const dw = aptW(b, lvl.door.x, lvl.door.z), sp = aptW(b, lvl.spawn.x, lvl.spawn.z);
   walker.teleport({ x: sp.x, z: sp.z, heading: wrapPi(lvl.spawn.lh + b.rot) }); // 先站好再給門（walk.js：給門的時候站在門的範圍裡面＝那扇門先不觸發；站的地方在門的旁邊 2 公尺）
   walker.setDoors([{ x: dw.x, z: dw.z, ry: wrapPi(lvl.door.ry + b.rot), w: lvl.door.w, aptIn: true }]);
-  walker.setCamera({ maxY: lvl.ceil != null ? lot.y + lvl.ceil : null, dist: Math.min(H.dist0, 3.4) });
+  walker.setCamera({ maxY: lvl.ceil != null ? lot.y + dy + lvl.ceil : null, dist: Math.min(H.dist0, 3.4) });
   walker.setAction(null); walker.setAction2(null);
   walker.toast('', 1);
   return { say: roof ? '頂樓' : '陽台' };
@@ -44018,7 +44538,7 @@ function aptBed() {
 }
 function aptWalk() {
   const I = indoor.I; let act = null;
-  if (I.floor === 3) {
+  if (I.floor >= 1) { // 第 61 批：2–5 樓都是你家
     const t = walker.telemetry(), s = I.spots.sleep?.[0], d = I.spots.dress?.[0];
     if (s && Math.hypot(t.x - s.x, t.z - s.z) < 1.9) act = SLEEP_ACT_APT; else if (d && Math.hypot(t.x - d.x, t.z - d.z) < 0.95) act = DRESS_ACT;
   }
@@ -44777,7 +45297,7 @@ function makeCrush() {
       return true;
     },
     makeJunk: async (i) => { // 表演場的舊車：輕量車（一次做一台）
-      const keys = Object.keys(LOD_CARS).filter((k) => !PERF[k]?.big);
+      const keys = Object.keys(LOD_CARS).filter((k) => !PERF[k]?.big && !PERF[k]?.lean); // 第 62 批：街車不當舊車
       const k = keys[i % keys.length]; if (!k || !TR) return null;
       const l = buildLodCar(k, await LOD_CARS[k].load(), JUNK_LOOK[i % JUNK_LOOK.length]);
       TR.scene.add(l.car);
@@ -45059,6 +45579,7 @@ function driveStep(dt) {
   if (DRIVE.on) npcStep(dt); // 路上的車、居民（走路的碰撞要在 walker.update 前面放好）
   if (DRIVE.on) crushStep(dt); // 第 7 批（輾扁）：怪獸卡車壓扁的東西（墊子、壓扁、表演場的垃圾車）
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
+  if (indoor && walker && DRIVE.on) stairStep(); // 第 61 批：樓梯自己走（走到一半換樓層）
   riderStep(dt); // 第 56 批：沙灘車騎的人（walker 後面：上車那一格就坐上去）
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
@@ -45243,31 +45764,33 @@ function mirrorStep() {
 // ==== 第 56 批：沙灘車（Z2）騎的人：你自己的樣子＋安全帽，坐在座椅上、手握把手（跟著轉）、腳踩腳踏板（z2-spec.js：Z2_RIDE、Z2_ride、Z2_steer）====
 //   騎著（walker 收起來、你的人藏起來＝坐在車上）才放上去；第一人稱不畫人（鏡頭在眼睛往前 6 公分）；下車、回車庫頁就拿下來
 //   400 公尺直線加速（race.src.js enterRace）也騎在上面：riderOn(S)；比完回車庫頁 riderOff()
-const RIDER = { C: null, lk: null, S: null, eye: [0, 0, 0] };
+//   第 62 批：N4 街車也是騎的（moto-spec.js：MOTO_RIDE、motoRide、motoSteer，n4-spec.js 包成一樣的介面）：RIDES[key]；換車就重新量眼睛
+const RIDES = { z2: { R: Z2_RIDE, ride: Z2_ride, steer: Z2_steer, eye: Z2_eye }, n4: { R: N4_RIDE, ride: N4_ride, steer: N4_steer, eye: N4_eye } };
+const RIDER = { C: null, lk: null, k: null, S: null, SK: null, eye: [0, 0, 0] };
 const riderLook = () => { const L = meLook(); return { ...L, ...Z2_helmet(L) }; }; // 騎沙灘車戴安全帽（你自己的帽子就是安全帽：照它的顏色）
-function riderMake() { // 第一次騎、換了樣子：做（換）人、量眼睛（第一人稱的鏡頭）
-  const L = meLook();
-  if (RIDER.C && RIDER.lk === L) return RIDER.C;
+function riderMake(k = cur) { // 第一次騎、換了樣子、換了車：做（換）人、量眼睛（第一人稱的鏡頭）
+  const L = meLook(), RD = RIDES[k] || RIDES.z2;
+  if (RIDER.C && RIDER.lk === L && RIDER.k === k) return RIDER.C;
   try {
     if (!RIDER.C) { RIDER.C = buildCharacter(riderLook(), { state: 'sit', shadow: false, plant: false }); RIDER.C.group.name = 'z2-rider'; RIDER.C.group.userData.seated = true; } // 第 57 批：seated＝車子釋放前先拿下來（disposeCar）
     else RIDER.C.setLook(riderLook());
-    RIDER.lk = L; Z2_eye(RIDER.C, RIDER.eye);
+    RIDER.lk = L; RIDER.k = k; RD.eye(RIDER.C, RIDER.eye);
   } catch (e) { console.error(e); RIDER.C = null; }
   return RIDER.C;
 }
-function riderOn(Sx, vis = true) { // 人放到這台車上（車身底下，跟著懸吊晃）
-  const C = riderMake(); if (!C || !Sx?.body) return null;
-  if (C.group.parent !== Sx.body) { if (RIDER.S && RIDER.S !== Sx) riderOff(); Sx.body.add(C.group); C.group.position.fromArray(Z2_RIDE.at); C.group.rotation.set(0, 0, 0); Z2_ride(C, 0, 1); }
-  C.group.visible = vis; RIDER.S = Sx;
+function riderOn(Sx, vis = true, k = cur) { // 人放到這台車上（車身底下，跟著懸吊晃；街車跟著車身往彎裡面倒）
+  const RD = RIDES[k] || RIDES.z2, C = riderMake(k); if (!C || !Sx?.body) return null;
+  if (C.group.parent !== Sx.body) { if (RIDER.S && RIDER.S !== Sx) riderOff(); Sx.body.add(C.group); C.group.position.fromArray(RD.R.at); C.group.rotation.set(0, 0, 0); RD.ride(C, 0, 1); }
+  C.group.visible = vis; RIDER.S = Sx; RIDER.SK = k;
   return C;
 }
-function riderOff() { if (RIDER.C) { RIDER.C.group.removeFromParent(); RIDER.C.group.visible = false; } if (RIDER.S?.body) Z2_steer(RIDER.S.body, 0); RIDER.S = null; }
+function riderOff() { if (RIDER.C) { RIDER.C.group.removeFromParent(); RIDER.C.group.visible = false; } if (RIDER.S?.body) (RIDES[RIDER.SK] || RIDES.z2).steer(RIDER.S.body, 0); RIDER.S = null; }
 function riderStep(dt) {
-  const ride = cur === 'z2' && DRIVE.on && !!drv && !!tripS?.body && tripS.car.visible && walker?.mode === 'off' && walker.character && !walker.character.group.visible;
+  const ride = !!RIDES[cur] && DRIVE.on && !!drv && !!tripS?.body && tripS.car.visible && walker?.mode === 'off' && walker.character && !walker.character.group.visible;
   if (!ride) { if (RIDER.S) riderOff(); return; }
   const C = riderOn(tripS, drv.cameraMode !== 'eye'); if (!C) return;
-  const s = drv.telemetry().steer; Z2_steer(tripS.body, s);
-  if (C.group.visible) Z2_ride(C, s, dt);
+  const RD = RIDES[cur], s = drv.telemetry().steer; RD.steer(tripS.body, s);
+  if (C.group.visible) RD.ride(C, s, dt);
 }
 function driveFrame(now) {
   const w = stage.clientWidth, h = stage.clientHeight;
@@ -45759,7 +46282,7 @@ function netStep(dt) {
     if (c.jl !== P.jlSeen) { P.jlSeen = c.jl; if (c.jl && P.n) netToast(`🚓 ${P.n}被警察抓走了！`); } // 朋友被警察抓走
     const tw = fresh && (c.o === 1 || c.o === 2) ? c.w : 0; if (tw !== P.tagW) { P.tagW = tw; if (P.n) netTag(P); } // 名字旁邊的星星
     const near = !!s && (c.o === 4 || !me || (s.x - mx) * (s.x - mx) + (s.z - mz) * (s.z - mz) < NET_FAR * NET_FAR); // 遠的：只有地圖上的點
-    const car = near && c.o === 1, walkin = near && (c.o === 2 || c.o === 4), inside = c.o === 4, ride = car && c.k === 'z2'; // 第 56 批：騎沙灘車＝人也要畫
+    const car = near && c.o === 1, walkin = near && (c.o === 2 || c.o === 4), inside = c.o === 4, ride = car && !!RIDES[c.k]; // 第 56 批：騎沙灘車＝人也要畫；第 62 批：街車也是
     // 第 19 批：他下車停著的車（走路的時候）：畫在停的地方、會擋；借給你了（你在開、在載入）就不畫這台
     // 第 22 批（Nick「他的車不管在哪裡你都要看得到」）：他在房子裡、在警察局、被關（車拖到警察局的停車場）也畫（pv）
     const pq = c.pk || c.pv;
@@ -45788,10 +46311,10 @@ function netStep(dt) {
         k.vx = Math.cos(oh) * ov; k.vz = -Math.sin(oh) * ov; k.dvx = k.dvz = 0; NET.cols.push(k);
       }
     }
-    if (ride && O && P.chr && P.objK === 'z2') { // 第 56 批：騎在沙灘車上（輕量車的車身底下，跟著車走）
+    if (ride && O && P.chr && RIDES[P.objK]) { // 第 56 批：騎在沙灘車上（輕量車的車身底下，跟著車走）
       const body = O.lod.body || O.car;
-      if (P.chr.group.parent !== body) { body.add(P.chr.group); P.chr.group.position.fromArray(Z2_RIDE.at); P.chr.group.rotation.set(0, 0, 0); P.riding = true; P.hat0 = { hat: P.chr.look.hat, hatColor: P.chr.look.hatColor }; P.chr.setLook(Z2_helmet(P.chr.look)); } // 戴上安全帽
-      P.chr.group.visible = true; Z2_ride(P.chr, 0, dt);
+      if (P.chr.group.parent !== body) { body.add(P.chr.group); P.chr.group.position.fromArray(RIDES[P.objK].R.at); P.chr.group.rotation.set(0, 0, 0); P.riding = true; P.hat0 = { hat: P.chr.look.hat, hatColor: P.chr.look.hatColor }; P.chr.setLook(Z2_helmet(P.chr.look)); } // 戴上安全帽
+      P.chr.group.visible = true; RIDES[P.objK].ride(P.chr, 0, dt);
     } else netUnride(P);
     if (C) {
       const scn = inside ? PSC : TR.scene, y = inside ? 0 : netH(s.x, s.z); // 第 22 批：警察局裡面＝它自己的場景（地板 0）
@@ -46850,6 +47373,7 @@ body.visiting .stage{aspect-ratio:auto;height:min(78vh,640px);max-height:none}`;
   function paint() {
     const c = cars[V.i], L = netLook(c.k, c.l), bits = [CARS[c.k].btn[0]];
     if (L.wide === 'on') bits.push('寬體');
+    if (L.stance === 'on') bits.push('海拉風');
     if (L.wing && L.wing !== 'none' && L.wing !== 'stock') bits.push(WING_NAMES[L.wing] || '尾翼');
     const rim = RIMS.find((r) => r[0] === L.rim); if (rim && L.rim !== 'chrome') bits.push(`${rim[1]}色輪框`);
     if (L.glow && L.glow !== 'none') bits.push('底盤燈');
@@ -47464,7 +47988,7 @@ const SEAT_PS = { n: 0 };
 function seatPeerBody(P) { // → [車身, 車, 位子] | null
   const c = P.cur; if (netNow() - P.last > 6000 || !netWorld()) return null;
   if (c.o === 1) {
-    if (!c.k || c.k === 'z2') return null; // 沙灘車：第 56 批騎的人
+    if (!c.k || RIDES[c.k]) return null; // 沙灘車：第 56 批騎的人
     if (HOP.on && HOP.uid === P.uid && HOP.car && HOP.k === c.k) return [HOP.car.body, c.k, c.st | 0];
     const O = P.obj; if (!O || !O.car.visible || P.objK !== c.k) return null;
     return [O.lod.body || O.car, c.k, c.st | 0];
@@ -47526,7 +48050,7 @@ function seatsStep(dt) {
   if (PAX.on && (!drv || !tripS || !walker || walker.mode !== 'off')) paxEnd(); // 被換掉了（回車庫頁、被抓⋯）
   if (PAX.on) { mySitOn(tripS, PAX.k, PAX.i, SCAM.mode !== 'eye'); seatCamTick(dt, tripS.body, PAX.k, PAX.i, tripS.car.rotation.y); }
   else if (HOP.on) { const Sx = HOP.car || HOP.lodS; mySitOn(Sx, HOP.k, HOP.i, SCAM.mode !== 'eye' || !HOP.car); seatCamTick(dt, Sx?.body, HOP.k, HOP.i, HOP.last.heading); }
-  else if (drv && walker && walker.mode === 'off' && cur !== 'z2' && tripS?.car?.visible && tripS.car.parent === TR.scene && !(walker.character && walker.character.group.visible) && seatsOf(cur).length) { // 開車：你坐在駕駛座（從外面看得到）
+  else if (drv && walker && walker.mode === 'off' && !RIDES[cur] && tripS?.car?.visible && tripS.car.parent === TR.scene && !(walker.character && walker.character.group.visible) && seatsOf(cur).length) { // 開車：你坐在駕駛座（從外面看得到）
     mySitOn(tripS, cur, 0, drv.cameraMode !== 'eye'); mySitSteer(drv.telemetry().steer);
   } else if (MYSIT.S) mySitOff();
   if (NET.on) seatPeers();
@@ -47643,7 +48167,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 34; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 35; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
