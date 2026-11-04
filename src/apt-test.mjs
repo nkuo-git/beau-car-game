@@ -19,12 +19,12 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + '   TWR, EL, PW, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE, setDest, CARS, PERF, TOWER_BAYS, towerFy, TOWER });'
   + ' window.__HOME = () => HOME; window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
   + ' window.__pol = () => (typeof police !== "undefined" ? police : null);' // 第 3 批（b3-int）：警察（撞人的測試以後把星星清掉：警察的部分在 test-b3.mjs）
-  + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR });'
+  + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR, LD });'
   + ' window.__APT = () => ({ APTU, A: APTU.A, aptLotOf, APT, aptW });'
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
   + ' window.__look = () => LOOKP; window.__cam = () => ({ maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
-  + ' window.__box = (o) => new THREE.Box3().setFromObject(o); window.__GH = () => GH; window.__ghostUnpack = (g) => ghostUnpack(g); window.__ghostAt = (G, t, o) => ghostAt(G, t, o);' // 鬼影車排行榜（ghost.src.js）
+  + ' window.__T3 = THREE; window.__box = (o) => new THREE.Box3().setFromObject(o); window.__GH = () => GH; window.__ghostUnpack = (g) => ghostUnpack(g); window.__ghostAt = (G, t, o) => ghostAt(G, t, o);' // 鬼影車排行榜（ghost.src.js）
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -248,18 +248,22 @@ await p.addInitScript(() => {
     return { moved: +r.d.toFixed(2), inside: Math.abs(dx * c - dz * s) < b.hx && Math.abs(dx * s + dz * c) < b.hz };
   };
   // 在房子裡面：這一層的出口 e 前面 1.4 公尺（房間這邊）朝出口推，推到門口開始黑掉為止
-  H.toExit = (e) => {
-    const w = W(), d = e.door, nx = -Math.sin(d.ry), nz = -Math.cos(d.ry), dir = Math.atan2(-nz, nx);
+  H.toExit = (e) => { // 第 65 批：村子房子的大門（live）不黑掉：走過門口就在外面（live＝true、out＝出來了、fadeFrames＝中間黑掉幾格）
+    const w = W(), d = e.door, nx = -Math.sin(d.ry), nz = -Math.cos(d.ry), dir = Math.atan2(-nz, nx), live = !!window.__IN().indoor?.live && e.to === 'outside';
     w.teleport({ x: d.x - nx * 1.4, z: d.z - nz * 1.4, heading: dir }); step(5);
-    let n = 0; for (; n < 240 && !window.__IN().doorFade; n++) { const t = w.telemetry(), a = dir - t.camYaw; w.setInput({ x: -Math.sin(a) * 0.6, y: Math.cos(a) * 0.6 }); step(1); }
-    w.setInput(null); return { s: +(n / 60).toFixed(2), fade: !!window.__IN().doorFade };
+    let n = 0, ff = 0, opened = false; for (; n < 240 && (live ? !!window.__IN().indoor : !window.__IN().doorFade); n++) { if (live && !opened && H.actText() === '開門') { H.press(); opened = true; } const t = w.telemetry(), a = dir - t.camYaw; w.setInput({ x: -Math.sin(a) * 0.6, y: Math.cos(a) * 0.6 }); step(1); if (window.__IN().doorFade) ff++; }
+    if (live) for (let k = 0; k < 30; k++) { const t = w.telemetry(), a = dir - t.camYaw; w.setInput({ x: -Math.sin(a) * 0.6, y: Math.cos(a) * 0.6 }); step(1); if (window.__IN().doorFade) ff++; } // 再走出去一點
+    w.setInput(null); return { s: +(n / 60).toFixed(2), fade: !!window.__IN().doorFade, live, opened, out: live && !window.__IN().indoor, fadeFrames: ff };
   };
   // 村子裡的門（walker.doors 的一個）：站到門外 2 公尺朝門推，推到開始黑掉為止
-  H.toDoor = (d) => {
-    const w = W(), nx = -Math.sin(d.ry), nz = -Math.cos(d.ry), dir = Math.atan2(-nz, nx);
+  H.toDoor = (d) => { // 第 65 批：村子的房子、店、公寓（interiorFor 有的）門自己開：「開門」就按、走過門口就在裡面（不黑掉）；警察局、槍店照舊推到黑掉
+    const w = W(), nx = -Math.sin(d.ry), nz = -Math.cos(d.ry), dir = Math.atan2(-nz, nx), live = !!(d.ref && window.__IN().interiorFor(d.ref));
     w.teleport({ x: d.ax - nx * 2, z: d.az - nz * 2, heading: dir }); step(20);
-    let n = 0; for (; n < 240 && !window.__IN().doorFade; n++) { const t = w.telemetry(), a = dir - t.camYaw; w.setInput({ x: -Math.sin(a) * 0.7, y: Math.cos(a) * 0.7 }); step(1); }
-    w.setInput(null); return { s: +(n / 60).toFixed(2), fade: !!window.__IN().doorFade };
+    let n = 0, ff = 0, opened = false; for (; n < 360 && (live ? !window.__IN().indoor : !window.__IN().doorFade); n++) {
+      if (live && !opened && H.actText && H.actText() === '開門') { H.press(); opened = true; }
+      const t = w.telemetry(), a = dir - t.camYaw; w.setInput({ x: -Math.sin(a) * 0.7, y: Math.cos(a) * 0.7 }); step(1); if (window.__IN().doorFade) ff++;
+    }
+    w.setInput(null); return { s: +(n / 60).toFixed(2), fade: !!window.__IN().doorFade, live, opened, in: !!window.__IN().indoor?.live, fadeFrames: ff };
   };
   // 在房子裡面的樣子（這一層）
   H.inInfo = () => {
@@ -267,7 +271,7 @@ await p.addInitScript(() => {
     if (!I) return { in: false, mode: t.mode, mine: w.character.group.parent === D.TR.scene, fade: !!X.doorFade };
     const e = document.querySelector('#stage .wk-toast'), f = document.querySelector('#stage .sleep-fade');
     return { in: true, name: I.name, kind: I.kind, floors: I.floors.length, floor: I.floor, x: t.x, z: t.z, mode: t.mode, paused: t.paused, hud: H.visible('#stage .wk'), near: t.near,
-      mine: w.character.group.parent === X.indoor.scene, doors: w.doors.length === I.exits.length && w.doors.every((d) => I.exits.some((x) => x.door === d.ref)),
+      mine: w.character.group.parent === X.indoor.scene, doors: ((ex) => w.doors.length === ex.length && w.doors.every((d) => ex.some((x) => x.door === d.ref)))(X.indoor.live ? I.exits.filter((x) => x.to !== 'outside') : I.exits), live: !!X.indoor.live, // 第 65 批：live 的大門不是 walk.js 的門
       toast: e && e.classList.contains('show') ? e.textContent : '', fadeShown: !!f && getComputedStyle(f).display !== 'none', mov: N ? N.MOV.length : 0, meFar: N ? N.me.x === 1e6 : true, info: I.info, cam: I.camera, dist: w.cameraDist };
   };
   // 一直往某個世界方向推 s 秒
@@ -387,14 +391,14 @@ const a1 = await p.evaluate(() => {
   return { n: apts.length, names: apts.map((b) => b.name), ext: ext.map((o) => `${o.name}:${o.count}`), y2: apts.find((b) => b.slot === 1)?.y, slotY: SL[1].y, matY: mats, cols: cols.length, mine: { x: +mine.x.toFixed(2), z: +mine.z.toFixed(2), rot: +mine.rot.toFixed(3), h: mine.h, door: mine.door }, lot: { x: +L.x.toFixed(2), z: +L.z.toFixed(2), heading: +L.heading.toFixed(3) }, dT: +dT.toFixed(2), lx: +lx.toFixed(2), slot: HM.slot, walker: D.walker.mode, tris: X.A?.tris };
 });
 console.log('1', el(), JSON.stringify(a1));
-check(a1.n === 6 && a1.names.every((n) => /的公寓$/.test(n)) && a1.ext.length === 5 && a1.ext.every((s) => /:6$/.test(s)) && a1.cols === 6, `6 apartments (one per home, kind 'apt', ${a1.names.join('、')}), shells are 5 InstancedMesh × 6, 6 solid footprint colliders`);
+check(a1.n === 6 && a1.names.every((n) => /的公寓$/.test(n)) && a1.ext.length === 6 && a1.ext.every((s) => /:6$/.test(s)) && a1.cols === 6, `6 apartments (one per home, kind 'apt', ${a1.names.join('、')}), shells are 6 InstancedMesh × 6 (第 65 批：大門的玻璃自己一組), 6 solid footprint colliders`);
 check(a1.y2 > 90 && Math.abs(a1.y2 - a1.slotY) < 1e-6 && a1.matY.every((y) => Math.abs(y - a1.y2) < 0.01), `the 山頂 apartment sits at the summit height (${a1.y2} m) like its tower`);
 check(Math.abs(a1.mine.x - a1.lot.x) < 1e-6 && Math.abs(a1.mine.z - a1.lot.z) < 1e-6 && Math.abs(a1.mine.rot - a1.lot.heading) < 1e-6 && a1.dT > 24 && a1.dT < 28 && a1.lx > 2 && a1.lx < 6 && a1.walker === 'walk', `my apartment is ${a1.dT} m beside my tower (home ${a1.slot + 1}), facing the same street (${a1.lx} m toward the door line); I start on foot in the tower`);
 // 外殼的樣子（第 63 批：白色大理石）：站在公寓前面 17 公尺看過去
 await p.evaluate(() => { const D = window.__D(), W = D.walker, HM = window.__HOME(), b = D.VIL.buildings.find((q) => q.kind === 'apt' && q.slot === HM.slot), sx = Math.sin(b.rot), cz = Math.cos(b.rot), h = Math.atan2(cz, -sx);
   W.teleport({ x: b.x + sx * 17, z: b.z + cz * 17, heading: h }); W.setCamera({ yaw: h, pitch: 0.32 }); window.__H.step(20); });
 await drawAndShot('0-shell');
-// 走到公寓門口（村子的門：walker.doors 裡 kind 'apt' 那扇）→ 推進去 → 黑掉 → 1 樓大廳
+// 走到公寓門口（村子的門：walker.doors 裡 kind 'apt' 那扇）→ 按「開門」→ 走進去（第 65 批：不黑掉）→ 1 樓大廳
 const d1 = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, W = D.walker, HM = window.__HOME(), X = window.__IN();
   const d = W.doors.find((q) => q.ref?.kind === 'apt' && q.ref.slot === HM.slot); if (!d) return { none: true, doors: W.doors.filter((q) => q.ref?.kind === 'apt').length };
@@ -403,11 +407,11 @@ const d1 = await p.evaluate(() => {
 });
 const f1 = await doorDone(); const i1 = await inInfo();
 console.log('  into the apartment:', JSON.stringify(d1), 'fade frames', f1 * 2, '→', JSON.stringify(i1));
-check(!d1.none && d1.fade && i1.in && i1.kind === 'apt' && i1.floors === 5 && i1.floor === 0 && i1.name === d1.name && i1.mode === 'walk' && !i1.paused && i1.hud && i1.mine && i1.doors && !i1.fadeShown,
-  `pushed into the apartment door (${d1.s} s): inside 「${i1.name}」 (5 floors), 1F lobby, walking HUD, its own scene; built in ${i1.info?.ms} ms`);
+check(!d1.none && d1.live && d1.opened && d1.in && d1.fadeFrames === 0 && i1.in && i1.live && i1.kind === 'apt' && i1.floors === 5 && i1.floor === 0 && i1.name === d1.name && i1.mode === 'walk' && !i1.paused && i1.hud && i1.mine && i1.doors && !i1.fadeShown,
+  `pressed 「開門」 and walked into the apartment door (${d1.s} s, no fade): inside 「${i1.name}」 (5 floors), 1F lobby, walking HUD, its own scene; built in ${i1.info?.ms} ms`);
 await drawAndShot('1-lobby');
 const r1 = await p.evaluate(() => window.__rinfo());
-check(r1.calls < 60, `lobby: ${r1.calls} draw calls / ${r1.tris} triangles`);
+check(r1.calls < 60, `lobby (the building itself, drawn after the village outside): ${r1.calls} draw calls / ${r1.tris} triangles`);
 const lob = await p.evaluate(() => { const I = window.__IN().indoor.I, F = I.floors[0]; return { rooms: F.rooms.map((r) => r.name), lift: !!I.lift, label: F.label, exits: F.exits.map((e) => e.to), stair: F.stair && { up: F.stair.up, down: F.stair.down }, s5: I.floors[4].stair?.top }; });
 console.log('  1F:', JSON.stringify(lob));
 check(lob.rooms.includes('大廳') && !lob.lift && lob.exits.includes('outside') && !lob.exits.some((e) => typeof e === 'number' || e === 'roof') && lob.stair?.up && !lob.stair.down && lob.s5 === 'roof',
@@ -494,7 +498,7 @@ const hw = await p.evaluate(() => {
       if (b.length && bad.length < 8) bad.push(`${room.name} f${i}: ${b.join('; ')}`);
     }
   }
-  W.setInput(null); W.setDoors(I.exits.map((e) => e.door));
+  W.setInput(null); W.setDoors((window.__IN().indoor.live ? I.exits.filter((e) => e.to !== 'outside') : I.exits).map((e) => e.door)); // 第 65 批：live 的大門不是 walk.js 的門
   return { rooms: I.rooms.length, frames, bad };
 });
 console.log('  walk 4F:', JSON.stringify(hw));
@@ -539,6 +543,30 @@ const bk = await toBack();
 const f5 = await doorDone(); const i5 = await inInfo();
 console.log('  back in:', JSON.stringify(bk), f5 * 2, JSON.stringify(i5));
 check(bk.fade && i5.in && i5.kind === 'apt' && i5.floor === 3 && i5.mode === 'walk' && !i5.paused && !(await p.evaluate(() => window.__APT().APTU.on)), 'walking into the balcony door brings you back into the living room (4F)');
+// 第 65 批：4 樓客廳往陽台的落地門看出去：門那裡裡面什麼都沒畫（洋紅色的底露出來），截圖＝村子（鏡頭搬到 4 樓的真的高度）自己畫的樣子
+await p.evaluate(() => { window.__px = (url, uv) => new Promise((res) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.drawImage(im, 0, 0); const out = []; for (const [du, dv] of [[0, 0], [-0.02, 0], [0.02, 0], [0, -0.02], [0, 0.02]]) { const q = g.getImageData(Math.round((uv.u + du) * (im.width - 1)), Math.round((uv.v + dv) * (im.height - 1)), 1, 1).data; out.push([q[0], q[1], q[2]]); } res(out); }; im.src = url; }); });
+const uv4 = await p.evaluate(() => {
+  const D = window.__D(), X = window.__IN(), I = X.indoor.I, W = D.walker, T3 = window.__T3, cam = D.dcam, e = I.exits.find((x) => x.to === 'balc'), d = e.door;
+  const nx = -Math.sin(d.ry), nz = -Math.cos(d.ry); W.teleport({ x: d.x - nx * 2.6, z: d.z - nz * 2.6, heading: Math.atan2(-nz, nx) }); W.setCamera({ yaw: Math.atan2(-nz, nx) + 0.4, pitch: 0.05 }); window.__H.step(30);
+  W.character.group.traverse((o) => o.layers.set(1)); const v = new T3.Vector3(d.x + Math.cos(d.ry) * 0.45, 1.6, d.z - Math.sin(d.ry) * 0.45).project(cam); /* 落地門中間有一支框：看旁邊那一片 */ return { u: (v.x + 1) / 2, v: (1 - v.y) / 2 };
+});
+const both4 = await (async () => { const n0 = await p.evaluate(() => { window.__noDraw = false; return window.__dframes || 0; }); await p.waitForFunction((n) => (window.__dframes || 0) >= n + 2, n0); await p.evaluate(() => { window.__noDraw = true; });
+  const r = await p.evaluate(() => { const e = window.__renderer().domElement.getBoundingClientRect(); return [e.left, e.top, e.width, e.height]; }), buf = await p.screenshot({ clip: { x: r[0], y: r[1], width: r[2], height: r[3] } });
+  return p.evaluate(([b64, uv]) => window.__px('data:image/png;base64,' + b64, uv), [buf.toString('base64'), uv4]); })();
+const lk4 = await p.evaluate(async (uv) => {
+  const D = window.__D(), X = window.__IN(), I = X.indoor.I, W = D.walker, T3 = window.__T3, R = window.__renderer(), cam = D.dcam, b = X.indoor.b, yoff = (b.y || 0) + I.floor * 3.3;
+  const ac = R.autoClear, cc = R.getClearColor(new T3.Color()), ca = R.getClearAlpha(); R.setRenderTarget(null);
+  R.autoClear = true; cam.position.y += yoff; cam.updateMatrixWorld(); R.render(D.TR.scene, cam); cam.position.y -= yoff; cam.updateMatrixWorld(); const world = await window.__px(R.domElement.toDataURL(), uv);
+  R.setClearColor(0xff00ff, 1); R.clear(); R.autoClear = false; R.render(X.indoor.scene, cam); const inside = await window.__px(R.domElement.toDataURL(), uv);
+  R.setClearColor(cc, ca); R.autoClear = ac; W.character.group.traverse((o) => o.layers.set(0));
+  const m = D.TR.scene.children.find((o) => o.name === 'apt-glass'), M = new T3.Matrix4(); m.getMatrixAt(b.slot, M);
+  return { uv, yoff: +yoff.toFixed(2), world, inside, glass: +M.elements[0].toFixed(2) };
+}, uv4);
+lk4.both = both4;
+await drawAndShot('2b-4f-lookout');
+const mg = (a) => a.filter((q) => q[0] > 240 && q[1] < 20 && q[2] > 240).length, nr = (a, c) => a.filter((q, i) => Math.abs(q[0] - c[i][0]) + Math.abs(q[1] - c[i][1]) + Math.abs(q[2] - c[i][2]) <= 40).length;
+console.log('  4F look out:', JSON.stringify(lk4));
+check(mg(lk4.inside) >= 4 && nr(lk4.both, lk4.world) >= 4 && lk4.yoff > 9.8 && lk4.glass === 0, `from the 4F living room the balcony door is open to the real outside: the village drawn from ${lk4.yoff} m up shows through it (${nr(lk4.both, lk4.world)}/5), the shell's dark window glass is hidden`);
 // ---- 5 頂樓：樓梯走上 5 樓（你家，沒有陽台）→ 再走上去就到頂樓（真的在外面：16.5 公尺、女兒牆擋人、水塔、晒衣架）→ 門走回 5 樓 ----
 const u5 = await p.evaluate(() => { const H = window.__H; H.toStairFoot('up'); return H.stairWalk(H.UP); });
 check(u5.ok && u5.from === 3 && u5.floor === 4 && u5.fade === 0, `up the stairs to 5F (${u5.s} s)`);
@@ -575,7 +603,7 @@ const ex = await p.evaluate(() => { const I = window.__IN().indoor.I, e = I.exit
 const f9 = await doorDone();
 const o9 = await p.evaluate(() => { const D = window.__D(), W = D.walker, t = W.telemetry(), b = window.__ad, U = window.__APT().APTU; return { in: !!window.__IN().indoor, on: U.on, mode: W.mode, mine: W.character.group.parent === D.TR.scene, y: +W.character.group.position.y.toFixed(2), d: +Math.hypot(t.x - b.door.x, t.z - b.door.z).toFixed(2), doors: W.doors.length }; });
 console.log('  out:', JSON.stringify(i9), JSON.stringify(ex), f9 * 2, JSON.stringify(o9));
-check(i9.floor === 0 && ex.fade && !o9.in && !o9.on && o9.mode === 'walk' && o9.mine && Math.abs(o9.y) < 0.05 && o9.d < 3 && o9.doors > 20, `out the front door: back on the street by the apartment door (${o9.d} m), ground level, the village doors are back`);
+check(i9.floor === 0 && ex.live && ex.out && ex.fadeFrames === 0 && !o9.in && !o9.on && o9.mode === 'walk' && o9.mine && Math.abs(o9.y) < 0.05 && o9.d < 3 && o9.doors > 20, `walked out the front door (no fade): back on the street by the apartment door (${o9.d} m), ground level, the village doors are back`);
 await drawAndShot('5-outside');
 const ro = await p.evaluate(() => window.__rinfo());
 console.log(`  draw calls: lobby ${r1.calls}/${r1.tris}, roof ${rr.calls}/${rr.tris}, outside by the door ${ro.calls}/${ro.tris}`);

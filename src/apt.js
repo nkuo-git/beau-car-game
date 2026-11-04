@@ -98,7 +98,7 @@ function mesher(uvScale) {
 }
 export function buildApt() {
   const { W, D, FH, NF, PAR, BZ, BX0, BX1, T, core, head } = APT, HX = W / 2, HZ = D / 2, H = ROOFY;
-  const TI = mesher(1.6), FL = mesher(1), GL = mesher(1), MT = mesher(1), WH = mesher(1); // 磁磚、水泥、玻璃、金屬、白
+  const TI = mesher(1.6), FL = mesher(1), GL = mesher(1), MT = mesher(1), WH = mesher(1), DG = mesher(1); // 磁磚、水泥、玻璃、金屬、白、大門的玻璃（第 65 批：自己一組，門開著就藏起來）
   const tile = col3('#ffffff'), tile2 = col3('#e9e6e0'), conc = col3('#c9c6bf'), conc2 = col3('#b4b1aa'), dark = col3('#3c4046'), al = col3('#c7ccd2'), white = col3('#f2f2ef'), under = col3('#8f8d88');
   // ---- 主體：四面磁磚牆（正面右邊 2–4 樓凹進去是陽台）----
   TI.bx(-HX, HX, 0, H, -HZ, HZ, tile, ['nz', 'px', 'nx'], null); // 後、左、右
@@ -136,7 +136,7 @@ export function buildApt() {
     win('nz', 1.2, 3.0, y, y1); win('nz', 4.0, 5.2, y + 0.3, y1); win('nz', -5.2, -4.4, y + 0.4, y1); // 後面：走廊、廚房、廁所的窗
   }
   // ---- 一樓大門：玻璃雙開門＋雨遮＋門階＋門牌燈；信箱在裡面（interiors.js）----
-  GL.bx(-1.0, 1.0, 0.05, 2.4, HZ + 0.02, HZ + 0.05, col3('#2a3440')); MT.bx(-1.08, 1.08, 2.4, 2.5, HZ, HZ + 0.08, al); MT.bx(-0.03, 0.03, 0.05, 2.4, HZ, HZ + 0.07, al); MT.bx(-1.08, -1.0, 0, 2.5, HZ, HZ + 0.08, al); MT.bx(1.0, 1.08, 0, 2.5, HZ, HZ + 0.08, al);
+  DG.bx(-1.0, 1.0, 0.05, 2.4, HZ + 0.02, HZ + 0.05, col3('#2a3440')); MT.bx(-1.08, 1.08, 2.4, 2.5, HZ, HZ + 0.08, al); DG.bx(-0.03, 0.03, 0.05, 2.4, HZ, HZ + 0.07, al); /* 中間的框跟著門藏起來 */ MT.bx(-1.08, -1.0, 0, 2.5, HZ, HZ + 0.08, al); MT.bx(1.0, 1.08, 0, 2.5, HZ, HZ + 0.08, al);
   FL.bx(-1.8, 1.8, 2.75, 2.9, HZ, HZ + 1.3, conc2); FL.bx(-1.8, 1.8, 0, 0.14, HZ, HZ + 0.5, conc2, ['py', 'pz', 'px', 'nx']); // 雨遮、門階
   WH.bx(-0.3, 0.3, 2.95, 3.1, HZ + 0.02, HZ + 0.12, white); // 門牌（字 town.src.js／net.src.js 以後再掛）
   // ---- 頂樓：女兒牆、樓梯間（上面水塔）、曬衣架、盆栽、冷氣 ----
@@ -180,8 +180,10 @@ export function buildApt() {
     mk('apt-tile', TI, new THREE.MeshStandardMaterial({ map: marbleTex(), vertexColors: true, roughness: 0.32, metalness: 0 })), // 第 63 批：白色大理石
     mk('apt-conc', FL, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 })),
     mk('apt-glass', GL, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.18, metalness: 0.7 })),
+    mk('apt-door', DG, null), // 跟 apt-glass 同一個材質（下面）
     mk('apt-metal', MT, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.6 })),
     mk('apt-white', WH, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.05 })),
   ];
-  return { parts, tris: TI.tris + FL.tris + GL.tris + MT.tris + WH.tris, cols, roof, balc };
+  parts[3].material = parts[2].material;
+  return { parts, tris: TI.tris + FL.tris + GL.tris + MT.tris + WH.tris + DG.tris, cols, roof, balc };
 }

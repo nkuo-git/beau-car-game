@@ -997,6 +997,7 @@ function createLook(o) {
   const API = {
     get level() { return LV; }, get max() { return MAX; }, setMax(on) { MAX = !!on; shadowCfg(LV); for (const m of MATS) m.needsUpdate = true; }, // 第 41 批：最真實的重的四樣（電腦＝true、手機＝false；測試可以切）
     get busy() { return !!busy; },
+    raw(sc, cam) { const e = R.toneMappingExposure; R.toneMappingExposure = EXP0; r0(sc, cam); R.toneMappingExposure = e; }, // 第 65 批：房子裡面那一遍（不算畫質那些：車漆、車燈、後製都不動）
     can: { post: half, soft },
     half,
     pref: lookCaps(R).pref, // 沒有設定過：電腦模擬的（測試）＝順，手機＝漂亮（第 39 批：最真實不管手機，太重），電腦畫得了半精度＝最真實

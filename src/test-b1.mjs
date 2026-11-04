@@ -24,7 +24,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + '   TWR, EL, PW, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE, setDest, CARS, PERF, TOWER_BAYS, towerFy, TOWER });'
   + ' window.__HOME = () => HOME; window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
   + ' window.__pol = () => (typeof police !== "undefined" ? police : null);' // 第 3 批（b3-int）：警察（撞人的測試以後把星星清掉：警察的部分在 test-b3.mjs）
-  + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR });'
+  + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR, LD });'
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
   + ' window.__look = () => LOOKP; window.__cam = () => ({ maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
@@ -244,26 +244,30 @@ await p.addInitScript(() => {
   };
   H.walkPath = (pts, o) => { let r = null; for (const q of pts) { r = H.walkTo(q[0], q[1], o); if (!r.ok) return { ...r, at: q }; } return r; };
   // 村子的房子 b：站在正面外面（離門 1.4 公尺：門的觸發範圍外面），往房子推 1.5 秒 → 最後在不在房子的長方形裡面（村子的碰撞在＝擋在牆外）
-  H.wallHolds = (b) => {
+  H.wallHolds = (b, o1 = 1.4) => { // o1：離門多遠（第 65 批：超商的自動門走近就開，要站遠一點）
     const w = W(), d = b.door, nx = -Math.sin(d.ry), nz = -Math.cos(d.ry), tx = Math.cos(d.ry), tz = -Math.sin(d.ry);
-    const side = (b.x - d.x) * tx + (b.z - d.z) * tz >= 0 ? 1 : -1, off = Math.min(1.4, b.hx - 0.5), sx = d.x + tx * off * side - nx, sz = d.z + tz * off * side - nz, dir = Math.atan2(-nz, nx);
+    const side = (b.x - d.x) * tx + (b.z - d.z) * tz >= 0 ? 1 : -1, off = Math.min(o1, b.hx - 0.5), sx = d.x + tx * off * side - nx, sz = d.z + tz * off * side - nz, dir = Math.atan2(-nz, nx);
     w.teleport({ x: sx, z: sz, heading: dir }); step(5);
     const r = H.push(dir, 1.5, 0.8), dx = r.x - b.x, dz = r.z - b.z, c = Math.cos(b.rot || 0), s = Math.sin(b.rot || 0);
     return { moved: +r.d.toFixed(2), inside: Math.abs(dx * c - dz * s) < b.hx && Math.abs(dx * s + dz * c) < b.hz };
   };
   // 在房子裡面：這一層的出口 e 前面 1.4 公尺（房間這邊）朝出口推，推到門口開始黑掉為止
-  H.toExit = (e) => {
-    const w = W(), d = e.door, nx = -Math.sin(d.ry), nz = -Math.cos(d.ry), dir = Math.atan2(-nz, nx);
+  H.toExit = (e) => { // 第 65 批：村子房子的大門（live）不黑掉：走過門口就在外面（live＝true、out＝出來了、fadeFrames＝中間黑掉幾格）
+    const w = W(), d = e.door, nx = -Math.sin(d.ry), nz = -Math.cos(d.ry), dir = Math.atan2(-nz, nx), live = !!window.__IN().indoor?.live && e.to === 'outside';
     w.teleport({ x: d.x - nx * 1.4, z: d.z - nz * 1.4, heading: dir }); step(5);
-    let n = 0; for (; n < 240 && !window.__IN().doorFade; n++) { const t = w.telemetry(), a = dir - t.camYaw; w.setInput({ x: -Math.sin(a) * 0.6, y: Math.cos(a) * 0.6 }); step(1); }
-    w.setInput(null); return { s: +(n / 60).toFixed(2), fade: !!window.__IN().doorFade };
+    let n = 0, ff = 0, opened = false; for (; n < 240 && (live ? !!window.__IN().indoor : !window.__IN().doorFade); n++) { if (live && !opened && H.actText() === '開門') { H.press(); opened = true; } const t = w.telemetry(), a = dir - t.camYaw; w.setInput({ x: -Math.sin(a) * 0.6, y: Math.cos(a) * 0.6 }); step(1); if (window.__IN().doorFade) ff++; }
+    if (live) for (let k = 0; k < 30; k++) { const t = w.telemetry(), a = dir - t.camYaw; w.setInput({ x: -Math.sin(a) * 0.6, y: Math.cos(a) * 0.6 }); step(1); if (window.__IN().doorFade) ff++; } // 再走出去一點
+    w.setInput(null); return { s: +(n / 60).toFixed(2), fade: !!window.__IN().doorFade, live, opened, out: live && !window.__IN().indoor, fadeFrames: ff };
   };
   // 村子裡的門（walker.doors 的一個）：站到門外 2 公尺朝門推，推到開始黑掉為止
-  H.toDoor = (d) => {
-    const w = W(), nx = -Math.sin(d.ry), nz = -Math.cos(d.ry), dir = Math.atan2(-nz, nx);
+  H.toDoor = (d) => { // 第 65 批：村子的房子、店、公寓（interiorFor 有的）門自己開：「開門」就按、走過門口就在裡面（不黑掉）；警察局、槍店照舊推到黑掉
+    const w = W(), nx = -Math.sin(d.ry), nz = -Math.cos(d.ry), dir = Math.atan2(-nz, nx), live = !!(d.ref && window.__IN().interiorFor(d.ref));
     w.teleport({ x: d.ax - nx * 2, z: d.az - nz * 2, heading: dir }); step(20);
-    let n = 0; for (; n < 240 && !window.__IN().doorFade; n++) { const t = w.telemetry(), a = dir - t.camYaw; w.setInput({ x: -Math.sin(a) * 0.7, y: Math.cos(a) * 0.7 }); step(1); }
-    w.setInput(null); return { s: +(n / 60).toFixed(2), fade: !!window.__IN().doorFade };
+    let n = 0, ff = 0, opened = false; for (; n < 360 && (live ? !window.__IN().indoor : !window.__IN().doorFade); n++) {
+      if (live && !opened && H.actText && H.actText() === '開門') { H.press(); opened = true; }
+      const t = w.telemetry(), a = dir - t.camYaw; w.setInput({ x: -Math.sin(a) * 0.7, y: Math.cos(a) * 0.7 }); step(1); if (window.__IN().doorFade) ff++;
+    }
+    w.setInput(null); return { s: +(n / 60).toFixed(2), fade: !!window.__IN().doorFade, live, opened, in: !!window.__IN().indoor?.live, fadeFrames: ff };
   };
   // 在房子裡面的樣子（這一層）
   H.inInfo = () => {
@@ -271,7 +275,7 @@ await p.addInitScript(() => {
     if (!I) return { in: false, mode: t.mode, mine: w.character.group.parent === D.TR.scene, fade: !!X.doorFade };
     const e = document.querySelector('#stage .wk-toast'), f = document.querySelector('#stage .sleep-fade');
     return { in: true, name: I.name, kind: I.kind, floors: I.floors.length, floor: I.floor, x: t.x, z: t.z, mode: t.mode, paused: t.paused, hud: H.visible('#stage .wk'), near: t.near,
-      mine: w.character.group.parent === X.indoor.scene, doors: w.doors.length === I.exits.length && w.doors.every((d) => I.exits.some((x) => x.door === d.ref)),
+      mine: w.character.group.parent === X.indoor.scene, doors: ((ex) => w.doors.length === ex.length && w.doors.every((d) => ex.some((x) => x.door === d.ref)))(X.indoor.live ? I.exits.filter((x) => x.to !== 'outside') : I.exits), live: !!X.indoor.live, // 第 65 批：live 的大門不是 walk.js 的門
       toast: e && e.classList.contains('show') ? e.textContent : '', fadeShown: !!f && getComputedStyle(f).display !== 'none', mov: N ? N.MOV.length : 0, meFar: N ? N.me.x === 1e6 : true, info: I.info, cam: I.camera, dist: w.cameraDist };
   };
   // 一直往某個世界方向推 s 秒
@@ -676,12 +680,12 @@ const hdoor = await p.evaluate(() => {
 const hw0 = await doorDone();
 const hin = await p.evaluate(() => { const H = window.__H, X = window.__IN(), I = X.indoor?.I, q = H.inInfo(); return { ...q, at: I ? +Math.hypot(q.x - I.spawn.x, q.z - I.spawn.z).toFixed(3) : null, kids: X.indoor?.scene.children.length }; });
 console.log('  into a house:', JSON.stringify(hdoor), 'fade frames', hw0 * 2, '→', JSON.stringify(hin));
-check(hdoor.n > 0 && hdoor.fade && hin.in && hin.name === hdoor.name && hin.floors === hdoor.floors && hin.mode === 'walk' && !hin.paused && hin.hud && hin.at < 0.05 && hin.mine && hin.doors && !hin.fadeShown && hin.toast === hin.name && hin.mov === 0 && hin.meFar,
-  `walked into a house door (pushed ${hdoor.s} s): screen goes black → inside 「${hin.name}」 (${hin.floors} floors) just inside the door, walking HUD back, its own scene (you + the house: ${hin.kids} objects), its exits are the doors now, the traffic and people outside don't count here; built in ${hin.info?.ms} ms`);
+check(hdoor.n > 0 && hdoor.live && hdoor.opened && hdoor.in && hdoor.fadeFrames === 0 && hin.in && hin.live && hin.name === hdoor.name && hin.floors === hdoor.floors && hin.mode === 'walk' && !hin.paused && hin.hud && hin.at < 1.5 && hin.mine && hin.doors && !hin.fadeShown && hin.toast === hin.name && hin.mov === 0 && hin.meFar,
+  `pressed 「開門」 at a house door and walked in (${hdoor.s} s, no fade; 第 65 批) → inside 「${hin.name}」 (${hin.floors} floors) just inside the door, walking HUD back, its own scene (you + the house: ${hin.kids} objects), its exits are the doors now, the traffic and people outside don't count here; built in ${hin.info?.ms} ms`);
 check(hdoor.open >= 80 && hdoor.open === hdoor.doors - 2 && hdoor.shut === 'gunshop,police' && !hdoor.dealer && hdoor.warm && hdoor.warm.compile >= 0, `every village door opens into a house/shop/store/temple/farmhouse (${hdoor.open} of ${hdoor.doors}; still shut: ${hdoor.shut}; the dealer's auto door is open, not a door); warmed up on the loading screen (${JSON.stringify(hdoor.warm)} ms)`);
 await drawAndShot('6b-house-inside');
 const hr0 = await p.evaluate(() => window.__rinfo());
-check(hr0.calls < 40, `inside only the house and you are drawn (${hr0.calls} draw calls, ${hr0.tris} triangles; the village is ~150)`);
+check(hr0.calls < 40, `inside: the house itself is ${hr0.calls} draw calls, ${hr0.tris} triangles (第 65 批：drawn after the village you see through the windows and the door)`);
 // 走來走去（每一間的中間出發，隨便走、隨便轉鏡頭）：不會卡進牆、家具；鏡頭不會在牆裡面、天花板上面、房子外面（出口先關掉：不要走一走就上樓）
 const hwalk = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, W = D.walker, I = window.__IN().indoor.I; let seed = 11; const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -703,7 +707,7 @@ const hwalk = await p.evaluate(() => {
       if (b.length && bad.length < 6) bad.push(`${room.name} f${i}: ${b.join('; ')}`);
     }
   }
-  W.setInput(null); W.setCamera({ hold: 0 }); W.setDoors(I.exits.map((e) => e.door));
+  W.setInput(null); W.setCamera({ hold: 0 }); W.setDoors((window.__IN().indoor.live ? I.exits.filter((e) => e.to !== 'outside') : I.exits).map((e) => e.door)); // 第 65 批：live 的大門不是 walk.js 的門
   return { frames, rooms: I.rooms.map((q) => q.name).join(','), bad, camTop: +camTop.toFixed(2), ceiling: I.camera.ceiling, dmax: +dmax.toFixed(2), maxDist: I.camera.maxDist };
 });
 check(!hwalk.bad.length && hwalk.dmax <= hwalk.maxDist + 0.01, `random walking in every room downstairs (${hwalk.rooms}; ${hwalk.frames} frames, random camera): never inside a wall or furniture, camera never in a wall, above the ceiling (highest ${hwalk.camTop} m, ceiling ${hwalk.ceiling}) or outside the house, camera at most ${hwalk.dmax} m away (room fits ${hwalk.maxDist})${hwalk.bad.length ? ' — ' + hwalk.bad.join(' | ') : ''}`);
@@ -730,8 +734,8 @@ const hoff = await p.evaluate(() => {
   return { ...q, at: +Math.hypot(t.x - o.x, t.z - o.z).toFixed(3), dh: +Math.abs(H.wrapA(t.heading - o.heading)).toFixed(3), vd, wall, dist: W.cameraDist };
 });
 console.log('  out again:', JSON.stringify(hex), JSON.stringify(hoff));
-check(hex.fade && !hoff.in && hoff.mode === 'walk' && hoff.at < 0.05 && hoff.dh < 0.01 && hoff.mine && hoff.vd && hoff.wall.inside === false && hoff.dist === hdoor.dist0 && hin.dist <= hin.cam.maxDist + 1e-6,
-  `walked out of the front door: black fade → outside the door facing the street, back in the village scene, village doors and walls back (pushing into the house wall stops you: moved ${hoff.wall.moved} m), camera distance back to ${hoff.dist} m (${hin.dist?.toFixed(2)} m inside: the room fits ${hin.cam?.maxDist?.toFixed(2)})`);
+check(hex.live && hex.out && hex.fadeFrames === 0 && !hoff.in && hoff.mode === 'walk' && hoff.at < 2.5 && hoff.dh < 0.3 && hoff.mine && hoff.vd && hoff.wall.inside === false && hoff.dist === hdoor.dist0 && hin.dist <= hin.cam.maxDist + 1e-6,
+  `walked out of the front door (no fade): outside the door facing the street (${hoff.at} m from the door spot), back in the village scene, village doors and walls back (pushing into the house wall stops you: moved ${hoff.wall.moved} m), camera distance back to ${hoff.dist} m (${hin.dist?.toFixed(2)} m inside: the room fits ${hin.cam?.maxDist?.toFixed(2)})`);
 // 警察局（第 3 批 b3-int 開門了）：推門 → 黑掉 → 警察局裡面（跟透天厝一樣；拘留室在後面，開著）→ 從門口走出去 → 外面警察局門口
 const pol = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, W = D.walker, t0 = W.telemetry(), d = W.doors.find((q) => q.ref?.kind === 'police'); if (!d) return { none: true };
@@ -1093,7 +1097,7 @@ await drawAndShot('20-second-trip');
 const st9 = await p.evaluate(() => { const W = window.__D().walker, d = W.doors.find((q) => q.ref?.kind === 'store'); return d ? { ...window.__H.toDoor(d), name: d.ref.name } : { none: true }; });
 await doorDone();
 const in9 = await p.evaluate(() => window.__H.inInfo());
-check(st9.fade && in9.in && in9.kind === 'store' && in9.floors === 1 && in9.mode === 'walk', `walked into the village store (${in9.name}: ${in9.floors} floor)`);
+check(st9.live && st9.in && st9.fadeFrames === 0 && in9.in && in9.kind === 'store' && in9.floors === 1 && in9.mode === 'walk', `walked into the village store through its sliding door, no fade (${in9.name}: ${in9.floors} floor)`);
 await drawAndShot('20b-store-inside');
 await p.evaluate(() => document.getElementById('driveHome').click()); await p.waitForTimeout(1200);
 const h9 = await p.evaluate(() => { const D = window.__D(), X = window.__IN(), W = D.walker; return { page: document.body.className === '' && !D.trip && D.GAR.door.t === 0 && W.mode === 'off', indoor: !!X.indoor, fade: !!X.doorFade, mine: W.character.group.parent === D.TR.scene, doors: W.doors.length > 50 }; });
@@ -1107,7 +1111,7 @@ await p.evaluate(() => { window.__hold = true; window.__noDraw = true; });
 await p.waitForFunction(() => window.__D().walker.cars.length >= 1 && ['gc8', 'supra'].every((k) => window.__D().LODS[k]?.lod?.car.parent?.name?.startsWith('towerBay')), null, { timeout: 120000 });
 await p.evaluate(() => window.__H.step(30));
 // 上一趟在超商裡面按了直接回車庫：這一趟村子的牆照樣擋人、門照樣進得去（超商那棟）
-const w10 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker, t0 = W.telemetry(), b = D.VIL.buildings.find((q) => q.kind === 'store'), r = H.wallHolds(b); W.teleport({ x: t0.x, z: t0.z, heading: t0.heading }); H.step(10); return { ...r, door: W.doors.some((d) => d.ref === b) }; });
+const w10 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker, t0 = W.telemetry(), b = D.VIL.buildings.find((q) => q.kind === 'store'), r = H.wallHolds(b, 3) /* 第 65 批：門旁邊 1.4 公尺是自動門開著的邊（走得進去），站 3 公尺外推牆 */; W.teleport({ x: t0.x, z: t0.z, heading: t0.heading }); H.step(10); return { ...r, door: W.doors.some((d) => d.ref === b) }; });
 check(w10.inside === false && w10.door, `next trip after leaving from inside the store: the village walls stop you again (moved ${w10.moved} m into the store wall), its door is a door again`);
 // 走路站上圓台（YARIS 停在上面）：面板出來 → 4F：你跟 YARIS 一起上去
 const ew = await p.evaluate(() => {

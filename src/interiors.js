@@ -565,6 +565,8 @@ function blobCanvas() {
 
 // ---- 共用的：貼圖、材質、環境貼圖（第一次蓋的時候做，之後每一棟都用同一份）----
 let SH = null;
+// 第 65 批：live＝房子裡面蓋在村子真的位置（town.src.js 先畫村子再畫裡面）：窗外不畫景（看得到真的外面）、大門的門片會動（F.moving）、門外擋人的盒子不要（門自己開，走得出去）
+let LIVE = false;
 const DFL = {}; // 每個材質「單色的面」用的 uv
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 function shared(renderer, quality) {
@@ -758,7 +760,7 @@ const col3 = (c) => (typeof c === 'string' ? C(c) : c || WHITE);
 // 表面：r＝surfAtlas 的名字、c＝顏色、m＝材質；wain＝下半截另一種（廚房、浴室的壁磚）{ h, s }；skirt＝踢腳板的顏色
 const sf = (r, c = WHITE, m = 'wall', o = {}) => ({ r, c: col3(c), m, ...o });
 function newFloor(o = {}) {
-  return { B: new IB(), ch: o.ch ?? CH, rooms: [], named: [], wins: [], walls: [], cols: [], exits: [], lamps: [], views: [], slabs: [],
+  return { B: new IB(), ch: o.ch ?? CH, rooms: [], named: [], wins: [], walls: [], cols: [], exits: [], lamps: [], views: [], slabs: [], moving: [], portals: [],
     spots: { stand: [], sit: [], sleep: [], pray: [], counter: [] }, sun: null, hemi: null, index: o.index || 0, label: o.label || '1F', cam: o.cam || null };
 }
 // 房間：陰影用（每個房間都要），name 有的話對外（rooms）；floor／ceil：地板、天花板的表面（null 不畫）
@@ -841,7 +843,8 @@ function drawWall(F, w) {
     segs.push([cur, w.s1]);
     for (const [p, q] of segs) if (q - p > 0.01) { const [x, z] = WP(w, (p + q) / 2, w.c); F.cols.push(w.ax === 'x' ? { t: 'box', x, z, hx: (q - p) / 2, hz: t / 2, rot: 0, h: Math.max(2.6, h) } : { t: 'box', x, z, hx: t / 2, hz: (q - p) / 2, rot: 0, h: Math.max(2.6, h) }); }
   }
-  if (w.out && w.view) viewBand(F, w);
+  if (w.out && w.view && !LIVE) viewBand(F, w);
+  if (LIVE && w.out) for (const o of w.ops) if ((o.k === 'door' || o.k === 'open') && o.y0 < 0.05) { const n = w.c + w.out * (w.t / 2 + 0.03); F.portals.push({ a: WP(w, o.a, n), b: WP(w, o.b, n), y1: o.y1 }); } // 第 65 批：外牆走得出去的洞（外面看進來的「門洞」）
 }
 // 洞：側面、上面、窗台＋裡面的東西（窗框、鐵窗、門、鐵捲門⋯）
 function opening(F, w, o) {
@@ -912,6 +915,11 @@ const OPEN_FILL = {
       F.cols.push({ t: 'box', x: (x0 + x1) / 2, z: (z0 + z1) / 2, hx: (x1 - x0) / 2 + 0.02, hz: (z1 - z0) / 2 + 0.02, rot: 0, h: 2.2 });
       if (F.occ) F.occ.push({ x0: x0 - 0.05, x1: x1 + 0.05, z0: z0 - 0.05, z1: z1 + 0.05 });
     };
+    if (LIVE && w.out) { // 第 65 批：門片會動：關著＝躺在牆中間，開著＝往裡面轉 90 度（town.src.js 按「開門」）
+      const one = (hs, sgn) => F.moving.push({ k: 'leaf', h: WP(w, hs, w.c), c: WP(w, hs + sgn * lw, w.c), o: WP(w, hs, w.c + inn * lw), len: lw, y1: o.y1 - 0.08, col: al });
+      if (leaves === 2) { one(a + 0.05, 1); one(b - 0.05, -1); } else one(o.hinge === 'b' ? b - 0.05 : a + 0.05, o.hinge === 'b' ? -1 : 1);
+      return;
+    }
     if (leaves === 2) { leaf(a + 0.05, 1); leaf(b - 0.05, -1); } else leaf(o.hinge === 'b' ? b - 0.05 : a + 0.05, o.hinge === 'b' ? -1 : 1);
   },
   idoor(F, w, o) { // 房門：木頭門框（兩面）、門片開到 90 度
@@ -993,7 +1001,7 @@ function blob(F, x0, z0, x1, z1, k = 1, T = F0, y = 0.006) {
   F.B.quad('shadow', a, b, c, d, [0, 0, 1, 1], [k, k, k]);
 }
 // ---- 碰撞、放人的點、出口（都是本地座標；最後才換成世界座標）----
-function colBox(F, x0, z0, x1, z1, h) { F.cols.push({ t: 'box', x: (x0 + x1) / 2, z: (z0 + z1) / 2, hx: Math.abs(x1 - x0) / 2, hz: Math.abs(z1 - z0) / 2, rot: 0, h }); }
+function colBox(F, x0, z0, x1, z1, h, xb = false) { if (xb && LIVE) return; F.cols.push({ t: 'box', x: (x0 + x1) / 2, z: (z0 + z1) / 2, hx: Math.abs(x1 - x0) / 2, hz: Math.abs(z1 - z0) / 2, rot: 0, h }); } // xb＝門外擋人的（第 65 批：live 的時候不要）
 function colT(F, T, x0, z0, x1, z1, h) { const c = T.p((x0 + x1) / 2, 0, (z0 + z1) / 2); F.cols.push({ t: 'box', x: c[0], z: c[2], hx: Math.abs(x1 - x0) / 2, hz: Math.abs(z1 - z0) / 2, rot: T.ry, h }); }
 function colC(F, x, z, r, h) { F.cols.push({ t: 'circle', x, z, r, h }); }
 // 放人的點：T 裡面的 (lx, lz)，lh＝在 T 裡面面朝哪裡（−π/2＝朝 T 的 +z）
@@ -1503,7 +1511,7 @@ function houseFloor(H, n) {
   // 走得出去（一樓的門）：出口、外面擋住、進來站的地方
   for (const d of doors) {
     exitZone(F, d.a + 0.12, ZF - 0.55, d.b - 0.12, H.hz + 0.35, 'outside', null);
-    colBox(F, d.a - 0.3, H.hz + 0.3, d.b + 0.3, H.hz + 0.8, 2.6);
+    colBox(F, d.a - 0.3, H.hz + 0.3, d.b + 0.3, H.hz + 0.8, 2.6, true);
   }
   if (n === 0) {
     const d = doors.find((o) => H.doorX >= o.a - 0.05 && H.doorX <= o.b + 0.05) || doors[0], sx = clamp(d.k === 'open' ? X(dwU) : H.doorX, d.a + 0.35, d.b - 0.35); // 整片打開的店面：站在正對後面門口的走道上
@@ -2047,9 +2055,10 @@ function storeFloor(b) {
   wall(F, 'x', 6.4, X0, X1, { t: 0.2, n: wallS, out: 1, view: 'street', voff: 0.3, ops: [{ a: X0 + 0.15, b: -1.2, y0: 0.05, y1: 2.9, k: 'glass', posters }, door, { a: 1.2, b: X1 - 0.15, y0: 0.05, y1: 2.9, k: 'glass', posters }] });
   ready(F);
   // 自動門（兩片玻璃往兩邊開）
-  for (const s of [-1, 1]) { const T = frame(s * 1.6, 0, 6.25); bx(F, 'metal', T, [-0.52, 0, -0.03, 0.52, 2.4, 0.03], '#aeb4ba', { pz: false, nz: false }); vq(F.B, 'glow', T, [-0.48, 0], [0.48, 0], 0.1, 2.3, dotUV(GU('s_ice')), [0.45, 0.5, 0.52], true); }
+  if (LIVE) for (const s of [-1, 1]) F.moving.push({ k: 'slide', c: [s * 0.53, 6.25], o: [s * 1.6, 6.25], len: 1.04, y1: 2.4, col: C('#aeb4ba'), glass: true }); // 第 65 批：自動門（走近了自己滑開）
+  else for (const s of [-1, 1]) { const T = frame(s * 1.6, 0, 6.25); bx(F, 'metal', T, [-0.52, 0, -0.03, 0.52, 2.4, 0.03], '#aeb4ba', { pz: false, nz: false }); vq(F.B, 'glow', T, [-0.48, 0], [0.48, 0], 0.1, 2.3, dotUV(GU('s_ice')), [0.45, 0.5, 0.52], true); }
   bx(F, 'glow', F0, [-1.2, 2.45, 6.0, 1.2, 2.72, 6.3], [1, 1, 1], { nz: GU('welcome'), _: dotUV(GU('s_black')) });
-  exitZone(F, -0.95, Z1 - 0.55, 0.95, 6.85, 'outside', null); colBox(F, -1.4, 6.8, 1.4, 7.3, 2.6);
+  exitZone(F, -0.95, Z1 - 0.55, 0.95, 6.85, 'outside', null); colBox(F, -1.4, 6.8, 1.4, 7.3, 2.6, true);
   F.spawnIn = { x: 0, z: Z1 - 1.2, lh: HP };
   path(F, 0, Z1 - 0.5, 0, 3.4, 0.55); path(F, -7.6, 3.6, 5.0, 3.6, 0.55); path(F, -7.6, -5.0, 5.0, -5.0, 0.5); path(F, -7.6, 3.6, -7.6, -5.0, 0.5); path(F, 5.0, 3.6, 5.0, -5.0, 0.55); path(F, 4.8, 4.2, 4.8, 5.6, 0.5);
   for (const z of [2.2, -0.6, -3.4]) path(F, -7.6, z - 1.35, 5.0, z - 1.35, 0.01);
@@ -2140,7 +2149,7 @@ function templeFloor(b) {
   // 燈、出口
   lamp(F, 0, Z0 + 2.2, 7, '#ffd9a8', 3.3); lamp(F, 0, 0.2, 5, '#ffe2b8', 3.3);
   F.sun = { from: [0.1, 0.5, 1], I: 0.8 }; F.hemi = { sky: '#fff2de', ground: '#b09a80', I: 1.45 };
-  exitZone(F, -1.7, Z1 - 0.55, 1.7, 2.2, 'outside', null); colBox(F, -2.2, 2.15, 2.2, 2.7, 3);
+  exitZone(F, -1.7, Z1 - 0.55, 1.7, 2.2, 'outside', null); colBox(F, -2.2, 2.15, 2.2, 2.7, 3, true);
   F.spawnIn = { x: 0, z: Z1 - 1.15, lh: HP };
   F.cam = { maxDist: 5.0, ceiling: 3.4, near: 0.1 };
   return F;
@@ -2196,7 +2205,7 @@ function farmFloor(b) {
   fixture(F, 0, 0.3, 'bulb', { y: RY(0.3) - 0.35 }); fixture(F, -6, 0.3, 'bulb', { y: RY(0.3) - 0.35 }); fixture(F, 6, 0.3, 'bulb', { y: RY(0.3) - 0.35 });
   lamp(F, 0, 0.3, 5, '#ffe6c0', 3.2); lamp(F, -6.0, 0.4, 3.5, '#ffe6c0', 3.2);
   F.sun = { from: [0.1, 0.55, 1], I: 0.85 }; F.hemi = { sky: '#fff6e8', ground: '#a88e74', I: 1.5 };
-  exitZone(F, -0.85, Z1 - 0.55, 0.85, 3.25, 'outside', null); colBox(F, -1.3, 3.2, 1.3, 3.7, 3);
+  exitZone(F, -0.85, Z1 - 0.55, 0.85, 3.25, 'outside', null); colBox(F, -1.3, 3.2, 1.3, 3.7, 3, true);
   F.spawnIn = { x: 0, z: Z1 - 1.15, lh: HP };
   path(F, 0, Z1 - 0.9, 0, -1.2, 0.5); path(F, -2.5, -1.4, -6.0, 0.4, 0.45); path(F, 2.5, -1.4, 6.0, 0.2, 0.45);
   F.cam = { maxDist: 3.6, ceiling: 3.25, near: 0.1 };
@@ -2313,7 +2322,7 @@ function aptFloor(A, n) {
   const B = F.B;
   stairShaft(F, { ...A, N: A.N + 1, roofUp: true, tread: 'marble' }, n, S_shaft); // N＋1：五樓也有往上的樓梯（走上去＝頂樓，town.src.js）
   // 大門：出口、外面擋住、進來站的地方
-  for (const d of doors) { exitZone(F, d.a + 0.12, ZF - 0.55, d.b - 0.12, A.hz + 0.35, 'outside', null); colBox(F, d.a - 0.3, A.hz + 0.3, d.b + 0.3, A.hz + 0.8, 2.6); }
+  for (const d of doors) { exitZone(F, d.a + 0.12, ZF - 0.55, d.b - 0.12, A.hz + 0.35, 'outside', null); colBox(F, d.a - 0.3, A.hz + 0.3, d.b + 0.3, A.hz + 0.8, 2.6, true); }
   if (lobby) F.spawnIn = { x: 0, z: ZF - 1.15, lh: HP };
   // 走道（家具不擋）：走廊一整條、電梯口、樓梯口、大門→走廊、玄關→客廳→房間→廁所、廚房
   path(F, X0 + 0.5, (ZB + zC) / 2, X1 - 0.5, (ZB + zC) / 2, 0.5);
@@ -2403,6 +2412,32 @@ function addLights(g, F) {
   const d = new THREE.DirectionalLight(0xfff2de, sn.I); d.name = 'int-sun'; d.position.set(sn.from[0] * 10, sn.from[1] * 10, sn.from[2] * 10); d.target.position.set(0, 0, 0); g.add(d, d.target);
   for (let i = 0; i < 2; i++) { const L = F.lamps[i]; const p = new THREE.PointLight(new THREE.Color(L ? L.c : '#ffffff'), L ? L.I * 4 : 0, 0, 2); p.name = 'int-lamp' + i; p.position.set(L ? L.x : 0, L ? L.y : 2.5, L ? L.z : 0); g.add(p); }
 }
+// 第 65 批：會動的門（本地）：leaf＝門片繞門軸（h）從關著（c 那邊）轉到開著（o 那邊）；slide＝自動門從 c 滑到 o
+function movingPiece(g, m, mats) {
+  const B = new IB(), piv = new THREE.Group(), len = m.len, y1 = m.y1;
+  const x0 = m.k === 'leaf' ? 0 : -len / 2, x1 = m.k === 'leaf' ? len : len / 2;
+  box(B, 'metal', F0, [x0, 0.02, -0.0225, x1, y1, 0.0225], m.col);
+  for (const z of [-0.026, 0.026]) vq(B, 'glow', F0, [x0 + 0.07, z], [x1 - 0.07, z], 0.28, y1 - 0.22, dotUV(GU('s_ice')), [0.5, 0.56, 0.6], true);
+  const { group: mg } = B.build(mats); piv.add(mg); piv.name = 'door-' + m.k; g.add(piv);
+  const ang = (P) => Math.atan2(P[1] - m.h[1], P[0] - m.h[0]);
+  const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  let set, seg;
+  if (m.k === 'leaf') {
+    const a0 = ang(m.c), da = wrap(ang(m.o) - a0);
+    piv.position.set(m.h[0], 0, m.h[1]);
+    const A = (t) => a0 + da * t;
+    set = (t) => { piv.rotation.y = -A(t); };
+    seg = (t) => { const a = A(t); return [[m.h[0], m.h[1]], [m.h[0] + Math.cos(a) * len, m.h[1] + Math.sin(a) * len]]; };
+  } else {
+    const dx = m.o[0] - m.c[0], dz = m.o[1] - m.c[1], L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L;
+    piv.rotation.y = -Math.atan2(uz, ux);
+    const at = (t) => [m.c[0] + dx * t, m.c[1] + dz * t];
+    set = (t) => { const p = at(t); piv.position.set(p[0], 0, p[1]); };
+    seg = (t) => { const p = at(t); return [[p[0] - ux * len / 2, p[1] - uz * len / 2], [p[0] + ux * len / 2, p[1] + uz * len / 2]]; };
+  }
+  set(0);
+  return { k: m.k, obj: piv, set, seg, tris: B.tris };
+}
 function buildInterior(b, o = {}) {
   const q = o.quality === 'low' ? 'low' : 'high';
   if (b == null) { shared(o.renderer || null, q); return null; } // 先做好共用的貼圖、環境貼圖、材質（載入畫面叫一次，第一次走進門就不會頓）
@@ -2411,9 +2446,12 @@ function buildInterior(b, o = {}) {
   shared(o.renderer || null, q); const mats = SH.mats[q];
   const P = planOf(b, kind), W = toWorld(b), rot = b.rot || 0;
   let Fs;
+  LIVE = !!o.live;
+  try {
   if (kind === 'house') { const H = houseInfo(b); Fs = []; for (let n = 0; n < H.N; n++) Fs.push(houseFloor(H, n)); }
   else if (kind === 'apt') { const A = aptInfo(b); Fs = []; for (let n = 0; n < A.N; n++) Fs.push(aptFloor(A, n)); }
   else Fs = [kind === 'store' ? storeFloor(b) : kind === 'temple' ? templeFloor(b) : farmFloor(b)];
+  } finally { LIVE = false; }
   const group = new THREE.Group(); group.name = 'interior:' + P.name; group.position.set(b.x, 0, b.z); group.rotation.y = rot;
   const xz = (x, z) => { const p = W(x, z); return { x: p[0], z: p[1] }; };
   const pose = (p) => ({ ...xz(p.x, p.z), heading: wrapA(p.lh + rot) });
@@ -2422,6 +2460,8 @@ function buildInterior(b, o = {}) {
   const floors = Fs.map((F, i) => {
     const { group: g, draws: dc } = F.B.build(mats); g.name = 'floor-' + F.label; g.visible = i === 0; addLights(g, F); group.add(g);
     tris += F.B.tris; draws = Math.max(draws, dc);
+    const moving = F.moving.map((m) => movingPiece(g, m, mats)); // 第 65 批：門片、自動門（本地；town.src.js 叫 setDoorT）
+    for (const m of moving) { tris += m.tris; }
     const spots = {}; for (const [k, list] of Object.entries(F.spots)) spots[k] = list.map((s) => { const r = { ...xz(s.x, s.z), heading: wrapA(s.heading + rot) }; if (s.y != null) r.y = s.y; if (s.room) r.room = s.room; if (s.edge) r.edge = true; return r; });
     const rs = F.rooms.length ? F.rooms : [{ x0: -1, x1: 1, z0: -1, z1: 1 }];
     const bx0 = Math.min(...rs.map((r) => r.x0)), bx1 = Math.max(...rs.map((r) => r.x1)), bz0 = Math.min(...rs.map((r) => r.z0)), bz1 = Math.max(...rs.map((r) => r.z1));
@@ -2431,6 +2471,7 @@ function buildInterior(b, o = {}) {
       exits: F.exits.map((e) => ({ ...xz(e.x, e.z), hx: e.hx, hz: e.hz, rot, to: e.to, spawn: e.to === 'outside' ? { ...outside } : pose(e.spawn), door: { ...xz(e.x, e.z + e.hz - 0.35), ry: wrapA(Math.PI + rot), w: e.hx } })),
       spots, rooms: F.named.map((r) => ({ name: r.name, ...xz((r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2), hx: (r.x1 - r.x0) / 2, hz: (r.z1 - r.z0) / 2, rot, probe: xz(r.probe[0], r.probe[1]) })),
       camera: { maxDist: 3, ceiling: F.ch - 0.2, near: 0.1, ...(F.cam || {}) },
+      moving, portals: F.portals.map((pt) => ({ a: W(pt.a[0], pt.a[1]), b: W(pt.b[0], pt.b[1]), y1: pt.y1 })), // 第 65 批：會動的門、外面看進來的門洞（世界座標）
       stair: F.stair ? { ...F.stair, ch: F.ch } : null, // 第 61 批：樓梯（本地座標；town.src.js stairY、樓梯走到一半換樓層）
       lift: F.lift ? { ...xz((F.lift.x0 + F.lift.x1) / 2, (F.lift.z0 + F.lift.z1) / 2), hx: (F.lift.x1 - F.lift.x0) / 2, hz: (F.lift.z1 - F.lift.z0) / 2, rot } : null, // 第 60 批：公寓的電梯（站進去出面板）
       bounds: { ...xz((bx0 + bx1) / 2, (bz0 + bz1) / 2), hx: (bx1 - bx0) / 2, hz: (bz1 - bz0) / 2, rot },
@@ -2446,6 +2487,18 @@ function buildInterior(b, o = {}) {
       return f;
     },
     dispose() { group.traverse((m) => { if (m.isMesh) m.geometry.dispose(); }); group.removeFromParent(); group.clear(); floors.length = 0; },
+    // 第 65 批：live 的大門（一樓）：doorStyle hinge＝按「開門」轉開、auto＝自動門（走近了滑開）、open＝沒有門（店面、廟）
+    doorStyle: floors[0].moving.some((m) => m.k === 'leaf') ? 'hinge' : floors[0].moving.length ? 'auto' : 'open',
+    portals: floors[0].portals,
+    setDoorT(t) { for (const m of floors[0]?.moving || []) m.set(t); },
+    doorCols(t) { // 世界座標的碰撞（門片現在在哪裡）
+      const out = [];
+      for (const m of floors[0]?.moving || []) {
+        const [P, Q] = m.seg(t), A = W(P[0], P[1]), B2 = W(Q[0], Q[1]), dx = B2[0] - A[0], dz = B2[1] - A[1], L = Math.hypot(dx, dz) || 1;
+        out.push({ t: 'box', x: (A[0] + B2[0]) / 2, z: (A[1] + B2[1]) / 2, hx: L / 2 + 0.02, hz: 0.05, rot: Math.atan2(-dz, dx), h: 2.2 });
+      }
+      return out;
+    },
   };
   I.setFloor(0);
   I.info = { kind: P.kind, biz: P.biz === 'store' || P.biz === 'temple' || P.biz === 'farm' ? null : P.biz, name: P.name, floors: floors.length, tris, draws, ms: +(now() - t0).toFixed(1) };
