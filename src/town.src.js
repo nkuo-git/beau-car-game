@@ -482,9 +482,11 @@ function makeDrv(pose) {
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
     onZone: arrive, onShift: () => dvoice?.shift(), onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
+    onEngine: (on) => { dvoice?.dispose(); dvoice = on ? engineAudio.voice(cur, { parts: partsOf(cur) }) : null; }, // 第 68 批：手排熄火＝引擎聲停、重新發動＝再來
     crush: crushFx && crushK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
+  if (gearK === 'mt') drv.setGearbox('mt'); // 第 68 批：手排
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
   drv.setCamCeil((x, z) => { if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75; if (TRAMP.on) return rampCeil(x, z); if (VIL.hills && !VIL.hills.high && VIL.hills.tunAt(x, z) >= 0) return VIL.hills.ceil; const c = GAR.ceilingAt(x, z, true); return c < 50 ? GAR.group.position.y + c - 0.75 : Infinity; }); // 第 27 批：隧道裡面＝拱頂底下 // 第 24 批：開在斜坡上＝上面那一圈的底下 // 第 21 批：圓塔現在這一層的天花板（一樓 4.2、樓上 2.9 公尺） // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
@@ -553,6 +555,18 @@ for (const b of document.querySelectorAll('#tiltPop button')) b.addEventListener
   tiltOpen(false);
   if (ask) DeviceMotionEvent.requestPermission().then((r) => tiltMode(r === 'granted' ? 'tilt' : 'btn', true), tiltFail); else tiltMode(k, true);
 });
+// 第 68 批：手排（Nick 2026-11-06「車子做手排的」、卡片「要有離合器」→ 草稿第 2 版「照這樣做」）：「⋯」那一排多一顆「自排／手排」，按一下切換；
+//   每支手機自己記（carid.gear，跟按鈕大小一樣不用搬家、不上雲端）；沒選過＝自排（跟以前一樣）。手排：drive.js setGearbox('mt')（▲ ▼、離合器、熄火、紅線斷油）
+const GEAR_KEY = 'carid.gear';
+let gearK = 'at';
+function gearMode(k, keep) {
+  gearK = k === 'mt' ? 'mt' : 'at';
+  const b = $('gearTog'); b.textContent = gearK === 'mt' ? '手排' : '自排'; b.setAttribute('aria-pressed', String(gearK === 'mt'));
+  if (keep) try { localStorage.setItem(GEAR_KEY, gearK); } catch {}
+  if (drv) drv.setGearbox(gearK);
+}
+try { gearMode(localStorage.getItem(GEAR_KEY)); } catch { gearMode('at'); }
+$('gearTog').addEventListener('click', () => { gearMode(gearK === 'mt' ? 'at' : 'mt', true); gtoast(gearK === 'mt' ? '手排：按住「離合器」再按 ▲ ▼ 換檔' : '自排：車子自己換檔', 2000); FOLD.moreopen = foldStart(); });
 // 畫質（第 29 批，Nick 2026-10-23「就用5號的真實度」）：「⋯」那一排多一顆「✨」（🎮 左邊）→「畫質 最真實／漂亮／順」（look.js）；
 //   每支手機自己記（carid.look，跟按鈕大小一樣不用搬家、不上雲端）；沒選過：電腦模擬的（測試）＝順，畫得了半精度＝最真實，不然＝漂亮
 const LOOK_KEY = 'carid.look';

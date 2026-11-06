@@ -170,6 +170,7 @@ const CSS = `
 .dv-spd.tach svg.red .a{stroke:#FF3B30}
 .dv-spd.tach em{position:static;order:-1;width:auto;height:auto;margin-top:4px;background:none;color:#F2F3F5;font:700 30px/1 ${COND};font-style:normal}
 .dv-spd.tach em.r{background:none;color:#FF3B30}
+.dv-spd em.n{background:#C6CAD1}.dv-spd.tach em.n{background:none;color:#C6CAD1} /* 第 68 批：手排的空檔 N */
 .dv-spd.tach>b{font-size:17px;margin-top:1px}
 .dv-spd.tach>span{font-size:8px;margin-top:1px}
 .dv-steer{bottom:12px;left:10px;display:flex;gap:8px;pointer-events:auto;touch-action:none}
@@ -214,6 +215,25 @@ const CSS = `
 @container (max-height:290px){.dv-pop{right:360px}.dv.pop .dv-spd.tach{right:438px}}
 @media (min-height:561px){@container (max-height:540px){.dv-pop{right:94px;bottom:124px;height:46px;flex-direction:row;gap:4px;font-size:14px}.dv-pop svg{width:22px;height:16px}}} /* 沒全螢幕的電腦（舞台 410–540 高）：上面放不下（壓到「下車」）→ 手煞車左邊、煞車上面 */
 @media (min-height:561px){@container (max-height:409px){.dv-pop{top:142px;right:196px;bottom:auto;height:44px;flex-direction:row;gap:4px;font-size:14px}.dv-pop svg{width:22px;height:16px}.pw-host.pw-on .dv-pop{margin-top:46px}}}
+/* 第 68 批：手排（Nick 2026-11-06「車子做手排的」＋卡片「要有離合器」）：▲升檔 ▼降檔 在煞車上面（右 94）、「離合器」在 ◀ ▶ 上面（左 10）；只有 .dv.mt 才有 */
+.dv-up,.dv-dn,.dv-clu,.dv-mth{display:none}
+.dv.mt .dv-up,.dv.mt .dv-dn,.dv.mt .dv-clu{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;box-sizing:border-box;margin:0;padding:0;border:0;border-radius:16px;background:#2B2E35;color:#F2F3F5;font:700 15px/1 ${SANS};letter-spacing:.04em;white-space:nowrap;box-shadow:0 5px 0 #111216;pointer-events:auto;touch-action:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.dv-up,.dv-dn{right:94px;width:62px;height:46px}
+.dv-dn{bottom:100px}.dv-up{bottom:154px} /* 煞車上面；轉速表（80 寬、到 94）在左邊 */
+@media (max-width:399px){.dv-dn{bottom:186px}.dv-up{bottom:240px}} /* 窄的手機：轉速表放高（garage.css bottom 96）→ ▲ ▼ 再上去（手煞車、跳燈旁邊） */
+.dv-up svg,.dv-dn svg{width:18px;height:12px;fill:#F2F3F5;flex:none}
+.dv-up.hot,.dv-dn.hot{background:#FF6A1F;color:#1A0F07}.dv-up.hot svg,.dv-dn.hot svg{fill:#1A0F07}
+.dv-up.lim{background:#FF3B30;color:#fff}.dv-up.lim svg{fill:#fff}
+.dv-up.on,.dv-dn.on,.dv-clu.on{transform:translateY(4px);box-shadow:none}
+.dv.mt .dv-clu{left:10px;bottom:140px;width:134px;height:46px;flex-direction:row;border:3px solid #FF6A1F;background:rgba(14,15,18,.75);color:#FF6A1F;font-size:17px} /* 「📍 去哪裡」（98–132）上面；134 寬不碰到放高的轉速表 */
+.dv.mt .dv-clu.on{background:#FF6A1F;color:#1A0F07}
+@media (max-width:379px){.dv.mt .dv-clu{width:116px}} /* 360 寬：轉速表在 140 起（要寫在上面那條後面才贏） */
+.dv.mt .dv-mth{display:block;bottom:104px;left:50%;transform:translateX(-50%);padding:5px 12px;border-radius:999px;background:#FF3B30;color:#fff;font:700 15px/1 ${SANS};font-style:normal;letter-spacing:.03em;white-space:nowrap;opacity:0;transition:opacity .15s}
+.dv.mt .dv-mth.show{opacity:1}.dv.mt .dv-mth.warn{background:#FF6A1F;color:#1A0F07}
+@media (max-height:560px){.dv-up,.dv-dn{width:62px;height:40px;bottom:88px}.dv-dn{right:94px}.dv-up{right:166px}.dv.mt .dv-clu{left:170px;bottom:88px;width:120px;height:40px;font-size:16px}} /* 橫拿：▲ ▼ 排一排在煞車、手煞車上面（88–128；「下車」在上面那一排 142–192 的下面）、離合器在「去哪裡」右邊 */
+@container (max-height:290px){.dv.mt .dv-mth{left:auto;right:366px;transform:none}} /* 很矮：提示跟著轉速表 */
+@media (min-height:561px){@container (max-height:540px){.dv.pop .dv-up{bottom:180px}}} /* 沒全螢幕的電腦：跳燈在 94／124 → ▲ 再上去 */
+@media (min-height:561px){@container (max-height:409px){.dv.mt .dv-clu{bottom:156px}}} /* 小舞台：「下車」在左邊 bottom 98 → 離合器再上去 */
 .dv-spd i{position:absolute;bottom:calc(100% + 24px);left:50%;transform:translateX(-50%);padding:5px 13px;border-radius:999px;background:#FF6A1F;color:#1A0F07;font:700 17px/1 ${SANS};font-style:normal;letter-spacing:.04em;white-space:nowrap;box-shadow:0 3px 0 #9E4213}
 .dv-spd i span{font:700 19px/1 ${COND};color:inherit;margin:0 0 0 5px;letter-spacing:0}
 .dv-toast{top:34%;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:9px 20px;border-radius:22px;background:rgba(14,15,18,0.78);font-size:20px;font-weight:700;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,-50%) scale(.92);transition:opacity .15s,transform .15s}
@@ -231,6 +251,7 @@ const ICON = {
   key: '<svg viewBox="0 0 24 24"><circle cx="8" cy="15.5" r="4.2"/><path d="M11 12.5l8.5-8.5M16.2 7.3l2.6 2.6M13.8 9.7l2 2"/></svg>',
   hand: '<svg viewBox="0 0 24 24"><path d="M10.2 21l-3.6-4.6a1.5 1.5 0 0 1 2.3-1.9l1.3 1.5V9.2a1.6 1.6 0 0 1 3.2 0v4.6l3.8.8a1.9 1.9 0 0 1 1.5 2.1l-.6 4.3"/><path d="M7.6 6.6a5 5 0 0 1 8.3 0"/></svg>',
   pop: '<svg viewBox="0 0 30 22" aria-hidden="true"><rect x="9" y="5" width="13" height="12" rx="3"/><path d="M3 6L7 8M2 11L7 11M3 16L7 14"/></svg>', // 跳燈（燈＋光線，跟草稿一樣）
+  gup: '<svg viewBox="0 0 18 12" aria-hidden="true"><path d="M9 0l9 12H0z"/></svg>', gdn: '<svg viewBox="0 0 18 12" aria-hidden="true"><path d="M0 0h18L9 12z"/></svg>', // 第 68 批：▲升檔 ▼降檔
   // 第二顆按鈕（下車）：走路的人
   walk: '<svg viewBox="0 0 24 24"><circle cx="13.4" cy="4.3" r="2"/><path d="M11.6 8.5l-3 1.6-1.3 3.2M11.6 8.5l2.4 2 2.9.6M11.6 8.5l-1 5.3 3 2.5.9 4.3M10.6 13.8l-1.9 3.4-3 1.3"/></svg>',
 };
@@ -405,9 +426,12 @@ function createDrive(o) {
     surf: 0, cap: vtop, bumps: 0, shifts: 0, touch: 0, blocked: 0, roll: 0, rollV: 0, pitch: 0, pitchV: 0, alat: 0, along: 0, kap: 0, scrub: 0, push: 0, jit: 0, jitT: 0, hitW: 0, hitT: -9, impT: -9, impW: 0 };
   // 第 3 批（甩尾）：slip＝甩的角度（走的方向＝th＋slip）、slipV＝它變多快、loose＝後輪多鬆（0–1）、dm＝甩了多少（0 抓地～1 甩）、skid＝輪胎叫、skidM＝胎痕／煙
   Object.assign(st, { slip: 0, slipV: 0, loose: 0, dm: 0, skid: 0, skidM: 0, flick: 0, sPrev: 0, thrMem: 0, pwT: 0, kick: 0, kickT: 0, dT: 0, drifts: 0, dShow: 0 });
+  // 第 68 批：手排（setGearbox('mt')）：mg＝排在哪一檔（−1 R、0 N、1–6；st.gear／st.rev 跟著它）、clu＝離合器接上多少（0 踩著～1 接上）、stall＝熄火了、crank＝發動中（秒）、
+  //   grind＝「咔咔」沒換進去（秒；grindWhy 1 沒按離合器、2 太快不能倒車）、lim＝撞到紅線斷油中、limT＝計時（紅線噠噠噠、閃）、shq＝按了 ▲ ▼ 還沒處理的
+  Object.assign(st, { mt: false, mg: 0, clu: 1, cluPrev: 1, stall: false, crank: 0, grind: 0, grindWhy: 0, lim: false, limT: 0, shq: [] });
   const dmgP = { power: 1, top: 1, maxKmh: Infinity, steerPull: 0 }; // 撞壞了（setDamage）
   let imp = null; // 這一幀最大的一下（onImpact）
-  const human = { thr: 0, brk: 0, steer: 0, hb: 0, kb: {} };
+  const human = { thr: 0, brk: 0, steer: 0, hb: 0, clu: 0, kb: {} };
   const tilt = { on: false, a: 0, n: 0, center: 0, val: 0, wait: 0, fail: null, scr: () => (typeof screen !== 'undefined' && screen.orientation ? screen.orientation.angle : typeof window !== 'undefined' && +window.orientation) || 0 };
   let forced = null, paused = false, auto = null, alive = true, dest = null, mode = 'chase', view = null, intro = null, now = 0, action = null, action2 = null, popOn = null, popFn = null;
   let marks = null; // 第 3 批（b3-int）別的模組給的小地圖點（setMarkers）：[{ x, z, fill, ring, r, on }]
@@ -524,17 +548,50 @@ function createDrive(o) {
     return best;
   }
 
+  // ---- 第 68 批：手排（Nick 2026-11-06「車子做手排的」，卡片「要有離合器」→ 草稿第 2 版「照這樣做」）----
+  //   ▲ ▼（shift(±1)）要踩著離合器（inp.clu）才換得進去，沒踩＝「咔咔」沒換（grind）；R 只有快停住（1.5 m/s 以下）才排得進去
+  //   檔位 R – N – 1 – 2 – 3 – 4 – 5 – 6；放開離合器那一下（接上過半）：轉速比怠速低（檔太高、太慢）又沒給油 → 熄火（stall）；按油門 0.6 秒重新發動
+  //   撞紅線不會自己升檔：斷油噠噠噠（physics 的 st.lim）；檔太高只是沒力（不熄火）；停住按著煞車 R ↔ 1 檔照舊（不用離合器）
+  function mtStep(h, inp) {
+    const want = inp.clu > 0.5 ? 0 : 1;
+    st.clu = want <= st.clu ? want : Math.min(1, st.clu + h / 0.12); // 踩下去馬上分開，放開 0.12 秒接上
+    if (st.cluPrev < 0.5 && st.clu >= 0.5 && st.mg !== 0 && !st.stall) { // 放開的那一下
+      const x = st.rev ? 0.14 + Math.min(1, Math.abs(st.v) / 4.5) * 0.3 : xOf(st.v, st.gear);
+      if (x < 0.12 && inp.thr < 0.15) { st.stall = true; st.crank = 0; st.cut = 0; events.push(['engine', false]); }
+    }
+    st.cluPrev = st.clu;
+    while (st.shq.length) {
+      const d = st.shq.shift(), g = clamp(st.mg + d, -1, 6);
+      if (g === st.mg) continue;
+      if (st.clu > 0.3) { st.grind = 0.7; st.grindWhy = 1; events.push(['grind', 1]); continue; }
+      if (g === -1 && Math.abs(st.v) > 1.5) { st.grind = 0.7; st.grindWhy = 2; events.push(['grind', 2]); continue; }
+      st.mg = g; st.rev = g === -1; st.gear = Math.max(0, g - 1); st.hold = 0; st.shifts++;
+      if (d > 0 && g > 1) events.push(['shift', g]);
+    }
+    if (st.stall) { if (st.crank > 0) { st.crank -= h; if (st.crank <= 0) { st.stall = false; st.crank = 0; events.push(['engine', true]); } } else if (inp.thr > 0.3) st.crank = 0.6; }
+    st.grind = Math.max(0, st.grind - h); st.limT += h;
+  }
+  function setGearbox(k) {
+    const on = k === 'mt'; if (on === st.mt) return;
+    st.mt = on; st.stall = false; st.crank = 0; st.grind = 0; st.lim = false; st.clu = st.cluPrev = 1; st.shq.length = 0;
+    if (on) st.mg = st.rev ? -1 : Math.abs(st.v) > 0.5 ? st.gear + 1 : 0; // 開著換成手排＝現在這一檔；停著＝空檔
+    if (hud) { hud.root.classList.toggle('mt', on); hud.last.gear = undefined; hud.last.rev = undefined; }
+  }
+  const shift = (d) => { if (st.mt && alive && !paused && (d === 1 || d === -1)) st.shq.push(d); };
+
   // ---- 物理（每步 h 秒）----
   function physics(h, inp) {
     const R = ride && ride.on ? ride : null; kGeo = R ? kGeo0 * R.k.ws : kGeo0; // 第 4 批：在地形上（村子裡 null：照舊）；四輪轉向
-    // 停住了還按著煞車＝換倒車；倒車停住了按油門＝換前進
-    const go0 = st.rev ? inp.brk : inp.thr, stop0 = st.rev ? inp.thr : inp.brk, u0 = st.v * (st.rev ? -1 : 1);
-    if (stop0 > 0.5 && go0 < 0.05 && u0 < 0.3 && !inp.hb) { st.hold += h; if (st.hold > 0.25) { st.rev = !st.rev; st.hold = 0; st.gear = 0; st.thr = st.brk = 0; } } else st.hold = 0;
+    const MT = st.mt; if (MT) mtStep(h, inp); // 第 68 批：手排：離合器、▲ ▼、熄火、發動
+    // 停住了還按著煞車＝換倒車；倒車停住了按油門＝換前進（手排：油門永遠是往前／往後走、煞車永遠是煞車；停住按著煞車 R ↔ 1 檔照舊）
+    const go0 = st.rev && !MT ? inp.brk : inp.thr, stop0 = st.rev && !MT ? inp.thr : inp.brk, u0 = st.v * (st.rev ? -1 : 1);
+    if (stop0 > 0.5 && go0 < 0.05 && u0 < 0.3 && !inp.hb) { st.hold += h; if (st.hold > 0.25) { st.rev = !st.rev; st.hold = MT ? -1e9 : 0; st.gear = 0; st.thr = st.brk = 0; if (MT) { st.mg = st.rev ? -1 : 1; st.stall = false; st.crank = 0; } } } else st.hold = 0; // 手排：按著煞車一次只換一次（放開再按才又換）
     // 方向盤：放開回正快、轉過去慢一點，越快越慢（300 km/h 點一下只換一點點車道）；油門慢慢踩下去
     const vab0 = Math.abs(st.v), back = Math.abs(inp.steer) < Math.abs(st.steer) || inp.steer * st.steer < 0;
     st.steer = toward(st.steer, inp.steer, h * (back ? 6 : 4 - 2 * Math.min(1, vab0 / 70)));
     st.thr = toward(st.thr, inp.thr, h * (inp.thr > st.thr ? 3.2 : 8)); st.brk = toward(st.brk, inp.brk, h * (inp.brk > st.brk ? 7 : 10)); st.hb = inp.hb || 0;
-    const sg = st.rev ? -1 : 1, go = st.rev ? st.brk : st.thr, stop = Math.max(st.rev ? st.thr : st.brk, st.hb * (1 - 0.65 * clamp((vab0 - 6) / 6, 0, 1))), u = st.v * sg, v0 = st.v; // 第 3 批：手煞車快的時候只煞三分之一（後輪鎖住、甩出去）
+    const sg = st.rev ? -1 : 1, go = st.rev && !MT ? st.brk : st.thr, stop = Math.max(st.rev && !MT ? st.thr : st.brk, st.hb * (1 - 0.65 * clamp((vab0 - 6) / 6, 0, 1))), u = st.v * sg, v0 = st.v; // 第 3 批：手煞車快的時候只煞三分之一（後輪鎖住、甩出去）
+    const eng = MT ? (st.mg === 0 || st.stall ? 0 : st.clu) : 1; // 第 68 批：引擎接到輪子多少（空檔、熄火、踩著離合器＝0）
     const vdm = Math.min(vtop * dmgP.top, dmgP.maxKmh / 3.6), sf = (R && R.sf(st.surf)) || SURF[st.surf] || SURF[0], capS = st.rev ? 4.5 : Math.min(vdm, sf.cap), soft = !st.rev && sf.cap < vdm; st.cap = capS; // 撞壞了極速變低
     // 轉彎：方向盤→想要的曲率（低速＝打死 tan 0.6，快的時候＝打滿要側向 aF）；快到抓地 aG 就推頭：實際轉得少一點、多的那份（scrub）把速度吃掉
     // aF：100 km/h 以下＝抓地 ×1.35、200 km/h ×1.25、320 km/h ×0.95（很穩）；推頭吃掉速度的比例 kS：100 km/h 以下 1.3（村子的彎抱著方向盤自己慢下來）、
@@ -551,12 +608,13 @@ function createDrive(o) {
     // 引擎：快到限速油門自己收（定速）；推頭的時候也收（像循跡控制）；load＝給引擎聲的（踩著就大聲）
     const gov = clamp((capS + (capS >= vmx ? 0.3 : 0) - u) / 0.5, 0, 1), lim = gov * (1 - Math.min(0.95, st.scrub / 7 + 0.7 * pk * (1 - st.dm))); // 定速在限速上（極速多 0.3 m/s：錶上看得到 250）
     st.thrEff = go * lim;
-    let a = 0;
-    if (st.rev) a = 2.8 * st.thrEff * Math.max(0.6, dmgP.power);
-    else if (st.cut <= 0) { const x = xOf(u, st.gear); if (x < 1) a = (Math.min(R ? tract * R.k.trac : tract, (st.thrEff * Tpk * torqueAt(clamp(x, st.gear === 0 ? 0.6 : 0.2, 1)) * GR[st.gear] * fd * 0.88) / RR) / m) * dmgP.power; } // 撞到紅線斷油；撞壞了出力變小
+    let a = 0; st.lim = false;
+    if (st.rev) a = 2.8 * st.thrEff * Math.max(0.6, dmgP.power) * eng;
+    else if (st.cut <= 0 && eng > 0) { const x = xOf(u, st.gear); if (x < 1) a = (Math.min(R ? tract * R.k.trac : tract, (st.thrEff * Tpk * torqueAt(clamp(x, st.gear === 0 ? 0.6 : 0.2, 1)) * GR[st.gear] * fd * 0.88) / RR) / m) * dmgP.power * eng; else if (MT && go > 0.3) st.lim = true; } // 撞到紅線斷油；撞壞了出力變小；手排撞紅線＝噠噠噠（不自己升檔）
     const D = slide(h, inp, R, u, go, gov, a, aG, ac); if (st.dm > 0) { a *= 1 + (D.fwd - 1) * st.dm; a += (Math.min(a, D.cap) - a) * st.dm; } // 第 3 批：甩尾（後輪空轉：往前推的少一點；抓地大部分拿去側滑了）
     const ov = u - capS - 0.5, over = ov > 0 ? (soft ? Math.min(sf.over[1], ov * sf.over[0]) : Math.min(8, ov * 2.5)) : 0; // 比限速快（開進草地、限速變低）：慢下來
-    const res = stop * (9.5 + 2.5 * Math.min(1, (u * u) / 4900)) + (go < 0.05 ? (st.rev ? 1.2 : 1.4) : 0) + sf.drag + 0.147 + (AERO * 0.6 * P.cda * u * u) / m + over + (st.rev ? 0 : Math.min(9, st.scrub)) + D.bleed;
+    const res = stop * (9.5 + 2.5 * Math.min(1, (u * u) / 4900)) + (go < 0.05 ? (st.rev ? 1.2 : 1.4) : 0) + sf.drag + 0.147 + (AERO * 0.6 * P.cda * u * u) / m + over + (st.rev ? 0 : Math.min(9, st.scrub)) + D.bleed
+      + (MT && !st.rev && eng > 0.5 && st.mg > 0 ? Math.min(8, Math.max(0, xOf(u, st.gear) - 1.02) * 60) * eng : 0); // 第 68 批：手排太早降檔（轉速衝過紅線）：引擎煞車很重
     let un;
     if (u > 1e-4) { un = u + (a - res) * h; if (un < 0) un = 0; }
     else if (u < -1e-4) { un = u + (a + res) * h; if (un > 0) un = a > 0 ? Math.min(un, a * h) : 0; }
@@ -567,14 +625,20 @@ function createDrive(o) {
     if (!st.rev) {
       st.cut = Math.max(0, st.cut - h);
       const x = xOf(un, st.gear), dem = go * gov, pedal = inp.thr > 0.05 && (un - u) / h > -1.5; // dem：腳踩多少（循跡收掉的不算：彎裡面檔位留低、轉速高）
-      if (st.cut <= 0 && st.gear < 5 && x > (pedal ? 0.64 + 0.34 * dem : 0.98)) {
+      if (MT) { /* 手排：自己換（mtStep） */ }
+      else if (st.cut <= 0 && st.gear < 5 && x > (pedal ? 0.64 + 0.34 * dem : 0.98)) {
         st.gear++; st.cut = 0.08 + 0.1 * dem; st.cutLoad = st.load > 0.9 ? 0 : st.load * 0.35; st.shifts++; events.push(['shift', st.gear + 1]); // 全油門換檔：油門放掉一下（洩壓、放炮，跟賽道一樣）
       } else if (st.gear > 0 && (x < (go > 0.05 ? 0.36 : 0.4) || (dem > 0.9 && xOf(un, st.gear - 1) < 0.8))) st.gear--;
     } else st.cut = 0;
     const xr = st.rev ? 0.14 + Math.min(1, Math.abs(un) / 4.5) * 0.3 : Math.max(0.13, xOf(un, st.gear));
     const slip = st.rev ? 0.1 * go : st.gear === 0 ? 0.34 * go * clamp(1 - xr / 0.5, 0, 1) : 0; // 起步半離合：一踩轉速就起來（聲音馬上出來）
-    st.rpm += (Math.min(1.02, xr + slip + D.rev) - st.rpm) * (1 - Math.exp(-h * 12));
-    st.load = st.cut > 0 ? st.cutLoad : go > 0.02 ? go * (0.65 + 0.35 * lim) : 0;
+    let want = Math.min(1.02, xr + slip + D.rev);
+    if (MT) { // 第 68 批：手排的轉速：踩著離合器／空檔＝油門直接催（0.13–1.0）；熄火＝0；發動中＝0.07 抖；撞紅線＝0.96／1.02 噠噠噠
+      const free = 0.13 + 0.87 * go;
+      want = st.stall ? (st.crank > 0 ? 0.07 + 0.03 * Math.sin(st.limT * 60) : 0) : st.lim ? (st.limT % 0.1 < 0.05 ? 0.96 : 1.02) : eng * Math.min(1.02, xr + slip) + (1 - eng) * free;
+    }
+    st.rpm += (want - st.rpm) * (1 - Math.exp(-h * (MT && st.stall ? 6 : 12)));
+    st.load = MT && (st.stall || st.mg === 0 || st.clu < 0.5) ? (st.stall ? 0 : go * 0.6) : st.cut > 0 ? st.cutLoad : go > 0.02 ? go * (0.65 + 0.35 * lim) : 0;
     // 走：後軸沿著車頭方向走、繞後軸轉（腳踏車模型）
     const vab = Math.abs(st.v);
     // 頂住東西了還踩油門：方向盤照「想走的速度」轉（原地轉出來，不會一直卡著）
@@ -830,7 +894,8 @@ function createDrive(o) {
       + `<div class="dv-tilt"><i aria-hidden="true"><svg viewBox="-30 -30 60 60"><g><circle r="24" stroke-width="6"/><path d="M-22 2L-7 5M22 2L7 5M0 9V22" stroke-width="5"/><circle r="6" fill="#F2F3F5" stroke="none"/><rect class="r" x="-3" y="-28" width="6" height="9" rx="1.5"/></g></svg></i><b role="button" aria-label="置中">置中</b></div>`
       + `<div class="dv-ped"><b class="dv-brk" role="button" aria-label="煞車">煞車</b><b class="dv-gas" role="button" aria-label="油門">油門</b></div><div class="dv-toast" role="status"></div>`
       + `<b class="dv-hb" role="button" aria-label="手煞車">手煞車</b>` // 第 3 批（甩尾）
-      + `<button type="button" class="dv-pop" aria-pressed="false" hidden>${ICON.pop}<span>跳燈</span></button>`; // 跳燈（86、RX-7）
+      + `<button type="button" class="dv-pop" aria-pressed="false" hidden>${ICON.pop}<span>跳燈</span></button>` // 跳燈（86、RX-7）
+      + `<button type="button" class="dv-up" aria-label="升檔">${ICON.gup}<span>升檔</span></button><button type="button" class="dv-dn" aria-label="降檔">${ICON.gdn}<span>降檔</span></button><b class="dv-clu" role="button" aria-label="離合器">離合器</b><i class="dv-mth" role="status"></i>`; // 第 68 批：手排
     o.hudParent.append(root);
     const q = (s) => root.querySelector(s), H = { root, chip: q('.dv-chip'), arrow: q('.dv-chip svg'), name: q('.dv-chip b'), dist: q('.dv-chip small'), map: q('.dv-map canvas'), cam: q('.dv-cam'),
       act: q('.dv-act'), actIcon: q('.dv-act i'), actText: q('.dv-act span'), act2: q('.dv-act2'), act2Icon: q('.dv-act2 i'), act2Text: q('.dv-act2 span'),
@@ -839,6 +904,7 @@ function createDrive(o) {
     H.hb = q('.dv-hb'); H.drift = q('.dv-spd i'); H.driftA = q('.dv-spd i span'); // 第 3 批
     H.tiltG = q('.dv-tilt g'); H.tiltC = q('.dv-tilt b'); // 轉手機開車
     H.pop = q('.dv-pop'); // 跳燈
+    H.up = q('.dv-up'); H.dn = q('.dv-dn'); H.clu = q('.dv-clu'); H.mth = q('.dv-mth'); // 第 68 批：手排
     H.spdBox = q('.dv-spd'); H.tach = q('.dv-spd svg'); H.tachA = q('.dv-spd svg .a'); H.spdBox.classList.toggle('tach', mode !== 'eye'); // 轉速表
     const on = (el, t, f, opt) => { el.addEventListener(t, f, opt); H.off.push(() => el.removeEventListener(t, f, opt)); };
     on(root, 'contextmenu', (e) => e.preventDefault());
@@ -851,6 +917,8 @@ function createDrive(o) {
     hold(H.gas, () => { human.thr = 1; H.gas.classList.add('on'); }, () => { human.thr = 0; H.gas.classList.remove('on'); });
     hold(H.brk, () => { human.brk = 1; H.brk.classList.add('on'); }, () => { human.brk = 0; H.brk.classList.remove('on'); });
     hold(H.hb, () => { human.hb = 1; H.hb.classList.add('on'); }, () => { human.hb = 0; H.hb.classList.remove('on'); }); // 第 3 批：手煞車（另一隻手指按著油門、方向也按得到）
+    hold(H.clu, () => { human.clu = 1; H.clu.classList.add('on'); }, () => { human.clu = 0; H.clu.classList.remove('on'); }); // 第 68 批：離合器（按住）
+    for (const [el, d] of [[H.up, 1], [H.dn, -1]]) { on(el, 'pointerdown', (e) => { e.preventDefault(); el.classList.add('on'); shift(d); }); for (const t of ['pointerup', 'pointercancel', 'pointerleave']) on(el, t, () => el.classList.remove('on')); } // ▲ ▼：按一下換一檔
     const fingers = new Map(), steerNow = () => { let s = 0; for (const v of fingers.values()) s = v; human.steer = s; H.steerB[0].classList.toggle('on', s < 0); H.steerB[1].classList.toggle('on', s > 0); };
     hold(H.steer, (e) => { const r = H.steer.getBoundingClientRect(); fingers.delete(e.pointerId); fingers.set(e.pointerId, e.clientX < r.left + r.width / 2 ? -1 : 1); steerNow(); }, (e) => { fingers.delete(e.pointerId); steerNow(); });
     on(H.cam, 'click', () => setCameraMode(mode === 'eye' ? 'chase' : 'eye'));
@@ -942,11 +1010,12 @@ function createDrive(o) {
   }
   function hudTick(dt) {
     const H = hud; if (!H) return;
-    const kmh = Math.round(Math.abs(st.v) * 3.6), gear = st.rev ? 'R' : String(st.gear + 1), set = (k, v, f) => { if (H.last[k] !== v) { H.last[k] = v; f(v); } };
-    set('spd', kmh, (v) => (H.spd.textContent = v)); set('gear', gear, (v) => { H.gear.textContent = v; H.gear.classList.toggle('r', v === 'R'); });
+    const kmh = Math.round(Math.abs(st.v) * 3.6), gear = st.mt ? (st.stall ? '熄' : st.mg === 0 ? 'N' : st.mg === -1 ? 'R' : String(st.mg)) : st.rev ? 'R' : String(st.gear + 1), set = (k, v, f) => { if (H.last[k] !== v) { H.last[k] = v; f(v); } };
+    set('spd', kmh, (v) => (H.spd.textContent = v)); set('gear', gear, (v) => { H.gear.textContent = v; H.gear.classList.toggle('r', v === 'R' || v === '熄'); H.gear.classList.toggle('n', v === 'N'); });
+    if (st.mt) mtHud(set);
     if (mode !== 'eye') { const r = Math.min(1, st.rpm); set('rpm', Math.round(r * 50), (v) => H.tachA.setAttribute('stroke-dasharray', `${v * 2} 100`)); set('redl', r > 0.86, (v) => H.tach.classList.toggle('red', v)); } // 轉速表：50 格，紅區（86% 以上）弧變紅
     if (tilt.on) set('tilt', Math.round(tilt.val * 45), (v) => H.tiltG.setAttribute('transform', `rotate(${v * 2})`)); // 轉手機開車：小方向盤（打到底 90 度，跟駕駛座的一樣）
-    set('rev', st.rev, (v) => { H.brk.textContent = v ? '倒車' : '煞車'; H.brk.classList.toggle('rev', v); });
+    set('rev', st.rev && !st.mt, (v) => { H.brk.textContent = v ? '倒車' : '煞車'; H.brk.classList.toggle('rev', v); }); // 手排：煞車永遠是煞車（R 檔油門往後走）
     const dd = dest && destStyle(dest); set('dest', dest, () => { H.chip.hidden = !dd; if (dd) H.name.textContent = dd.label; });
     if (dd && routeData) {
       const here = zoneNow === dest; set('here', here, (v) => { H.chip.classList.toggle('here', v); H.arrow.innerHTML = v ? '<path d="M5 12.5l4.5 4.5L19.5 7" fill="none" stroke="#0E0F12" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>' : ICON.up.replace(/<\/?svg[^>]*>/g, ''); });
@@ -959,6 +1028,17 @@ function createDrive(o) {
     if (st.dT >= 0.25) st.dShow = 0.6; else st.dShow = Math.max(0, st.dShow - dt);
     set('drift', st.dShow > 0, (v) => (H.drift.hidden = !v));
     if (st.dT >= 0.25) { H.dA = (H.dA || 0) - dt; if (H.dA <= 0) { H.dA = 0.1; set('dA', Math.max(10, Math.round((Math.abs(st.slip) * 180) / Math.PI / 5) * 5), (v) => (H.driftA.textContent = v + '°')); } }
+  }
+  // 第 68 批：手排的提示（轉速表上面一條）、▲ ▼ 亮：熄火 ＞ 咔咔 ＞ 紅線噠噠噠 ＞ 空檔踩油門 ＞ 檔太高；甩尾的字出來的時候不顯示
+  function mtHud(set) {
+    const H = hud, go = st.rev ? 0 : st.thr, x = st.mg > 0 ? xOf(st.v, st.gear) : 0, lug = st.mg >= 2 && go > 0.3 && Math.abs(st.v) > 1 && x < 0.22 && !st.stall && st.clu > 0.5;
+    const msg = st.stall ? (st.crank > 0 ? '發動中⋯' : '熄火了！按油門重新發動') : st.grind > 0 ? (st.grindWhy === 2 ? '咔咔！停下來才能倒車' : '咔咔！要先按住離合器') : st.lim ? '噠噠噠 要升檔了！▲' : st.mg === 0 && go > 0.3 ? '空檔：按住離合器、按 ▲ 排 1 檔' : lug ? '檔太高了 ▼' : '';
+    const warn = !st.stall && st.grind <= 0 && !st.lim;
+    set('mth', st.dShow > 0 ? '' : msg, (v) => { if (v) H.mth.textContent = v; H.mth.classList.toggle('show', !!v); });
+    set('mthW', warn, (v) => H.mth.classList.toggle('warn', v));
+    set('upHot', st.mg > 0 && st.mg < 6 && !st.lim && st.rpm > 0.86, (v) => H.up.classList.toggle('hot', v));
+    set('upLim', st.lim && (st.limT % 0.3 < 0.15), (v) => H.up.classList.toggle('lim', v));
+    set('dnHot', lug, (v) => H.dn.classList.toggle('hot', v));
   }
   let toastT = 0;
   function toast(text, ms = 1600) { if (!hud) return; hud.toast.textContent = text; hud.toast.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => hud && hud.toast.classList.remove('show'), ms); }
@@ -998,13 +1078,14 @@ function createDrive(o) {
   function doPop() { if (popOn === null || paused || !alive || !popFn) return; popFn(api); }
 
   // ---- 鍵盤 ----
-  const KEYS = { ArrowUp: 'U', KeyW: 'U', ArrowDown: 'D', KeyS: 'D', ArrowLeft: 'L', KeyA: 'L', ArrowRight: 'R', KeyD: 'R', Space: 'B' };
+  const KEYS = { ArrowUp: 'U', KeyW: 'U', ArrowDown: 'D', KeyS: 'D', ArrowLeft: 'L', KeyA: 'L', ArrowRight: 'R', KeyD: 'R', Space: 'B', ShiftLeft: 'C', ShiftRight: 'C' }; // 第 68 批：Shift＝離合器、Q 升檔、Z 降檔
   const onKey = (e) => {
     if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     const k = KEYS[e.code], down = e.type === 'keydown';
     if (k) { if (!paused) e.preventDefault(); human.kb[k] = down; }
     else if (down && e.code === 'KeyC' && !e.repeat && !paused) setCameraMode(mode === 'eye' ? 'chase' : 'eye');
     else if (down && e.code === 'KeyL' && !e.repeat && !paused && popOn !== null) { e.preventDefault(); doPop(); } // 跳燈
+    else if (down && (e.code === 'KeyQ' || e.code === 'KeyZ') && !e.repeat && !paused && st.mt) { e.preventDefault(); shift(e.code === 'KeyQ' ? 1 : -1); } // 第 68 批：手排
     else if (down && e.code === 'KeyE' && !e.repeat && !paused && (action || action2)) { e.preventDefault(); if (action) doAction(); else doAction2(); } // 沒有大按鈕：按第二顆（下車）
   };
   const onBlur = () => { human.kb = {}; };
@@ -1012,7 +1093,7 @@ function createDrive(o) {
   if (useKeys) { window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey); window.addEventListener('blur', onBlur); }
   const input = () => {
     if (forced) return forced;
-    const k = human.kb; return { thr: Math.max(k.U ? 1 : 0, human.thr), brk: Math.max(k.D ? 1 : 0, human.brk), hb: Math.max(k.B ? 1 : 0, human.hb), steer: clamp((k.R ? 1 : 0) - (k.L ? 1 : 0) + human.steer + (tilt.on ? tilt.val : 0), -1, 1) };
+    const k = human.kb; return { thr: Math.max(k.U ? 1 : 0, human.thr), brk: Math.max(k.D ? 1 : 0, human.brk), hb: Math.max(k.B ? 1 : 0, human.hb), clu: Math.max(k.C ? 1 : 0, human.clu), steer: clamp((k.R ? 1 : 0) - (k.L ? 1 : 0) + human.steer + (tilt.on ? tilt.val : 0), -1, 1) };
   };
   // ---- 轉手機開車：重力的方向（低通）→ 跟「置中」差幾度 → −1～1 ----
   function tiltVal() { const d = wrapA(((tilt.a - tilt.center) * Math.PI) / 180) * 180 / Math.PI, m = Math.abs(d) - TILT.dead; tilt.val = m > 0 ? clamp((Math.sign(d) * m) / (TILT.full - TILT.dead), -1, 1) : 0; }
@@ -1101,6 +1182,8 @@ function createDrive(o) {
     for (const e of ev) {
       if (e[0] === 'zone' && o.onZone) o.onZone(e[1], e[2], places[e[1]]);
       else if (e[0] === 'shift' && o.onShift) o.onShift(e[1]);
+      else if (e[0] === 'engine' && o.onEngine) o.onEngine(e[1]); // 第 68 批：手排熄火（false）、重新發動（true）
+      else if (e[0] === 'grind' && o.onGrind) o.onGrind(e[1]);
       else if (e[0] === 'bump' && o.onBump) o.onBump(e[1]);
       else if (e[0] === 'land') { cam.shake = Math.max(cam.shake, Math.min(0.3, e[1].speed * 0.025)); if (o.onLand) o.onLand(e[1]); } // 第 4 批：落地
       else if (e[0] === 'impact' && o.onImpact) o.onImpact(e[1]);
@@ -1115,7 +1198,7 @@ function createDrive(o) {
   function setHidden(h) { if (hud) hud.root.hidden = h; fx.shadow.visible = !h; if (h) fx.beacon.visible = false; }
   function teleport(p, op = {}) {
     auto = null; events.length = 0;
-    st.x = p.x; st.z = p.z; st.th = p.heading ?? 0; st.gear = 0; st.rev = false; st.hold = 0; st.cut = 0; neutral();
+    st.x = p.x; st.z = p.z; st.th = p.heading ?? 0; st.gear = 0; st.rev = false; st.hold = 0; st.cut = 0; st.mg = 0; st.stall = false; st.crank = 0; st.grind = 0; st.lim = false; st.clu = st.cluPrev = 1; st.shq.length = 0; neutral(); // 手排：空檔、沒熄火
     if (ride) ride.reset(); // 第 4 批
     pose(); zones(true); routeTick(0, true); cam.ok = false; cam.yaw = st.th; cam.d = 6.5; cam.spd = 0; cam.acc = 0; cam.shake = 0;
     intro = op.intro ? { t: 0, T: 3.4, a0: 2.8, d0: 8.5, h0: 1.45 } : null;
@@ -1126,10 +1209,10 @@ function createDrive(o) {
     const x1 = p.noseX != null ? p.noseX - f1[0] * info.nose : p.x, z1 = p.noseX != null ? p.z - f1[1] * info.nose : p.z;
     const dx = x1 - st.x, dz = z1 - st.z, dist = Math.hypot(dx, dz);
     auto = { t: 0, T: clamp(dist / 4.5 + 0.5, 0.6, 3.2), x0: st.x, z0: st.z, th0: st.th, x1, z1, th1, k: dist, f0, f1, onDone, curve: dist > 0.5 && dx * f0[0] + dz * f0[1] > 0 && f0[0] * f1[0] + f0[1] * f1[1] > 0.3 };
-    st.rev = false; st.gear = 0; st.hold = 0;
+    st.rev = false; st.gear = 0; st.hold = 0; st.mg = st.mt ? 1 : 0; st.stall = false; st.crank = 0; st.shq.length = 0; // 手排：自動停車排 1 檔
     st.slip = st.slipV = st.loose = st.dm = 0; // 第 3 批：自動停車不甩
   }
-  function pause() { paused = true; auto = null; events.length = 0; neutral(); setHidden(true); human.thr = human.brk = human.steer = human.hb = 0; human.kb = {}; fxOff(); if (hud) hud.hb.classList.remove('on'); /* 第 3 批 */ if (hud) { hud.act.classList.remove('on'); hud.act2.classList.remove('on'); hud.pop.classList.remove('on'); } }
+  function pause() { paused = true; auto = null; events.length = 0; neutral(); setHidden(true); human.thr = human.brk = human.steer = human.hb = human.clu = 0; human.kb = {}; fxOff(); if (hud) hud.hb.classList.remove('on'); /* 第 3 批 */ if (hud) { hud.act.classList.remove('on'); hud.act2.classList.remove('on'); hud.pop.classList.remove('on'); hud.clu.classList.remove('on'); hud.up.classList.remove('on'); hud.dn.classList.remove('on'); } st.shq.length = 0; }
   function resume() { if (!alive) return; paused = false; setHidden(false); cam.ok = false; }
   function release() { pause(); if (ride) ride.release(); st.spin = 0; car.position.set(0, 0, 0); car.rotation.set(0, 0, 0); S.wheels.forEach((w) => (w.rotation.z = 0)); car.updateMatrixWorld(true); }
   function setDestination(name) { dest = name && places[name] ? name : null; routeT = 0; routeTick(0, true); if (hud) hud.last.here = undefined; }
@@ -1145,7 +1228,9 @@ function createDrive(o) {
   const telemetry = () => ({ x: st.x, z: st.z, heading: st.th, v: st.v, kmh: Math.abs(st.v) * 3.6, rpm: st.rpm, gear: st.rev ? -1 : st.gear + 1, throttle: st.cut > 0 ? 0 : st.thrEff, load: paused ? 0 : st.load,
     brake: Math.max(st.rev ? st.thr : st.brk, st.hb), steer: st.steer, surface: st.surf, cap: Math.min(999, Math.round(st.cap * 36) / 10), reversing: st.rev, bumps: st.bumps, shifts: st.shifts, zone: zoneNow, dest, destDist: routeData ? Math.max(0, routeData.len - routeS) : null, auto: !!auto, paused,
     slip: st.slip, travel: wrapA(st.th + st.slip), drift: st.dm, drifting: Math.abs(st.slip) > 0.175, drifts: st.drifts, loose: st.loose, skid: st.skid, handbrake: st.hb > 0 ? 1 : 0, // 第 3 批（甩尾）
-    marks: SK ? SK.count() : 0, smoke: SK ? SK.alive() : 0, tilt: tilt.on ? tilt.val : null, ...(ride ? ride.tele() : null) });
+    marks: SK ? SK.count() : 0, smoke: SK ? SK.alive() : 0, tilt: tilt.on ? tilt.val : null,
+    mt: st.mt, mgear: st.mt ? st.mg : null, clutch: st.mt ? +(1 - st.clu).toFixed(3) : 0, stalled: st.stall, cranking: st.crank > 0, grind: st.grind > 0 ? st.grindWhy : 0, limiter: st.lim, // 第 68 批：手排
+    ...(ride ? ride.tele() : null) });
 
   const api = {
     update, telemetry, setDestination, setCameraMode, teleport, parkAt, pause, resume, release, dispose, toast, setAction, setAction2,
@@ -1161,7 +1246,8 @@ function createDrive(o) {
     setCamCeil: (fn) => { camCeil = typeof fn === 'function' ? fn : null; }, // 修 5（2026-10-10）
     setTilt, get tilt() { return tilt.on; },
     setPop, get pop() { return popOn; }, // 跳燈
-    setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
+    setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, clu: +i.clutch || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
+    setGearbox, shift, get gearbox() { return st.mt ? 'mt' : 'at'; }, // 第 68 批：手排（'mt'）／自排（'at'）；shift(±1)＝按 ▲ ▼
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
     carInfo: { nose: info.nose, tail: info.tail, len: info.len, halfW: Math.max(info.halfW, +o.halfW || 0), wheelbase: L, vmax: P.vmax }, hud: hud && hud.root, // halfW：碰撞的半寬（怪獸卡車：輪胎比車身寬）
   };
