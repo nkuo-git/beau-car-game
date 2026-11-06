@@ -853,7 +853,7 @@ const dealer = await p.evaluate(() => ({ list: [...document.querySelectorAll('#d
   buy: document.getElementById('dealerBuyHead').textContent, msg: document.getElementById('dealerMsg').textContent, name: document.getElementById('dealerName').textContent, cash: document.getElementById('dealerCash').textContent }));
 console.log('4', el(), 'dealer:', JSON.stringify(dealer), '| lods', JSON.stringify(await lodAt()));
 // 2026-10-17：多了 10 台新車（一般的車 17 台）→ 車行擺所有還沒買的（便宜的在前面），先選買得起最便宜的那台；轉盤 6 個（多的按到才換一批）
-const dWant = await p.evaluate(() => { const D = window.__D(), G = window.__G(), sale = Object.keys(D.CARS).filter((k) => !G.owned.has(k) && !D.PERF[k].offroad).sort((a, b) => D.PERF[a].price - D.PERF[b].price);
+const dWant = await p.evaluate(() => { const D = window.__D(), G = window.__G(), sale = Object.keys(D.CARS).filter((k) => !G.owned.has(k) && (D.PERF[k].shop || (D.PERF[k].offroad ? 'odealer' : 'dealer')) === 'dealer').sort((a, b) => D.PERF[a].price - D.PERF[b].price); // 第 67 批：PERF.shop（越野腳踏車也在阿財車行）
   return { n: sale.length, names: sale.map((k) => D.CARS[k].btn[0]), sel: D.CARS[sale.find((k) => G.money >= D.PERF[k].price)].btn[0] }; });
 check(dealer.list.length === dWant.n && dWant.n >= 15 && dealer.list.map((x) => x.split(/[*:]/)[0]).join() === dWant.names.join() && dealer.list.some((x) => x.startsWith(dWant.sel + '*')) && dealer.buy.includes(dWant.sel), `dealer lists the ${dWant.n} unowned cars cheapest first, ${dWant.sel} (cheapest affordable) selected`);
 await p.waitForFunction(() => Object.entries(window.__D().LODS).filter(([k, L]) => L.lod?.car.parent === window.__D().VIL.group).length === 6, null, { timeout: 180000 });
