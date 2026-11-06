@@ -941,6 +941,8 @@ function houseFolks() {
 //   畫面：在裡面＝先畫村子（鏡頭照樓層往上移）、清掉深度再畫裡面（窗戶、門的洞看到的就是村子）；在外面＝裡面先畫到 LD.rt，門洞（LD.quad，在村子裡）貼它（前面的人、車照樣擋住）
 const LD = { b: null, I: null, sc: null, proxy: null, t: 0, want: 0, far: 0, leafT: -1, cols: [], rt: null, quads: [], qmat: null, cam: null, style: 'hinge' };
 let LD_AT = null; // 「開門」對著的那一棟（外面）
+// 第 66 批：在 LD 那一棟的屋頂上（走樓梯上頂樓、走出樓梯間）：村子的場景、腳下＝屋頂的高度（y）、碰撞＝頂樓那一層（女兒牆、樓梯間）'ldroof'
+const LDR = { on: false, y: 0, dist0: 3 };
 const LD_OPEN = { label: '開門', icon: 'door', onClick: () => ldOpenNow() };
 const LD_V2 = new THREE.Vector2(), LD_CC = new THREE.Color(), LD_FR = new THREE.Frustum(), LD_M4 = new THREE.Matrix4();
 function ldLocal(b, x, z) { const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot || 0), s = Math.sin(b.rot || 0); return [dx * c - dz * s, dx * s + dz * c]; }
@@ -972,6 +974,7 @@ function ldBuild(b) {
 function ldDrop(force = false) { // 收掉（在裡面不收，除非 force：leaveHouse、回車庫）
   if (!LD.b) return;
   if (!force && indoor?.live) return;
+  if (LDR.on) ldRoofDrop(); // 第 66 批
   for (const c of LD.cols) c.off = false;
   walker?.removeColliders('ldcols'); walker?.removeColliders('ldleaf');
   for (const q of LD.quads) { q.removeFromParent(); q.geometry.dispose(); }
@@ -984,6 +987,7 @@ function ldDrop(force = false) { // 收掉（在裡面不收，除非 force：le
 }
 function ldLeafCols(force) { // 門片的碰撞（轉到哪裡擋到哪裡）
   if (!walker || !LD.I) return;
+  if (LDR.on) { walker.removeColliders('ldleaf'); LD.leafT = -1; return; } // 第 66 批：在屋頂上（門片在樓下，xz 在屋頂裡面會擋人）
   if (!force && Math.abs(LD.t - LD.leafT) < 0.08 && LD.t !== 0 && LD.t !== 1) return;
   if (!force && LD.t === LD.leafT) return;
   LD.leafT = LD.t;
@@ -1004,7 +1008,7 @@ function ldDoorDist(x, z) { // 離最近的門洞多遠（世界）
 }
 // 「開門」：外面站在門口前面（interiorFor 的 enter 前後 2 公尺）；裡面站在大門旁邊；門已經開了就不給
 function ldAct(t) {
-  if (doorFade || sleep || jailed()) return null;
+  if (doorFade || sleep || jailed() || LDR.on) return null;
   if (indoor?.live) {
     if (indoor.I.floor !== 0 || LD.style !== 'hinge' || LD.want > 0) return null;
     return ldDoorDist(t.x, t.z) < 1.9 ? LD_OPEN : null;
@@ -1027,8 +1031,17 @@ function ldScan(t) {
 function ldStep(dt) {
   if (!walker) return;
   const walking = walker.mode === 'walk';
-  if (walking && !indoor && !APTU.on && !doorFade) ldScan(walker.telemetry()); else if (!indoor) LD_AT = null;
+  if (walking && !indoor && !APTU.on && !LDR.on && !doorFade) ldScan(walker.telemetry()); else if (!indoor) LD_AT = null;
   if (!LD.b) return;
+  if (LDR.on) { // 第 66 批：在屋頂上：走進樓梯間的門口＝回到裡面（頂樓那一層）；被搬走了（去這裡、被抓）＝收掉
+    if (indoor) ldRoofDrop();
+    else {
+      const t = walker.telemetry(), [lx, lz] = ldLocal(LD.b, t.x, t.z), S = LD.I.floors[LD.I.roofFl]?.stair;
+      if (!S || Math.abs(lx) > LD.b.hx + 1.5 || Math.abs(lz) > LD.b.hz + 1.5) { ldDrop(); return; }
+      if (walking && !doorFade && !sleep && lx > S.xs0 - 0.05 && lx < S.xs1 + 0.05 && lz > S.zSB - 0.02) ldRoofIn();
+      return;
+    }
+  }
   if (!walking && !indoor && walker.mode === 'off') { ldDrop(); return; } // 開車了：房子的碰撞盒換回來（車子不會從門開進去）
   const I = LD.I, t = walker.telemetry(), dd = ldDoorDist(t.x, t.z);
   if (LD.style === 'auto') LD.want = walking && dd < 2.8 ? 1 : 0;
@@ -1043,7 +1056,9 @@ function ldStep(dt) {
     const b = LD.b, [lx, lz] = ldLocal(b, t.x, t.z);
     if (!indoor && LD.t > 0.5 && Math.abs(lx) < b.hx - 0.05 && lz < b.hz - 0.12 && lz > -b.hz) ldEnter();
     else if (indoor?.live && indoor.I === I && I.floor === 0 && lz > b.hz + 0.12) ldLeave();
+    else if (indoor?.live && indoor.I === I && I.roofFl > 0 && I.floor === I.roofFl && I.stair && lz < I.stair.zSB - 0.25) ldRoofOut(); // 第 66 批：走出頂樓的樓梯間
   }
+  if (LDR.on) return; // 剛走上屋頂（下面兩條是走開了才收）
   if (!indoor && !LD.want && LD.t === 0 && LD.style === 'hinge' && dd > 6) ldDrop(); // 門關好了、走開了
   else if (!indoor && dd > 22) ldDrop(); // 店面、超商：走遠了
   if (LD.b?.kind === 'apt') aptHide(LD.b.slot, LD.t > 0 || !!indoor, !!indoor?.live); // 公寓：大門、窗戶的玻璃
@@ -1067,7 +1082,35 @@ function ldLeave() { // 走出大門（不黑掉）
   const t = walker.telemetry(); walker.teleport({ x: t.x, z: t.z, heading: t.heading }, { keepCamera: true, keepMotion: true }); // 高度換回村子的
   walker.toast('', 1);
 }
-// 門洞（外面看進去）：村子裡一片四邊形，貼 LD.rt（裡面從同一個鏡頭畫的）
+// 第 66 批：走出頂樓的樓梯間（不黑掉）：村子的場景、腳下＝屋頂（walkWorld）、碰撞＝村子＋頂樓那一層（女兒牆、樓梯間的牆）；門口外面看進去＝門洞（ldPortal 畫頂樓那一層）
+function ldRoofOut() {
+  const H = indoor, I = LD.I; indoor = null;
+  Object.assign(LDR, { on: true, y: (LD.b.y || 0) + I.floor * 3.3, dist0: H.dist0 });
+  walker.removeColliders('interior'); walker.removeColliders('ldleaf'); LD.leafT = -1;
+  walker.addColliders(VIL.colliders, 'world');
+  walker.addColliders(I.colliders.map((c) => (c.y0 == null ? { ...c, h: (c.h ?? 9) + LDR.y } : { ...c, h: (c.h ?? 9) + LDR.y, y0: c.y0 + LDR.y })), 'ldroof'); // 高度換成世界的（鏡頭的線是世界的高度）
+  walker.setDoors([]); walker.setCarReach(false); walker.setAction(null);
+  walker.setCamera({ maxY: null, dist: H.dist0 });
+  TR.scene.add(walker.character.group);
+  for (const f of H.folks) f.C.dispose();
+  const t = walker.telemetry(); walker.teleport({ x: t.x, z: t.z, heading: t.heading }, { keepCamera: true, keepMotion: true }); // 高度換成屋頂的
+}
+function ldRoofIn() { // 從屋頂走回樓梯間
+  LDR.on = false;
+  walker.removeColliders('ldroof'); walker.removeColliders('world');
+  indoor = { b: LD.b, I: LD.I, scene: LD.sc, t: 0, dist0: LDR.dist0, folks: [], kind: 'house', live: true };
+  LD.sc.add(walker.character.group); walker.setCarReach(false);
+  houseSet(null);
+  ldLeafCols(true);
+}
+function ldRoofDrop() { // 屋頂那一套收掉（ldDrop、被別的地方接走）
+  if (!LDR.on) return;
+  LDR.on = false;
+  walker?.removeColliders('ldroof');
+  if (walker && !indoor) { walker.setDoors('village'); walker.setCarReach(true); walker.setCamera({ maxY: null }); }
+}
+const ldOnRoof = (x, z) => { const b = LD.b; if (!b) return false; const [lx, lz] = ldLocal(b, x, z); return Math.abs(lx) < b.hx + 0.6 && Math.abs(lz) < b.hz + 0.6; };
+// 門洞（外面看進去）：村子裡一片四邊形，貼 LD.rt（裡面從同一個鏡頭畫的）；第 66 批：頂樓樓梯間的門口也是（userData.fl＝哪一層）
 function ldQuads() {
   if (!LD.qmat) {
     LD.qmat = new THREE.ShaderMaterial({
@@ -1078,12 +1121,12 @@ function ldQuads() {
     });
     LD.cam = new THREE.PerspectiveCamera();
   }
-  const y0 = LD.b.y || 0;
-  for (const p of LD.I.portals) {
-    const g = new THREE.BufferGeometry();
+  const fls = [0]; if (LD.I.roofFl > 0) fls.push(LD.I.roofFl);
+  for (const fl of fls) for (const p of LD.I.floors[fl].portals) {
+    const y0 = (LD.b.y || 0) + fl * 3.3, g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute([p.a[0], y0, p.a[1], p.b[0], y0, p.b[1], p.b[0], y0 + p.y1, p.b[1], p.a[0], y0 + p.y1, p.a[1]], 3));
     g.setIndex([0, 1, 2, 0, 2, 3]);
-    const m = new THREE.Mesh(g, LD.qmat); m.name = 'ld-portal'; m.frustumCulled = false; m.renderOrder = 5; m.visible = false;
+    const m = new THREE.Mesh(g, LD.qmat); m.name = 'ld-portal'; m.frustumCulled = false; m.renderOrder = 5; m.visible = false; m.userData.fl = fl;
     TR.scene.add(m); LD.quads.push(m);
   }
 }
@@ -1101,11 +1144,11 @@ function ldIndoorDraw() { // 在裡面：村子（鏡頭搬到真的高度）→
   renderer.autoClear = ac;
 }
 function ldPortal() { // 在外面：門開著、門洞在畫面裡 → 裡面先畫到 rt（同一個鏡頭；你也借進去，站在門口裡外都對）
-  const base = LD.b?.y || 0;
-  let vis = LD.t > 0.001 && LD.quads.length > 0;
+  const fl = LDR.on ? LD.I.floor : 0, base = (LD.b?.y || 0) + fl * 3.3; // 第 66 批：在屋頂上＝頂樓樓梯間的門口（沒有門片：一直開著）
+  let vis = (fl > 0 || LD.t > 0.001) && LD.quads.length > 0;
   if (vis) { // 門洞在畫面裡才畫裡面
     LD_FR.setFromProjectionMatrix(LD_M4.multiplyMatrices(dcam.projectionMatrix, dcam.matrixWorldInverse)); vis = false;
-    for (const q of LD.quads) { if (!q.geometry.boundingSphere) q.geometry.computeBoundingSphere(); if (LD_FR.intersectsSphere(q.geometry.boundingSphere)) { vis = true; break; } }
+    for (const q of LD.quads) { if (q.userData.fl !== fl) continue; if (!q.geometry.boundingSphere) q.geometry.computeBoundingSphere(); if (LD_FR.intersectsSphere(q.geometry.boundingSphere)) { vis = true; break; } }
   }
   if (vis) {
     renderer.getDrawingBufferSize(LD_V2);
@@ -1119,7 +1162,7 @@ function ldPortal() { // 在外面：門開著、門洞在畫面裡 → 裡面�
     renderer.setRenderTarget(LD.rt); renderer.setClearColor(0x000000, 0); renderer.clear(); ldRaw(LD.sc, C); renderer.setRenderTarget(null); renderer.setClearColor(cc, ca);
     if (me && home === TR.scene) TR.scene.add(me);
   }
-  for (const q of LD.quads) q.visible = vis;
+  for (const q of LD.quads) q.visible = vis && q.userData.fl === fl;
 }
 // 載入畫面：字型、共用的貼圖／PMREM／材質；再蓋一棟透天厝和你一起編譯（所有房子共用同一組材質、同一組燈：之後每一棟都不用再編譯）
 let HOUSE_WARM = null;
@@ -1345,7 +1388,7 @@ function aptHide(i, door, glass) {
 const aptW = (b, x, z) => { const c = Math.cos(b.rot), s = Math.sin(b.rot); return { x: b.x + x * c + z * s, z: b.z - x * s + z * c }; }; // 公寓本地 → 世界（b＝V.buildings 那一棟）
 const inApt = (x, z, m = 0) => { const b = APTU.b; if (!b) return false; const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot), s = Math.sin(b.rot); return Math.abs(dx * c - dz * s) < b.hx + m && Math.abs(dx * s + dz * c) < b.hz + m; };
 // 走路用的世界：房子裡面地板都在 0（公寓蓋在山頂那座也是）；在頂樓、陽台＝那一層的高度；其他照 PW
-function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? stairY(x, z) : APTU.on && inApt(x, z, 0.6) ? APTU.y : PW.heightAt(x, z)); return W; }
+function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? stairY(x, z) : APTU.on && inApt(x, z, 0.6) ? APTU.y : LDR.on && ldOnRoof(x, z) ? LDR.y : PW.heightAt(x, z)); return W; } // 第 66 批：透天厝的屋頂
 // 第 61 批：樓梯自己走（interiors.js 的 I.stair，本地）：兩跑樓梯，同一個 xz 上面一跑、下面一跑 → 挑最接近上一格人的高度（STAIR.y）的那一面；
 //   過了平台一點（高度 > 一層的一半 + 0.12）就換到上一層（人的高度 −3.3，畫面一樣）、往下也一樣；五樓往上走到 8 成＝頂樓（aptOut）
 const STAIR = { y: 0, cam: null, busy: false };

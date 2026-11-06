@@ -16,7 +16,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + '   TWR, EL, PW, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE, setDest, CARS, PERF, TOWER_BAYS, towerFy, TOWER });'
   + ' window.__HOME = () => HOME; window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
   + ' window.__pol = () => (typeof police !== "undefined" ? police : null);' // 第 3 批（b3-int）：警察（撞人的測試以後把星星清掉：警察的部分在 test-b3.mjs）
-  + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR, LD, LD_AT, ldAct, ldStyle });'
+  + ' window.__IN = () => ({ LDR, indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR, LD, LD_AT, ldAct, ldStyle });'
   + ' window.__APT = () => ({ APTU, A: APTU.A, aptLotOf, APT, aptW });'
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
   + ' window.__look = () => LOOKP; window.__cam = () => ({ maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
@@ -206,7 +206,7 @@ await p.addInitScript(() => {
       const yoff = X.indoor?.live ? (L.b.y || 0) + X.indoor.I.floor * 3.3 : 0, cc = R.getClearColor(new T3.Color()), ca = R.getClearAlpha(), ac = R.autoClear;
       const me = D.walker.character.group; me.traverse((o) => o.layers.set(1)); R.setRenderTarget(null); R.autoClear = true;
       if (which === 'world') { cam.position.y += yoff; cam.updateMatrixWorld(); R.render(D.TR.scene, cam); cam.position.y -= yoff; cam.updateMatrixWorld(); }
-      else { const base = X.indoor?.live ? 0 : (L.b.y || 0); cam.position.y -= base; cam.updateMatrixWorld(); R.setClearColor(0xff00ff, 1); R.clear(); R.autoClear = false; R.render(L.sc, cam); cam.position.y += base; cam.updateMatrixWorld(); }
+      else { const base = X.indoor?.live ? 0 : X.LDR?.on ? X.LDR.y : (L.b.y || 0); cam.position.y -= base; cam.updateMatrixWorld(); R.setClearColor(0xff00ff, 1); R.clear(); R.autoClear = false; R.render(L.sc, cam); cam.position.y += base; cam.updateMatrixWorld(); }
       const url = R.domElement.toDataURL(); R.setClearColor(cc, ca); R.autoClear = ac; me.traverse((o) => o.layers.set(0)); window.__hold = false;
       return window.__L.sample(url, uv); },
     sample: (url, uv) => new Promise((res) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.drawImage(im, 0, 0);
@@ -282,6 +282,74 @@ const h4 = await L(() => { const L = window.__L, b = window.__hb, e = window.__I
   const a = L.info(), offs = window.__D().VIL.colliders.filter((c) => c.off === true).length; const wall = window.__H.wallHolds({ ...b, door: { ...b.door, x: e.x, z: e.z, ry: Math.atan2(-nx, -nz) } }); return { ...a, walked: r.ok, offs, wall }; });
 console.log('  away:', JSON.stringify(h4));
 check(h4.walked && h4.b === null && h4.t === 0 && h4.offs === k0.offs && h4.wall.inside === false, `walked 8 m away: the door closed by itself and the house is put away (its wall box is back: pushing into the wall stops you after ${h4.wall.moved} m)`);
+// ---- 3b 頂樓（第 66 批）：透天厝的樓梯走上去＝樓梯間（不黑掉）→ 後面的門口走出去＝真的屋頂（女兒牆擋人）→ 屋頂上看樓梯間的門口＝裡面 → 走回來、下樓、出大門 ----
+const t0 = await L(() => { const D = window.__D(), X = window.__IN(), out = { n: 0, bad: [], other: [] };
+  for (const b of D.VIL.buildings) { const I0 = X.interiorFor(b); if (!I0) continue;
+    if (!b.roof) { out.other.push(I0.kind); continue; }
+    const I = X.buildInterior(b, { live: true, quality: 'low' }), S = I.floors[I.roofFl]?.stair, h = b.hut; out.n++;
+    const d = S && h ? Math.max(Math.abs(h[0] - (S.xs0 - 0.12)), Math.abs(h[1] - (S.xs1 + 0.12)), Math.abs(h[2] - (S.zSB - 0.11)), Math.abs(h[3] - (S.zS1 + 0.12))) : 9;
+    if (I.floors.length !== 2 || I.floors[1].label !== '頂樓' || I.roofFl !== 1 || d > 0.02 || !I.floors[0].stair?.up) out.bad.push([b.name, I.floors.map((f) => f.label).join(), +d.toFixed(3)]);
+    I.dispose(); }
+  out.other = [...new Set(out.other)].sort(); return out; });
+console.log('3b', el(), JSON.stringify(t0));
+check(t0.n >= 70 && t0.bad.length === 0 && !t0.other.includes('house'), `every village house (${t0.n}, shops too) has a 頂樓 above its 1F, and the stair hut on its roof sits right over the stairwell (others without a roof: ${t0.other.join(' ')})`);
+await p.evaluate(() => {
+  const H = window.__H;
+  // 照房子的本地點走（跟 walkTo 一樣推搖桿）：每一格記「整棟的高度」（裡面＝房子＋樓層×3.3＋腳下；屋頂上＝世界的高度）
+  H.walkL = (pts, { maxS = 20 } = {}) => {
+    const W = window.__D().walker, ch = W.character.group, X = () => window.__IN(), b = window.__hb;
+    let last = null, jump = 0, fade = 0, ok = true, at = null;
+    for (const [px, pz] of pts) {
+      const [x, z] = window.__L.bw(b, px, pz); let k = 0, stuck = 0, lx = 1e9, lz = 1e9;
+      for (; k < maxS * 60; k++) {
+        const t = W.telemetry(); if (Math.hypot(x - t.x, z - t.z) < 0.25) break;
+        const a = Math.atan2(-(z - t.z), x - t.x) - t.camYaw; W.setInput({ x: -Math.sin(a) * 0.6, y: Math.cos(a) * 0.6 }); H.step(1);
+        const I = X().indoor, e = I ? ch.position.y + (b.y || 0) + I.I.floor * 3.3 : ch.position.y; if (last != null) jump = Math.max(jump, Math.abs(e - last)); last = e;
+        if (X().doorFade) fade++;
+        if (k % 60 === 59) { if (Math.hypot(t.x - lx, t.z - lz) < 0.12) stuck++; else stuck = 0; lx = t.x; lz = t.z; if (stuck >= 2) { ok = false; at = [px, pz]; break; } }
+      }
+      if (!ok) break;
+    }
+    W.setInput({ x: 0, y: 0 }); H.step(15); W.setInput(null);
+    const X1 = X(), t = W.telemetry(), [lx, lz] = window.__L.loc(b, t.x, t.z);
+    return { ...window.__L.info(), ok, stuckAt: at, jump: +jump.toFixed(3), fadeN: fade, lx: +lx.toFixed(2), lz: +lz.toFixed(2), roof: !!X1.LDR.on, roofY: +X1.LDR.y.toFixed(2), label: X1.indoor ? X1.indoor.I.floors[X1.indoor.I.floor].label : null };
+  };
+});
+const st = await L(() => { const L = window.__L, b = window.__hb; L.approach(b); window.__H.press(); window.__H.step(50); L.walkIn(b, 3); return window.__IN().indoor.I.floors[0].stair; });
+const HB = await L(() => ({ hz: window.__hb.hz, y: window.__hb.y || 0 })), sa = (st.xa0 + st.xa1) / 2, sb = (st.xb0 + st.xb1) / 2;
+const u1 = await L((a) => window.__H.walkL(a), [[st.xs1 + 0.4, st.zSB - 0.8], [sa, st.zSB - 0.8], [sa, st.zSB + 0.3], [sa, st.zS1 - 0.45], [sb, st.zS1 - 0.45], [sb, st.zSB + 0.3], [sb, st.zSB - 0.1]]);
+console.log('  up:', JSON.stringify(u1));
+check(u1.ok && u1.indoor && u1.fl === 1 && u1.label === '頂樓' && u1.fadeN === 0 && u1.jump < 0.06 && !u1.roof, `walked up the stairs from 1F to the stair hut (「${u1.label}」) with no fade, height smooth (biggest step ${u1.jump} m)`);
+const u2 = await L((a) => window.__H.walkL(a), [[sb, st.zSB - 1.2], [sb, -HB.hz + 1.4]]);
+console.log('  out:', JSON.stringify(u2));
+check(u2.ok && u2.roof && !u2.indoor && u2.inWorld && u2.fadeN === 0 && Math.abs(u2.y - (HB.y + 3.3)) < 0.03 && u2.mode === 'walk', `walked out of the hut's doorway onto the real roof: in the village, standing ${u2.y} m up, no fade`);
+const rw = await L(() => { const b = window.__hb, H = window.__H, c = Math.cos(b.rot), s = Math.sin(b.rot), out = {};
+  for (const [k, lx, lz] of [['back', 0, -1], ['side', 1, 0], ['side2', -1, 0]]) { const dx = lx * c + lz * s, dz = -lx * s + lz * c, r = H.push(Math.atan2(-dz, dx), 3, 0.8), [qx, qz] = window.__L.loc(b, r.x, r.z); out[k] = [+qx.toFixed(2), +qz.toFixed(2), +window.__D().walker.character.group.position.y.toFixed(2)]; }
+  out.hx = b.hx; out.hz = b.hz; out.info = window.__L.info(); return out; });
+console.log('  parapet:', JSON.stringify(rw));
+check(['back', 'side', 'side2'].every((k) => Math.abs(rw[k][0]) < rw.hx - 0.15 && Math.abs(rw[k][1]) < rw.hz - 0.15 && Math.abs(rw[k][2] - u2.y) < 0.03) && rw.info.b === u2.b,
+  `the parapet holds: pushing 3 s to the back and both sides you stay on the roof (back ${rw.back[1]}/${-rw.hz}, sides ${rw.side[0]}, ${rw.side2[0]} / ±${rw.hx.toFixed(2)})`);
+// 屋頂上回頭看樓梯間：門口＝裡面畫好的樓梯間
+await L(() => { const b = window.__hb, W = window.__D().walker, S = window.__IN().LD.I.floors[1].stair, [x, z] = window.__L.bw(b, (S.xb0 + S.xb1) / 2, S.zSB - 2.6); W.teleport({ x, z, heading: Math.atan2(-Math.cos(b.rot), Math.sin(b.rot)) });
+  W.setCamera({ yaw: Math.atan2(-Math.cos(b.rot), Math.sin(b.rot)) + 0.25, pitch: 0.15 }); /* 朝前面（樓梯間）看 */ window.__H.step(30); });
+const uvR = await L(() => { const X = window.__IN(), P = X.LD.I.floors[1].portals[0], v = new window.__T3.Vector3((P.a[0] + P.b[0]) / 2, X.LDR.y + 1.2, (P.a[1] + P.b[1]) / 2); v.project(window.__D().dcam); return { u: (v.x + 1) / 2, v: (1 - v.y) / 2, z: v.z }; });
+const pxR = await shotPx(uvR), inR = await L((uv) => window.__L.alone('in', uv), uvR);
+await drawAndShot('3b-roof');
+const rR = await frameInfo();
+console.log('  roof px', JSON.stringify(uvR), JSON.stringify(pxR), JSON.stringify(inR), JSON.stringify(rR));
+check(uvR.z < 1 && uvR.u > 0.05 && uvR.u < 0.95 && near(pxR, inR) >= 4 && magenta(inR) <= 1, `on the roof the hut's doorway shows the stairs inside (≈ the inside drawn alone at ${near(pxR, inR)}/5 points); whole frame ${rR.calls} calls / ${rR.tris} triangles`);
+check(rR.calls < 420, `draw calls on the roof: ${rR.calls}`);
+const u3 = await L((a) => window.__H.walkL(a), [[sb, st.zSB - 1.0], [sb, st.zSB + 0.3]]);
+console.log('  back in:', JSON.stringify(u3));
+check(u3.ok && u3.indoor && u3.fl === 1 && !u3.roof && u3.inHouse && u3.fadeN === 0 && u3.jump < 0.06, `walked back into the hut from the roof, no fade (height smooth: ${u3.jump} m)`);
+const EL = await L(() => { const b = window.__hb, e = window.__IN().interiorFor(b).enter; return window.__L.loc(b, e.x, e.z); });
+const u4 = await L((a) => window.__H.walkL(a), [[sb, st.zS1 - 0.45], [sa, st.zS1 - 0.45], [sa, st.zSB + 0.3], [sa, st.zSB - 0.7], [st.xs1 + 0.4, st.zSB - 0.8], [EL[0], EL[1] - 3]]);
+const u5 = await L(() => { const L = window.__L, b = window.__hb, e = window.__IN().interiorFor(b).enter, W = window.__D().walker, nx = Math.sin(b.rot), nz = Math.cos(b.rot); W.teleport({ x: e.x - nx * 1.2, z: e.z - nz * 1.2, heading: Math.atan2(-nz, nx) }); window.__H.step(10);
+  const pressed = window.__H.press(); window.__H.step(50); return { pressed, ...L.walkOut(b, 2.5) }; }); // 大門走開以後自己關了：裡面按「開門」
+console.log('  down + out:', JSON.stringify(u4), JSON.stringify(u5));
+check(u4.ok && u4.fl === 0 && u4.fadeN === 0 && u4.jump < 0.06 && u5.pressed === '開門' && !u5.indoor && u5.inWorld && u5.fadeFrames === 0 && Math.abs(u5.y - HB.y) < 0.05,
+  `walked down to 1F, pressed 「開門」 (the front door had closed behind you) and walked out, no fade anywhere`);
+await L(() => { const b = window.__hb, e = window.__IN().interiorFor(b).enter; window.__H.walkTo(e.x + Math.sin(b.rot) * 8, e.z + Math.cos(b.rot) * 8); window.__H.step(90); });
 // ---- 4 超商：自動門（走近就開、走開就關），走進去、從玻璃看出去 ----
 const s0 = await L(() => { const D = window.__D(), b = D.VIL.buildings.find((q) => window.__IN().interiorFor(q)?.kind === 'store'); window.__sb = b; const a = window.__L.approach(b, 1.6); window.__H.step(40); return { name: b.name, a, now: window.__L.info() }; });
 console.log('4', el(), JSON.stringify(s0));

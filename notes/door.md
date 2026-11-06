@@ -32,3 +32,26 @@ Plan told to Nick (three steps, each to the trial page): 1 windows show the real
   Pixel checks compare the screenshot at the doorway with the same view drawn alone (village only / interior only with a magenta clear); the walker is shrunk for those because walk.js resets `visible` every frame.
 - `apt-test`, `test-b1`, `test-app-b1`, `test-b3`: `H.toDoor` presses 「開門」 and walks in for buildings with `interiorFor`; `H.toExit` walks out of a live front door (pressing 「開門」 if it closed); `inInfo.doors` ignores the live front door.
 - `test-app-b1` runs on `docs/`: its new checks only pass after the site is rebuilt with this batch (上線).
+
+# Batch 66 (trial v78): walk up to the roof of every village house
+
+Nick 2026-11-04 picked 「1 層＋頂樓」 for 透天厝: houses stay one floor, and the stairs go up to a walkable roof. Step 2 of the plan in this note's first part. Only village houses built by `village.js house()` (kind house/shop, `b.roof`); the farmhouse, temple, store, apartment (its roof keeps the fade) and Neihu are unchanged.
+
+## What changed
+- `village.js house()`: the old random roof hut / water tank is replaced by a stair hut right over the interior stairwell (`hutSS` = the stairs' side: away from the door, or a position hash when the door is in the middle; same formula as `interiors.js houseInfo`, written to the building as `b.ss`). Hut = concrete box `[stairwell x ±0.12, zSB−0.11 … zP]`, 3.15 m high, a dark doorway on its back face (only the outward face: from inside it does not block the view), a water tank on top (`roofR` keeps the rnd order). The building record gets `ss`, `roof: true`, `hut` (local rect, for the test).
+- `interiors.js`: with `live` and `b.roof` a house gets one more floor, `roofFloor(H, n)` labelled 頂樓: the stair hut inside (stairs going down, lamp), a doorway in the back wall (`out: -1` → a portal), and parapet colliders round the roof (1.2 m). `F.roof = { hx, hz, X0, X1 }`; `I.roofFl` = its index (−1 = none). The 1F stairs now go up (`stairShaft` up/down from the floor count).
+- `town.src.js` (LD, `LDR = { on, y, dist0 }`):
+  - walking up the stairs swaps to the 頂樓 floor like any other floor (no fade).
+  - on the 頂樓 floor, stepping out of the doorway (`lz < zSB − 0.25`) = `ldRoofOut`: back to the village scene, ground height = roof (`walkWorld` heightAt: `LDR.on && ldOnRoof` → `LDR.y`), colliders = village + this floor's (heights shifted to world: the camera line uses world heights, otherwise the camera went through the hut), no doors, no car reach.
+  - walking back into the hut (`lz > zSB`, between the stairwell walls) = `ldRoofIn` (indoor again on the 頂樓 floor).
+  - `ldStep` returns right after `ldRoofOut` (otherwise the "door shut and 6 m away" rule dropped the building the same frame and you fell to the street); far from the house (teleport, 去這裡) = `ldDrop` → `ldRoofDrop`.
+  - portals: `ldQuads` makes quads for floor 0 and the roof floor (`userData.fl`); `ldPortal` on the roof draws the interior from the roof height and shows only the roof quad.
+  - the front door closes behind you as before; inside, 「開門」 by the door opens it again.
+- Known: right at the doorway the camera can trail outside the hut for a moment, and the interior is drawn over the village (same x-ray as the front door since batch 65).
+
+## Numbers (swiftshader 390×844, 普通)
+- on the roof looking at the hut doorway (village + hut interior through the doorway): about 98–130 calls / 0.39–0.53M triangles.
+- the 頂樓 floor itself: 4 calls / 4.6k triangles.
+
+## Tests
+- `door-test.mjs` section 3b: all 81 village houses have 1F + 頂樓 and the hut sits over the stairwell (`b.hut` vs `F.stair`, 2 cm); up the stairs (no fade, height smooth), out onto the roof (world scene, y = b.y + 3.3), the parapet holds (back, both sides), the hut doorway shows the stairs (pixel check vs the interior drawn alone from the roof height), back in, down, 「開門」, out of the front door. 31 ok.

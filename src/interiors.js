@@ -1395,7 +1395,7 @@ function houseInfo(b) {
   const c = Math.cos(b.rot), s = Math.sin(b.rot), ddx = b.door.x - b.x, ddz = b.door.z - b.z, doorX = ddx * c - ddz * s;
   const R = rng(seedOf(b)), N = Math.max(1, b.floors || Math.round(b.h / FH) || 2), biz = bizOf(b);
   const front = b.front || (b.kind === 'shop' ? 'shop' : Math.abs(doorX) > 0.5 ? 'shutter' : 'door');
-  const ss = Math.abs(doorX) > 0.5 ? -Math.sign(doorX) : R() < 0.5 ? -1 : 1;
+  const ss0 = Math.abs(doorX) > 0.5 ? -Math.sign(doorX) : R() < 0.5 ? -1 : 1, ss = b.ss || ss0; // 第 66 批：村子的透天厝（village.js 算好 ss：頂樓的樓梯間蓋在樓梯正上面）；亂數照舊用掉
   const X = (u) => (ss < 0 ? X0 + u : X1 - u), XR = (u0, u1) => { const a = X(u0), q = X(u1); return [Math.min(a, q), Math.max(a, q)]; };
   const Wp = W - 2.1, dww = Wp >= 2.6 ? 1.3 : 1.0, dwU = 2.1 + Wp / 2;
   const altarFl = biz ? N - 1 : N >= 3 && R() < 0.35 ? N - 1 : 0;
@@ -1545,6 +1545,28 @@ function houseFloor(H, n) {
   if (fu === 'living') living(ctx); else if (fu === 'shop') shopFront(ctx); else if (fu === 'shrine') shrineRoom(ctx); else bedFront(ctx);
   if (bu === 'kitchen') kitchenBack(ctx); else if (bu === 'bed2') bedBack(ctx); else if (bu === 'family') familyBack(ctx); else if (bu === 'study') studyBack(ctx); else laundryBack(ctx);
   if (n === 0 && H.Wp >= 2.4 && !shop) passageDining(ctx);
+  return F;
+}
+// 第 66 批：頂樓（透天厝，live）：樓梯井上面的樓梯間（裡面：牆、往下的樓梯、燈；外面那一面、屋頂、女兒牆是 village.js 畫的）
+//   門口在後面那一面（樓梯第二跑那一邊、沒有門片）：走出去＝town.src.js 換成「在屋頂上」（村子的場景、屋頂的高度、這一層的碰撞＝女兒牆、樓梯間的牆）
+function roofFloor(H, n) {
+  const { X, XR, X0, X1, zSB, zS1, zP, hx, hz } = H;
+  const F = newFloor({ index: n, label: '頂樓' });
+  const S = sf('plaster', '#efece4', 'wall');
+  const [sx0, sx1] = XR(0, 2.0), [st0, st1] = XR(0, 2.1), [hb0, hb1] = XR(0, 0.95);
+  room(F, null, sx0, sx1, zSB, zS1, { h: F.ch });
+  wall(F, 'z', X(2.05), zSB, zS1, { t: 0.1, p: null, n: null }); // 樓梯間靠屋頂那面（裡面那面 stairShaft 畫、外面 village.js）
+  wall(F, 'x', zP - 0.06, st0, st1, { p: null, n: null });
+  wall(F, 'x', zSB - 0.05, st0, st1, { t: 0.1, p: S, n: null, out: -1, ops: [{ a: hb0, b: hb1, y0: 0, y1: 2.3, k: 'open' }] }); // 門口（out：外面看進來的門洞）
+  colBox(F, -hx - 0.3, -hz - 0.3, X0, hz + 0.3, 1.2); colBox(F, X1, -hz - 0.3, hx + 0.3, hz + 0.3, 1.2); // 女兒牆（兩邊）
+  colBox(F, X0, hz - 0.2, X1, hz + 0.3, 1.2); colBox(F, X0, -hz - 0.3, X1, -hz + 0.2, 1.2); // 女兒牆（前、後）
+  ready(F);
+  stairShaft(F, H, n, S);
+  const cx = (sx0 + sx1) / 2, cz = (zSB + zS1) / 2;
+  lamp(F, cx, cz, 2.4, '#fff4e6'); fixture(F, cx, cz, 'round');
+  F.sun = { from: [0.3, 0.75, 1], I: 0.8 }; F.hemi = { sky: '#fffaf2', ground: '#c8b89c', I: 1.55 };
+  F.cam = { maxDist: 2.4, ceiling: F.ch - 0.18, near: 0.1 };
+  F.roof = { hx, hz, X0, X1 };
   return F;
 }
 // u 方向的 frame：朝 +u、朝 −u、朝 +z、朝 −z
@@ -2448,7 +2470,11 @@ function buildInterior(b, o = {}) {
   let Fs;
   LIVE = !!o.live;
   try {
-  if (kind === 'house') { const H = houseInfo(b); Fs = []; for (let n = 0; n < H.N; n++) Fs.push(houseFloor(H, n)); }
+  if (kind === 'house') { // 第 66 批：live＋村子的透天厝（b.roof）：最上面一層的樓梯往上走＝頂樓（多一層 roofFloor：樓梯間，走出去是真的屋頂）
+    const H0 = houseInfo(b), roof = LIVE && b.roof, H = roof ? { ...H0, N: H0.N + 1 } : H0; Fs = [];
+    for (let n = 0; n < H0.N; n++) Fs.push(houseFloor(H, n));
+    if (roof) Fs.push(roofFloor(H, H0.N));
+  }
   else if (kind === 'apt') { const A = aptInfo(b); Fs = []; for (let n = 0; n < A.N; n++) Fs.push(aptFloor(A, n)); }
   else Fs = [kind === 'store' ? storeFloor(b) : kind === 'temple' ? templeFloor(b) : farmFloor(b)];
   } finally { LIVE = false; }
@@ -2473,6 +2499,7 @@ function buildInterior(b, o = {}) {
       camera: { maxDist: 3, ceiling: F.ch - 0.2, near: 0.1, ...(F.cam || {}) },
       moving, portals: F.portals.map((pt) => ({ a: W(pt.a[0], pt.a[1]), b: W(pt.b[0], pt.b[1]), y1: pt.y1 })), // 第 65 批：會動的門、外面看進來的門洞（世界座標）
       stair: F.stair ? { ...F.stair, ch: F.ch } : null, // 第 61 批：樓梯（本地座標；town.src.js stairY、樓梯走到一半換樓層）
+      roof: F.roof || null, // 第 66 批：頂樓那一層（本地：女兒牆裡面 x0–x1、±hz）
       lift: F.lift ? { ...xz((F.lift.x0 + F.lift.x1) / 2, (F.lift.z0 + F.lift.z1) / 2), hx: (F.lift.x1 - F.lift.x0) / 2, hz: (F.lift.z1 - F.lift.z0) / 2, rot } : null, // 第 60 批：公寓的電梯（站進去出面板）
       bounds: { ...xz((bx0 + bx1) / 2, (bz0 + bz1) / 2), hx: (bx1 - bx0) / 2, hz: (bz1 - bz0) / 2, rot },
     };
@@ -2490,6 +2517,7 @@ function buildInterior(b, o = {}) {
     // 第 65 批：live 的大門（一樓）：doorStyle hinge＝按「開門」轉開、auto＝自動門（走近了滑開）、open＝沒有門（店面、廟）
     doorStyle: floors[0].moving.some((m) => m.k === 'leaf') ? 'hinge' : floors[0].moving.length ? 'auto' : 'open',
     portals: floors[0].portals,
+    roofFl: floors.findIndex((f) => f.roof), // 第 66 批：頂樓是第幾層（沒有＝−1）
     setDoorT(t) { for (const m of floors[0]?.moving || []) m.set(t); },
     doorCols(t) { // 世界座標的碰撞（門片現在在哪裡）
       const out = [];

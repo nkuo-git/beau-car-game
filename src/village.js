@@ -1249,11 +1249,8 @@ function buildVillage(opts = {}) {
     const pw = 0.18, ph = 0.95; // 女兒牆
     box('main', T, [-w / 2, H, -pw, w / 2, H + ph, 0], { pz: cw, _: cs }, { pz: FAC ? false : subUV(U.tile, 0, 0, Math.min(1, w / 6.2), 0.07), _: U.conc });
     box('main', T, [-w / 2, H, -D, w / 2, H + ph, -D + pw], cs, { _: U.conc }); box('main', T, [-w / 2, H, -D + pw, -w / 2 + pw, H + ph, -pw], cs, { _: U.conc }); box('main', T, [w / 2 - pw, H, -D + pw, w / 2, H + ph, -pw], cs, { _: U.conc });
-    // 頂樓：樓梯間、水塔、加蓋的鐵皮屋
-    const sx = (rnd() - 0.5) * Math.max(0, w - 3.2), stair = [sx - 1.3, H, -D + 0.6, sx + 1.3, H + 2.6, -D + 3.9];
-    box('main', T, stair, cs, { _: U.conc, pz: U.conc }); face('main', T, sx - 0.45, sx + 0.45, H, H + 2.1, -D + 3.92, U.ac2);
-    if (rnd() < 0.55) { cyl('main', T, sx, -D + 2.2, H + 2.6, H + 2.8, 0.5, 0.5, 6, C('#7d8288'), null, true); cyl('main', T, sx, -D + 2.2, H + 2.8, H + 4.1, 0.58, 0.58, 10, WHITE, U.tank, false); cyl('main', T, sx, -D + 2.2, H + 4.1, H + 4.4, 0.58, 0, 10, C('#d9dde1'), null, false); }
-    else { const bl = C('#2f78c8'); cyl('main', T, sx, -D + 2.2, H + 2.6, H + 3.8, 0.62, 0.62, 10, bl, null, false); cyl('main', T, sx, -D + 2.2, H + 3.8, H + 4.05, 0.62, 0.2, 10, mul(bl, 0.9), null, true); }
+    // 頂樓：樓梯間、水塔（第 66 批：樓梯間蓋在房子裡面的樓梯正上面（interiors.js 的樓梯井），門在後面那一面＝樓梯走上來就走出去；亂數照舊用掉，位置等一樓的門決定了再算）
+    const roofR = [rnd(), rnd()]; // 本來的樓梯間位置、水塔的樣子
     if (fl < 3 && fl0 >= 3) { if (rnd() < 0.35) pick(rnd, ROOFADD); } // 第 10 批：變矮的房子不加蓋（亂數一樣用掉）
     else if (fl >= 3 && rnd() < 0.35) { // 頂樓加蓋（浪板）
       const rc = pick(rnd, ROOFADD), z1 = -D * 0.42;
@@ -1281,6 +1278,20 @@ function buildVillage(opts = {}) {
       if (w >= 4.6) { face('main', T, -w / 2 + 0.35, -1.05, 0.9, 2.4, 0.02, U.winP); face('main', T, 1.05, w / 2 - 0.35, 0.9, 2.4, 0.02, U.winP); }
     }
     if (hl) { hl.kind = kind; hl.door = door; if (kind === 'shutter') { const sw = w >= 5 ? Math.min(3.4, w - 1.7) : w - 0.5; hl.shutter = [-w / 2 + 0.25, -w / 2 + 0.25 + sw]; } } // 第 3 批
+    // 第 66 批：頂樓的樓梯間＝蓋在房子裡面的樓梯井正上面（interiors.js houseInfo：樓梯在門的另一邊，門在中間的照位置算一邊；這裡算的 ss 寫進 V.buildings 給 interiors.js 用），
+    //   門口在後面那一面、樓梯第二跑那一邊（走上來就走出去，沒有門片）；樓梯間裡面的天花板 3.0（interiors.js CH）；水塔放在樓梯間上面
+    const hutSS = Math.abs(door) > 0.5 ? -Math.sign(door) : hash2(Math.round(x * 10) + 31, Math.round(z * 10) + 977) < 0.5 ? -1 : 1;
+    let hutR = null; // 樓梯間（裡面的座標：x、z＝離房子中心；給測試對 interiors.js 的樓梯井）
+    {
+      const t = 0.2, hz = D / 2, L1 = Math.min(5.3, Math.max(4.3, (D - 2 * t) * 0.42)), zP = hz - t - L1, zSB = zP - 0.12 - 3.2;
+      const X0 = -w / 2 + t, X1 = w / 2 - t, Xu = (u) => (hutSS < 0 ? X0 + u : X1 - u), lo = (a, b) => Math.min(Xu(a), Xu(b)), hi = (a, b) => Math.max(Xu(a), Xu(b));
+      const z0 = zSB - 0.11 - hz, z1 = zP - hz, HT = H + 3.15, tx = (lo(-0.12, 2.12) + hi(-0.12, 2.12)) / 2, tz = (z0 + z1) / 2;
+      box('main', T, [lo(-0.12, 2.12), H, z0, hi(-0.12, 2.12), HT, z1], cs, { _: U.conc });
+      hutR = [lo(-0.12, 2.12), hi(-0.12, 2.12), z0 + hz, z1 + hz];
+      box('main', T, [lo(0, 0.95), H, z0 - 0.008, hi(0, 0.95), H + 2.3, z0], C('#2b2d31'), { _: WD, py: false, ny: false, px: false, nx: false, pz: false }); // 門口（外面看暗暗的；只畫朝外那一面：樓梯間裡面往外看不擋；走近了 town.src.js 貼裡面畫好的樓梯間）
+      if (roofR[1] < 0.55) { cyl('main', T, tx, tz, HT, HT + 0.2, 0.5, 0.5, 6, C('#7d8288'), null, true); cyl('main', T, tx, tz, HT + 0.2, HT + 1.5, 0.58, 0.58, 10, WHITE, U.tank, false); cyl('main', T, tx, tz, HT + 1.5, HT + 1.8, 0.58, 0, 10, C('#d9dde1'), null, false); }
+      else { const bl = C('#2f78c8'); cyl('main', T, tx, tz, HT, HT + 1.2, 0.62, 0.62, 10, bl, null, false); cyl('main', T, tx, tz, HT + 1.2, HT + 1.45, 0.62, 0.2, 10, mul(bl, 0.9), null, true); }
+    }
     { // ==== 第 35 批（內容 22）：房子更真：牆腳踢腳、門口的台階、窗台＋窗楣、鐵捲門的軌道、落水管、電表箱、女兒牆的壓頂（不動亂數：用位置算）====
       const hq = (k) => hash2(Math.round(x * 10) + k * 7919, Math.round(z * 10) + k * 104729);
       const DK = mul(cs, 0.62), STEP = C('#cfcdc6'), SILL = C('#dedcd6'), RAIL = C('#8f959b'), PIPE = hq(3) < 0.5 ? C('#c3c6ca') : mul(cw, 0.92), CAP = mix(cs, WHITE, 0.3);
@@ -1331,7 +1342,7 @@ function buildVillage(opts = {}) {
     if (o.scooter || rnd() < 0.22) scooter(...(() => { const p = T.p((rnd() - 0.5) * (w - 2), 0, 0.8); return [p[0], p[2], ry + (rnd() < 0.5 ? 0 : Math.PI), rnd]; })());
     const c = T.p(0, 0, -D / 2), dp = T.p(door, 0, 0.6); addBox(c[0], c[2], w / 2, D / 2, ry, H);
     const biz = kind === 'shop' ? { name: SHOP_NAMES[o.shop % 3] } : kind === 'shutter' && o.vsign != null && fl >= 3 ? { sign: VSIGN_TEXT[o.vsign] } : {}; // 店名（橫招牌）、直立招牌的字（一樓做生意）：走進去的時候照這個擺
-    buildings.push({ kind: kind === 'shop' ? 'shop' : 'house', ...biz, front: kind, x: c[0], z: c[2], hx: w / 2, hz: D / 2, rot: ry, h: H, floors: fl, up: ups, door: { x: dp[0], z: dp[2], ry } }); // door：大門外面一點（ry＝房子正面朝的方向）；front：一樓正面 shop 店面 | shutter 鐵捲門＋小門 | door 大門＋窗；up：二樓以上每層正面 b 陽台 | w 鐵窗
+    buildings.push({ kind: kind === 'shop' ? 'shop' : 'house', ...biz, front: kind, x: c[0], z: c[2], hx: w / 2, hz: D / 2, rot: ry, h: H, floors: fl, up: ups, door: { x: dp[0], z: dp[2], ry }, ss: hutSS, roof: true, hut: hutR }); // door：大門外面一點（ry＝房子正面朝的方向）；front：一樓正面 shop 店面 | shutter 鐵捲門＋小門 | door 大門＋窗；up：二樓以上每層正面 b 陽台 | w 鐵窗
     if (hl) { hl.b = buildings[buildings.length - 1]; stHouses.push(hl); } // 第 3 批（hl.b：street.js 掛了招牌的，把店名寫進 V.buildings 那一筆的 name、streetSign）
     return H;
   };
