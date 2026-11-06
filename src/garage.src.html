@@ -124,7 +124,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 /*__INLINE__*/
 // ==== 第 4 批：越野車（offroad.js）：駕駛座視角、引擎聲接到車內（cabin.js）、引擎聲（sound.js）的表 ====
-Object.assign(CABIN_VIEW, OFFROAD_EYE, { z2: Z2_RIDE.view, n4: N4_RIDE.view }); if (createEngineAudio.cars) Object.assign(createEngineAudio.cars, OFFROAD_SOUND); // 第 56 批：沙灘車的第一人稱（騎的人的眼睛）
+Object.assign(CABIN_VIEW, OFFROAD_EYE, { z2: Z2_RIDE.view, n4: N4_RIDE.view, mtb: MTB_RIDE.view, road: ROAD_RIDE.view }); if (createEngineAudio.cars) Object.assign(createEngineAudio.cars, OFFROAD_SOUND); // 第 56 批：沙灘車的第一人稱（騎的人的眼睛）
 
 const stage = document.getElementById('stage');
 const msg = document.getElementById('msg'), prog = document.getElementById('prog'), status = document.getElementById('status'), hint = document.getElementById('hint');
@@ -306,7 +306,9 @@ const CARS = {
   k2: { file: 'car-k2.txt', size: SIZES.k2, spec: K2_SPEC, btn: ['K2', '小越野車 · 薄荷綠'], ...K2_GARAGE }, // 第 51 批（Nick 2026-10-29 卡片「好，做進去」）：三門小越野車（自己設計的，沒有真的牌子），越野車行賣
   p8: { file: 'car-p8.txt', size: SIZES.p8, spec: P8_SPEC, btn: ['P8', '皮卡 · 火山紅'], ...P8_GARAGE }, // 第 53 批（Nick 2026-10-29「越野車 繼續做」→ 看圖卡片「好，做進去」）：四門雙排座皮卡（自己設計的，沒有真的牌子），越野車行賣
   z2: { file: 'car-z2.txt', size: SIZES.z2, spec: Z2_SPEC, btn: ['Z2', '沙灘車 · 閃電黃'], ...Z2_GARAGE }, // 第 56 批（Nick 2026-10-29「繼續做其他的」→ 看圖卡片「好，做進去」）：四輪沙灘車（騎的；自己設計的，沒有真的牌子），越野車行賣
-  n4: { file: 'car-n4.txt', size: SIZES.n4, spec: N4_SPEC, btn: ['N4', '街車 · 消光灰'], ...N4_GARAGE }, // 第 62 批（Nick 2026-11-02 卡片「只做街車」）：直四街車（騎的；自己設計的，沒有真的牌子），阿財車行賣
+  n4: { file: 'car-n4.txt', size: SIZES.n4, spec: N4_SPEC, btn: ['N4', '街車 · 消光灰'], ...N4_GARAGE },
+  mtb: { file: 'car-mtb.txt', size: SIZES.mtb, spec: MTB_SPEC, btn: ['越野腳踏車', '登山車 · 橘'], ...MTB_GARAGE }, // 第 67 批（Nick 2026-11-06「加自行車」「還有越野腳踏車」，卡片「兩台都做」）：腳踏車（騎的、用腳踩；自己設計的，沒有真的牌子），阿財車行賣
+  road: { file: 'car-road.txt', size: SIZES.road, spec: ROAD_SPEC, btn: ['一般腳踏車', '公路車 · 藍'], ...ROAD_GARAGE }, // 第 67 批 // 第 62 批（Nick 2026-11-02 卡片「只做街車」）：直四街車（騎的；自己設計的，沒有真的牌子），阿財車行賣
 };
 // 性能（約略照真車）：馬力、重量、四驅、紅線、極速（vmax 原廠；top＝零件全裝，第 46 批 vmaxOf）、風阻；drive＝後驅的車起步時後輪壓到多少重量（引擎在中間的比較會起步）
 // price＝大概行情價的一半（Nick 2026-10-07「所有車都半價」；怪獸卡車他說 100 萬）（新台幣「萬」，二手車看車況差很多）；tyres＝半熱熔胎、直線加速胎的價錢（萬）
@@ -410,6 +412,12 @@ const PERF = {
     ['header', '不鏽鋼頭段', '排氣更順', 3, 2], ['cams', '高角度凸輪軸', '高轉更有力', 5, 3], ['stroker', '加大缸徑', '686 cc 擴到 750 cc', 6, 4]] },
   // 第 62 批：N4 街車（騎的，2.1 公尺：停得進圓塔、坐得了電梯、開得上斜坡）：照 900 cc 直四街車（約 125 匹、212 公斤、極速約 240）；lean：轉彎往裡面倒；
   //   top＝vmax：找了一次（改裝過的 900 cc 直四街車），只有原廠的數字，沒有改裝過再量極速的紀錄（notes/cars.md）→ 零件只加馬力
+  // 第 67 批：腳踏車（騎的、用腳踩：沒有引擎聲）：馬力＝你的腿（約 1.2 匹＝900 瓦：真的人衝刺才有，0.5 匹騎斜坡上不去、20 秒踩不到 30，遊戲裡太慢）、重量＝車＋你；越野腳踏車跟沙灘車一樣走越野那一級的懸吊（泥巴路、山路騎得動）但很輕、不輾東西（light）；
+  //   零件只有兩樣便宜的；極速照平路踩得到的（登山車約 30、公路車約 35）；shop：兩台都在阿財車行賣（越野的本來會跑去越野車行）
+  mtb: { price: 3, hp: 1.2, kg: 95, awd: 0, drive: 0.75, red: 7000, vmax: 30, top: 32, cda: 0.6, offroad: 1, light: 1, lean: 1, bike: 1, shop: 'dealer', eng: '你的兩條腿（約 1 匹）', tyres: [1, 1], parts: [
+    ['light', '碳纖維車架', '車子變輕、踩起來更順', 0.1, 1], ['tyre', '競賽越野胎', '滾得更順、抓地更好', 0.1, 1]] },
+  road: { price: 2, hp: 1.2, kg: 88, awd: 0, drive: 0.75, red: 7000, vmax: 35, top: 37, cda: 0.45, lean: 1, bike: 1, shop: 'dealer', eng: '你的兩條腿（約 1 匹）', tyres: [1, 1], parts: [
+    ['light', '碳纖維車架', '車子變輕、踩起來更順', 0.1, 1], ['tyre', '競賽光頭胎', '滾得更順', 0.1, 1]] },
   n4: { price: 40, hp: 125, kg: 212, red: 11000, vmax: 240, top: 240, cda: 0.42, drive: 0.9, lean: 1, eng: '948 cc 直列四缸 自然進氣', tyres: [1, 2], parts: [
     ['intake', '高流量進氣', '空濾換成高流量的', 4, 1], ['exhaust', '鈦合金排氣', '直四叫得更尖', 6, 2], ['ecu', 'ECU 調校', '重寫點火和噴油', 7, 2],
     ['header', '不鏽鋼頭段', '四合一更順', 5, 2], ['cams', '高角度凸輪軸', '高轉更有力', 9, 4], ['quick', '快排', '換檔不用收油門', 4, 3]] },

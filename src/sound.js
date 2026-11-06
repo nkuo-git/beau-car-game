@@ -593,6 +593,9 @@ SND_CARS.z2 = { ...SND_CARS.yaris, name: '686 cc 單缸自然進氣', red: 8500,
 SND_CARS.n4 = { ...SND_CARS.yaris, name: '948 cc 直列四缸自然進氣', red: 11000, idle: 0.11, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.97, 1, 0.98], turbo: null, gain: 1.2, idleGain: 2.6,
   width: 110, vari: 0.04, jit: 0.6, drive: 1.5, rasp: 0.42, raspHz: 3200, lp: 4200, eq: [[180, 1, 2], [900, 1.4, 3], [2600, 2, 2.5]],
   intake: { ...SND_CARS.yaris.intake, lvl: 0.34, f: 700, tone: 0.55, hiss: 0.14 }, pops: { ...SND_CARS.yaris.pops, lift: 0.35, shift: 0.25, lvl: 0.55, rate: 12 } };
+// 第 67 批：腳踏車沒有引擎：整個聲音關掉（gain 0；車庫頁的催油門、比賽、出門都靜音）
+SND_CARS.mtb = { ...SND_CARS.yaris, name: '沒有引擎（用腳踩）', gain: 0, idleGain: 0, turbo: null, pops: { ...SND_CARS.yaris.pops, lift: 0, shift: 0, lvl: 0 }, intake: { ...SND_CARS.yaris.intake, lvl: 0 } };
+SND_CARS.road = SND_CARS.mtb;
 // 車庫的引擎零件會改變聲音
 function SND_profile(key, parts) {
   const B = SND_CARS[key] || SND_CARS.supra;

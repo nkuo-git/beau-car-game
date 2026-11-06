@@ -24,13 +24,13 @@ import { Document, NodeIO } from '@gltf-transform/core';
 import { KHRMeshQuantization } from '@gltf-transform/extensions';
 import { serve, browser, DIR } from './lod-serve.mjs';
 
-const ALL = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'rx7', 'evo', 'civic', 'laferrari', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron', 'jp4', 'k2', 'p8', 'z2', 'n4']; // 第 48 批：吉普車（車身是遮罩座標，B.mask）；第 51 批：K2 小越野車（也是遮罩座標）；第 53 批：P8 皮卡（也是）；第 56 批：Z2 沙灘車（公尺座標，零件很多很細）
+const ALL = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'rx7', 'evo', 'civic', 'laferrari', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron', 'jp4', 'k2', 'p8', 'z2', 'n4', 'mtb', 'road']; // 第 48 批：吉普車（車身是遮罩座標，B.mask）；第 51 批：K2 小越野車（也是遮罩座標）；第 53 批：P8 皮卡（也是）；第 56 批：Z2 沙灘車（公尺座標，零件很多很細）
 const arg = (k, d) => { const a = process.argv.find((s) => s.startsWith(`--${k}=`)); return a ? a.split('=')[1] : d; };
 const KEYS = (process.argv.slice(2).find((s) => !s.startsWith('--')) || ALL.join(',')).split(',');
 const HALF0 = +arg('half', 0) || 9000; // 半邊車身（含車頭）目標三角形數
-const HALF_CAR = { n4: 4000 }; // 第 62 批：街車的車殼很小（油箱＋座墊車尾）：4000 就夠（沒給 --half 的時候）
+const HALF_CAR = { n4: 4000, mtb: 20, road: 20 }; // 第 67 批：腳踏車的車身只是一顆小方塊 // 第 62 批：街車的車殼很小（油箱＋座墊車尾）：4000 就夠（沒給 --half 的時候）
 const PART_ERR = +arg('perr', 0.002); // 零件簡化誤差（公尺）
-const PART_ERR_CAR = { jp4: 0.004, k2: 0.004, p8: 0.004, z2: 0.003 }; // 第 48 批：吉普車的零件又多又大（輪弧、保桿、備胎、車底），誤差 4 公釐（沒給 --perr 的時候）
+const PART_ERR_CAR = { jp4: 0.004, k2: 0.004, p8: 0.004, z2: 0.003, mtb: 0.0012, road: 0.0012 }; // 第 67 批：腳踏車的管子、輻條都很細 // 第 48 批：吉普車的零件又多又大（輪弧、保桿、備胎、車底），誤差 4 公釐（沒給 --perr 的時候）
 const WIDE_ERR = +arg('werr', 0.004); // 寬體葉子板（大片、平順）
 const BLUR = 0.005; // 遮罩模糊（公尺，高斯 σ）
 const MATTE_ERR = +arg('merr', 0.012); // 輪拱內、車底先簡化的誤差（公尺）

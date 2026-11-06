@@ -1,6 +1,8 @@
-// 自行車（第 67 批，做圖）：自己設計的，沒有真的牌子。整台用程式做（沒有車殼 glb）：車架（管子）、前叉、把手、座墊、曲柄＋腳踏、齒盤、鏈條、飛輪、兩個輪子（輻條）、煞車。
+// 自行車（第 67 批；Nick 2026-11-06「加自行車」「還有越野腳踏車」，卡片「兩台都做」）：自己設計的，沒有真的牌子。整台用程式做（車身 glb 只是五通裡一顆看不到的小方塊：make-bike.mjs）：
+// 車架（管子）、前叉、把手、座墊、曲柄＋腳踏、齒盤、鏈條、飛輪、兩個輪子（輻條）、煞車。騎的人跟 Z2／N4 一樣（town.src.js RIDES）：手握把手、腳踩腳踏（曲柄跟著後輪轉）。
 // key：'mtb'（登山車：避震前叉、粗的越野胎、平把、碟煞）／'road'（公路車：彎把、細胎、夾器）。座標：x 往前、y 往上、z 往右（跟 moto-spec.js 一樣），公尺。
 import * as THREE from 'three';
+import { BOX, layers, canvas } from './masks.js';
 
 const BK_V = (a) => new THREE.Vector3(...a);
 function BK_rod(a, b, r, seg = 12, r2 = r) { // a → b 的圓管
@@ -159,26 +161,140 @@ export function bikeBuild(key, paint, mats) {
   g.add(new THREE.Mesh(BK_at(new THREE.CylinderGeometry(0.034, 0.034, 0.2, 18), wb[0], wb[1], 0, 0, 0, dA - Math.PI / 2), mats.bottle));
   g.add(new THREE.Mesh(BK_at(new THREE.BoxGeometry(0.012, 0.03, 0.04), S.seat[0] - 0.03, S.seat[1] - 0.09, 0), mats.red));
   if (!R) { // 側柱（停的時候放下來，騎的時候收起來：做圖先收著）
-    const ks = new THREE.Mesh(BK_rod([0, 0, 0], [-0.24, -0.02, 0], 0.008, 8), mats.black); ks.name = 'kick'; ks.position.set(bx - 0.04, by - 0.01, -0.05); g.add(ks);
+    const ks = new THREE.Mesh(BK_rod([0, 0, 0], [-0.24, -0.02, 0], 0.008, 8), mats.black); ks.name = 'kick'; ks.position.set(bx - 0.04, by - 0.01, -0.05); ks.rotation.z = 0.1; g.add(ks); // 收著（沿著後下叉）
   }
   // ---- 輪子 ----
   const wR = bikeWheel(S, mats, key, true), wF = bikeWheel(S, mats, key, false);
-  wR.position.set(S.xr, y0, 0); wF.position.set(S.xf - (hb[0] - (S.xf)) * 0, y0, 0);
+  wR.name = 'wheelR'; wF.name = 'wheelF'; // supra.js buildCar（wheels.moto）、lod-bake.html 認這兩個名字
+  wR.position.set(S.xr, y0, 0); wF.position.set(S.xf, y0, 0);
   g.add(wR); bars.add(wF);
-  return { group: g, wheels: [wR, wF], crank, bars, peds };
+  const B = { group: g, wheels: [wR, wF], crank, bars, peds, key, kick: g.getObjectByName('kick') || null };
+  g.userData.bike = B;
+  return B;
 }
 
-// 騎的人：屁股（character 的 at）、手（握把）、兩隻腳（跟著曲柄轉）
+// ---- 騎的人（跟 z2-spec.js、moto-spec.js 一樣的介面：town.src.js 的 RIDES）----
+//   at：屁股（character 的 group 放在車身底下的這一點）；grip：右手的握把（左手 z 相反；把手轉了跟著轉）；lean：坐上去再多往前趴幾弧度（手才搆得到低低的把手）
+//   max：drive 的 steer 打到底（±1）把手轉幾弧度；ratio：後輪轉幾圈曲柄轉一圈（齒比）；view：第一人稱（CABIN_VIEW）：眼睛、往前看的點；真的騎的時候照騎的人的眼睛換（bikeEye）
 export const BIKE_RIDE = {
-  mtb: { at: [-0.27, 0.53, 0], grip: [0.335, 0.882, 0.29], max: 0.5, lean: 0.3 },
-  road: { at: [-0.24, 0.51, 0], grip: [0.53, 0.87, 0.21], max: 0.45, lean: 0.6 },
+  mtb: { at: [-0.27, 0.47, 0], grip: [0.335, 0.882, 0.29], max: 0.5, lean: 0.3, ratio: 2.3, view: { eye: [0.28, 1.33, 0], look: [3.2, 0.5, 0], fov: 72 } }, // at 比座墊低 5 公分：腳才踩得到最下面的腳踏（角色的腿比較短）
+  road: { at: [-0.24, 0.45, 0], grip: [0.53, 0.87, 0.21], max: 0.45, lean: 0.6, ratio: 2.9, view: { eye: [0.32, 1.15, 0], look: [3.2, 0.4, 0], fov: 72 } },
 };
-const BK_HD = [[0, 0, 0], [0, 0, 0]], BK_FT = [[0, 0, 0], [0, 0, 0]], BK_UP = { state: 'sit', hands: BK_HD, feet: BK_FT, leanMax: 1.7, leanAdd: 0 }, BK_P = new THREE.Vector3();
-export function bikeRide(C, B, key, dt) { // B＝bikeBuild 回傳的；腳踝在腳踏上面 7 公分
-  const R = BIKE_RIDE[key], at = R.at, G = R.grip;
+const BK_HD = [[0, 0, 0], [0, 0, 0]], BK_FT = [[0, 0, 0], [0, 0, 0]], BK_UP = { state: 'sit', hands: BK_HD, feet: BK_FT, leanMax: 1.7, leanAdd: 0 };
+const BK_P = new THREE.Vector3(), BK_Q = new THREE.Quaternion(), BK_PV = new THREE.Vector3(), BK_AX = new THREE.Vector3();
+const bikeOf = (o) => (o && (o.userData.bike || (o.userData.bike = o.getObjectByName('bars')?.parent?.userData.bike))) || null; // body（車身）或 bikeBuild 的 group → B
+// 把手跟著轉（繞頭管）＋曲柄跟著後輪轉（腳踏保持水平）；s＝drive 的 steer（−1 左～1 右）；每一格叫（town.src.js riderStep、riderOff）
+export function bikeSteer(body, s, key) {
+  const B = bikeOf(body); if (!B) return;
+  const S = BIKE[key], R = BIKE_RIDE[key], b = B.bars, piv = b.userData.piv, ax = b.userData.ax;
+  BK_AX.set(ax[0], ax[1], ax[2]).normalize(); BK_PV.set(piv[0], piv[1], piv[2]);
+  b.quaternion.setFromAxisAngle(BK_AX, -s * R.max);
+  b.position.copy(BK_PV).sub(BK_P.copy(BK_PV).applyQuaternion(b.quaternion));
+  const a = B.wheels[0].rotation.z / R.ratio; B.crank.rotation.z = a; for (const p of B.peds) p.rotation.z = -a;
+  void S;
+}
+// 人坐好：手握著（轉過的）把手、腳踩（轉到哪裡的）腳踏；C＝buildCharacter(look, { state: 'sit', shadow: false, plant: false })，C.group 放在車身底下的 BIKE_RIDE.at；每一格叫（不會 new 東西）
+export function bikeRide(C, s, dt, key) {
+  const R = BIKE_RIDE[key], S = BIKE[key], at = R.at, G = R.grip, B = bikeOf(C.group.parent);
+  const piv = B ? B.bars.userData.piv : [0, 0, 0], ax = B ? B.bars.userData.ax : [0, 1, 0];
+  BK_AX.set(ax[0], ax[1], ax[2]).normalize(); BK_PV.set(piv[0], piv[1], piv[2]); BK_Q.setFromAxisAngle(BK_AX, -s * R.max);
+  for (let k = 0; k < 2; k++) {
+    BK_P.set(G[0], G[1], (k ? 1 : -1) * G[2]).sub(BK_PV).applyQuaternion(BK_Q).add(BK_PV);
+    BK_HD[k][0] = BK_P.x - at[0]; BK_HD[k][1] = BK_P.y - at[1]; BK_HD[k][2] = BK_P.z - at[2];
+  }
+  const a = B ? B.crank.rotation.z : 0, [bx, by] = S.bb, L = S.crank; // 腳踏：右邊曲柄角度 a（朝前＝0），左邊相反；腳踝在腳踏上面 7 公分
+  for (let k = 0; k < 2; k++) { const dx = k ? L : -L; BK_FT[k][0] = bx + dx * Math.cos(a) - at[0] - 0.01; BK_FT[k][1] = by + dx * Math.sin(a) - at[1] + 0.07; BK_FT[k][2] = (k ? 1 : -1) * 0.11 * 0.85; }
   BK_UP.leanAdd = R.lean;
-  for (let k = 0; k < 2; k++) { BK_HD[k][0] = G[0] - at[0]; BK_HD[k][1] = G[1] - at[1]; BK_HD[k][2] = (k ? 1 : -1) * G[2]; }
-  B.group.updateMatrixWorld(true);
-  for (let k = 0; k < 2; k++) { const p = B.peds[k ? 1 : 0]; p.getWorldPosition(BK_P); B.group.worldToLocal(BK_P); BK_FT[k][0] = BK_P.x - at[0] - 0.01; BK_FT[k][1] = BK_P.y - at[1] + 0.07; BK_FT[k][2] = BK_P.z * 0.85; }
   C.update(dt, BK_UP);
 }
+// 騎的人的眼睛（車身座標）：把手擺正坐好以後量（out＝[x, y, z]）；C 還沒放進車身的時候也可以量（照 at 算）
+export function bikeEye(C, key, out = [0, 0, 0]) {
+  for (let i = 0; i < 30; i++) bikeRide(C, 0, 1 / 30, key);
+  const g = C.group, p = g.parent; if (p) p.remove(g);
+  const P0 = g.position.clone(), R0 = g.rotation.clone(); g.position.set(0, 0, 0); g.rotation.set(0, 0, 0);
+  g.updateMatrixWorld(true); C.eyes.getWorldPosition(BK_P);
+  g.position.copy(P0); g.rotation.copy(R0); if (p) p.add(g);
+  const at = BIKE_RIDE[key].at; out[0] = BK_P.x + at[0]; out[1] = BK_P.y + at[1]; out[2] = BK_P.z + at[2];
+  return out;
+}
+export const MTB_RIDE = BIKE_RIDE.mtb, ROAD_RIDE = BIKE_RIDE.road;
+export const MTB_steer = (body, s) => bikeSteer(body, s, 'mtb'), ROAD_steer = (body, s) => bikeSteer(body, s, 'road');
+export const MTB_ride = (C, s = 0, dt = 1 / 60) => bikeRide(C, s, dt, 'mtb'), ROAD_ride = (C, s = 0, dt = 1 / 60) => bikeRide(C, s, dt, 'road');
+export const MTB_eye = (C, out) => bikeEye(C, 'mtb', out), ROAD_eye = (C, out) => bikeEye(C, 'road', out);
+
+// ---- 材質：車庫的 mats 沒有的自己做（bike-view.html 也用）----
+export function bikeMats(mats, key) {
+  const M = { ...mats };
+  M.alu2 ||= new THREE.MeshStandardMaterial({ color: 0x8e9196, roughness: 0.45, metalness: 0.8 });
+  M.steel ||= new THREE.MeshStandardMaterial({ color: 0xb9bcc2, roughness: 0.35, metalness: 0.9 });
+  M.decal ||= new THREE.MeshStandardMaterial({ color: 0xf4f5f6, roughness: 0.5, metalness: 0 });
+  M.light ||= new THREE.MeshStandardMaterial({ color: 0xf6f3e4, roughness: 0.2, metalness: 0, emissive: 0xfff3c0, emissiveIntensity: 0.35 });
+  M.saddle ||= M.seat || new THREE.MeshStandardMaterial({ color: 0x141518, roughness: 0.8 });
+  M.amber ||= new THREE.MeshStandardMaterial({ color: 0xe8901a, roughness: 0.3, emissive: 0x6a3a00, emissiveIntensity: 0.3 });
+  M.chain ||= new THREE.MeshStandardMaterial({ color: 0x5a5d63, roughness: 0.5, metalness: 0.8 });
+  M.bottle ||= new THREE.MeshStandardMaterial({ color: key === 'mtb' ? 0x2fb36b : 0xf2f2ee, roughness: 0.4 });
+  M.red ||= new THREE.MeshStandardMaterial({ color: 0xd01818, roughness: 0.2, emissive: 0x400000, emissiveIntensity: 1 });
+  return M;
+}
+
+// ---- 車庫（supra.js buildCar 的 spec）：車身 glb 是一顆看不到的小方塊（make-bike.mjs）；整台在 build() 裡用 bikeBuild 做；兩個輪子（wheels.moto）----
+function bikeLook() { // 車殼上沒有玻璃、黑、縫、拉花（都是零件）
+  const none = (b) => () => layers(b, [null, null, null, null]);
+  const empty = (b) => () => { const { c, g } = canvas(b); g.clearRect(-3, -1, 6, 3); return c; };
+  return { side: none(BOX.side), rear: none(BOX.rear), top: none(BOX.top), fronts: { base: none(BOX.front) }, livery: empty(BOX.side), frontLivery: empty(BOX.front), livDefault: 0, nose: () => 'base',
+    U: { uXr: -0.5, uXf: 0.5, uFx: [3.0, 3.1], uRx: [-3.0, -3.1], uWell: [0.0, 0.0, 0.0], uWellR: [0.0, 0.0, 0.0], uGlassY: 3 } };
+}
+// 後貨架（wing 'rack'）：座墊後面的黑色鐵架＋籃子
+function bikeRack(S, mats) {
+  const g = new THREE.Group(), x0 = S.xr - 0.02, y = S.R + 0.12 + (S.R > 0.35 ? 0.06 : 0), bars = [];
+  for (const s of [-1, 1]) { bars.push(BK_rod([x0 + 0.17, y, s * 0.06], [x0 - 0.17, y, s * 0.06], 0.005, 8), BK_rod([x0 - 0.12, y, s * 0.06], [S.xr, S.R + 0.01, s * 0.05], 0.005, 8), BK_rod([x0 + 0.12, y, s * 0.06], [S.xr + 0.12, S.R + 0.26, s * 0.03], 0.005, 8)); }
+  for (const dx of [-0.17, -0.06, 0.06, 0.17]) bars.push(BK_rod([x0 + dx, y, -0.06], [x0 + dx, y, 0.06], 0.004, 6));
+  g.add(new THREE.Mesh(BK_merge(bars), mats.black));
+  const bk = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 0.24), new THREE.MeshStandardMaterial({ color: 0x3b3f46, roughness: 0.7 })); bk.position.set(x0, y + 0.075, 0); g.add(bk);
+  return g;
+}
+function bikeSpec(key) {
+  const S = BIKE[key];
+  return {
+    look: bikeLook(), paint: key === 'mtb' ? '#e2531d' : '#1f6fd1', metal: 0.1, seat: 0x141518,
+    wheels: { xf: S.xf, xr: S.xr, R: S.R, rim: S.rim, trackF: 0.08, trackR: 0.08, wF: S.tw, wR: S.tw, style: 'five', moto: true },
+    wings: { none: () => new THREE.Group(), rack: (paint, mats) => bikeRack(S, mats) },
+    wing: 'none',
+    interior: {},
+    build(body, paint, mats) {
+      const cab = body.getObjectByName('interior'); if (cab) body.remove(cab); // 沒有車內（騎的）
+      const B = bikeBuild(key, paint, bikeMats(mats, key));
+      body.add(B.group); body.userData.bike = B;
+      return () => {};
+    },
+    kit: 'stock',
+    lod: { wheels: (B, R, kit, axles) => bikeLodWheels(B, R, kit, axles, key) },
+  };
+}
+// 輕量車的兩個輪子（carlod.js 的 builder：B.lathe／B.cap；R＝角色 → 類別）：圓胎、兩面輪框、花鼓；都在中間（z 0）
+function bikeLodWheels(B, R, kit, axles, key) {
+  for (const A of axles) {
+    const c = { x: A.x, y: A.R, z: 0 }, w = A.w, Rr = A.R, rim = A.rim, hw = w / 2, cc = Rr - hw, prof = [[rim - 0.008, -hw * 0.5], [rim + 0.004, -hw * 0.95]];
+    for (let i = 0; i <= 8; i++) { const a = -Math.PI / 2 + Math.PI * i / 8; prof.push([cc + Math.cos(a) * hw, Math.sin(a) * hw]); }
+    prof.push([rim + 0.004, hw * 0.95], [rim - 0.008, hw * 0.5]);
+    B.lathe(prof, 32, c, 1, R.rubber);
+    const ring = []; for (let j = 0; j < 24; j++) { const a = (j / 24) * Math.PI * 2; ring.push([Math.cos(a) * (rim - 0.006), Math.sin(a) * (rim - 0.006)]); }
+    B.cap(ring, 0.006, c, 1, key === 'road' ? R.black : R.rim); B.cap(ring, -0.006, c, 1, key === 'road' ? R.black : R.rim, true); // 輪框兩面（輻條太細，輕量車不畫）
+    const hub = []; for (let j = 0; j < 12; j++) { const a = (j / 12) * Math.PI * 2; hub.push([Math.cos(a) * 0.03, Math.sin(a) * 0.03]); }
+    B.cap(hub, 0.04, c, 1, R.rim); B.cap(hub, -0.04, c, 1, R.rim, true);
+  }
+}
+export const MTB_SPEC = bikeSpec('mtb'), ROAD_SPEC = bikeSpec('road');
+const BIKE_OPTS = { wing: [['none', '不要'], ['rack', '後貨架＋籃子']], kit: [['stock', '原廠']], height: [['0', '原廠']], livery: [['none', '沒有']], rimStyle: [['stock', '原廠']], wide: [['off', '原廠']] };
+export const MTB_GARAGE = {
+  name: '越野腳踏車', sub: '登山車 · 3D 試做版',
+  paints: [['#e2531d', '橘'], ['#2fb36b', '綠'], ['#1f6fd1', '藍'], ['#d42a2a', '紅'], ['#f2c21b', '黃'], ['#f2f2ee', '白'], ['#121315', '黑'], ['#8e44ad', '紫']],
+  opts: BIKE_OPTS,
+  state: { paint: '#e2531d', rim: 'chrome', caliper: '#17181b', wing: 'none', kit: 'stock', height: '0', livery: 'none', tint: 'dark' },
+};
+export const ROAD_GARAGE = {
+  name: '一般腳踏車', sub: '公路車 · 3D 試做版',
+  paints: [['#1f6fd1', '藍'], ['#d42a2a', '紅'], ['#f2f2ee', '白'], ['#121315', '黑'], ['#2fb36b', '綠'], ['#f2c21b', '黃'], ['#e2531d', '橘'], ['#59c3d8', '天藍']],
+  opts: BIKE_OPTS,
+  state: { paint: '#1f6fd1', rim: 'black', caliper: '#17181b', wing: 'none', kit: 'stock', height: '0', livery: 'none', tint: 'dark' },
+};

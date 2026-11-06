@@ -37,6 +37,7 @@ import { P8_SPEC, P8_GARAGE } from './p8-spec.js'; // 第 53 批：P8 皮卡
 import { P8_M } from './p8-look.js';
 import { Z2_SPEC, Z2_GARAGE } from './z2-spec.js'; // 第 56 批：Z2 沙灘車（車身就是公尺座標，沒有 mask）
 import { N4_SPEC, N4_GARAGE } from './n4-spec.js'; // 第 62 批：街車（公尺座標；輪子在 spec.lod.wheels）
+import { MTB_SPEC, ROAD_SPEC, MTB_GARAGE, ROAD_GARAGE } from './bike-spec.js'; // 第 67 批：腳踏車（整台都是零件；車身是看不到的小方塊）
 const KITS3 = [['stock'], ['bomex'], ['track']];
 const CARS = {
   supra: { spec: SUPRA_SPEC, glb: 'body-q.glb', kits: KITS3, wings: [['stock'], ['gt'], ['none']] },
@@ -61,6 +62,8 @@ const CARS = {
   p8: { spec: P8_SPEC, glb: 'body-p8-q.glb', ...P8_GARAGE.opts, mask: P8_M },
   z2: { spec: Z2_SPEC, glb: 'body-z2-q.glb', ...Z2_GARAGE.opts },
   n4: { spec: N4_SPEC, glb: 'body-n4-q.glb', ...N4_GARAGE.opts },
+  mtb: { spec: MTB_SPEC, glb: 'body-mtb-q.glb', ...MTB_GARAGE.opts },
+  road: { spec: ROAD_SPEC, glb: 'body-road-q.glb', ...ROAD_GARAGE.opts },
 };
 for (const C of Object.values(CARS)) C.kits = (C.kit || C.kits).map((o) => o[0]), C.wingKeys = (C.wing || C.wings).map((o) => o[0]);
 const SENT = '#123457';

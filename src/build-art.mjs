@@ -28,6 +28,8 @@ const CARS = [
   ['p8', 'body-p8-q.glb', 'car-p8.txt', ['p8-look.js', 'p8-spec.js']], // 第 53 批：P8 皮卡（越野車行賣的）；輕量車 body-p8-lod.glb（make-lod.mjs）
   ['z2', 'body-z2-q.glb', 'car-z2.txt', ['z2-look.js', 'z2-spec.js']], // 第 56 批：Z2 沙灘車（越野車行賣的；騎的）；輕量車 body-z2-lod.glb（make-lod.mjs）
   ['n4', 'body-n4-q.glb', 'car-n4.txt', ['n4-look.js', 'moto-spec.js', 'n4-spec.js']], // 第 62 批：N4 街車（阿財車行賣的；騎的）；輕量車 body-n4-lod.glb（make-lod.mjs）
+  ['mtb', 'body-mtb-q.glb', 'car-mtb.txt', ['bike-spec.js']], // 第 67 批：腳踏車（阿財車行賣的；騎的）：整台在 bike-spec.js，車身檔只是看不到的小方塊（make-bike.mjs）；輕量車 body-mtb-lod.glb（make-lod.mjs）
+  ['road', 'body-road-q.glb', 'car-road.txt', []], // 第 67 批：一般腳踏車（跟上面同一個 bike-spec.js）
 ];
 const NOLOD = []; // 沒有輕量車的車（不停車位、不擺阿財車行）；怪獸卡車現在有了（body-monster-lod.glb）
 const yaris = process.argv.includes('--yaris');

@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { MAT } from './parts.js';
-import { bikeBuild, bikeRide, BIKE_RIDE } from './bike-spec.js';
+import { bikeBuild, bikeRide, bikeSteer, BIKE_RIDE } from './bike-spec.js';
 const Q = new URLSearchParams(location.search), key = Q.get('car') || 'mtb';
 const W = +(Q.get('W') || 1200), H = +(Q.get('H') || 800);
 const paint = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(Q.get('paint') || (key === 'mtb' ? '#e2531d' : '#1f6fd1')), metalness: 0.2, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.05 });
@@ -26,7 +26,7 @@ if (Q.has('rider')) {
   const { buildCharacter, PLAYER_LOOK } = await import('./character.js');
   C = buildCharacter({ ...PLAYER_LOOK, hat: 'helmet', hatColor: Q.get('helmet') || '#f1f1ee' }, { state: 'sit', shadow: false, plant: false });
   C.group.position.fromArray(BIKE_RIDE[key].at); car.add(C.group);
-  for (let i = 0; i < 40; i++) bikeRide(C, B, key, 1 / 30);
+  for (let i = 0; i < 40; i++) bikeRide(C, st, 1 / 30, key);
 }
 if (Q.has('lean')) car.rotation.x = +Q.get('lean') * Math.PI / 180;
 const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });

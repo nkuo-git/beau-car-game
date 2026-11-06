@@ -88,7 +88,7 @@ $('shopName').textContent = SHOP_NAME;
 const inBox = (r, x, z, m = 0) => { const dx = x - r.x, dz = z - r.z, c = Math.cos(r.rot || 0), s = Math.sin(r.rot || 0); return Math.abs(dx * c - dz * s) <= r.hx + m && Math.abs(dx * s + dz * c) <= r.hz + m; };
 const wrapPi = (a) => { a = (a + Math.PI) % (Math.PI * 2); return a < 0 ? a + Math.PI : a - Math.PI; };
 let dealerAt = 'dealer'; // ==== 第 4 批：現在在哪一家：dealer（阿財車行：一般的車）／odealer（越野車場的越野車行：越野車）====
-const saleOf = (at) => byPrice(Object.keys(CARS).filter((k) => !GAME.owned.has(k) && !!PERF[k].offroad === (at === 'odealer'))); // 那一家擺的：還沒買的車（便宜的在前面）
+const saleOf = (at) => byPrice(Object.keys(CARS).filter((k) => !GAME.owned.has(k) && (PERF[k].shop || (PERF[k].offroad ? 'odealer' : 'dealer')) === at)); // 那一家擺的：還沒買的車（便宜的在前面）；第 67 批：PERF.shop 指定哪一家（越野腳踏車在阿財車行）
 const forSale = () => saleOf(dealerAt); // 車店擺的：還沒買的車（便宜的在前面）
 const canBuy = () => saleOf('dealer').some((k) => GAME.money >= PERF[k].price);
 const dealerName = () => VIL?.places[dealerAt]?.name || '阿財車行';
@@ -2738,7 +2738,8 @@ function mirrorStep() {
 //   騎著（walker 收起來、你的人藏起來＝坐在車上）才放上去；第一人稱不畫人（鏡頭在眼睛往前 6 公分）；下車、回車庫頁就拿下來
 //   400 公尺直線加速（race.src.js enterRace）也騎在上面：riderOn(S)；比完回車庫頁 riderOff()
 //   第 62 批：N4 街車也是騎的（moto-spec.js：MOTO_RIDE、motoRide、motoSteer，n4-spec.js 包成一樣的介面）：RIDES[key]；換車就重新量眼睛
-const RIDES = { z2: { R: Z2_RIDE, ride: Z2_ride, steer: Z2_steer, eye: Z2_eye }, n4: { R: N4_RIDE, ride: N4_ride, steer: N4_steer, eye: N4_eye } };
+const RIDES = { z2: { R: Z2_RIDE, ride: Z2_ride, steer: Z2_steer, eye: Z2_eye }, n4: { R: N4_RIDE, ride: N4_ride, steer: N4_steer, eye: N4_eye },
+  mtb: { R: MTB_RIDE, ride: MTB_ride, steer: MTB_steer, eye: MTB_eye }, road: { R: ROAD_RIDE, ride: ROAD_ride, steer: ROAD_steer, eye: ROAD_eye } }; // 第 67 批：腳踏車（bike-spec.js；steer 也讓曲柄跟著後輪轉）
 const RIDER = { C: null, lk: null, k: null, S: null, SK: null, eye: [0, 0, 0] };
 const riderLook = () => { const L = meLook(); return { ...L, ...Z2_helmet(L) }; }; // 騎沙灘車戴安全帽（你自己的帽子就是安全帽：照它的顏色）
 function riderMake(k = cur) { // 第一次騎、換了樣子、換了車：做（換）人、量眼睛（第一人稱的鏡頭）

@@ -117,7 +117,7 @@ check(!g0.cabin && !g0.interior && g0.bars && g0.eye && g0.eye[1] > 1.4, `you ri
 check(g0.perf.price === CAR.price && !g0.perf.offroad && g0.perf.lean === 1 && !g0.perf.big && g0.perf.vmax === CAR.top && g0.perf.top === CAR.top, `${CAR.price} 萬, a road vehicle of normal size (fits the tower; not off-road, so it never crushes things), leans into turns, top speed ${CAR.top} km/h even fully tuned`);
 check(g0.wheels.n === 4 && g0.wheels.front && g0.wheels.rear && g0.wheels.inBars && g0.wheels.hubMeshes === 0 && g0.wheels.tyres === 2, `two wheels (${g0.wheels.tyres} tyres; the front one in the handlebar group, so it steers); the four wheel slots drive.js spins are invisible points sharing the real wheels' rotation`);
 const sale = await p.evaluate(() => { const D = window.__D(), G = window.__G(); G.owned.delete(window.__K); const s = D.saleOf('dealer'), o = D.saleOf('odealer'); G.owned.add(window.__K); return { dealer: s.includes(window.__K), first: s[0], odealer: o.includes(window.__K) }; });
-check(sale.dealer && !sale.odealer && sale.first === K, `before you own it, 阿財車行 (not the off-road dealer) sells it, cheapest first (${sale.first})`);;
+check(sale.dealer && !sale.odealer && (sale.first === K || sale.first === 'road'), `before you own it, 阿財車行 (not the off-road dealer) sells it, cheapest first (${sale.first}; 第 67 批起腳踏車更便宜、排在前面)`);
 const riG = await gshot('0-garage');
 const seat = await p.evaluate(async () => {
   document.getElementById('seatBtn').click(); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -223,7 +223,7 @@ const park4 = await p.evaluate(() => {
   const D = window.__D(), t0 = D.drv.telemetry(), hl = t0.heading - D.garLot().heading, ux = Math.cos(hl), uz = -Math.sin(hl);
   const r = window.__follow([[0, 0], [ux * 3, uz * 3], [ux * 7.6, uz * 7.6], [ux * 10, uz * 10]], 60 * 15, () => 2, (t) => { const q = window.__gl(t.x, t.z); return Math.hypot(q.x, q.z) > 7.3; });
   window.__stop(60);
-  D.leaveCar(); let n = 0, toast = ''; for (; n < 240 && (D.walker.mode !== 'walk' || !toast); n++) { window.__dstep(1); toast = toast || window.__toast(); }
+  D.leaveCar(); let n = 0; const ts = new Set(); for (; n < 300 && (D.walker.mode !== 'walk' || n < 200); n++) { window.__dstep(1); const t = window.__toast(); if (t) ts.add(t); } const toast = [...ts].join(' / '); // 停好的提示跟在「往前開進空的格子」後面（舊的還沒退）：收一段時間的提示
   const i = D.TWR.indexOf(window.__K), R = D.RIDER;
   return { ...r, mode: D.walker.mode, toast, bay: i, f: i >= 0 ? D.TOWER_BAYS[i].f : null, saved: window.__G().park.tower[i], riderOff: !R.S && !R.C.group.parent && !R.C.group.visible, walkerShown: D.walker.character.group.visible };
 });
