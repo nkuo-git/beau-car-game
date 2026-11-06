@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}canvas{display:block}</style>
+</head><body>
+<script type="module">
+// 自行車做圖用的看車頁（第 67 批；跟 moto-view.html 一樣，整台是 bike-spec.js 做的）：?car=mtb|road&v=front34&paint=%23…&rider=1&steer=&crank=度&helmet=%23…&bg=none&W=&H=
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { MAT } from './parts.js';
+import { bikeBuild, bikeRide, BIKE_RIDE } from './bike-spec.js';
+const Q = new URLSearchParams(location.search), key = Q.get('car') || 'mtb';
+const W = +(Q.get('W') || 1200), H = +(Q.get('H') || 800);
+const paint = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(Q.get('paint') || (key === 'mtb' ? '#e2531d' : '#1f6fd1')), metalness: 0.2, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.05 });
+const P = (c, r, m = 0) => new THREE.MeshPhysicalMaterial({ color: c, roughness: r, metalness: m });
+const mats = { rubber: MAT.rubber(), chrome: MAT.chrome(), alu: MAT.alu(), disc: MAT.disc(), black: P(0x151517, 0.45), alu2: P(0x2a2c30, 0.35, 0.6), steel: P(0xb8bcc2, 0.3, 1), decal: P(0xf4f4f2, 0.4),
+  light: new THREE.MeshPhysicalMaterial({ color: 0xffffff, emissive: 0xfff4d8, emissiveIntensity: 0.4, roughness: 0.1 }), saddle: P(0x1b1b1d, 0.55), amber: P(0xff9a1a, 0.3), chain: P(0x6a6d72, 0.4, 0.9),
+  bottle: new THREE.MeshPhysicalMaterial({ color: key === 'mtb' ? 0x2fb36b : 0xf2f2ee, roughness: 0.4, transmission: 0 }), red: new THREE.MeshPhysicalMaterial({ color: 0xd01818, roughness: 0.2, emissive: 0x400000 }) };
+const B = bikeBuild(key, paint, mats), car = B.group;
+B.crank.rotation.z = -(+(Q.get('crank') || 30)) * Math.PI / 180;
+for (const p of B.peds) p.rotation.z = -B.crank.rotation.z;
+const st = +(Q.get('steer') || 0), bu = B.bars.userData;
+if (st) { const piv = new THREE.Vector3(...bu.piv), ax = new THREE.Vector3(...bu.ax).normalize(); B.bars.quaternion.setFromAxisAngle(ax, -st * BIKE_RIDE[key].max); B.bars.position.copy(piv).sub(piv.clone().applyQuaternion(B.bars.quaternion)); }
+let C = null;
+if (Q.has('rider')) {
+  const { buildCharacter, PLAYER_LOOK } = await import('./character.js');
+  C = buildCharacter({ ...PLAYER_LOOK, hat: 'helmet', hatColor: Q.get('helmet') || '#f1f1ee' }, { state: 'sit', shadow: false, plant: false });
+  C.group.position.fromArray(BIKE_RIDE[key].at); car.add(C.group);
+  for (let i = 0; i < 40; i++) bikeRide(C, B, key, 1 / 30);
+}
+if (Q.has('lean')) car.rotation.x = +Q.get('lean') * Math.PI / 180;
+const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+r.setSize(W, H); r.setPixelRatio(1); r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(), dark = Q.get('studio') === 'dark';
+scene.environment = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = dark ? 0.35 : 1;
+if (Q.get('bg') !== 'none') scene.background = new THREE.Color(dark ? 0x15161a : 0xd9dce1);
+const sun = new THREE.DirectionalLight(0xffffff, dark ? 1.2 : 2.2); sun.position.set(3, 6, 2); scene.add(sun, new THREE.HemisphereLight(0xffffff, 0x444444, dark ? 0.2 : 0.5));
+if (Q.get('bg') !== 'none') { const fl = new THREE.Mesh(new THREE.CircleGeometry(8, 64), new THREE.MeshStandardMaterial({ color: dark ? 0x222327 : 0xc4c7cc, roughness: 0.8 })); fl.rotation.x = -Math.PI / 2; fl.position.y = -0.001; scene.add(fl); }
+scene.add(car);
+const CAMS = { front34: { a: 35, d: 4.4, h: 1.35, tx: 0, ty: 0.62, fov: 32 }, rear34: { a: 145, d: 4.4, h: 1.35, tx: -0.05, ty: 0.62, fov: 32 },
+  side: { a: 90, d: 6.0, h: 0.72, tx: 0, ty: 0.6, fov: 26 }, sideL: { a: -90, d: 6.0, h: 0.72, tx: 0, ty: 0.6, fov: 26 }, front: { a: 0, d: 6, h: 0.75, tx: 0, ty: 0.6, fov: 20 }, rear: { a: 180, d: 6, h: 0.75, tx: 0, ty: 0.6, fov: 20 },
+  low: { a: 28, d: 3.4, h: 0.45, tx: 0.2, ty: 0.55, fov: 40 }, top: { a: 90, d: 0.01, h: 8, tx: 0, ty: 0, fov: 25 } };
+const v = Q.get('v') || 'front34', c = v === 'custom' ? Object.fromEntries(['a', 'd', 'h', 'tx', 'ty', 'tz', 'fov'].map((k) => [k, +(Q.get(k) || 0)])) : CAMS[v];
+const cam = new THREE.PerspectiveCamera(c.fov, W / H, 0.05, 200), a = c.a * Math.PI / 180;
+cam.position.set(c.tx + Math.cos(a) * c.d, c.h, (c.tz || 0) - Math.sin(a) * c.d);
+if (v === 'top') cam.up.set(-1, 0, 0);
+cam.lookAt(c.tx, c.ty, c.tz || 0);
+r.render(scene, cam);
+window.info = { calls: r.info.render.calls, tris: r.info.render.triangles };
+if (C) { const w = new THREE.Vector3(), o = (x) => { x.getWorldPosition(w); car.worldToLocal(w); return w.toArray().map((n) => +n.toFixed(3)); }; window.info.hand = [o(C.handL), o(C.hand)]; const sh = C.bones?.find?.((b) => b.name === 'upR') || C.skeleton?.bones.find((b) => b.name === 'upR'); if (sh) window.info.shR = o(sh); window.info.grip = BIKE_RIDE[key].grip; }
+window.done = true;
+</script></body></html>

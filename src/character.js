@@ -17,8 +17,8 @@
 //       ＋ support   長槍：左手扶在右手前面幾公尺（預設 0.32）
 //       ＋ hands     'sit' 的時候手放哪：'lap' 放腿上（預設）｜'bars' 機車把手（右手 [0.62, 0.8, 0.3]、左手 z 相反）｜'wheel' 方向盤｜[x, y, z]（本地公尺，右手；左手 z 相反）
 //                    ｜[[左手 x, y, z], [右手 x, y, z]]（兩隻手各自給：沙灘車的手把會轉，第 56 批）
-//       ＋ feet      'sit' 的時候腳踩哪：不給＝椅子前面的地上｜[x, y, z]（腳踝，本地公尺，右腳；左腳 z 相反；膝蓋往外張開）：跨坐沙灘車
-//                    手搆不到的時候身體會往前傾（最多 0.9 弧度）
+//       ＋ feet      'sit' 的時候腳踩哪：不給＝椅子前面的地上｜[x, y, z]（腳踝，本地公尺，右腳；左腳 z 相反；膝蓋往外張開）：跨坐沙灘車｜[[左], [右]]（兩隻腳各自的，z 照給的；膝蓋朝前）：踩腳踏車
+//                    手搆不到的時候身體會往前傾（最多 0.9 弧度；＋ leanMax 改最多幾弧度、leanAdd 再多傾幾弧度：腳踏車）
 //     C.state       現在的狀態
 //     C.dispose()   從場景拿掉、釋放幾何（材質、貼圖大家共用，不會釋放）
 //   state：'idle' 站 | 'walk' 走 | 'run' 跑 | 'sit' 坐（屁股 0.45 公尺高）| 'fall' 倒下、躺著不動 | 'getup' 爬起來 | 'punch' 右手直拳
@@ -2353,7 +2353,7 @@ function sitBody(S, M, P, o) {
   idleBody(S, M, P, S.time, 0);
   const g = handsTarget(S, M, o);
   if (g) { // 手要往前伸（機車把手）：身體往前傾到搆得到
-    const lean = sitLean(M, g);
+    const mx = S.leanMax ?? 0.9, lean = Math.min(mx, sitLean(M, g, mx) + (S.leanAdd || 0));
     P[CI.sp] -= 0.45 * lean; P[CI.cp] -= 0.55 * lean; P[CI.hp] -= 0.1 * lean;
   }
   P[CI.kp] -= 0.8 * (P[CI.hp] + P[CI.sp] + P[CI.cp]);
@@ -2366,14 +2366,14 @@ function handsTarget(S, M, o) {
   return null;
 }
 const BARS = [0.62, 0.8, 0.3], WHEEL = [0.45, 0.86, 0.19];
-function sitLean(M, g) { // 肩膀繞著腰往前轉，轉到手搆得到（最多 0.9）；兩隻手各自給的：遠的那隻搆得到
-  if (Array.isArray(g[0])) return Math.max(sitLean(M, g[0]), sitLean(M, g[1]));
+function sitLean(M, g, mx = 0.9) { // 肩膀繞著腰往前轉，轉到手搆得到（最多 0.9）；兩隻手各自給的：遠的那隻搆得到
+  if (Array.isArray(g[0])) return Math.max(sitLean(M, g[0], mx), sitLean(M, g[1], mx));
   const hy = sitHipJ(M), pivY = hy + (M.spineY - M.hipJY), Ls = M.shY - M.spineY, R = (M.upper + M.fore) * 0.97 + 0.07 * M.s;
-  for (let l = 0; l <= 0.9; l += 0.05) {
+  for (let l = 0; l <= mx; l += 0.05) {
     const sx = Math.sin(l) * Ls, sy = pivY + Math.cos(l) * Ls;
     if (Math.hypot(g[0] - sx, g[1] - sy, Math.abs(g[2]) - M.shZ * 0.9) <= R) return l;
   }
-  return 0.9;
+  return mx;
 }
 
 // ---- 手的 IK ----
@@ -2453,7 +2453,7 @@ function sitLegs(S, M) {
     const sd = k ? 1 : -1, b = SIDE_B[k], yaw = -sd * 0.14;
     let ay = M.ankleY, th = 0; const x = M.thigh * 0.98 + 0.03 * M.s, f = S.seatFeet;
     if (hy - M.shin * 0.97 > ay) { ay = hy - M.shin * 0.97; th = -0.35; } // 腳搆不到地（小孩）：垂著
-    if (f) { V_A.set(f[0], f[1], sd * Math.abs(f[2])); V_POLE.set(1, 0.35, sd * 0.9); } // 腳踩的地方（腳踝，本地公尺；跨坐沙灘車：腳開開、膝蓋往外）
+    if (f) { const q = Array.isArray(f[0]) ? f[k] : f; V_A.set(q[0], q[1], q === f ? sd * Math.abs(q[2]) : q[2]); V_POLE.set(1, 0.35, sd * (q === f ? 0.9 : 0.25)); } // 兩隻腳各自的（[[左], [右]]：踩腳踏車） // 腳踩的地方（腳踝，本地公尺；跨坐沙灘車：腳開開、膝蓋往外）
     else { V_A.set(x, ay, sd * (M.hipZ + 0.02 * M.s)); V_POLE.set(1, 0.7, sd * 0.15); }
     footQ(yaw, th, Q_F);
     ik2(M, S.Q, S.HP, b.thigh, b.shin, M.thigh, M.shin, V_A, V_POLE, true, Q_F, b.foot);
@@ -2545,6 +2545,8 @@ function animate(C, S, dt, o) {
   if (o.support) S.support = +o.support;
   if (o.hands !== undefined) S.hands = o.hands;
   if (o.feet !== undefined) S.seatFeet = o.feet; // （S.feet 是走路的兩隻腳）
+  if (o.leanMax !== undefined) S.leanMax = o.leanMax; // 'sit' 手搆不到最多往前傾幾弧度（預設 0.9）
+  if (o.leanAdd !== undefined) S.leanAdd = o.leanAdd; // 'sit' 再多往前傾幾弧度（腳踏車：手才握得到低低的把手）
   const want = o.state;
   if (want && want !== S.state && STATES[want]) request(C, S, want, o);
   S.t += dt; S.time += dt; S.rec += dt;
