@@ -459,6 +459,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - `node gc8-bake.mjs gtr --rebake --write` → body-gtr-q.glb（11 萬三角形、2.75 MB）＋FIT.gtr（cabin.js）、WINGS_DECK.gtr（wings.js）、WIDE.gtr（wide.js、wide.json）。gc8-bake.mjs 變成每台車一組設定（`CFG`）；cabin-fit.mjs、make-wide.mjs 不再量 gtr。輕量車 `node make-lod.mjs gtr --rebake`（2.3 萬三角形、4 個 draw call；make-lod.mjs `BK_ASYM.gtr`、`BK_TAIL_V` 每台自己的）。
   - supra.js `GTR_SPEC`：原廠尾翼＝`'baked'`（車身檔裡的）、後照鏡／排氣管／側燈都在車身檔裡；輪框 `GTR_spokes`（影片那種六根直直的輻條、平平的輪轂、黑色中心蓋（沒有字）、五顆螺帽）；賽道套件 `AERO_GTR` 照新車身重新擺。車庫的選項、價錢、PERF 都沒變。
   - 效能：整台（cview，含車內）以前約 180 calls／102 萬三角形 → 67 calls／16 萬（GC8 62／16.8 萬）；開車第一人稱 194 calls／0.74M＋後照鏡 105／0.44M（三格一次；GC8 190／0.73M）。
+  - 2026-11-07 放上試做頁（頁面＋car-gtr.txt、car-gtr-lod.txt；artifact 第 86 版，頁面也有 v84 的內湖街景）。
   - 測試：test-b1 151 ok（跟 v84 的內湖街景一起）、stance-test 16、seats-test 29、mirror-test、drift-test、top-test、bump-test、free-test 都過。
   - 前後對照圖 /mnt/project-files/car-game/gtr/gtr-v83-outside.jpg、gtr-v83-detail.jpg。說明在 `notes/cars.md` 第 71 批。
 - **還沒做（爸爸 2026-10-24 問，已回；前三項 v50 做了、路和房子內容 22 做了一部分）**：泥巴賽一起比；更多越野車（吉普車內容 28、小越野車 K2 內容 30、皮卡 P8 內容 31、沙灘車 Z2 內容 32 好了，其他一台一台做）；車子／建築再往目標圖靠近（新的 GC8 內容 29、A 柱和 B 柱內容 30、細節＋門縫＋車燈內容 31 上線了）；車庫頁真的車款名；iPhone 沒測；音量沒真的聽過。
