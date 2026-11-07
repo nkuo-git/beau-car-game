@@ -19,7 +19,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
   + ' window.__money = (n) => { GAME.money = n; save(true); renderWallet(); renderOptions(); refreshCarBtns(); };'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, home, bayLock, snooze, TR, LODS, camGo, cur, built, walker, tripPose, tripFull, boarding,'
-  + '   LOOK, TWR, EL, PW, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE });'
+  + '   LOOK, TWR, EL, PW, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE, crushFx, PERF });'
   + ' window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
   + ' window.__pol = () => (typeof police !== "undefined" ? police : null);' // 第 3 批（b3-int）：警察（開車的機器人不小心撞到人：星星清掉，見 leg）
   + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR });'
@@ -682,9 +682,11 @@ const S7s = await p.evaluate(() => { const V = window.__D().VIL, N = V.neihu, I 
   const segD = (px, pz, s) => { const dx = s[2] - s[0], dz = s[3] - s[1], l2 = dx * dx + dz * dz || 1e-9; let t = ((px - s[0]) * dx + (pz - s[1]) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; return Math.hypot(s[0] + dx * t - px, s[1] + dz * t - pz); };
   // 停著的車、機車不能在車道上（兩線道的車道在中線 w/4、車寬約 1.8；單行道在中線）
   let onLane = 0, nCar = 0, nSc = 0, badIm = 0; const onLaneEx = []; const lamps = (V.poles || []).filter((q) => q.lamp && q.x > I.box[0] && q.x < I.box[2]).length;
-  for (const c of V.colliders) { const nm = c.im && c.im.name || ''; if (!/^nh-(car|scooter)-/.test(nm)) continue; const car = /car/.test(nm); if (car) nCar++; else nSc++; if (!c.im.count) badIm++;
-    let best = null, bd = 1e9; for (const s of segs) { const d = segD(c.x, c.z, s); if (d < bd) { bd = d; best = s; } }
-    if (!best) continue; const lane = best[5] ? 0 : best[4] / 4, need = lane + 0.95 + (car ? 0.95 : 0.85); /* 車半寬 0.95；停著的車橫著 0.95、機車車頭朝房子＝半長 0.85 */ if (bd < need) { onLane++; if (onLaneEx.length < 6) onLaneEx.push([car ? 'car' : 'sc', +c.x.toFixed(0), +c.z.toFixed(0), +bd.toFixed(1), best[4], best[5]]); } }
+  const items = []; for (const c of V.colliders) { const nm = c.im && c.im.name || ''; if (/^nh-scooter-/.test(nm)) { nSc++; if (!c.im.count) badIm++; items.push([false, c.x, c.z]); } }
+  for (const q of N.street.parked) { nCar++; items.push([true, q[0], q[1]]); } // 第 74 批：停著的車只記位置（開到附近才做成車店的車），不再是 InstancedMesh
+  for (const [car, x, z] of items) {
+    let best = null, bd = 1e9; for (const s of segs) { const d = segD(x, z, s); if (d < bd) { bd = d; best = s; } }
+    if (!best) continue; const lane = best[5] ? 0 : best[4] / 4, need = lane + 0.95 + (car ? 0.95 : 0.85); /* 車半寬 0.95；停著的車橫著 0.95、機車車頭朝房子＝半長 0.85 */ if (bd < need) { onLane++; if (onLaneEx.length < 6) onLaneEx.push([car ? 'car' : 'sc', +x.toFixed(0), +z.toFixed(0), +bd.toFixed(1), best[4], best[5]]); } }
   // 江南街邊的房子：真的樓層（≥ 3 層＝高 10 公尺以上的房子）
   const v = N.street.views, tall = (k) => { const [x, z] = v[k]; return V.colliders.filter((c) => c.g >= 1e6 && c.h >= 10 && Math.hypot(c.x - x, c.z - z) < 60).length; };
   return { st, fixArc: I.fixArc, lamps, onLane, onLaneEx, nCar, nSc, badIm, tall: { jn: tall('jn'), nh: tall('nh'), hs: tall('hs') }, views: v, signalsG: N.street.signals.filter((q) => q[2]).length, ubike: N.street.ubike.length, site: N.street.site }; });
@@ -692,7 +694,26 @@ console.log('7s street', el(), JSON.stringify(S7s));
 check(S7s.st.scooters > 300 && S7s.st.cars > 40 && S7s.st.bays > 80 && S7s.st.palms > 100 && S7s.st.lamps > 40 && S7s.st.shelters >= 8 && S7s.st.signals >= 20 && S7s.st.uboxes >= 4 && S7s.st.site === 1 && S7s.st.guides >= 3 && S7s.st.bikes >= 8 && S7s.ubike === 2 && S7s.st.boxes >= 200 && S7s.st.wallM > 100 && S7s.st.rwallM > 100,
   `street things: ${S7s.st.scooters} scooters, ${S7s.st.cars} parked cars in ${S7s.st.bays} bays, ${S7s.st.palms} palms, ${S7s.st.lamps} lamps, ${S7s.st.shelters} bus shelters, ${S7s.st.signals} signals, ${S7s.st.uboxes} utility boxes, site ${S7s.st.site}, ${S7s.st.guides} guide signs, ${S7s.st.bikes} bikes at ${S7s.ubike} stations, ${S7s.st.boxes} lightbox signs, walls ${S7s.st.wallM.toFixed(0)} m + retaining ${S7s.st.rwallM.toFixed(0)} m`);
 check(S7s.fixArc >= 5 && S7s.tall.jn >= 5 && S7s.tall.nh >= 5 && S7s.tall.hs >= 5, `江南街 arcades added ${S7s.fixArc}; tall buildings (≥ 10 m) near the views: 江南街 ${S7s.tall.jn}, 內湖路 ${S7s.tall.nh}, 環山路 ${S7s.tall.hs}`);
-check(S7s.onLane === 0 && S7s.nCar === S7s.st.cars && S7s.nSc === S7s.st.scooters && S7s.badIm === 0 && S7s.lamps >= S7s.st.lamps, `parked cars / scooters all have crushable InstancedMesh colliders and none sits on a traffic lane (${S7s.onLane} on lanes); ${S7s.lamps} lamp poles in 內湖 for look.js`);
+check(S7s.onLane === 0 && S7s.nCar === S7s.st.cars && S7s.nSc === S7s.st.scooters && S7s.badIm === 0 && S7s.lamps >= S7s.st.lamps, `scooters all have crushable InstancedMesh colliders, ${S7s.nCar} parking-bay cars have positions (第 74 批), none sits on a traffic lane (${S7s.onLane} on lanes); ${S7s.lamps} lamp poles in 內湖 for look.js`);
+// ==== 7t 第 74 批（Nick「路停的車用車店的隨機放 豪車少一點」）：環山路停車格的車＝車店的車（輕量車）：開到那裡 5 秒內一台一台做出來、便宜的多、擋車、遠的藏起來 ====
+const built0 = await p.evaluate(() => { const D = window.__D(), C = D.crushFx, N = D.VIL.neihu, v = N.street.views.hs; D.drv.teleport({ x: v[0], z: v[1], heading: v[2] }); D.drv.setInput({ throttle: 0, brake: 0, steer: 0, handbrake: 1 }); window.__dstep(2); return C.junk.filter((j) => j.street).length; }); // 開過來的路上已經做了幾台
+const t7t = Date.now(); for (let i = 0; i < 40; i++) await p.evaluate(() => window.__dstep(12)); // 8 秒（分 40 次：做車是 async，要讓出來才會做）
+const S7t = await p.evaluate(() => { const D = window.__D(), C = D.crushFx, N = D.VIL.neihu;
+  const me = D.drv.telemetry(), dist = (x, z) => Math.hypot(x - me.x, z - me.z), near = N.street.parked.filter((q) => dist(q[0], q[1]) < 150).length, far = N.street.parked.filter((q) => dist(q[0], q[1]) > 160).length;
+  const lots = C.junk.filter((j) => j.street), kinds = {}; for (const j of lots) { const k = j.lod.car.name.slice(4); kinds[k] = (kinds[k] || 0) + 1; }
+  const nearB = lots.filter((j) => dist(j.x, j.z) < 150).length, visOk = lots.every((j) => j.lod.car.visible === (dist(j.x, j.z) < 130)), vis = lots.filter((j) => j.lod.car.visible).length;
+  const pricey = lots.filter((j) => D.PERF[j.lod.car.name.slice(4)].price >= 1000).length, cheap = lots.filter((j) => D.PERF[j.lod.car.name.slice(4)].price <= 100).length;
+  const atSpot = lots.filter((j) => Math.hypot(j.lod.car.position.x - j.x, j.lod.car.position.z - j.z) < 0.01).length;
+  const cols = D.drv.colsNear(me.x, me.z, 400).filter((c) => c.tag === 'junk').length, wcols = D.walker ? D.walker.colsNear?.(me.x, me.z, 400) : null;
+  const tris = lots.reduce((t, j) => { let n = 0; j.lod.car.traverse((o) => { if (o.isMesh && o.geometry) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; }); return t + n; }, 0);
+  return { near, far, built: lots.length, nearB, stats: C.stats.lots, vis, visOk, kinds, pricey, cheap, atSpot, cols, wcols, tris: Math.round(tris), big: C.me.big, pads: C.pads.length }; });
+console.log('7t parked cars', el(), `built before ${built0}, ${((Date.now() - t7t) / 1000).toFixed(1)} s real`, JSON.stringify(S7t));
+check(S7t.near >= 8 && S7t.nearB >= Math.min(S7t.near, 12) && S7t.stats === S7t.built && S7t.atSpot === S7t.built && S7t.visOk && S7t.cols === S7t.built, `環山路: ${S7t.near} bays with cars within 150 m → ${S7t.nearB} dealer cars built there in 8 s (one every 0.25 s; ${S7t.built} in all), all at their bay, shown within 130 m (${S7t.vis}) and hidden beyond, every one blocking the car (${S7t.cols} junk colliders)`);
+check(Object.keys(S7t.kinds).length >= 4 && S7t.cheap >= S7t.built * 0.6 && S7t.pricey <= Math.max(1, Math.floor(S7t.built * 0.1)), `mixed cheap models ${JSON.stringify(S7t.kinds)}: ${S7t.cheap} cost ≤ 100 萬, only ${S7t.pricey} supercar(s)`);
+{ const far = await p.evaluate(() => { const D = window.__D(), C = D.crushFx, N = D.VIL.neihu, v = N.street.views.jn; D.drv.teleport({ x: v[0], z: v[1], heading: v[2] }); window.__dstep(40); const lots = C.junk.filter((j) => j.street), me = D.drv.telemetry();
+  return { hidden: lots.filter((j) => !j.lod.car.visible && Math.hypot(j.x - me.x, j.z - me.z) > 130).length, shown: lots.filter((j) => j.lod.car.visible).length, farOnes: lots.filter((j) => Math.hypot(j.x - me.x, j.z - me.z) > 130).length }; });
+  console.log('7t far', JSON.stringify(far));
+  check(far.hidden === far.farOnes && far.farOnes > 0, `drive to 江南街: the ${far.farOnes} bay cars more than 130 m away are hidden (${far.shown} still shown)`); }
 await p.evaluate(() => { const D = window.__D(); D.LOOK.set(1); D.LOOK.setHour(18.1); D.LOOK.setRain(0); }); await p.waitForTimeout(1500); // 傍晚、畫質「高」（照片是傍晚拍的）
 for (const [k, [x, z, hd]] of Object.entries(S7s.views)) { perf['st_' + k] = await shotAt(`7s-${k}-dusk`, { x, z, heading: hd }); }
 if (S7s.site) { const [x, z] = S7s.site; perf.st_site = await shotAt('7s-site', null, 'air', { at: [x + 45, 22, z + 45], look: [x, 8, z] }); }

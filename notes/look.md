@@ -297,3 +297,6 @@ Nick: 「好 做下雨 偶爾可以讓它下雨 但這樣跑得動嗎?」. Rain 
   - 普通: nothing (no rain).
   - New reflection maps at the rain thresholds (0.25 / 0.75) cost one PMREM each, a short hitch like the existing sun bands.
 - **Tests:** rain-test.mjs, 17 ok (about 17 min). look-test and night-test now pin `setRain(0)`.
+
+## Batch 74 (2026-11-07): less night
+Nick: 「天黑比例要少一點」. `DAY_FRAC = 2/3`: of the 12-minute day, 6:00–18:00 now takes 8 minutes (minutes 2–10 of the cycle) and the night 4. `hourAt` first bends the cycle fraction with a sine (`u = 24f + A·sin(2πf)`, A chosen so f = 1/6 is exactly 6:00 and 5/6 is 18:00; smooth, so the clock never jumps), then applies the batch-40 sunrise/sunset slow-down. Because the bend makes 6:00/18:00 run 1.3× faster, `DAY_SLOW` went 0.65 → 0.8 so dusk (sun 8° → −10°) still takes about 89 s (was 90). Full dark (sun below −10°) is now about 2.5 minutes per cycle (was 4.4). night-test checks day 8 min, dark 2.2–3 min, monotonic clock, 2/6/10 min = 6/12/18 h, and uses `LOOK.hourAt` instead of a copy of the formula.

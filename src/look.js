@@ -38,7 +38,8 @@ const LOOK_NAMES = ['普通', '高', '超高']; // 第 41 批：Nick「畫質直
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // 光線（範例 2 號以後都一樣）
 const LT = { elev: 38, az: 233, turb: 6, ray: 1.3, mie: 0.004, exp: 0.45, sunI: 4.6, sunC: 0xfff0dc, envI: 0.3, hemiI: 0.12, hemiC: 0xdde6ef, hemiG: 0x474a3c, fog: 0xc3ccd3, gnd: 0x3c4235, cloud: 0.32, cden: 0.5 };
-const DAY_SLOW = 0.65; // 第 40 批：日出、日落附近時間走慢多少（0＝平均）
+const DAY_SLOW = 0.8; // 第 40 批：日出、日落附近時間走慢多少（0＝平均）；第 74 批 0.65 → 0.8（白天拉長以後，日落那段才還是約 90 秒）
+const DAY_FRAC = 2 / 3; // 第 74 批（Nick「天黑比例要少一點」）：白天（6–18 點）佔一天的幾分之幾：12 分鐘裡白天 8 分鐘、晚上 4 分鐘（以前一半一半）
 const DAY_MIN = 12; // 第 30 批：遊戲裡一天＝真的 24 分鐘（照手機的時鐘：大家一樣）；第 34 批：Nick「一天時間改成12分鐘」→ 12 分鐘
 const SUN_MAX = 55; // 中午太陽多高（度）
 const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fog: 0xd8b49a, envI: 0.4, turb: 6, ray: 2.0, mie: 0.002, g: 0.7, exp: 0.38, sunK: 0.6 }; // 太陽低的時候（橘色、天空濁、霧暖色）；第 31 批：夕陽的光調弱（sunK＝最多少掉幾成）；第 34 批：Nick「面像太陽的時候光線還是有點太亮」：太陽的光暈小一點（turb 8 → 6、mie 0.004 → 0.002、g 0.8 → 0.7）、曝光 0.45 → 0.38
@@ -194,7 +195,9 @@ function createLook(o) {
   // ==== 第 30 批：一天的時間 ====
   let hourOv = null; // 測試、試做頁：固定幾點（null＝照時鐘）
   // 第 40 批（Nick 2026-10-25「傍晚變晚上天色變黑的太快」）：一天還是 12 分鐘（白天 6、晚上 6），但太陽出來、下山的時候時間走慢（0.35 倍），中午、半夜走快（1.65 倍）：天色從亮到黑約 1.5 分鐘（以前約 37 秒）
-  const hourAt = (ms) => { const u = (((ms / 60000) % DAY_MIN) / DAY_MIN) * 24, h = u - DAY_SLOW * (6 / Math.PI) * Math.sin((Math.PI * (u - 6)) / 6); return ((h % 24) + 24) % 24; };
+  // 第 74 批：白天拉長：一天的進度 f（0＝半夜）先用一個正弦彎一下（f＝(1−DAY_FRAC)/2 剛好 6 點、(1+DAY_FRAC)/2 剛好 18 點；平滑，速度不跳），再照第 40 批把日出日落附近走慢
+  const DAY_NF = (1 - DAY_FRAC) / 2, DAY_A = (6 - 24 * DAY_NF) / Math.sin(2 * Math.PI * DAY_NF);
+  const hourAt = (ms) => { const f = ((ms / 60000) % DAY_MIN) / DAY_MIN, u = 24 * f + DAY_A * Math.sin(2 * Math.PI * f), h = u - DAY_SLOW * (6 / Math.PI) * Math.sin((Math.PI * (u - 6)) / 6); return ((h % 24) + 24) % 24; };
   const hourNow = () => (hourOv != null ? hourOv : hourAt(Date.now()));
   const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
   // ==== 第 47 批：下雨（什麼時候、多大）：照手機的時鐘，每 4 分鐘一段（整數雜湊：每支手機算出來一樣）====

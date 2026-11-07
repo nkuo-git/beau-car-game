@@ -186,3 +186,16 @@ The three roads already exist in neihu-data.js; everything new is a second modul
   Numbers (960×576, 高, dusk): 江南街 166 calls / 0.52M, 內湖路 232 / 0.73M, 環山路 187 / 0.49M (380 looking back west on
   環山路二段 towards the whole east side); Neihu 240 meshes / 604k triangles (was 199 / 458k), build ≈ +100 ms.
 - Test: neihu-test 7s (counts, no parked thing on a lane, arcades, tall buildings near the views, dusk shots, calls < 300).
+
+## Batch 74 (2026-11-07): parking-bay cars are dealer cars
+Nick: 「路停的車用車店的隨機放 豪車少一點」. The 環山路 bays no longer get the instanced box car: nhstreet.js only records
+`spots.parked = [[x, z, heading, seed]…]` (`info.cars` still counts them). crush.js got a second car list next to the
+off-road park's junk cars: `o.lots()` (town.src.js → `VIL.neihu.street.parked`), `o.me(out)` (driver or walker position),
+`o.makeLot(i, spot)`. Every 0.25 s it builds the nearest unbuilt bay within 150 m (one LOD car per tick, `buildLodCar`),
+hides built ones beyond 130 m, and gives each a `junk` pad (`street: true`): the same squash / 30 s regrow as the park cars,
+but the first hit calls `police()` (1★ outside the park). `colliders(true)` returns the unflattened ones regardless of the
+current car for the walker; `crushStep` now re-pushes 'junk' colliders to a new drv too. Pads grow on demand (`take(true)`)
+so the 16-pad pool is not eaten. Model choice is a per-seed weighted hash in town.src.js `lotKind`: price ≤ 60 萬 6,
+≤ 100 3, ≤ 200 1.5, ≤ 500 0.6, supercars 0.06 (≈1.3 %); paints white/silver/black-heavy (`LOT_PAINT`); no ridden things, no
+monster truck. Test: neihu-test 7s counts `N.street.parked`, 7t builds them at the 環山路 view (6 s), checks model mix,
+positions, visibility, colliders, hiding at 江南街.

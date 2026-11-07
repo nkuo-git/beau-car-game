@@ -13,6 +13,7 @@
 //     hudParent: stage,       HUD 放在這個元素裡（要 position: relative）；沒給就沒有 HUD（測試用）
 //     onZone(name, inside, place)   開進／開出任何一個 places.<name>.zone（這一幀算完才叫；開出去要離開範圍 2.5 公尺才算，在邊上晃不會一直叫）
 //     onShift(gear), onBump(strength)   升檔（接引擎聲 voice.shift()）、撞到東西（撞進去的速度 m/s，可以拿來震動）
+//     onBlip(gear)                     第 74 批：手排降檔放開離合器轉速衝上去那一下（接引擎聲 voice.shift()：補油、放炮）
 //     onLand(e)               第 4 批：落地（飛起來 0.25 秒以上再碰到地）e＝{ speed（往下撞地的速度 m/s）, air（飛了幾秒）, drop（最高離地幾公尺）, x, z, v（水平速度）, hard（超過這台車受得了的）}
 //     halfW                   第 4 批：碰撞的半寬（可省略；輪胎比車身寬的車，怪獸卡車 1.905）；perf.gears：自己的六個齒比（可省略）
 //     onImpact(e)             撞壞用（damage.js：onImpact: (e) => dmg.hit(e)）：這一幀最大的一下（撞進去 1.5 m/s 以上；0.2 秒內只叫一次，除非更大力）
@@ -419,7 +420,7 @@ function createDrive(o) {
   const DR = { rwd, ofr, bias: rwd ? 1 : 0.42, amax: ofr ? 0.3 : rwd ? clamp(0.6 + 0.3 * (pwk - 0.3), 0.6, 0.78) : clamp(0.4 + 0.25 * (pwk - 0.2), 0.4, 0.52),
     sus: ofr ? 0.06 : rwd ? clamp(0.5 + (pwk - 0.3), 0.5, 1) : clamp(0.3 + 0.5 * (pwk - 0.2), 0.25, 0.5), pow: ofr ? 0 : rwd ? 1 : 0.4, dec: ofr ? (rwd ? 1.15 : 1.5) : rwd ? 1.7 : 2.2, cg: W.xr + 0.47 * (W.xf - W.xr) };
 
-  const st = { x: car.position.x, z: car.position.z, th: car.rotation.y, v: 0, steer: 0, thr: 0, brk: 0, hb: 0, thrEff: 0, load: 0, cutLoad: 0, gear: 0, rev: false, hold: 0, cut: 0, rpm: 0.13, spin: 0,
+  const st = { x: car.position.x, z: car.position.z, th: car.rotation.y, v: 0, steer: 0, thr: 0, brk: 0, hb: 0, thrEff: 0, load: 0, cutLoad: 0, gear: 0, rev: false, hold: 0, cut: 0, rpm: 0.13, blip: 0, spin: 0,
     surf: 0, cap: vtop, bumps: 0, shifts: 0, touch: 0, blocked: 0, roll: 0, rollV: 0, pitch: 0, pitchV: 0, alat: 0, along: 0, kap: 0, scrub: 0, push: 0, jit: 0, jitT: 0, hitW: 0, hitT: -9, impT: -9, impW: 0 };
   // 第 3 批（甩尾）：slip＝甩的角度（走的方向＝th＋slip）、slipV＝它變多快、loose＝後輪多鬆（0–1）、dm＝甩了多少（0 抓地～1 甩）、skid＝輪胎叫、skidM＝胎痕／煙
   Object.assign(st, { slip: 0, slipV: 0, loose: 0, dm: 0, skid: 0, skidM: 0, flick: 0, sPrev: 0, thrMem: 0, pwT: 0, kick: 0, kickT: 0, dT: 0, drifts: 0, dShow: 0 });
@@ -549,13 +550,14 @@ function createDrive(o) {
   //   ▲ ▼（shift(±1)）要踩著離合器（inp.clu）才換得進去，沒踩＝「咔咔」沒換（grind）；R 只有快停住（1.5 m/s 以下）才排得進去
   //   檔位 R – N – 1 – 2 – 3 – 4 – 5 – 6；放開離合器那一下（接上過半）：轉速比怠速低（檔太高、太慢）又沒給油 → 熄火（stall）；按油門 0.6 秒重新發動
   //   撞紅線不會自己升檔：斷油噠噠噠（physics 的 st.lim）；檔太高只是沒力（不熄火）；停住按著煞車 R ↔ 1 檔照舊（不用離合器）
+  const BLIP_T = 0.55, FREE_UP = 2.4, FREE_DOWN = 4; // 第 74 批：降檔補油聲幾秒；空催轉速上去、空檔下來的快慢（以前跟接著輪子一樣 12；踩著離合器放油門照舊 12）
   function mtStep(h, inp) {
     const want = inp.clu > 0.5 ? 0 : 1;
     st.clu = want <= st.clu ? want : Math.min(1, st.clu + h / 0.12); // 踩下去馬上分開，放開 0.12 秒接上
     if (st.cluPrev < 0.5 && st.clu >= 0.5 && st.mg !== 0 && !st.stall) { // 放開的那一下
       const x = st.rev ? 0.14 + Math.min(1, Math.abs(st.v) / 4.5) * 0.3 : xOf(st.v, st.gear);
       if (x < 0.12 && inp.thr < 0.15) { st.stall = true; st.crank = 0; st.cut = 0; events.push(['engine', false]); }
-      else if (x > st.rpm) st.rpm = Math.min(1.08, x); // 第 69 批：降檔接上＝轉速瞬間衝上去（不慢慢爬）
+      else if (x > st.rpm) { if (x > st.rpm + 0.06) { st.blip = BLIP_T; events.push(['blip', st.mg]); } st.rpm = Math.min(1.08, x); } // 第 69 批：降檔接上＝轉速瞬間衝上去（不慢慢爬）；第 74 批：那一下引擎聲大聲（blip，Nick「降檔時的聲浪太小」）
     }
     st.cluPrev = st.clu;
     while (st.shq.length) {
@@ -635,8 +637,10 @@ function createDrive(o) {
       const free = 0.13 + 0.87 * go;
       want = st.stall ? (st.crank > 0 ? 0.07 + 0.03 * Math.sin(st.limT * 60) : 0) : st.lim ? (st.limT % 0.1 < 0.05 ? 0.96 : 1.02) : (st.clu >= 0.5 && st.mg !== 0 ? 1 : eng) * Math.min(1.02, xr + slip) + (st.clu >= 0.5 && st.mg !== 0 ? 0 : 1 - eng) * free; // 第 69 批：接上過半轉速就跟著輪子（降檔瞬間衝上去，不被怠速拉回來）
     }
-    st.rpm += (want - st.rpm) * (1 - Math.exp(-h * (MT && st.stall ? 6 : 12)));
+    const freeRev = MT && !st.stall && (st.mg === 0 || st.clu < 0.5); // 第 74 批（Nick「空檔踩的時候轉速表不要升那麼快」）：引擎沒接到輪子＝空催，轉速慢慢上去（0.3 秒一半、1 秒到 9 成）；空檔放油門掉下來也慢一點
+    st.rpm += (want - st.rpm) * (1 - Math.exp(-h * (MT && st.stall ? 6 : freeRev ? (want > st.rpm ? FREE_UP : st.mg === 0 ? FREE_DOWN : 12) : 12)));
     st.load = MT && (st.stall || st.mg === 0 || st.clu < 0.5) ? (st.stall ? 0 : go * (st.mg === 0 ? 1 : 0.6)) : st.cut > 0 ? st.cutLoad : go > 0.02 ? go * (0.65 + 0.35 * lim) : 0;
+    if (st.blip > 0) { st.blip -= h; if (!st.stall) st.load = Math.max(st.load, 0.6 + 0.4 * clamp(st.blip / BLIP_T, 0, 1)); } // 第 74 批：降檔那一下補一腳油的聲音（0.55 秒慢慢退）
     // 走：後軸沿著車頭方向走、繞後軸轉（腳踏車模型）
     const vab = Math.abs(st.v);
     // 頂住東西了還踩油門：方向盤照「想走的速度」轉（原地轉出來，不會一直卡著）
@@ -1185,6 +1189,7 @@ function createDrive(o) {
     for (const e of ev) {
       if (e[0] === 'zone' && o.onZone) o.onZone(e[1], e[2], places[e[1]]);
       else if (e[0] === 'shift' && o.onShift) o.onShift(e[1]);
+      else if (e[0] === 'blip' && o.onBlip) o.onBlip(e[1]); // 第 74 批：手排降檔接上那一下（引擎聲放炮）
       else if (e[0] === 'engine' && o.onEngine) o.onEngine(e[1]); // 第 68 批：手排熄火（false）、重新發動（true）
       else if (e[0] === 'grind' && o.onGrind) o.onGrind(e[1]);
       else if (e[0] === 'bump' && o.onBump) o.onBump(e[1]);

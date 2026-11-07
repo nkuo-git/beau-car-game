@@ -3,10 +3,10 @@
 //   店名用諧音（Nick 2026-11-07「可以用諧音字 就是不完全一樣 但又看得出來是在講那家店」）：顏色跟真的店像、名字差一兩個字、logo 畫得不一樣；沒有真的品牌名字和 logo。
 //   江南街：騎樓、一整排停著的機車、彩色發亮的燈箱招牌、4～5 樓公寓（後面幾棟 12 樓以上的大樓）、紅綠燈
 //   內湖路一段：一排大王椰子、公車亭、路燈、7 樓公寓、圍牆＋樹籬＋後面的樹、變電箱彩繪
-//   環山路：擋土牆＋很多樹、新大樓＋舊公寓混著、鷹架的工地（塔吊）、停車格＋停著的車、綠色路牌、公車亭、共享腳踏車站「優拜客」
+//   環山路：擋土牆＋很多樹、新大樓＋舊公寓混著、鷹架的工地（塔吊）、停車格＋停著的車（第 74 批起是車店的車：spots.parked 只給位置，town.src.js／crush.js 開到附近才做）、綠色路牌、公車亭、共享腳踏車站「優拜客」
 // 【API】（neihu.js 的 buildNeihu 叫）
 //   nhStreetPrep({ N, nx, nz, names, hh }) → S：floorsOf(b, bi, cx, cz)（這三條路邊的房子照真的樓層）、arcadeFix(b)（江南街的騎樓）、noTree(x, z)（內湖路的行道樹換成大王椰子）、nearKey(x, z)
-//   nhStreetBuild(ctx) → { meshes（InstancedMesh：機車、停著的車、大王椰子；250 公尺一格，跟樹一樣遠了不畫）, poles（路燈：look.js 晚上最近的幾支真的有光）, info, spots, tex }
+//   nhStreetBuild(ctx) → { meshes（InstancedMesh：機車、大王椰子；250 公尺一格，跟樹一樣遠了不畫）, poles（路燈：look.js 晚上最近的幾支真的有光）, info, spots（parked＝停車格的車的位置）, tex }
 //   效能：全部合併進 neihu.js 的格子（wall、paint、sign2）或 InstancedMesh；每格不多幾個 draw call
 import * as THREE from 'three';
 
@@ -80,7 +80,7 @@ function nhStreetPrep({ N, nx, nz, names }) {
 function nhStreetBuild(ctx) {
   const { S, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV, GB } = ctx;
   const info = { scooters: 0, cars: 0, bays: 0, palms: 0, lamps: 0, shelters: 0, signals: 0, uboxes: 0, wallM: 0, rwallM: 0, site: 0, guides: 0, bikes: 0, boxes: 0, hedgeTrees: 0 };
-  const spots = { shelters: [], signals: [], guides: [], ubike: [], site: null, views: {} };
+  const spots = { shelters: [], signals: [], guides: [], ubike: [], site: null, views: {}, parked: [] }; // parked（第 74 批）：停車格裡停著的車 [x, z, 車頭方向, 亂數種子]：town.src.js／crush.js 開到附近才做成車店的車（輕量車）
   const WHITE = [255, 255, 255];
   // ---- 招牌、燈箱、牌子的貼圖（一張 1024×1024）----
   const [ac, ag] = cv(1024, 1024), UV = {}; const W = 1024, H = 1024;
@@ -181,7 +181,7 @@ function nhStreetBuild(ctx) {
         if (prev) { const c = t < 0.6 ? L1 : L2; g.grow(8, 12); let k = g.v; for (const p of [prev[0], prev[1], cur[1], cur[0]]) g.vert(p[0], p[1], p[2], 0, 0, c[0], c[1], c[2], 0); g.tri(k, k + 1, k + 2); g.tri(k, k + 2, k + 3); k = g.v; for (const p of [prev[1], prev[0], cur[0], cur[1]]) g.vert(p[0], p[1], p[2], 0, 0, c[0] * 0.85, c[1] * 0.85, c[2] * 0.85, 0); g.tri(k, k + 1, k + 2); g.tri(k, k + 2, k + 3); }
         prev = cur; } }
     return g.geometry(); })();
-  const tiles = { scooter: new Map(), car: new Map(), palm: new Map() }, tcols = [];
+  const tiles = { scooter: new Map(), palm: new Map() }, tcols = []; // 第 74 批：停著的車不再是 InstancedMesh（spots.parked）
   const tkey = (x, z) => Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT);
   const addInst = (kind, x, z, rot, s, c, col) => { const key = tkey(x, z); let L = tiles[kind].get(key); if (!L) tiles[kind].set(key, (L = [])); L.push([x, z, rot, s, c]); if (col) { col.tk = kind + '-' + key; col.ti = L.length - 1; colliders.push(col); tcols.push(col); } }; // tk 要跟 InstancedMesh 的名字（'nh-' 後面）一樣，下面才接得上 im（neihu-test 7s 會查）
   const SCOL = ['#e8e8e8', '#2b2b2b', '#c62f25', '#1f5fae', '#f3c623', '#6a6a6a', '#2a8a4a', '#ffffff', '#8a3a8a', '#d9d9d9', '#3b3b3b', '#f28c28'].map(col255);
@@ -220,7 +220,7 @@ function nhStreetBuild(ctx) {
           const ax = px + ux * lx0 + rx * lz0, az = pz + uz * lx0 + rz * lz0, bx = px + ux * lx1 + rx * lz1, bz = pz + uz * lx1 + rz * lz1, nxx = -(bz - az), nzz = bx - ax, nl = Math.hypot(nxx, nzz) || 1;
           for (const [qx, qz] of [[ax - nxx / nl * wdt, az - nzz / nl * wdt], [bx - nxx / nl * wdt, bz - nzz / nl * wdt], [bx + nxx / nl * wdt, bz + nzz / nl * wdt], [ax + nxx / nl * wdt, az + nzz / nl * wdt]]) g.vert(qx, 0.054, qz, 0, 0, c[0], c[1], c[2], 0); g.tri(k, k + 2, k + 1); g.tri(k, k + 3, k + 2); }
         info.bays++;
-        if (hh(n, 14) < 0.62) { const rot = rotOf(ux, uz) + (hh(n, 15) < 0.5 ? 0 : Math.PI); addInst('car', px, pz, rot, 0.95 + hh(n, 16) * 0.1, CCOL[Math.floor(hh(n, 17) * CCOL.length)], { t: 'box', x: px, z: pz, hx: 2.3, hz: 0.95, rot, h: 1.45 }); info.cars++; } });
+        if (hh(n, 14) < 0.62) { const rot = rotOf(ux, uz) + (hh(n, 15) < 0.5 ? 0 : Math.PI); spots.parked.push([+px.toFixed(2), +pz.toFixed(2), +rot.toFixed(4), n * 2 + (side > 0 ? 1 : 0) + rd.ri * 1000]); info.cars++; } }); // 第 74 批（Nick「路停的車用車店的隨機放 豪車少一點」）：以前是 InstancedMesh 的方塊車；現在只記位置，開到附近 crush.js／town.src.js 做成車店的車
     }
   }
   // ==== 3 大王椰子（內湖路一段兩邊，取代一般的行道樹）====
@@ -378,7 +378,7 @@ function nhStreetBuild(ctx) {
   }
   // ---- InstancedMesh ----
   const meshes = [], M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), SC = new THREE.Vector3(), PV = new THREE.Vector3(), UPV = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
-  const geos = { scooter: scooterGeo, car: carGeo, palm: palmGeo };
+  const geos = { scooter: scooterGeo, palm: palmGeo };
   for (const kind of Object.keys(tiles)) for (const [key, L] of tiles[kind]) {
     const n = L.length, m = new THREE.InstancedMesh(geos[kind], kind === 'palm' ? mats.tree : mats.inst, n); m.name = 'nh-' + kind + '-' + key; let cx = 0, cz = 0;
     for (let i = 0; i < n; i++) { const [x, z, rot, s, c] = L[i]; Q.setFromAxisAngle(UPV, rot); M4.compose(PV.set(x, 0, z), Q, SC.set(s, s, s)); m.setMatrixAt(i, M4); col.setRGB(c[0] / 255, c[1] / 255, c[2] / 255); m.setColorAt(i, col); cx += x; cz += z; }

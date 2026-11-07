@@ -229,13 +229,14 @@ await p.evaluate(() => window.__view(960, 576, false)); await p.screenshot({ pat
 wk.mus = await p.waitForFunction(() => window.__D().MUS && window.__D().MUS.style === 'walk', null, { timeout: 8000 }).then(() => 'walk').catch(() => p.evaluate(() => (window.__D().MUS ? window.__D().MUS.style : null))); // 第 36 批：走路換成輕鬆的那首（真的時間：下一小節，最多約 2.6 秒）
 check(wk.mode === 'walk' && wk.amb && wk.same && wk.last && wk.last.wind === 1 && wk.last.birds === 1 && wk.hidden === false && wk.txt === '☀ 13:00' && wk.mus === 'walk', `got out of the car (${wk.act2} → ${wk.mode}): ambient sound keeps running (wind ${wk.last && wk.last.wind}, birds), clock 「${wk.txt}」 on the walking minimap; 第 36 批: music switched to the walking tune (${wk.mus})`);
 // ---- 7 回到時鐘 ----
-const c2 = await p.evaluate(() => { const D = window.__D(); D.LOOK.setHour(null); return { h: D.LOOK.hour, c: (() => { const u = (((Date.now() / 60000) % 12) / 12) * 24, h = u - 0.65 * (6 / Math.PI) * Math.sin((Math.PI * (u - 6)) / 6); return ((h % 24) + 24) % 24; })() }; });
+const c2 = await p.evaluate(() => { const D = window.__D(); D.LOOK.setHour(null); return { h: D.LOOK.hour, c: D.LOOK.hourAt(Date.now()) }; }); // 第 74 批：公式在 look.js（hourAt），這裡只看 setHour(null) 真的回到時鐘
 check(Math.abs(c2.h - c2.c) < 0.05, `setHour(null): back to the clock (${c2.h.toFixed(2)})`);
-// 第 40 批（Nick「傍晚變晚上天色變黑的太快」）：一天還是 12 分鐘、白天 6 分鐘，但日落那段走慢：太陽 8° → 晚上全黑（-10°）要多久
+// 第 40 批（Nick「傍晚變晚上天色變黑的太快」）：一天還是 12 分鐘，但日落那段走慢：太陽 8° → 晚上全黑（-10°）要多久；第 74 批（Nick「天黑比例要少一點」）：白天 8 分鐘（2–10 分）、晚上 4 分鐘、全黑約 2.5 分鐘
 const dk = await p.evaluate(() => { const L = window.__D().LOOK, el = (h) => 55 * Math.sin(Math.PI * ((((h - 6) / 12) % 2 + 2) % 2)); let a = null, b = null, day = 0;
-  for (let ms = 0; ms < 12 * 60000; ms += 250) { const h = L.hourAt(ms), e = el(h); if (h > 12 && h < 24 && a === null && e < 8) a = ms; if (h > 12 && a !== null && b === null && e < -10) b = ms; if (h >= 6 && h < 18) day += 250; }
-  return { dusk: (b - a) / 1000, day: day / 60000, h6: +L.hourAt(3 * 60000).toFixed(3), h18: +L.hourAt(9 * 60000).toFixed(3), h12: +L.hourAt(6 * 60000).toFixed(3) }; });
-check(dk.dusk > 80 && dk.dusk < 120 && Math.abs(dk.day - 6) < 0.02 && dk.h6 === 6 && dk.h18 === 18 && dk.h12 === 12, `第 40 批: dusk (sun 8° → full night) takes ${dk.dusk} s of real time (was ≈ 37 s); daytime still ${dk.day} min of the 12; 3/6/9 min = ${dk.h6}/${dk.h12}/${dk.h18} h`);
+  let dark = 0, mono = true, prev = L.hourAt(0);
+  for (let ms = 0; ms < 12 * 60000; ms += 250) { const h = L.hourAt(ms), e = el(h); if (h > 12 && h < 24 && a === null && e < 8) a = ms; if (h > 12 && a !== null && b === null && e < -10) b = ms; if (h >= 6 && h < 18) day += 250; if (e < -10) dark += 250; if (ms && ((h - prev + 24) % 24) > 1) mono = false; prev = h; }
+  return { dusk: (b - a) / 1000, day: day / 60000, dark: dark / 60000, mono, h6: +L.hourAt(2 * 60000).toFixed(3), h18: +L.hourAt(10 * 60000).toFixed(3), h12: +L.hourAt(6 * 60000).toFixed(3) }; });
+check(dk.dusk > 80 && dk.dusk < 120 && Math.abs(dk.day - 8) < 0.02 && dk.dark > 2.2 && dk.dark < 3 && dk.mono && dk.h6 === 6 && dk.h18 === 18 && dk.h12 === 12, `第 40/74 批: dusk (sun 8° → full night) takes ${dk.dusk} s of real time (was ≈ 37 s); daytime ${dk.day} min of the 12 (第 74 批: was 6), full dark ${dk.dark} min (was ≈ 4.4), clock never jumps; 2/6/10 min = ${dk.h6}/${dk.h12}/${dk.h18} h`);
 // ---- 8 第 42 批：回車庫頁（畫質已經做好了）再從那一格換：馬上換，出門就是那個 ----
 await p.evaluate(() => { window.__hold = false; window.__noDraw = false; document.getElementById('driveHome').click(); });
 await p.waitForFunction(() => !window.__D().on && document.getElementById('lookRow').offsetParent !== null, null, { timeout: 60000 });

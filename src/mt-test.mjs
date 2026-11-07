@@ -1,5 +1,5 @@
 // 手排（第 68 批；Nick 2026-11-06「車子做手排的」，卡片「要有離合器」→ 草稿第 2 版「照這樣做」）
-// 第 1 段 Node（不開瀏覽器，一秒內）：drive.js 的手排模式：空檔、離合器、▲ ▼、咔咔、熄火、重新發動、紅線不自己升檔、太早降檔的引擎煞車、R 檔、停住按煞車 R ↔ 1
+// 第 1 段 Node（不開瀏覽器，一秒內）：drive.js 的手排模式：空檔、離合器、▲ ▼、咔咔、熄火、重新發動、紅線不自己升檔、太早降檔的引擎煞車、R 檔、停住按煞車 R ↔ 1；第 74 批：空檔轉速慢慢上去、降檔補油聲（load、onBlip）
 // 第 2 段 瀏覽器：「⋯」→「自排／手排」切換（每支手機自己記 carid.gear）、▲ ▼ 離合器按鈕、轉速表 N／檔位、提示、5 種手機大小不壓到別的按鈕；自排完全照舊
 // node mt-test.mjs [../out/mt/mt]   （只跑 Node：NODE_ONLY=1）
 import './village-node-stub.mjs';
@@ -16,11 +16,11 @@ function fakeCar() {
   for (const [x, tr] of [[W.xf, W.trackF], [W.xr, W.trackR]]) for (const s of [-1, 1]) { const hub = new THREE.Group(); hub.position.set(x, W.R, s * tr); const wh = new THREE.Group(); hub.add(wh); car.add(hub); wheels.push(wh); }
   return { car, body, wheels, spec: { wheels: W, interior: { wheelZ: 0.37 } } };
 }
-const dt = 1 / 60, ev = { shifts: [], engine: [], grind: [] };
+const dt = 1 / 60, ev = { shifts: [], engine: [], grind: [], blip: [] };
 function rig(perf = PERF) {
   const S = fakeCar(), scene = new THREE.Scene(); scene.add(S.car);
   const d = createDrive({ car: S, scene, camera: null, perf, world: { surfaceAt: () => 0, colliders: [], places: {} }, keyboard: false,
-    onShift: (g) => ev.shifts.push(g), onEngine: (on) => ev.engine.push(on), onGrind: (w) => ev.grind.push(w) });
+    onShift: (g) => ev.shifts.push(g), onEngine: (on) => ev.engine.push(on), onGrind: (w) => ev.grind.push(w), onBlip: (g) => ev.blip.push(g) });
   d.teleport({ x: 0, z: 0, heading: 0 });
   return d;
 }
@@ -37,6 +37,9 @@ check(!t.mt && t.mgear === null && t.gear >= 3 && t.shifts >= 2 && t.kmh > 120, 
 d = rig(); d.setGearbox('mt'); ev.shifts.length = 0;
 t = run(d, 3, { throttle: 1 });
 check(d.gearbox === 'mt' && t.mt && t.mgear === 0 && t.kmh < 0.1 && t.rpm > 0.85 && !t.stalled, `手排一開始是空檔 N：踩油門車不動（${r2(t.kmh)} km/h）、引擎空催到 ${r2(t.rpm)}`);
+// ---- 第 74 批（Nick「空檔踩的時候轉速表不要升那麼快」）：空檔油門到底，轉速慢慢上去（0.25 秒還不到 0.6、1 秒過 0.85）；放掉也慢慢掉 ----
+{ const dN = rig(); dN.setGearbox('mt'); const a = run(dN, 0.25, { throttle: 1 }).rpm, b = run(dN, 0.75, { throttle: 1 }).rpm, c = run(dN, 0.2, { throttle: 0 }).rpm, e = run(dN, 1.5, { throttle: 0 }).rpm;
+  check(a > 0.3 && a < 0.6 && b > 0.85 && c > 0.4 && c < 0.8 && e < 0.16, `空檔油門到底：0.25 秒 ${r2(a)}、1 秒 ${r2(b)}（以前 0.25 秒就到頂）；放掉 0.2 秒 ${r2(c)}、1.7 秒回怠速 ${r2(e)}`); }
 // ---- 沒按離合器排不進去 ----
 d.shift(1); t = run(d, 0.5, { throttle: 0 });
 check(t.mgear === 0 && t.grind === 1 && ev.grind.join() === '1', `沒按離合器按 ▲：咔咔（grind ${t.grind}）、還是 N`);
@@ -107,6 +110,10 @@ check(t.ngears === 2 && t.gear === 2 && t.shifts === 1, `2 速（怪獸卡車那
 d = rig(); run(d, 6, { throttle: 1 }); d.setGearbox('mt'); t = run(d, 0.5, { throttle: 0 }); const g0 = t.mgear, r3 = t.rpm;
 run(d, 0.5, { clutch: 1 }); const rC = d.telemetry().rpm; d.shift(-1); run(d, 0.1, { clutch: 1 }); const r1 = run(d, 6 / 60, { throttle: 0 }).rpm, rEnd = run(d, 0.5, { throttle: 0 }).rpm, t2 = d.telemetry();
 check(g0 >= 3 && t2.mgear === g0 - 1 && rC < r3 - 0.1 && r1 > r3 + 0.1 && r1 > rEnd * 0.9 && t.kmh > 80, `${g0} 檔 ${Math.round(t.kmh)} km/h 收油（轉速 ${r2(r3)}）、踩離合器轉速掉到 ${r2(rC)}、降到 ${t2.mgear} 檔放開：0.1 秒就衝到 ${r2(r1)}（0.5 秒後 ${r2(rEnd)}）`);
+// ---- 第 74 批（Nick「降檔時的聲浪太小」）：降檔接上那一下引擎聲大聲（load 補一腳油、onBlip 放炮），0.55 秒退掉；收油滑行本來 load 0 ----
+{ const dB = rig(); run(dB, 6, { throttle: 1 }); dB.setGearbox('mt'); run(dB, 0.5, { throttle: 0 }); const l0 = dB.telemetry().load; ev.blip.length = 0;
+  run(dB, 0.3, { clutch: 1 }); dB.shift(-1); run(dB, 0.1, { clutch: 1 }); const lA = run(dB, 8 / 60, { throttle: 0 }).load, lB = run(dB, 0.3, { throttle: 0 }).load, lC = run(dB, 0.6, { throttle: 0 }).load, gB = dB.telemetry().mgear;
+  check(l0 === 0 && lA > 0.85 && lB > 0.3 && lB < lA && lC === 0 && ev.blip.join() === String(gB), `降檔放開：引擎聲 load 滑行 ${l0} → 接上 ${r2(lA)} → 0.3 秒 ${r2(lB)} → 0.9 秒 ${lC}；onBlip(${ev.blip.join()})`); }
 console.log(fails.length ? `FAILED ${fails.length}: ${fails.join(' | ')}` : 'ALL CHECKS OK (Node)');
 if (process.env.NODE_ONLY || fails.length) process.exit(fails.length ? 1 : 0);
 
