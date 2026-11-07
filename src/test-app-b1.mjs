@@ -194,7 +194,7 @@ await p.addInitScript(() => {
           const dx = hit.x - mx, dz = hit.z - mz; P.blk = { key: hit.key, kind: hit.kind, x: +hit.x.toFixed(1), z: +hit.z.toFixed(1), h: +hit.heading.toFixed(2), v: +hit.v.toFixed(2), al: +(dx * f0 + dz * f1).toFixed(1), la: +(-dx * f1 + dz * f0).toFixed(1), by: hit.blockedBy, stun: +(hit.stun || 0).toFixed(1), t: +P.t.toFixed(1), me: [+t.x.toFixed(1), +t.z.toFixed(1), +t.heading.toFixed(2)], long }; }
         else if (long || P.t - (P.waitT ?? -99) < 1) { thr = Math.abs(t.v) > 3 ? 0 : Math.min(thr, 0.35); } // 剛等完：慢慢起步
       }
-      // 卡住了（撞到路上的車以後貼著路邊、油門踩著車不動 2 秒；不是在等車、等門、到了）：倒車 1.6 秒再走（自排：停住按著煞車 0.25 秒就變 R、再按著煞車就往後走；之後油門又變回 D）
+      // 卡住了（撞到路上的車以後貼著路邊、油門踩著車不動 2 秒，或是 3 秒沒前進 1.5 公尺（頂著房子的時候速度會 −0.1～0.4 跳來跳去，光看速度抓不到）；不是在等車、等門、到了）：倒車 1.6 秒再走（自排：停住按著煞車 0.25 秒就變 R、再按著煞車就往後走；之後油門又變回 D）
       const waiting = P.t - (P.waitT ?? -99) < 0.1 || brk > 0 || thr < 0.3;
       if (P.t < (P.revUntil ?? -1)) { thr = 0; brk = 1; P.steer = -(P.steer0 ?? P.steer); }
       else { if (Math.abs(t.v) < 0.4 && !waiting) P.slowT = (P.slowT || 0) + 1 / 60; else P.slowT = 0; if (P.slowT > 2) { P.revUntil = P.t + 1.6; P.steer0 = P.steer; P.slowT = 0; P.recov = (P.recov || 0) + 1; } }
@@ -203,7 +203,7 @@ await p.addInitScript(() => {
       const t2 = window.__D().drv?.telemetry(); if (!t2) return { stop: true, t: P.t };
       P.maxKmh = Math.max(P.maxKmh, t2.kmh); if (t2.bumps > bb) P.bumps++;
       if (Math.abs(t2.v) > 1.5 && window.__D().drv.action2) P.out2++; // 開著的時候不可以有「下車」
-      if (P.t - P.lastT > 3) { if (Math.hypot(t2.x - P.lx, t2.z - P.lz) < 1.5 && !(G && G.door.moving) && !(P.t - (P.waitT ?? -99) < 3)) P.stuck++; P.lastT = P.t; P.lx = t2.x; P.lz = t2.z; }
+      if (P.t - P.lastT > 3) { if (Math.hypot(t2.x - P.lx, t2.z - P.lz) < 1.5 && !(G && G.door.moving) && !(P.t - (P.waitT ?? -99) < 3)) { P.stuck++; if (brk === 0 && P.t >= (P.revUntil ?? -1)) { P.revUntil = P.t + 1.6; P.steer0 = P.steer; P.recov = (P.recov || 0) + 1; } } P.lastT = P.t; P.lx = t2.x; P.lz = t2.z; }
     }
     return { arrived: false, t: P.t };
   };
