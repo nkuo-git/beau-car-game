@@ -545,11 +545,13 @@ const nh = await p.evaluate(() => {
   const g = q.c.g, grp = V.colliders.filter((k) => k.g === g); delete q.c;
   const r = H.ram(q, 0.6, 5); H.step(60);
   const j = C.big.find((k) => k.grp.some((c) => c.g === g));
-  return { q, r, can: grp.filter((k) => C.can(k)).length, tops: Math.max(...V.colliders.filter((k) => k.g != null && k.g >= 1e6 && k.t === 'box').map((k) => k.h ?? 0)), n: grp.length, crushed: grp.filter((k) => k.crushed).length, verts: j ? j.segs.reduce((a, s) => a + s.idx.length, 0) : 0, maxY: j ? H.segMaxY(j) : null, top: j ? j.top : null, ms: +C.stats.bigMs.toFixed(2), hit: +C.stats.hitMs.toFixed(2) };
+  const SR = Object.values(V.neihu.street.roads), segD = (px, pz, a, b) => { const dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz || 1e-9; let u = ((px - a[0]) * dx + (pz - a[1]) * dz) / l2; u = u < 0 ? 0 : u > 1 ? 1 : u; return Math.hypot(a[0] + dx * u - px, a[1] + dz * u - pz); };
+  const onStreet = (k) => SR.some((P) => { for (let i = 1; i < P.length; i++) if (segD(k.x, k.z, P[i - 1], P[i]) < 60) return true; return false; }); // 第 72 批：江南街、內湖路一段、環山路邊的房子照真的樓層（3～15 樓）
+  return { q, r, can: grp.filter((k) => C.can(k)).length, tops: Math.max(...V.colliders.filter((k) => k.g != null && k.g >= 1e6 && k.t === 'box' && !onStreet(k)).map((k) => k.h ?? 0)), tall: V.colliders.filter((k) => k.g != null && k.g >= 1e6 && k.t === 'box' && (k.h ?? 0) > 7.5).length, n: grp.length, crushed: grp.filter((k) => k.crushed).length, verts: j ? j.segs.reduce((a, s) => a + s.idx.length, 0) : 0, maxY: j ? H.segMaxY(j) : null, top: j ? j.top : null, ms: +C.stats.bigMs.toFixed(2), hit: +C.stats.hitMs.toFixed(2) };
 });
 console.log('  neihu building:', JSON.stringify(nh));
 check(!nh.none && nh.crushed === 0 && nh.can === 0 && nh.verts === 0 && (nh.r.bumps > 0 || nh.r.kmh < 12), `a building in 內湖 (${nh.n} collider boxes) stops the truck and is not flattened (bumps ${nh.r?.bumps})`);
-check(!nh.none && nh.tops <= 7.5, `內湖 buildings are at most 2 floors now (tallest ordinary building ${nh.tops} m)`);
+check(!nh.none && nh.tops <= 7.5 && nh.tall > 0, `內湖 buildings are at most 2 floors away from the three photographed streets (tallest ordinary building ${nh.tops} m; ${nh.tall} tall boxes along 江南街／內湖路／環山路, 第 72 批)`);
 await drawAndShot('10-neihu-solid');
 // 6g 修 8＋9（2026-10-10）：電線桿輾扁了，接在上面的電線垂到地上；扁了 20 秒、離開 15 公尺以上才 0.8 秒長回來（電線也拉回去），擋路的又擋了
 const back9 = await p.evaluate(() => {

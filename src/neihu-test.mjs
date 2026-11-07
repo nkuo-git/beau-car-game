@@ -704,9 +704,9 @@ const S7t = await p.evaluate(() => { const D = window.__D(), C = D.crushFx, N = 
   const nearB = lots.filter((j) => dist(j.x, j.z) < 150).length, visOk = lots.every((j) => j.lod.car.visible === (dist(j.x, j.z) < 130)), vis = lots.filter((j) => j.lod.car.visible).length;
   const pricey = lots.filter((j) => D.PERF[j.lod.car.name.slice(4)].price >= 1000).length, cheap = lots.filter((j) => D.PERF[j.lod.car.name.slice(4)].price <= 100).length;
   const atSpot = lots.filter((j) => Math.hypot(j.lod.car.position.x - j.x, j.lod.car.position.z - j.z) < 0.01).length;
-  const cols = D.drv.colsNear(me.x, me.z, 400).filter((c) => c.tag === 'junk').length, wcols = D.walker ? D.walker.colsNear?.(me.x, me.z, 400) : null;
+  const jc = D.drv.colsNear(me.x, me.z, 400).filter((c) => c.tag === 'junk'), cols = lots.filter((j) => jc.some((c) => Math.abs(c.x - j.px) < 0.05 && Math.abs(c.z - j.pz) < 0.05)).length; // 每台路邊的車都有一個 junk 碰撞盒（越野車場的垃圾車也是 junk，不算）
   const tris = lots.reduce((t, j) => { let n = 0; j.lod.car.traverse((o) => { if (o.isMesh && o.geometry) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; }); return t + n; }, 0);
-  return { near, far, built: lots.length, nearB, stats: C.stats.lots, vis, visOk, kinds, pricey, cheap, atSpot, cols, wcols, tris: Math.round(tris), big: C.me.big, pads: C.pads.length }; });
+  return { near, far, built: lots.length, nearB, stats: C.stats.lots, vis, visOk, kinds, pricey, cheap, atSpot, cols, wcols, tris: Math.round(tris), big: C.me.big, pads: C.pads.length, jc: jc.length }; });
 console.log('7t parked cars', el(), `built before ${built0}, ${((Date.now() - t7t) / 1000).toFixed(1)} s real`, JSON.stringify(S7t));
 check(S7t.near >= 8 && S7t.nearB >= Math.min(S7t.near, 12) && S7t.stats === S7t.built && S7t.atSpot === S7t.built && S7t.visOk && S7t.cols === S7t.built, `環山路: ${S7t.near} bays with cars within 150 m → ${S7t.nearB} dealer cars built there in 8 s (one every 0.25 s; ${S7t.built} in all), all at their bay, shown within 130 m (${S7t.vis}) and hidden beyond, every one blocking the car (${S7t.cols} junk colliders)`);
 check(Object.keys(S7t.kinds).length >= 4 && S7t.cheap >= S7t.built * 0.6 && S7t.pricey <= Math.max(1, Math.floor(S7t.built * 0.1)), `mixed cheap models ${JSON.stringify(S7t.kinds)}: ${S7t.cheap} cost ≤ 100 萬, only ${S7t.pricey} supercar(s)`);
