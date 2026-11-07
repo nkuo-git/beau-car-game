@@ -546,7 +546,7 @@ const nh = await p.evaluate(() => {
   const r = H.ram(q, 0.6, 5); H.step(60);
   const j = C.big.find((k) => k.grp.some((c) => c.g === g));
   const SR = Object.values(V.neihu.street.roads), segD = (px, pz, a, b) => { const dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz || 1e-9; let u = ((px - a[0]) * dx + (pz - a[1]) * dz) / l2; u = u < 0 ? 0 : u > 1 ? 1 : u; return Math.hypot(a[0] + dx * u - px, a[1] + dz * u - pz); };
-  const onStreet = (k) => SR.some((P) => { for (let i = 1; i < P.length; i++) if (segD(k.x, k.z, P[i - 1], P[i]) < 60) return true; return false; }); // 第 72 批：江南街、內湖路一段、環山路邊的房子照真的樓層（3～15 樓）
+  const onStreet = (k) => SR.some((P) => { for (let i = 1; i < P.length; i++) if (segD(k.x, k.z, P[i - 1], P[i]) < 95) return true; return false; }); // 第 72 批：江南街、內湖路一段、環山路邊的房子照真的樓層（3～15 樓；江南街後面一排離路最多約 75 公尺＋房子的半邊）
   return { q, r, can: grp.filter((k) => C.can(k)).length, tops: Math.max(...V.colliders.filter((k) => k.g != null && k.g >= 1e6 && k.t === 'box' && !onStreet(k)).map((k) => k.h ?? 0)), tall: V.colliders.filter((k) => k.g != null && k.g >= 1e6 && k.t === 'box' && (k.h ?? 0) > 7.5).length, n: grp.length, crushed: grp.filter((k) => k.crushed).length, verts: j ? j.segs.reduce((a, s) => a + s.idx.length, 0) : 0, maxY: j ? H.segMaxY(j) : null, top: j ? j.top : null, ms: +C.stats.bigMs.toFixed(2), hit: +C.stats.hitMs.toFixed(2) };
 });
 console.log('  neihu building:', JSON.stringify(nh));
