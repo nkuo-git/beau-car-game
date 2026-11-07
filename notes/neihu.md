@@ -199,3 +199,4 @@ so the 16-pad pool is not eaten. Model choice is a per-seed weighted hash in tow
 ≤ 100 3, ≤ 200 1.5, ≤ 500 0.6, supercars 0.06 (≈1.3 %); paints white/silver/black-heavy (`LOT_PAINT`); no ridden things, no
 monster truck. Test: neihu-test 7s counts `N.street.parked`, 7t builds them at the 環山路 view (6 s), checks model mix,
 positions, visibility, colliders, hiding at 江南街.
+- Test lessons (batch 74): neihu-test 7t must yield between `__dstep` batches (a synchronous loop in one `evaluate` never lets the async `buildLodCar` promises run); `drv.colsNear` takes a half-width, so query 1500 m to see every street car's junk collider. crush-test's "Neihu ≤ 2 floors" check now skips boxes within 95 m of the three streets' ways (`V.neihu.street.roads`, an array: one road has several ways). Final: neihu-test 42 ok, crush-test 55 ok.
