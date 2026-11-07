@@ -13303,6 +13303,7 @@ return { createRide, RIDE: { CLS, SURF } };
 //     hudParent: stage,       HUD 放在這個元素裡（要 position: relative）；沒給就沒有 HUD（測試用）
 //     onZone(name, inside, place)   開進／開出任何一個 places.<name>.zone（這一幀算完才叫；開出去要離開範圍 2.5 公尺才算，在邊上晃不會一直叫）
 //     onShift(gear), onBump(strength)   升檔（接引擎聲 voice.shift()）、撞到東西（撞進去的速度 m/s，可以拿來震動）
+//     onBlip(gear)                     第 74 批：手排降檔放開離合器轉速衝上去那一下（接引擎聲 voice.shift()：補油、放炮）
 //     onLand(e)               第 4 批：落地（飛起來 0.25 秒以上再碰到地）e＝{ speed（往下撞地的速度 m/s）, air（飛了幾秒）, drop（最高離地幾公尺）, x, z, v（水平速度）, hard（超過這台車受得了的）}
 //     halfW                   第 4 批：碰撞的半寬（可省略；輪胎比車身寬的車，怪獸卡車 1.905）；perf.gears：自己的六個齒比（可省略）
 //     onImpact(e)             撞壞用（damage.js：onImpact: (e) => dmg.hit(e)）：這一幀最大的一下（撞進去 1.5 m/s 以上；0.2 秒內只叫一次，除非更大力）
@@ -13707,7 +13708,7 @@ function createDrive(o) {
   const DR = { rwd, ofr, bias: rwd ? 1 : 0.42, amax: ofr ? 0.3 : rwd ? clamp(0.6 + 0.3 * (pwk - 0.3), 0.6, 0.78) : clamp(0.4 + 0.25 * (pwk - 0.2), 0.4, 0.52),
     sus: ofr ? 0.06 : rwd ? clamp(0.5 + (pwk - 0.3), 0.5, 1) : clamp(0.3 + 0.5 * (pwk - 0.2), 0.25, 0.5), pow: ofr ? 0 : rwd ? 1 : 0.4, dec: ofr ? (rwd ? 1.15 : 1.5) : rwd ? 1.7 : 2.2, cg: W.xr + 0.47 * (W.xf - W.xr) };
 
-  const st = { x: car.position.x, z: car.position.z, th: car.rotation.y, v: 0, steer: 0, thr: 0, brk: 0, hb: 0, thrEff: 0, load: 0, cutLoad: 0, gear: 0, rev: false, hold: 0, cut: 0, rpm: 0.13, spin: 0,
+  const st = { x: car.position.x, z: car.position.z, th: car.rotation.y, v: 0, steer: 0, thr: 0, brk: 0, hb: 0, thrEff: 0, load: 0, cutLoad: 0, gear: 0, rev: false, hold: 0, cut: 0, rpm: 0.13, blip: 0, spin: 0,
     surf: 0, cap: vtop, bumps: 0, shifts: 0, touch: 0, blocked: 0, roll: 0, rollV: 0, pitch: 0, pitchV: 0, alat: 0, along: 0, kap: 0, scrub: 0, push: 0, jit: 0, jitT: 0, hitW: 0, hitT: -9, impT: -9, impW: 0 };
   // 第 3 批（甩尾）：slip＝甩的角度（走的方向＝th＋slip）、slipV＝它變多快、loose＝後輪多鬆（0–1）、dm＝甩了多少（0 抓地～1 甩）、skid＝輪胎叫、skidM＝胎痕／煙
   Object.assign(st, { slip: 0, slipV: 0, loose: 0, dm: 0, skid: 0, skidM: 0, flick: 0, sPrev: 0, thrMem: 0, pwT: 0, kick: 0, kickT: 0, dT: 0, drifts: 0, dShow: 0 });
@@ -13837,13 +13838,14 @@ function createDrive(o) {
   //   ▲ ▼（shift(±1)）要踩著離合器（inp.clu）才換得進去，沒踩＝「咔咔」沒換（grind）；R 只有快停住（1.5 m/s 以下）才排得進去
   //   檔位 R – N – 1 – 2 – 3 – 4 – 5 – 6；放開離合器那一下（接上過半）：轉速比怠速低（檔太高、太慢）又沒給油 → 熄火（stall）；按油門 0.6 秒重新發動
   //   撞紅線不會自己升檔：斷油噠噠噠（physics 的 st.lim）；檔太高只是沒力（不熄火）；停住按著煞車 R ↔ 1 檔照舊（不用離合器）
+  const BLIP_T = 0.55, FREE_UP = 2.4, FREE_DOWN = 4; // 第 74 批：降檔補油聲幾秒；空催轉速上去、空檔下來的快慢（以前跟接著輪子一樣 12；踩著離合器放油門照舊 12）
   function mtStep(h, inp) {
     const want = inp.clu > 0.5 ? 0 : 1;
     st.clu = want <= st.clu ? want : Math.min(1, st.clu + h / 0.12); // 踩下去馬上分開，放開 0.12 秒接上
     if (st.cluPrev < 0.5 && st.clu >= 0.5 && st.mg !== 0 && !st.stall) { // 放開的那一下
       const x = st.rev ? 0.14 + Math.min(1, Math.abs(st.v) / 4.5) * 0.3 : xOf(st.v, st.gear);
       if (x < 0.12 && inp.thr < 0.15) { st.stall = true; st.crank = 0; st.cut = 0; events.push(['engine', false]); }
-      else if (x > st.rpm) st.rpm = Math.min(1.08, x); // 第 69 批：降檔接上＝轉速瞬間衝上去（不慢慢爬）
+      else if (x > st.rpm) { if (x > st.rpm + 0.06) { st.blip = BLIP_T; events.push(['blip', st.mg]); } st.rpm = Math.min(1.08, x); } // 第 69 批：降檔接上＝轉速瞬間衝上去（不慢慢爬）；第 74 批：那一下引擎聲大聲（blip，Nick「降檔時的聲浪太小」）
     }
     st.cluPrev = st.clu;
     while (st.shq.length) {
@@ -13923,8 +13925,10 @@ function createDrive(o) {
       const free = 0.13 + 0.87 * go;
       want = st.stall ? (st.crank > 0 ? 0.07 + 0.03 * Math.sin(st.limT * 60) : 0) : st.lim ? (st.limT % 0.1 < 0.05 ? 0.96 : 1.02) : (st.clu >= 0.5 && st.mg !== 0 ? 1 : eng) * Math.min(1.02, xr + slip) + (st.clu >= 0.5 && st.mg !== 0 ? 0 : 1 - eng) * free; // 第 69 批：接上過半轉速就跟著輪子（降檔瞬間衝上去，不被怠速拉回來）
     }
-    st.rpm += (want - st.rpm) * (1 - Math.exp(-h * (MT && st.stall ? 6 : 12)));
+    const freeRev = MT && !st.stall && (st.mg === 0 || st.clu < 0.5); // 第 74 批（Nick「空檔踩的時候轉速表不要升那麼快」）：引擎沒接到輪子＝空催，轉速慢慢上去（0.3 秒一半、1 秒到 9 成）；空檔放油門掉下來也慢一點
+    st.rpm += (want - st.rpm) * (1 - Math.exp(-h * (MT && st.stall ? 6 : freeRev ? (want > st.rpm ? FREE_UP : st.mg === 0 ? FREE_DOWN : 12) : 12)));
     st.load = MT && (st.stall || st.mg === 0 || st.clu < 0.5) ? (st.stall ? 0 : go * (st.mg === 0 ? 1 : 0.6)) : st.cut > 0 ? st.cutLoad : go > 0.02 ? go * (0.65 + 0.35 * lim) : 0;
+    if (st.blip > 0) { st.blip -= h; if (!st.stall) st.load = Math.max(st.load, 0.6 + 0.4 * clamp(st.blip / BLIP_T, 0, 1)); } // 第 74 批：降檔那一下補一腳油的聲音（0.55 秒慢慢退）
     // 走：後軸沿著車頭方向走、繞後軸轉（腳踏車模型）
     const vab = Math.abs(st.v);
     // 頂住東西了還踩油門：方向盤照「想走的速度」轉（原地轉出來，不會一直卡著）
@@ -14473,6 +14477,7 @@ function createDrive(o) {
     for (const e of ev) {
       if (e[0] === 'zone' && o.onZone) o.onZone(e[1], e[2], places[e[1]]);
       else if (e[0] === 'shift' && o.onShift) o.onShift(e[1]);
+      else if (e[0] === 'blip' && o.onBlip) o.onBlip(e[1]); // 第 74 批：手排降檔接上那一下（引擎聲放炮）
       else if (e[0] === 'engine' && o.onEngine) o.onEngine(e[1]); // 第 68 批：手排熄火（false）、重新發動（true）
       else if (e[0] === 'grind' && o.onGrind) o.onGrind(e[1]);
       else if (e[0] === 'bump' && o.onBump) o.onBump(e[1]);
@@ -16887,10 +16892,10 @@ const NEIHU_DATA = {"v":2,"wide":1.5,"center":{"lat":25.07943,"lon":121.57687},"
 //   店名用諧音（Nick 2026-11-07「可以用諧音字 就是不完全一樣 但又看得出來是在講那家店」）：顏色跟真的店像、名字差一兩個字、logo 畫得不一樣；沒有真的品牌名字和 logo。
 //   江南街：騎樓、一整排停著的機車、彩色發亮的燈箱招牌、4～5 樓公寓（後面幾棟 12 樓以上的大樓）、紅綠燈
 //   內湖路一段：一排大王椰子、公車亭、路燈、7 樓公寓、圍牆＋樹籬＋後面的樹、變電箱彩繪
-//   環山路：擋土牆＋很多樹、新大樓＋舊公寓混著、鷹架的工地（塔吊）、停車格＋停著的車、綠色路牌、公車亭、共享腳踏車站「優拜客」
+//   環山路：擋土牆＋很多樹、新大樓＋舊公寓混著、鷹架的工地（塔吊）、停車格＋停著的車（第 74 批起是車店的車：spots.parked 只給位置，town.src.js／crush.js 開到附近才做）、綠色路牌、公車亭、共享腳踏車站「優拜客」
 // 【API】（neihu.js 的 buildNeihu 叫）
 //   nhStreetPrep({ N, nx, nz, names, hh }) → S：floorsOf(b, bi, cx, cz)（這三條路邊的房子照真的樓層）、arcadeFix(b)（江南街的騎樓）、noTree(x, z)（內湖路的行道樹換成大王椰子）、nearKey(x, z)
-//   nhStreetBuild(ctx) → { meshes（InstancedMesh：機車、停著的車、大王椰子；250 公尺一格，跟樹一樣遠了不畫）, poles（路燈：look.js 晚上最近的幾支真的有光）, info, spots, tex }
+//   nhStreetBuild(ctx) → { meshes（InstancedMesh：機車、大王椰子；250 公尺一格，跟樹一樣遠了不畫）, poles（路燈：look.js 晚上最近的幾支真的有光）, info, spots（parked＝停車格的車的位置）, tex }
 //   效能：全部合併進 neihu.js 的格子（wall、paint、sign2）或 InstancedMesh；每格不多幾個 draw call
 
 const { nhStreetPrep, nhStreetBuild, NH_STREET_TEXT } = (() => {
@@ -16963,7 +16968,7 @@ function nhStreetPrep({ N, nx, nz, names }) {
 function nhStreetBuild(ctx) {
   const { S, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV, GB } = ctx;
   const info = { scooters: 0, cars: 0, bays: 0, palms: 0, lamps: 0, shelters: 0, signals: 0, uboxes: 0, wallM: 0, rwallM: 0, site: 0, guides: 0, bikes: 0, boxes: 0, hedgeTrees: 0 };
-  const spots = { shelters: [], signals: [], guides: [], ubike: [], site: null, views: {} };
+  const spots = { shelters: [], signals: [], guides: [], ubike: [], site: null, views: {}, parked: [], roads: S.roads.map((rd) => ({ key: rd.key, name: rd.name, pts: rd.pts })) }; // roads：三條路每一段 way 的中線（一條路好幾段；測試：哪些房子是照真的樓層蓋高的） // parked（第 74 批）：停車格裡停著的車 [x, z, 車頭方向, 亂數種子]：town.src.js／crush.js 開到附近才做成車店的車（輕量車）
   const WHITE = [255, 255, 255];
   // ---- 招牌、燈箱、牌子的貼圖（一張 1024×1024）----
   const [ac, ag] = cv(1024, 1024), UV = {}; const W = 1024, H = 1024;
@@ -17064,7 +17069,7 @@ function nhStreetBuild(ctx) {
         if (prev) { const c = t < 0.6 ? L1 : L2; g.grow(8, 12); let k = g.v; for (const p of [prev[0], prev[1], cur[1], cur[0]]) g.vert(p[0], p[1], p[2], 0, 0, c[0], c[1], c[2], 0); g.tri(k, k + 1, k + 2); g.tri(k, k + 2, k + 3); k = g.v; for (const p of [prev[1], prev[0], cur[0], cur[1]]) g.vert(p[0], p[1], p[2], 0, 0, c[0] * 0.85, c[1] * 0.85, c[2] * 0.85, 0); g.tri(k, k + 1, k + 2); g.tri(k, k + 2, k + 3); }
         prev = cur; } }
     return g.geometry(); })();
-  const tiles = { scooter: new Map(), car: new Map(), palm: new Map() }, tcols = [];
+  const tiles = { scooter: new Map(), palm: new Map() }, tcols = []; // 第 74 批：停著的車不再是 InstancedMesh（spots.parked）
   const tkey = (x, z) => Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT);
   const addInst = (kind, x, z, rot, s, c, col) => { const key = tkey(x, z); let L = tiles[kind].get(key); if (!L) tiles[kind].set(key, (L = [])); L.push([x, z, rot, s, c]); if (col) { col.tk = kind + '-' + key; col.ti = L.length - 1; colliders.push(col); tcols.push(col); } }; // tk 要跟 InstancedMesh 的名字（'nh-' 後面）一樣，下面才接得上 im（neihu-test 7s 會查）
   const SCOL = ['#e8e8e8', '#2b2b2b', '#c62f25', '#1f5fae', '#f3c623', '#6a6a6a', '#2a8a4a', '#ffffff', '#8a3a8a', '#d9d9d9', '#3b3b3b', '#f28c28'].map(col255);
@@ -17103,7 +17108,7 @@ function nhStreetBuild(ctx) {
           const ax = px + ux * lx0 + rx * lz0, az = pz + uz * lx0 + rz * lz0, bx = px + ux * lx1 + rx * lz1, bz = pz + uz * lx1 + rz * lz1, nxx = -(bz - az), nzz = bx - ax, nl = Math.hypot(nxx, nzz) || 1;
           for (const [qx, qz] of [[ax - nxx / nl * wdt, az - nzz / nl * wdt], [bx - nxx / nl * wdt, bz - nzz / nl * wdt], [bx + nxx / nl * wdt, bz + nzz / nl * wdt], [ax + nxx / nl * wdt, az + nzz / nl * wdt]]) g.vert(qx, 0.054, qz, 0, 0, c[0], c[1], c[2], 0); g.tri(k, k + 2, k + 1); g.tri(k, k + 3, k + 2); }
         info.bays++;
-        if (hh(n, 14) < 0.62) { const rot = rotOf(ux, uz) + (hh(n, 15) < 0.5 ? 0 : Math.PI); addInst('car', px, pz, rot, 0.95 + hh(n, 16) * 0.1, CCOL[Math.floor(hh(n, 17) * CCOL.length)], { t: 'box', x: px, z: pz, hx: 2.3, hz: 0.95, rot, h: 1.45 }); info.cars++; } });
+        if (hh(n, 14) < 0.62) { const rot = rotOf(ux, uz) + (hh(n, 15) < 0.5 ? 0 : Math.PI); spots.parked.push([+px.toFixed(2), +pz.toFixed(2), +rot.toFixed(4), n * 2 + (side > 0 ? 1 : 0) + rd.ri * 1000]); info.cars++; } }); // 第 74 批（Nick「路停的車用車店的隨機放 豪車少一點」）：以前是 InstancedMesh 的方塊車；現在只記位置，開到附近 crush.js／town.src.js 做成車店的車
     }
   }
   // ==== 3 大王椰子（內湖路一段兩邊，取代一般的行道樹）====
@@ -17261,7 +17266,7 @@ function nhStreetBuild(ctx) {
   }
   // ---- InstancedMesh ----
   const meshes = [], M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), SC = new THREE.Vector3(), PV = new THREE.Vector3(), UPV = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
-  const geos = { scooter: scooterGeo, car: carGeo, palm: palmGeo };
+  const geos = { scooter: scooterGeo, palm: palmGeo };
   for (const kind of Object.keys(tiles)) for (const [key, L] of tiles[kind]) {
     const n = L.length, m = new THREE.InstancedMesh(geos[kind], kind === 'palm' ? mats.tree : mats.inst, n); m.name = 'nh-' + kind + '-' + key; let cx = 0, cz = 0;
     for (let i = 0; i < n; i++) { const [x, z, rot, s, c] = L[i]; Q.setFromAxisAngle(UPV, rot); M4.compose(PV.set(x, 0, z), Q, SC.set(s, s, s)); m.setMatrixAt(i, M4); col.setRGB(c[0] / 255, c[1] / 255, c[2] / 255); m.setColorAt(i, col); cx += x; cz += z; }
@@ -36837,6 +36842,8 @@ return { createTraffic, createPedestrians, npcGraphs };
 //     world: V,                        buildVillage＋buildOffroad 的（V.group、V.colliders、V.heightAt、V.offroad.show＝越野車場的表演場）
 //     getCar(out) → true/false,        玩家的車（每幀）：out.x、out.z（車身中心）、heading、v、hx、hz、big（是不是怪獸卡車）；沒在開車回 false
 //     makeJunk(i, [x, z, h]) → Promise<lod>,  表演場的垃圾車（buildLodCar 做的輕量車；一次做一台）
+//     lots() → [[x, z, h, seed]…] | null, me(out) → true/false, makeLot(i, spot) → Promise<lod>   第 74 批（Nick「路邊停的車用車店的隨機放 豪車少一點」）：路邊停車格的車（內湖環山路，nhstreet.js 給位置）：
+//                                       開車、走路到 150 公尺內一次做一台（車店的車的輕量車，便宜的多、豪車很少）、130 公尺外藏起來；還沒扁的擋車（colliders(true) 也給走路的）；越野車輾得扁（報警）、30 秒長回來
 //     recycle(car),                    輾扁的路上的車收回車流的池子（npc.js traffic.recycle）
 //     bail(x, z, dx, dz) → n,          車上的人跳車往 (dx, dz) 跑掉（npc.js peds.bail）
 //     sound(kind, x, z, k),            'crunch'（壓扁的咖啦聲）、'glass'（玻璃碎）
@@ -36875,6 +36882,7 @@ const PROP_FLAT = 0.14; // 路邊的東西輾扁以後多高
 const SQ_T = 0.55, GROW_T = 0.3; // 壓扁要幾秒；墊子長出來要幾秒（突然長出來車會被彈起來）
 const KEEP = 20, FADE = 1.4; // 輾扁的車在路邊留幾秒、再淡掉幾秒
 const JUNK_BACK = 30, JUNK_FAR = 170, JUNK_AWAY = 50; // 表演場的垃圾車幾秒後回來；離這麼遠就算要蓋（170）／算離開了（50）
+const LOT_FAR = 150, LOT_VIS = 130, LOT_TICK = 0.25; // 第 74 批：路邊停的車：多近才做、多遠藏起來、幾秒看一次
 const CRIME_GAP = 8; // 一路輾過去只報一次警（一次 1★；不然一次就被通緝好幾顆星）
 const V3 = new THREE.Vector3();
 // 第 9 批：大東西（房子、樹、路燈⋯）
@@ -36919,16 +36927,18 @@ function createCrush(o = {}) {
   const heightOf = typeof V.heightAt === 'function' ? V.heightAt : () => 0;
   let alive = true, colVer = 0, jN = 0, jBusy = false, awayT = 0, toldPark = false, crimeT = -99, clock = 0;
   const ME = { x: -0, z: -0, heading: -0, v: -0, hx: 2.8, hz: 1.9, big: false };
-  const st = { cars: 0, junk: 0, props: 0, bails: 0, pads: 0, flats: 0, ms: -0, maxMs: -0, frames: 0, types: [], big: 0, cops: 0, restored: 0, bigMs: -0, hitMs: -0, wires: 0 };
+  const st = { cars: 0, junk: 0, props: 0, bails: 0, pads: 0, flats: 0, ms: -0, maxMs: -0, frames: 0, types: [], big: 0, cops: 0, restored: 0, bigMs: -0, hitMs: -0, wires: 0, lots: 0, lotHits: 0 };
   // 墊子（池子裡重複用；小數欄位 -0／x.5 開始）
   const PAD = [];
   for (let i = 0; i < 16; i++) PAD.push({ on: false, kind: '', x: -0, z: -0, c: 1.5, s: -0, hx: 1.5, hz: 1.5, h0: 1.5, hf: 0.5, h: -0, sq: -0, sqA: -0, grow: -0, t: -0, snd: 0, ct: -0, flat: false, car: null, lod: null, col: null, junk: -1 });
-  const JUNK = []; // 表演場的垃圾車：{ lod, x, z, h, pad }
+  const JUNK = []; // 表演場的垃圾車、第 74 批路邊停的車：{ lod, x, z, h, hx, hz, cx, px, pz, pad, street }（px pz＝車身中心；street＝路邊的：輾了報警）
+  const LOT = [], MEP = { x: -0, z: -0 }; let lBusy = false, lotT = 0; // 第 74 批：路邊停車格的車（照 o.lots() 的順序；null＝還沒做）
   const COL = [], CPOOL = []; // colliders()：還沒輾扁的垃圾車（重複用同一批物件）
 
   // ---- 墊子 ----
-  function take() {
+  function take(grow) {
     for (let i = 0; i < PAD.length; i++) if (!PAD[i].on) return PAD[i];
+    if (grow) { const q = { on: false, kind: '', x: -0, z: -0, c: 1.5, s: -0, hx: 1.5, hz: 1.5, h0: 1.5, hf: 0.5, h: -0, sq: -0, sqA: -0, grow: -0, t: -0, snd: 0, ct: -0, flat: false, car: null, lod: null, col: null, junk: -1 }; PAD.push(q); return q; } // 第 74 批：路邊的車每台一個墊子，不夠就多配（只在做車的時候）
     let old = null; // 滿了：最舊的（不是垃圾車的）先收掉
     for (let i = 0; i < PAD.length; i++) { const q = PAD[i]; if (q.junk >= 0) continue; if (!old || q.t > old.t) old = q; }
     if (old) { finish(old); return old; }
@@ -37375,8 +37385,8 @@ function createCrush(o = {}) {
 
   // ---- 表演場的垃圾車（越野車場；輾爆好玩的，不會報警）----
   function junkPad(j) {
-    const q = take(); if (!q) return null;
-    setPad(q, 'junk', j.x, j.z, j.h, j.hx, j.hz, CAR_H, CAR_FLAT, false);
+    const q = take(!!j.street); if (!q) return null;
+    setPad(q, 'junk', j.px ?? j.x, j.pz ?? j.z, j.h, j.hx, j.hz, CAR_H, CAR_FLAT, false);
     q.lod = j.lod; q.junk = JUNK.indexOf(j); j.pad = q;
     return q;
   }
@@ -37390,16 +37400,42 @@ function createCrush(o = {}) {
         jBusy = false;
         if (!alive || !l) { jN = SHOW.cars.length; return; }
         jN = i + 1;
-        const j = { lod: l, x: p[0], z: p[1], h: p[2] || 0, hx: 2.2, hz: 0.9, pad: null };
-        const b = new THREE.Box3().setFromObject(l.car); // 這台多長多寬（輕量車）
-        if (isFinite(b.max.x)) { j.hx = (b.max.x - b.min.x) / 2; j.hz = Math.max(b.max.z, -b.min.z); }
-        l.car.position.set(j.x, heightOf(j.x, j.z), j.z); l.car.rotation.set(0, j.h, 0); l.car.visible = true;
+        const j = placeLod(l, p, false);
         JUNK.push(j); junkPad(j); colVer++;
       }).catch((e) => { jBusy = false; jN = SHOW.cars.length; console.warn('crush: 垃圾車做不出來', e); });
     }
     // 離開很久（或回車庫）：輾扁的垃圾車全部擺回來
     awayT = live && d < JUNK_AWAY ? 0 : awayT + dt;
     if (awayT > 2) for (let i = 0; i < JUNK.length; i++) if (JUNK[i].pad && JUNK[i].pad.sq > 0) respawn(JUNK[i]);
+  }
+  function placeLod(l, p, street) { // 輕量車放到 [x, z, h]：量多長多寬（車身中心 cx 往前多少）→ JUNK 的那一筆
+    const j = { lod: l, x: p[0], z: p[1], h: p[2] || 0, hx: 2.2, hz: 0.9, cx: 0, px: p[0], pz: p[1], pad: null, street };
+    l.car.position.set(0, 0, 0); l.car.rotation.set(0, 0, 0); l.car.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(l.car); // 這台多長多寬（輕量車）
+    if (isFinite(b.max.x)) { j.hx = (b.max.x - b.min.x) / 2; j.hz = Math.max(b.max.z, -b.min.z); j.cx = (b.max.x + b.min.x) / 2; j.px = j.x + Math.cos(j.h) * j.cx; j.pz = j.z - Math.sin(j.h) * j.cx; }
+    l.car.position.set(j.x, heightOf(j.x, j.z), j.z); l.car.rotation.set(0, j.h, 0); l.car.visible = true;
+    return j;
+  }
+  // ---- 第 74 批：路邊停車格的車（o.lots()：nhstreet.js 的位置）：你（開車或走路）到 150 公尺內一次做一台、130 公尺外藏起來；墊子跟垃圾車一樣（輾扁、30 秒長回來），但會報警 ----
+  function lotTick(dt) {
+    const spots = o.lots ? o.lots() : null; if (!spots || !spots.length || !o.makeLot || !o.me) return;
+    lotT += dt; if (lotT < LOT_TICK) return; lotT = 0;
+    if (!o.me(MEP)) return; // 不在外面
+    let best = -1, bd = LOT_FAR * LOT_FAR;
+    for (let i = 0; i < spots.length; i++) {
+      const p = spots[i], dx = p[0] - MEP.x, dz = p[1] - MEP.z, d2 = dx * dx + dz * dz, L = LOT[i];
+      if (L) { if (L.lod) L.lod.car.visible = d2 < LOT_VIS * LOT_VIS; continue; }
+      if (d2 < bd) { bd = d2; best = i; }
+    }
+    if (best < 0 || lBusy) return;
+    lBusy = true; const i = best, p = spots[i]; LOT[i] = { lod: null, j: null };
+    Promise.resolve().then(() => o.makeLot(i, p)).then((l) => {
+      lBusy = false;
+      if (!alive) return;
+      if (!l) { LOT[i] = { lod: null, j: null, bad: true }; return; } // 做不出來（沒有這台的輕量車）：這格就空著
+      const j = placeLod(l, p, true);
+      JUNK.push(j); junkPad(j); LOT[i].lod = l; LOT[i].j = j; st.lots++; colVer++;
+    }).catch((e) => { lBusy = false; LOT[i] = { lod: null, j: null, bad: true }; console.warn('crush: 路邊的車做不出來', e); });
   }
   function respawn(j) {
     const q = j.pad; if (!q) return;
@@ -37415,7 +37451,7 @@ function createCrush(o = {}) {
     clock += dt;
     const live = o.getCar ? !!o.getCar(ME) : false;
     if (live && warm < 2 && anyNow()) { if (!warm) { warm = 1; fxInit(); meshes(); } else if (cgAdd(1500)) warm = 2; } // 第 9 批：越野車開出來就先做好（分幾幀；第一次輾房子不會卡一下）
-    junkTick(dt, live);
+    junkTick(dt, live); lotTick(dt);
     bigTick(dt, live); dustTick(dt); // 第 9 批：房子壓下去、灰塵、太久沒回來就長回來
     for (let i = 0; i < PAD.length; i++) {
       const q = PAD[i]; if (!q.on) continue;
@@ -37428,7 +37464,8 @@ function createCrush(o = {}) {
         if (on && q.kind === 'junk' && q.sq > 0.02 && !(q.snd & 1)) { // 垃圾車：第一下才算輾到
           q.snd |= 1; q.ct = q.t; st.junk++; note('junk'); colVer++;
           if (o.sound) o.sound('crunch', q.x, q.z, 0.42);
-          if (!toldPark) { toldPark = true; if (o.toast) o.toast('輾扁了！'); }
+          if (JUNK[q.junk] && JUNK[q.junk].street) { st.lotHits++; police(q.x, q.z); } // 第 74 批：路邊停的車不是表演場的：輾了報警
+          else if (!toldPark) { toldPark = true; if (o.toast) o.toast('輾扁了！'); }
         }
         if (q.sq > 0.35 && !(q.snd & 2) && q.kind !== 'prop' && q.kind !== 'cop') { q.snd |= 2; if (o.sound) o.sound('glass', q.x, q.z, 0.3); } // 玻璃破掉
         if (q.sq > 0.5 && !q.flat && q.kind === 'prop' && q.col) { q.flat = true; flatten(q.col); }
@@ -37454,12 +37491,12 @@ function createCrush(o = {}) {
   }
 
   // ---- 還沒輾扁的垃圾車：給「不是怪獸卡車」的車擋（怪獸卡車的時候沒有：直接開上去）----
-  function colliders() {
+  function colliders(all) { // all：走路的人（第 74 批）：不管現在開的是不是怪獸卡車，沒扁的都擋
     COL.length = 0;
-    if (ME.big) return COL;
+    if (ME.big && !all) return COL;
     for (let i = 0; i < JUNK.length; i++) {
       const j = JUNK[i]; if (!j.pad || j.pad.sq > 0.5) continue;
-      COL.push({ t: 'box', x: j.x, z: j.z, hx: j.hx, hz: j.hz, rot: j.h, h: 1.35, junk: true, noCrush: true });
+      COL.push({ t: 'box', x: j.px, z: j.pz, hx: j.hx, hz: j.hz, rot: j.h, h: 1.35, junk: true, noCrush: true });
     }
     return COL;
   }
@@ -37480,7 +37517,7 @@ function createCrush(o = {}) {
   }
   return {
     heightAt, can: (c) => canAny(c, anyNow(), o.protect || null), hit, hitTraffic, update, colliders, reset, dispose, restoreAll,
-    get colVer() { return colVer; }, get junk() { return JUNK; }, get pads() { return PAD; }, get big() { return BIG; }, stats: st, me: ME,
+    get colVer() { return colVer; }, get junk() { return JUNK; }, get lots() { return LOT; }, get pads() { return PAD; }, get big() { return BIG; }, stats: st, me: ME,
   };
 }
 return { createCrush };
@@ -42028,7 +42065,8 @@ const LOOK_NAMES = ['普通', '高', '超高']; // 第 41 批：Nick「畫質直
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // 光線（範例 2 號以後都一樣）
 const LT = { elev: 38, az: 233, turb: 6, ray: 1.3, mie: 0.004, exp: 0.45, sunI: 4.6, sunC: 0xfff0dc, envI: 0.3, hemiI: 0.12, hemiC: 0xdde6ef, hemiG: 0x474a3c, fog: 0xc3ccd3, gnd: 0x3c4235, cloud: 0.32, cden: 0.5 };
-const DAY_SLOW = 0.65; // 第 40 批：日出、日落附近時間走慢多少（0＝平均）
+const DAY_SLOW = 0.8; // 第 40 批：日出、日落附近時間走慢多少（0＝平均）；第 74 批 0.65 → 0.8（白天拉長以後，日落那段才還是約 90 秒）
+const DAY_FRAC = 2 / 3; // 第 74 批（Nick「天黑比例要少一點」）：白天（6–18 點）佔一天的幾分之幾：12 分鐘裡白天 8 分鐘、晚上 4 分鐘（以前一半一半）
 const DAY_MIN = 12; // 第 30 批：遊戲裡一天＝真的 24 分鐘（照手機的時鐘：大家一樣）；第 34 批：Nick「一天時間改成12分鐘」→ 12 分鐘
 const SUN_MAX = 55; // 中午太陽多高（度）
 const DUSK = { sunC: 0xffb070, hemiI: 0.18, hemiC: 0xc9b2a8, hemiG: 0x2e2c30, fog: 0xd8b49a, envI: 0.4, turb: 6, ray: 2.0, mie: 0.002, g: 0.7, exp: 0.38, sunK: 0.6 }; // 太陽低的時候（橘色、天空濁、霧暖色）；第 31 批：夕陽的光調弱（sunK＝最多少掉幾成）；第 34 批：Nick「面像太陽的時候光線還是有點太亮」：太陽的光暈小一點（turb 8 → 6、mie 0.004 → 0.002、g 0.8 → 0.7）、曝光 0.45 → 0.38
@@ -42184,7 +42222,9 @@ function createLook(o) {
   // ==== 第 30 批：一天的時間 ====
   let hourOv = null; // 測試、試做頁：固定幾點（null＝照時鐘）
   // 第 40 批（Nick 2026-10-25「傍晚變晚上天色變黑的太快」）：一天還是 12 分鐘（白天 6、晚上 6），但太陽出來、下山的時候時間走慢（0.35 倍），中午、半夜走快（1.65 倍）：天色從亮到黑約 1.5 分鐘（以前約 37 秒）
-  const hourAt = (ms) => { const u = (((ms / 60000) % DAY_MIN) / DAY_MIN) * 24, h = u - DAY_SLOW * (6 / Math.PI) * Math.sin((Math.PI * (u - 6)) / 6); return ((h % 24) + 24) % 24; };
+  // 第 74 批：白天拉長：一天的進度 f（0＝半夜）先用一個正弦彎一下（f＝(1−DAY_FRAC)/2 剛好 6 點、(1+DAY_FRAC)/2 剛好 18 點；平滑，速度不跳），再照第 40 批把日出日落附近走慢
+  const DAY_NF = (1 - DAY_FRAC) / 2, DAY_A = (6 - 24 * DAY_NF) / Math.sin(2 * Math.PI * DAY_NF);
+  const hourAt = (ms) => { const f = ((ms / 60000) % DAY_MIN) / DAY_MIN, u = 24 * f + DAY_A * Math.sin(2 * Math.PI * f), h = u - DAY_SLOW * (6 / Math.PI) * Math.sin((Math.PI * (u - 6)) / 6); return ((h % 24) + 24) % 24; };
   const hourNow = () => (hourOv != null ? hourOv : hourAt(Date.now()));
   const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
   // ==== 第 47 批：下雨（什麼時候、多大）：照手機的時鐘，每 4 分鐘一段（整數雜湊：每支手機算出來一樣）====
@@ -44512,7 +44552,7 @@ const liftSnd = {}; // 電梯的馬達聲（sound.js 的 lift）
 const SPAWN = { x: 3.6, z: -5.4, heading: Math.atan2(-5.4, -3.6) }; // 出門的時候人站哪裡（塔的本地：大廳、小房子旁邊，看著電梯上的車）
 let meChar = null; // 你自己（character.js）：第一次出門在「出門中⋯」的時候先做好（第一個人會先畫大家共用的貼圖，手機 0.1～0.5 秒）；樣子＝GAME.look（自訂角色）
 let NPC = null; // 路上的人和車（npc.js）：第一次出門做好就留著（回車庫頁藏起來、停住）；做不出來就沒有（不擋出門）
-let crushFx = null, junkVer = -1; // 第 7 批（輾扁，crush.js）：怪獸卡車開上去把東西壓扁；junkVer＝表演場的垃圾車碰撞換過幾次
+let crushFx = null, junkVer = -1, junkDrv = null; // 第 7 批（輾扁，crush.js）：怪獸卡車開上去把東西壓扁；junkVer＝表演場的垃圾車（第 74 批：＋路邊停的車）碰撞換過幾次、junkDrv＝放給哪個 drv
 let LOOK = null; // 第 29 批：畫質（look.js）：順／漂亮／最真實；第一次出門做好（村子蓋好以後）
 let police = null, gunner = null; // 第 3 批（b3-int）：警察（police-ai.js：第一次出門的載入畫面做好就留著）、槍（guns.js：做走路的時候一起做）
 let PI = null, PSC = null; // 警察局一樓裡面（police.js 的 buildPoliceInterior，載入畫面蓋好一直留著：拘留室的鐵門跟著警察開關）、它自己的場景
@@ -44923,7 +44963,7 @@ function makeDrv(pose) {
   dEye = eye;
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
-    onZone: arrive, onShift: () => dvoice?.shift(), onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
+    onZone: arrive, onShift: () => dvoice?.shift(), onBlip: () => dvoice?.shift() /* 第 74 批：降檔補油 */, onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
     onEngine: (on) => { dvoice?.dispose(); dvoice = on ? engineAudio.voice(cur, { parts: partsOf(cur) }) : null; }, // 第 68 批：手排熄火＝引擎聲停、重新發動＝再來
     crush: crushFx && crushK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
@@ -46710,6 +46750,22 @@ const CRUSH_DRV = { heightAt: (x, z) => (crushFx ? crushFx.heightAt(x, z) : 0), 
 const CRUSH_POS = { x: 0, z: 0 }; // 報警用（每格不配置記憶體）
 const JUNK_LOOK = [{ paint: '#8d8f86', finish: 'matte', rim: 'gunmetal', tint: 'dark' }, { paint: '#7b6a52', finish: 'matte', rim: 'black', tint: 'dark' },
   { paint: '#5f6a72', finish: 'matte', rim: 'gunmetal', tint: 'dark' }, { paint: '#9a6b5c', finish: 'matte', rim: 'black', tint: 'dark' }, { paint: '#6f7a66', finish: 'matte', rim: 'gunmetal', tint: 'dark' }];
+// 第 74 批（Nick「路停的車用車店的隨機放 豪車少一點」）：內湖環山路停車格裡的車＝車店的車（輕量車）：便宜的多（45～60 萬 6 份、～100 萬 3 份、～200 萬 1.5 份、GT-R 0.6 份、超跑各 0.06 份）；
+//   每格照亂數種子固定是哪一台、什麼顏色（大家看到一樣）；騎的（沙灘車、街車、腳踏車）、怪獸卡車不放
+const LOT_KINDS = [], LOT_PAINT = ['#f2f2f0', '#f2f2f0', '#f2f2f0', '#d6d8da', '#c0c3c6', '#1c1c1e', '#1c1c1e', '#4a4d52', '#8a2a24', '#1f3f7a', '#2e5a2e', '#c99a2e', '#6b4a2e']; // 白、銀、黑最多（台灣的路邊）
+const lotHash = (n, sd) => { let x = (Math.imul(n | 0, 0x9e3779b1) ^ Math.imul((sd | 0) + 1, 0x85ebca6b)) >>> 0; x ^= x >>> 15; x = Math.imul(x, 0x2c1b3c6d) >>> 0; x ^= x >>> 12; return (x >>> 0) / 4294967296; };
+function lotKinds() {
+  if (!LOT_KINDS.length) for (const k of Object.keys(LOD_CARS)) { const P = PERF[k]; if (!P || P.big || P.lean || RIDES[k]) continue; const p = P.price; LOT_KINDS.push([k, p <= 60 ? 6 : p <= 100 ? 3 : p <= 200 ? 1.5 : p <= 500 ? 0.6 : 0.06]); }
+  return LOT_KINDS;
+}
+function lotKind(n) { const K = lotKinds(); let tot = 0; for (const e of K) tot += e[1]; let r = lotHash(n, 1) * tot; for (const e of K) { r -= e[1]; if (r <= 0) return e[0]; } return K.length ? K[K.length - 1][0] : null; }
+function lotLook(k, n) { return { ...DEFAULT_LOOK[k], paint: LOT_PAINT[Math.floor(lotHash(n, 2) * LOT_PAINT.length)] }; }
+const LOT_ME = (q) => { // 我在外面哪裡（開車＝車、走路＝人；車庫頁、比賽不算）
+  if (!trip || !DRIVE.on || RACE.on) return false;
+  if (walker && walker.mode !== 'off') { const t = walker.telemetry(); q.x = t.x; q.z = t.z; return true; }
+  if (drv) { const t = drv.telemetry(); q.x = t.x; q.z = t.z; return true; }
+  return false;
+};
 function npcCrush(car) { if (crushFx) crushFx.hitTraffic(car); } // npc.js：路上的車被怪獸卡車輾到（已經從車流裡拿出來了）
 function makeCrush() {
   return createCrush({
@@ -46729,6 +46785,8 @@ function makeCrush() {
       TR.scene.add(l.car);
       return l;
     },
+    lots: () => (VIL.neihu && VIL.neihu.street ? VIL.neihu.street.parked : null), me: LOT_ME, // 第 74 批：內湖路邊停車格的車
+    makeLot: async (i, p) => { const n = p[3] ?? i, k = lotKind(n); if (!k || !TR) return null; const l = buildLodCar(k, await LOD_CARS[k].load(), lotLook(k, n)); l.car.name = 'lot-' + k; TR.scene.add(l.car); return l; },
     recycle: (car) => NPC?.traffic.recycle(car),
     bail: (x, z, dx, dz) => (NPC ? NPC.peds.bail(x, z, dx, dz) : 0),
     sound: (kind, x, z, k) => engineAudio.crash(kind === 'glass' ? { strength: 0.12, glass: 1 } : { strength: k, glass: 0 }),
@@ -46743,7 +46801,11 @@ function makeCrush() {
 function crushStep(dt) {
   if (!crushFx) return;
   crushFx.update(dt);
-  if (drv && crushFx.colVer !== junkVer) { junkVer = crushFx.colVer; drv.removeColliders('junk'); drv.addColliders(crushFx.colliders(), 'junk'); }
+  if (crushFx.colVer !== junkVer || junkDrv !== drv) { // 第 74 批：換了車（新的 drv）也要重放；走路的人也擋（colliders(true)：不管開的是什麼車）
+    junkVer = crushFx.colVer; junkDrv = drv;
+    if (drv) { drv.removeColliders('junk'); drv.addColliders(crushFx.colliders(), 'junk'); }
+    if (walker) { walker.removeColliders('junk'); walker.addColliders(crushFx.colliders(true), 'junk'); }
+  }
 }
 
 // ==== 第 3 批（b3-int）：警察（police-ai.js）、槍（guns.js）、槍店（gunshop.js）、警察局裡面（police.js）====
@@ -49601,7 +49663,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 38; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 39; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
