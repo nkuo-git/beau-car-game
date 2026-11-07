@@ -80,7 +80,7 @@ function nhStreetPrep({ N, nx, nz, names }) {
 function nhStreetBuild(ctx) {
   const { S, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV, GB } = ctx;
   const info = { scooters: 0, cars: 0, bays: 0, palms: 0, lamps: 0, shelters: 0, signals: 0, uboxes: 0, wallM: 0, rwallM: 0, site: 0, guides: 0, bikes: 0, boxes: 0, hedgeTrees: 0 };
-  const spots = { shelters: [], signals: [], guides: [], ubike: [], site: null, views: {}, parked: [], roads: Object.fromEntries(S.roads.map((rd) => [rd.key, rd.pts])) }; // roads：三條路的中線（測試：哪些房子是照真的樓層蓋高的） // parked（第 74 批）：停車格裡停著的車 [x, z, 車頭方向, 亂數種子]：town.src.js／crush.js 開到附近才做成車店的車（輕量車）
+  const spots = { shelters: [], signals: [], guides: [], ubike: [], site: null, views: {}, parked: [], roads: S.roads.map((rd) => ({ key: rd.key, name: rd.name, pts: rd.pts })) }; // roads：三條路每一段 way 的中線（一條路好幾段；測試：哪些房子是照真的樓層蓋高的） // parked（第 74 批）：停車格裡停著的車 [x, z, 車頭方向, 亂數種子]：town.src.js／crush.js 開到附近才做成車店的車（輕量車）
   const WHITE = [255, 255, 255];
   // ---- 招牌、燈箱、牌子的貼圖（一張 1024×1024）----
   const [ac, ag] = cv(1024, 1024), UV = {}; const W = 1024, H = 1024;
