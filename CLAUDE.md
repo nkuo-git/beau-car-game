@@ -171,7 +171,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 - 這個機器的 GitHub 代理不給碰 Actions secrets 和 Pages 設定（403）：這兩個要 Nick（或家長）在 GitHub 網頁上設。
 - 圖示：萬能軟體的橘色車＋右下角格子旗徽章（蓋掉保桿上的貼紙字），深色底（`src/site/make-icons.py`）。
 
-## 現在的狀態（2026-11-07，內容 36）
+## 現在的狀態（2026-11-07，內容 37）
 - **main** ＝ 手機上的 0.9.37 遊戲（萬能軟體內容 37／38 的 tune.js 跟 `build-app.mjs` 產生的一模一樣）＋這次的網站（內容 1）＋APK 殼。
   - 0.9.37 有：越野車車庫（4 格，越野車專屬）、怪獸卡車輾扁東西（車、路邊小東西；人跳開）、汽車半價、怪獸卡車 100 萬、拿掉撞爛（`CRASH_DAMAGE = false`）、內湖（七個地標、路牌、離村子近）、警察、槍店、甩尾、賽車場。
 - **內容 2（2026-10-09 上線，試做頁 v25–v27）**：路變寬 1.5 倍（村子、內湖；快速道路、賽車場、直線加速沒變）；房子最多 2 層（村子、內湖；地標不變），越野車撞不倒房子，其他的（樹、電線桿、警車⋯）幾乎都輾得扁（不會輾的：人、小孩、房子、你家車庫、改車廠、車店、槍店、警察局、廟、捷運柱子⋯），輾扁的東西你離開 140 公尺 25 秒後會修好；越野車車庫搬到你的車庫前面左邊（門對著路，變大）；你的車庫變高（6 公尺、門 8×5）、裡面變寬（31.4 公尺）；路人不會再卡在門口。說明在 `notes/wide.md`、`notes/tall.md`。
@@ -439,6 +439,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - **降檔轉速瞬間衝上去**：放開離合器接上過半那一下，新的這檔的轉速比現在高就直接設上去（最多 1.08）；接上過半以後轉速就跟著輪子（不被怠速那一項拉回來）。N 踩油門引擎聲 load 1.0（大聲空轉）。
   - **跳出來的字變小**：開車／走路的提示（`.dv-toast`、`.wk-toast`）20 → 13px、放在地圖下面（top 132）；比賽頁 `.toast`、車庫頁 `gtoast` 也 13px。
   - 測試 mt-test.mjs（Node 26＋瀏覽器 30）；top-test、bump-test、drift-test、test-b4（怪獸卡車 2 速）、test-b1 也跑。說明在 `notes/manual.md` 第 69 批。
+- **內容 37（2026-11-07 上線＝試做頁 v82＋v84；Nick「全部上線」）**：main 52d965c、Pages run 54；測試 site-test 24、test-app-b1 152、test-app-b4 90、world-test 136 ok（試做頁那邊 test-b1 151、neihu-test 39、folks 18、door 31、apt 28）。v83（GT-R 更真）是另一條線的，還沒上線。沒改 android/，不用編新的 APK。
 - **試做頁 v82（2026-11-07；第 70 批）＝ 房子裡的人會動、會進出**：第 65 批說的第 3 步（Nick「第二項可以做了」；mock https://claude.ai/artifact/LZZ8z4aRBsKmvnPMCp2qKQ ，卡片選「照這樣做」）。只有村子、只有蓋好的那一棟（LD）；公寓沒有人。
   - folks.js（新）：每棟固定的人（同一棟每次一樣）：透天厝／店 1～3 個（店的老闆算一個、站櫃台不走）、廟 0～2 個拜拜的。走來走去（interiors.js 每層輸出 `nav`＝走路用的 0.1 公尺格子；BFS 找路再拉直）、坐沙發、站起來、拜拜；你擋在路上他停下來等；站著、走著的人擋你（walker 的 movers）。
   - 進出：在一樓的人有時候走到大門，門自己開（town.src.js `LDF_HOOKS.openDoor`→`LD.hold`），走出去變成路上走的人（npc.js `spawnAt`，同樣的樣子）；路上的人走到這一家（npc.js `setHome`：附近一半的人會來）快到門口門就先開（`onEnter(p, d, near)`），門還沒開先等（'wait'），走進來變成裡面的人（`LD.folks.arrive`），去找位子。人滿了（14 個）就把最遠的那個收掉（`freeOrFar`）。
@@ -453,7 +454,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
     - neihu.js：`NS.floorsOf`／`arcadeFix`／`noTree`（內湖路邊不種一般的樹、工地那塊）、`b.site` 跳過、`ORDER` 多 sign2／sign3、`treeMeshes` 多 nhstreet 的 InstancedMesh（400 公尺外不畫）、`V.poles` 接上、`info.street`、`V.neihu.street.views`（三條路中間：測試、截圖用）。文字加進 `NEIHU_TEXT`（字型先載）。
   - 效能（電腦模擬 960×576、高、傍晚）：江南街 166 calls／0.52M 三角形、內湖路 232／0.73M、環山路 187／0.49M；內湖整個 240 meshes／60 萬三角形（以前 199／46 萬）；蓋的時間約 +0.1 秒。
   - 測試 neihu-test 7s（39 ok）；test-b1 也跑。說明在 `notes/neihu.md` 最後一段。
-  - 內湖的街景（Nick 2026-11-07 給了江南街 13 張、內湖路 9 張、環山路 9 張傍晚的截圖，存在 /mnt/project-files/car-game/neihu/ref-2026-11-07/，只能看著做）：第 72 批（v84）做了，見上面批做（騎樓、一排機車、發亮的招牌、大王椰子、公車亭、擋土牆⋯），先畫圖給 Nick 看；店名用諧音（Nick 2026-11-07「可以用諧音字 就是不完全一樣 但又看得出來是在講那家店」）、logo 畫得像但不一樣，不用真的名字和 logo。
+  - 參考照片只能看著做（CLAUDE.md 的規則）；店名用諧音（Nick 2026-11-07「可以用諧音字 就是不完全一樣 但又看得出來是在講那家店」）、圖案畫得像但不一樣，不用真的名字和 logo。
 - **試做頁 v83（2026-11-07；第 71 批）＝ GT-R 整台重做**（比 v84 晚放上去：頁面是 v84＋這一批）：Nick 給了一台藍色 R34 小車（1:64）的環景影片「有辦法依此把它畫得更真嗎」→ 先看對照圖（/mnt/project-files/car-game/gtr/gtr-video-compare.jpg），卡片選「好，整台重做」。影片只拿來看（不放進遊戲、repo、artifact）。
   - gtr-model.js（新，跟 gc8-model.js 一樣只在烘焙的時候用）：剖面曲線拉出來的車身（直直的線、方方的肩）；車頭、車尾各一片平的面＋圓角，四顆圓尾燈挖在車尾那一片；黑色蜂巢水箱罩、大進氣口、黑色下巴包到前輪拱；大燈＝黑色燈殼裡外面投射燈（鏡片＋鍍鉻圈）、裡面反光碗＋燈泡；保桿上白色小燈（晚上亮）、橘色側燈；倒車燈（白）、後霧燈（紅）、第三煞車燈、車牌 BEA-3434（自己編的）、排氣管在左後；R34 原廠尾翼（細立柱＋上面圓圓的頭、黑色副翼）。
   - `node gc8-bake.mjs gtr --rebake --write` → body-gtr-q.glb（11 萬三角形、2.75 MB）＋FIT.gtr（cabin.js）、WINGS_DECK.gtr（wings.js）、WIDE.gtr（wide.js、wide.json）。gc8-bake.mjs 變成每台車一組設定（`CFG`）；cabin-fit.mjs、make-wide.mjs 不再量 gtr。輕量車 `node make-lod.mjs gtr --rebake`（2.3 萬三角形、4 個 draw call；make-lod.mjs `BK_ASYM.gtr`、`BK_TAIL_V` 每台自己的）。
