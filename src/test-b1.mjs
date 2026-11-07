@@ -201,7 +201,7 @@ await p.addInitScript(() => {
       const t2 = window.__D().drv?.telemetry(); if (!t2) return { stop: true, t: P.t };
       P.maxKmh = Math.max(P.maxKmh, t2.kmh); if (t2.bumps > bb) P.bumps++;
       if (Math.abs(t2.v) > 1.5 && window.__D().drv.action2) P.out2++; // 開著的時候不可以有「下車」
-      if (P.t - P.lastT > 3) { if (Math.hypot(t2.x - P.lx, t2.z - P.lz) < 1.5 && !(G && G.door.moving) && !(P.t - (P.waitT ?? -99) < 3)) P.stuck++; P.lastT = P.t; P.lx = t2.x; P.lz = t2.z; }
+      if (P.t - P.lastT > 3) { if (Math.hypot(t2.x - P.lx, t2.z - P.lz) < 1.5 && !(G && G.door.moving) && !(P.t - (P.waitT ?? -99) < 3)) { P.stuck++; if ((P.dbg ||= []).length < 12) P.dbg.push({ t: +P.t.toFixed(1), v: +t2.v.toFixed(2), thr: +thr.toFixed(2), brk, rl: +r.len.toFixed(1), np: r.pts.length, wt: +(P.t - (P.waitT ?? -99)).toFixed(1), st: P.steer, slow: +(P.slowT || 0).toFixed(2), at: [+t2.x.toFixed(1), +t2.z.toFixed(1), +t2.heading.toFixed(2)] }); } P.lastT = P.t; P.lx = t2.x; P.lz = t2.z; }
     }
     return { arrived: false, t: P.t };
   };
@@ -340,7 +340,7 @@ await p.addInitScript(() => {
 });
 let polClr = 0; // 第 3 批（b3-int）：開車的時候警察的星星清掉幾次
 async function leg(dest, untilSrc, opt = {}, maxS = 200, shots = []) {
-  const t0 = await p.evaluate(() => { const P = window.__pp; P.maxKmh = 0; P.stuck = 0; P.bumps = 0; P.acts = []; P.out2 = 0; P.yields = 0; P.recov = 0; P.slowT = 0; P.revUntil = -1; return P.t; });
+  const t0 = await p.evaluate(() => { const P = window.__pp; P.maxKmh = 0; P.stuck = 0; P.bumps = 0; P.acts = []; P.out2 = 0; P.yields = 0; P.recov = 0; P.slowT = 0; P.revUntil = -1; P.dbg = []; return P.t; });
   let r = null, done = 0;
   for (let s = 0; s < maxS; s++) {
     r = await p.evaluate(([d, u, o]) => window.__pp.run(d, 60, new Function(`return (${u})`), o), [dest, untilSrc, opt]);
@@ -349,10 +349,11 @@ async function leg(dest, untilSrc, opt = {}, maxS = 200, shots = []) {
     if (r.arrived || r.stop) break;
   }
   await p.evaluate(() => window.__D().drv?.setInput(null));
-  const s = await p.evaluate(() => ({ stuck: window.__pp.stuck, max: window.__pp.maxKmh, bumps: window.__pp.bumps, acts: window.__pp.acts, out2: window.__pp.out2, yields: window.__pp.yields || 0, recov: window.__pp.recov || 0, npc: (() => { const N = window.__N && window.__N(); return N ? `${N.traffic.cars.length} cars, ${N.peds.people.filter((q) => !q.gone).length} people, npcStep avg ${N.avg.toFixed(2)} ms` : 'off'; })() }));
+  const s = await p.evaluate(() => ({ stuck: window.__pp.stuck, max: window.__pp.maxKmh, bumps: window.__pp.bumps, acts: window.__pp.acts, out2: window.__pp.out2, yields: window.__pp.yields || 0, recov: window.__pp.recov || 0, dbg: window.__pp.dbg || [], npc: (() => { const N = window.__N && window.__N(); return N ? `${N.traffic.cars.length} cars, ${N.peds.people.filter((q) => !q.gone).length} people, npcStep avg ${N.avg.toFixed(2)} ms` : 'off'; })() }));
   if (!r.arrived && !r.stop) console.log('  near cars:', JSON.stringify(await p.evaluate(() => { const t = window.__D().drv?.telemetry(), N = window.__N && window.__N(); if (!t || !N) return null; const E = (e) => e && { id: e.id, c: e.conn ? 1 : 0, p: e.prio, tn: e.turn, L: +e.len.toFixed(1), j: e.junc ? [e.junc.id, +e.junc.x.toFixed(1), +e.junc.z.toFixed(1)] : null }; return N.traffic.cars.filter((c) => Math.hypot(c.x - t.x, c.z - t.z) < 45).map((c) => ({ id: c.id, k: c.key, x: +c.x.toFixed(1), z: +c.z.toFixed(1), h: +c.heading.toFixed(2), v: +c.v.toFixed(2), by: c.blockedBy, st: +(c.stun || 0).toFixed(1), s: +c.s.toFixed(1), e: E(c.edge), p0: E(c.plan && c.plan[0]), cm: c.commit ? c.commit.id : null, w: +(c.waitT || 0).toFixed(1) })); })));
   if (!r.arrived && !r.stop) console.log('  last blocked by:', JSON.stringify(await p.evaluate(() => window.__pp.blk || null)), '| now', JSON.stringify(await p.evaluate(() => { const t = window.__D().drv?.telemetry(); const D = window.__D(), HM = window.__HOME(); return t && { x: +t.x.toFixed(1), z: +t.z.toFixed(1), h: +t.heading.toFixed(2), v: +t.v.toFixed(2), gear: t.gear, bumps: t.bumps, paused: t.paused, auto: t.auto, dest: t.dest, act: D.drv.action, act2: D.drv.action2, home: { in: HM.in, slot: HM.slot }, route: (() => { const r = D.VIL.route(t.x, t.z, t.dest || 'garage'); return [+r.len.toFixed(1), r.pts[r.pts.length - 1]]; })() }; })));
   console.log(`  leg → ${dest}: ${r.arrived ? 'arrived' : r.stop ? 'stopped (drive handed over)' : 'NOT ARRIVED'} after ${(r.t - t0).toFixed(1)} s sim${polClr ? ` · police stars cleared ${polClr}× so far (robot hit someone)` : ''} · max ${s.max.toFixed(0)} km/h · bumps ${s.bumps} · stuck ${s.stuck} · waited for traffic ${(s.yields / 60).toFixed(1)} s (${s.npc}) · pressed ${s.acts.join(',') || '-'} · 下車 while moving ${s.out2}${s.recov ? ` · backed out of a jam ${s.recov}×` : ''}`, el());
+  if (!r.arrived && s.dbg.length) console.log(`  stuck samples: ${JSON.stringify(s.dbg)}`);
   return { ...r, ...s };
 }
 const driveInfo = () => p.evaluate(() => {
