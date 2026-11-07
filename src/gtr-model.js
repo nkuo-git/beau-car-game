@@ -10,7 +10,8 @@
 window.__CAR2 = (() => {
 const PI = Math.PI;
 let rs = 4242; const rnd = () => ((rs = (rs * 16807) % 2147483647) / 2147483647);
-const NP = 14, KINKS = [7, 10]; // 剖面 14 點：底盤中線 → 側裙 → 車門 → 肩線(7) → 玻璃／引擎蓋 → 雨槽(10) → 車頂中線
+const NP = 14; // 剖面 14 點：底盤中線 → 側裙（後面：保桿上緣那條線）3、4 → 車門 → 肩線(7) → 玻璃／引擎蓋 → 雨槽(10) → 車頂中線
+const NB = [10, 6, 14, 12, 12, 22, 15, 5, 13, 16, 15, 17, 22]; // 第 73 批：每一段（剖面點 k → k+1）固定幾格：剖面點一直在格子上，線才會尖、不會一站一站歪
 const XF = 1.29, XR = -1.375, RW = 0.327, TRACK = 0.74, TW = 0.245, RIM = 0.2286, ARCH_R = 0.372; // 軸距 2.665、18 吋、245/40
 const XB = -2.30, XN = 2.305, DR = 0.09, DF = 0.04; // 車尾那一片、車頭那一片；收圓角的長度
 // ---- 曲線 ----
@@ -32,7 +33,13 @@ const YB = curve([[-2.21, 0.18], [-2.12, 0.165], [-2.0, 0.152], [-1.85, 0.142], 
 const HCH = curve([[0.70, 0.95], [0.86, 0.926], [1.0, 0.915], [1.29, 0.896], [1.6, 0.86], [1.9, 0.814], [2.05, 0.788], [2.10, 0.775], [2.13, 0.764], [2.155, 0.745], [2.18, 0.718], [2.20, 0.69], [2.215, 0.662], [2.228, 0.632], [2.238, 0.610], [2.25, 0.599], [2.265, 0.596]]); // 引擎蓋中線（前面往下折成斜的臉：大燈、水箱罩在這裡）
 const kc = (x) => 1 - ss((x - 2.20) / 0.07);
 const hoodH = (x, z) => HCH(x) - kc(x) * 0.032 * (z / 0.72) ** 2; // 引擎蓋：中間高、兩邊低 3.2 公分
-const hoodTop = (x, w) => { const z8 = w - 0.07; return [1, 0.91, 0.70, 0.50, 0.25, 0].map((f) => [z8 * f, hoodH(x, z8 * f)]); };
+// 第 73 批（影片）：引擎蓋中間鼓起來（兩條線從水箱罩上面兩個角往後到擋風玻璃）、兩邊比葉子板低（葉子板在大燈上面最高）
+const BUL = (x) => 0.014 * band(x, 0.90, 1.06, 1.96, 2.12); // 中間鼓起來多高
+const ZBUL = (x) => 0.27 + 0.06 * ss((x - 0.95) / 1.1); // 鼓起來那塊的半寬（前面寬、後面窄）
+const FPK = (x) => (0.008 + 0.012 * ss((x - 1.2) / 0.5)) * (1 - ss((x - 2.10) / 0.09)); // 葉子板比引擎蓋的邊高多少
+const HZ = (x) => band(x, 0.86, 1.0, 2.06, 2.16); // 引擎蓋那段的線（前面斜的臉上淡掉）
+const hoodTop = (x, w) => { const zb = ZBUL(x), b = BUL(x), he = hoodH(x, 0.735); // 葉子板最高、引擎蓋的邊（縫）、平的、鼓起來的下緣（凹的線）、上緣、中間
+  return [[w - 0.06, he + FPK(x)], [0.735, he - 0.003 * HZ(x)], [0.53, hoodH(x, 0.53)], [zb, hoodH(x, zb)], [zb - 0.05, hoodH(x, zb - 0.05) + 0.8 * b], [0, HCH(x) + b]]; };
 const DC = curve([[-2.21, 0.978], [-2.12, 0.99], [-2.0, 0.998], [-1.80, 1.003], [-1.62, 1.005], [-1.45, 1.01]]); // 行李廂蓋中線
 const deckH = (x, z) => DC(x) - 0.012 * (z / 0.75) ** 2;
 const deckTop = (x, w) => { const z8 = w - 0.07; return [1, 0.88, 0.66, 0.45, 0.22, 0].map((f) => [z8 * f, deckH(x, z8 * f)]); };
@@ -44,16 +51,29 @@ const mixP = (A, B, f) => A.map((p, k) => [p[0] + f * (B[k][0] - p[0]), p[1] + f
 const COWLP = hoodTop(0.86, Wb(0.86)), RFP = roofTop(0.17, Wb(0.17)), DECKP = deckTop(-1.62, Wb(-1.62)), RRP = roofTop(-0.72, Wb(-0.72));
 // 前後擋風玻璃那幾站：上面那半（8–13）從前圍（行李廂蓋）混到車頂前緣（後緣），混的比例照中線高度
 const green = (x, w) => (x > 0.17 ? mixP(COWLP, RFP, (HC(x) - COWLP[5][1]) / (RFP[5][1] - COWLP[5][1])) : x < -0.72 ? mixP(DECKP, RRP, (HC(x) - DECKP[5][1]) / (RRP[5][1] - DECKP[5][1])) : roofTop(x, w));
-const ysAt = (x, w) => { const gy = YG(x) - 0.042, h = hoodH(x, w - 0.024) - 0.012, d = deckH(x, w - 0.024) - 0.022; // 肩線的高度：車窗那段在腰線下面 4.2 公分；引擎蓋、行李廂蓋那段在蓋子下面一點
+const ysAt = (x, w) => { const gy = YG(x) - 0.042, h = hoodH(x, 0.735) + FPK(x) - 0.02, d = deckH(x, w - 0.024) - 0.022; // 肩線的高度：車窗那段在腰線下面 4.2 公分；引擎蓋、行李廂蓋那段在蓋子下面一點
   if (x >= 0.95) return h; if (x <= -1.75) return d;
   if (x > 0.70) return gy + ss((x - 0.70) / 0.25) * (h - gy);
   if (x < -1.45) return gy + ss((-1.45 - x) / 0.30) * (d - gy);
   return gy; };
-const body = (x) => { const w = Wb(x), F = flare(x), yb = YB(x), ys = ysAt(x, w), dy = ys - yb;
-  return [[0, yb], [w - 0.16, yb], [w - 0.032, yb + 0.028], [w - 0.006 + 0.5 * F, yb + 0.17 * dy], [w + 0.9 * F, yb + 0.39 * dy], [w - 0.002 + F, yb + 0.62 * dy], [w - 0.010 + 0.55 * F, yb + 0.85 * dy], [w - 0.024 + 0.15 * F, ys]]
+// 側面（第 73 批，影片）：三段，在輪拱裡面換（洞挖掉看不到）
+//   兩個輪拱中間：側裙凸出來、上緣尖尖的（3）、上面往裡縮一層（4）、車門下面一條亮亮的線（5）
+//   後面（後輪拱到車尾）：保桿上緣那條線（4、5：下面的保桿凸出來 1 公分，車尾那一片凸出來 3 公分＝尾燈下面那一層）
+//   前面：照原本的比例（保桿、大燈旁邊）
+const zones = (x) => { const fz = ss((x - 1.10) / 0.15), rz = 1 - ss((x + 1.50) / 0.25); return [fz, rz, 1 - fz - rz]; };
+const SH0 = 0.615, SH1 = 0.640, SHF = 0.03; // 車尾那一層：保桿上緣（下）、上面那片的下緣（上）、上面那片往前縮多少
+const shelfDX = (x, y) => SHF * Math.min(1, Math.max(0, (y - SH0) / (SH1 - SH0))) * (1 - ss((x - XB) / 0.18));
+const body = (x) => { const w = Wb(x), F = flare(x), yb = YB(x), ys = ysAt(x, w), dy = ys - yb, [fz, rz, kz] = zones(x);
+  const m3 = (a, b, c) => [kz * a[0] + fz * b[0] + rz * c[0], kz * a[1] + fz * b[1] + rz * c[1]];
+  return [[0, yb], [w - 0.16, yb],
+    m3([w - 0.012, yb + 0.022], [w - 0.032, yb + 0.028], [w - 0.030 + 0.3 * F, yb + 0.03]),
+    m3([w + 0.006 + 0.2 * F, yb + 0.115], [w - 0.006 + 0.5 * F, yb + 0.17 * dy], [w - 0.004 + 0.8 * F, yb + 0.45 * (SH0 - yb)]),
+    m3([w - 0.020 + 0.5 * F, yb + 0.150], [w + 0.9 * F, yb + 0.39 * dy], [w + 0.004 + F, SH0]),
+    m3([w + 0.001 + F, yb + 0.33], [w - 0.002 + F, yb + 0.62 * dy], [w - 0.006 + F, SH1]),
+    [w - 0.008 + 0.7 * F, ys - Math.min(0.11, 0.15 * dy)], [w - 0.024 + 0.35 * F, ys]]
     .concat(x >= 0.86 ? hoodTop(x, w) : x <= -1.62 ? deckTop(x, w) : green(x, w)); };
 // 車尾、車頭那一片的輪廓（右半邊，從下面中線到上面中線，14 點）
-const FACE_R = [[0, 0.325], [0.60, 0.325], [0.728, 0.345], [0.762, 0.41], [0.77, 0.53], [0.769, 0.66], [0.763, 0.785], [0.748, 0.872], [0.705, 0.903], [0.62, 0.911], [0.47, 0.914], [0.32, 0.916], [0.16, 0.917], [0, 0.917]];
+const FACE_R = [[0, 0.325], [0.60, 0.325], [0.728, 0.345], [0.765, 0.47], [0.774, SH0], [0.764, SH1], [0.763, 0.785], [0.748, 0.872], [0.705, 0.903], [0.62, 0.911], [0.47, 0.914], [0.32, 0.916], [0.16, 0.917], [0, 0.917]];
 const FACE_F = [[0, 0.235], [0.60, 0.235], [0.728, 0.255], [0.762, 0.30], [0.77, 0.37], [0.769, 0.44], [0.763, 0.505], [0.748, 0.545], [0.705, 0.556], [0.62, 0.558], [0.47, 0.559], [0.32, 0.56], [0.16, 0.56], [0, 0.56]];
 const BR0 = body(XB + DR), BF0 = body(XN - DF);
 const prof = (x) => (x < XB + DR ? mixP(FACE_R, BR0, gq((x - XB) / DR)) : x > XN - DF ? mixP(FACE_F, BF0, gq((XN - x) / DF)) : body(x));
@@ -66,14 +86,19 @@ function crCurve(P, kinks) {
     return [cr(0), cr(1)]; };
   return (t) => { for (const [a, b] of segs) if (t <= b + 1e-9) return ev(a, b, Math.max(a, t)); return P[NP - 1]; };
 }
-function profileCurve(P, w7 = 1, w10 = 1) {
-  const c0 = crCurve(P, []), c7 = crCurve(P, [KINKS[0]]), c10 = crCurve(P, [KINKS[1]]);
-  return (t) => { const a = c0(t), b = c7(t), c = c10(t); return [a[0] + w7 * (b[0] - a[0]) + w10 * (c[0] - a[0]), a[1] + w7 * (b[1] - a[1]) + w10 * (c[1] - a[1])]; };
+function profileCurve(P, W) { // W[k]：第 k 點尖多少（0 圓、1 尖）；Catmull-Rom 對控制點是線性的，一點一點加起來剛好
+  const c0 = crCurve(P, []), ks = []; for (let k = 1; k < NP - 1; k++) if (W[k] > 1e-4) ks.push([W[k], crCurve(P, [k])]);
+  return (t) => { const a = c0(t); let z = a[0], y = a[1]; for (const [w, c] of ks) { const b = c(t); z += w * (b[0] - a[0]); y += w * (b[1] - a[1]); } return [z, y]; };
 }
 const kinkW7 = (x) => 0.5 + 0.5 * band(x, XB, XB + DR, XN - DF, XN); // 肩線：一路都是尖的（R34），只有頭尾那一片收圓
 const kinkW10 = (x) => band(x, -1.62, -1.35, 0.70, 0.86); // 雨槽：只有車頂那段
+const kinksAt = (x) => { const W = new Array(NP).fill(0), [, rz, kz] = zones(x), h = HZ(x), b = BUL(x) / 0.014;
+  W[3] = 0.9 * kz; W[4] = 0.5 * kz + 0.9 * rz; W[5] = 0.3 * kz + 0.7 * rz; // 側裙上緣（尖）、上面往裡縮（凹）、車門下面的線；後面：保桿上緣（4 尖、5 凹）
+  W[7] = kinkW7(x); W[8] = 0.35 * h; W[9] = 0.5 * h; W[10] = kinkW10(x); W[11] = 0.8 * b; W[12] = 0.5 * b; // 肩線、葉子板最高、引擎蓋的邊、雨槽、引擎蓋鼓起來的下緣／上緣
+  return W; };
 // ---- 車身格子 ----
-function loft(dx = 0.015, M = 160) {
+function loft(dx = 0.015) {
+  const M = NB.reduce((a, b) => a + b, 1);
   const X = []; for (let x = XB; x < XN - 1e-6;) { X.push(x); const a = Math.abs(x); x += a > 2.24 ? dx / 6 : a > 1.99 ? dx / 3 : dx; } // 頭尾比較密（圓角）
   if (XN - X[X.length - 1] < dx / 12) X.pop(); X.push(XN);
   // B 柱那段再密 3 倍；貼圖的 u 照原本的站算（同 GC8）
@@ -82,11 +107,14 @@ function loft(dx = 0.015, M = 160) {
   const U = VI.map((k) => k / (nV - 1));
   const G = []; // G[i][j] = { x, y, z, idx }
   for (const x of X) {
-    const P = prof(x), f = profileCurve(P, kinkW7(x), kinkW10(x)), S = 600, pts = [], len = [0];
-    for (let s = 0; s <= S; s++) { const t = (s / S) * (NP - 1), [z, y] = f(t); pts.push([z, y, t]); if (s) len.push(len[s - 1] + Math.hypot(z - pts[s - 1][0], y - pts[s - 1][1])); }
-    const L = len[S], row = []; let s = 0;
-    for (let j = 0; j < M; j++) { const d = (j / (M - 1)) * L; while (s < S - 1 && len[s + 1] < d) s++; const u = len[s + 1] > len[s] ? (d - len[s]) / (len[s + 1] - len[s]) : 0; const a = pts[s], b = pts[s + 1];
-      row.push({ x, y: a[1] + (b[1] - a[1]) * u, z: a[0] + (b[0] - a[0]) * u, idx: a[2] + (b[2] - a[2]) * u }); }
+    const P = prof(x), f = profileCurve(P, kinksAt(x)), SB = 48, S = SB * (NP - 1), pts = [], len = [0];
+    for (let s = 0; s <= S; s++) { const t = s / SB, [z, y] = f(t); pts.push([z, y, t]); if (s) len.push(len[s - 1] + Math.hypot(z - pts[s - 1][0], y - pts[s - 1][1])); }
+    const row = []; let s = 0; // 每一段照弧長平均分 NB[k] 格；剖面點剛好在格子上
+    for (let k = 0; k < NP - 1; k++) { const L0 = len[k * SB], L1 = len[(k + 1) * SB];
+      for (let q = 0; q < NB[k]; q++) { const d = L0 + ((L1 - L0) * q) / NB[k]; if (s < k * SB) s = k * SB; while (s < S - 1 && len[s + 1] < d) s++; const u = len[s + 1] > len[s] ? Math.min(1, Math.max(0, (d - len[s]) / (len[s + 1] - len[s]))) : 0; const a = pts[s], b = pts[s + 1];
+        row.push({ x, y: a[1] + (b[1] - a[1]) * u, z: a[0] + (b[0] - a[0]) * u, idx: a[2] + (b[2] - a[2]) * u }); } }
+    { const a = pts[S]; row.push({ x, y: a[1], z: a[0], idx: a[2] }); }
+    for (const v of row) v.x += shelfDX(x, v.y); // 車尾那一層：上面那片往前縮
     row[0].z = 0; row[M - 1].z = 0; G.push(row);
   }
   return { G, X, M, U };
@@ -134,20 +162,20 @@ const capUV = (z, y) => [0.5 + z / CZ, (LH + ((y - CY0) / (CY1 - CY0)) * (TXH - 
 const noseUV = (z, y) => [0.5 + z / 4.3, (0.002 + (y - 0.2) / 3.4) * VLR]; // 保桿正面：借車底那一條（沒有縫）
 // ---- 門縫 ----
 const SEAMS_SIDE = [ // (x, y)：側面（z > 0.5、−2.25 < x < 2.27）
-  [[0.562, 0.925], [0.66, 0.88], [0.731, 0.817], [0.76, 0.70], [0.767, 0.636], [0.769, 0.415], [0.765, 0.30]], // 車門前緣
-  [[-0.627, 0.925], [-0.621, 0.777], [-0.620, 0.591], [-0.569, 0.428], [-0.46, 0.324], [-0.40, 0.30]], // 車門後緣（下面往前彎）
-  [[-0.40, 0.30], [0.765, 0.30]], // 車門下緣
+  [[0.562, 0.925], [0.66, 0.88], [0.731, 0.817], [0.76, 0.70], [0.767, 0.636], [0.769, 0.415], [0.765, 0.285]], // 車門前緣
+  [[-0.627, 0.925], [-0.621, 0.777], [-0.620, 0.591], [-0.569, 0.428], [-0.46, 0.31], [-0.40, 0.285]], // 車門後緣（下面往前彎）
+  [[-0.40, 0.285], [0.765, 0.285]], // 車門下緣（側裙上面那一層的上面）
   [[1.62, 0.45], [1.66, 0.60], [1.75, 0.625], [2.05, 0.622], [2.27, 0.615]], // 前保桿
-  [[-1.645, 0.58], [-2.0, 0.597], [-2.32, 0.615]], // 後保桿
+  [[-1.535, SH1 + 0.003], [-2.32, SH1 + 0.003]], // 後保桿（那一層的上面）
   [[-1.62, 0.78], [-1.47, 0.78], [-1.47, 0.87], [-1.62, 0.87], [-1.62, 0.78]], // 油箱蓋
   [[-0.48, 0.785], [-0.30, 0.785], [-0.30, 0.828], [-0.48, 0.828], [-0.48, 0.785]], // 門把的凹槽
 ];
 const SEAMS_TOP = [ // (x, z)：上面（x > −2.27、z < 0.82、夠高）
   [[0.915, 0], [0.915, 0.55], [0.905, 0.70]], [[0.905, 0.70], [1.30, 0.735], [1.75, 0.745], [2.06, 0.745], [2.085, 0.70], [2.105, 0.62], [2.125, 0.50], [2.145, 0.42], [2.16, 0.37], [2.185, 0.34], [2.19, 0]], // 引擎蓋
-  [[-1.63, 0], [-1.63, 0.645]], [[-1.63, 0.645], [-1.90, 0.665], [-2.14, 0.66], [-2.22, 0.62], [-2.255, 0.52], [-2.27, 0.43]], // 行李廂蓋
+  [[-1.63, 0], [-1.63, 0.645]], [[-1.63, 0.645], [-1.90, 0.665], [-2.12, 0.66], [-2.195, 0.62], [-2.228, 0.52], [-2.243, 0.43]], // 行李廂蓋
 ];
 const SEAMS_REAR = [ // (z, y)：車尾（x < −2.24）：行李廂蓋兩邊往下、底下一條橫的；保桿上緣一條橫的
-  [[0.43, 0.97], [0.43, 0.893], [0.36, 0.86], [0.355, 0.715], [0, 0.715]], [[0, 0.615], [0.86, 0.615]],
+  [[0.43, 0.97], [0.43, 0.893], [0.36, 0.86], [0.355, 0.715], [0, 0.715]], [[0, SH1 + 0.003], [0.86, SH1 + 0.003]],
 ];
 const SEAMS_FRONT = [ // (z, y)：車頭（x > 2.22）：保桿上緣（大燈、水箱罩下面）
   [[0, 0.602], [0.78, 0.606], [0.86, 0.615]],
@@ -157,12 +185,13 @@ const dpoly = (L, px, py) => { let d = 1e9; for (let i = 1; i < L.length; i++) d
 const sideOK = (x, z) => z > 0.5 && x > -2.25 && x < 2.27;
 const topOK = (x, y, z) => x > -2.27 && z < 0.82 && y > (x > 2.0 ? 0.66 : 0.74);
 // 平面上一圈（可以有洞）切成小三角形（同 GC8）
-const steinerTri = (THREE, outer0, holes0, step) => {
+const steinerTri = (THREE, outer0, holes0, step, extra = []) => { // extra：一定要有的點（線上一排）
   const cl = (L) => (L.length > 2 && Math.abs(L[0][0] - L[L.length - 1][0]) < 1e-9 && Math.abs(L[0][1] - L[L.length - 1][1]) < 1e-9 ? L.slice(0, -1) : L), outer = cl(outer0), holes = holes0.map(cl);
   const loops = [outer, ...holes]; let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
   for (const [a, b] of outer) { a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b); }
   const near = (a, b) => loops.some((L) => L.some((p, k) => dseg(a, b, p, L[(k + 1) % L.length]) < step * 0.45)), st = [];
-  for (let r = 0, b = b0 + step / 2; b < b1; b += step * 0.866, r++) for (let a = a0 + step / 2 + (r % 2) * step * 0.5; a < a1; a += step) if (inPoly(outer, a, b) && !holes.some((h) => inPoly(h, a, b)) && !near(a, b)) st.push([a, b]);
+  for (let r = 0, b = b0 + step / 2; b < b1; b += step * 0.866, r++) for (let a = a0 + step / 2 + (r % 2) * step * 0.5; a < a1; a += step) if (inPoly(outer, a, b) && !holes.some((h) => inPoly(h, a, b)) && !near(a, b) && !extra.some(([c, d]) => Math.hypot(a - c, b - d) < step * 0.6)) st.push([a, b]);
+  for (const p of extra) st.push(p);
   const P = outer.concat(...holes, st), J = P.map(([a, b], i) => { const h = Math.sin(i * 12.9898 + 1.7) * 43758.5453, g = Math.sin(i * 78.233 + 0.3) * 24634.6345; return [a + (h - Math.floor(h) - 0.5) * 2e-5, b + (g - Math.floor(g) - 0.5) * 2e-5]; });
   const V = (k0, len) => J.slice(k0, k0 + len).map(([a, b]) => new THREE.Vector2(a, b)), HV = []; let o = outer.length;
   for (const h of holes) { HV.push(V(o, h.length)); o += h.length; }
@@ -359,7 +388,7 @@ function build(THREE, opt = {}) {
     ga.putImageData(IA, 0, 0); gn.putImageData(IN, 0, 0);
     const T = (cv, srgb) => { const t = new THREE.CanvasTexture(cv); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / 0.012, 1 / 0.012); t.anisotropy = 8; return t; };
     Mt.lensAmber.map = T(ca, true); Mt.lensAmber.normalMap = T(cn, false); Mt.lensAmber.needsUpdate = true; }
-  const { G, X, M, U } = loft(opt.dx ?? 0.015, opt.M ?? 160), nx = X.length;
+  const { G, X, M, U } = loft(opt.dx ?? 0.015), nx = X.length;
   const topY = (x, z) => { let bi = 0; for (let i = 1; i < nx; i++) if (Math.abs(X[i] - x) < Math.abs(X[bi] - x)) bi = i; let best = null; for (const v of G[bi]) if (v.idx >= 8 && (!best || Math.abs(v.z - z) < Math.abs(best.z - z))) best = v; return best.y; };
   const nearI = (x) => { let i = 0; for (let k = 1; k < nx; k++) if (Math.abs(X[k] - x) < Math.abs(X[i] - x)) i = k; return i; };
   const rowY = (row, z) => { for (let j = M - 1; j > 0; j--) { const a = row[j], b = row[j - 1]; if (b.idx < 7.5) break; if ((a.z - z) * (b.z - z) <= 0 && a.z !== b.z) return a.y + ((b.y - a.y) * (z - a.z)) / (b.z - a.z); } return null; };
@@ -431,8 +460,11 @@ function build(THREE, opt = {}) {
     else { tri(a, b, c, A, B, C); tri(b, d, c, B, D, C); } }
   // 車尾那一片：第 0 站那一圈（左右）封成平的一片，四顆尾燈、倒車燈、後霧燈挖洞；自己的頂點（貼圖在漆的下面那 256 行）
   { const row = G[0], half = row.map((v) => [v.z, v.y]), outer = half.concat(half.slice(1, -1).reverse().map(([z, y]) => [-z, y]));
-    const ct = steinerTri(THREE, outer, CAP_HOLES, 0.022), base = pos.length / 3;
-    for (const [z, y] of ct.P) { pos.push(XB, y, z); uv.push(...capUV(z, y)); }
+    const zr = (yy) => { let zz = 0; for (const v of row) if (Math.abs(v.y - yy) < 1e-6) zz = Math.max(zz, v.z); return zz; }, ex = []; // 那一層的兩條線上一排點（三角形才不會斜斜地跨過去）
+    { const zm = Math.min(zr(SH0), zr(SH1)) - 0.006, n = Math.ceil((2 * zm) / 0.01); // 兩條線＋旁邊兩排，左右都對齊（亮光才是一條直線，不會鋸齒）
+      for (const yy of [SH0 - 0.006, SH0 - 0.002, SH0, SH1, SH1 + 0.002, SH1 + 0.006]) for (let k = 0; k <= n; k++) ex.push([-zm + (2 * zm * k) / n, yy]); }
+    const ct = steinerTri(THREE, outer, CAP_HOLES, 0.022, ex), base = pos.length / 3;
+    for (const [z, y] of ct.P) { pos.push(XB + shelfDX(XB, y), y, z); uv.push(...capUV(z, y)); }
     for (const t of ct.T) { const [a, b, c] = t.map((k) => base + k), nxx = (pos[b * 3 + 1] - pos[a * 3 + 1]) * (pos[c * 3 + 2] - pos[a * 3 + 2]) - (pos[b * 3 + 2] - pos[a * 3 + 2]) * (pos[c * 3 + 1] - pos[a * 3 + 1]);
       if (nxx < 0) idxBy[0].push(a, b, c); else idxBy[0].push(a, c, b); } }
   let body = new THREE.BufferGeometry(); body.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); body.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
@@ -443,7 +475,7 @@ function build(THREE, opt = {}) {
     const p = body.attributes.position, n = body.attributes.normal, I = body.index.array, gr = body.groups[0], acc = new Float32Array(p.count * 3), has = new Uint8Array(p.count);
     for (let t = gr.start; t < gr.start + gr.count; t += 3) { const a = I[t], b = I[t + 1], c = I[t + 2]; const ux = p.getX(b) - p.getX(a), uy = p.getY(b) - p.getY(a), uz = p.getZ(b) - p.getZ(a), vx = p.getX(c) - p.getX(a), vy = p.getY(c) - p.getY(a), vz = p.getZ(c) - p.getZ(a); const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; for (const k of [a, b, c]) { acc[k * 3] += nx; acc[k * 3 + 1] += ny; acc[k * 3 + 2] += nz; has[k] = 1; } }
     for (let i = 0; i < p.count; i++) if (has[i]) { const l = Math.hypot(acc[i * 3], acc[i * 3 + 1], acc[i * 3 + 2]); if (l > 0) n.setXYZ(i, acc[i * 3] / l, acc[i * 3 + 1] / l, acc[i * 3 + 2] / l); } }
-  { const n = body.attributes.normal, p = body.attributes.position; for (let i = 0; i < n.count; i++) if (Math.abs(p.getZ(i)) < 1e-4 && Math.abs(p.getX(i) - XB) > 1e-6) { n.setZ(i, 0); } }
+  { const n = body.attributes.normal, p = body.attributes.position; for (let i = 0; i < n.count; i++) if (Math.abs(p.getZ(i)) < 1e-4 && Math.abs(p.getX(i) - XB - shelfDX(XB, p.getY(i))) > 1e-6) { n.setZ(i, 0); } }
   const maps = paintMaps(THREE, G, X, U, M, color, !!opt.bake); Object.assign(Mt.paint, maps); Mt.paint.needsUpdate = true;
   const bodyMesh = new THREE.Mesh(body, [Mt.paint, Mt.glass, Mt.trim]); bodyMesh.name = 'car2-body'; bodyMesh.castShadow = bodyMesh.receiveShadow = true; g.add(bodyMesh);
   // 後擋的除霧線（同 GC8 第 54 批）
@@ -568,19 +600,19 @@ function build(THREE, opt = {}) {
   // 車尾：四顆圓尾燈（燈罩往外鼓 6 公釐、一圈黑框）、倒車燈（左，透明）、後霧燈（右，紅）、第三煞車燈（上緣中間）、車牌
   for (const [z0, yc, r, cell] of TL) for (const zc of [z0, -z0]) {
     const K = 6, S = 48, pp = [], uu = [], ii = [];
-    pp.push(XB - 0.006, yc, zc); uu.push(...cellUV(cell, 0, 0, r));
-    for (let k = 1; k <= K; k++) { const rho = (r * k) / K; for (let s = 0; s < S; s++) { const a = (s / S) * 2 * PI, dz = rho * Math.cos(a), dy = rho * Math.sin(a); pp.push(XB - 0.006 * (1 - (rho / r) ** 2), yc + dy, zc + dz); uu.push(...cellUV(cell, dz, dy, r)); } }
+    pp.push(XB + SHF - 0.006, yc, zc); uu.push(...cellUV(cell, 0, 0, r));
+    for (let k = 1; k <= K; k++) { const rho = (r * k) / K; for (let s = 0; s < S; s++) { const a = (s / S) * 2 * PI, dz = rho * Math.cos(a), dy = rho * Math.sin(a); pp.push(XB + SHF - 0.006 * (1 - (rho / r) ** 2), yc + dy, zc + dz); uu.push(...cellUV(cell, dz, dy, r)); } }
     for (let s = 0; s < S; s++) ii.push(0, 1 + s, 1 + ((s + 1) % S));
     for (let k = 1; k < K; k++) for (let s = 0; s < S; s++) { const a = 1 + (k - 1) * S + s, b = 1 + (k - 1) * S + ((s + 1) % S); ii.push(a, a + S, b, b, a + S, b + S); }
     const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); lg.setAttribute('uv', new THREE.Float32BufferAttribute(uu, 2)); lg.setIndex(ii); addMesh(faceX(lg, -1), tailM, 'tailLens');
-    const bz = new THREE.TorusGeometry(r + 0.0005, 0.0032, 8, 48); bz.rotateY(PI / 2); bz.translate(XB - 0.0012, yc, zc); addMesh(bz, Mt.trim, 'tailBezel'); }
+    const bz = new THREE.TorusGeometry(r + 0.0005, 0.0032, 8, 48); bz.rotateY(PI / 2); bz.translate(XB + SHF - 0.0012, yc, zc); addMesh(bz, Mt.trim, 'tailBezel'); }
   { const RL = mirrorLoop(REV);
     pocket(REV, XB, -1, 0.012, 0.9, darkDS, null, 'fog'); flatPlate([REV], XB - 0.002, 0.01, tailM, 'fogLens', (z, y) => cellUV(2, z - 0.2525, y - 0.5135, 0.08), -1);
     const p = pocket(RL, XB, -1, 0.022, 0.85, lgM, revM, 'rev'); const b = new THREE.SphereGeometry(0.008, 12, 8); b.translate(XB + 0.012, p.cy, p.cz); addMesh(b, Mt.bulb, 'revBulb');
     flatPlate([RL], XB - 0.002, 0.01, Mt.lensClear, 'revLens', (z, y) => [z * 4, y * 4], -1); }
   { const hb = new THREE.BoxGeometry(0.012, 0.03, 0.26, 1, 1, 12), hm = new THREE.MeshStandardMaterial({ color: 0xbfc3c8, roughness: 0.35, metalness: 0.3 }); hm.userData.slot = 'trim'; // 第三煞車燈：淺灰的框＋中間一條紅（影片）
-    hb.translate(XB - 0.004, 0.889, 0); addMesh(crease(hb), hm, 'stop3');
-    const sl = new THREE.BoxGeometry(0.004, 0.012, 0.22, 1, 1, 12), su = sl.attributes.uv; for (let k = 0; k < su.count; k++) su.setXY(k, ...cellUV(2, (su.getX(k) - 0.5) * 0.12, (su.getY(k) - 0.5) * 0.04, 0.08)); sl.translate(XB - 0.011, 0.889, 0); addMesh(sl, tailM, 'stop3Lens'); }
+    hb.translate(XB + SHF - 0.004, 0.889, 0); addMesh(crease(hb), hm, 'stop3');
+    const sl = new THREE.BoxGeometry(0.004, 0.012, 0.22, 1, 1, 12), su = sl.attributes.uv; for (let k = 0; k < su.count; k++) su.setXY(k, ...cellUV(2, (su.getX(k) - 0.5) * 0.12, (su.getY(k) - 0.5) * 0.04, 0.08)); sl.translate(XB + SHF - 0.011, 0.889, 0); addMesh(sl, tailM, 'stop3Lens'); }
   { const fr = new THREE.BoxGeometry(0.012, 0.165, 0.345, 1, 4, 16); fr.translate(XB - 0.004, 0.4375, 0); addMesh(fr, Mt.dark, 'plateFrame');
     const pl = new THREE.BoxGeometry(0.006, 0.15, 0.33, 1, 8, 16); pl.translate(XB - 0.011, 0.4375, 0); addMesh(pl, plateM, 'plate'); }
   // 後視鏡（影片：車窗前下角一塊三角座（車身色）＋圓圓的殼；同 GC8，往後 21 公分）
@@ -649,10 +681,10 @@ function build(THREE, opt = {}) {
     for (const s of [1, -1]) { const card = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.50, 0.03), Mt.plastic); card.position.set(0.12, 0.60, 0.76 * s); g.add(card); }
     const liner = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.015, 0.90), Mt.liner); liner.position.set(-0.28, 1.285, 0); g.add(liner); }
   // 車頭、車尾那一片跟車身接的那一圈：兩邊的法線平均（貼圖的 uv 不一樣，頂點沒有併在一起）
-  const mendEdge = (geos, xp) => { const key = (y, z) => `${Math.round(y * 1e5)},${Math.round(z * 1e5)}`, acc = new Map();
-    for (const geo of geos) { const p = geo.attributes.position, n = geo.attributes.normal; for (let i = 0; i < p.count; i++) if (Math.abs(p.getX(i) - xp) < 1e-6) { const k = key(p.getY(i), p.getZ(i)); let a = acc.get(k); if (!a) acc.set(k, (a = [0, 0, 0, 0])); a[0] += n.getX(i); a[1] += n.getY(i); a[2] += n.getZ(i); a[3]++; } }
-    for (const geo of geos) { const p = geo.attributes.position, n = geo.attributes.normal; for (let i = 0; i < p.count; i++) if (Math.abs(p.getX(i) - xp) < 1e-6) { const a = acc.get(key(p.getY(i), p.getZ(i))); if (a[3] < 2) continue; const l = Math.hypot(a[0], a[1], a[2]) || 1; n.setXYZ(i, a[0] / l, a[1] / l, a[2] / l); } n.needsUpdate = true; } };
-  mendEdge([body], XB); mendEdge([body, noseGeo], XN);
+  const mendEdge = (geos, xp0) => { const key = (y, z) => `${Math.round(y * 1e5)},${Math.round(z * 1e5)}`, acc = new Map(), xpf = typeof xp0 === 'function' ? xp0 : () => xp0; // xp：那一圈的 x（可以照 y 變：車尾那一層）
+    for (const geo of geos) { const p = geo.attributes.position, n = geo.attributes.normal; for (let i = 0; i < p.count; i++) if (Math.abs(p.getX(i) - xpf(p.getY(i))) < 1e-6) { const k = key(p.getY(i), p.getZ(i)); let a = acc.get(k); if (!a) acc.set(k, (a = [0, 0, 0, 0])); a[0] += n.getX(i); a[1] += n.getY(i); a[2] += n.getZ(i); a[3]++; } }
+    for (const geo of geos) { const p = geo.attributes.position, n = geo.attributes.normal; for (let i = 0; i < p.count; i++) if (Math.abs(p.getX(i) - xpf(p.getY(i))) < 1e-6) { const a = acc.get(key(p.getY(i), p.getZ(i))); if (a[3] < 2) continue; const l = Math.hypot(a[0], a[1], a[2]) || 1; n.setXYZ(i, a[0] / l, a[1] / l, a[2] / l); } n.needsUpdate = true; } };
+  mendEdge([body], (y) => XB + shelfDX(XB, y)); mendEdge([body, noseGeo], XN);
   // 車頭、車尾從上面看是圓弧：繞一根直立的軸彎（照弧長：z 不會變窄），越靠近頭（尾）彎越多（同 GC8 的 deformAll）
   const deformAll = (fn, inR) => { const e = 1e-4, o = [0, 0, 0], A = [0, 0, 0], B = [0, 0, 0], c0 = [0, 0, 0], c1 = [0, 0, 0], c2 = [0, 0, 0], done = new Set();
     const col = (c, x, y, z, dx, dy, dz) => { fn(x + dx, y + dy, z + dz, A); fn(x - dx, y - dy, z - dz, B); for (let k = 0; k < 3; k++) c[k] = (A[k] - B[k]) / (2 * e); };
