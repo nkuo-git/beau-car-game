@@ -676,8 +676,10 @@ await A.evaluate(() => window.__D().drv.setInput(null));
 await shot(A, `${prefix}-9-doorbell.png`);
 const ring = async () => { await click(A, '.nt-gar'); return waitFor(B, () => { const c = document.querySelector('.nt-inv'); return c && !c.hidden; }, null, 15000); };
 const cardB = await ring();
+// A 的按鈕是 A 的下一格（netStep → netGstTick）才換成「等…回答⋯」；B 的卡片是收到就跳，可能比 A 的下一格早（SwiftShader 一格 1–2 秒）→ 等 A 換字（最多 10 秒）再讀
+const t9 = Date.now(), wt9 = await waitFor(A, () => /^🔔 等/.test(document.querySelector('.nt-gar').textContent), null, 10000), wms9 = Date.now() - t9;
 const c9 = await card(B), w9 = await A.evaluate(() => document.querySelector('.nt-gar').textContent), m9 = Object.entries(getAt('matches') || {}).find(([, v]) => v.kind === 'bell');
-console.log('   card', JSON.stringify(c9), w9, JSON.stringify(m9));
+console.log('   card', JSON.stringify(c9), w9, `(A's button changed after ${wms9} ms: ${wt9})`, JSON.stringify(m9));
 check(cardB && /有人按你家的門鈴/.test(c9) && /大便龍車神想開進你的車庫/.test(c9) && /他只能看你的車，不能開走/.test(c9) && w9 === '🔔 等阿明快車手回答⋯' && m9 && m9[1].a === 'u1' && m9[1].b === 'u2' && m9[1].ok === 0, `ring → B’s phone: 「${c9}」, A’s button 「${w9}」`);
 await shot(B, `${prefix}-9-bell-card.png`);
 await click(B, '.nt-inv .a');
