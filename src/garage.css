@@ -162,10 +162,10 @@ body.racing #revBtn, body.racing #wallet, body.racing #buyCar, body.racing .lock
 .pedals .go { min-width: 108px; height: 70px; padding: 0 18px; border-radius: 16px; background: var(--accent); color: var(--on-accent); font-size: 21px; box-shadow: 0 5px 0 color-mix(in srgb, var(--accent) 62%, #000); }
 .pedals button:active:not(:disabled) { transform: translateY(3px); box-shadow: none; }
 .pedals button:disabled { opacity: 0.4; cursor: default; }
-.toast { top: 42%; left: 50%; padding: 8px 18px; border-radius: 999px; background: rgba(14,15,18,0.76); font: 700 20px var(--sans); white-space: nowrap;
+.toast { top: 42%; left: 50%; padding: 5px 13px; border-radius: 999px; background: rgba(14,15,18,0.7); font: 600 13px var(--sans); white-space: nowrap;
   opacity: 0; transform: translate(-50%, -50%) scale(0.92); transition: opacity 0.15s, transform 0.15s; }
 .toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-.stage > .gtoast { position: absolute; top: 50%; max-width: calc(100% - 24px); white-space: normal; text-align: center; font-size: 17px; line-height: 1.35; color: #F2F3F5; pointer-events: none; }
+.stage > .gtoast { position: absolute; top: 50%; max-width: calc(100% - 24px); white-space: normal; text-align: center; font-size: 13px; line-height: 1.35; color: #F2F3F5; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 
 /* ---- 開車出門（小村莊：village.js 的村子、drive.js 的開車；town.src.js 接起來）---- */
@@ -309,8 +309,11 @@ body.fs.driving:not(.walking):not(.racing).moreopen:not(.sizeopen):not(.tiltopen
   background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 20px/1 var(--sans); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: margin-top .2s; }
 body.fs #drivebar .mustog[aria-pressed="false"] { filter: grayscale(1); opacity: 0.55; }
 /* 第 68 批：手排／自排（🎵 左邊；橫拿放 🎵 左邊那一排、「下車」再往左 426 → 478）；亮橘色＝手排；「去哪裡」打開的時候離合器先藏起來（那一疊會蓋到） */
-body.fs.destsopen #stage .dv-clu { visibility: hidden; }
+body.fs.destsopen #stage .dv-shf { visibility: hidden; } /* 第 69 批：「去哪裡」打開的時候換檔桿先藏起來 */
+@media (max-height: 560px) { body.fs.driving.mtgear:not(.walking) #drivebar { left: calc(var(--fs-l) + 72px); bottom: calc(var(--fs-b) + 88px); } } /* 第 69 批：橫拿、手排：「去哪裡」往右讓換檔桿、低一點（338 高的手機「⋯」打開時「下車」在 148–198） */
+body.fs.moreopen #stage .dv-shf { visibility: hidden; } /* 第 69 批：「⋯」那一排打開的時候（直拿左邊會壓到 ✨ 🎮）換檔桿先藏起來；車開起來那一排自己收 */
 .geartog { display: none; }
+body.fs #drivebar .geartog[hidden] { display: none !important; } /* 第 69 批：自排車沒有 MT，那一格藏起來 */
 body.fs.driving:not(.walking):not(.racing).moreopen:not(.sizeopen):not(.tiltopen):not(.lookopen):not(.musopen) #drivebar .geartog { display: grid; place-items: center; position: fixed; top: calc(var(--fs-t) + 194px); right: calc(var(--fs-r) + 62px); width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
   background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 13px/1 var(--sans); letter-spacing: 0.02em; cursor: pointer; touch-action: manipulation; z-index: 6; }
 body.fs #drivebar .geartog[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }

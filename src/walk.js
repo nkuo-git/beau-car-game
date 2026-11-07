@@ -147,8 +147,8 @@ const CSS = `
 .wk-btns{right:12px;bottom:22px;display:flex;flex-direction:column;align-items:flex-end;gap:12px;pointer-events:auto}
 .wk-btns b{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;background:rgba(14,15,18,0.62);font-size:21px;font-weight:700;box-shadow:0 4px 0 rgba(0,0,0,0.35);cursor:pointer;touch-action:manipulation}
 .wk-btns b.on{transform:translateY(3px);box-shadow:none;background:#FF6A1F;color:#1A0F07}
-.wk-toast{top:34%;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:9px 20px;border-radius:22px;background:rgba(14,15,18,0.78);font-size:20px;font-weight:700;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,-50%) scale(.92);transition:opacity .15s,transform .15s}
-.wk-toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.wk-toast{top:132px;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:5px 13px;border-radius:999px;background:rgba(14,15,18,0.7);font-size:13px;font-weight:600;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,0) scale(.92);transition:opacity .15s,transform .15s}
+.wk-toast.show{opacity:1;transform:translate(-50%,0) scale(1)}
 @media (prefers-reduced-motion:reduce){.wk-toast,.wk-chip svg,.wk-stick{transition:none}.wk-act::after{animation:none}}
 `;
 const ICON = {
