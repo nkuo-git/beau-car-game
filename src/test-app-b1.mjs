@@ -684,7 +684,7 @@ const hdoor = await p.evaluate(() => {
   const d = ds[0]; if (!d) return { n: 0 };
   window.__hb = d.ref; window.__hback = { x: t0.x, z: t0.z, heading: t0.heading };
   const dist0 = W.cameraDist, r = H.toDoor(d), info = X.interiorFor(d.ref);
-  return { n: ds.length, doors: all.length, open, shut, dealer: all.some((b) => b.kind === 'dealer'), ...r, name: info.name, floors: info.floors, warm: X.HOUSE_WARM, dist0 };
+  return { n: ds.length, doors: all.length, open, shut, dealer: all.some((b) => b.kind === 'dealer'), ...r, name: info.name, floors: info.floors + (d.ref.roof ? 1 : 0), warm: X.HOUSE_WARM, dist0 };
 });
 const hw0 = await doorDone();
 const hin = await p.evaluate(() => { const H = window.__H, X = window.__IN(), I = X.indoor?.I, q = H.inInfo(); return { ...q, at: I ? +Math.hypot(q.x - I.spawn.x, q.z - I.spawn.z).toFixed(3) : null, kids: X.indoor?.scene.children.length }; });
@@ -722,9 +722,10 @@ const hwalk = await p.evaluate(() => {
 check(!hwalk.bad.length && hwalk.dmax <= hwalk.maxDist + 0.01, `random walking in every room downstairs (${hwalk.rooms}; ${hwalk.frames} frames, random camera): never inside a wall or furniture, camera never in a wall, above the ceiling (highest ${hwalk.camTop} m, ceiling ${hwalk.ceiling}) or outside the house, camera at most ${hwalk.dmax} m away (room fits ${hwalk.maxDist})${hwalk.bad.length ? ' — ' + hwalk.bad.join(' | ') : ''}`);
 // 第 18 批（Nick 2026-10-14「對 把房子變矮」）：透天厝只剩 1 層：沒有樓梯（出口只有大門），名字寫一樓
 const h1 = await p.evaluate(() => { const I = window.__IN().indoor.I, V = window.__D().VIL, hs = V.buildings.filter((b) => b.kind === 'house' || (b.kind === 'shop' && b.front));
-  return { floors: I.floors.length, exits: I.exits.map((e) => e.to), name: I.name, maxFl: Math.max(...hs.map((b) => b.floors)), maxH: Math.max(...hs.map((b) => b.h)), n: hs.length }; });
+  return { floors: I.floors.length, labels: I.floors.map((f) => f.label).join(), roofFl: I.roofFl, up: !!I.floors[0].stair?.up, exits: I.exits.map((e) => e.to), name: I.name, maxFl: Math.max(...hs.map((b) => b.floors)), maxH: Math.max(...hs.map((b) => b.h)), n: hs.length }; });
 console.log('  one floor:', JSON.stringify(h1));
-check(h1.floors === 1 && h1.exits.length && h1.exits.every((t) => t === 'outside') && /一樓/.test(h1.name) && h1.maxFl === 1 && h1.maxH <= 3.31, `houses are one floor now: inside 「${h1.name}」 there are no stairs (exits: ${h1.exits}); every village house/shop row is 1 floor (${h1.n} buildings, highest ${h1.maxH} m)`);
+// 第 66 批（Nick 2026-11-04 卡片「1 層＋頂樓」）：還是 1 層，樓梯走上去只有頂樓（樓梯是走的，不是出口）
+check(h1.floors === 2 && h1.labels === '1F,頂樓' && h1.roofFl === 1 && h1.up && h1.exits.length && h1.exits.every((t) => t === 'outside') && /一樓/.test(h1.name) && h1.maxFl === 1 && h1.maxH <= 3.31, `houses are still one floor: inside 「${h1.name}」 the stairs only go up to the roof (${h1.labels}; exits: ${h1.exits}); every village house/shop row is 1 floor (${h1.n} buildings, highest ${h1.maxH} m)`);
 // 第 18 批（Nick 2026-10-14「把一些房子弄掉然後在那邊弄一個平面大停車場」）：x −339.75…−305.25、z −66.75…−6.75 整塊是路面，沒有房子；裡面只有 5 支路燈擋路
 //   （四邊 1 公尺內是路邊本來就有的電線桿、路牌、紅綠燈：以前站在騎樓前面，不算）
 const pk = await p.evaluate(() => { const V = window.__D().VIL, P = V.parking; if (!P) return null; const inP = (x, z, m = 0) => Math.abs(x - P.x) < P.hx - m && Math.abs(z - P.z) < P.hz - m;

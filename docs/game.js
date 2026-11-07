@@ -4539,7 +4539,7 @@ function mesher(uvScale) {
 }
 function buildApt() {
   const { W, D, FH, NF, PAR, BZ, BX0, BX1, T, core, head } = APT, HX = W / 2, HZ = D / 2, H = ROOFY;
-  const TI = mesher(1.6), FL = mesher(1), GL = mesher(1), MT = mesher(1), WH = mesher(1); // 磁磚、水泥、玻璃、金屬、白
+  const TI = mesher(1.6), FL = mesher(1), GL = mesher(1), MT = mesher(1), WH = mesher(1), DG = mesher(1); // 磁磚、水泥、玻璃、金屬、白、大門的玻璃（第 65 批：自己一組，門開著就藏起來）
   const tile = col3('#ffffff'), tile2 = col3('#e9e6e0'), conc = col3('#c9c6bf'), conc2 = col3('#b4b1aa'), dark = col3('#3c4046'), al = col3('#c7ccd2'), white = col3('#f2f2ef'), under = col3('#8f8d88');
   // ---- 主體：四面磁磚牆（正面右邊 2–4 樓凹進去是陽台）----
   TI.bx(-HX, HX, 0, H, -HZ, HZ, tile, ['nz', 'px', 'nx'], null); // 後、左、右
@@ -4577,7 +4577,7 @@ function buildApt() {
     win('nz', 1.2, 3.0, y, y1); win('nz', 4.0, 5.2, y + 0.3, y1); win('nz', -5.2, -4.4, y + 0.4, y1); // 後面：走廊、廚房、廁所的窗
   }
   // ---- 一樓大門：玻璃雙開門＋雨遮＋門階＋門牌燈；信箱在裡面（interiors.js）----
-  GL.bx(-1.0, 1.0, 0.05, 2.4, HZ + 0.02, HZ + 0.05, col3('#2a3440')); MT.bx(-1.08, 1.08, 2.4, 2.5, HZ, HZ + 0.08, al); MT.bx(-0.03, 0.03, 0.05, 2.4, HZ, HZ + 0.07, al); MT.bx(-1.08, -1.0, 0, 2.5, HZ, HZ + 0.08, al); MT.bx(1.0, 1.08, 0, 2.5, HZ, HZ + 0.08, al);
+  DG.bx(-1.0, 1.0, 0.05, 2.4, HZ + 0.02, HZ + 0.05, col3('#2a3440')); MT.bx(-1.08, 1.08, 2.4, 2.5, HZ, HZ + 0.08, al); DG.bx(-0.03, 0.03, 0.05, 2.4, HZ, HZ + 0.07, al); /* 中間的框跟著門藏起來 */ MT.bx(-1.08, -1.0, 0, 2.5, HZ, HZ + 0.08, al); MT.bx(1.0, 1.08, 0, 2.5, HZ, HZ + 0.08, al);
   FL.bx(-1.8, 1.8, 2.75, 2.9, HZ, HZ + 1.3, conc2); FL.bx(-1.8, 1.8, 0, 0.14, HZ, HZ + 0.5, conc2, ['py', 'pz', 'px', 'nx']); // 雨遮、門階
   WH.bx(-0.3, 0.3, 2.95, 3.1, HZ + 0.02, HZ + 0.12, white); // 門牌（字 town.src.js／net.src.js 以後再掛）
   // ---- 頂樓：女兒牆、樓梯間（上面水塔）、曬衣架、盆栽、冷氣 ----
@@ -4621,10 +4621,12 @@ function buildApt() {
     mk('apt-tile', TI, new THREE.MeshStandardMaterial({ map: marbleTex(), vertexColors: true, roughness: 0.32, metalness: 0 })), // 第 63 批：白色大理石
     mk('apt-conc', FL, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 })),
     mk('apt-glass', GL, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.18, metalness: 0.7 })),
+    mk('apt-door', DG, null), // 跟 apt-glass 同一個材質（下面）
     mk('apt-metal', MT, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.6 })),
     mk('apt-white', WH, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.05 })),
   ];
-  return { parts, tris: TI.tris + FL.tris + GL.tris + MT.tris + WH.tris, cols, roof, balc };
+  parts[3].material = parts[2].material;
+  return { parts, tris: TI.tris + FL.tris + GL.tris + MT.tris + WH.tris + DG.tris, cols, roof, balc };
 }
 
 // ---- sound.js ----
@@ -5223,6 +5225,9 @@ SND_CARS.z2 = { ...SND_CARS.yaris, name: '686 cc 單缸自然進氣', red: 8500,
 SND_CARS.n4 = { ...SND_CARS.yaris, name: '948 cc 直列四缸自然進氣', red: 11000, idle: 0.11, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.97, 1, 0.98], turbo: null, gain: 1.2, idleGain: 2.6,
   width: 110, vari: 0.04, jit: 0.6, drive: 1.5, rasp: 0.42, raspHz: 3200, lp: 4200, eq: [[180, 1, 2], [900, 1.4, 3], [2600, 2, 2.5]],
   intake: { ...SND_CARS.yaris.intake, lvl: 0.34, f: 700, tone: 0.55, hiss: 0.14 }, pops: { ...SND_CARS.yaris.pops, lift: 0.35, shift: 0.25, lvl: 0.55, rate: 12 } };
+// 第 67 批：腳踏車沒有引擎：整個聲音關掉（gain 0；車庫頁的催油門、比賽、出門都靜音）
+SND_CARS.mtb = { ...SND_CARS.yaris, name: '沒有引擎（用腳踩）', gain: 0, idleGain: 0, turbo: null, pops: { ...SND_CARS.yaris.pops, lift: 0, shift: 0, lvl: 0 }, intake: { ...SND_CARS.yaris.intake, lvl: 0 } };
+SND_CARS.road = SND_CARS.mtb;
 // 車庫的引擎零件會改變聲音
 function SND_profile(key, parts) {
   const B = SND_CARS[key] || SND_CARS.supra;
@@ -9333,11 +9338,8 @@ function buildVillage(opts = {}) {
     const pw = 0.18, ph = 0.95; // 女兒牆
     box('main', T, [-w / 2, H, -pw, w / 2, H + ph, 0], { pz: cw, _: cs }, { pz: FAC ? false : subUV(U.tile, 0, 0, Math.min(1, w / 6.2), 0.07), _: U.conc });
     box('main', T, [-w / 2, H, -D, w / 2, H + ph, -D + pw], cs, { _: U.conc }); box('main', T, [-w / 2, H, -D + pw, -w / 2 + pw, H + ph, -pw], cs, { _: U.conc }); box('main', T, [w / 2 - pw, H, -D + pw, w / 2, H + ph, -pw], cs, { _: U.conc });
-    // 頂樓：樓梯間、水塔、加蓋的鐵皮屋
-    const sx = (rnd() - 0.5) * Math.max(0, w - 3.2), stair = [sx - 1.3, H, -D + 0.6, sx + 1.3, H + 2.6, -D + 3.9];
-    box('main', T, stair, cs, { _: U.conc, pz: U.conc }); face('main', T, sx - 0.45, sx + 0.45, H, H + 2.1, -D + 3.92, U.ac2);
-    if (rnd() < 0.55) { cyl('main', T, sx, -D + 2.2, H + 2.6, H + 2.8, 0.5, 0.5, 6, C('#7d8288'), null, true); cyl('main', T, sx, -D + 2.2, H + 2.8, H + 4.1, 0.58, 0.58, 10, WHITE, U.tank, false); cyl('main', T, sx, -D + 2.2, H + 4.1, H + 4.4, 0.58, 0, 10, C('#d9dde1'), null, false); }
-    else { const bl = C('#2f78c8'); cyl('main', T, sx, -D + 2.2, H + 2.6, H + 3.8, 0.62, 0.62, 10, bl, null, false); cyl('main', T, sx, -D + 2.2, H + 3.8, H + 4.05, 0.62, 0.2, 10, mul(bl, 0.9), null, true); }
+    // 頂樓：樓梯間、水塔（第 66 批：樓梯間蓋在房子裡面的樓梯正上面（interiors.js 的樓梯井），門在後面那一面＝樓梯走上來就走出去；亂數照舊用掉，位置等一樓的門決定了再算）
+    const roofR = [rnd(), rnd()]; // 本來的樓梯間位置、水塔的樣子
     if (fl < 3 && fl0 >= 3) { if (rnd() < 0.35) pick(rnd, ROOFADD); } // 第 10 批：變矮的房子不加蓋（亂數一樣用掉）
     else if (fl >= 3 && rnd() < 0.35) { // 頂樓加蓋（浪板）
       const rc = pick(rnd, ROOFADD), z1 = -D * 0.42;
@@ -9365,6 +9367,20 @@ function buildVillage(opts = {}) {
       if (w >= 4.6) { face('main', T, -w / 2 + 0.35, -1.05, 0.9, 2.4, 0.02, U.winP); face('main', T, 1.05, w / 2 - 0.35, 0.9, 2.4, 0.02, U.winP); }
     }
     if (hl) { hl.kind = kind; hl.door = door; if (kind === 'shutter') { const sw = w >= 5 ? Math.min(3.4, w - 1.7) : w - 0.5; hl.shutter = [-w / 2 + 0.25, -w / 2 + 0.25 + sw]; } } // 第 3 批
+    // 第 66 批：頂樓的樓梯間＝蓋在房子裡面的樓梯井正上面（interiors.js houseInfo：樓梯在門的另一邊，門在中間的照位置算一邊；這裡算的 ss 寫進 V.buildings 給 interiors.js 用），
+    //   門口在後面那一面、樓梯第二跑那一邊（走上來就走出去，沒有門片）；樓梯間裡面的天花板 3.0（interiors.js CH）；水塔放在樓梯間上面
+    const hutSS = Math.abs(door) > 0.5 ? -Math.sign(door) : hash2(Math.round(x * 10) + 31, Math.round(z * 10) + 977) < 0.5 ? -1 : 1;
+    let hutR = null; // 樓梯間（裡面的座標：x、z＝離房子中心；給測試對 interiors.js 的樓梯井）
+    {
+      const t = 0.2, hz = D / 2, L1 = Math.min(5.3, Math.max(4.3, (D - 2 * t) * 0.42)), zP = hz - t - L1, zSB = zP - 0.12 - 3.2;
+      const X0 = -w / 2 + t, X1 = w / 2 - t, Xu = (u) => (hutSS < 0 ? X0 + u : X1 - u), lo = (a, b) => Math.min(Xu(a), Xu(b)), hi = (a, b) => Math.max(Xu(a), Xu(b));
+      const z0 = zSB - 0.11 - hz, z1 = zP - hz, HT = H + 3.15, tx = (lo(-0.12, 2.12) + hi(-0.12, 2.12)) / 2, tz = (z0 + z1) / 2;
+      box('main', T, [lo(-0.12, 2.12), H, z0, hi(-0.12, 2.12), HT, z1], cs, { _: U.conc });
+      hutR = [lo(-0.12, 2.12), hi(-0.12, 2.12), z0 + hz, z1 + hz];
+      box('main', T, [lo(0, 0.95), H, z0 - 0.008, hi(0, 0.95), H + 2.3, z0], C('#2b2d31'), { _: WD, py: false, ny: false, px: false, nx: false, pz: false }); // 門口（外面看暗暗的；只畫朝外那一面：樓梯間裡面往外看不擋；走近了 town.src.js 貼裡面畫好的樓梯間）
+      if (roofR[1] < 0.55) { cyl('main', T, tx, tz, HT, HT + 0.2, 0.5, 0.5, 6, C('#7d8288'), null, true); cyl('main', T, tx, tz, HT + 0.2, HT + 1.5, 0.58, 0.58, 10, WHITE, U.tank, false); cyl('main', T, tx, tz, HT + 1.5, HT + 1.8, 0.58, 0, 10, C('#d9dde1'), null, false); }
+      else { const bl = C('#2f78c8'); cyl('main', T, tx, tz, HT, HT + 1.2, 0.62, 0.62, 10, bl, null, false); cyl('main', T, tx, tz, HT + 1.2, HT + 1.45, 0.62, 0.2, 10, mul(bl, 0.9), null, true); }
+    }
     { // ==== 第 35 批（內容 22）：房子更真：牆腳踢腳、門口的台階、窗台＋窗楣、鐵捲門的軌道、落水管、電表箱、女兒牆的壓頂（不動亂數：用位置算）====
       const hq = (k) => hash2(Math.round(x * 10) + k * 7919, Math.round(z * 10) + k * 104729);
       const DK = mul(cs, 0.62), STEP = C('#cfcdc6'), SILL = C('#dedcd6'), RAIL = C('#8f959b'), PIPE = hq(3) < 0.5 ? C('#c3c6ca') : mul(cw, 0.92), CAP = mix(cs, WHITE, 0.3);
@@ -9415,7 +9431,7 @@ function buildVillage(opts = {}) {
     if (o.scooter || rnd() < 0.22) scooter(...(() => { const p = T.p((rnd() - 0.5) * (w - 2), 0, 0.8); return [p[0], p[2], ry + (rnd() < 0.5 ? 0 : Math.PI), rnd]; })());
     const c = T.p(0, 0, -D / 2), dp = T.p(door, 0, 0.6); addBox(c[0], c[2], w / 2, D / 2, ry, H);
     const biz = kind === 'shop' ? { name: SHOP_NAMES[o.shop % 3] } : kind === 'shutter' && o.vsign != null && fl >= 3 ? { sign: VSIGN_TEXT[o.vsign] } : {}; // 店名（橫招牌）、直立招牌的字（一樓做生意）：走進去的時候照這個擺
-    buildings.push({ kind: kind === 'shop' ? 'shop' : 'house', ...biz, front: kind, x: c[0], z: c[2], hx: w / 2, hz: D / 2, rot: ry, h: H, floors: fl, up: ups, door: { x: dp[0], z: dp[2], ry } }); // door：大門外面一點（ry＝房子正面朝的方向）；front：一樓正面 shop 店面 | shutter 鐵捲門＋小門 | door 大門＋窗；up：二樓以上每層正面 b 陽台 | w 鐵窗
+    buildings.push({ kind: kind === 'shop' ? 'shop' : 'house', ...biz, front: kind, x: c[0], z: c[2], hx: w / 2, hz: D / 2, rot: ry, h: H, floors: fl, up: ups, door: { x: dp[0], z: dp[2], ry }, ss: hutSS, roof: true, hut: hutR }); // door：大門外面一點（ry＝房子正面朝的方向）；front：一樓正面 shop 店面 | shutter 鐵捲門＋小門 | door 大門＋窗；up：二樓以上每層正面 b 陽台 | w 鐵窗
     if (hl) { hl.b = buildings[buildings.length - 1]; stHouses.push(hl); } // 第 3 批（hl.b：street.js 掛了招牌的，把店名寫進 V.buildings 那一筆的 name、streetSign）
     return H;
   };
@@ -10792,6 +10808,8 @@ function blobCanvas() {
 
 // ---- 共用的：貼圖、材質、環境貼圖（第一次蓋的時候做，之後每一棟都用同一份）----
 let SH = null;
+// 第 65 批：live＝房子裡面蓋在村子真的位置（town.src.js 先畫村子再畫裡面）：窗外不畫景（看得到真的外面）、大門的門片會動（F.moving）、門外擋人的盒子不要（門自己開，走得出去）
+let LIVE = false;
 const DFL = {}; // 每個材質「單色的面」用的 uv
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 function shared(renderer, quality) {
@@ -10985,7 +11003,7 @@ const col3 = (c) => (typeof c === 'string' ? C(c) : c || WHITE);
 // 表面：r＝surfAtlas 的名字、c＝顏色、m＝材質；wain＝下半截另一種（廚房、浴室的壁磚）{ h, s }；skirt＝踢腳板的顏色
 const sf = (r, c = WHITE, m = 'wall', o = {}) => ({ r, c: col3(c), m, ...o });
 function newFloor(o = {}) {
-  return { B: new IB(), ch: o.ch ?? CH, rooms: [], named: [], wins: [], walls: [], cols: [], exits: [], lamps: [], views: [], slabs: [],
+  return { B: new IB(), ch: o.ch ?? CH, rooms: [], named: [], wins: [], walls: [], cols: [], exits: [], lamps: [], views: [], slabs: [], moving: [], portals: [],
     spots: { stand: [], sit: [], sleep: [], pray: [], counter: [] }, sun: null, hemi: null, index: o.index || 0, label: o.label || '1F', cam: o.cam || null };
 }
 // 房間：陰影用（每個房間都要），name 有的話對外（rooms）；floor／ceil：地板、天花板的表面（null 不畫）
@@ -11068,7 +11086,8 @@ function drawWall(F, w) {
     segs.push([cur, w.s1]);
     for (const [p, q] of segs) if (q - p > 0.01) { const [x, z] = WP(w, (p + q) / 2, w.c); F.cols.push(w.ax === 'x' ? { t: 'box', x, z, hx: (q - p) / 2, hz: t / 2, rot: 0, h: Math.max(2.6, h) } : { t: 'box', x, z, hx: t / 2, hz: (q - p) / 2, rot: 0, h: Math.max(2.6, h) }); }
   }
-  if (w.out && w.view) viewBand(F, w);
+  if (w.out && w.view && !LIVE) viewBand(F, w);
+  if (LIVE && w.out) for (const o of w.ops) if ((o.k === 'door' || o.k === 'open') && o.y0 < 0.05) { const n = w.c + w.out * (w.t / 2 + 0.03); F.portals.push({ a: WP(w, o.a, n), b: WP(w, o.b, n), y1: o.y1 }); } // 第 65 批：外牆走得出去的洞（外面看進來的「門洞」）
 }
 // 洞：側面、上面、窗台＋裡面的東西（窗框、鐵窗、門、鐵捲門⋯）
 function opening(F, w, o) {
@@ -11139,6 +11158,11 @@ const OPEN_FILL = {
       F.cols.push({ t: 'box', x: (x0 + x1) / 2, z: (z0 + z1) / 2, hx: (x1 - x0) / 2 + 0.02, hz: (z1 - z0) / 2 + 0.02, rot: 0, h: 2.2 });
       if (F.occ) F.occ.push({ x0: x0 - 0.05, x1: x1 + 0.05, z0: z0 - 0.05, z1: z1 + 0.05 });
     };
+    if (LIVE && w.out) { // 第 65 批：門片會動：關著＝躺在牆中間，開著＝往裡面轉 90 度（town.src.js 按「開門」）
+      const one = (hs, sgn) => F.moving.push({ k: 'leaf', h: WP(w, hs, w.c), c: WP(w, hs + sgn * lw, w.c), o: WP(w, hs, w.c + inn * lw), len: lw, y1: o.y1 - 0.08, col: al });
+      if (leaves === 2) { one(a + 0.05, 1); one(b - 0.05, -1); } else one(o.hinge === 'b' ? b - 0.05 : a + 0.05, o.hinge === 'b' ? -1 : 1);
+      return;
+    }
     if (leaves === 2) { leaf(a + 0.05, 1); leaf(b - 0.05, -1); } else leaf(o.hinge === 'b' ? b - 0.05 : a + 0.05, o.hinge === 'b' ? -1 : 1);
   },
   idoor(F, w, o) { // 房門：木頭門框（兩面）、門片開到 90 度
@@ -11220,7 +11244,7 @@ function blob(F, x0, z0, x1, z1, k = 1, T = F0, y = 0.006) {
   F.B.quad('shadow', a, b, c, d, [0, 0, 1, 1], [k, k, k]);
 }
 // ---- 碰撞、放人的點、出口（都是本地座標；最後才換成世界座標）----
-function colBox(F, x0, z0, x1, z1, h) { F.cols.push({ t: 'box', x: (x0 + x1) / 2, z: (z0 + z1) / 2, hx: Math.abs(x1 - x0) / 2, hz: Math.abs(z1 - z0) / 2, rot: 0, h }); }
+function colBox(F, x0, z0, x1, z1, h, xb = false) { if (xb && LIVE) return; F.cols.push({ t: 'box', x: (x0 + x1) / 2, z: (z0 + z1) / 2, hx: Math.abs(x1 - x0) / 2, hz: Math.abs(z1 - z0) / 2, rot: 0, h }); } // xb＝門外擋人的（第 65 批：live 的時候不要）
 function colT(F, T, x0, z0, x1, z1, h) { const c = T.p((x0 + x1) / 2, 0, (z0 + z1) / 2); F.cols.push({ t: 'box', x: c[0], z: c[2], hx: Math.abs(x1 - x0) / 2, hz: Math.abs(z1 - z0) / 2, rot: T.ry, h }); }
 function colC(F, x, z, r, h) { F.cols.push({ t: 'circle', x, z, r, h }); }
 // 放人的點：T 裡面的 (lx, lz)，lh＝在 T 裡面面朝哪裡（−π/2＝朝 T 的 +z）
@@ -11614,7 +11638,7 @@ function houseInfo(b) {
   const c = Math.cos(b.rot), s = Math.sin(b.rot), ddx = b.door.x - b.x, ddz = b.door.z - b.z, doorX = ddx * c - ddz * s;
   const R = rng(seedOf(b)), N = Math.max(1, b.floors || Math.round(b.h / FH) || 2), biz = bizOf(b);
   const front = b.front || (b.kind === 'shop' ? 'shop' : Math.abs(doorX) > 0.5 ? 'shutter' : 'door');
-  const ss = Math.abs(doorX) > 0.5 ? -Math.sign(doorX) : R() < 0.5 ? -1 : 1;
+  const ss0 = Math.abs(doorX) > 0.5 ? -Math.sign(doorX) : R() < 0.5 ? -1 : 1, ss = b.ss || ss0; // 第 66 批：村子的透天厝（village.js 算好 ss：頂樓的樓梯間蓋在樓梯正上面）；亂數照舊用掉
   const X = (u) => (ss < 0 ? X0 + u : X1 - u), XR = (u0, u1) => { const a = X(u0), q = X(u1); return [Math.min(a, q), Math.max(a, q)]; };
   const Wp = W - 2.1, dww = Wp >= 2.6 ? 1.3 : 1.0, dwU = 2.1 + Wp / 2;
   const altarFl = biz ? N - 1 : N >= 3 && R() < 0.35 ? N - 1 : 0;
@@ -11730,7 +11754,7 @@ function houseFloor(H, n) {
   // 走得出去（一樓的門）：出口、外面擋住、進來站的地方
   for (const d of doors) {
     exitZone(F, d.a + 0.12, ZF - 0.55, d.b - 0.12, H.hz + 0.35, 'outside', null);
-    colBox(F, d.a - 0.3, H.hz + 0.3, d.b + 0.3, H.hz + 0.8, 2.6);
+    colBox(F, d.a - 0.3, H.hz + 0.3, d.b + 0.3, H.hz + 0.8, 2.6, true);
   }
   if (n === 0) {
     const d = doors.find((o) => H.doorX >= o.a - 0.05 && H.doorX <= o.b + 0.05) || doors[0], sx = clamp(d.k === 'open' ? X(dwU) : H.doorX, d.a + 0.35, d.b - 0.35); // 整片打開的店面：站在正對後面門口的走道上
@@ -11764,6 +11788,28 @@ function houseFloor(H, n) {
   if (fu === 'living') living(ctx); else if (fu === 'shop') shopFront(ctx); else if (fu === 'shrine') shrineRoom(ctx); else bedFront(ctx);
   if (bu === 'kitchen') kitchenBack(ctx); else if (bu === 'bed2') bedBack(ctx); else if (bu === 'family') familyBack(ctx); else if (bu === 'study') studyBack(ctx); else laundryBack(ctx);
   if (n === 0 && H.Wp >= 2.4 && !shop) passageDining(ctx);
+  return F;
+}
+// 第 66 批：頂樓（透天厝，live）：樓梯井上面的樓梯間（裡面：牆、往下的樓梯、燈；外面那一面、屋頂、女兒牆是 village.js 畫的）
+//   門口在後面那一面（樓梯第二跑那一邊、沒有門片）：走出去＝town.src.js 換成「在屋頂上」（村子的場景、屋頂的高度、這一層的碰撞＝女兒牆、樓梯間的牆）
+function roofFloor(H, n) {
+  const { X, XR, X0, X1, zSB, zS1, zP, hx, hz } = H;
+  const F = newFloor({ index: n, label: '頂樓' });
+  const S = sf('plaster', '#efece4', 'wall');
+  const [sx0, sx1] = XR(0, 2.0), [st0, st1] = XR(0, 2.1), [hb0, hb1] = XR(0, 0.95);
+  room(F, null, sx0, sx1, zSB, zS1, { h: F.ch });
+  wall(F, 'z', X(2.05), zSB, zS1, { t: 0.1, p: null, n: null }); // 樓梯間靠屋頂那面（裡面那面 stairShaft 畫、外面 village.js）
+  wall(F, 'x', zP - 0.06, st0, st1, { p: null, n: null });
+  wall(F, 'x', zSB - 0.05, st0, st1, { t: 0.1, p: S, n: null, out: -1, ops: [{ a: hb0, b: hb1, y0: 0, y1: 2.3, k: 'open' }] }); // 門口（out：外面看進來的門洞）
+  colBox(F, -hx - 0.3, -hz - 0.3, X0, hz + 0.3, 1.2); colBox(F, X1, -hz - 0.3, hx + 0.3, hz + 0.3, 1.2); // 女兒牆（兩邊）
+  colBox(F, X0, hz - 0.2, X1, hz + 0.3, 1.2); colBox(F, X0, -hz - 0.3, X1, -hz + 0.2, 1.2); // 女兒牆（前、後）
+  ready(F);
+  stairShaft(F, H, n, S);
+  const cx = (sx0 + sx1) / 2, cz = (zSB + zS1) / 2;
+  lamp(F, cx, cz, 2.4, '#fff4e6'); fixture(F, cx, cz, 'round');
+  F.sun = { from: [0.3, 0.75, 1], I: 0.8 }; F.hemi = { sky: '#fffaf2', ground: '#c8b89c', I: 1.55 };
+  F.cam = { maxDist: 2.4, ceiling: F.ch - 0.18, near: 0.1 };
+  F.roof = { hx, hz, X0, X1 };
   return F;
 }
 // u 方向的 frame：朝 +u、朝 −u、朝 +z、朝 −z
@@ -12274,9 +12320,10 @@ function storeFloor(b) {
   wall(F, 'x', 6.4, X0, X1, { t: 0.2, n: wallS, out: 1, view: 'street', voff: 0.3, ops: [{ a: X0 + 0.15, b: -1.2, y0: 0.05, y1: 2.9, k: 'glass', posters }, door, { a: 1.2, b: X1 - 0.15, y0: 0.05, y1: 2.9, k: 'glass', posters }] });
   ready(F);
   // 自動門（兩片玻璃往兩邊開）
-  for (const s of [-1, 1]) { const T = frame(s * 1.6, 0, 6.25); bx(F, 'metal', T, [-0.52, 0, -0.03, 0.52, 2.4, 0.03], '#aeb4ba', { pz: false, nz: false }); vq(F.B, 'glow', T, [-0.48, 0], [0.48, 0], 0.1, 2.3, dotUV(GU('s_ice')), [0.45, 0.5, 0.52], true); }
+  if (LIVE) for (const s of [-1, 1]) F.moving.push({ k: 'slide', c: [s * 0.53, 6.25], o: [s * 1.6, 6.25], len: 1.04, y1: 2.4, col: C('#aeb4ba'), glass: true }); // 第 65 批：自動門（走近了自己滑開）
+  else for (const s of [-1, 1]) { const T = frame(s * 1.6, 0, 6.25); bx(F, 'metal', T, [-0.52, 0, -0.03, 0.52, 2.4, 0.03], '#aeb4ba', { pz: false, nz: false }); vq(F.B, 'glow', T, [-0.48, 0], [0.48, 0], 0.1, 2.3, dotUV(GU('s_ice')), [0.45, 0.5, 0.52], true); }
   bx(F, 'glow', F0, [-1.2, 2.45, 6.0, 1.2, 2.72, 6.3], [1, 1, 1], { nz: GU('welcome'), _: dotUV(GU('s_black')) });
-  exitZone(F, -0.95, Z1 - 0.55, 0.95, 6.85, 'outside', null); colBox(F, -1.4, 6.8, 1.4, 7.3, 2.6);
+  exitZone(F, -0.95, Z1 - 0.55, 0.95, 6.85, 'outside', null); colBox(F, -1.4, 6.8, 1.4, 7.3, 2.6, true);
   F.spawnIn = { x: 0, z: Z1 - 1.2, lh: HP };
   path(F, 0, Z1 - 0.5, 0, 3.4, 0.55); path(F, -7.6, 3.6, 5.0, 3.6, 0.55); path(F, -7.6, -5.0, 5.0, -5.0, 0.5); path(F, -7.6, 3.6, -7.6, -5.0, 0.5); path(F, 5.0, 3.6, 5.0, -5.0, 0.55); path(F, 4.8, 4.2, 4.8, 5.6, 0.5);
   for (const z of [2.2, -0.6, -3.4]) path(F, -7.6, z - 1.35, 5.0, z - 1.35, 0.01);
@@ -12367,7 +12414,7 @@ function templeFloor(b) {
   // 燈、出口
   lamp(F, 0, Z0 + 2.2, 7, '#ffd9a8', 3.3); lamp(F, 0, 0.2, 5, '#ffe2b8', 3.3);
   F.sun = { from: [0.1, 0.5, 1], I: 0.8 }; F.hemi = { sky: '#fff2de', ground: '#b09a80', I: 1.45 };
-  exitZone(F, -1.7, Z1 - 0.55, 1.7, 2.2, 'outside', null); colBox(F, -2.2, 2.15, 2.2, 2.7, 3);
+  exitZone(F, -1.7, Z1 - 0.55, 1.7, 2.2, 'outside', null); colBox(F, -2.2, 2.15, 2.2, 2.7, 3, true);
   F.spawnIn = { x: 0, z: Z1 - 1.15, lh: HP };
   F.cam = { maxDist: 5.0, ceiling: 3.4, near: 0.1 };
   return F;
@@ -12423,7 +12470,7 @@ function farmFloor(b) {
   fixture(F, 0, 0.3, 'bulb', { y: RY(0.3) - 0.35 }); fixture(F, -6, 0.3, 'bulb', { y: RY(0.3) - 0.35 }); fixture(F, 6, 0.3, 'bulb', { y: RY(0.3) - 0.35 });
   lamp(F, 0, 0.3, 5, '#ffe6c0', 3.2); lamp(F, -6.0, 0.4, 3.5, '#ffe6c0', 3.2);
   F.sun = { from: [0.1, 0.55, 1], I: 0.85 }; F.hemi = { sky: '#fff6e8', ground: '#a88e74', I: 1.5 };
-  exitZone(F, -0.85, Z1 - 0.55, 0.85, 3.25, 'outside', null); colBox(F, -1.3, 3.2, 1.3, 3.7, 3);
+  exitZone(F, -0.85, Z1 - 0.55, 0.85, 3.25, 'outside', null); colBox(F, -1.3, 3.2, 1.3, 3.7, 3, true);
   F.spawnIn = { x: 0, z: Z1 - 1.15, lh: HP };
   path(F, 0, Z1 - 0.9, 0, -1.2, 0.5); path(F, -2.5, -1.4, -6.0, 0.4, 0.45); path(F, 2.5, -1.4, 6.0, 0.2, 0.45);
   F.cam = { maxDist: 3.6, ceiling: 3.25, near: 0.1 };
@@ -12540,7 +12587,7 @@ function aptFloor(A, n) {
   const B = F.B;
   stairShaft(F, { ...A, N: A.N + 1, roofUp: true, tread: 'marble' }, n, S_shaft); // N＋1：五樓也有往上的樓梯（走上去＝頂樓，town.src.js）
   // 大門：出口、外面擋住、進來站的地方
-  for (const d of doors) { exitZone(F, d.a + 0.12, ZF - 0.55, d.b - 0.12, A.hz + 0.35, 'outside', null); colBox(F, d.a - 0.3, A.hz + 0.3, d.b + 0.3, A.hz + 0.8, 2.6); }
+  for (const d of doors) { exitZone(F, d.a + 0.12, ZF - 0.55, d.b - 0.12, A.hz + 0.35, 'outside', null); colBox(F, d.a - 0.3, A.hz + 0.3, d.b + 0.3, A.hz + 0.8, 2.6, true); }
   if (lobby) F.spawnIn = { x: 0, z: ZF - 1.15, lh: HP };
   // 走道（家具不擋）：走廊一整條、電梯口、樓梯口、大門→走廊、玄關→客廳→房間→廁所、廚房
   path(F, X0 + 0.5, (ZB + zC) / 2, X1 - 0.5, (ZB + zC) / 2, 0.5);
@@ -12630,6 +12677,32 @@ function addLights(g, F) {
   const d = new THREE.DirectionalLight(0xfff2de, sn.I); d.name = 'int-sun'; d.position.set(sn.from[0] * 10, sn.from[1] * 10, sn.from[2] * 10); d.target.position.set(0, 0, 0); g.add(d, d.target);
   for (let i = 0; i < 2; i++) { const L = F.lamps[i]; const p = new THREE.PointLight(new THREE.Color(L ? L.c : '#ffffff'), L ? L.I * 4 : 0, 0, 2); p.name = 'int-lamp' + i; p.position.set(L ? L.x : 0, L ? L.y : 2.5, L ? L.z : 0); g.add(p); }
 }
+// 第 65 批：會動的門（本地）：leaf＝門片繞門軸（h）從關著（c 那邊）轉到開著（o 那邊）；slide＝自動門從 c 滑到 o
+function movingPiece(g, m, mats) {
+  const B = new IB(), piv = new THREE.Group(), len = m.len, y1 = m.y1;
+  const x0 = m.k === 'leaf' ? 0 : -len / 2, x1 = m.k === 'leaf' ? len : len / 2;
+  box(B, 'metal', F0, [x0, 0.02, -0.0225, x1, y1, 0.0225], m.col);
+  for (const z of [-0.026, 0.026]) vq(B, 'glow', F0, [x0 + 0.07, z], [x1 - 0.07, z], 0.28, y1 - 0.22, dotUV(GU('s_ice')), [0.5, 0.56, 0.6], true);
+  const { group: mg } = B.build(mats); piv.add(mg); piv.name = 'door-' + m.k; g.add(piv);
+  const ang = (P) => Math.atan2(P[1] - m.h[1], P[0] - m.h[0]);
+  const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  let set, seg;
+  if (m.k === 'leaf') {
+    const a0 = ang(m.c), da = wrap(ang(m.o) - a0);
+    piv.position.set(m.h[0], 0, m.h[1]);
+    const A = (t) => a0 + da * t;
+    set = (t) => { piv.rotation.y = -A(t); };
+    seg = (t) => { const a = A(t); return [[m.h[0], m.h[1]], [m.h[0] + Math.cos(a) * len, m.h[1] + Math.sin(a) * len]]; };
+  } else {
+    const dx = m.o[0] - m.c[0], dz = m.o[1] - m.c[1], L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L;
+    piv.rotation.y = -Math.atan2(uz, ux);
+    const at = (t) => [m.c[0] + dx * t, m.c[1] + dz * t];
+    set = (t) => { const p = at(t); piv.position.set(p[0], 0, p[1]); };
+    seg = (t) => { const p = at(t); return [[p[0] - ux * len / 2, p[1] - uz * len / 2], [p[0] + ux * len / 2, p[1] + uz * len / 2]]; };
+  }
+  set(0);
+  return { k: m.k, obj: piv, set, seg, tris: B.tris };
+}
 function buildInterior(b, o = {}) {
   const q = o.quality === 'low' ? 'low' : 'high';
   if (b == null) { shared(o.renderer || null, q); return null; } // 先做好共用的貼圖、環境貼圖、材質（載入畫面叫一次，第一次走進門就不會頓）
@@ -12638,9 +12711,16 @@ function buildInterior(b, o = {}) {
   shared(o.renderer || null, q); const mats = SH.mats[q];
   const P = planOf(b, kind), W = toWorld(b), rot = b.rot || 0;
   let Fs;
-  if (kind === 'house') { const H = houseInfo(b); Fs = []; for (let n = 0; n < H.N; n++) Fs.push(houseFloor(H, n)); }
+  LIVE = !!o.live;
+  try {
+  if (kind === 'house') { // 第 66 批：live＋村子的透天厝（b.roof）：最上面一層的樓梯往上走＝頂樓（多一層 roofFloor：樓梯間，走出去是真的屋頂）
+    const H0 = houseInfo(b), roof = LIVE && b.roof, H = roof ? { ...H0, N: H0.N + 1 } : H0; Fs = [];
+    for (let n = 0; n < H0.N; n++) Fs.push(houseFloor(H, n));
+    if (roof) Fs.push(roofFloor(H, H0.N));
+  }
   else if (kind === 'apt') { const A = aptInfo(b); Fs = []; for (let n = 0; n < A.N; n++) Fs.push(aptFloor(A, n)); }
   else Fs = [kind === 'store' ? storeFloor(b) : kind === 'temple' ? templeFloor(b) : farmFloor(b)];
+  } finally { LIVE = false; }
   const group = new THREE.Group(); group.name = 'interior:' + P.name; group.position.set(b.x, 0, b.z); group.rotation.y = rot;
   const xz = (x, z) => { const p = W(x, z); return { x: p[0], z: p[1] }; };
   const pose = (p) => ({ ...xz(p.x, p.z), heading: wrapA(p.lh + rot) });
@@ -12649,6 +12729,8 @@ function buildInterior(b, o = {}) {
   const floors = Fs.map((F, i) => {
     const { group: g, draws: dc } = F.B.build(mats); g.name = 'floor-' + F.label; g.visible = i === 0; addLights(g, F); group.add(g);
     tris += F.B.tris; draws = Math.max(draws, dc);
+    const moving = F.moving.map((m) => movingPiece(g, m, mats)); // 第 65 批：門片、自動門（本地；town.src.js 叫 setDoorT）
+    for (const m of moving) { tris += m.tris; }
     const spots = {}; for (const [k, list] of Object.entries(F.spots)) spots[k] = list.map((s) => { const r = { ...xz(s.x, s.z), heading: wrapA(s.heading + rot) }; if (s.y != null) r.y = s.y; if (s.room) r.room = s.room; if (s.edge) r.edge = true; return r; });
     const rs = F.rooms.length ? F.rooms : [{ x0: -1, x1: 1, z0: -1, z1: 1 }];
     const bx0 = Math.min(...rs.map((r) => r.x0)), bx1 = Math.max(...rs.map((r) => r.x1)), bz0 = Math.min(...rs.map((r) => r.z0)), bz1 = Math.max(...rs.map((r) => r.z1));
@@ -12658,7 +12740,9 @@ function buildInterior(b, o = {}) {
       exits: F.exits.map((e) => ({ ...xz(e.x, e.z), hx: e.hx, hz: e.hz, rot, to: e.to, spawn: e.to === 'outside' ? { ...outside } : pose(e.spawn), door: { ...xz(e.x, e.z + e.hz - 0.35), ry: wrapA(Math.PI + rot), w: e.hx } })),
       spots, rooms: F.named.map((r) => ({ name: r.name, ...xz((r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2), hx: (r.x1 - r.x0) / 2, hz: (r.z1 - r.z0) / 2, rot, probe: xz(r.probe[0], r.probe[1]) })),
       camera: { maxDist: 3, ceiling: F.ch - 0.2, near: 0.1, ...(F.cam || {}) },
+      moving, portals: F.portals.map((pt) => ({ a: W(pt.a[0], pt.a[1]), b: W(pt.b[0], pt.b[1]), y1: pt.y1 })), // 第 65 批：會動的門、外面看進來的門洞（世界座標）
       stair: F.stair ? { ...F.stair, ch: F.ch } : null, // 第 61 批：樓梯（本地座標；town.src.js stairY、樓梯走到一半換樓層）
+      roof: F.roof || null, // 第 66 批：頂樓那一層（本地：女兒牆裡面 x0–x1、±hz）
       lift: F.lift ? { ...xz((F.lift.x0 + F.lift.x1) / 2, (F.lift.z0 + F.lift.z1) / 2), hx: (F.lift.x1 - F.lift.x0) / 2, hz: (F.lift.z1 - F.lift.z0) / 2, rot } : null, // 第 60 批：公寓的電梯（站進去出面板）
       bounds: { ...xz((bx0 + bx1) / 2, (bz0 + bz1) / 2), hx: (bx1 - bx0) / 2, hz: (bz1 - bz0) / 2, rot },
     };
@@ -12673,6 +12757,19 @@ function buildInterior(b, o = {}) {
       return f;
     },
     dispose() { group.traverse((m) => { if (m.isMesh) m.geometry.dispose(); }); group.removeFromParent(); group.clear(); floors.length = 0; },
+    // 第 65 批：live 的大門（一樓）：doorStyle hinge＝按「開門」轉開、auto＝自動門（走近了滑開）、open＝沒有門（店面、廟）
+    doorStyle: floors[0].moving.some((m) => m.k === 'leaf') ? 'hinge' : floors[0].moving.length ? 'auto' : 'open',
+    portals: floors[0].portals,
+    roofFl: floors.findIndex((f) => f.roof), // 第 66 批：頂樓是第幾層（沒有＝−1）
+    setDoorT(t) { for (const m of floors[0]?.moving || []) m.set(t); },
+    doorCols(t) { // 世界座標的碰撞（門片現在在哪裡）
+      const out = [];
+      for (const m of floors[0]?.moving || []) {
+        const [P, Q] = m.seg(t), A = W(P[0], P[1]), B2 = W(Q[0], Q[1]), dx = B2[0] - A[0], dz = B2[1] - A[1], L = Math.hypot(dx, dz) || 1;
+        out.push({ t: 'box', x: (A[0] + B2[0]) / 2, z: (A[1] + B2[1]) / 2, hx: L / 2 + 0.02, hz: 0.05, rot: Math.atan2(-dz, dx), h: 2.2 });
+      }
+      return out;
+    },
   };
   I.setFloor(0);
   I.info = { kind: P.kind, biz: P.biz === 'store' || P.biz === 'temple' || P.biz === 'farm' ? null : P.biz, name: P.name, floors: floors.length, tris, draws, ms: +(now() - t0).toFixed(1) };
@@ -13057,7 +13154,7 @@ return { createRide, RIDE: { CLS, SURF } };
 
 // 打包時全部接在同一個 script 裡：只露出 createDrive
 const { createDrive, DRIVE_DEST, tiltAngle, bodyBox } = (() => {
-const TAU = Math.PI * 2, GEARS = [3.3, 2.2, 1.62, 1.28, 1.05, 0.86];
+const TAU = Math.PI * 2, GEARS = [3.3, 2.2, 1.62, 1.28, 1.05, 0.86], SHF_SWIPE = 16; // 第 69 批：換檔桿滑幾個像素算換一檔
 const AERO = 0.55, STEP = 0.25, HZ = 120; // 風阻（街機）、一步最多走幾公尺（碰撞）、物理每秒最少幾步
 const torqueAt = (x) => 0.8 + 0.4 * x - 0.4 * x * x;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -13139,6 +13236,7 @@ const CSS = `
 .dv-spd.tach svg.red .a{stroke:#FF3B30}
 .dv-spd.tach em{position:static;order:-1;width:auto;height:auto;margin-top:4px;background:none;color:#F2F3F5;font:700 30px/1 ${COND};font-style:normal}
 .dv-spd.tach em.r{background:none;color:#FF3B30}
+.dv-spd em.n{background:#C6CAD1}.dv-spd.tach em.n{background:none;color:#C6CAD1} /* 第 68 批：手排的空檔 N */
 .dv-spd.tach>b{font-size:17px;margin-top:1px}
 .dv-spd.tach>span{font-size:8px;margin-top:1px}
 .dv-steer{bottom:12px;left:10px;display:flex;gap:8px;pointer-events:auto;touch-action:none}
@@ -13183,10 +13281,26 @@ const CSS = `
 @container (max-height:290px){.dv-pop{right:360px}.dv.pop .dv-spd.tach{right:438px}}
 @media (min-height:561px){@container (max-height:540px){.dv-pop{right:94px;bottom:124px;height:46px;flex-direction:row;gap:4px;font-size:14px}.dv-pop svg{width:22px;height:16px}}} /* 沒全螢幕的電腦（舞台 410–540 高）：上面放不下（壓到「下車」）→ 手煞車左邊、煞車上面 */
 @media (min-height:561px){@container (max-height:409px){.dv-pop{top:142px;right:196px;bottom:auto;height:44px;flex-direction:row;gap:4px;font-size:14px}.dv-pop svg{width:22px;height:16px}.pw-host.pw-on .dv-pop{margin-top:46px}}}
+/* 第 68 批：手排（Nick 2026-11-06「車子做手排的」＋卡片「要有離合器」）：▲升檔 ▼降檔 在煞車上面（右 94）、「離合器」在 ◀ ▶ 上面（左 10）；只有 .dv.mt 才有 */
+.dv-shf,.dv-mth{display:none}
+/* 第 69 批（Nick 2026-11-07「換檔在左邊螢幕做一個垂直的用上下滑動換檔」）：左邊一條直的換檔桿 R N 1 2 … NG；手指按著＝踩著離合器，往上滑一格＝升一檔、往下＝降一檔（一次只換一檔） */
+.dv.mt .dv-shf{display:flex;flex-direction:column;left:10px;top:62px;width:52px;padding:4px;box-sizing:border-box;border-radius:14px;background:rgba(14,15,18,0.62);pointer-events:auto;cursor:ns-resize;touch-action:none;-webkit-user-select:none;user-select:none;transition:background .1s,box-shadow .1s}
+.dv.mt .dv-shf.on{background:rgba(14,15,18,0.85);box-shadow:0 0 0 3px #FF6A1F} /* 手指按著＝離合器踩著 */
+.dv-shf b{height:28px;display:grid;place-items:center;border-radius:9px;font:700 15px/1 ${COND};color:#C6CAD1;pointer-events:none}
+.dv-shf b.r{color:#FF8A8A}
+.dv-shf b.cur{background:#FF6A1F;color:#1A0F07;font-size:19px}
+.dv-shf b.cur.stall{background:#55585F;color:#C6CAD1}
+.dv-shf b.hot{color:#FF6A1F;background:rgba(255,106,31,0.22)} /* 下一檔亮橘＝該升（或該降）了 */
+.dv-shf b.lim{color:#fff;background:#FF3B30} /* 撞紅線：上面那一格閃紅 */
+.dv.mt .dv-mth{display:block;bottom:140px;left:50%;transform:translateX(-50%);padding:4px 11px;border-radius:999px;background:#FF3B30;color:#fff;font:700 13px/1 ${SANS};font-style:normal;letter-spacing:.02em;white-space:nowrap;opacity:0;transition:opacity .15s;pointer-events:none}
+.dv.mt .dv-mth.show{opacity:1}.dv.mt .dv-mth.warn{background:#FF6A1F;color:#1A0F07}
+@media (max-height:560px){.dv.mt .dv-shf{top:58px}.dv-shf b{height:22px;font-size:14px}.dv-shf b.cur{font-size:17px}} /* 橫拿：矮一點（338 高的手機：◀ ▶ 在 254 起） */
+@container (max-height:290px){.dv.mt .dv-mth{left:auto;right:366px;transform:none}} /* 很矮：提示跟著轉速表 */
+@container (max-height:300px){.dv.mt .dv-shf{display:none}} /* 沒全螢幕的小舞台（電腦，290 高）：換檔桿放不下，用鍵盤（Shift＋Q／Z）；338 高的手機還放得下 */
 .dv-spd i{position:absolute;bottom:calc(100% + 24px);left:50%;transform:translateX(-50%);padding:5px 13px;border-radius:999px;background:#FF6A1F;color:#1A0F07;font:700 17px/1 ${SANS};font-style:normal;letter-spacing:.04em;white-space:nowrap;box-shadow:0 3px 0 #9E4213}
 .dv-spd i span{font:700 19px/1 ${COND};color:inherit;margin:0 0 0 5px;letter-spacing:0}
-.dv-toast{top:34%;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:9px 20px;border-radius:22px;background:rgba(14,15,18,0.78);font-size:20px;font-weight:700;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,-50%) scale(.92);transition:opacity .15s,transform .15s}
-.dv-toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.dv-toast{top:132px;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:5px 13px;border-radius:999px;background:rgba(14,15,18,0.7);font-size:13px;font-weight:600;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,0) scale(.92);transition:opacity .15s,transform .15s}
+.dv-toast.show{opacity:1;transform:translate(-50%,0) scale(1)}
 @media (prefers-reduced-motion:reduce){.dv-toast,.dv-chip svg{transition:none}.dv-act::after{animation:none}}
 `;
 const ICON = {
@@ -13360,9 +13474,10 @@ function createDrive(o) {
   const base = { bx: body.position.x, bz: body.position.z };
   // 引擎、齒比、起步抓地：跟 race.src.js 的 racer() 一樣；尾速長一點點（六檔紅線＝極速 ×1.012）：跑極速的時候轉速 0.99，不會一直撞斷油
   const m = P.kg + 75, wr = (P.red * TAU) / 60, vrl = vmx * 1.012;
-  const GR = Array.isArray(P.gears) && P.gears.length === 6 ? P.gears : GEARS; // 第 4 批：自己的齒比（怪獸卡車）
-  const fd = (wr * RR) / (GR[5] * vrl), Tpk = (P.hp * 745.7) / (wr * 0.95 * torqueAt(0.95)), tract = 1.35 * m * 9.81 * (P.awd ? 0.9 : P.drive ?? 0.74);
-  const xOf = (u, g) => (Math.abs(u) * GR[g]) / (GR[5] * vrl), kGeo0 = Math.tan(0.6) / L; let kGeo = kGeo0; // 第 4 批：kGeo 四輪轉向會變 // 轉速÷紅線；方向盤打死的曲率
+  const NG = clamp(Math.round(P.ng || 6), 2, 12); // 第 69 批：幾檔照真的車（PERF.ng，沒寫＝6）
+  const GR = Array.isArray(P.gears) && P.gears.length === NG ? P.gears : NG === 6 ? GEARS : Array.from({ length: NG }, (_, i) => +(GEARS[0] * Math.pow(GEARS[5] / GEARS[0], i / (NG - 1))).toFixed(3)); // 第 4 批：自己的齒比（怪獸卡車）；第 69 批：不是 6 檔就從 3.3 到 0.86 平均分
+  const fd = (wr * RR) / (GR[NG - 1] * vrl), Tpk = (P.hp * 745.7) / (wr * 0.95 * torqueAt(0.95)), tract = 1.35 * m * 9.81 * (P.awd ? 0.9 : P.drive ?? 0.74);
+  const xOf = (u, g) => (Math.abs(u) * GR[g]) / (GR[NG - 1] * vrl), kGeo0 = Math.tan(0.6) / L; let kGeo = kGeo0; // 第 4 批：kGeo 四輪轉向會變 // 轉速÷紅線；方向盤打死的曲率
   // ---- 第 3 批（甩尾）：這台車的個性：後驅大馬力最好甩（角度大、踩油門撐得久）、四驅穩一點（角度小、自己慢慢抓回來）、越野車最穩（只有手煞車甩得動）----
   // Nick 2026-10-11「甩尾甩太多了 可以不要滑那麼遠」：dec 1.15／1.5 → 1.7／2.2（放開抓回來快一點）、甩的時候多掉的速度 bleed 0.55 → 0.9（越野車照舊）
   // amax＝最大的角度（弧度）、sus＝踩油門撐住多少、pow＝油門甩得出來嗎、dec＝放開以後多快抓回來、bias＝後輪出力的比例、cg＝甩的時候繞哪裡轉（重心附近，車子座標 x）
@@ -13374,9 +13489,12 @@ function createDrive(o) {
     surf: 0, cap: vtop, bumps: 0, shifts: 0, touch: 0, blocked: 0, roll: 0, rollV: 0, pitch: 0, pitchV: 0, alat: 0, along: 0, kap: 0, scrub: 0, push: 0, jit: 0, jitT: 0, hitW: 0, hitT: -9, impT: -9, impW: 0 };
   // 第 3 批（甩尾）：slip＝甩的角度（走的方向＝th＋slip）、slipV＝它變多快、loose＝後輪多鬆（0–1）、dm＝甩了多少（0 抓地～1 甩）、skid＝輪胎叫、skidM＝胎痕／煙
   Object.assign(st, { slip: 0, slipV: 0, loose: 0, dm: 0, skid: 0, skidM: 0, flick: 0, sPrev: 0, thrMem: 0, pwT: 0, kick: 0, kickT: 0, dT: 0, drifts: 0, dShow: 0 });
+  // 第 68 批：手排（setGearbox('mt')）：mg＝排在哪一檔（−1 R、0 N、1–6；st.gear／st.rev 跟著它）、clu＝離合器接上多少（0 踩著～1 接上）、stall＝熄火了、crank＝發動中（秒）、
+  //   grind＝「咔咔」沒換進去（秒；grindWhy 1 沒按離合器、2 太快不能倒車）、lim＝撞到紅線斷油中、limT＝計時（紅線噠噠噠、閃）、shq＝按了 ▲ ▼ 還沒處理的
+  Object.assign(st, { mt: false, mg: 0, clu: 1, cluPrev: 1, stall: false, crank: 0, grind: 0, grindWhy: 0, lim: false, limT: 0, shq: [] });
   const dmgP = { power: 1, top: 1, maxKmh: Infinity, steerPull: 0 }; // 撞壞了（setDamage）
   let imp = null; // 這一幀最大的一下（onImpact）
-  const human = { thr: 0, brk: 0, steer: 0, hb: 0, kb: {} };
+  const human = { thr: 0, brk: 0, steer: 0, hb: 0, clu: 0, kb: {} };
   const tilt = { on: false, a: 0, n: 0, center: 0, val: 0, wait: 0, fail: null, scr: () => (typeof screen !== 'undefined' && screen.orientation ? screen.orientation.angle : typeof window !== 'undefined' && +window.orientation) || 0 };
   let forced = null, paused = false, auto = null, alive = true, dest = null, mode = 'chase', view = null, intro = null, now = 0, action = null, action2 = null, popOn = null, popFn = null;
   let marks = null; // 第 3 批（b3-int）別的模組給的小地圖點（setMarkers）：[{ x, z, fill, ring, r, on }]
@@ -13493,17 +13611,51 @@ function createDrive(o) {
     return best;
   }
 
+  // ---- 第 68 批：手排（Nick 2026-11-06「車子做手排的」，卡片「要有離合器」→ 草稿第 2 版「照這樣做」）----
+  //   ▲ ▼（shift(±1)）要踩著離合器（inp.clu）才換得進去，沒踩＝「咔咔」沒換（grind）；R 只有快停住（1.5 m/s 以下）才排得進去
+  //   檔位 R – N – 1 – 2 – 3 – 4 – 5 – 6；放開離合器那一下（接上過半）：轉速比怠速低（檔太高、太慢）又沒給油 → 熄火（stall）；按油門 0.6 秒重新發動
+  //   撞紅線不會自己升檔：斷油噠噠噠（physics 的 st.lim）；檔太高只是沒力（不熄火）；停住按著煞車 R ↔ 1 檔照舊（不用離合器）
+  function mtStep(h, inp) {
+    const want = inp.clu > 0.5 ? 0 : 1;
+    st.clu = want <= st.clu ? want : Math.min(1, st.clu + h / 0.12); // 踩下去馬上分開，放開 0.12 秒接上
+    if (st.cluPrev < 0.5 && st.clu >= 0.5 && st.mg !== 0 && !st.stall) { // 放開的那一下
+      const x = st.rev ? 0.14 + Math.min(1, Math.abs(st.v) / 4.5) * 0.3 : xOf(st.v, st.gear);
+      if (x < 0.12 && inp.thr < 0.15) { st.stall = true; st.crank = 0; st.cut = 0; events.push(['engine', false]); }
+      else if (x > st.rpm) st.rpm = Math.min(1.08, x); // 第 69 批：降檔接上＝轉速瞬間衝上去（不慢慢爬）
+    }
+    st.cluPrev = st.clu;
+    while (st.shq.length) {
+      const d = st.shq.shift(), g = clamp(st.mg + d, -1, NG);
+      if (g === st.mg) continue;
+      if (st.clu > 0.3) { st.grind = 0.7; st.grindWhy = 1; events.push(['grind', 1]); continue; }
+      if (g === -1 && Math.abs(st.v) > 1.5) { st.grind = 0.7; st.grindWhy = 2; events.push(['grind', 2]); continue; }
+      st.mg = g; st.rev = g === -1; st.gear = Math.max(0, g - 1); st.hold = 0; st.shifts++;
+      if (d > 0 && g > 1) events.push(['shift', g]);
+    }
+    if (st.stall) { if (st.crank > 0) { st.crank -= h; if (st.crank <= 0) { st.stall = false; st.crank = 0; events.push(['engine', true]); } } else if (inp.thr > 0.3) st.crank = 0.6; }
+    st.grind = Math.max(0, st.grind - h); st.limT += h;
+  }
+  function setGearbox(k) {
+    const on = k === 'mt'; if (on === st.mt) return;
+    st.mt = on; st.stall = false; st.crank = 0; st.grind = 0; st.lim = false; st.clu = st.cluPrev = 1; st.shq.length = 0;
+    if (on) st.mg = st.rev ? -1 : Math.abs(st.v) > 0.5 ? st.gear + 1 : 0; // 開著換成手排＝現在這一檔；停著＝空檔
+    if (hud) { hud.root.classList.toggle('mt', on); hud.last.gear = undefined; hud.last.rev = undefined; }
+  }
+  const shift = (d) => { if (st.mt && alive && !paused && (d === 1 || d === -1)) st.shq.push(d); };
+
   // ---- 物理（每步 h 秒）----
   function physics(h, inp) {
     const R = ride && ride.on ? ride : null; kGeo = R ? kGeo0 * R.k.ws : kGeo0; // 第 4 批：在地形上（村子裡 null：照舊）；四輪轉向
-    // 停住了還按著煞車＝換倒車；倒車停住了按油門＝換前進
-    const go0 = st.rev ? inp.brk : inp.thr, stop0 = st.rev ? inp.thr : inp.brk, u0 = st.v * (st.rev ? -1 : 1);
-    if (stop0 > 0.5 && go0 < 0.05 && u0 < 0.3 && !inp.hb) { st.hold += h; if (st.hold > 0.25) { st.rev = !st.rev; st.hold = 0; st.gear = 0; st.thr = st.brk = 0; } } else st.hold = 0;
+    const MT = st.mt; if (MT) mtStep(h, inp); // 第 68 批：手排：離合器、▲ ▼、熄火、發動
+    // 停住了還按著煞車＝換倒車；倒車停住了按油門＝換前進（手排：油門永遠是往前／往後走、煞車永遠是煞車；停住按著煞車 R ↔ 1 檔照舊）
+    const go0 = st.rev && !MT ? inp.brk : inp.thr, stop0 = st.rev && !MT ? inp.thr : inp.brk, u0 = st.v * (st.rev ? -1 : 1);
+    if (stop0 > 0.5 && go0 < 0.05 && u0 < 0.3 && !inp.hb && !MT) { st.hold += h; if (st.hold > 0.25) { st.rev = !st.rev; st.hold = 0; st.gear = 0; st.thr = st.brk = 0; } } else st.hold = 0; // 第 69 批：手排沒有「停住按著煞車＝倒車」，R 在換檔桿上（N 再往下） // 手排：按著煞車一次只換一次（放開再按才又換）
     // 方向盤：放開回正快、轉過去慢一點，越快越慢（300 km/h 點一下只換一點點車道）；油門慢慢踩下去
     const vab0 = Math.abs(st.v), back = Math.abs(inp.steer) < Math.abs(st.steer) || inp.steer * st.steer < 0;
     st.steer = toward(st.steer, inp.steer, h * (back ? 6 : 4 - 2 * Math.min(1, vab0 / 70)));
     st.thr = toward(st.thr, inp.thr, h * (inp.thr > st.thr ? 3.2 : 8)); st.brk = toward(st.brk, inp.brk, h * (inp.brk > st.brk ? 7 : 10)); st.hb = inp.hb || 0;
-    const sg = st.rev ? -1 : 1, go = st.rev ? st.brk : st.thr, stop = Math.max(st.rev ? st.thr : st.brk, st.hb * (1 - 0.65 * clamp((vab0 - 6) / 6, 0, 1))), u = st.v * sg, v0 = st.v; // 第 3 批：手煞車快的時候只煞三分之一（後輪鎖住、甩出去）
+    const sg = st.rev ? -1 : 1, go = st.rev && !MT ? st.brk : st.thr, stop = Math.max(st.rev && !MT ? st.thr : st.brk, st.hb * (1 - 0.65 * clamp((vab0 - 6) / 6, 0, 1))), u = st.v * sg, v0 = st.v; // 第 3 批：手煞車快的時候只煞三分之一（後輪鎖住、甩出去）
+    const eng = MT ? (st.mg === 0 || st.stall ? 0 : st.clu) : 1; // 第 68 批：引擎接到輪子多少（空檔、熄火、踩著離合器＝0）
     const vdm = Math.min(vtop * dmgP.top, dmgP.maxKmh / 3.6), sf = (R && R.sf(st.surf)) || SURF[st.surf] || SURF[0], capS = st.rev ? 4.5 : Math.min(vdm, sf.cap), soft = !st.rev && sf.cap < vdm; st.cap = capS; // 撞壞了極速變低
     // 轉彎：方向盤→想要的曲率（低速＝打死 tan 0.6，快的時候＝打滿要側向 aF）；快到抓地 aG 就推頭：實際轉得少一點、多的那份（scrub）把速度吃掉
     // aF：100 km/h 以下＝抓地 ×1.35、200 km/h ×1.25、320 km/h ×0.95（很穩）；推頭吃掉速度的比例 kS：100 km/h 以下 1.3（村子的彎抱著方向盤自己慢下來）、
@@ -13520,12 +13672,13 @@ function createDrive(o) {
     // 引擎：快到限速油門自己收（定速）；推頭的時候也收（像循跡控制）；load＝給引擎聲的（踩著就大聲）
     const gov = clamp((capS + (capS >= vmx ? 0.3 : 0) - u) / 0.5, 0, 1), lim = gov * (1 - Math.min(0.95, st.scrub / 7 + 0.7 * pk * (1 - st.dm))); // 定速在限速上（極速多 0.3 m/s：錶上看得到 250）
     st.thrEff = go * lim;
-    let a = 0;
-    if (st.rev) a = 2.8 * st.thrEff * Math.max(0.6, dmgP.power);
-    else if (st.cut <= 0) { const x = xOf(u, st.gear); if (x < 1) a = (Math.min(R ? tract * R.k.trac : tract, (st.thrEff * Tpk * torqueAt(clamp(x, st.gear === 0 ? 0.6 : 0.2, 1)) * GR[st.gear] * fd * 0.88) / RR) / m) * dmgP.power; } // 撞到紅線斷油；撞壞了出力變小
+    let a = 0; st.lim = false;
+    if (st.rev) a = 2.8 * st.thrEff * Math.max(0.6, dmgP.power) * eng;
+    else if (st.cut <= 0 && eng > 0) { const x = xOf(u, st.gear); if (x < 1) a = (Math.min(R ? tract * R.k.trac : tract, (st.thrEff * Tpk * torqueAt(clamp(x, st.gear === 0 ? 0.6 : 0.2, 1)) * GR[st.gear] * fd * 0.88) / RR) / m) * dmgP.power * eng; else if (MT && go > 0.3) st.lim = true; } // 撞到紅線斷油；撞壞了出力變小；手排撞紅線＝噠噠噠（不自己升檔）
     const D = slide(h, inp, R, u, go, gov, a, aG, ac); if (st.dm > 0) { a *= 1 + (D.fwd - 1) * st.dm; a += (Math.min(a, D.cap) - a) * st.dm; } // 第 3 批：甩尾（後輪空轉：往前推的少一點；抓地大部分拿去側滑了）
     const ov = u - capS - 0.5, over = ov > 0 ? (soft ? Math.min(sf.over[1], ov * sf.over[0]) : Math.min(8, ov * 2.5)) : 0; // 比限速快（開進草地、限速變低）：慢下來
-    const res = stop * (9.5 + 2.5 * Math.min(1, (u * u) / 4900)) + (go < 0.05 ? (st.rev ? 1.2 : 1.4) : 0) + sf.drag + 0.147 + (AERO * 0.6 * P.cda * u * u) / m + over + (st.rev ? 0 : Math.min(9, st.scrub)) + D.bleed;
+    const res = stop * (9.5 + 2.5 * Math.min(1, (u * u) / 4900)) + (go < 0.05 ? (st.rev ? 1.2 : 1.4) : 0) + sf.drag + 0.147 + (AERO * 0.6 * P.cda * u * u) / m + over + (st.rev ? 0 : Math.min(9, st.scrub)) + D.bleed
+      + (MT && !st.rev && eng > 0.5 && st.mg > 0 ? Math.min(8, Math.max(0, xOf(u, st.gear) - 1.02) * 60) * eng : 0); // 第 68 批：手排太早降檔（轉速衝過紅線）：引擎煞車很重
     let un;
     if (u > 1e-4) { un = u + (a - res) * h; if (un < 0) un = 0; }
     else if (u < -1e-4) { un = u + (a + res) * h; if (un > 0) un = a > 0 ? Math.min(un, a * h) : 0; }
@@ -13536,14 +13689,20 @@ function createDrive(o) {
     if (!st.rev) {
       st.cut = Math.max(0, st.cut - h);
       const x = xOf(un, st.gear), dem = go * gov, pedal = inp.thr > 0.05 && (un - u) / h > -1.5; // dem：腳踩多少（循跡收掉的不算：彎裡面檔位留低、轉速高）
-      if (st.cut <= 0 && st.gear < 5 && x > (pedal ? 0.64 + 0.34 * dem : 0.98)) {
+      if (MT) { /* 手排：自己換（mtStep） */ }
+      else if (st.cut <= 0 && st.gear < NG - 1 && x > (pedal ? 0.64 + 0.34 * dem : 0.98)) {
         st.gear++; st.cut = 0.08 + 0.1 * dem; st.cutLoad = st.load > 0.9 ? 0 : st.load * 0.35; st.shifts++; events.push(['shift', st.gear + 1]); // 全油門換檔：油門放掉一下（洩壓、放炮，跟賽道一樣）
       } else if (st.gear > 0 && (x < (go > 0.05 ? 0.36 : 0.4) || (dem > 0.9 && xOf(un, st.gear - 1) < 0.8))) st.gear--;
     } else st.cut = 0;
     const xr = st.rev ? 0.14 + Math.min(1, Math.abs(un) / 4.5) * 0.3 : Math.max(0.13, xOf(un, st.gear));
     const slip = st.rev ? 0.1 * go : st.gear === 0 ? 0.34 * go * clamp(1 - xr / 0.5, 0, 1) : 0; // 起步半離合：一踩轉速就起來（聲音馬上出來）
-    st.rpm += (Math.min(1.02, xr + slip + D.rev) - st.rpm) * (1 - Math.exp(-h * 12));
-    st.load = st.cut > 0 ? st.cutLoad : go > 0.02 ? go * (0.65 + 0.35 * lim) : 0;
+    let want = Math.min(1.02, xr + slip + D.rev);
+    if (MT) { // 第 68 批：手排的轉速：踩著離合器／空檔＝油門直接催（0.13–1.0）；熄火＝0；發動中＝0.07 抖；撞紅線＝0.96／1.02 噠噠噠
+      const free = 0.13 + 0.87 * go;
+      want = st.stall ? (st.crank > 0 ? 0.07 + 0.03 * Math.sin(st.limT * 60) : 0) : st.lim ? (st.limT % 0.1 < 0.05 ? 0.96 : 1.02) : (st.clu >= 0.5 && st.mg !== 0 ? 1 : eng) * Math.min(1.02, xr + slip) + (st.clu >= 0.5 && st.mg !== 0 ? 0 : 1 - eng) * free; // 第 69 批：接上過半轉速就跟著輪子（降檔瞬間衝上去，不被怠速拉回來）
+    }
+    st.rpm += (want - st.rpm) * (1 - Math.exp(-h * (MT && st.stall ? 6 : 12)));
+    st.load = MT && (st.stall || st.mg === 0 || st.clu < 0.5) ? (st.stall ? 0 : go * (st.mg === 0 ? 1 : 0.6)) : st.cut > 0 ? st.cutLoad : go > 0.02 ? go * (0.65 + 0.35 * lim) : 0;
     // 走：後軸沿著車頭方向走、繞後軸轉（腳踏車模型）
     const vab = Math.abs(st.v);
     // 頂住東西了還踩油門：方向盤照「想走的速度」轉（原地轉出來，不會一直卡著）
@@ -13799,7 +13958,8 @@ function createDrive(o) {
       + `<div class="dv-tilt"><i aria-hidden="true"><svg viewBox="-30 -30 60 60"><g><circle r="24" stroke-width="6"/><path d="M-22 2L-7 5M22 2L7 5M0 9V22" stroke-width="5"/><circle r="6" fill="#F2F3F5" stroke="none"/><rect class="r" x="-3" y="-28" width="6" height="9" rx="1.5"/></g></svg></i><b role="button" aria-label="置中">置中</b></div>`
       + `<div class="dv-ped"><b class="dv-brk" role="button" aria-label="煞車">煞車</b><b class="dv-gas" role="button" aria-label="油門">油門</b></div><div class="dv-toast" role="status"></div>`
       + `<b class="dv-hb" role="button" aria-label="手煞車">手煞車</b>` // 第 3 批（甩尾）
-      + `<button type="button" class="dv-pop" aria-pressed="false" hidden>${ICON.pop}<span>跳燈</span></button>`; // 跳燈（86、RX-7）
+      + `<button type="button" class="dv-pop" aria-pressed="false" hidden>${ICON.pop}<span>跳燈</span></button>` // 跳燈（86、RX-7）
+      + `<div class="dv-shf" role="group" aria-label="換檔桿（按著往上滑升檔、往下滑降檔）"></div><i class="dv-mth" role="status"></i>`; // 第 68 批：手排；第 69 批：▲ ▼ 離合器按鈕 → 左邊的換檔桿
     o.hudParent.append(root);
     const q = (s) => root.querySelector(s), H = { root, chip: q('.dv-chip'), arrow: q('.dv-chip svg'), name: q('.dv-chip b'), dist: q('.dv-chip small'), map: q('.dv-map canvas'), cam: q('.dv-cam'),
       act: q('.dv-act'), actIcon: q('.dv-act i'), actText: q('.dv-act span'), act2: q('.dv-act2'), act2Icon: q('.dv-act2 i'), act2Text: q('.dv-act2 span'),
@@ -13808,6 +13968,9 @@ function createDrive(o) {
     H.hb = q('.dv-hb'); H.drift = q('.dv-spd i'); H.driftA = q('.dv-spd i span'); // 第 3 批
     H.tiltG = q('.dv-tilt g'); H.tiltC = q('.dv-tilt b'); // 轉手機開車
     H.pop = q('.dv-pop'); // 跳燈
+    H.shf = q('.dv-shf'); H.mth = q('.dv-mth'); H.slots = []; // 第 68 批：手排；第 69 批：換檔桿（每一格一個 <b>：NG … 1、N、R）
+    for (let g = NG; g >= -1; g--) { const b = document.createElement('b'); b.textContent = g === 0 ? 'N' : g === -1 ? 'R' : String(g); if (g === -1) b.className = 'r'; b.dataset.g = g; H.shf.append(b); H.slots.push(b); }
+    H.shfY = null; H.shfId = null; H.shfDone = false;
     H.spdBox = q('.dv-spd'); H.tach = q('.dv-spd svg'); H.tachA = q('.dv-spd svg .a'); H.spdBox.classList.toggle('tach', mode !== 'eye'); // 轉速表
     const on = (el, t, f, opt) => { el.addEventListener(t, f, opt); H.off.push(() => el.removeEventListener(t, f, opt)); };
     on(root, 'contextmenu', (e) => e.preventDefault());
@@ -13820,6 +13983,11 @@ function createDrive(o) {
     hold(H.gas, () => { human.thr = 1; H.gas.classList.add('on'); }, () => { human.thr = 0; H.gas.classList.remove('on'); });
     hold(H.brk, () => { human.brk = 1; H.brk.classList.add('on'); }, () => { human.brk = 0; H.brk.classList.remove('on'); });
     hold(H.hb, () => { human.hb = 1; H.hb.classList.add('on'); }, () => { human.hb = 0; H.hb.classList.remove('on'); }); // 第 3 批：手煞車（另一隻手指按著油門、方向也按得到）
+    // 第 69 批：換檔桿：手指按下去＝離合器踩著（human.clu）；滑超過 SHF_SWIPE 像素＝換一檔（這一根手指只換這一次）；放開＝放離合器
+    on(H.shf, 'pointerdown', (e) => { e.preventDefault(); if (H.shfY !== null) return; H.shfY = e.clientY; H.shfId = e.pointerId; H.shfDone = false; try { H.shf.setPointerCapture(e.pointerId); } catch {} human.clu = 1; H.shf.classList.add('on'); });
+    on(H.shf, 'pointermove', (e) => { if (H.shfY === null || e.pointerId !== H.shfId || H.shfDone) return; const dy = H.shfY - e.clientY; if (Math.abs(dy) >= SHF_SWIPE) { H.shfDone = true; shift(dy > 0 ? 1 : -1); } });
+    const shfEnd = (e) => { if (H.shfY === null || e.pointerId !== H.shfId) return; H.shfY = null; human.clu = 0; H.shf.classList.remove('on'); };
+    on(H.shf, 'pointerup', shfEnd); on(H.shf, 'pointercancel', shfEnd);
     const fingers = new Map(), steerNow = () => { let s = 0; for (const v of fingers.values()) s = v; human.steer = s; H.steerB[0].classList.toggle('on', s < 0); H.steerB[1].classList.toggle('on', s > 0); };
     hold(H.steer, (e) => { const r = H.steer.getBoundingClientRect(); fingers.delete(e.pointerId); fingers.set(e.pointerId, e.clientX < r.left + r.width / 2 ? -1 : 1); steerNow(); }, (e) => { fingers.delete(e.pointerId); steerNow(); });
     on(H.cam, 'click', () => setCameraMode(mode === 'eye' ? 'chase' : 'eye'));
@@ -13911,11 +14079,12 @@ function createDrive(o) {
   }
   function hudTick(dt) {
     const H = hud; if (!H) return;
-    const kmh = Math.round(Math.abs(st.v) * 3.6), gear = st.rev ? 'R' : String(st.gear + 1), set = (k, v, f) => { if (H.last[k] !== v) { H.last[k] = v; f(v); } };
-    set('spd', kmh, (v) => (H.spd.textContent = v)); set('gear', gear, (v) => { H.gear.textContent = v; H.gear.classList.toggle('r', v === 'R'); });
+    const kmh = Math.round(Math.abs(st.v) * 3.6), gear = st.mt ? (st.stall ? '熄' : st.mg === 0 ? 'N' : st.mg === -1 ? 'R' : String(st.mg)) : st.rev ? 'R' : String(st.gear + 1), set = (k, v, f) => { if (H.last[k] !== v) { H.last[k] = v; f(v); } };
+    set('spd', kmh, (v) => (H.spd.textContent = v)); set('gear', gear, (v) => { H.gear.textContent = v; H.gear.classList.toggle('r', v === 'R' || v === '熄'); H.gear.classList.toggle('n', v === 'N'); });
+    if (st.mt) mtHud(set);
     if (mode !== 'eye') { const r = Math.min(1, st.rpm); set('rpm', Math.round(r * 50), (v) => H.tachA.setAttribute('stroke-dasharray', `${v * 2} 100`)); set('redl', r > 0.86, (v) => H.tach.classList.toggle('red', v)); } // 轉速表：50 格，紅區（86% 以上）弧變紅
     if (tilt.on) set('tilt', Math.round(tilt.val * 45), (v) => H.tiltG.setAttribute('transform', `rotate(${v * 2})`)); // 轉手機開車：小方向盤（打到底 90 度，跟駕駛座的一樣）
-    set('rev', st.rev, (v) => { H.brk.textContent = v ? '倒車' : '煞車'; H.brk.classList.toggle('rev', v); });
+    set('rev', st.rev && !st.mt, (v) => { H.brk.textContent = v ? '倒車' : '煞車'; H.brk.classList.toggle('rev', v); }); // 手排：煞車永遠是煞車（R 檔油門往後走）
     const dd = dest && destStyle(dest); set('dest', dest, () => { H.chip.hidden = !dd; if (dd) H.name.textContent = dd.label; });
     if (dd && routeData) {
       const here = zoneNow === dest; set('here', here, (v) => { H.chip.classList.toggle('here', v); H.arrow.innerHTML = v ? '<path d="M5 12.5l4.5 4.5L19.5 7" fill="none" stroke="#0E0F12" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>' : ICON.up.replace(/<\/?svg[^>]*>/g, ''); });
@@ -13928,6 +14097,17 @@ function createDrive(o) {
     if (st.dT >= 0.25) st.dShow = 0.6; else st.dShow = Math.max(0, st.dShow - dt);
     set('drift', st.dShow > 0, (v) => (H.drift.hidden = !v));
     if (st.dT >= 0.25) { H.dA = (H.dA || 0) - dt; if (H.dA <= 0) { H.dA = 0.1; set('dA', Math.max(10, Math.round((Math.abs(st.slip) * 180) / Math.PI / 5) * 5), (v) => (H.driftA.textContent = v + '°')); } }
+  }
+  // 第 68 批：手排的提示（轉速表上面一條）、▲ ▼ 亮：熄火 ＞ 咔咔 ＞ 紅線噠噠噠 ＞ 空檔踩油門 ＞ 檔太高；甩尾的字出來的時候不顯示
+  function mtHud(set) {
+    const H = hud, go = st.rev ? 0 : st.thr, x = st.mg > 0 ? xOf(st.v, st.gear) : 0, lug = st.mg >= 2 && go > 0.3 && Math.abs(st.v) > 1 && x < 0.22 && !st.stall && st.clu > 0.5;
+    const msg = st.stall ? (st.crank > 0 ? '發動中⋯' : '熄火了！按油門重新發動') : st.grind > 0 ? (st.grindWhy === 2 ? '咔咔！停下來才能倒車' : '咔咔！要按著離合器（Shift）') : st.lim ? '噠噠噠 要升檔了！往上滑' : st.mg === 0 && go > 0.3 ? '空檔：按著換檔桿往上滑排 1 檔' : lug ? '檔太高了 往下滑' : '';
+    const warn = !st.stall && st.grind <= 0 && !st.lim;
+    set('mth', st.dShow > 0 ? '' : msg, (v) => { if (v) H.mth.textContent = v; H.mth.classList.toggle('show', !!v); });
+    set('mthW', warn, (v) => H.mth.classList.toggle('warn', v));
+    // 換檔桿的格子：現在這一檔橘色（熄火＝灰）、該升檔＝上面那格亮橘、撞紅線＝上面那格閃紅、檔太高＝下面那格亮橘
+    const upHot = st.mg > 0 && st.mg < NG && !st.lim && st.rpm > 0.86, upLim = st.lim && st.mg < NG && (st.limT % 0.3 < 0.15);
+    set('shf', `${st.mg}|${st.stall ? 1 : 0}|${upHot ? 1 : 0}|${upLim ? 1 : 0}|${lug ? 1 : 0}`, () => { for (const b of H.slots) { const g = +b.dataset.g; b.className = (g === -1 ? 'r' : '') + (g === st.mg ? ' cur' + (st.stall ? ' stall' : '') : g === st.mg + 1 && upLim ? ' lim' : g === st.mg + 1 && upHot ? ' hot' : g === st.mg - 1 && lug ? ' hot' : ''); } });
   }
   let toastT = 0;
   function toast(text, ms = 1600) { if (!hud) return; hud.toast.textContent = text; hud.toast.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => hud && hud.toast.classList.remove('show'), ms); }
@@ -13967,13 +14147,14 @@ function createDrive(o) {
   function doPop() { if (popOn === null || paused || !alive || !popFn) return; popFn(api); }
 
   // ---- 鍵盤 ----
-  const KEYS = { ArrowUp: 'U', KeyW: 'U', ArrowDown: 'D', KeyS: 'D', ArrowLeft: 'L', KeyA: 'L', ArrowRight: 'R', KeyD: 'R', Space: 'B' };
+  const KEYS = { ArrowUp: 'U', KeyW: 'U', ArrowDown: 'D', KeyS: 'D', ArrowLeft: 'L', KeyA: 'L', ArrowRight: 'R', KeyD: 'R', Space: 'B', ShiftLeft: 'C', ShiftRight: 'C' }; // 第 68 批：Shift＝離合器、Q 升檔、Z 降檔
   const onKey = (e) => {
     if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     const k = KEYS[e.code], down = e.type === 'keydown';
     if (k) { if (!paused) e.preventDefault(); human.kb[k] = down; }
     else if (down && e.code === 'KeyC' && !e.repeat && !paused) setCameraMode(mode === 'eye' ? 'chase' : 'eye');
     else if (down && e.code === 'KeyL' && !e.repeat && !paused && popOn !== null) { e.preventDefault(); doPop(); } // 跳燈
+    else if (down && (e.code === 'KeyQ' || e.code === 'KeyZ') && !e.repeat && !paused && st.mt) { e.preventDefault(); shift(e.code === 'KeyQ' ? 1 : -1); } // 第 68 批：手排
     else if (down && e.code === 'KeyE' && !e.repeat && !paused && (action || action2)) { e.preventDefault(); if (action) doAction(); else doAction2(); } // 沒有大按鈕：按第二顆（下車）
   };
   const onBlur = () => { human.kb = {}; };
@@ -13981,7 +14162,7 @@ function createDrive(o) {
   if (useKeys) { window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey); window.addEventListener('blur', onBlur); }
   const input = () => {
     if (forced) return forced;
-    const k = human.kb; return { thr: Math.max(k.U ? 1 : 0, human.thr), brk: Math.max(k.D ? 1 : 0, human.brk), hb: Math.max(k.B ? 1 : 0, human.hb), steer: clamp((k.R ? 1 : 0) - (k.L ? 1 : 0) + human.steer + (tilt.on ? tilt.val : 0), -1, 1) };
+    const k = human.kb; return { thr: Math.max(k.U ? 1 : 0, human.thr), brk: Math.max(k.D ? 1 : 0, human.brk), hb: Math.max(k.B ? 1 : 0, human.hb), clu: Math.max(k.C ? 1 : 0, human.clu), steer: clamp((k.R ? 1 : 0) - (k.L ? 1 : 0) + human.steer + (tilt.on ? tilt.val : 0), -1, 1) };
   };
   // ---- 轉手機開車：重力的方向（低通）→ 跟「置中」差幾度 → −1～1 ----
   function tiltVal() { const d = wrapA(((tilt.a - tilt.center) * Math.PI) / 180) * 180 / Math.PI, m = Math.abs(d) - TILT.dead; tilt.val = m > 0 ? clamp((Math.sign(d) * m) / (TILT.full - TILT.dead), -1, 1) : 0; }
@@ -14070,6 +14251,8 @@ function createDrive(o) {
     for (const e of ev) {
       if (e[0] === 'zone' && o.onZone) o.onZone(e[1], e[2], places[e[1]]);
       else if (e[0] === 'shift' && o.onShift) o.onShift(e[1]);
+      else if (e[0] === 'engine' && o.onEngine) o.onEngine(e[1]); // 第 68 批：手排熄火（false）、重新發動（true）
+      else if (e[0] === 'grind' && o.onGrind) o.onGrind(e[1]);
       else if (e[0] === 'bump' && o.onBump) o.onBump(e[1]);
       else if (e[0] === 'land') { cam.shake = Math.max(cam.shake, Math.min(0.3, e[1].speed * 0.025)); if (o.onLand) o.onLand(e[1]); } // 第 4 批：落地
       else if (e[0] === 'impact' && o.onImpact) o.onImpact(e[1]);
@@ -14084,7 +14267,7 @@ function createDrive(o) {
   function setHidden(h) { if (hud) hud.root.hidden = h; fx.shadow.visible = !h; if (h) fx.beacon.visible = false; }
   function teleport(p, op = {}) {
     auto = null; events.length = 0;
-    st.x = p.x; st.z = p.z; st.th = p.heading ?? 0; st.gear = 0; st.rev = false; st.hold = 0; st.cut = 0; neutral();
+    st.x = p.x; st.z = p.z; st.th = p.heading ?? 0; st.gear = 0; st.rev = false; st.hold = 0; st.cut = 0; st.mg = 0; st.stall = false; st.crank = 0; st.grind = 0; st.lim = false; st.clu = st.cluPrev = 1; st.shq.length = 0; neutral(); // 手排：空檔、沒熄火
     if (ride) ride.reset(); // 第 4 批
     pose(); zones(true); routeTick(0, true); cam.ok = false; cam.yaw = st.th; cam.d = 6.5; cam.spd = 0; cam.acc = 0; cam.shake = 0;
     intro = op.intro ? { t: 0, T: 3.4, a0: 2.8, d0: 8.5, h0: 1.45 } : null;
@@ -14095,10 +14278,10 @@ function createDrive(o) {
     const x1 = p.noseX != null ? p.noseX - f1[0] * info.nose : p.x, z1 = p.noseX != null ? p.z - f1[1] * info.nose : p.z;
     const dx = x1 - st.x, dz = z1 - st.z, dist = Math.hypot(dx, dz);
     auto = { t: 0, T: clamp(dist / 4.5 + 0.5, 0.6, 3.2), x0: st.x, z0: st.z, th0: st.th, x1, z1, th1, k: dist, f0, f1, onDone, curve: dist > 0.5 && dx * f0[0] + dz * f0[1] > 0 && f0[0] * f1[0] + f0[1] * f1[1] > 0.3 };
-    st.rev = false; st.gear = 0; st.hold = 0;
+    st.rev = false; st.gear = 0; st.hold = 0; st.mg = st.mt ? 1 : 0; st.stall = false; st.crank = 0; st.shq.length = 0; // 手排：自動停車排 1 檔
     st.slip = st.slipV = st.loose = st.dm = 0; // 第 3 批：自動停車不甩
   }
-  function pause() { paused = true; auto = null; events.length = 0; neutral(); setHidden(true); human.thr = human.brk = human.steer = human.hb = 0; human.kb = {}; fxOff(); if (hud) hud.hb.classList.remove('on'); /* 第 3 批 */ if (hud) { hud.act.classList.remove('on'); hud.act2.classList.remove('on'); hud.pop.classList.remove('on'); } }
+  function pause() { paused = true; auto = null; events.length = 0; neutral(); setHidden(true); human.thr = human.brk = human.steer = human.hb = human.clu = 0; human.kb = {}; fxOff(); if (hud) hud.hb.classList.remove('on'); /* 第 3 批 */ if (hud) { hud.act.classList.remove('on'); hud.act2.classList.remove('on'); hud.pop.classList.remove('on'); hud.shf.classList.remove('on'); hud.shfY = null; } st.shq.length = 0; }
   function resume() { if (!alive) return; paused = false; setHidden(false); cam.ok = false; }
   function release() { pause(); if (ride) ride.release(); st.spin = 0; car.position.set(0, 0, 0); car.rotation.set(0, 0, 0); S.wheels.forEach((w) => (w.rotation.z = 0)); car.updateMatrixWorld(true); }
   function setDestination(name) { dest = name && places[name] ? name : null; routeT = 0; routeTick(0, true); if (hud) hud.last.here = undefined; }
@@ -14114,7 +14297,9 @@ function createDrive(o) {
   const telemetry = () => ({ x: st.x, z: st.z, heading: st.th, v: st.v, kmh: Math.abs(st.v) * 3.6, rpm: st.rpm, gear: st.rev ? -1 : st.gear + 1, throttle: st.cut > 0 ? 0 : st.thrEff, load: paused ? 0 : st.load,
     brake: Math.max(st.rev ? st.thr : st.brk, st.hb), steer: st.steer, surface: st.surf, cap: Math.min(999, Math.round(st.cap * 36) / 10), reversing: st.rev, bumps: st.bumps, shifts: st.shifts, zone: zoneNow, dest, destDist: routeData ? Math.max(0, routeData.len - routeS) : null, auto: !!auto, paused,
     slip: st.slip, travel: wrapA(st.th + st.slip), drift: st.dm, drifting: Math.abs(st.slip) > 0.175, drifts: st.drifts, loose: st.loose, skid: st.skid, handbrake: st.hb > 0 ? 1 : 0, // 第 3 批（甩尾）
-    marks: SK ? SK.count() : 0, smoke: SK ? SK.alive() : 0, tilt: tilt.on ? tilt.val : null, ...(ride ? ride.tele() : null) });
+    marks: SK ? SK.count() : 0, smoke: SK ? SK.alive() : 0, tilt: tilt.on ? tilt.val : null,
+    ngears: NG, mt: st.mt, mgear: st.mt ? st.mg : null, clutch: st.mt ? +(1 - st.clu).toFixed(3) : 0, stalled: st.stall, cranking: st.crank > 0, grind: st.grind > 0 ? st.grindWhy : 0, limiter: st.lim, // 第 68 批：手排
+    ...(ride ? ride.tele() : null) });
 
   const api = {
     update, telemetry, setDestination, setCameraMode, teleport, parkAt, pause, resume, release, dispose, toast, setAction, setAction2,
@@ -14130,7 +14315,8 @@ function createDrive(o) {
     setCamCeil: (fn) => { camCeil = typeof fn === 'function' ? fn : null; }, // 修 5（2026-10-10）
     setTilt, get tilt() { return tilt.on; },
     setPop, get pop() { return popOn; }, // 跳燈
-    setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
+    setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, clu: +i.clutch || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
+    setGearbox, shift, get gearbox() { return st.mt ? 'mt' : 'at'; }, // 第 68 批：手排（'mt'）／自排（'at'）；shift(±1)＝按 ▲ ▼
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
     carInfo: { nose: info.nose, tail: info.tail, len: info.len, halfW: Math.max(info.halfW, +o.halfW || 0), wheelbase: L, vmax: P.vmax }, hud: hud && hud.root, // halfW：碰撞的半寬（怪獸卡車：輪胎比車身寬）
   };
@@ -20778,8 +20964,8 @@ const CSS = `
 .wk-btns{right:12px;bottom:22px;display:flex;flex-direction:column;align-items:flex-end;gap:12px;pointer-events:auto}
 .wk-btns b{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;background:rgba(14,15,18,0.62);font-size:21px;font-weight:700;box-shadow:0 4px 0 rgba(0,0,0,0.35);cursor:pointer;touch-action:manipulation}
 .wk-btns b.on{transform:translateY(3px);box-shadow:none;background:#FF6A1F;color:#1A0F07}
-.wk-toast{top:34%;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:9px 20px;border-radius:22px;background:rgba(14,15,18,0.78);font-size:20px;font-weight:700;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,-50%) scale(.92);transition:opacity .15s,transform .15s}
-.wk-toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.wk-toast{top:132px;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:5px 13px;border-radius:999px;background:rgba(14,15,18,0.7);font-size:13px;font-weight:600;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,0) scale(.92);transition:opacity .15s,transform .15s}
+.wk-toast.show{opacity:1;transform:translate(-50%,0) scale(1)}
 @media (prefers-reduced-motion:reduce){.wk-toast,.wk-chip svg,.wk-stick{transition:none}.wk-act::after{animation:none}}
 `;
 const ICON = {
@@ -21883,8 +22069,8 @@ const { createBigMap, BIGMAP_STYLE } = (() => {
 //       ＋ support   長槍：左手扶在右手前面幾公尺（預設 0.32）
 //       ＋ hands     'sit' 的時候手放哪：'lap' 放腿上（預設）｜'bars' 機車把手（右手 [0.62, 0.8, 0.3]、左手 z 相反）｜'wheel' 方向盤｜[x, y, z]（本地公尺，右手；左手 z 相反）
 //                    ｜[[左手 x, y, z], [右手 x, y, z]]（兩隻手各自給：沙灘車的手把會轉，第 56 批）
-//       ＋ feet      'sit' 的時候腳踩哪：不給＝椅子前面的地上｜[x, y, z]（腳踝，本地公尺，右腳；左腳 z 相反；膝蓋往外張開）：跨坐沙灘車
-//                    手搆不到的時候身體會往前傾（最多 0.9 弧度）
+//       ＋ feet      'sit' 的時候腳踩哪：不給＝椅子前面的地上｜[x, y, z]（腳踝，本地公尺，右腳；左腳 z 相反；膝蓋往外張開）：跨坐沙灘車｜[[左], [右]]（兩隻腳各自的，z 照給的；膝蓋朝前）：踩腳踏車
+//                    手搆不到的時候身體會往前傾（最多 0.9 弧度；＋ leanMax 改最多幾弧度、leanAdd 再多傾幾弧度：腳踏車）
 //     C.state       現在的狀態
 //     C.dispose()   從場景拿掉、釋放幾何（材質、貼圖大家共用，不會釋放）
 //   state：'idle' 站 | 'walk' 走 | 'run' 跑 | 'sit' 坐（屁股 0.45 公尺高）| 'fall' 倒下、躺著不動 | 'getup' 爬起來 | 'punch' 右手直拳
@@ -24218,7 +24404,7 @@ function sitBody(S, M, P, o) {
   idleBody(S, M, P, S.time, 0);
   const g = handsTarget(S, M, o);
   if (g) { // 手要往前伸（機車把手）：身體往前傾到搆得到
-    const lean = sitLean(M, g);
+    const mx = S.leanMax ?? 0.9, lean = Math.min(mx, sitLean(M, g, mx) + (S.leanAdd || 0));
     P[CI.sp] -= 0.45 * lean; P[CI.cp] -= 0.55 * lean; P[CI.hp] -= 0.1 * lean;
   }
   P[CI.kp] -= 0.8 * (P[CI.hp] + P[CI.sp] + P[CI.cp]);
@@ -24231,14 +24417,14 @@ function handsTarget(S, M, o) {
   return null;
 }
 const BARS = [0.62, 0.8, 0.3], WHEEL = [0.45, 0.86, 0.19];
-function sitLean(M, g) { // 肩膀繞著腰往前轉，轉到手搆得到（最多 0.9）；兩隻手各自給的：遠的那隻搆得到
-  if (Array.isArray(g[0])) return Math.max(sitLean(M, g[0]), sitLean(M, g[1]));
+function sitLean(M, g, mx = 0.9) { // 肩膀繞著腰往前轉，轉到手搆得到（最多 0.9）；兩隻手各自給的：遠的那隻搆得到
+  if (Array.isArray(g[0])) return Math.max(sitLean(M, g[0], mx), sitLean(M, g[1], mx));
   const hy = sitHipJ(M), pivY = hy + (M.spineY - M.hipJY), Ls = M.shY - M.spineY, R = (M.upper + M.fore) * 0.97 + 0.07 * M.s;
-  for (let l = 0; l <= 0.9; l += 0.05) {
+  for (let l = 0; l <= mx; l += 0.05) {
     const sx = Math.sin(l) * Ls, sy = pivY + Math.cos(l) * Ls;
     if (Math.hypot(g[0] - sx, g[1] - sy, Math.abs(g[2]) - M.shZ * 0.9) <= R) return l;
   }
-  return 0.9;
+  return mx;
 }
 
 // ---- 手的 IK ----
@@ -24318,7 +24504,7 @@ function sitLegs(S, M) {
     const sd = k ? 1 : -1, b = SIDE_B[k], yaw = -sd * 0.14;
     let ay = M.ankleY, th = 0; const x = M.thigh * 0.98 + 0.03 * M.s, f = S.seatFeet;
     if (hy - M.shin * 0.97 > ay) { ay = hy - M.shin * 0.97; th = -0.35; } // 腳搆不到地（小孩）：垂著
-    if (f) { V_A.set(f[0], f[1], sd * Math.abs(f[2])); V_POLE.set(1, 0.35, sd * 0.9); } // 腳踩的地方（腳踝，本地公尺；跨坐沙灘車：腳開開、膝蓋往外）
+    if (f) { const q = Array.isArray(f[0]) ? f[k] : f; V_A.set(q[0], q[1], q === f ? sd * Math.abs(q[2]) : q[2]); V_POLE.set(1, 0.35, sd * (q === f ? 0.9 : 0.25)); } // 兩隻腳各自的（[[左], [右]]：踩腳踏車） // 腳踩的地方（腳踝，本地公尺；跨坐沙灘車：腳開開、膝蓋往外）
     else { V_A.set(x, ay, sd * (M.hipZ + 0.02 * M.s)); V_POLE.set(1, 0.7, sd * 0.15); }
     footQ(yaw, th, Q_F);
     ik2(M, S.Q, S.HP, b.thigh, b.shin, M.thigh, M.shin, V_A, V_POLE, true, Q_F, b.foot);
@@ -24410,6 +24596,8 @@ function animate(C, S, dt, o) {
   if (o.support) S.support = +o.support;
   if (o.hands !== undefined) S.hands = o.hands;
   if (o.feet !== undefined) S.seatFeet = o.feet; // （S.feet 是走路的兩隻腳）
+  if (o.leanMax !== undefined) S.leanMax = o.leanMax; // 'sit' 手搆不到最多往前傾幾弧度（預設 0.9）
+  if (o.leanAdd !== undefined) S.leanAdd = o.leanAdd; // 'sit' 再多往前傾幾弧度（腳踏車：手才握得到低低的把手）
   const want = o.state;
   if (want && want !== S.state && STATES[want]) request(C, S, want, o);
   S.t += dt; S.time += dt; S.rec += dt;
@@ -32820,6 +33008,306 @@ const N4_GARAGE = {
   state: { paint: '#2a2b2e', rim: 'black', caliper: '#17181b', wing: 'none', kit: 'stock', height: '0', livery: 'race', tint: 'dark' },
 };
 
+// ---- bike-spec.js ----
+// 自行車（第 67 批；Nick 2026-11-06「加自行車」「還有越野腳踏車」，卡片「兩台都做」）：自己設計的，沒有真的牌子。整台用程式做（車身 glb 只是五通裡一顆看不到的小方塊：make-bike.mjs）：
+// 車架（管子）、前叉、把手、座墊、曲柄＋腳踏、齒盤、鏈條、飛輪、兩個輪子（輻條）、煞車。騎的人跟 Z2／N4 一樣（town.src.js RIDES）：手握把手、腳踩腳踏（曲柄跟著後輪轉）。
+// key：'mtb'（登山車：避震前叉、粗的越野胎、平把、碟煞）／'road'（公路車：彎把、細胎、夾器）。座標：x 往前、y 往上、z 往右（跟 moto-spec.js 一樣），公尺。
+
+const BK_V = (a) => new THREE.Vector3(...a);
+function BK_rod(a, b, r, seg = 12, r2 = r) { // a → b 的圓管
+  const A = BK_V(a), B = BK_V(b), d = B.clone().sub(A), g = new THREE.CylinderGeometry(r2, r, d.length(), seg, 1, false);
+  g.applyMatrix4(new THREE.Matrix4().compose(A.clone().add(B).multiplyScalar(0.5), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()), new THREE.Vector3(1, 1, 1)));
+  return g;
+}
+const BK_tube = (pts, r, seg = 40, rs = 10) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(BK_V), false, 'catmullrom', 0.3), seg, r, rs, false);
+function BK_merge(list) {
+  const P = [], N = []; let n = 0;
+  for (let g of list) { if (g.index) g = g.toNonIndexed(); P.push(g.attributes.position.array); N.push(g.attributes.normal.array); n += g.attributes.position.count; }
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3); let o = 0;
+  for (let i = 0; i < P.length; i++) { pos.set(P[i], o); nor.set(N[i], o); o += P[i].length; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  return geo;
+}
+const BK_at = (g, x, y, z, rx = 0, ry = 0, rz = 0) => { g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(1, 1, 1))); return g; };
+
+// 兩台的尺寸：輪子半徑（外徑）、胎寬、輪框半徑、前後輪軸、五通（曲柄的軸）、頭管上下、座墊、把手
+const BIKE = {
+  mtb: { R: 0.365, tw: 0.058, rim: 0.292, xr: -0.565, xf: 0.6, bb: [-0.13, 0.33], ht: [[0.425, 0.66], [0.38, 0.79]], seat: [-0.315, 0.97], bar: [0.36, 0.87], barW: 0.37, crank: 0.17 },
+  road: { R: 0.336, tw: 0.028, rim: 0.3, xr: -0.5, xf: 0.5, bb: [-0.1, 0.27], ht: [[0.385, 0.68], [0.345, 0.84]], seat: [-0.29, 0.95], bar: [0.43, 0.88], barW: 0.21, crank: 0.172 },
+};
+
+// 輪子（輪軸＝z）：外胎、輪框、輻條、花鼓（＋碟盤）
+function bikeWheel(S, mats, key, rear) {
+  const g = new THREE.Group(), R = S.R, tw = S.tw, rim = S.rim, cr = R - tw / 2;
+  const tyre = new THREE.TorusGeometry(cr, tw / 2, 14, 96);
+  if (key === 'mtb') { // 越野胎：外圈一顆一顆的胎塊
+    const knobs = [];
+    for (let i = 0; i < 64; i++) { const a = i * Math.PI * 2 / 64; for (const z of i % 2 ? [-0.016, 0.016] : [0]) knobs.push(BK_at(new THREE.BoxGeometry(0.014, 0.012, 0.016), Math.cos(a) * (R - 0.002), Math.sin(a) * (R - 0.002), z, 0, 0, a)); }
+    for (let i = 0; i < 64; i++) { const a = (i + 0.5) * Math.PI * 2 / 64; for (const z of [-0.027, 0.027]) knobs.push(BK_at(new THREE.BoxGeometry(0.012, 0.012, 0.01), Math.cos(a) * (cr + 0.02), Math.sin(a) * (cr + 0.02), z, 0, 0, a)); }
+    g.add(new THREE.Mesh(BK_merge([tyre, ...knobs]), mats.rubber));
+  } else g.add(new THREE.Mesh(tyre, mats.rubber));
+  const rimG = new THREE.LatheGeometry([[rim - 0.012, -0.011], [rim + 0.006, -0.012], [rim + 0.008, 0.012], [rim - 0.012, 0.011], [rim - 0.012, -0.011]].map(([r, y]) => new THREE.Vector2(r, y)), 96); rimG.rotateX(Math.PI / 2);
+  g.add(new THREE.Mesh(rimG, key === 'road' ? mats.black : mats.alu));
+  const sp = [], n = key === 'road' ? 24 : 32, hz = 0.03;
+  for (let i = 0; i < n; i++) { const a = i * Math.PI * 2 / n, s = i % 2 ? 1 : -1, a0 = a + s * 0.25; sp.push(BK_rod([Math.cos(a0) * 0.024, Math.sin(a0) * 0.024, s * hz], [Math.cos(a) * (rim - 0.012), Math.sin(a) * (rim - 0.012), s * 0.004], 0.0011, 4)); }
+  g.add(new THREE.Mesh(BK_merge(sp), mats.steel));
+  const hub = new THREE.CylinderGeometry(0.018, 0.018, 0.1, 16); hub.rotateX(Math.PI / 2);
+  const fl = [-hz, hz].map((z) => BK_at(new THREE.CylinderGeometry(0.03, 0.03, 0.004, 20), 0, 0, z, Math.PI / 2));
+  g.add(new THREE.Mesh(BK_merge([hub, ...fl]), mats.alu));
+  if (key === 'mtb') { // 碟盤（左邊）
+    const d = new THREE.Shape(); d.absarc(0, 0, 0.09, 0, Math.PI * 2, false); const h = new THREE.Path(); h.absarc(0, 0, 0.07, 0, Math.PI * 2, true); d.holes.push(h);
+    for (let j = 0; j < 12; j++) { const a = j * Math.PI / 6, q = new THREE.Path(); q.absarc(Math.cos(a) * 0.08, Math.sin(a) * 0.08, 0.004, 0, Math.PI * 2, true); d.holes.push(q); }
+    const dg = new THREE.ExtrudeGeometry(d, { depth: 0.002, bevelEnabled: false, curveSegments: 40 }); dg.translate(0, 0, -0.052);
+    const arms = []; for (let j = 0; j < 6; j++) { const a = j * Math.PI / 3; arms.push(BK_rod([Math.cos(a) * 0.02, Math.sin(a) * 0.02, -0.051], [Math.cos(a + 0.3) * 0.072, Math.sin(a + 0.3) * 0.072, -0.051], 0.004, 6)); }
+    g.add(new THREE.Mesh(BK_merge([dg, ...arms]), mats.disc));
+  }
+  if (rear) { // 飛輪（右邊，一片一片的齒片）
+    const cs = []; for (let j = 0; j < (key === 'road' ? 11 : 12); j++) { const r = 0.024 + j * (key === 'road' ? 0.0042 : 0.0055), c = new THREE.CylinderGeometry(r, r, 0.0018, 28); c.rotateX(Math.PI / 2); c.translate(0, 0, 0.045 - j * 0.0037); cs.push(c); }
+    g.add(new THREE.Mesh(BK_merge(cs), mats.steel));
+  }
+  return g;
+}
+
+// 一台：回傳 { group, wheels: [後, 前], crank, bars }（crank、bars 是會轉的那組）
+function bikeBuild(key, paint, mats) {
+  const S = BIKE[key], g = new THREE.Group(), y0 = S.R, [bx, by] = S.bb, [hb, ht] = S.ht, R = key === 'road';
+  const tr = R ? 0.016 : 0.022; // 管子的半徑
+  // ---- 車架 ----
+  const stTop = [bx + (S.seat[0] - bx) * (R ? 0.72 : 0.6), by + (S.seat[1] - by) * (R ? 0.72 : 0.6)];
+  const frame = [
+    BK_rod([bx, by, 0], [stTop[0], stTop[1], 0], tr * 0.85), // 立管
+    BK_rod([bx, by, 0], [hb[0], hb[1], 0], tr * 1.15, 14, tr), // 下管
+    BK_rod([stTop[0] + 0.01, stTop[1] - 0.03, 0], [ht[0], ht[1] - 0.03, 0], tr * 0.9), // 上管
+    BK_rod([hb[0] + 0.006, hb[1] - 0.03, 0], [ht[0] - 0.004, ht[1] + 0.03, 0], tr * 1.35, 16), // 頭管
+  ];
+  for (const s of [-1, 1]) {
+    frame.push(BK_tube([[bx, by, s * 0.03], [(bx + S.xr) / 2, (by + y0) / 2 - 0.005, s * 0.06], [S.xr, y0, s * 0.066]], tr * 0.55, 12, 8)); // 後下叉
+    frame.push(BK_tube([[stTop[0] - 0.005, stTop[1] - 0.04, s * 0.022], [(stTop[0] + S.xr) / 2, (stTop[1] + y0) / 2 + 0.02, s * 0.055], [S.xr, y0 + 0.01, s * 0.066]], tr * 0.48, 12, 8)); // 後上叉
+  }
+  frame.push(BK_at(new THREE.CylinderGeometry(0.024, 0.024, 0.075, 18), bx, by, 0, Math.PI / 2)); // 五通
+  g.add(new THREE.Mesh(BK_merge(frame), paint));
+  // 車架上的字（自己編的）：下管兩邊一條白色的貼紙
+  const dDir = new THREE.Vector2(hb[0] - bx, hb[1] - by), dL = dDir.length(), dA = Math.atan2(dDir.y, dDir.x);
+  for (const s of [-1, 1]) g.add(new THREE.Mesh(BK_at(new THREE.BoxGeometry(dL * 0.45, tr * 0.9, 0.002), bx + Math.cos(dA) * dL * 0.5, by + Math.sin(dA) * dL * 0.5, s * tr * 1.12, 0, 0, dA), mats.decal));
+  // ---- 前叉、龍頭、把手（bars：轉向的那一組，繞頭管轉）----
+  const bars = new THREE.Group(); bars.name = 'bars';
+  const ax = new THREE.Vector2(ht[0] - hb[0], ht[1] - hb[1]).normalize(); // 頭管往上的方向
+  const fk = [S.xf, y0], crown = [hb[0] - ax.x * 0.03, hb[1] - ax.y * 0.03];
+  const fork = [];
+  if (!R) { // 避震前叉：上面銀色內管、下面黑色外管
+    const mid = [crown[0] + (fk[0] - crown[0]) * 0.45, crown[1] + (fk[1] - crown[1]) * 0.45];
+    const st = [], low = [];
+    for (const s of [-1, 1]) { st.push(BK_rod([crown[0], crown[1], s * 0.055], [mid[0], mid[1], s * 0.055], 0.016, 14)); low.push(BK_rod([mid[0] + (crown[0] - mid[0]) * 0.1, mid[1] + (crown[1] - mid[1]) * 0.1, s * 0.055], [fk[0] - 0.01, fk[1] - 0.02, s * 0.055], 0.021, 14)); }
+    low.push(BK_tube([[mid[0] - 0.01, mid[1] + 0.06, -0.055], [mid[0] + 0.03, mid[1] + 0.08, 0], [mid[0] - 0.01, mid[1] + 0.06, 0.055]], 0.012, 12, 8)); // 拱橋
+    low.push(BK_at(new THREE.BoxGeometry(0.06, 0.035, 0.15), crown[0], crown[1], 0, 0, 0, Math.atan2(ax.y, ax.x) - Math.PI / 2)); // 肩蓋
+    bars.add(new THREE.Mesh(BK_merge(st), mats.chrome), new THREE.Mesh(BK_merge(low), mats.black));
+  } else {
+    for (const s of [-1, 1]) fork.push(BK_tube([[crown[0], crown[1], s * 0.03], [(crown[0] + fk[0]) / 2 + 0.01, (crown[1] + fk[1]) / 2, s * 0.05], [fk[0], fk[1], s * 0.052]], 0.011, 16, 8));
+    fork.push(BK_at(new THREE.BoxGeometry(0.04, 0.03, 0.08), crown[0], crown[1], 0));
+    bars.add(new THREE.Mesh(BK_merge(fork), paint));
+  }
+  const top = [ht[0] + ax.x * 0.05, ht[1] + ax.y * 0.05]; // 龍頭的柱
+  const stem = [BK_rod([ht[0], ht[1], 0], [top[0], top[1], 0], 0.016, 14), BK_rod([top[0] - 0.01, top[1] - 0.01, 0], [S.bar[0], S.bar[1], 0], 0.017, 12)];
+  bars.add(new THREE.Mesh(BK_merge(stem), mats.black));
+  const bw = S.barW, bar = [];
+  if (!R) bar.push(BK_tube([[S.bar[0] - 0.03, S.bar[1] + 0.012, -bw], [S.bar[0], S.bar[1] + 0.006, -0.12], [S.bar[0] + 0.004, S.bar[1], 0], [S.bar[0], S.bar[1] + 0.006, 0.12], [S.bar[0] - 0.03, S.bar[1] + 0.012, bw]], 0.0115, 40, 10));
+  else for (const s of [-1, 1]) bar.push(BK_tube([[S.bar[0], S.bar[1], 0], [S.bar[0], S.bar[1], s * 0.12], [S.bar[0] + 0.02, S.bar[1], s * 0.2], [S.bar[0] + 0.1, S.bar[1] - 0.01, s * bw], [S.bar[0] + 0.13, S.bar[1] - 0.08, s * bw], [S.bar[0] + 0.08, S.bar[1] - 0.14, s * bw], [S.bar[0], S.bar[1] - 0.13, s * bw]], 0.0115, 40, 10)); // 彎把
+  bars.add(new THREE.Mesh(BK_merge(bar), mats.alu2));
+  const grips = [];
+  if (!R) for (const s of [-1, 1]) { grips.push(BK_rod([S.bar[0] - 0.024, S.bar[1] + 0.011, s * (bw - 0.11)], [S.bar[0] - 0.03, S.bar[1] + 0.012, s * (bw + 0.004)], 0.017, 14)); }
+  else for (const s of [-1, 1]) grips.push(BK_tube([[S.bar[0] + 0.02, S.bar[1], s * 0.2], [S.bar[0] + 0.1, S.bar[1] - 0.01, s * bw], [S.bar[0] + 0.13, S.bar[1] - 0.08, s * bw], [S.bar[0] + 0.08, S.bar[1] - 0.14, s * bw]], 0.0145, 30, 10)); // 握把帶
+  // 煞車把手（兩邊）、變速撥桿、鈴鐺（右邊）、車燈（前面）
+  for (const s of [-1, 1]) {
+    if (!R) grips.push(BK_rod([S.bar[0] - 0.01, S.bar[1] + 0.02, s * (bw - 0.13)], [S.bar[0] + 0.07, S.bar[1] + 0.005, s * (bw - 0.05)], 0.006, 8));
+    else grips.push(BK_rod([S.bar[0] + 0.13, S.bar[1] - 0.02, s * bw], [S.bar[0] + 0.15, S.bar[1] - 0.15, s * bw], 0.007, 8), BK_at(new THREE.BoxGeometry(0.05, 0.05, 0.03), S.bar[0] + 0.125, S.bar[1] - 0.005, s * bw)); // 變速把手（兩用）
+  }
+  bars.add(new THREE.Mesh(BK_merge(grips), mats.black));
+  const bell = new THREE.SphereGeometry(0.022, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2); bell.translate(S.bar[0] + 0.005, S.bar[1] + 0.014, R ? 0.075 : 0.2);
+  bars.add(new THREE.Mesh(bell, mats.chrome));
+  const lamp = BK_at(new THREE.CylinderGeometry(0.022, 0.026, 0.06, 18), S.bar[0] + 0.03, S.bar[1] - 0.028, R ? -0.06 : -0.08, 0, 0, -Math.PI / 2);
+  bars.add(new THREE.Mesh(lamp, mats.black));
+  const lens = BK_at(new THREE.CircleGeometry(0.021, 18), S.bar[0] + 0.061, S.bar[1] - 0.028, R ? -0.06 : -0.08, 0, Math.PI / 2, 0);
+  bars.add(new THREE.Mesh(lens, mats.light));
+  g.add(bars);
+  bars.userData.piv = [hb[0], hb[1], 0]; bars.userData.ax = [ax.x, ax.y, 0];
+  // ---- 座墊、座管 ----
+  const sp = [stTop[0] + 0.01, stTop[1] - 0.04];
+  g.add(new THREE.Mesh(BK_rod([sp[0], sp[1], 0], [S.seat[0] + 0.01, S.seat[1] - 0.03, 0], 0.0135, 14), mats.alu2));
+  const sad = new THREE.SphereGeometry(1, 24, 12); const sp2 = sad.attributes.position;
+  for (let i = 0; i < sp2.count; i++) { const x = sp2.getX(i), y = sp2.getY(i), z = sp2.getZ(i), w = 0.035 + 0.045 * Math.max(0, Math.min(1, (-x + 0.2) / 1.0)); sp2.setXYZ(i, x * 0.135, y * (y < 0 ? 0.03 : 0.024) + x * x * 0.012, z * w); }
+  sad.computeVertexNormals(); sad.translate(S.seat[0], S.seat[1] - 0.005, 0);
+  g.add(new THREE.Mesh(sad, mats.saddle));
+  // ---- 曲柄、齒盤、腳踏（crank：繞五通轉）----
+  const crank = new THREE.Group(); crank.name = 'crank'; crank.position.set(bx, by, 0);
+  const ring = new THREE.Shape(), rr = R ? 0.105 : 0.085; ring.absarc(0, 0, rr, 0, Math.PI * 2, false); const hh = new THREE.Path(); hh.absarc(0, 0, rr - 0.018, 0, Math.PI * 2, true); ring.holes.push(hh);
+  const rg = new THREE.ExtrudeGeometry(ring, { depth: 0.003, bevelEnabled: false, curveSegments: 48 }); rg.translate(0, 0, 0.052);
+  const teeth = []; for (let j = 0; j < (R ? 50 : 32); j++) { const a = j * Math.PI * 2 / (R ? 50 : 32); teeth.push(BK_at(new THREE.BoxGeometry(0.006, 0.006, 0.003), Math.cos(a) * (rr + 0.002), Math.sin(a) * (rr + 0.002), 0.0535, 0, 0, a)); }
+  const spider = []; for (let j = 0; j < 4; j++) { const a = j * Math.PI / 2 + Math.PI / 4; spider.push(BK_rod([0, 0, 0.05], [Math.cos(a) * (rr - 0.01), Math.sin(a) * (rr - 0.01), 0.05], 0.006, 6)); }
+  crank.add(new THREE.Mesh(BK_merge([rg, ...teeth]), mats.steel), new THREE.Mesh(BK_merge(spider), mats.black));
+  const L = S.crank, arms = [], peds = [];
+  for (const s of [-1, 1]) { // 右邊的曲柄朝前（角度 0），左邊朝後
+    const dx = s > 0 ? L : -L;
+    arms.push(BK_rod([0, 0, s * 0.062], [dx, 0, s * 0.072], 0.011, 10, 0.009));
+    const pd = new THREE.Group(); pd.name = s > 0 ? 'pedR' : 'pedL'; pd.position.set(dx, 0, s * 0.11);
+    pd.add(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.016, 0.075), mats.black));
+    pd.add(new THREE.Mesh(BK_at(new THREE.BoxGeometry(0.004, 0.006, 0.07), 0.04, -0.012, 0), mats.amber), new THREE.Mesh(BK_at(new THREE.BoxGeometry(0.004, 0.006, 0.07), -0.04, -0.012, 0), mats.amber)); // 反光片
+    crank.add(pd); peds.push(pd);
+  }
+  crank.add(new THREE.Mesh(BK_merge([...arms, BK_at(new THREE.CylinderGeometry(0.012, 0.012, 0.15, 12), 0, 0, 0, Math.PI / 2)]), mats.alu2));
+  g.add(crank);
+  // 鏈條：齒盤 → 飛輪（上下兩條，右邊）
+  const cw = 0.003, rc = R ? 0.034 : 0.05, chain = [];
+  for (const s of [-1, 1]) chain.push(BK_rod([bx, by + s * (rr + cw), 0.054], [S.xr, y0 + s * (rc + cw), 0.054], 0.004, 6));
+  const cA = new THREE.TorusGeometry(rr + cw, 0.004, 6, 48, Math.PI); cA.rotateZ(-Math.PI / 2); cA.translate(bx, by, 0.054);
+  const cB = new THREE.TorusGeometry(rc + cw, 0.004, 6, 24, Math.PI); cB.rotateZ(Math.PI / 2); cB.translate(S.xr, y0, 0.054);
+  g.add(new THREE.Mesh(BK_merge([...chain, cA, cB]), mats.chain));
+  if (!R) g.add(new THREE.Mesh(BK_merge([BK_rod([S.xr + 0.01, y0 - 0.02, 0.066], [S.xr + 0.03, y0 - 0.11, 0.07], 0.01, 8), BK_at(new THREE.BoxGeometry(0.04, 0.05, 0.015), S.xr + 0.035, y0 - 0.11, 0.072)]), mats.black)); // 後變速器
+  // 煞車：登山車＝卡鉗（碟盤那邊），公路車＝夾器
+  if (!R) { const cal = [BK_at(new THREE.BoxGeometry(0.05, 0.035, 0.022), S.xf - 0.05, y0 + 0.06, -0.055), BK_at(new THREE.BoxGeometry(0.05, 0.035, 0.022), S.xr + 0.045, y0 + 0.07, -0.055)]; g.add(new THREE.Mesh(BK_merge(cal), mats.black)); }
+  else { const cal = [BK_at(new THREE.BoxGeometry(0.03, 0.05, 0.06), crown[0] + 0.01, crown[1] - 0.04, 0), BK_at(new THREE.BoxGeometry(0.03, 0.05, 0.06), stTop[0] - 0.07, stTop[1] - 0.12, 0)]; g.add(new THREE.Mesh(BK_merge(cal), mats.alu2)); }
+  // 水壺架＋水壺（下管上面）、後面的紅色反光片
+  const wb = [bx + Math.cos(dA) * dL * 0.45 - Math.sin(dA) * 0.045, by + Math.sin(dA) * dL * 0.45 + Math.cos(dA) * 0.045];
+  g.add(new THREE.Mesh(BK_at(new THREE.CylinderGeometry(0.034, 0.034, 0.2, 18), wb[0], wb[1], 0, 0, 0, dA - Math.PI / 2), mats.bottle));
+  g.add(new THREE.Mesh(BK_at(new THREE.BoxGeometry(0.012, 0.03, 0.04), S.seat[0] - 0.03, S.seat[1] - 0.09, 0), mats.red));
+  if (!R) { // 側柱（停的時候放下來，騎的時候收起來：做圖先收著）
+    const ks = new THREE.Mesh(BK_rod([0, 0, 0], [-0.24, -0.02, 0], 0.008, 8), mats.black); ks.name = 'kick'; ks.position.set(bx - 0.04, by - 0.01, -0.05); ks.rotation.z = 0.1; g.add(ks); // 收著（沿著後下叉）
+  }
+  // ---- 輪子 ----
+  const wR = bikeWheel(S, mats, key, true), wF = bikeWheel(S, mats, key, false);
+  wR.name = 'wheelR'; wF.name = 'wheelF'; // supra.js buildCar（wheels.moto）、lod-bake.html 認這兩個名字
+  wR.position.set(S.xr, y0, 0); wF.position.set(S.xf, y0, 0);
+  g.add(wR); bars.add(wF);
+  const B = { group: g, wheels: [wR, wF], crank, bars, peds, key, kick: g.getObjectByName('kick') || null };
+  g.userData.bike = B;
+  return B;
+}
+
+// ---- 騎的人（跟 z2-spec.js、moto-spec.js 一樣的介面：town.src.js 的 RIDES）----
+//   at：屁股（character 的 group 放在車身底下的這一點）；grip：右手的握把（左手 z 相反；把手轉了跟著轉）；lean：坐上去再多往前趴幾弧度（手才搆得到低低的把手）
+//   max：drive 的 steer 打到底（±1）把手轉幾弧度；ratio：後輪轉幾圈曲柄轉一圈（齒比）；view：第一人稱（CABIN_VIEW）：眼睛、往前看的點；真的騎的時候照騎的人的眼睛換（bikeEye）
+const BIKE_RIDE = {
+  mtb: { at: [-0.27, 0.47, 0], grip: [0.335, 0.882, 0.29], max: 0.5, lean: 0.3, ratio: 2.3, view: { eye: [0.28, 1.33, 0], look: [3.2, 0.5, 0], fov: 72 } }, // at 比座墊低 5 公分：腳才踩得到最下面的腳踏（角色的腿比較短）
+  road: { at: [-0.24, 0.45, 0], grip: [0.53, 0.87, 0.21], max: 0.45, lean: 0.6, ratio: 2.9, view: { eye: [0.32, 1.15, 0], look: [3.2, 0.4, 0], fov: 72 } },
+};
+const BK_HD = [[0, 0, 0], [0, 0, 0]], BK_FT = [[0, 0, 0], [0, 0, 0]], BK_UP = { state: 'sit', hands: BK_HD, feet: BK_FT, leanMax: 1.7, leanAdd: 0 };
+const BK_P = new THREE.Vector3(), BK_Q = new THREE.Quaternion(), BK_PV = new THREE.Vector3(), BK_AX = new THREE.Vector3();
+const bikeOf = (o) => (o && (o.userData.bike || (o.userData.bike = o.getObjectByName('bars')?.parent?.userData.bike))) || null; // body（車身）或 bikeBuild 的 group → B
+// 把手跟著轉（繞頭管）＋曲柄跟著後輪轉（腳踏保持水平）；s＝drive 的 steer（−1 左～1 右）；每一格叫（town.src.js riderStep、riderOff）
+function bikeSteer(body, s, key) {
+  const B = bikeOf(body); if (!B) return;
+  const S = BIKE[key], R = BIKE_RIDE[key], b = B.bars, piv = b.userData.piv, ax = b.userData.ax;
+  BK_AX.set(ax[0], ax[1], ax[2]).normalize(); BK_PV.set(piv[0], piv[1], piv[2]);
+  b.quaternion.setFromAxisAngle(BK_AX, -s * R.max);
+  b.position.copy(BK_PV).sub(BK_P.copy(BK_PV).applyQuaternion(b.quaternion));
+  const a = B.wheels[0].rotation.z / R.ratio; B.crank.rotation.z = a; for (const p of B.peds) p.rotation.z = -a;
+  void S;
+}
+// 人坐好：手握著（轉過的）把手、腳踩（轉到哪裡的）腳踏；C＝buildCharacter(look, { state: 'sit', shadow: false, plant: false })，C.group 放在車身底下的 BIKE_RIDE.at；每一格叫（不會 new 東西）
+function bikeRide(C, s, dt, key) {
+  const R = BIKE_RIDE[key], S = BIKE[key], at = R.at, G = R.grip, B = bikeOf(C.group.parent);
+  const piv = B ? B.bars.userData.piv : [0, 0, 0], ax = B ? B.bars.userData.ax : [0, 1, 0];
+  BK_AX.set(ax[0], ax[1], ax[2]).normalize(); BK_PV.set(piv[0], piv[1], piv[2]); BK_Q.setFromAxisAngle(BK_AX, -s * R.max);
+  for (let k = 0; k < 2; k++) {
+    BK_P.set(G[0], G[1], (k ? 1 : -1) * G[2]).sub(BK_PV).applyQuaternion(BK_Q).add(BK_PV);
+    BK_HD[k][0] = BK_P.x - at[0]; BK_HD[k][1] = BK_P.y - at[1]; BK_HD[k][2] = BK_P.z - at[2];
+  }
+  const a = B ? B.crank.rotation.z : 0, [bx, by] = S.bb, L = S.crank; // 腳踏：右邊曲柄角度 a（朝前＝0），左邊相反；腳踝在腳踏上面 7 公分
+  for (let k = 0; k < 2; k++) { const dx = k ? L : -L; BK_FT[k][0] = bx + dx * Math.cos(a) - at[0] - 0.01; BK_FT[k][1] = by + dx * Math.sin(a) - at[1] + 0.07; BK_FT[k][2] = (k ? 1 : -1) * 0.11 * 0.85; }
+  BK_UP.leanAdd = R.lean;
+  C.update(dt, BK_UP);
+}
+// 騎的人的眼睛（車身座標）：把手擺正坐好以後量（out＝[x, y, z]）；C 還沒放進車身的時候也可以量（照 at 算）
+function bikeEye(C, key, out = [0, 0, 0]) {
+  for (let i = 0; i < 30; i++) bikeRide(C, 0, 1 / 30, key);
+  const g = C.group, p = g.parent; if (p) p.remove(g);
+  const P0 = g.position.clone(), R0 = g.rotation.clone(); g.position.set(0, 0, 0); g.rotation.set(0, 0, 0);
+  g.updateMatrixWorld(true); C.eyes.getWorldPosition(BK_P);
+  g.position.copy(P0); g.rotation.copy(R0); if (p) p.add(g);
+  const at = BIKE_RIDE[key].at; out[0] = BK_P.x + at[0]; out[1] = BK_P.y + at[1]; out[2] = BK_P.z + at[2];
+  return out;
+}
+const MTB_RIDE = BIKE_RIDE.mtb, ROAD_RIDE = BIKE_RIDE.road;
+const MTB_steer = (body, s) => bikeSteer(body, s, 'mtb'), ROAD_steer = (body, s) => bikeSteer(body, s, 'road');
+const MTB_ride = (C, s = 0, dt = 1 / 60) => bikeRide(C, s, dt, 'mtb'), ROAD_ride = (C, s = 0, dt = 1 / 60) => bikeRide(C, s, dt, 'road');
+const MTB_eye = (C, out) => bikeEye(C, 'mtb', out), ROAD_eye = (C, out) => bikeEye(C, 'road', out);
+
+// ---- 材質：車庫的 mats 沒有的自己做（bike-view.html 也用）----
+function bikeMats(mats, key) {
+  const M = { ...mats };
+  M.alu2 ||= new THREE.MeshStandardMaterial({ color: 0x8e9196, roughness: 0.45, metalness: 0.8 });
+  M.steel ||= new THREE.MeshStandardMaterial({ color: 0xb9bcc2, roughness: 0.35, metalness: 0.9 });
+  M.decal ||= new THREE.MeshStandardMaterial({ color: 0xf4f5f6, roughness: 0.5, metalness: 0 });
+  M.light ||= new THREE.MeshStandardMaterial({ color: 0xf6f3e4, roughness: 0.2, metalness: 0, emissive: 0xfff3c0, emissiveIntensity: 0.35 });
+  M.saddle ||= M.seat || new THREE.MeshStandardMaterial({ color: 0x141518, roughness: 0.8 });
+  M.amber ||= new THREE.MeshStandardMaterial({ color: 0xe8901a, roughness: 0.3, emissive: 0x6a3a00, emissiveIntensity: 0.3 });
+  M.chain ||= new THREE.MeshStandardMaterial({ color: 0x5a5d63, roughness: 0.5, metalness: 0.8 });
+  M.bottle ||= new THREE.MeshStandardMaterial({ color: key === 'mtb' ? 0x2fb36b : 0xf2f2ee, roughness: 0.4 });
+  M.red ||= new THREE.MeshStandardMaterial({ color: 0xd01818, roughness: 0.2, emissive: 0x400000, emissiveIntensity: 1 });
+  return M;
+}
+
+// ---- 車庫（supra.js buildCar 的 spec）：車身 glb 是一顆看不到的小方塊（make-bike.mjs）；整台在 build() 裡用 bikeBuild 做；兩個輪子（wheels.moto）----
+function bikeLook() { // 車殼上沒有玻璃、黑、縫、拉花（都是零件）
+  const none = (b) => () => layers(b, [null, null, null, null]);
+  const empty = (b) => () => { const { c, g } = canvas(b); g.clearRect(-3, -1, 6, 3); return c; };
+  return { side: none(BOX.side), rear: none(BOX.rear), top: none(BOX.top), fronts: { base: none(BOX.front) }, livery: empty(BOX.side), frontLivery: empty(BOX.front), livDefault: 0, nose: () => 'base',
+    U: { uXr: -0.5, uXf: 0.5, uFx: [3.0, 3.1], uRx: [-3.0, -3.1], uWell: [0.0, 0.0, 0.0], uWellR: [0.0, 0.0, 0.0], uGlassY: 3 } };
+}
+// 後貨架（wing 'rack'）：座墊後面的黑色鐵架＋籃子
+function bikeRack(S, mats) {
+  const g = new THREE.Group(), x0 = S.xr - 0.02, y = S.R + 0.12 + (S.R > 0.35 ? 0.06 : 0), bars = [];
+  for (const s of [-1, 1]) { bars.push(BK_rod([x0 + 0.17, y, s * 0.06], [x0 - 0.17, y, s * 0.06], 0.005, 8), BK_rod([x0 - 0.12, y, s * 0.06], [S.xr, S.R + 0.01, s * 0.05], 0.005, 8), BK_rod([x0 + 0.12, y, s * 0.06], [S.xr + 0.12, S.R + 0.26, s * 0.03], 0.005, 8)); }
+  for (const dx of [-0.17, -0.06, 0.06, 0.17]) bars.push(BK_rod([x0 + dx, y, -0.06], [x0 + dx, y, 0.06], 0.004, 6));
+  g.add(new THREE.Mesh(BK_merge(bars), mats.black));
+  const bk = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 0.24), new THREE.MeshStandardMaterial({ color: 0x3b3f46, roughness: 0.7 })); bk.position.set(x0, y + 0.075, 0); g.add(bk);
+  return g;
+}
+function bikeSpec(key) {
+  const S = BIKE[key];
+  return {
+    look: bikeLook(), paint: key === 'mtb' ? '#e2531d' : '#1f6fd1', metal: 0.1, seat: 0x141518,
+    wheels: { xf: S.xf, xr: S.xr, R: S.R, rim: S.rim, trackF: 0.08, trackR: 0.08, wF: S.tw, wR: S.tw, style: 'five', moto: true },
+    wings: { none: () => new THREE.Group(), rack: (paint, mats) => bikeRack(S, mats) },
+    wing: 'none',
+    interior: {},
+    build(body, paint, mats) {
+      const cab = body.getObjectByName('interior'); if (cab) body.remove(cab); // 沒有車內（騎的）
+      const B = bikeBuild(key, paint, bikeMats(mats, key));
+      body.add(B.group); body.userData.bike = B;
+      return () => {};
+    },
+    kit: 'stock',
+    lod: { wheels: (B, R, kit, axles) => bikeLodWheels(B, R, kit, axles, key) },
+  };
+}
+// 輕量車的兩個輪子（carlod.js 的 builder：B.lathe／B.cap；R＝角色 → 類別）：圓胎、兩面輪框、花鼓；都在中間（z 0）
+function bikeLodWheels(B, R, kit, axles, key) {
+  for (const A of axles) {
+    const c = { x: A.x, y: A.R, z: 0 }, w = A.w, Rr = A.R, rim = A.rim, hw = w / 2, cc = Rr - hw, prof = [[rim - 0.008, -hw * 0.5], [rim + 0.004, -hw * 0.95]];
+    for (let i = 0; i <= 8; i++) { const a = -Math.PI / 2 + Math.PI * i / 8; prof.push([cc + Math.cos(a) * hw, Math.sin(a) * hw]); }
+    prof.push([rim + 0.004, hw * 0.95], [rim - 0.008, hw * 0.5]);
+    B.lathe(prof, 32, c, 1, R.rubber);
+    const ring = []; for (let j = 0; j < 24; j++) { const a = (j / 24) * Math.PI * 2; ring.push([Math.cos(a) * (rim - 0.006), Math.sin(a) * (rim - 0.006)]); }
+    B.cap(ring, 0.006, c, 1, key === 'road' ? R.black : R.rim); B.cap(ring, -0.006, c, 1, key === 'road' ? R.black : R.rim, true); // 輪框兩面（輻條太細，輕量車不畫）
+    const hub = []; for (let j = 0; j < 12; j++) { const a = (j / 12) * Math.PI * 2; hub.push([Math.cos(a) * 0.03, Math.sin(a) * 0.03]); }
+    B.cap(hub, 0.04, c, 1, R.rim); B.cap(hub, -0.04, c, 1, R.rim, true);
+  }
+}
+const MTB_SPEC = bikeSpec('mtb'), ROAD_SPEC = bikeSpec('road');
+const BIKE_OPTS = { wing: [['none', '不要'], ['rack', '後貨架＋籃子']], kit: [['stock', '原廠']], height: [['0', '原廠']], livery: [['none', '沒有']], rimStyle: [['stock', '原廠']], wide: [['off', '原廠']] };
+const MTB_GARAGE = {
+  name: '越野腳踏車', sub: '登山車 · 3D 試做版',
+  paints: [['#e2531d', '橘'], ['#2fb36b', '綠'], ['#1f6fd1', '藍'], ['#d42a2a', '紅'], ['#f2c21b', '黃'], ['#f2f2ee', '白'], ['#121315', '黑'], ['#8e44ad', '紫']],
+  opts: BIKE_OPTS,
+  state: { paint: '#e2531d', rim: 'chrome', caliper: '#17181b', wing: 'none', kit: 'stock', height: '0', livery: 'none', tint: 'dark' },
+};
+const ROAD_GARAGE = {
+  name: '一般腳踏車', sub: '公路車 · 3D 試做版',
+  paints: [['#1f6fd1', '藍'], ['#d42a2a', '紅'], ['#f2f2ee', '白'], ['#121315', '黑'], ['#2fb36b', '綠'], ['#f2c21b', '黃'], ['#e2531d', '橘'], ['#59c3d8', '天藍']],
+  opts: BIKE_OPTS,
+  state: { paint: '#1f6fd1', rim: 'black', caliper: '#17181b', wing: 'none', kit: 'stock', height: '0', livery: 'none', tint: 'dark' },
+};
+
 // ---- carlod.js ----
 // 輕量車（LOD）：車庫六個車位停的車、車行展示的車、之後路上別人開的車用的「輕的整台車」
 // 一台約 2～2.5 萬個三角形、4 個 draw call（車身＋零件、玻璃、輪胎＋煞車、輪框），沒有車內（深色玻璃擋住，看進去是暗的車殼）
@@ -32847,16 +33335,16 @@ const N4_GARAGE = {
 const { buildLodCar, LOD_CARS } = (() => {
   // spec、預設外觀用 switch 拿（只算到用到的那一個）：沒打包 Yaris 的版本（build-art.mjs 沒加 --yaris）拿 YARIS_SPEC 會丟 ReferenceError → 那台就不列在 LOD_CARS
   // 打包時這個檔要接在每台車的 spec 後面（build-art.mjs／build-app.mjs 是這樣接的）
-  const SPEC = (k) => { switch (k) { case 'supra': return SUPRA_SPEC; case 'gtr': return GTR_SPEC; case 'gc8': return GC8_SPEC; case 'yaris': return YARIS_SPEC; case 'p918': return P918_SPEC; case 'sp3': return SP3_SPEC; case 'jesko': return JESKO_SPEC; case 'monster': return MONSTER_SPEC; case 'rx7': return RX7_SPEC; case 'chiron': return CHIRON_SPEC; case 'ae86': return AE86_SPEC; case 'aventador': return AVENTADOR_SPEC; case 'altis': return ALTIS_SPEC; case 'senna': return SENNA_SPEC; case 'huayra': return HUAYRA_SPEC; case 'laferrari': return LAFERRARI_SPEC; case 'civic': return CIVIC_SPEC; case 'evo': return EVO_SPEC; case 'jp4': return JP4_SPEC; case 'k2': return K2_SPEC; case 'p8': return P8_SPEC; case 'z2': return Z2_SPEC; case 'n4': return N4_SPEC; } return null; };
-  const KEYS = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'monster', 'rx7', 'evo', 'civic', 'laferrari', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron', 'jp4', 'k2', 'p8', 'z2', 'n4'].filter((k) => { try { return !!SPEC(k); } catch { return false; } });
+  const SPEC = (k) => { switch (k) { case 'supra': return SUPRA_SPEC; case 'gtr': return GTR_SPEC; case 'gc8': return GC8_SPEC; case 'yaris': return YARIS_SPEC; case 'p918': return P918_SPEC; case 'sp3': return SP3_SPEC; case 'jesko': return JESKO_SPEC; case 'monster': return MONSTER_SPEC; case 'rx7': return RX7_SPEC; case 'chiron': return CHIRON_SPEC; case 'ae86': return AE86_SPEC; case 'aventador': return AVENTADOR_SPEC; case 'altis': return ALTIS_SPEC; case 'senna': return SENNA_SPEC; case 'huayra': return HUAYRA_SPEC; case 'laferrari': return LAFERRARI_SPEC; case 'civic': return CIVIC_SPEC; case 'evo': return EVO_SPEC; case 'jp4': return JP4_SPEC; case 'k2': return K2_SPEC; case 'p8': return P8_SPEC; case 'z2': return Z2_SPEC; case 'n4': return N4_SPEC; case 'mtb': return MTB_SPEC; case 'road': return ROAD_SPEC; } return null; };
+  const KEYS = ['supra', 'gtr', 'gc8', 'yaris', 'p918', 'sp3', 'jesko', 'monster', 'rx7', 'evo', 'civic', 'laferrari', 'huayra', 'senna', 'altis', 'aventador', 'ae86', 'chiron', 'jp4', 'k2', 'p8', 'z2', 'n4', 'mtb', 'road'].filter((k) => { try { return !!SPEC(k); } catch { return false; } });
   const DEF = (k) => { switch (k) { // Supra、GT-R 的預設寫在車庫頁（garage.src.html CARS），這裡抄一份；其他台用 <KEY>_GARAGE.state
     case 'supra': return { paint: '#ff7414', rim: 'chrome', caliper: '#9da1a6', wing: 'gt', kit: 'bomex', height: '0', livery: 'ff', tint: 'light' };
     case 'gtr': return { paint: '#1d4fc9', rim: 'gunmetal', caliper: '#c8141e', wing: 'stock', kit: 'bomex', height: '-0.03', livery: 'none', tint: 'light' };
-    case 'gc8': return GC8_GARAGE.state; case 'yaris': return YARIS_GARAGE.state; case 'p918': return P918_GARAGE.state; case 'sp3': return SP3_GARAGE.state; case 'jesko': return JESKO_GARAGE.state; case 'monster': return MONSTER_GARAGE.state; case 'rx7': return RX7_GARAGE.state; case 'evo': return EVO_GARAGE.state; case 'civic': return CIVIC_GARAGE.state; case 'laferrari': return LAFERRARI_GARAGE.state; case 'huayra': return HUAYRA_GARAGE.state; case 'senna': return SENNA_GARAGE.state; case 'altis': return ALTIS_GARAGE.state; case 'aventador': return AVENTADOR_GARAGE.state; case 'ae86': return AE86_GARAGE.state; case 'chiron': return CHIRON_GARAGE.state; case 'jp4': return JP4_GARAGE.state; case 'k2': return K2_GARAGE.state; case 'p8': return P8_GARAGE.state; case 'z2': return Z2_GARAGE.state; case 'n4': return N4_GARAGE.state;
+    case 'gc8': return GC8_GARAGE.state; case 'yaris': return YARIS_GARAGE.state; case 'p918': return P918_GARAGE.state; case 'sp3': return SP3_GARAGE.state; case 'jesko': return JESKO_GARAGE.state; case 'monster': return MONSTER_GARAGE.state; case 'rx7': return RX7_GARAGE.state; case 'evo': return EVO_GARAGE.state; case 'civic': return CIVIC_GARAGE.state; case 'laferrari': return LAFERRARI_GARAGE.state; case 'huayra': return HUAYRA_GARAGE.state; case 'senna': return SENNA_GARAGE.state; case 'altis': return ALTIS_GARAGE.state; case 'aventador': return AVENTADOR_GARAGE.state; case 'ae86': return AE86_GARAGE.state; case 'chiron': return CHIRON_GARAGE.state; case 'jp4': return JP4_GARAGE.state; case 'k2': return K2_GARAGE.state; case 'p8': return P8_GARAGE.state; case 'z2': return Z2_GARAGE.state; case 'n4': return N4_GARAGE.state; case 'mtb': return MTB_GARAGE.state; case 'road': return ROAD_GARAGE.state;
   } return {}; };
   const BASE = { wide: 'off', finish: 'stock', rimStyle: 'stock', glow: 'none', stance: 'off', lights: false, brake: false };
-  const FILES = { supra: 'tune/supra-lod.glb?h=1ff75170', gtr: 'tune/gtr-lod.glb?h=4bd6b3dc', gc8: 'tune/gc8-lod.glb?h=f63e2346', yaris: 'tune/yaris-lod.glb?h=d9db9130', p918: 'tune/p918-lod.glb?h=0ee9057b', sp3: 'tune/sp3-lod.glb?h=312b720a', jesko: 'tune/jesko-lod.glb?h=f98af4da', monster: 'tune/monster-lod.glb?h=91f92e5f', rx7: 'tune/rx7-lod.glb?h=bb2bb64f', chiron: 'tune/chiron-lod.glb?h=e0d0c2bc', ae86: 'tune/ae86-lod.glb?h=3fb036ca', aventador: 'tune/aventador-lod.glb?h=22667281', altis: 'tune/altis-lod.glb?h=9d7d94e7', senna: 'tune/senna-lod.glb?h=cfb7020b', huayra: 'tune/huayra-lod.glb?h=3de6ad69', laferrari: 'tune/laferrari-lod.glb?h=fd056f38', civic: 'tune/civic-lod.glb?h=2063796a', evo: 'tune/evo-lod.glb?h=ac2423ab', jp4: 'tune/jp4-lod.glb?h=2ea13b09', k2: 'tune/k2-lod.glb?h=e1dc3fed', p8: 'tune/p8-lod.glb?h=fbf23d55', z2: 'tune/z2-lod.glb?h=71d51db4', n4: 'tune/n4-lod.glb?h=426a9fa9' };
-  const SIZES = {"supra":245812,"gtr":224380,"sp3":246392,"jesko":242384,"yaris":240240,"gc8":211448,"p918":224292,"rx7":174108,"chiron":196068,"ae86":148768,"aventador":168704,"altis":169972,"senna":187460,"huayra":209052,"laferrari":190012,"civic":182588,"evo":163172,"monster":190612,"jp4":274324,"k2":205848,"p8":224804,"z2":305528,"n4":167676};
+  const FILES = { supra: 'tune/supra-lod.glb?h=1ff75170', gtr: 'tune/gtr-lod.glb?h=4bd6b3dc', gc8: 'tune/gc8-lod.glb?h=f63e2346', yaris: 'tune/yaris-lod.glb?h=d9db9130', p918: 'tune/p918-lod.glb?h=0ee9057b', sp3: 'tune/sp3-lod.glb?h=312b720a', jesko: 'tune/jesko-lod.glb?h=f98af4da', monster: 'tune/monster-lod.glb?h=91f92e5f', rx7: 'tune/rx7-lod.glb?h=bb2bb64f', chiron: 'tune/chiron-lod.glb?h=e0d0c2bc', ae86: 'tune/ae86-lod.glb?h=3fb036ca', aventador: 'tune/aventador-lod.glb?h=22667281', altis: 'tune/altis-lod.glb?h=9d7d94e7', senna: 'tune/senna-lod.glb?h=cfb7020b', huayra: 'tune/huayra-lod.glb?h=3de6ad69', laferrari: 'tune/laferrari-lod.glb?h=fd056f38', civic: 'tune/civic-lod.glb?h=2063796a', evo: 'tune/evo-lod.glb?h=ac2423ab', jp4: 'tune/jp4-lod.glb?h=2ea13b09', k2: 'tune/k2-lod.glb?h=e1dc3fed', p8: 'tune/p8-lod.glb?h=fbf23d55', z2: 'tune/z2-lod.glb?h=71d51db4', n4: 'tune/n4-lod.glb?h=426a9fa9', mtb: 'tune/mtb-lod.glb?h=78b1bf56', road: 'tune/road-lod.glb?h=f37efbdd' };
+  const SIZES = {"supra":245812,"gtr":224380,"sp3":246392,"jesko":242384,"yaris":240240,"gc8":211448,"p918":224292,"rx7":174108,"chiron":196068,"ae86":148768,"aventador":168704,"altis":169972,"senna":187460,"huayra":209052,"laferrari":190012,"civic":182588,"evo":163172,"monster":190612,"jp4":274324,"k2":205848,"p8":224804,"z2":305528,"n4":167676,"mtb":74864,"road":83888};
   const LOADED = new Map(); // key → Promise<gltf.scene>
   function load(k) { // 下載（.txt＝base64、.glb 直接用）＋解析；失敗了下次再試
     if (!LOADED.has(k)) {
@@ -41832,6 +42320,7 @@ function createLook(o) {
   const API = {
     get level() { return LV; }, get max() { return MAX; }, setMax(on) { MAX = !!on; shadowCfg(LV); for (const m of MATS) m.needsUpdate = true; }, // 第 41 批：最真實的重的四樣（電腦＝true、手機＝false；測試可以切）
     get busy() { return !!busy; },
+    raw(sc, cam) { const e = R.toneMappingExposure; R.toneMappingExposure = EXP0; r0(sc, cam); R.toneMappingExposure = e; }, // 第 65 批：房子裡面那一遍（不算畫質那些：車漆、車燈、後製都不動）
     can: { post: half, soft },
     half,
     pref: lookCaps(R).pref, // 沒有設定過：電腦模擬的（測試）＝順，手機＝漂亮（第 39 批：最真實不管手機，太重），電腦畫得了半精度＝最真實
@@ -41848,7 +42337,7 @@ return { createLook, LOOK_NAMES, lookCaps };
 })();
 
 // ==== 第 4 批：越野車（offroad.js）：駕駛座視角、引擎聲接到車內（cabin.js）、引擎聲（sound.js）的表 ====
-Object.assign(CABIN_VIEW, OFFROAD_EYE, { z2: Z2_RIDE.view, n4: N4_RIDE.view }); if (createEngineAudio.cars) Object.assign(createEngineAudio.cars, OFFROAD_SOUND); // 第 56 批：沙灘車的第一人稱（騎的人的眼睛）
+Object.assign(CABIN_VIEW, OFFROAD_EYE, { z2: Z2_RIDE.view, n4: N4_RIDE.view, mtb: MTB_RIDE.view, road: ROAD_RIDE.view }); if (createEngineAudio.cars) Object.assign(createEngineAudio.cars, OFFROAD_SOUND); // 第 56 批：沙灘車的第一人稱（騎的人的眼睛）
 
 const stage = document.getElementById('stage');
 const msg = document.getElementById('msg'), prog = document.getElementById('prog'), status = document.getElementById('status'), hint = document.getElementById('hint');
@@ -41984,7 +42473,7 @@ view(38);
 
 // 兩台車：各自的模型檔、名字、選項、預設值；改過的選項各自記住，切回來還是一樣
 const PAINT_COMMON = [['#f2f3f5', '白'], ['#141518', '黑'], ['#c3c8ce', '銀'], ['#d0202a', '紅'], ['#f4c21b', '黃'], ['#5b2d9e', '紫'], ['#1e8f4e', '綠']];
-const SIZES = {"supra":1304976,"gtr":1707668,"sp3":1379416,"jesko":1696900,"yaris":1544848,"gc8":2659380,"p918":1745044,"rx7":1428492,"chiron":1783564,"ae86":1340704,"aventador":1777496,"altis":1599208,"senna":1650428,"huayra":1724012,"laferrari":1775872,"civic":1742452,"evo":1619536,"monster":138756,"jp4":1325416,"k2":1070412,"p8":1657880,"z2":422064,"n4":342112};
+const SIZES = {"supra":1304976,"gtr":1707668,"sp3":1379416,"jesko":1696900,"yaris":1544848,"gc8":2659380,"p918":1745044,"rx7":1428492,"chiron":1783564,"ae86":1340704,"aventador":1777496,"altis":1599208,"senna":1650428,"huayra":1724012,"laferrari":1775872,"civic":1742452,"evo":1619536,"monster":138756,"jp4":1325416,"k2":1070412,"p8":1657880,"z2":422064,"n4":342112,"mtb":1536,"road":1548};
 const CARS = {
   supra: {
     file: 'tune/supra.glb?h=f69628b4', size: SIZES.supra, spec: SUPRA_SPEC, btn: ['SUPRA', '橘 · 玩命關頭'], name: 'Toyota Supra', sub: '玩命關頭那台 · 3D 試做版',
@@ -42030,54 +42519,56 @@ const CARS = {
   k2: { file: 'tune/k2.glb?h=47659174', size: SIZES.k2, spec: K2_SPEC, btn: ['K2', '小越野車 · 薄荷綠'], ...K2_GARAGE }, // 第 51 批（Nick 2026-10-29 卡片「好，做進去」）：三門小越野車（自己設計的，沒有真的牌子），越野車行賣
   p8: { file: 'tune/p8.glb?h=b055377e', size: SIZES.p8, spec: P8_SPEC, btn: ['P8', '皮卡 · 火山紅'], ...P8_GARAGE }, // 第 53 批（Nick 2026-10-29「越野車 繼續做」→ 看圖卡片「好，做進去」）：四門雙排座皮卡（自己設計的，沒有真的牌子），越野車行賣
   z2: { file: 'tune/z2.glb?h=880b690d', size: SIZES.z2, spec: Z2_SPEC, btn: ['Z2', '沙灘車 · 閃電黃'], ...Z2_GARAGE }, // 第 56 批（Nick 2026-10-29「繼續做其他的」→ 看圖卡片「好，做進去」）：四輪沙灘車（騎的；自己設計的，沒有真的牌子），越野車行賣
-  n4: { file: 'tune/n4.glb?h=828ae1ca', size: SIZES.n4, spec: N4_SPEC, btn: ['N4', '街車 · 消光灰'], ...N4_GARAGE }, // 第 62 批（Nick 2026-11-02 卡片「只做街車」）：直四街車（騎的；自己設計的，沒有真的牌子），阿財車行賣
+  n4: { file: 'tune/n4.glb?h=828ae1ca', size: SIZES.n4, spec: N4_SPEC, btn: ['N4', '街車 · 消光灰'], ...N4_GARAGE },
+  mtb: { file: 'tune/mtb.glb?h=b6f041d2', size: SIZES.mtb, spec: MTB_SPEC, btn: ['越野腳踏車', '登山車 · 橘'], ...MTB_GARAGE }, // 第 67 批（Nick 2026-11-06「加自行車」「還有越野腳踏車」，卡片「兩台都做」）：腳踏車（騎的、用腳踩；自己設計的，沒有真的牌子），阿財車行賣
+  road: { file: 'tune/road.glb?h=364a2a18', size: SIZES.road, spec: ROAD_SPEC, btn: ['一般腳踏車', '公路車 · 藍'], ...ROAD_GARAGE }, // 第 67 批 // 第 62 批（Nick 2026-11-02 卡片「只做街車」）：直四街車（騎的；自己設計的，沒有真的牌子），阿財車行賣
 };
 // 性能（約略照真車）：馬力、重量、四驅、紅線、極速（vmax 原廠；top＝零件全裝，第 46 批 vmaxOf）、風阻；drive＝後驅的車起步時後輪壓到多少重量（引擎在中間的比較會起步）
 // price＝大概行情價的一半（Nick 2026-10-07「所有車都半價」；怪獸卡車他說 100 萬）（新台幣「萬」，二手車看車況差很多）；tyres＝半熱熔胎、直線加速胎的價錢（萬）
 // parts：引擎零件 [代號, 名字, 做什麼, 加幾匹, 多少錢（萬）]，每台車不一樣，便宜的在前面；買了就一直裝著
 const PERF = {
-  gc8: { price: 75, hp: 280, kg: 1260, awd: 1, red: 8000, vmax: 250, top: 288, cda: 0.62, eng: 'EJ20 水平對臥四缸渦輪', tyres: [3, 6], parts: [
+  gc8: { price: 75, ng: 5, mt: 1, hp: 280, kg: 1260, awd: 1, red: 8000, vmax: 250, top: 288, cda: 0.62, eng: 'EJ20 水平對臥四缸渦輪', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 30, 4], ['exhaust', '不鏽鋼排氣', '中尾段換大口徑', 15, 4],
     ['ic', '上置大中冷', '進氣溫度降下來', 15, 5], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 5], ['header', '等長排氣頭段', '水平對臥的咕嚕聲會變順', 20, 8],
     ['turbo', 'TD05 大渦輪', '換更大顆的渦輪', 100, 20], ['forged', '鍛造活塞連桿', '引擎撐得住高增壓', 40, 35]] },
-  yaris: { price: 130, hp: 300, kg: 1280, awd: 1, red: 7000, vmax: 230, top: 250, cda: 0.66, eng: 'G16E 1.6 三缸渦輪', tyres: [3, 6], parts: [
+  yaris: { price: 130, ng: 6, mt: 1, hp: 300, kg: 1280, awd: 1, red: 7000, vmax: 230, top: 250, cda: 0.66, eng: 'G16E 1.6 三缸渦輪', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成高流量的', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 4], ['exhaust', '中尾段排氣', '排氣更順', 10, 5],
     ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 5], ['ic', '大中冷', '進氣溫度降下來', 15, 6], ['cams', '賽車凸輪軸', '高轉更有力', 25, 15],
     ['turbo', '混合式大渦輪', '渦輪換大一號', 80, 22], ['forged', '鍛造活塞連桿', '三缸也撐得住高增壓', 40, 38]] },
-  supra: { price: 200, hp: 550, kg: 1520, awd: 0, drive: 0.7, red: 7200, vmax: 300, top: 387, cda: 0.62, eng: '2JZ 直六雙渦輪', tyres: [4, 8], parts: [
+  supra: { price: 200, ng: 6, mt: 1, hp: 550, kg: 1520, awd: 0, drive: 0.7, red: 7200, vmax: 300, top: 387, cda: 0.62, eng: '2JZ 直六雙渦輪', tyres: [4, 8], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 15, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 5], ['exhaust', '3 吋全段排氣', '整條換大口徑', 25, 6],
     ['ic', '前置大中冷', '進氣溫度降下來', 20, 6], ['fuel', '1000cc 噴油嘴＋雙汽油泵', '大馬力要很多油', 30, 8], ['cams', '高角度凸輪軸', '高轉更有力', 60, 18],
     ['turbo', '單顆大渦輪', '兩顆渦輪換成一顆大的', 180, 35], ['forged', '鍛造活塞連桿', '2JZ 撐到 1000 匹', 80, 60]] },
-  gtr: { price: 400, hp: 500, kg: 1560, awd: 1, red: 8000, vmax: 290, top: 346, cda: 0.66, eng: 'RB26 直六雙渦輪', tyres: [4, 8], parts: [
+  gtr: { price: 400, ng: 6, mt: 1, hp: 500, kg: 1560, awd: 1, red: 8000, vmax: 290, top: 346, cda: 0.66, eng: 'RB26 直六雙渦輪', tyres: [4, 8], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 6], ['ic', '前置大中冷', '進氣溫度降下來', 20, 7],
     ['exhaust', '鈦合金排氣', '又輕又大口徑', 20, 8], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 20, 8], ['cams', '高角度凸輪軸', '高轉更有力', 60, 20],
     ['turbo', '雙大渦輪', '兩顆渦輪都換大', 150, 45], ['stroker', 'RB28 鍛造曲軸', '排氣量加到 2.8 升', 80, 80]] },
-  p918: { price: 3000, hp: 887, kg: 1675, awd: 1, red: 9150, vmax: 345, top: 351, cda: 0.62, eng: '4.6 V8＋兩顆電動馬達', tyres: [12, 20], parts: [
+  p918: { price: 3000, ng: 7, hp: 887, kg: 1675, awd: 1, red: 9150, vmax: 345, top: 351, cda: 0.62, eng: '4.6 V8＋兩顆電動馬達', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 8, 5], ['flywheel', '輕量化飛輪', '轉速拉得更快', 10, 25], ['exhaust', '鈦合金排氣', '頂出式排氣換鈦合金', 20, 30],
     ['ecu', 'ECU 調校', '引擎和馬達一起重調', 30, 40], ['battery', '電池放電升級', '電池一次放更多電', 40, 120], ['motorF', '前馬達升級', '前輪的電動馬達換大', 40, 150],
     ['motorR', '後馬達升級', '後面的電動馬達換大', 45, 180], ['turbo', 'V8 加裝雙渦輪', '自然進氣改成渦輪', 70, 450]] },
-  sp3: { price: 6000, hp: 829, kg: 1485, awd: 0, drive: 0.8, red: 9500, vmax: 340, top: 340, cda: 0.62, eng: '6.5 V12 自然進氣', tyres: [12, 20], parts: [
+  sp3: { price: 6000, ng: 7, hp: 829, kg: 1485, awd: 0, drive: 0.8, red: 9500, vmax: 340, top: 340, cda: 0.62, eng: '6.5 V12 自然進氣', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 8, 5], ['flywheel', '輕量化飛輪', '轉速拉得更快', 10, 30], ['ecu', 'ECU 調校', '重寫點火和汽門正時', 20, 35],
     ['exhaust', '鈦合金排氣', 'V12 叫得更大聲', 25, 45], ['intake', '可變長度進氣歧管', '高轉低轉都有力', 15, 60], ['cams', '高角度凸輪軸', '高轉更有力', 30, 90],
     ['forged', '鍛造活塞', '撐得住機械增壓', 20, 150], ['sc', '機械增壓', 'V12 加一顆機械增壓器', 250, 600]] },
-  jesko: { price: 7500, hp: 1280, kg: 1420, awd: 0, drive: 0.8, red: 8500, vmax: 330, top: 413, cda: 0.72, eng: '5.0 V8 雙渦輪', tyres: [12, 20], parts: [
+  jesko: { price: 7500, ng: 9, hp: 1280, kg: 1420, awd: 0, drive: 0.8, red: 8500, vmax: 330, top: 413, cda: 0.72, eng: '5.0 V8 雙渦輪', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 10, 8], ['e85', 'E85 生質燃料', '改加 E85，1280 匹變 1600 匹', 320, 30], ['fuel', '大噴油嘴', 'E85 要更多油', 20, 50],
     ['exhaust', '鈦合金排氣', '又輕又大聲', 30, 60], ['ecu', 'ECU 調校', '重寫點火和增壓', 50, 80], ['cams', '賽車凸輪軸', '高轉更有力', 20, 150],
     ['forged', '鍛造內部', '曲軸、活塞都換鍛造', 40, 300], ['turbo', '大渦輪', '兩顆渦輪都換大', 150, 400]] },
   // 2026-10-17 新的 10 台車（價錢一樣是行情價的一半左右）
-  rx7: { price: 100, hp: 280, kg: 1260, awd: 0, drive: 0.7, red: 8000, vmax: 250, top: 389, cda: 0.62, eng: '13B 雙轉子雙渦輪', tyres: [3, 6], parts: [
+  rx7: { price: 100, ng: 5, mt: 1, hp: 280, kg: 1260, awd: 0, drive: 0.7, red: 8000, vmax: 250, top: 389, cda: 0.62, eng: '13B 雙轉子雙渦輪', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 30, 4], ['exhaust', '不鏽鋼排氣', '轉子引擎叫得更兇', 15, 4],
     ['ic', '前置大中冷', '進氣溫度降下來', 15, 5], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 5], ['port', '轉子擴孔', '進氣孔磨大，高轉更有力', 40, 15],
     ['turbo', '單顆大渦輪', '兩顆小渦輪換成一顆大的', 150, 30], ['seals', '強化油封', '轉子撐得住高增壓', 30, 35]] },
-  chiron: { price: 8000, hp: 1500, kg: 1995, awd: 1, red: 6700, vmax: 350, top: 490, cda: 0.62, eng: '8.0 W16 四渦輪', tyres: [12, 20], parts: [
+  chiron: { price: 8000, ng: 7, hp: 1500, kg: 1995, awd: 1, red: 6700, vmax: 350, top: 490, cda: 0.62, eng: '8.0 W16 四渦輪', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 10, 8], ['exhaust', '鈦合金排氣', '四根排氣管叫得更大聲', 30, 60], ['ecu', 'ECU 調校', '重寫點火和增壓', 60, 80],
     ['ic', '大水冷中冷', '四顆渦輪的空氣更冷', 40, 90], ['fuel', '大噴油嘴', '大馬力要很多油', 30, 100], ['cams', '賽車凸輪軸', '高轉更有力', 40, 150],
     ['forged', '鍛造內部', 'W16 撐得住更高增壓', 50, 300], ['turbo', '四顆大渦輪', '四顆渦輪都換大', 200, 500]] },
-  ae86: { price: 75, hp: 130, kg: 940, awd: 0, drive: 0.65, red: 7600, vmax: 190, top: 254, cda: 0.7, eng: '4A-GE 1.6 直列四缸自然進氣', tyres: [2, 4], parts: [
+  ae86: { price: 75, ng: 5, mt: 1, hp: 130, kg: 940, awd: 0, drive: 0.65, red: 7600, vmax: 190, top: 254, cda: 0.7, eng: '4A-GE 1.6 直列四缸自然進氣', tyres: [2, 4], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 6, 1], ['exhaust', '不鏽鋼排氣', '叫得更清脆', 8, 2], ['header', '4-2-1 頭段', '高轉更順', 10, 3],
     ['ecu', 'ECU 調校', '重寫點火和噴油', 10, 3], ['itb', '四喉節氣門', '每一缸自己一個節氣門', 25, 8], ['cams', '高角度凸輪軸', '高轉更有力', 20, 10],
     ['bore', '加大缸徑', '排氣量加到 1.8 升', 30, 18], ['sc', '機械增壓', '加一顆機械增壓器', 70, 30]] },
-  aventador: { price: 1200, hp: 740, kg: 1575, awd: 1, red: 8500, vmax: 345, top: 350, cda: 0.68, eng: '6.5 V12 自然進氣', tyres: [10, 18], parts: [
+  aventador: { price: 1200, ng: 7, hp: 740, kg: 1575, awd: 1, red: 8500, vmax: 345, top: 350, cda: 0.68, eng: '6.5 V12 自然進氣', tyres: [10, 18], parts: [
     ['filter', '賽車空濾', '吸氣更順', 8, 5], ['exhaust', '鈦合金排氣', 'V12 叫得更大聲', 25, 30], ['ecu', 'ECU 調校', '重寫點火和汽門正時', 20, 30],
     ['flywheel', '輕量化飛輪', '轉速拉得更快', 10, 25], ['intake', '碳纖維進氣', '進氣更順更冷', 15, 40], ['cams', '高角度凸輪軸', '高轉更有力', 30, 70],
     ['forged', '鍛造活塞', '撐得住雙渦輪', 20, 120], ['turbo', '雙渦輪套件', '自然進氣改成雙渦輪', 300, 450]] },
@@ -42085,45 +42576,45 @@ const PERF = {
     ['filter', '高流量空濾', '吸氣更順', 3, 1], ['exhaust', '不鏽鋼排氣', '安靜的計程車也會叫了', 5, 2], ['ecu', '油電電腦調校', '引擎和馬達一起出力', 8, 4],
     ['battery', '大電池', '馬達可以出力更久', 15, 6], ['motor', '強化馬達', '起步更快', 20, 8], ['cams', '高角度凸輪軸', '高轉更有力', 12, 8],
     ['sc', '機械增壓', '加一顆機械增壓器', 50, 30], ['swap', '換 2.0 引擎', '整顆換成 2.0 升', 60, 40]] },
-  senna: { price: 1500, hp: 800, kg: 1198, awd: 0, drive: 0.8, red: 8250, vmax: 335, top: 335, cda: 0.72, eng: '4.0 V8 雙渦輪（中置後驅）', tyres: [10, 18], parts: [
+  senna: { price: 1500, ng: 7, hp: 800, kg: 1198, awd: 0, drive: 0.8, red: 8250, vmax: 335, top: 335, cda: 0.72, eng: '4.0 V8 雙渦輪（中置後驅）', tyres: [10, 18], parts: [
     ['filter', '賽車空濾', '吸氣更順', 8, 5], ['exhaust', '鈦合金排氣', '往上排的排氣叫得更兇', 25, 30], ['ecu', 'ECU 調校', '重寫點火和增壓', 30, 50],
     ['ic', '大中冷', '進氣溫度降下來', 20, 40], ['fuel', '大噴油嘴', '大馬力要更多油', 15, 50], ['cams', '賽車凸輪軸', '高轉更有力', 30, 70],
     ['forged', '鍛造內部', '撐得住更高增壓', 40, 150], ['turbo', '大渦輪', '兩顆渦輪都換大', 150, 250]] },
-  huayra: { price: 4500, hp: 730, kg: 1350, awd: 0, drive: 0.8, red: 7000, vmax: 360, top: 360, cda: 0.68, eng: '6.0 V12 雙渦輪（中置後驅）', tyres: [12, 20], parts: [
+  huayra: { price: 4500, ng: 7, hp: 730, kg: 1350, awd: 0, drive: 0.8, red: 7000, vmax: 360, top: 360, cda: 0.68, eng: '6.0 V12 雙渦輪（中置後驅）', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 10, 5], ['exhaust', '鈦合金排氣', '四根排氣管叫得更大聲', 30, 30], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 50],
     ['ic', '大中冷', '進氣溫度降下來', 25, 40], ['fuel', '大噴油嘴', '大馬力要更多油', 20, 50], ['cams', '賽車凸輪軸', '高轉更有力', 35, 70],
     ['forged', '鍛造內部', '撐得住更高增壓', 50, 150], ['turbo', '大渦輪', '兩顆渦輪都換大', 180, 300]] },
-  laferrari: { price: 5000, hp: 963, kg: 1255, awd: 0, drive: 0.8, red: 9250, vmax: 350, top: 350, cda: 0.65, eng: '6.3 V12 油電（中置後驅）', tyres: [12, 20], parts: [
+  laferrari: { price: 5000, ng: 7, hp: 963, kg: 1255, awd: 0, drive: 0.8, red: 9250, vmax: 350, top: 350, cda: 0.65, eng: '6.3 V12 油電（中置後驅）', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 10, 5], ['exhaust', '鈦合金排氣', 'V12 叫得更大聲', 30, 30], ['ecu', 'ECU 調校', '重寫點火和汽門正時', 40, 40],
     ['battery', '大電池', '馬達可以出力更久', 40, 60], ['motor', '強化馬達', '起步更快', 50, 80], ['cams', '賽車凸輪軸', '高轉更有力', 35, 70],
     ['forged', '鍛造活塞', '撐得住雙渦輪', 30, 120], ['turbo', '雙渦輪套件', '自然進氣改成雙渦輪', 300, 400]] },
-  civic: { price: 115, hp: 320, kg: 1380, awd: 0, drive: 0.58, red: 7000, vmax: 272, top: 275, cda: 0.68, eng: '2.0 渦輪直列四缸（前置前驅）', tyres: [3, 6], parts: [
+  civic: { price: 115, ng: 6, mt: 1, hp: 320, kg: 1380, awd: 0, drive: 0.58, red: 7000, vmax: 272, top: 275, cda: 0.68, eng: '2.0 渦輪直列四缸（前置前驅）', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 8, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 20, 5], ['exhaust', '中置三出排氣', '中間三根叫得更兇', 15, 4],
     ['ic', '前置大中冷', '進氣溫度降下來', 12, 5], ['fuel', '大噴油嘴', '大馬力要更多油', 10, 5], ['lsd', '強化限滑差速器', '前輪不會只有一邊空轉', 15, 10],
     ['cams', '高角度凸輪軸', '高轉更有力', 20, 15], ['turbo', '大渦輪', '渦輪換大一號', 80, 40]] },
-  evo: { price: 100, hp: 280, kg: 1400, awd: 1, red: 7500, vmax: 250, top: 299, cda: 0.68, eng: '4G63 2.0 渦輪直列四缸（四輪驅動）', tyres: [3, 6], parts: [
+  evo: { price: 100, ng: 6, mt: 1, hp: 280, kg: 1400, awd: 1, red: 7500, vmax: 250, top: 299, cda: 0.68, eng: '4G63 2.0 渦輪直列四缸（四輪驅動）', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 8, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 20, 5], ['exhaust', '不鏽鋼排氣', '叫得更兇', 12, 4],
     ['ic', '前置大中冷', '進氣溫度降下來', 12, 6], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 6], ['cams', '高角度凸輪軸', '高轉更有力', 20, 12],
     ['forged', '鍛造活塞連桿', '4G63 撐得住大增壓', 30, 25], ['turbo', '大渦輪', '渦輪換大一號', 80, 60]] },
   // ==== 第 4 批：越野車：offroad＝越野車行賣的（泥巴、石頭、沙跑得動：terrain.js）；big＝大車（車庫頁鏡頭拉遠、不停車位）；halfW＝碰撞半寬（輪胎比車身寬）；gears＝自己的齒比 ====
-  monster: { price: 100, hp: 1500, kg: 5400, awd: 1, red: 6800, vmax: 110, top: 160, cda: 2.2, offroad: 1, big: 1, halfW: 1.905, gears: [2.1, 1.35, 1.0, 0.92, 0.88, 0.86], eng: '機械增壓 V8（燒甲醇）', tyres: [8, 15], parts: [
+  monster: { price: 100, hp: 1500, kg: 5400, awd: 1, red: 6800, vmax: 110, top: 160, cda: 2.2, offroad: 1, big: 1, halfW: 1.905, ng: 2, gears: [2.1, 0.86], eng: '機械增壓 V8（燒甲醇）', tyres: [8, 15], parts: [
     ['intake', '大口徑進氣帽', '增壓器上面的進氣帽換大', 50, 6], ['ecu', '噴射電腦調校', '甲醇噴射重新調', 90, 12], ['exhaust', '直排頭段', '八根短管直排，聲音更兇', 70, 18],
     ['fuel', '大流量甲醇泵', '大馬力要很多甲醇', 50, 22], ['cams', '賽車凸輪軸', '高轉更有力', 110, 40], ['heads', '大口徑汽缸頭', '進排氣更順', 120, 70],
     ['blower', '大顆機械增壓', '增壓器換大一號', 250, 120], ['forged', '鍛造引擎', '整顆換鍛造，撐得住大增壓', 150, 200]] },
   // 第 48 批：J4 吉普車（普通大小：停得進圓塔、坐得了電梯，所以沒有 big）：照兩門 3.6 V6 吉普車（280 匹、1837 公斤、極速 180）；
   //   top＝vmax：找不到改裝過再量極速的紀錄（大 V8 的原廠版本也只限速 160 左右，大輪胎跑不快；notes/cars.md）→ 零件只加馬力（起步、爬坡、泥巴更快）
-  jp4: { price: 80, hp: 285, kg: 1840, awd: 1, red: 6600, vmax: 180, top: 180, cda: 1.3, offroad: 1, eng: '3.6 V6 自然進氣（四輪驅動）', tyres: [3, 6], parts: [
+  jp4: { price: 80, ng: 6, mt: 1, hp: 285, kg: 1840, awd: 1, red: 6600, vmax: 180, top: 180, cda: 1.3, offroad: 1, eng: '3.6 V6 自然進氣（四輪驅動）', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 8, 2], ['exhaust', '不鏽鋼排氣', 'V6 叫得更好聽', 10, 3], ['ecu', 'ECU 調校', '重寫點火和噴油', 15, 3],
     ['header', '不鏽鋼頭段', '排氣更順', 12, 4], ['cams', '高角度凸輪軸', '高轉更有力', 20, 8], ['stroker', '加大排氣量', '3.6 升擴到 3.9 升', 35, 15],
     ['sc', '機械增壓', '加一顆機械增壓器', 110, 30], ['swap', '換 6.4 V8', '整顆換成 6.4 升大 V8', 150, 45]] },
   // 第 51 批：K2 小越野車（普通大小，跟吉普車一樣停得進圓塔、坐得了電梯）：照三門 1.5 小越野車（102 匹、1090 公斤、極速 145）；
   //   top＝vmax：找不到改裝過再量極速的紀錄（notes/cars.md）→ 零件只加馬力（起步、爬坡、泥巴更快）
-  k2: { price: 60, hp: 102, kg: 1090, awd: 1, red: 6200, vmax: 145, top: 145, cda: 1.15, offroad: 1, eng: '1.5 直列四缸 自然進氣（四輪驅動）', tyres: [2, 4], parts: [
+  k2: { price: 60, ng: 5, mt: 1, hp: 102, kg: 1090, awd: 1, red: 6200, vmax: 145, top: 145, cda: 1.15, offroad: 1, eng: '1.5 直列四缸 自然進氣（四輪驅動）', tyres: [2, 4], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 4, 1], ['exhaust', '不鏽鋼排氣', '小引擎叫得更有精神', 5, 2], ['ecu', 'ECU 調校', '重寫點火和噴油', 6, 2],
     ['header', '不鏽鋼頭段', '排氣更順', 5, 2], ['cams', '高角度凸輪軸', '高轉更有力', 8, 4], ['sc', '機械增壓', '加一顆小的機械增壓器', 45, 15]] },
   // 第 53 批：P8 皮卡（車身 5.3 公尺，還是普通大小：停得進圓塔、坐得了電梯、開得上斜坡）：照四門越野皮卡的大 V8 版本（約 400 匹、2250 公斤、限速 180）；
   //   top＝vmax：找了一次（機械增壓 V8 皮卡），只有原廠的測試，沒有改裝過再量極速的紀錄（notes/cars.md）→ 零件只加馬力（起步、爬坡、拖、泥巴更快）
-  p8: { price: 90, hp: 395, kg: 2250, awd: 1, red: 6000, vmax: 180, top: 180, cda: 1.35, offroad: 1, eng: '5.0 V8 自然進氣（四輪驅動）', tyres: [3, 6], parts: [
+  p8: { price: 90, ng: 10, hp: 395, kg: 2250, awd: 1, red: 6000, vmax: 180, top: 180, cda: 1.35, offroad: 1, eng: '5.0 V8 自然進氣（四輪驅動）', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 10, 2], ['exhaust', '不鏽鋼排氣', 'V8 叫得更大聲', 12, 3], ['ecu', 'ECU 調校', '重寫點火和噴油', 18, 3],
     ['header', '不鏽鋼頭段', '排氣更順', 15, 4], ['cams', '高角度凸輪軸', '高轉更有力', 25, 8], ['sc', '機械增壓', '加一顆大的機械增壓器', 150, 35]] },
   // 第 56 批：Z2 沙灘車（騎的四輪沙灘車，2.1 公尺：停得進圓塔、坐得了電梯、開得上斜坡）：照 700 cc 單缸四驅的大沙灘車（約 48 匹、300 公斤、極速約 105）；
@@ -42134,7 +42625,13 @@ const PERF = {
     ['header', '不鏽鋼頭段', '排氣更順', 3, 2], ['cams', '高角度凸輪軸', '高轉更有力', 5, 3], ['stroker', '加大缸徑', '686 cc 擴到 750 cc', 6, 4]] },
   // 第 62 批：N4 街車（騎的，2.1 公尺：停得進圓塔、坐得了電梯、開得上斜坡）：照 900 cc 直四街車（約 125 匹、212 公斤、極速約 240）；lean：轉彎往裡面倒；
   //   top＝vmax：找了一次（改裝過的 900 cc 直四街車），只有原廠的數字，沒有改裝過再量極速的紀錄（notes/cars.md）→ 零件只加馬力
-  n4: { price: 40, hp: 125, kg: 212, red: 11000, vmax: 240, top: 240, cda: 0.42, drive: 0.9, lean: 1, eng: '948 cc 直列四缸 自然進氣', tyres: [1, 2], parts: [
+  // 第 67 批：腳踏車（騎的、用腳踩：沒有引擎聲）：馬力＝你的腿（約 1.2 匹＝900 瓦：真的人衝刺才有，0.5 匹騎斜坡上不去、20 秒踩不到 30，遊戲裡太慢）、重量＝車＋你；越野腳踏車跟沙灘車一樣走越野那一級的懸吊（泥巴路、山路騎得動）但很輕、不輾東西（light）；
+  //   零件只有兩樣便宜的；極速照平路踩得到的（登山車約 30、公路車約 35）；shop：兩台都在阿財車行賣（越野的本來會跑去越野車行）
+  mtb: { price: 3, hp: 1.2, kg: 95, awd: 0, drive: 0.75, red: 7000, vmax: 30, top: 32, cda: 0.6, offroad: 1, light: 1, lean: 1, bike: 1, shop: 'dealer', eng: '你的兩條腿（約 1 匹）', tyres: [1, 1], parts: [
+    ['light', '碳纖維車架', '車子變輕、踩起來更順', 0.1, 1], ['tyre', '競賽越野胎', '滾得更順、抓地更好', 0.1, 1]] },
+  road: { price: 2, hp: 1.2, kg: 88, awd: 0, drive: 0.75, red: 7000, vmax: 35, top: 37, cda: 0.45, lean: 1, bike: 1, shop: 'dealer', eng: '你的兩條腿（約 1 匹）', tyres: [1, 1], parts: [
+    ['light', '碳纖維車架', '車子變輕、踩起來更順', 0.1, 1], ['tyre', '競賽光頭胎', '滾得更順', 0.1, 1]] },
+  n4: { price: 40, ng: 6, mt: 1, hp: 125, kg: 212, red: 11000, vmax: 240, top: 240, cda: 0.42, drive: 0.9, lean: 1, eng: '948 cc 直列四缸 自然進氣', tyres: [1, 2], parts: [
     ['intake', '高流量進氣', '空濾換成高流量的', 4, 1], ['exhaust', '鈦合金排氣', '直四叫得更尖', 6, 2], ['ecu', 'ECU 調校', '重寫點火和噴油', 7, 2],
     ['header', '不鏽鋼頭段', '四合一更順', 5, 2], ['cams', '高角度凸輪軸', '高轉更有力', 9, 4], ['quick', '快排', '換檔不用收油門', 4, 3]] },
 };
@@ -43366,7 +43863,7 @@ $('shopName').textContent = SHOP_NAME;
 const inBox = (r, x, z, m = 0) => { const dx = x - r.x, dz = z - r.z, c = Math.cos(r.rot || 0), s = Math.sin(r.rot || 0); return Math.abs(dx * c - dz * s) <= r.hx + m && Math.abs(dx * s + dz * c) <= r.hz + m; };
 const wrapPi = (a) => { a = (a + Math.PI) % (Math.PI * 2); return a < 0 ? a + Math.PI : a - Math.PI; };
 let dealerAt = 'dealer'; // ==== 第 4 批：現在在哪一家：dealer（阿財車行：一般的車）／odealer（越野車場的越野車行：越野車）====
-const saleOf = (at) => byPrice(Object.keys(CARS).filter((k) => !GAME.owned.has(k) && !!PERF[k].offroad === (at === 'odealer'))); // 那一家擺的：還沒買的車（便宜的在前面）
+const saleOf = (at) => byPrice(Object.keys(CARS).filter((k) => !GAME.owned.has(k) && (PERF[k].shop || (PERF[k].offroad ? 'odealer' : 'dealer')) === at)); // 那一家擺的：還沒買的車（便宜的在前面）；第 67 批：PERF.shop 指定哪一家（越野腳踏車在阿財車行）
 const forSale = () => saleOf(dealerAt); // 車店擺的：還沒買的車（便宜的在前面）
 const canBuy = () => saleOf('dealer').some((k) => GAME.money >= PERF[k].price);
 const dealerName = () => VIL?.places[dealerAt]?.name || '阿財車行';
@@ -43760,9 +44257,11 @@ function makeDrv(pose) {
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
     onZone: arrive, onShift: () => dvoice?.shift(), onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
+    onEngine: (on) => { dvoice?.dispose(); dvoice = on ? engineAudio.voice(cur, { parts: partsOf(cur) }) : null; }, // 第 68 批：手排熄火＝引擎聲停、重新發動＝再來
     crush: crushFx && crushK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
+  $('gearTog').hidden = !PERF[cur]?.mt; if (gearK === 'mt' && PERF[cur]?.mt) drv.setGearbox('mt'); document.body.classList.toggle('mtgear', drv.gearbox === 'mt'); // 第 68 批：手排；第 69 批：自排車（PERF 沒有 mt）沒有 MT，那一格也不出來
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
   drv.setCamCeil((x, z) => { if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75; if (TRAMP.on) return rampCeil(x, z); if (VIL.hills && !VIL.hills.high && VIL.hills.tunAt(x, z) >= 0) return VIL.hills.ceil; const c = GAR.ceilingAt(x, z, true); return c < 50 ? GAR.group.position.y + c - 0.75 : Infinity; }); // 第 27 批：隧道裡面＝拱頂底下 // 第 24 批：開在斜坡上＝上面那一圈的底下 // 第 21 批：圓塔現在這一層的天花板（一樓 4.2、樓上 2.9 公尺） // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
@@ -43831,6 +44330,19 @@ for (const b of document.querySelectorAll('#tiltPop button')) b.addEventListener
   tiltOpen(false);
   if (ask) DeviceMotionEvent.requestPermission().then((r) => tiltMode(r === 'granted' ? 'tilt' : 'btn', true), tiltFail); else tiltMode(k, true);
 });
+// 第 68 批：手排（Nick 2026-11-06「車子做手排的」、卡片「要有離合器」→ 草稿第 2 版「照這樣做」）：「⋯」那一排多一顆「自排／手排」，按一下切換；
+//   每支手機自己記（carid.gear，跟按鈕大小一樣不用搬家、不上雲端）；沒選過＝自排（跟以前一樣）。手排：drive.js setGearbox('mt')（▲ ▼、離合器、熄火、紅線斷油）
+const GEAR_KEY = 'carid.gear';
+let gearK = 'at';
+function gearMode(k, keep) {
+  gearK = k === 'mt' ? 'mt' : 'at';
+  const b = $('gearTog'); b.textContent = gearK === 'mt' ? 'MT' : 'AT'; b.setAttribute('aria-pressed', String(gearK === 'mt')); // 第 69 批：寫 AT／MT（Nick 2026-11-07）
+  if (keep) try { localStorage.setItem(GEAR_KEY, gearK); } catch {}
+  if (drv) drv.setGearbox(gearK === 'mt' && PERF[cur]?.mt ? 'mt' : 'at');
+  document.body.classList.toggle('mtgear', !!drv && drv.gearbox === 'mt'); // 第 69 批：橫拿的「去哪裡」讓位給換檔桿（garage.css）
+}
+try { gearMode(localStorage.getItem(GEAR_KEY)); } catch { gearMode('at'); }
+$('gearTog').addEventListener('click', () => { gearMode(gearK === 'mt' ? 'at' : 'mt', true); gtoast(gearK === 'mt' ? 'MT 手排：左邊的換檔桿按著往上滑升檔、往下滑降檔' : 'AT 自排：車子自己換檔', 2000); FOLD.moreopen = foldStart(); });
 // 畫質（第 29 批，Nick 2026-10-23「就用5號的真實度」）：「⋯」那一排多一顆「✨」（🎮 左邊）→「畫質 最真實／漂亮／順」（look.js）；
 //   每支手機自己記（carid.look，跟按鈕大小一樣不用搬家、不上雲端）；沒選過：電腦模擬的（測試）＝順，畫得了半精度＝最真實，不然＝漂亮
 const LOOK_KEY = 'carid.look';
@@ -44099,7 +44611,8 @@ function atDoor(d) {
   if (d.crushed) { walker.toast('房子被壓扁了，等一下才會修好', 1800); return; } // 第 9 批：越野車輾扁的房子（離開一陣子就長回來）
   const info = CLOSED[d.kind] ? null : interiorFor(d);
   if (!info) { walker.toast(CLOSED[d.kind] || `${d.name ? d.name + '：' : ''}門鎖著`, 1800); return; }
-  goDoor(() => enterHouse(d));
+  if (LD.b === d && LD.t > 0.3) return; // 第 65 批：門開著：自己走進去（ldStep 走過門口就換）
+  if (ldStyle(d) === 'hinge') walker.toast('按「開門」', 1400); // 第 65 批：門要自己開（不再黑掉傳送進去）
 }
 // 門口：走路停住（HUD 收起來，人還在門口）、慢慢黑掉；全黑的時候 act()（回傳 { wait: 蓋好、編譯好的 Promise, say: 亮的時候說的話 }）
 function goDoor(act) {
@@ -44138,12 +44651,12 @@ function fader(text) {
   stage.append(fadeEl); fadeEl.style.display = 'grid';
   return fadeEl;
 }
-function enterHouse(b) {
-  let I = null;
-  try { I = buildInterior(b, { renderer, quality: roomQ }); } catch (e) { console.error(e); I = null; }
+function enterHouse(b) { // 黑掉再進去（頂樓、陽台走回裡面）；從大門走進去是 ldEnter（第 65 批：不黑掉）
+  const I = ldBuild(b);
   if (!I) return { say: `${b.name ? b.name + '：' : ''}門鎖著` };
-  const sc = new THREE.Scene(); sc.name = 'indoor'; sc.background = I.background; sc.add(I.group);
-  indoor = { b, I, scene: sc, t: 0, dist0: walker.cameraDist, folks: [], kind: I.kind === 'apt' ? 'apt' : 'house' }; // 第 60 批：公寓
+  const sc = LD.sc;
+  walker.removeColliders('ldcols');
+  indoor = { b, I, scene: sc, t: 0, dist0: walker.cameraDist, folks: [], kind: I.kind === 'apt' ? 'apt' : 'house', live: true }; // 第 60 批：公寓；第 65 批：live＝裡面蓋在真的位置（先畫村子）
   sc.add(walker.character.group); // 你搬進房子的場景（出去再搬回村子）
   walker.removeColliders('world'); walker.setCarReach(false); // 村子的碰撞（蓋住房子的地板）拿掉；車停在外面（隔著牆）不給「上車」
   houseSet(I.spawn);
@@ -44153,12 +44666,14 @@ function enterHouse(b) {
 function houseSet(spawn) {
   const I = indoor.I;
   walker.removeColliders('interior'); walker.addColliders(I.colliders, 'interior');
-  if (indoor.kind === 'police') stationFolks(); else if (indoor.kind === 'house' || indoor.kind === 'apt') houseFolks(); // 槍店的店員 gunshop.js 自己有
-  walker.setDoors(indoor.jail ? [] : (indoor.exits || I.exits).map((e) => e.door)); // 關在拘留室：沒有門
+  if (indoor.kind === 'police') stationFolks(); else if (indoor.kind === 'house') houseFolks(); // 槍店的店員 gunshop.js 自己有；第 65 批：公寓不要有人（Nick）
+  walker.setDoors(indoor.jail ? [] : ldExits(indoor.exits || I.exits).map((e) => e.door)); // 關在拘留室：沒有門；第 65 批：live 的大門自己開（不是黑掉的門口）
   walker.setCamera({ maxY: I.camera.ceiling, dist: Math.min(indoor.dist0, I.camera.maxDist) });
   STAIR.y = 0; STAIR.cam = I.camera.ceiling; STAIR.busy = false; // 第 61 批
-  walker.teleport(spawn); indoor.t = 0;
+  if (spawn) walker.teleport(spawn); else { const t = walker.telemetry(); walker.teleport({ x: t.x, z: t.z, heading: t.heading }, { keepCamera: true, keepMotion: true }); } // 第 65 批：從大門走進來（null）：人不動，只換高度（房子裡面的地板）
+  indoor.t = 0;
 }
+const ldExits = (list) => (indoor?.live ? list.filter((e) => e.to !== 'outside') : list);
 function houseFloor(e) {
   const f = indoor.I.setFloor(e.to);
   houseSet(e.spawn);
@@ -44175,7 +44690,8 @@ function leaveHouse(e) {
   TR.scene.add(walker.character.group);
   for (const f of H.folks) f.C.dispose();
   if (H.kind === 'gunshop') gsLeave(); // 第 3 批（b3-int）：櫃台關掉、靶場停、槍換回村子
-  if (!H.keep) H.I.dispose(); // 警察局、槍店蓋一次留著
+  if (H.live) ldDrop(true); // 第 65 批：裡面跟著 LD 收掉（房子的碰撞盒換回來）
+  else if (!H.keep) H.I.dispose(); // 警察局、槍店蓋一次留著
   if (e) walker.teleport(e.spawn);
   walker.toast('', 1); // 裡面說的話（幾樓、哪一間）還掛著的話收掉
   return null;
@@ -44206,6 +44722,237 @@ function houseFolks() {
     if (st !== 'sit') cols.push({ t: 'circle', x: px, z: pz, r: 0.3, h: 1.7 });
   }
   if (cols.length) walker.addColliders(cols, 'interior');
+}
+// ==== 第 65 批：房子裡面蓋在真的位置（窗戶看得到外面的村子）、門自己開 ====
+//   Nick「所有建築的窗戶真的可以看外面 門也要自己開」：interiors.js 的房子（透天厝、店、超商、廟、三合院、公寓）蓋成 live（窗外不畫景、門片會動）
+//   LD＝現在蓋好的那一棟（一次一棟）。在外面：房子的碰撞盒先不算（off）、改用裡面的牆（'ldcols'）＋門片（'ldleaf'）；
+//   門：hinge＝走到門口按「開門」轉開（走遠了自己關）、auto＝超商的自動門（走近了滑開）、open＝店面、廟（本來就開著：走近了就蓋好）
+//   走過門口（進到牆裡面）＝indoor（不黑掉、不傳送）；走出門口＝回到外面。
+//   畫面：在裡面＝先畫村子（鏡頭照樓層往上移）、清掉深度再畫裡面（窗戶、門的洞看到的就是村子）；在外面＝裡面先畫到 LD.rt，門洞（LD.quad，在村子裡）貼它（前面的人、車照樣擋住）
+const LD = { b: null, I: null, sc: null, proxy: null, t: 0, want: 0, far: 0, leafT: -1, cols: [], rt: null, quads: [], qmat: null, cam: null, style: 'hinge' };
+let LD_AT = null; // 「開門」對著的那一棟（外面）
+// 第 66 批：在 LD 那一棟的屋頂上（走樓梯上頂樓、走出樓梯間）：村子的場景、腳下＝屋頂的高度（y）、碰撞＝頂樓那一層（女兒牆、樓梯間）'ldroof'
+const LDR = { on: false, y: 0, dist0: 3 };
+const LD_OPEN = { label: '開門', icon: 'door', onClick: () => ldOpenNow() };
+const LD_V2 = new THREE.Vector2(), LD_CC = new THREE.Color(), LD_FR = new THREE.Frustum(), LD_M4 = new THREE.Matrix4();
+function ldLocal(b, x, z) { const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot || 0), s = Math.sin(b.rot || 0); return [dx * c - dz * s, dx * s + dz * c]; }
+function ldStyle(b) { const k = interiorFor(b)?.kind; return k === 'store' ? 'auto' : k === 'temple' || (k === 'house' && b.front === 'shop') ? 'open' : 'hinge'; }
+function ldInfo(b) { if (b._ld === undefined) b._ld = interiorFor(b) || null; return b._ld; }
+function ldHouseCols(b) { // 村子的碰撞盒裡面蓋住這一棟的（透天厝、公寓＝一個盒子；超商、廟⋯也是）
+  const out = [];
+  for (const c of VIL.colliders) { if (c.t !== 'box' || c.off) continue; const [lx, lz] = ldLocal(b, c.x, c.z); if (Math.abs(lx) < b.hx + 0.05 && Math.abs(lz) < b.hz + 0.05 && Math.max(c.hx, c.hz) > 1.2) out.push(c); }
+  return out;
+}
+function ldBuild(b) {
+  if (LD.b === b && LD.I) return LD.I;
+  ldDrop();
+  if (LD.b) return null; // 還在別棟裡面（不會發生：保險）
+  let I = null;
+  try { I = buildInterior(b, { renderer, quality: roomQ, live: true }); } catch (e) { console.error(e); I = null; }
+  if (!I) return null;
+  const sc = new THREE.Scene(); sc.name = 'indoor'; sc.background = null; sc.add(I.group);
+  const proxy = new THREE.Group(); proxy.name = 'ld-me'; sc.add(proxy); // 外面看門洞的時候：你借放在這裡（高度照房子的地板）
+  const style = I.doorStyle, open = style === 'open';
+  Object.assign(LD, { b, I, sc, proxy, style, t: open ? 1 : 0, want: open ? 1 : 0, far: 0, leafT: -1, cols: ldHouseCols(b) });
+  I.setDoorT(LD.t);
+  for (const c of LD.cols) c.off = true;
+  if (!indoor) walker.addColliders(I.colliders, 'ldcols');
+  ldLeafCols(true);
+  ldQuads();
+  return I;
+}
+function ldDrop(force = false) { // 收掉（在裡面不收，除非 force：leaveHouse、回車庫）
+  if (!LD.b) return;
+  if (!force && indoor?.live) return;
+  if (LDR.on) ldRoofDrop(); // 第 66 批
+  for (const c of LD.cols) c.off = false;
+  walker?.removeColliders('ldcols'); walker?.removeColliders('ldleaf');
+  for (const q of LD.quads) { q.removeFromParent(); q.geometry.dispose(); }
+  if (walker?.character && walker.character.group.parent === LD.proxy) TR.scene.add(walker.character.group);
+  if (LD.b.kind === 'apt') aptHide(-1, false, false);
+  LD.I.dispose();
+  Object.assign(LD, { b: null, I: null, sc: null, proxy: null, t: 0, want: 0, cols: [], quads: [] });
+  LD_AT = null;
+  if (walker && !indoor && !APTU.on) walker.setDoors('village'); // 牆擋回來了：門重新找（門開著的時候 walk.js 當它是開著的洞，不算門）
+}
+function ldLeafCols(force) { // 門片的碰撞（轉到哪裡擋到哪裡）
+  if (!walker || !LD.I) return;
+  if (LDR.on) { walker.removeColliders('ldleaf'); LD.leafT = -1; return; } // 第 66 批：在屋頂上（門片在樓下，xz 在屋頂裡面會擋人）
+  if (!force && Math.abs(LD.t - LD.leafT) < 0.08 && LD.t !== 0 && LD.t !== 1) return;
+  if (!force && LD.t === LD.leafT) return;
+  LD.leafT = LD.t;
+  walker.removeColliders('ldleaf');
+  const ease = LD.t * LD.t * (3 - 2 * LD.t);
+  walker.addColliders(LD.I.doorCols(ease), 'ldleaf');
+}
+function ldOpenNow() {
+  const b = indoor?.live ? indoor.b : LD_AT; if (!b) return;
+  if (!ldBuild(b)) return;
+  LD.want = 1; LD.far = 0;
+  walker.setAction(null);
+}
+function ldDoorDist(x, z) { // 離最近的門洞多遠（世界）
+  let best = Infinity;
+  for (const p of LD.I?.portals || []) { const cx = (p.a[0] + p.b[0]) / 2, cz = (p.a[1] + p.b[1]) / 2, d = Math.hypot(x - cx, z - cz); if (d < best) best = d; }
+  return best;
+}
+// 「開門」：外面站在門口前面（interiorFor 的 enter 前後 2 公尺）；裡面站在大門旁邊；門已經開了就不給
+function ldAct(t) {
+  if (doorFade || sleep || jailed() || LDR.on) return null;
+  if (indoor?.live) {
+    if (indoor.I.floor !== 0 || LD.style !== 'hinge' || LD.want > 0) return null;
+    return ldDoorDist(t.x, t.z) < 1.9 ? LD_OPEN : null;
+  }
+  return LD_AT && !(LD.b === LD_AT && LD.want > 0) && ldStyle(LD_AT) === 'hinge' ? LD_OPEN : null;
+}
+// 每一格：找門口（外面）、門開關、走過門口換裡面／外面、走遠了收掉
+function ldScan(t) {
+  LD_AT = null;
+  let near = null, nd = Infinity;
+  for (const b of VIL.buildings) {
+    if (Math.abs(b.x - t.x) > 30 || Math.abs(b.z - t.z) > 30) continue;
+    const e = ldInfo(b)?.enter; if (!e || b.crushed) continue;
+    const dx = t.x - e.x, dz = t.z - e.z, c = Math.cos(e.rot), s = Math.sin(e.rot), lx = dx * c - dz * s, lz = dx * s + dz * c; // 門口前面的長方形（本地：z 往外）
+    if (Math.abs(lx) < e.hx + 0.6 && lz > -0.6 && lz < 2.4) { const d = Math.abs(lz) + Math.abs(lx) * 0.3; if (d < nd) { nd = d; near = b; } }
+  }
+  LD_AT = near;
+  if (near && near !== LD.b && ldStyle(near) !== 'hinge') ldBuild(near); // 超商、店面、廟：走到門口就蓋好（自動門、開著的店面）
+}
+function ldStep(dt) {
+  if (!walker) return;
+  const walking = walker.mode === 'walk';
+  if (walking && !indoor && !APTU.on && !LDR.on && !doorFade) ldScan(walker.telemetry()); else if (!indoor) LD_AT = null;
+  if (!LD.b) return;
+  if (LDR.on) { // 第 66 批：在屋頂上：走進樓梯間的門口＝回到裡面（頂樓那一層）；被搬走了（去這裡、被抓）＝收掉
+    if (indoor) ldRoofDrop();
+    else {
+      const t = walker.telemetry(), [lx, lz] = ldLocal(LD.b, t.x, t.z), S = LD.I.floors[LD.I.roofFl]?.stair;
+      if (!S || Math.abs(lx) > LD.b.hx + 1.5 || Math.abs(lz) > LD.b.hz + 1.5) { ldDrop(); return; }
+      if (walking && !doorFade && !sleep && lx > S.xs0 - 0.05 && lx < S.xs1 + 0.05 && lz > S.zSB - 0.02) ldRoofIn();
+      return;
+    }
+  }
+  if (!walking && !indoor && walker.mode === 'off') { ldDrop(); return; } // 開車了：房子的碰撞盒換回來（車子不會從門開進去）
+  const I = LD.I, t = walker.telemetry(), dd = ldDoorDist(t.x, t.z);
+  if (LD.style === 'auto') LD.want = walking && dd < 2.8 ? 1 : 0;
+  else if (LD.style === 'hinge' && LD.want > 0) { if (!walking || dd > 3.2) { LD.far += dt; if (LD.far > 0.8) LD.want = 0; } else LD.far = 0; }
+  if (LD.t !== LD.want) {
+    const sp = dt / (LD.style === 'auto' ? 0.45 : 0.6);
+    LD.t = LD.want > LD.t ? Math.min(LD.want, LD.t + sp) : Math.max(LD.want, LD.t - sp);
+    I.setDoorT(LD.t * LD.t * (3 - 2 * LD.t));
+    ldLeafCols(false);
+  }
+  if (walking && !doorFade && !sleep) {
+    const b = LD.b, [lx, lz] = ldLocal(b, t.x, t.z);
+    if (!indoor && LD.t > 0.5 && Math.abs(lx) < b.hx - 0.05 && lz < b.hz - 0.12 && lz > -b.hz) ldEnter();
+    else if (indoor?.live && indoor.I === I && I.floor === 0 && lz > b.hz + 0.12) ldLeave();
+    else if (indoor?.live && indoor.I === I && I.roofFl > 0 && I.floor === I.roofFl && I.stair && lz < I.stair.zSB - 0.25) ldRoofOut(); // 第 66 批：走出頂樓的樓梯間
+  }
+  if (LDR.on) return; // 剛走上屋頂（下面兩條是走開了才收）
+  if (!indoor && !LD.want && LD.t === 0 && LD.style === 'hinge' && dd > 6) ldDrop(); // 門關好了、走開了
+  else if (!indoor && dd > 22) ldDrop(); // 店面、超商：走遠了
+  if (LD.b?.kind === 'apt') aptHide(LD.b.slot, LD.t > 0 || !!indoor, !!indoor?.live); // 公寓：大門、窗戶的玻璃
+}
+function ldEnter() { // 走過大門進來（不黑掉）
+  const I = LD.I, b = LD.b;
+  walker.removeColliders('ldcols');
+  indoor = { b, I, scene: LD.sc, t: 0, dist0: walker.cameraDist, folks: [], kind: I.kind === 'apt' ? 'apt' : 'house', live: true };
+  LD.sc.add(walker.character.group);
+  walker.removeColliders('world'); walker.setCarReach(false);
+  houseSet(null);
+  walker.toast(I.name, 1600);
+}
+function ldLeave() { // 走出大門（不黑掉）
+  const H = indoor; indoor = null;
+  walker.removeColliders('interior'); walker.addColliders(VIL.colliders, 'world'); walker.addColliders(LD.I.colliders, 'ldcols');
+  walker.setDoors('village'); walker.setCarReach(true);
+  walker.setCamera({ maxY: null, dist: H.dist0 });
+  TR.scene.add(walker.character.group);
+  for (const f of H.folks) f.C.dispose();
+  const t = walker.telemetry(); walker.teleport({ x: t.x, z: t.z, heading: t.heading }, { keepCamera: true, keepMotion: true }); // 高度換回村子的
+  walker.toast('', 1);
+}
+// 第 66 批：走出頂樓的樓梯間（不黑掉）：村子的場景、腳下＝屋頂（walkWorld）、碰撞＝村子＋頂樓那一層（女兒牆、樓梯間的牆）；門口外面看進去＝門洞（ldPortal 畫頂樓那一層）
+function ldRoofOut() {
+  const H = indoor, I = LD.I; indoor = null;
+  Object.assign(LDR, { on: true, y: (LD.b.y || 0) + I.floor * 3.3, dist0: H.dist0 });
+  walker.removeColliders('interior'); walker.removeColliders('ldleaf'); LD.leafT = -1;
+  walker.addColliders(VIL.colliders, 'world');
+  walker.addColliders(I.colliders.map((c) => (c.y0 == null ? { ...c, h: (c.h ?? 9) + LDR.y } : { ...c, h: (c.h ?? 9) + LDR.y, y0: c.y0 + LDR.y })), 'ldroof'); // 高度換成世界的（鏡頭的線是世界的高度）
+  walker.setDoors([]); walker.setCarReach(false); walker.setAction(null);
+  walker.setCamera({ maxY: null, dist: H.dist0 });
+  TR.scene.add(walker.character.group);
+  for (const f of H.folks) f.C.dispose();
+  const t = walker.telemetry(); walker.teleport({ x: t.x, z: t.z, heading: t.heading }, { keepCamera: true, keepMotion: true }); // 高度換成屋頂的
+}
+function ldRoofIn() { // 從屋頂走回樓梯間
+  LDR.on = false;
+  walker.removeColliders('ldroof'); walker.removeColliders('world');
+  indoor = { b: LD.b, I: LD.I, scene: LD.sc, t: 0, dist0: LDR.dist0, folks: [], kind: 'house', live: true };
+  LD.sc.add(walker.character.group); walker.setCarReach(false);
+  houseSet(null);
+  ldLeafCols(true);
+}
+function ldRoofDrop() { // 屋頂那一套收掉（ldDrop、被別的地方接走）
+  if (!LDR.on) return;
+  LDR.on = false;
+  walker?.removeColliders('ldroof');
+  if (walker && !indoor) { walker.setDoors('village'); walker.setCarReach(true); walker.setCamera({ maxY: null }); }
+}
+const ldOnRoof = (x, z) => { const b = LD.b; if (!b) return false; const [lx, lz] = ldLocal(b, x, z); return Math.abs(lx) < b.hx + 0.6 && Math.abs(lz) < b.hz + 0.6; };
+// 門洞（外面看進去）：村子裡一片四邊形，貼 LD.rt（裡面從同一個鏡頭畫的）；第 66 批：頂樓樓梯間的門口也是（userData.fl＝哪一層）
+function ldQuads() {
+  if (!LD.qmat) {
+    LD.qmat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: null } },
+      vertexShader: 'varying vec4 vP;\nvoid main() { vP = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = vP; }',
+      fragmentShader: 'uniform sampler2D map;\nvarying vec4 vP;\nvoid main() {\n  vec4 c = texture2D(map, vP.xy / vP.w * 0.5 + 0.5);\n  gl_FragColor = c;\n  #include <tonemapping_fragment>\n  #include <colorspace_fragment>\n}',
+      transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: true,
+    });
+    LD.cam = new THREE.PerspectiveCamera();
+  }
+  const fls = [0]; if (LD.I.roofFl > 0) fls.push(LD.I.roofFl);
+  for (const fl of fls) for (const p of LD.I.floors[fl].portals) {
+    const y0 = (LD.b.y || 0) + fl * 3.3, g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([p.a[0], y0, p.a[1], p.b[0], y0, p.b[1], p.b[0], y0 + p.y1, p.b[1], p.a[0], y0 + p.y1, p.a[1]], 3));
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    const m = new THREE.Mesh(g, LD.qmat); m.name = 'ld-portal'; m.frustumCulled = false; m.renderOrder = 5; m.visible = false; m.userData.fl = fl;
+    TR.scene.add(m); LD.quads.push(m);
+  }
+}
+function ldRaw(sc, cam) { if (LOOK?.raw) LOOK.raw(sc, cam); else renderer.render(sc, cam); }
+function ldIndoorDraw() { // 在裡面：村子（鏡頭搬到真的高度）→ 清深度 → 裡面（窗戶、門的洞看到的就是村子）
+  const I = LD.I, yoff = (LD.b?.y || 0) + I.floor * 3.3;
+  for (const q of LD.quads) q.visible = false;
+  dcam.position.y += yoff; dcam.updateMatrixWorld();
+  const f0 = renderer.info.render.frame;
+  worldDraw();
+  dcam.position.y -= yoff; dcam.updateMatrixWorld();
+  if (renderer.info.render.frame === f0) return; // 村子這一格沒畫（測試停住畫面）：裡面也不疊上去
+  const ac = renderer.autoClear; renderer.autoClear = false; renderer.setRenderTarget(null); renderer.clearDepth();
+  ldRaw(LD.sc, dcam);
+  renderer.autoClear = ac;
+}
+function ldPortal() { // 在外面：門開著、門洞在畫面裡 → 裡面先畫到 rt（同一個鏡頭；你也借進去，站在門口裡外都對）
+  const fl = LDR.on ? LD.I.floor : 0, base = (LD.b?.y || 0) + fl * 3.3; // 第 66 批：在屋頂上＝頂樓樓梯間的門口（沒有門片：一直開著）
+  let vis = (fl > 0 || LD.t > 0.001) && LD.quads.length > 0;
+  if (vis) { // 門洞在畫面裡才畫裡面
+    LD_FR.setFromProjectionMatrix(LD_M4.multiplyMatrices(dcam.projectionMatrix, dcam.matrixWorldInverse)); vis = false;
+    for (const q of LD.quads) { if (q.userData.fl !== fl) continue; if (!q.geometry.boundingSphere) q.geometry.computeBoundingSphere(); if (LD_FR.intersectsSphere(q.geometry.boundingSphere)) { vis = true; break; } }
+  }
+  if (vis) {
+    renderer.getDrawingBufferSize(LD_V2);
+    const w = Math.max(64, Math.round(LD_V2.x * 0.7)), h = Math.max(64, Math.round(LD_V2.y * 0.7));
+    if (!LD.rt) { LD.rt = new THREE.WebGLRenderTarget(w, h, { type: LOOK?.half ? THREE.HalfFloatType : THREE.UnsignedByteType, depthBuffer: true }); LD.qmat.uniforms.map.value = LD.rt.texture; }
+    else if (LD.rt.width !== w || LD.rt.height !== h) LD.rt.setSize(w, h);
+    const C = LD.cam; C.copy(dcam); C.position.y -= base; C.updateMatrixWorld();
+    const me = walker?.character?.group, home = me?.parent;
+    if (me && home === TR.scene) { LD.proxy.position.y = -base; LD.proxy.add(me); }
+    const cc = renderer.getClearColor(LD_CC), ca = renderer.getClearAlpha();
+    renderer.setRenderTarget(LD.rt); renderer.setClearColor(0x000000, 0); renderer.clear(); ldRaw(LD.sc, C); renderer.setRenderTarget(null); renderer.setClearColor(cc, ca);
+    if (me && home === TR.scene) TR.scene.add(me);
+  }
+  for (const q of LD.quads) q.visible = vis && q.userData.fl === fl;
 }
 // 載入畫面：字型、共用的貼圖／PMREM／材質；再蓋一棟透天厝和你一起編譯（所有房子共用同一組材質、同一組燈：之後每一棟都不用再編譯）
 let HOUSE_WARM = null;
@@ -44417,10 +45164,21 @@ function aptExt() { // 6 座公寓的外殼（蓋一次，InstancedMesh）＋ V.
   SL.forEach((q, i) => { const L = aptLotOf(VIL.homeSites[i], i); M.makeRotationY(L.heading).setPosition(L.x, q.y || 0, L.z); for (const m of APTU.ext) m.setMatrixAt(i, M); });
   for (const m of APTU.ext) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
 }
+// 第 65 批：公寓的外殼藏一部分（i＝哪一座）：大門的玻璃（門開著、你在裡面：門洞要看得到裡面／外面）、窗戶的玻璃（你在裡面：窗戶看出去；外殼的玻璃是不透明的盒子）
+const APT_HID = { i: -1, door: false, glass: false };
+function aptHide(i, door, glass) {
+  if (!APTU.ext) return;
+  if (APT_HID.i === i && APT_HID.door === door && APT_HID.glass === glass) return;
+  const SL = VIL.places.garst.slots, M = new THREE.Matrix4();
+  const put = (k, j, hide) => { const m = APTU.ext.find((q) => q.name === k); if (!m || j < 0) return; const L = aptLotOf(VIL.homeSites[j], j); M.makeRotationY(L.heading).setPosition(L.x, SL[j].y || 0, L.z); if (hide) M.scale(new THREE.Vector3(0, 0, 0)); m.setMatrixAt(j, M); m.instanceMatrix.needsUpdate = true; };
+  if (APT_HID.i >= 0 && APT_HID.i !== i) { put('apt-door', APT_HID.i, false); put('apt-glass', APT_HID.i, false); }
+  put('apt-door', i, door); put('apt-glass', i, glass);
+  Object.assign(APT_HID, { i, door, glass });
+}
 const aptW = (b, x, z) => { const c = Math.cos(b.rot), s = Math.sin(b.rot); return { x: b.x + x * c + z * s, z: b.z - x * s + z * c }; }; // 公寓本地 → 世界（b＝V.buildings 那一棟）
 const inApt = (x, z, m = 0) => { const b = APTU.b; if (!b) return false; const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot), s = Math.sin(b.rot); return Math.abs(dx * c - dz * s) < b.hx + m && Math.abs(dx * s + dz * c) < b.hz + m; };
 // 走路用的世界：房子裡面地板都在 0（公寓蓋在山頂那座也是）；在頂樓、陽台＝那一層的高度；其他照 PW
-function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? stairY(x, z) : APTU.on && inApt(x, z, 0.6) ? APTU.y : PW.heightAt(x, z)); return W; }
+function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? stairY(x, z) : APTU.on && inApt(x, z, 0.6) ? APTU.y : LDR.on && ldOnRoof(x, z) ? LDR.y : PW.heightAt(x, z)); return W; } // 第 66 批：透天厝的屋頂
 // 第 61 批：樓梯自己走（interiors.js 的 I.stair，本地）：兩跑樓梯，同一個 xz 上面一跑、下面一跑 → 挑最接近上一格人的高度（STAIR.y）的那一面；
 //   過了平台一點（高度 > 一層的一半 + 0.12）就換到上一層（人的高度 −3.3，畫面一樣）、往下也一樣；五樓往上走到 8 成＝頂樓（aptOut）
 const STAIR = { y: 0, cam: null, busy: false };
@@ -44456,8 +45214,8 @@ function stairSwap(dir) {
   const t = walker.telemetry(), rise = I.stair.rise;
   I.setFloor(f);
   walker.removeColliders('interior'); walker.addColliders(I.colliders, 'interior');
-  if (indoor.kind === 'house' || indoor.kind === 'apt') houseFolks();
-  walker.setDoors((indoor.exits || I.exits).map((e) => e.door));
+  if (indoor.kind === 'house') houseFolks(); // 第 65 批：公寓不要有人
+  walker.setDoors(ldExits(indoor.exits || I.exits).map((e) => e.door));
   STAIR.y = walker.character.group.position.y - dir * rise; STAIR.cam = null;
   walker.teleport({ x: t.x, z: t.z, heading: t.heading }, { keepCamera: true, keepMotion: true });
   STAIR.y = walker.character.group.position.y;
@@ -44469,7 +45227,8 @@ function aptOut(e) {
   const b = H.b, A = APTU.A || (APTU.A = buildApt()), roof = e.to === 'roof', lvl = roof ? A.roof : A.balc;
   const bf = roof ? 4 : H.I.floor, dy = roof ? 0 : (bf - 3) * 3.3; // 第 61 批：2–4 樓都有陽台（apt.js 的 balc 是 4 樓的：上下差一層 3.3）
   indoor = null;
-  walker.removeColliders('interior'); for (const f of H.folks) f.C.dispose(); H.I.dispose();
+  walker.removeColliders('interior'); for (const f of H.folks) f.C.dispose();
+  if (H.live) ldDrop(true); else H.I.dispose(); // 第 65 批
   TR.scene.add(walker.character.group);
   const lot = { x: b.x, z: b.z, heading: b.rot, y: b.y || 0 };
   Object.assign(APTU, { on: true, b, lvl, y: lot.y + lvl.y + dy, floor: bf });
@@ -44542,7 +45301,7 @@ function aptWalk() {
     const t = walker.telemetry(), s = I.spots.sleep?.[0], d = I.spots.dress?.[0];
     if (s && Math.hypot(t.x - s.x, t.z - s.z) < 1.9) act = SLEEP_ACT_APT; else if (d && Math.hypot(t.x - d.x, t.z - d.z) < 0.95) act = DRESS_ACT;
   }
-  walker.setAction(act);
+  walker.setAction(act || ldAct(walker.telemetry())); // 第 65 批：一樓大門「開門」
 }
 // 走路在你家裡面：床邊（睡覺）、衣櫃前面（換衣服）、電梯井旁邊（叫電梯）的大按鈕；頭上多高有東西（鏡頭別穿過天花板）；小房子裡面自動第一人稱
 function homeWalk() {
@@ -44552,6 +45311,7 @@ function homeWalk() {
   if (!act && inT) act = elCallAct(t.x, t.z); // 第 21 批：電梯不在這層
   if (!act && !t.near) act = orbayAct(t); // 第 6 批：站在越野車車庫門口（旁邊沒有車可以上）：「開鐵捲門」
   if (!act) act = hideAct(t.x, t.z, 0.3); // 第 3 批（b3-int）：通緝中躲回車庫：「關鐵捲門」
+  if (!act) act = ldAct(t); // 第 65 批：房子的門口：「開門」
   walker.setAction(act);
   const c = OB && OB.inside(t.x, t.z, -0.35) ? OB.size.ceil - 0.25 : GAR.group.position.y + GAR.ceilingAt(q.x, q.z); // 第 6 批：在越野車車庫裡面，鏡頭不要穿過天花板；第 21 批：塔的這一層
   if (c !== gcam.maxY) { gcam.maxY = c; walker.setCamera({ maxY: isFinite(c) ? c : null }); }
@@ -45130,6 +45890,7 @@ function leaveDrive() {
   if (doorFade) { doorFade = null; fadeEl.style.display = 'none'; }
   aptDown(); // 第 60 批：在公寓的頂樓、陽台
   if (indoor) leaveHouse(null); // 在房子裡面按「直接回車庫」：碰撞、門、鏡頭換回村子的，你搬回村子的場景
+  ldDrop(true); // 第 65 批：外面開著門的那一棟收掉
   crushFx?.reset(); junkVer = -1; // 第 7 批（輾扁）：墊子清掉、輾扁的車收回車流的池子、表演場的垃圾車擺回來
   oLeave(); // 第 4 批：越野賽、越野車行展示台的車收掉
   ciLeave(); // 賽車場的比賽、選對手收掉
@@ -45574,8 +46335,10 @@ function driveStep(dt) {
   if (doorFade) fadeStep(dt); // 走進門口：黑掉 → 換成房子裡面（樓上、外面）→ 亮起來
   if (indoor) { indoor.t += dt; for (const f of indoor.folks) f.C.update(dt, FOLK_POSE); } // 裡面的人：站著、坐著會動一動
   if (indoor?.kind === 'police') PI.update(dt); else if (indoor?.kind === 'gunshop' && walker) gsStep(dt); // 第 3 批：拘留室的鐵門；槍店的靶、店員、櫃台／靶場的按鈕
+  if (DRIVE.on) ldStep(dt); // 第 65 批：門開關、走過門口換裡面／外面、外面的房子走近了蓋好
   if (walker && walker.mode === 'walk' && DRIVE.on && !indoor && !APTU.on) { homeWalk(); oTick(walker.telemetry()); }
-  else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.kind === 'apt') aptWalk(); // 第 60 批：公寓 4 樓的床、衣櫃 // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）
+  else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.kind === 'apt') aptWalk();
+  else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.live) walker.setAction(ldAct(walker.telemetry())); // 第 65 批：裡面走到大門：「開門」 // 第 60 批：公寓 4 樓的床、衣櫃 // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）
   if (DRIVE.on) npcStep(dt); // 路上的車、居民（走路的碰撞要在 walker.update 前面放好）
   if (DRIVE.on) crushStep(dt); // 第 7 批（輾扁）：怪獸卡車壓扁的東西（墊子、壓扁、表演場的垃圾車）
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
@@ -45765,7 +46528,8 @@ function mirrorStep() {
 //   騎著（walker 收起來、你的人藏起來＝坐在車上）才放上去；第一人稱不畫人（鏡頭在眼睛往前 6 公分）；下車、回車庫頁就拿下來
 //   400 公尺直線加速（race.src.js enterRace）也騎在上面：riderOn(S)；比完回車庫頁 riderOff()
 //   第 62 批：N4 街車也是騎的（moto-spec.js：MOTO_RIDE、motoRide、motoSteer，n4-spec.js 包成一樣的介面）：RIDES[key]；換車就重新量眼睛
-const RIDES = { z2: { R: Z2_RIDE, ride: Z2_ride, steer: Z2_steer, eye: Z2_eye }, n4: { R: N4_RIDE, ride: N4_ride, steer: N4_steer, eye: N4_eye } };
+const RIDES = { z2: { R: Z2_RIDE, ride: Z2_ride, steer: Z2_steer, eye: Z2_eye }, n4: { R: N4_RIDE, ride: N4_ride, steer: N4_steer, eye: N4_eye },
+  mtb: { R: MTB_RIDE, ride: MTB_ride, steer: MTB_steer, eye: MTB_eye }, road: { R: ROAD_RIDE, ride: ROAD_ride, steer: ROAD_steer, eye: ROAD_eye } }; // 第 67 批：腳踏車（bike-spec.js；steer 也讓曲柄跟著後輪轉）
 const RIDER = { C: null, lk: null, k: null, S: null, SK: null, eye: [0, 0, 0] };
 const riderLook = () => { const L = meLook(); return { ...L, ...Z2_helmet(L) }; }; // 騎沙灘車戴安全帽（你自己的帽子就是安全帽：照它的顏色）
 function riderMake(k = cur) { // 第一次騎、換了樣子、換了車：做（換）人、量眼睛（第一人稱的鏡頭）
@@ -45803,7 +46567,12 @@ function driveFrame(now) {
     dcam.position.lerpVectors(camGo.p0, camGo.p1, e); camAt.lerpVectors(camGo.a0, camGo.a1, e); dcam.lookAt(camAt);
     if (camGo.t >= camGo.T) camGo = null;
   }
-  if (indoor) { renderer.render(indoor.scene, dcam); return; } // 在房子裡面：只畫房子裡面（自己的燈；村子的地面跟地板重疊，不畫）
+  if (indoor?.live) { ldIndoorDraw(); return; } // 第 65 批：房子（interiors.js）先畫村子再畫裡面（窗戶、門看得到外面）
+  if (indoor) { renderer.render(indoor.scene, dcam); return; } // 警察局、槍店：只畫裡面（自己的燈；村子的地面跟地板重疊，不畫）
+  if (LD.b) ldPortal(); // 第 65 批：外面看進開著的門（門洞）
+  worldDraw();
+}
+function worldDraw() { // 村子（開車、走路；第 65 批：房子裡面看出去也是這個）
   GAR.cull(dcam); // 第 21 批：每一層的車只畫看得到的（在塔裡面＝只畫那一層）
   OB?.cull(dcam); // 第 6 批：鏡頭跑到越野車車庫的屋頂上面就不畫屋頂（才看得到裡面的車）
   mirrorStep(); // 第 25 批：駕駛座的後照鏡
@@ -48167,7 +48936,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 35; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 36; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
