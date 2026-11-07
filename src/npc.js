@@ -1433,6 +1433,7 @@ const RMAX = 400;
 function createPedestrians(o = {}) {
   const V = o.world, scene = o.scene || null, max = o.max ?? 20, radius = o.radius ?? 150, R = rngOf(o.seed ?? 4242);
   const mkChar = o.makeCharacter || null, rLook = o.randomLook || null, visR = o.visible ?? 125;
+  const onEnter = o.onEnter || null; let HOME = null; // 第 70 批：蓋好的那一棟（folks.js）：走到它的門口 onEnter(p, d) → true＝裡面接走了、'wait'＝門還沒開先等；setHome(b)＝附近的人比較常回這一家
   const AN = new Float64Array([o.animNear ?? 45, o.animMid ?? 90]); // 動畫：這麼近每幀、再遠一點隔一幀、更遠四幀一次（角色的 update 比較貴的話調小）
   const W = npcGraphs(V).walk, NODES = W.nodes, EDGES = W.edges, NN = NODES.length, cg = W.cg;
   const view = makeViewTest(V, o.camera || null);
@@ -1530,6 +1531,7 @@ function createPedestrians(o = {}) {
       }
     }
     if (r < 0.62) { // 回家／去別人家
+      if (HOME && W.comp[HOME.node] === cp && R() < 0.5) { const dd = hyp(HOME.x - x, HOME.z - z); if (dd > 8 && dd < 150 && plan(p, eid, st0, HOME.node)) { p.gk = 'door'; p.door = HOME; return true; } } // 第 70 批：你開了門的那一家
       for (let k = 0; k < 8; k++) {
         const d = W.doors[(R() * W.doors.length) | 0], dd = hyp(d.x - x, d.z - z); if (W.comp[d.node] !== cp || dd < 20 || dd > 150) continue;
         if (plan(p, eid, st0, d.node)) { p.gk = 'door'; p.door = d; return true; }
@@ -1588,6 +1590,13 @@ function createPedestrians(o = {}) {
     st.despawned++;
   }
   const free = () => { for (let i = 0; i < P.length; i++) if (!P[i].active) return P[i]; return null; };
+  let LFX = 0, LFZ = 0; // 上一格的焦點（你在哪裡）：freeOrFar 用
+  function freeOrFar(x, z, why) { // 第 70 批：要一個空的位子；滿了就把離你、離這裡最遠的那個人收掉（他在很遠的地方、看不到）
+    const p = free(); if (p) return p;
+    let far = null, fd = 25; for (const q of people) { if (q.gone || q.mode === 'enter' || q.mode === 'talk' || q.mode === 'sit' || q.mode === 'sitdown') continue; const d = Math.min(hyp(q.x - LFX, q.z - LFZ), hyp(q.x - x, q.z - z)); if (d > fd) { fd = d; far = q; } }
+    if (!far) { st.noSlot = (st.noSlot || 0) + 1; st.lastFail = why + ':no slot'; return null; }
+    release(far); st.recycled = (st.recycled || 0) + 1; return free();
+  }
   const seenAt = (x, z, fx, fz, fh) => view.seen(x, z, fx, fz, fh, 190);
   function pickSlot(fx, fz, minD, fh, hidden) {
     let tot = 0; const c = cand; c.length = 0;
@@ -1625,6 +1634,32 @@ function createPedestrians(o = {}) {
       setWalk(p); p.run = false; return true;
     }
     return false;
+  }
+  function spawnAt(x, z, heading, look) { // 第 70 批：從房子裡面走出來的人（folks.js）：門口外面變成路上的人，樣子一樣；走最近那扇門接的路
+    const p = freeOrFar(x, z, 'spawnAt'); if (!p) return false;
+    let d = null, bd = Infinity; for (const q of W.doors) { const dd = hyp(q.x - x, q.z - z); if (dd < bd) { bd = dd; d = q; } }
+    if (!d || bd > 4) { st.lastFail = 'spawnAt:no door near ' + bd.toFixed(1); return false; }
+    const b0 = budget; budget = Math.max(budget, 1); const ch = takeChar(); budget = b0; if (!ch) { st.lastFail = 'spawnAt:no character'; return false; }
+    if (look) { try { ch.setLook(look); } catch (e) { console.error(e); } }
+    activate(p, ch, x, z, heading);
+    const e = EDGES[NODES[d.node].e[0]];
+    for (let k = 0; k < 3; k++) { if (newGoal(p, e.id, e.a === d.node ? 0 : e.len) && p.goal !== d.node) { setWalk(p); p.run = false; st.fromHome = (st.fromHome || 0) + 1; return true; } }
+    release(p); st.lastFail = 'spawnAt:no goal'; return false;
+  }
+  function setHome(b) { HOME = b ? W.doors.find((d) => d.b === b) || null : null; return !!HOME; }
+  function spawnHome(look, back = 6) { // 第 70 批（測試用）：在你開了門的那一家門口的路上 back 公尺生一個人，走去敲門（跟 newGoal 挑到 HOME 一樣）
+    if (!HOME) return false; const p = freeOrFar(HOME.x, HOME.z, 'spawnHome'); if (!p) return false;
+    // 從附近（back～back+25 公尺）別家的門口出發，走到你開了門的這一家（跟 newGoal 挑到 HOME 一樣）
+    const cp = W.comp[HOME.node], ds = W.doors.filter((d) => d !== HOME && W.comp[d.node] === cp && hyp(d.x - HOME.x, d.z - HOME.z) > back && hyp(d.x - HOME.x, d.z - HOME.z) < back + 25).sort((a, c) => hyp(a.x - HOME.x, a.z - HOME.z) - hyp(c.x - HOME.x, c.z - HOME.z));
+    const b0 = budget; budget = Math.max(budget, 1); const ch = takeChar(); budget = b0; if (!ch) { st.lastFail = 'spawnHome:no character'; return false; }
+    if (look) { try { ch.setLook(look); } catch (err) { console.error(err); } }
+    for (const d of ds) {
+      const e = EDGES[NODES[d.node].e[0]];
+      activate(p, ch, d.hx, d.hz, headOf(d.fx, d.fz));
+      if (!plan(p, e.id, e.a === d.node ? 0 : e.len, HOME.node)) continue;
+      p.gk = 'door'; p.door = HOME; setWalk(p); p.run = false; return p;
+    }
+    release(p); st.lastFail = 'spawnHome:no plan (' + ds.length + ' doors)'; return false;
   }
   function spawnSeat(fx, fz, fh, initial) {
     const p = free(); if (!p) return false;
@@ -1841,7 +1876,7 @@ function createPedestrians(o = {}) {
   function stepPerson(p, h) {
     p.talkCool -= h; p.hitCool -= h; p.mx = 0; p.mz = 0; // mx、mz：這一步的速度（車子用來預測）
     switch (p.mode) {
-      case 'walk': walkStep(p, h); break;
+      case 'walk': walkStep(p, h); if (HOME && p.door === HOME && p.gk === 'door' && onEnter && hyp(p.x - HOME.hx, p.z - HOME.hz) < 4) onEnter(p, HOME, true); break; // 第 70 批：快到你開了門的這一家：門先開（onEnter near）
       case 'wait': { // 路邊：左右看、等空檔
         p.waitT += h; p.lookT += h; st.waitMax = Math.max(st.waitMax, p.waitT);
         { const dx = p.tx - p.x, dz = p.tz - p.z; if (dx * dx + dz * dz > 0.0025) { moveToward(p, p.tx, p.tz, p.baseV * 0.7, h); pushOut(p, false); } } // 走到排隊的位置
@@ -1853,7 +1888,12 @@ function createPedestrians(o = {}) {
       }
       case 'enter': { // 進門：走到門裡面一點就不見了
         // 門口有東西（花台、機車）擋住、走不到門裡面：4 秒以後就算進去了（不然會一直卡在門口，那個人永遠不會換）
-        const d = p.door; if (moveToward(p, d.hx, d.hz, p.baseV * 0.8, h) < 0.05 || (p.timer += h) > 4) { st.entered++; release(p); } else pushOut(p, false); break;
+        // 第 70 批：那一棟蓋好了（folks.js）：門自己開（onEnter 'wait'＝門口等一下）、走進去變成裡面的人（true）
+        const d = p.door, r = onEnter ? onEnter(p, d) : 0;
+        if (r === true) { st.entered++; st.handed = (st.handed || 0) + 1; release(p); break; }
+        if (r === 'wait') { p.v = 0; p.waitDoor = true; if ((p.timer += h * 0.25) > 4) { st.entered++; release(p); } break; }
+        p.waitDoor = false;
+        if (moveToward(p, d.hx, d.hz, p.baseV * 0.8, h) < 0.05 || (p.timer += h) > 4) { st.entered++; release(p); } else pushOut(p, false); break;
       }
       case 'sitdown': { // 轉身、往後坐下
         const s = p.seat; p.timer += h; p.hd = headOf(s.fx, s.fz);
@@ -2021,7 +2061,7 @@ function createPedestrians(o = {}) {
     if (!alive || !(dt > 0)) return;
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     dt = Math.min(dt, 0.1); frame++; TM[0] += dt; budget = filled ? 1 : Infinity;
-    const fx = focus.x ?? 0, fz = focus.z ?? 0, fh = focus.heading;
+    const fx = focus.x ?? 0, fz = focus.z ?? 0, fh = focus.heading; LFX = fx; LFZ = fz;
     view.frame();
     CARS.length = 0; for (let i = 0; i < cars.length; i++) { const c = cars[i]; if (!c) continue; if (Array.isArray(c)) { for (let k = 0; k < c.length; k++) if (c[k] && !c[k].gone) CARS.push(c[k]); } else if (!c.gone) CARS.push(c); }
     WALKERS = walkers;
@@ -2090,7 +2130,7 @@ function createPedestrians(o = {}) {
         case 'angry': s = 'wave'; break;
         case 'enter': s = 'walk'; break;
       }
-      send(p, s, p.mode === 'enter' ? p.baseV * 0.8 : p.mode === 'wait' ? hyp(p.mx, p.mz) : p.v, adt);
+      send(p, s, p.mode === 'enter' ? (p.waitDoor ? 0 : p.baseV * 0.8) : p.mode === 'wait' ? hyp(p.mx, p.mz) : p.v, adt);
     }
     if (SH.length) shoutTick(dt); // 第 9 批：「哇！」
     const ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
@@ -2117,7 +2157,7 @@ function createPedestrians(o = {}) {
     if (propMesh) { propMesh.removeFromParent(); propMesh = null; }
     for (const q of SH) { q.m.removeFromParent(); q.m.material.dispose(); } SH.length = 0; if (shTex) { shTex.dispose(); shTex = null; }
   }
-  return { update, people, colliders, scare, knock, bail, nearest, prewarm, dispose, graph: W, props: { colliders: W.props.colliders, seats: W.props.seats }, stats: st, get time() { return TM[0]; } };
+  return { update, people, colliders, scare, knock, bail, nearest, prewarm, dispose, spawnAt, setHome, spawnHome, get home() { return HOME; }, graph: W, props: { colliders: W.props.colliders, seats: W.props.seats }, stats: st, get time() { return TM[0]; } };
 }
 
 return { createTraffic, createPedestrians, npcGraphs };

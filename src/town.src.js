@@ -891,7 +891,7 @@ function enterHouse(b) { // 黑掉再進去（頂樓、陽台走回裡面）；�
 function houseSet(spawn) {
   const I = indoor.I;
   walker.removeColliders('interior'); walker.addColliders(I.colliders, 'interior');
-  if (indoor.kind === 'police') stationFolks(); else if (indoor.kind === 'house') houseFolks(); // 槍店的店員 gunshop.js 自己有；第 65 批：公寓不要有人（Nick）
+  if (indoor.kind === 'police') stationFolks(); // 槍店的店員 gunshop.js 自己有；第 65 批：公寓不要有人（Nick）；第 70 批：房子裡的人是 LD.folks（folks.js），蓋好就在
   walker.setDoors(indoor.jail ? [] : ldExits(indoor.exits || I.exits).map((e) => e.door)); // 關在拘留室：沒有門；第 65 批：live 的大門自己開（不是黑掉的門口）
   walker.setCamera({ maxY: I.camera.ceiling, dist: Math.min(indoor.dist0, I.camera.maxDist) });
   STAIR.y = 0; STAIR.cam = I.camera.ceiling; STAIR.busy = false; // 第 61 批
@@ -921,40 +921,32 @@ function leaveHouse(e) {
   walker.toast('', 1); // 裡面說的話（幾樓、哪一間）還掛著的話收掉
   return null;
 }
-// 房子裡的人（interiors.js 的 spots）：店裡櫃台後面的老闆、拜拜的人、沙發／椅子上坐一個（這一層最多兩個；同一棟、同一層每次都是同樣的人）
-//   站著的擋人（圓 0.3 公尺，跟這一層的碰撞一起：'interior'）；坐著的在家具上（家具本來就擋）
+// 裡面的人：警察局的（stationFolks）站著不動；房子裡的人第 70 批起是 folks.js（LD.folks：走來走去、坐下站起來、進出大門）
 const FOLK_POSE = { speed: 0 };
-function houseFolks() {
-  const H = indoor, I = H.I, sp = I.spots, kind = I.info?.kind || H.b.kind;
-  for (const f of H.folks) f.C.dispose();
-  H.folks.length = 0;
-  let q = (Math.imul(Math.round(H.b.x * 10), 73856093) ^ Math.imul(Math.round(H.b.z * 10), 19349663) ^ Math.imul(I.floor + 1, 83492791)) >>> 0;
-  const rnd = () => { q = (q + 0x6d2b79f5) >>> 0; let t = q; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  const pick = (a) => a[(rnd() * a.length) | 0], want = [];
-  if (sp.counter?.length) want.push([sp.counter[0], 'idle', true]); // 老闆（大人）
-  if (sp.pray?.length && rnd() < 0.6) want.push([pick(sp.pray), 'idle']);
-  if (want.length < 2 && sp.sit?.length && rnd() < 0.6) want.push([pick(sp.sit), 'sit']);
-  const cols = [];
-  for (const [p, st, adult] of want.slice(0, 2)) {
-    let C = null, L = randomLook(rnd);
-    for (let k = 0; adult && L.age === 'kid' && k < 8; k++) L = randomLook(rnd);
-    try { C = buildCharacter(L, { state: st }); } catch (e) { console.error(e); continue; }
-    const back = kind === 'temple' && st === 'idle' && p !== sp.counter?.[0] ? 0.45 : 0; // 廟裡拜拜：站在拜墊後面（沒有跪的動作，站在墊子上腳會陷進去）
-    const px = p.x - Math.cos(p.heading) * back, pz = p.z + Math.sin(p.heading) * back;
-    C.group.position.set(px, st === 'sit' ? Math.max(0, (p.y ?? 0.45) - 0.45) : 0, pz); C.group.rotation.set(0, p.heading, 0);
-    C.update(0, { speed: 0, state: st }); C.update(0.05, FOLK_POSE);
-    H.scene.add(C.group); H.folks.push({ C, st });
-    if (st !== 'sit') cols.push({ t: 'circle', x: px, z: pz, r: 0.3, h: 1.7 });
-  }
-  if (cols.length) walker.addColliders(cols, 'interior');
-}
 // ==== 第 65 批：房子裡面蓋在真的位置（窗戶看得到外面的村子）、門自己開 ====
 //   Nick「所有建築的窗戶真的可以看外面 門也要自己開」：interiors.js 的房子（透天厝、店、超商、廟、三合院、公寓）蓋成 live（窗外不畫景、門片會動）
 //   LD＝現在蓋好的那一棟（一次一棟）。在外面：房子的碰撞盒先不算（off）、改用裡面的牆（'ldcols'）＋門片（'ldleaf'）；
 //   門：hinge＝走到門口按「開門」轉開（走遠了自己關）、auto＝超商的自動門（走近了滑開）、open＝店面、廟（本來就開著：走近了就蓋好）
 //   走過門口（進到牆裡面）＝indoor（不黑掉、不傳送）；走出門口＝回到外面。
 //   畫面：在裡面＝先畫村子（鏡頭照樓層往上移）、清掉深度再畫裡面（窗戶、門的洞看到的就是村子）；在外面＝裡面先畫到 LD.rt，門洞（LD.quad，在村子裡）貼它（前面的人、車照樣擋住）
-const LD = { b: null, I: null, sc: null, proxy: null, t: 0, want: 0, far: 0, leafT: -1, cols: [], rt: null, quads: [], qmat: null, cam: null, style: 'hinge' };
+// 第 70 批：房子裡的人（folks.js）跟門、你、路上的人（npc.js）的接頭
+const LDF_HOOKS = {
+  door: () => (LD.style === 'open' ? 1 : LD.t), // 門開了多少
+  openDoor: () => { if (!LD.I) return; LD.hold = 0.6; if (LD.style === 'hinge') { LD.want = 1; LD.far = 0; } }, // 請門開著（每格叫）
+  player: () => (walker && walker.mode === 'walk' ? walker.telemetry() : null), // 人會讓你
+  leave: (look, x, z, heading) => !!(NPC && NPC.peds.spawnAt(x, z, heading, look)), // 走出大門＝變成路上的人（樣子一樣）
+};
+function npcEnter(p, d, near) { // 路上的人走到門口（npc.js 的 enter；near＝還在路上快到了）：蓋好的那一棟 → 門自己開（'wait'＝還沒開先等）、走進去變成裡面的人（true）
+  if (!LD.b || d.b !== LD.b || !LD.folks || LDR.on) return 0;
+  const dd = Math.hypot(p.x - d.hx, p.z - d.hz);
+  if (dd < 3.5) LDF_HOOKS.openDoor();
+  if (near) return 0;
+  if (LD.style === 'hinge' && LD.t < 0.6) return dd < 1.1 ? 'wait' : 0; // 門還沒開：門口先等（先看這個：人已經站在門線上也要等門開）
+  const [lx, lz] = ldLocal(LD.b, p.x, p.z);
+  if (dd < 0.35 || (Math.abs(lx) < LD.b.hx && lz < LD.b.hz + 0.1)) return LD.folks.arrive(p.ch?.look) ? true : 0;
+  return 0;
+}
+const LD = { b: null, I: null, sc: null, proxy: null, t: 0, want: 0, far: 0, leafT: -1, cols: [], rt: null, quads: [], qmat: null, cam: null, style: 'hinge', folks: null, hold: 0 }; // 第 70 批：folks＝裡面的人（folks.js）、hold＝裡面的人要進出：門先開著（秒）
 let LD_AT = null; // 「開門」對著的那一棟（外面）
 // 第 66 批：在 LD 那一棟的屋頂上（走樓梯上頂樓、走出樓梯間）：村子的場景、腳下＝屋頂的高度（y）、碰撞＝頂樓那一層（女兒牆、樓梯間）'ldroof'
 const LDR = { on: false, y: 0, dist0: 3 };
@@ -984,6 +976,9 @@ function ldBuild(b) {
   if (!indoor) walker.addColliders(I.colliders, 'ldcols');
   ldLeafCols(true);
   ldQuads();
+  // 第 70 批：裡面的人（公寓沒有人）：一蓋好就在（門開著從外面看得到）；附近走路的人比較常回這一家
+  LD.folks = I.kind !== 'apt' ? createFolks({ I, b, scene: sc, makeCharacter: buildCharacter, randomLook, hooks: LDF_HOOKS }) : null; LD.hold = 0;
+  NPC?.peds.setHome(LD.folks ? b : null);
   return I;
 }
 function ldDrop(force = false) { // 收掉（在裡面不收，除非 force：leaveHouse、回車庫）
@@ -995,8 +990,9 @@ function ldDrop(force = false) { // 收掉（在裡面不收，除非 force：le
   for (const q of LD.quads) { q.removeFromParent(); q.geometry.dispose(); }
   if (walker?.character && walker.character.group.parent === LD.proxy) TR.scene.add(walker.character.group);
   if (LD.b.kind === 'apt') aptHide(-1, false, false);
+  LD.folks?.dispose(); NPC?.peds.setHome(null); // 第 70 批
   LD.I.dispose();
-  Object.assign(LD, { b: null, I: null, sc: null, proxy: null, t: 0, want: 0, cols: [], quads: [] });
+  Object.assign(LD, { b: null, I: null, sc: null, proxy: null, t: 0, want: 0, cols: [], quads: [], folks: null, hold: 0 });
   LD_AT = null;
   if (walker && !indoor && !APTU.on) walker.setDoors('village'); // 牆擋回來了：門重新找（門開著的時候 walk.js 當它是開著的洞，不算門）
 }
@@ -1059,14 +1055,16 @@ function ldStep(dt) {
   }
   if (!walking && !indoor && walker.mode === 'off') { ldDrop(); return; } // 開車了：房子的碰撞盒換回來（車子不會從門開進去）
   const I = LD.I, t = walker.telemetry(), dd = ldDoorDist(t.x, t.z);
-  if (LD.style === 'auto') LD.want = walking && dd < 2.8 ? 1 : 0;
-  else if (LD.style === 'hinge' && LD.want > 0) { if (!walking || dd > 3.2) { LD.far += dt; if (LD.far > 0.8) LD.want = 0; } else LD.far = 0; }
+  if (LD.hold > 0) LD.hold -= dt; // 第 70 批：裡面的人、路上的人要進出：門先開著
+  if (LD.style === 'auto') LD.want = (walking && dd < 2.8) || LD.hold > 0 ? 1 : 0;
+  else if (LD.style === 'hinge' && LD.want > 0) { if (LD.hold > 0) LD.far = 0; else if (!walking || dd > 3.2) { LD.far += dt; if (LD.far > 0.8) LD.want = 0; } else LD.far = 0; }
   if (LD.t !== LD.want) {
     const sp = dt / (LD.style === 'auto' ? 0.45 : 0.6);
     LD.t = LD.want > LD.t ? Math.min(LD.want, LD.t + sp) : Math.max(LD.want, LD.t - sp);
     I.setDoorT(LD.t * LD.t * (3 - 2 * LD.t));
     ldLeafCols(false);
   }
+  if (LD.folks) { if (LD.folks.floor !== I.floor) LD.folks.setFloor(I.floor); LD.folks.update(dt); } // 第 70 批：裡面的人走來走去、進出
   if (walking && !doorFade && !sleep) {
     const b = LD.b, [lx, lz] = ldLocal(b, t.x, t.z);
     if (!indoor && LD.t > 0.5 && Math.abs(lx) < b.hx - 0.05 && lz < b.hz - 0.12 && lz > -b.hz) ldEnter();
@@ -1439,8 +1437,7 @@ function stairSwap(dir) {
   const t = walker.telemetry(), rise = I.stair.rise;
   I.setFloor(f);
   walker.removeColliders('interior'); walker.addColliders(I.colliders, 'interior');
-  if (indoor.kind === 'house') houseFolks(); // 第 65 批：公寓不要有人
-  walker.setDoors(ldExits(indoor.exits || I.exits).map((e) => e.door));
+  walker.setDoors(ldExits(indoor.exits || I.exits).map((e) => e.door)); // 第 70 批：這一層的人 ldStep 跟著換（LD.folks.setFloor）
   STAIR.y = walker.character.group.position.y - dir * rise; STAIR.cam = null;
   walker.teleport({ x: t.x, z: t.z, heading: t.heading }, { keepCamera: true, keepMotion: true });
   STAIR.y = walker.character.group.position.y;
@@ -2179,7 +2176,7 @@ async function makeNpc() {
   const lod = { keys: Object.keys(LOD_CARS), load: (k) => LOD_CARS[k].load(), build: (k, sc, look) => withDriver(k, buildLodCar(k, sc, look)) };
   const traffic = createTraffic({ world: VIL, scene: g, lod, camera: dcam, max: NPC_MAX.cars, makeCharacter: buildCharacter, randomLook, sound: NPC_SND, onCarHit: npcCarHit, onCrush: npcCrush });
   const peds = createPedestrians({ world: VIL, scene: g, camera: dcam, max: NPC_MAX.people, visible: NPC_MAX.visible, animNear: NPC_MAX.animNear, animMid: NPC_MAX.animMid,
-    makeCharacter: buildCharacter, randomLook, onHit: npcHit });
+    makeCharacter: buildCharacter, randomLook, onHit: npcHit, onEnter: npcEnter });
   const warm = await Promise.race([traffic.prewarm(NPC_MAX.cars + 3), new Promise((r) => setTimeout(() => r(-1), 12000))]); // 多做 3 台（npc.js 最多做 max＋3 台）：之後開車不用再做車（一台 10～25 毫秒，手機會頓一下）
   const T2 = performance.now(), nPeds = peds.prewarm(), T3 = performance.now();
   // 每一格重複用的物件（不要每格 new）：me＝你（開車：車身中心；走路：0.3 公尺的人）、pk＝你停著的車、wme＝走路的你（居民讓開）
@@ -2218,6 +2215,7 @@ function npcStep(dt) {
     N.peds.update(dt, f, N.PCARSW, N.WALK);
     if (drv) drv.removeColliders('traffic'); // 停著的車：上車那一格再放
     const M = N.MOV; M.length = 0;
+    if (LD.folks) { const fc = LD.folks.colliders; for (let i = 0; i < fc.length; i++) M.push(fc[i]); } // 第 70 批：房子裡的人擋你（裡面、門口外面都算）
     if (out) {
       const tc = N.traffic.colliders(w.x, w.z, 12); for (let i = 0; i < tc.length; i++) M.push(tc[i]);
       const pc = N.peds.colliders(w.x, w.z, 4); for (let i = 0; i < pc.length; i++) M.push(pc[i]);

@@ -2491,8 +2491,12 @@ function buildInterior(b, o = {}) {
     const spots = {}; for (const [k, list] of Object.entries(F.spots)) spots[k] = list.map((s) => { const r = { ...xz(s.x, s.z), heading: wrapA(s.heading + rot) }; if (s.y != null) r.y = s.y; if (s.room) r.room = s.room; if (s.edge) r.edge = true; return r; });
     const rs = F.rooms.length ? F.rooms : [{ x0: -1, x1: 1, z0: -1, z1: 1 }];
     const bx0 = Math.min(...rs.map((r) => r.x0)), bx1 = Math.max(...rs.map((r) => r.x1)), bz0 = Math.min(...rs.map((r) => r.z0)), bz1 = Math.max(...rs.map((r) => r.z1));
+    // 第 70 批：走路的格子給裡面的人（folks.js）：擺東西的時候算好的（透天厝、公寓）；店、廟、三合院這裡才算；補上後來加的碰撞
+    if (!F.walk && F.spawnIn && F.rooms.length) { try { walkInit(F, [F.spawnIn]); } catch (e) { F.walk = null; } }
+    if (F.walk) walkSync(F);
+    const nav = F.walk ? { x0: F.walk.x0, z0: F.walk.z0, nx: F.walk.nx, nz: F.walk.nz, gs: GS, cells: F.walk.base } : null;
     return {
-      index: i, label: F.label, group: g, draws: dc, tris: F.B.tris,
+      index: i, label: F.label, group: g, draws: dc, tris: F.B.tris, nav,
       colliders: F.cols.map((c) => (c.t === 'box' ? { t: 'box', ...xz(c.x, c.z), hx: c.hx, hz: c.hz, rot: wrapA((c.rot || 0) + rot), h: c.h } : { t: 'circle', ...xz(c.x, c.z), r: c.r, h: c.h })),
       exits: F.exits.map((e) => ({ ...xz(e.x, e.z), hx: e.hx, hz: e.hz, rot, to: e.to, spawn: e.to === 'outside' ? { ...outside } : pose(e.spawn), door: { ...xz(e.x, e.z + e.hz - 0.35), ry: wrapA(Math.PI + rot), w: e.hx } })),
       spots, rooms: F.named.map((r) => ({ name: r.name, ...xz((r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2), hx: (r.x1 - r.x0) / 2, hz: (r.z1 - r.z0) / 2, rot, probe: xz(r.probe[0], r.probe[1]) })),
@@ -2518,6 +2522,7 @@ function buildInterior(b, o = {}) {
     doorStyle: floors[0].moving.some((m) => m.k === 'leaf') ? 'hinge' : floors[0].moving.length ? 'auto' : 'open',
     portals: floors[0].portals,
     roofFl: floors.findIndex((f) => f.roof), // 第 66 批：頂樓是第幾層（沒有＝−1）
+    local: (x, z) => { const dx = x - b.x, dz = z - b.z, c = Math.cos(rot), s = Math.sin(rot); return [dx * c - dz * s, dx * s + dz * c]; }, world: (x, z) => W(x, z), // 第 70 批：世界 ↔ 本地（folks.js 的格子是本地的）
     setDoorT(t) { for (const m of floors[0]?.moving || []) m.set(t); },
     doorCols(t) { // 世界座標的碰撞（門片現在在哪裡）
       const out = [];

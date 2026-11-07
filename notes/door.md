@@ -55,3 +55,27 @@ Nick 2026-11-04 picked 「1 層＋頂樓」 for 透天厝: houses stay one floor
 
 ## Tests
 - `door-test.mjs` section 3b: all 81 village houses have 1F + 頂樓 and the hut sits over the stairwell (`b.hut` vs `F.stair`, 2 cm); up the stairs (no fade, height smooth), out onto the roof (world scene, y = b.y + 3.3), the parapet holds (back, both sides), the hut doorway shows the stairs (pixel check vs the interior drawn alone from the roof height), back in, down, 「開門」, out of the front door. 31 ok.
+
+# Batch 70 (trial v82): residents who move about and come and go
+
+Nick 2026-11-04 「每棟房子裡的人會進出 會動／公寓不要有人」; 2026-11-07 「第二項可以做了」, mock https://claude.ai/artifact/LZZ8z4aRBsKmvnPMCp2qKQ, card 「照這樣做」. Step 3 of the plan at the top of this note. Village only (Neihu later).
+
+## What changed
+- `folks.js` (new, `window.createFolks({ I, b, scene, makeCharacter, randomLook, hooks })`): the residents of the one built (live) building, `LD.folks`.
+  - Per floor, lazily: a seeded rnd per building (same people every visit): houses/shops 1–3 (the shop's boss counts as one and never leaves the counter), temple 0–2 praying, apartment none. People are placed on the floor's `spots` (sit / stand / pray / counter).
+  - Walking: `interiors.js` now exports each floor's `nav` = the 0.1 m occupancy grid `walkInit/walkSync` already build for the player (person radius 0.32 baked in); `route()` = BFS (4-neighbour) from the nearest free cell (≤1.2 m) to the goal's, then string-pulled with a 0.05 m line-of-sight test; the last point is the exact spot. ~0.1–0.5 ms per path.
+  - Cycle: sit 15–60 s / stand 4–20 s / pray 8–28 s → pick another free spot (`next`) or, on floor 0 with a `leave` hook, 18 % walk to the inside door point (`doorPts()`: portal centre ±0.7 m inside / 1.0 m outside, towards the floor's centre), ask the door to open every frame (`hooks.openDoor`), walk out to the outside point and hand over to npc.js (`hooks.leave(look, wx, wz, heading)`); on failure they stand there 20–40 s and try again later.
+  - Yielding: a walker stops when the player is within 1.05 m ahead (or another walker within 0.6 m, lower index wins); after 2.5 s waiting it re-routes.
+  - `arrive(look)`: a new resident at the inside door point (same look as the pedestrian), who stands 0.3–0.8 s then goes to find a spot.
+  - `colliders`: circle colliders of the standing/walking people on the current floor, pushed into `walker.setMovers` in `npcStep` so they block you; sitting people don't.
+  - Test hooks: `_leave(f)`, `_route`, `_free`, `_nearFree`.
+- `npc.js`: `onEnter(p, d, near)` hook for the `enter` mode and (near) for a `walk` toward `HOME` within 4 m: `true` = the house took the person (released, `st.handed`), `'wait'` = stand at the door until it opens (`p.waitDoor`, animation idle), else walk in and vanish as before. `setHome(b)` = the built building: `newGoal` sends 50 % of people in its component (8–150 m) there. `spawnAt(x, z, heading, look)` = a resident coming out becomes a pedestrian at the door (`st.fromHome`), `spawnHome(look, back)` (test) = a pedestrian from a nearby door walking to HOME. Both use `freeOrFar`: when all 14 slots are busy the farthest walker (>25 m from you and from here, not sitting/talking/entering) is recycled (`st.recycled`); `st.lastFail` says why a spawn failed.
+- `town.src.js`: `LDF_HOOKS` (door = `LD.t`, openDoor = `LD.hold = 0.6` + hinge `want = 1`, player = walker position, leave = `NPC.peds.spawnAt`); `npcEnter(p, d, near)` opens the door within 3.5 m, returns `'wait'` while a hinge door is < 0.6 open, `true` once the person is at the door line (`LD.folks.arrive`). `ldBuild` creates the folks (not for apartments) and `setHome(b)`; `ldDrop` disposes; `ldStep` ticks `hold`, keeps a hinge door from closing while `hold > 0`, calls `LD.folks.update(dt)` after the door animation and `setFloor` when you change floors. The old static `houseFolks()` is gone (`indoor.folks` only holds the police station's people now).
+- `build-art.mjs` / `build-app.mjs`: `folks.js` after `interiors.js`.
+
+## Numbers (swiftshader 390×844, 普通)
+- inside a house with 2 residents: house pass 13 calls / 19k tris, whole frame 218 calls / 0.54M; `folks.update` ≈ 0.02 ms per frame; creating a building's residents ≈ 8 ms (characters).
+
+## Tests
+- `folks-test.mjs` (new, 18 checks, ~1 min): every village building gets residents off-line (90 buildings: counts, boss at every counter, nobody standing in a wall, everyone can route to the door, apartments none); walk into the nearest house (residents in the house scene, movers); told to move → someone walks, never through walls, settles again; you stand in his way → he waits; forced leave → door opens by itself, he becomes a pedestrian with the same look, door closes again; `spawnHome` → door opens ~3 m before he arrives, he becomes a resident with the same look and goes to find a spot; draw calls / update ms; house put away and repopulated the same; shop boss stays at the counter; apartment has nobody and is not a HOME.
+- Gotchas: `window.__IN()` is a snapshot — re-call it after walking in (stale `indoor`); a pedestrian slot object is reused as soon as it is released, so "is he gone" must be checked by position/look, not by `p.gone`.
