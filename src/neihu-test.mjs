@@ -2,7 +2,7 @@
 //   0 轉換程式再跑一次＝一模一樣的 neihu-data.js；1 載入（內湖蓋好了：房子、車站、路名）；2 出門上 GC8、七個目的地有「去內湖」；
 //   3 機器人從車庫照「去內湖」的路線開到港墘站（直線加速賽道南邊的口、聯外道路、山谷、內湖路一段）、地圖資料的出處；
 //   4 沿著內湖路一段往東、港墘路往北、再整條往南開（不卡住、大部分在那條路上）；4b 內湖的車流和走路的人（修 10）；5 房子擋車；6 下車走路（人行道、騎樓、房子擋人）；
-//   7 截圖（路上、駕駛座、空拍、車站、學校、山邊、七個地標）＋ draw call／三角形；8 直接回車庫：小村莊放回來、出處、路名收起來）
+//   7 截圖（路上、駕駛座、空拍、車站、學校、山邊、七個地標）＋ draw call／三角形；7s 第 72 批的街景（江南街、內湖路一段、環山路：機車、停著的車、椰子、路燈、公車亭、紅綠燈、工地、路牌、腳踏車站、燈箱招牌；傍晚「高」的截圖＋draw call）；8 直接回車庫：小村莊放回來、出處、路名收起來）
 //   地標（碧湖公園、內湖國小、麗山國中、港墘站、湖光教會、西湖圖書館、大港墘公園）的位置照 OSM、牌子、擋得住；大路的路名牌、HUD 的路名
 import http from 'node:http';
 import fs from 'node:fs';
@@ -19,7 +19,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
   + ' window.__money = (n) => { GAME.money = n; save(true); renderWallet(); renderOptions(); refreshCarBtns(); };'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, home, bayLock, snooze, TR, LODS, camGo, cur, built, walker, tripPose, tripFull, boarding,'
-  + '   TWR, EL, PW, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE });'
+  + '   LOOK, TWR, EL, PW, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE });'
   + ' window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
   + ' window.__pol = () => (typeof police !== "undefined" ? police : null);' // 第 3 批（b3-int）：警察（開車的機器人不小心撞到人：星星清掉，見 leg）
   + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR });'
@@ -676,6 +676,28 @@ for (const [k, cx, cz, lx, lz, nm] of LM7) {
 }
 perf.edge = await shotAt('7i-hills-edge', S7.sp, 'air', { at: [S7.box[2] - 60, 25, (S7.box[1] + S7.box[3]) / 2], look: [S7.box[2] + 300, 40, (S7.box[1] + S7.box[3]) / 2 - 100] });
 console.log('7 perf', JSON.stringify(perf));
+// ==== 7s 第 72 批：內湖的街景（照 Nick 2026-11-07 的照片；nhstreet.js）====
+const S7s = await p.evaluate(() => { const V = window.__D().VIL, N = V.neihu, I = V.info.neihu, st = I.street, ND = N.data.nodes, nx = (i) => ND[i * 2], nz = (i) => ND[i * 2 + 1];
+  const segs = []; N.data.roads.forEach((r) => { if (r.cls > 4) return; for (let i = 1; i < r.n.length; i++) segs.push([nx(r.n[i - 1]), nz(r.n[i - 1]), nx(r.n[i]), nz(r.n[i]), r.w, r.ow]); });
+  const segD = (px, pz, s) => { const dx = s[2] - s[0], dz = s[3] - s[1], l2 = dx * dx + dz * dz || 1e-9; let t = ((px - s[0]) * dx + (pz - s[1]) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; return Math.hypot(s[0] + dx * t - px, s[1] + dz * t - pz); };
+  // 停著的車、機車不能在車道上（兩線道的車道在中線 w/4、車寬約 1.8；單行道在中線）
+  let onLane = 0, nCar = 0, nSc = 0, badIm = 0; const onLaneEx = []; const lamps = (V.poles || []).filter((q) => q.lamp && q.x > I.box[0] && q.x < I.box[2]).length;
+  for (const c of V.colliders) { const nm = c.im && c.im.name || ''; if (!/^nh-(car|scooter)-/.test(nm)) continue; const car = /car/.test(nm); if (car) nCar++; else nSc++; if (!c.im.count) badIm++;
+    let best = null, bd = 1e9; for (const s of segs) { const d = segD(c.x, c.z, s); if (d < bd) { bd = d; best = s; } }
+    if (!best) continue; const lane = best[5] ? 0 : best[4] / 4, need = lane + 0.95 + (car ? 0.95 : 0.85); /* 車半寬 0.95；停著的車橫著 0.95、機車車頭朝房子＝半長 0.85 */ if (bd < need) { onLane++; if (onLaneEx.length < 6) onLaneEx.push([car ? 'car' : 'sc', +c.x.toFixed(0), +c.z.toFixed(0), +bd.toFixed(1), best[4], best[5]]); } }
+  // 江南街邊的房子：真的樓層（≥ 3 層＝高 10 公尺以上的房子）
+  const v = N.street.views, tall = (k) => { const [x, z] = v[k]; return V.colliders.filter((c) => c.g >= 1e6 && c.h >= 10 && Math.hypot(c.x - x, c.z - z) < 60).length; };
+  return { st, fixArc: I.fixArc, lamps, onLane, onLaneEx, nCar, nSc, badIm, tall: { jn: tall('jn'), nh: tall('nh'), hs: tall('hs') }, views: v, signalsG: N.street.signals.filter((q) => q[2]).length, ubike: N.street.ubike.length, site: N.street.site }; });
+console.log('7s street', el(), JSON.stringify(S7s));
+check(S7s.st.scooters > 300 && S7s.st.cars > 40 && S7s.st.bays > 80 && S7s.st.palms > 100 && S7s.st.lamps > 40 && S7s.st.shelters >= 8 && S7s.st.signals >= 20 && S7s.st.uboxes >= 4 && S7s.st.site === 1 && S7s.st.guides >= 3 && S7s.st.bikes >= 8 && S7s.ubike === 2 && S7s.st.boxes >= 200 && S7s.st.wallM > 100 && S7s.st.rwallM > 100,
+  `street things: ${S7s.st.scooters} scooters, ${S7s.st.cars} parked cars in ${S7s.st.bays} bays, ${S7s.st.palms} palms, ${S7s.st.lamps} lamps, ${S7s.st.shelters} bus shelters, ${S7s.st.signals} signals, ${S7s.st.uboxes} utility boxes, site ${S7s.st.site}, ${S7s.st.guides} guide signs, ${S7s.st.bikes} bikes at ${S7s.ubike} stations, ${S7s.st.boxes} lightbox signs, walls ${S7s.st.wallM.toFixed(0)} m + retaining ${S7s.st.rwallM.toFixed(0)} m`);
+check(S7s.fixArc >= 5 && S7s.tall.jn >= 5 && S7s.tall.nh >= 5 && S7s.tall.hs >= 5, `江南街 arcades added ${S7s.fixArc}; tall buildings (≥ 10 m) near the views: 江南街 ${S7s.tall.jn}, 內湖路 ${S7s.tall.nh}, 環山路 ${S7s.tall.hs}`);
+check(S7s.onLane === 0 && S7s.nCar === S7s.st.cars && S7s.nSc === S7s.st.scooters && S7s.badIm === 0 && S7s.lamps >= S7s.st.lamps, `parked cars / scooters all have crushable InstancedMesh colliders and none sits on a traffic lane (${S7s.onLane} on lanes); ${S7s.lamps} lamp poles in 內湖 for look.js`);
+await p.evaluate(() => { const D = window.__D(); D.LOOK.set(1); D.LOOK.setHour(18.1); D.LOOK.setRain(0); }); await p.waitForTimeout(1500); // 傍晚、畫質「高」（照片是傍晚拍的）
+for (const [k, [x, z, hd]] of Object.entries(S7s.views)) { perf['st_' + k] = await shotAt(`7s-${k}-dusk`, { x, z, heading: hd }); }
+if (S7s.site) { const [x, z] = S7s.site; perf.st_site = await shotAt('7s-site', null, 'air', { at: [x + 45, 22, z + 45], look: [x, 8, z] }); }
+await p.evaluate(() => { const D = window.__D(); D.LOOK.set(0); D.LOOK.setHour(13); }); await p.waitForTimeout(800);
+{ const m = Math.max(perf.st_jn.calls, perf.st_nh.calls, perf.st_hs.calls); check(m < 300, `draw calls on the three streets at dusk (高) ≤ ${m} (江南街 ${perf.st_jn.calls}, 內湖路 ${perf.st_nh.calls}, 環山路 ${perf.st_hs.calls})`); }
 const maxCalls = Math.max(...['street', 'eye', 'rev', 'drone', 'entry', 'wende', 'school'].filter((k) => perf[k]).map((k) => perf[k].calls));
 check(maxCalls < 260, `draw calls at street level / drone in 內湖 ≤ ${maxCalls} (street ${perf.street.calls}, west ${perf.rev.calls}, drone ${perf.drone.calls})`);
 

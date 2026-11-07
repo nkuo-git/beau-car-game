@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import { NEIHU_DATA } from './neihu-data.js';
 import { HOME_SITES, homeFront } from './village.js';
 import { TOWER_RAMP } from './tower.js';
+import { nhStreetPrep, nhStreetBuild, NH_STREET_TEXT } from './nhstreet.js'; // 第 72 批：內湖的街景（江南街、內湖路、環山路）
 
 // 打包（build-art.mjs、build-app.mjs）：整個包在一個函式裡，只露出下面這些名字
 export const { buildNeihu, neihuFonts, NEIHU_TEXT, NEIHU_KEEP } = (() => {
@@ -47,7 +48,7 @@ const NEIHU_KEEP = []; // race.src.js：賽道旁邊的樹不要種在聯外道�
 const RIDGE_Z = 232; // 越野車場（圍籬 z 196、外面一圈地形到 z 229）南邊：內湖北邊那道矮山脊從這裡起
 // 世界本來的草地（village.js 的 ground、race.src.js 的賽道草地）在哪裡：內湖的山在這上面平的地方壓低一點（草地蓋過去），範圍裡面挖掉（carveWorld）
 const worldGround = (x, z) => (x >= -1450 && x <= -62 && Math.abs(z) <= 880) || (x > -62 && x <= 1300 && Math.abs(z) <= 1150);
-const NEIHU_TEXT = [...new Set([...D.names.map((n) => n[0]).join(''), ...D.stations.map((s) => s[0]).join(''), ...D.nsigns.map((s) => s[3]).join(''), ...SHOPS.join(''), ...BOARD.join(''), ...'地圖資料©OpenStreetMap貢獻者到了'].filter((ch) => ch.charCodeAt(0) > 0x2e80))].join('');
+const NEIHU_TEXT = [...new Set([...D.names.map((n) => n[0]).join(''), ...D.stations.map((s) => s[0]).join(''), ...D.nsigns.map((s) => s[3]).join(''), ...SHOPS.join(''), ...BOARD.join(''), ...'地圖資料©OpenStreetMap貢獻者到了', ...NH_STREET_TEXT].filter((ch) => ch.charCodeAt(0) > 0x2e80))].join('');
 function neihuFonts(ms = 1500) {
   const f = typeof document !== 'undefined' && document.fonts;
   if (!f || !f.load) return Promise.resolve();
@@ -469,14 +470,18 @@ function buildNeihu(V, opt = {}) {
   const NH_MAX_FL = 1; // 第 10 批：內湖一般的房子最多幾層（地標不變）；第 18 批（Nick 2026-10-14「對 把房子變矮」）：1 層
   const GB = 1e6; // 第 9 批：房子的編號（碰撞物的 g；村子的房子沒有 g）
   const roadAtH = NH_VARIETY ? mkRoadGrid() : null; // 第 28 批：哪一面牆對著路（那一面畫門、窗；其他畫側牆）
+  const NS = nhStreetPrep({ N, nx, nz, names: D.names }); let nFix = 0; N.bld.forEach((b, bi) => { if (NS.arcadeFix(b, bi)) nFix++; }); // 第 72 批：江南街、內湖路、環山路邊的房子照真的樓層、江南街補騎樓、一棟換成工地
   N.bld.forEach((b, bi) => {
     if (b.lm) return; // 地標的房子（西湖圖書館、湖光教會）：下面自己做
+    if (b.site) { nb++; return; } // 第 72 批：工地（nhstreet.js 自己蓋）
     const P = b.P, n = P.length; let cx = 0, cz = 0; for (const p of P) { cx += p[0]; cz += p[1]; } cx /= n; cz /= n;
     const g = bank('wall', cx, cz, TB);
     const VAR = NH_VARIETY && resSt.has(b.st) && !(LISHAN && inPoly(LISHAN, cx, cz)); // 第 28 批：住宅的樣子才換（學校、廟、工廠、辦公大樓照舊）
     const gh = b.e.includes(2) ? 4.2 : 3.6, top0 = b.h > 2 ? b.h : b.f <= 1 ? 3.8 + hh(bi, 1) * 0.8 : gh + (b.f - 1) * 3.2;
-    const bf = Math.min(b.f, NH_MAX_FL), top = VAR ? (b.e.includes(2) ? gh : gh * (0.94 + 0.16 * hh(bi, 71))) : Math.min(top0, gh + (NH_MAX_FL - 1) * 3.2); // 第 10 批（Nick「所有房子變矮」）：最多 2 層樓高；第 28 批：高高低低一點
-    const st = b.st, base = VAR ? WHITE : STY_COL[st] || WHITE, tint = VAR ? 0.92 + hh(bi, 2) * 0.12 : 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, VAR ? 0.86 : 0.78), gcell = GROUND_OF[st] ?? 15;
+    let bf = Math.min(b.f, NH_MAX_FL), top = VAR ? (b.e.includes(2) ? gh : gh * (0.94 + 0.16 * hh(bi, 71))) : Math.min(top0, gh + (NH_MAX_FL - 1) * 3.2); // 第 10 批（Nick「所有房子變矮」）：最多 2 層樓高；第 28 批：高高低低一點
+    const ov = NS.floorsOf(b, bi, cx, cz); if (ov) { bf = ov.fl; top = gh + (bf - 1) * 3.2 + (hh(bi, 71) - 0.5) * 0.3; } // 第 72 批：三條街邊的房子照真的樓層（照片裡 4～15 樓）
+    const one = !ov && b.f <= 1 && b.h <= 2; // 一層樓的房子：牆一次到屋頂
+    const st = ov && ov.st != null ? ov.st : b.st, base = VAR ? WHITE : STY_COL[st] || WHITE, tint = VAR ? 0.92 + hh(bi, 2) * 0.12 : 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, VAR ? 0.86 : 0.78), gcell = GROUND_OF[st] ?? 15;
     const fam = Math.floor(hh(bi, 70) * 12), fCell = 32 + fam, sCell = fam < 6 ? 26 + fam : 38 + fam, anyE = b.e.some((x) => x); // 第 28 批：12 種一樓住家（前面）＋同一種的側牆
     let faceR = null; // 第 28 批：每一面牆往外 3 公尺是不是路（人行道）；都不是的話，最靠近路的那一面（8 公尺內）
     if (VAR) { faceR = []; let bestI = -1, bestD = Infinity;
@@ -497,9 +502,9 @@ function buildNeihu(V, opt = {}) {
         for (let j = 0; j < k; j++) { const t0 = j / k, t1 = (j + 1) / k, r = hh(bi, 100 + i * 17 + j), cl = e ? SHOP_CELLS[Math.floor(r * SHOP_CELLS.length)] : r < 0.5 ? fCell : 32 + Math.floor(hh(bi, 140 + i * 17 + j) * 12);
           wallQ(g, x0 + (x1 - x0) * t0, z0 + (z1 - z0) * t0, x0 + (x1 - x0) * t1, z0 + (z1 - z0) * t1, 0, y1, 0, 1, 0, 1, cl, low, col); }
       };
-      if (b.f <= 1 && b.h <= 2) gWall(a[0], a[1], c[0], c[1], top, L, L / 6);
+      if (one) gWall(a[0], a[1], c[0], c[1], top, L, L / 6);
       else {
-        const gw = VAR && !(e === 2 && b.core) ? top : gh; // 第 28 批：一層樓的房子，一樓的牆直接到屋頂
+        const gw = VAR && !ov && !(e === 2 && b.core) ? top : gh; // 第 28 批：一層樓的房子，一樓的牆直接到屋頂
         // 一樓（騎樓的話退到裡面那條線）
         gWall(ca[0], ca[1], cc[0], cc[1], gw, Lc, Math.max(1, Math.round(Lc / 6)));
         // 樓上
@@ -510,7 +515,7 @@ function buildNeihu(V, opt = {}) {
         if (e === 1 && L >= 2.5 && hh(bi, 80 + i) < 0.72) awning(g, a, c, L, ux, uz, ox, oz, 1.1 + 0.5 * hh(bi, 81 + i), hh(bi, 82 + i), hh(bi, 83 + i));
         if (!e && L >= 2.5 && hh(bi, 90 + i) < (front ? 0.5 : 0.3)) { const t = 0.2 + 0.6 * hh(bi, 91 + i); boxG(g, a[0] + (c[0] - a[0]) * t + ox * 0.2, a[1] + (c[1] - a[1]) * t + oz * 0.2, 0.42, 0.17, rotOf(ux, uz), 2.2, 2.75, [226, 224, 216], 20); }
       }
-      if (b.f <= 1 && b.h <= 2) continue;
+      if (one) continue;
       if (e === 2 && b.core) { // 騎樓：天花板、柱子
         nArc++;
         quad3(g, [[a[0], gh, a[1]], [ca[0], gh, ca[1]], [cc[0], gh, cc[1]], [c[0], gh, c[1]]], [[0.3, 0.3], [0.3, 0.7], [0.7, 0.7], [0.7, 0.3]], 20, [214, 210, 200]);
@@ -1191,8 +1196,6 @@ function buildNeihu(V, opt = {}) {
     }
   }
 
-  const signMesh = new THREE.Mesh(sg.geometry(), mats.sign); signMesh.name = 'nh-signs'; signMesh.matrixAutoUpdate = false;
-
   // ==== 樹（250 公尺一格 InstancedMesh：樹幹＋樹冠一個網格；山上的樹另外一個）====
   const treeGeo = (() => {
     const g = new Geo(false), TR = col255('#6b4f37'), L1 = col255('#4f7a3a'), L2 = col255('#3f6a31');
@@ -1209,7 +1212,11 @@ function buildNeihu(V, opt = {}) {
   const treeTiles = new Map(), TT = 250, M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), SC = new THREE.Vector3(), PV = new THREE.Vector3(), UPV = new THREE.Vector3(0, 1, 0);
   const addTree = (x, y, z, s, hill = false) => { const key = hill ? 'hill' : Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT); let L = treeTiles.get(key); if (!L) treeTiles.set(key, (L = [])); L.push(x, y, z, s); };
   const treeCols = []; // 第 9 批：碰撞物記著是哪一格的第幾棵（越野車輾到 → 那一棵壓扁：crush.js 改 InstancedMesh 的矩陣）
-  for (const [x, z, s] of N.trees) { addTree(x, 0, z, s); if (inBox(x, z)) { const c = { t: 'circle', x, z, r: 0.25, h: 3, tk: Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT), ti: treeTiles.get(Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT)).length / 4 - 1 }; colliders.push(c); treeCols.push(c); } }
+  let nSkipT = 0;
+  for (const [x, z, s] of N.trees) { if (NS.noTree(x, z)) { nSkipT++; continue; } addTree(x, 0, z, s); if (inBox(x, z)) { const c = { t: 'circle', x, z, r: 0.25, h: 3, tk: Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT), ti: treeTiles.get(Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT)).length / 4 - 1 }; colliders.push(c); treeCols.push(c); } }
+  // 第 72 批：路邊的東西（機車、停著的車、大王椰子、路燈、公車亭、紅綠燈、變電箱、圍牆、擋土牆、工地、路牌、腳踏車站、燈箱招牌）；要在 signMesh 做出來以前（工地的「施工」牌用 plate）
+  const NSB = nhStreetBuild({ S: NS, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV: SA.uv['b' + bIdx((b) => b.t === 'work')], GB, roadAt, AX, AZ, names: D.names, plate });
+  const signMesh = new THREE.Mesh(sg.geometry(), mats.sign); signMesh.name = 'nh-signs'; signMesh.matrixAutoUpdate = false;
   { // 山上的樹（遠遠看的）：範圍外面一圈，山腳 4 公尺以上；近的密一點
     const R3 = rng(8); let n = 0;
     for (let tries = 0; n < 2600 && tries < 40000; tries++) {
@@ -1226,14 +1233,15 @@ function buildNeihu(V, opt = {}) {
     m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); m.userData.c = [cx / n, cz / n]; m.userData.hill = key === 'hill'; treeMeshes.push(m);
   }
   { const byKey = new Map(treeMeshes.map((m) => [m.name.slice(9), m])); for (const c of treeCols) { c.im = byKey.get(c.tk) || null; delete c.tk; } }
+  for (const m of NSB.meshes) treeMeshes.push(m); // 第 72 批：機車、停著的車、大王椰子（跟樹一樣 250 公尺一格、400 公尺外不畫）
 
   // ==== 全部放進 group ====
   const group = new THREE.Group(); group.name = 'neihu';
   let tris = 0, meshes = 0; const tileMeshes = [];
-  const ORDER = ['ground', 'area', 'walk', 'road', 'paint', 'wall'];
+  const ORDER = ['ground', 'area', 'walk', 'road', 'paint', 'wall', 'sign2', 'sign3'];
   for (const [key, b] of [...banks.entries()].sort((p, q) => ORDER.indexOf(p[1].mat) - ORDER.indexOf(q[1].mat))) {
     if (!b.g.v) continue; const m = new THREE.Mesh(b.g.geometry(), mats[b.mat]); m.name = 'nh-' + key; m.matrixAutoUpdate = false; m.updateMatrix();
-    m.userData.c = [b.cx, b.cz]; m.userData.r = b.size * 0.75; m.userData.far = b.mat === 'paint' ? 420 : b.mat === 'wall' ? 1300 : 1500;
+    m.userData.c = [b.cx, b.cz]; m.userData.r = b.size * 0.75; m.userData.far = b.mat === 'paint' ? 420 : b.mat === 'sign2' || b.mat === 'sign3' ? 700 : b.mat === 'wall' ? 1300 : 1500;
     group.add(m); tileMeshes.push(m); tris += b.g.ni / 3; meshes++;
   }
   group.add(hillMesh, signMesh); meshes += 2; tris += hillTris + sg.ni / 3;
@@ -1431,14 +1439,16 @@ function buildNeihu(V, opt = {}) {
   }
   update.x = 0; update.y = 0; update.z = 0;
 
-  const info = { meshes, tris: Math.round(tris), colliders: colliders.length, bigSigns: bigSigns.length, buildings: nb, arcades: nArc, sheds: nShed, shopSigns: vSigns.length, trees: N.trees.length, ms: 0, at: [AX, AZ], box: [BX0, BZ0, BX1, BZ1] };
+  const info = { meshes, tris: Math.round(tris), colliders: colliders.length, bigSigns: bigSigns.length, buildings: nb, arcades: nArc, sheds: nShed, shopSigns: vSigns.length, trees: N.trees.length - nSkipT, street: NSB.info, fixArc: nFix, ms: 0, at: [AX, AZ], box: [BX0, BZ0, BX1, BZ1] };
   if (V.info) V.info.neihu = info;
+  if (NSB.poles.length) V.poles = (V.poles || []).concat(NSB.poles); // 第 72 批：內湖的路燈（look.js 晚上最近的幾支真的有光）
   const P = {
     group, info, inside, update, uncull, place, routeTo, roadName, bigSigns, names: D.names, link: LK, destNode, pathTo: (x, z) => pathTo(x, z, destNode), data: N, hillH, inBox,
+    street: NSB.spots, // 第 72 批：街景的東西在哪裡（測試、截圖）
     ringAt, ringN, ringBox: RING.slice(), // 第 27 批：外面那圈山的地形（hills.js 包進 V.heightAt）
     dispose() {
       uncull(); uncarve(); group.removeFromParent(); group.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
-      for (const m of Object.values(mats)) m.dispose(); for (const t of [FA.tex, SA.tex, tAsph, tPave, tGround]) t.dispose();
+      for (const m of Object.values(mats)) m.dispose(); for (const t of [FA.tex, SA.tex, NSB.tex, tAsph, tPave, tGround]) t.dispose();
     },
   };
   V.neihu = P;

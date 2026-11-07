@@ -143,3 +143,46 @@ https://claude.ai/artifact/FcaD5KwCZGwsHKHuXy67cf . **`NH_VARIETY = false` until
   - Cost: Neihu triangles 295k → 458k; draw calls unchanged (same 199 meshes). Street views 1.07M → 1.17M triangles
     (130–252 calls either way). Build time no visible change. Atlas memory +~11 MB.
 - Probe: `src/probe-nh.mjs` (not committed; flips the flag at serve time, renders 11 spots both ways, `ATLAS=1` dumps the atlas).
+
+
+## Batch 72 (trial v84, 2026-11-07): the three streets from Nick's dashcam photos — `src/nhstreet.js`
+
+Nick sent 31 dusk screenshots of 江南街 (13), 內湖路一段 (9) and 環山路 (9) on 2026-11-07 (kept under
+/mnt/project-files/car-game/neihu/ref-2026-11-07/, reference only — never in the game) and said 「直接開始做內湖的部分」.
+The three roads already exist in neihu-data.js; everything new is a second module so neihu.js stays readable.
+
+- `nhStreetPrep({ N, nx, nz, names })` runs before the building loop:
+  - `floorsOf(b, bi, cx, cz)`: buildings whose front (generated rects: edge P0→P1, otherwise the centroid) is within
+    w/2 + sw + 8 m of one of the three roads get their real floor count back (NH_MAX_FL = 1 stays everywhere else):
+    江南街 3–5 F (≥ 9 F keeps up to 14), 內湖路 5–15 F, 環山路 3–15 F; 16 % of the buildings 18–75 m behind 江南街 become
+    12–14 F towers (the photos show towers behind the low street). Facade style 4 (tower) for ≥ 11 F, 7 for some low 環山路 ones.
+    neihu.js: `bf`/`top` become `let`, `one = !ov && b.f <= 1 && b.h <= 2` picks the one-wall shortcut, `gw = gh` so upper walls draw.
+  - `arcadeFix(b, bi)`: generated rects fronting 江南街 (≥ 3 F, ≥ 4.4 m wide, ≥ 9 m deep) get `e[0] = 2`, a `core` inset 3.2 m
+    and a collider box shrunk by 1.6 m → the existing arcade code draws the ceiling and pillars. The converter only makes
+    arcades on cls ≤ 2 roads; 江南街 is cls 4. 7 buildings (the gen rects along 江南街 are sparse: fronts sit 9–11.6 m from the centreline).
+  - One generated rect (8–20 m sides, nearest x ≈ 520) on 環山路 becomes the construction site (`b.site`, skipped by the loop).
+  - `noTree(x, z)`: no OSM street trees along 內湖路 (palms instead) or on the site.
+- `nhStreetBuild(ctx)` runs after `addTree` exists and before `signMesh` is built (the site uses the SA 「施工」 plate):
+  - 1024² canvas atlas: 36 lightbox cells 256×80 (`CHAINS` 24 parody chains + `GENERIC` 12 made-up shops; icons are hand-drawn
+    cup/house/star/burger/cart/plus/leaf/bolt/ring/bars — never a real logo), 6 dynamic green guide cells, bus / 優拜客 / two
+    utility-box paintings / scaffold mesh / lamp glow / 施工中 / hoarding, 3 signal heads. `mats.sign2` (map = emissiveMap,
+    0.3 → look.js boosts it at night like the other signs) and `mats.sign3` (no emissive: mesh, utility boxes).
+    `plate2(x, y, z, ux, uz, w, h, key, two, c, fx, fz, mat)`: a one-sided plate faces (fx, fz) — the first run had every
+    single-sided plate facing into its wall (quad a→b faces (−uz, ux)).
+  - Scooters (`along` each road, 0.85 m steps, runs of 5–14 on 江南街 at w/2 − 0.55, sparse on the other two sidewalks),
+    parking bays + cars on 環山路 only (bays at w/2 − 1.3: the NPC lane is at w/4, so the car's inner edge stays ≥ 1 m clear;
+    內湖路 is one-way with the lane on the centreline — no bays), royal palms every 9 m both sides of 內湖路, lamps every 34 m
+    alternating sides (`poles.push({x, z, fx, fz, lamp: true})` → look.js lampList), bus shelters (candidates every 10 m,
+    one per 230 m that passes `ok` + not near another road + no building within 2.2 m; try the other side first),
+    signals at junctions of the three roads with other named roads (one per approach, right side, arm over the lane),
+    utility boxes, walls + hedges (內湖路) / 3.6 m retaining walls + two rows of trees (環山路) on 4 m runs with no building
+    within 6.5 m, the site (hoarding, 6 slabs + columns, scaffold on two faces with mesh sheets, tower crane), guide signs
+    (≤ 6, 28 m before 環山路 junctions with cls ≤ 3 roads), two bike stations, lightbox signs on ground floors fronting the
+    three roads (one per 6 m piece, 40 % chains).
+  - Scooters / cars / palms are InstancedMesh per 250 m tile (`nh-scooter-i,j` …) pushed into neihu.js `treeMeshes`, so they
+    are culled at 400 m like the trees and crushable through `im`/`ti` like the trees (circle/box colliders with the
+    `small` sizes crush.js accepts for any car). Walls, shelter posts, the site and the crane are `noCrush`.
+- Probe (not committed): scratchpad probe2-nh.mjs = neihu-test's helpers + shots at `V.neihu.street.views` at 高 / 17:54.
+  Numbers (960×576, 高, dusk): 江南街 166 calls / 0.52M, 內湖路 232 / 0.73M, 環山路 187 / 0.49M (380 looking back west on
+  環山路二段 towards the whole east side); Neihu 240 meshes / 604k triangles (was 199 / 458k), build ≈ +100 ms.
+- Test: neihu-test 7s (counts, no parked thing on a lane, arcades, tall buildings near the views, dusk shots, calls < 300).
