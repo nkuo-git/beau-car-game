@@ -1,7 +1,7 @@
 // 組一台 3D 車：車身（三層：車漆、車內、玻璃）＋輪子＋尾翼＋後照鏡＋車內＋套件
 // 每台車的不同都寫在 SPEC 裡（Supra、GT-R）
 import * as THREE from 'three';
-import { MAT, wheel, gtWing, mirror, interior, aeroKit, AERO_SUPRA, lip, r34Wing, mirrorR34, exhaust, wideKit, WIDE_PUSH, STANCE, mk4Wing, rimFace, RIM_POLISH, neonPad } from './parts.js';
+import { MAT, wheel, gtWing, mirror, interior, aeroKit, AERO_SUPRA, lip, exhaust, wideKit, WIDE_PUSH, STANCE, mk4Wing, rimFace, RIM_POLISH, neonPad, rimMerge, rimLathe, rimCyl } from './parts.js';
 import { makeMaskTextures, patchPaint, patchGlass, patchInside, SUPRA_LOOK, PAINT_NIGHT } from './masks.js';
 import { GTR_LOOK } from './gtr-look.js';
 
@@ -18,29 +18,42 @@ export const SUPRA_SPEC = {
   },
   kit: 'bomex',
 };
-export const AERO_GTR = {
-  front: [[2.335, 0], [2.325, 0.30], [2.285, 0.50], [2.21, 0.65], [2.10, 0.76], [1.98, 0.815]], back: 1.95, y: 0.118, rods: [2.26, 0.165],
-  canard: { S: [2.175, 0.69], t: [-0.57, 0.82], ys: [0.28, 0.20] },
-  skirt: { y: 0.125, x0: -0.95, x1: 0.80, z0: 0.86, z1: 0.95 },
-  diff: { x0: -1.85, x1: -2.10, x2: -2.285, y0: 0.128, y1: 0.146, y2: 0.19, w: 0.62, fin0: -1.95 },
+export const AERO_GTR = { // 第 71 批：照新的車身量（保桿前面平平的 x 2.30、角在 x 2.24、門檻外面 z 0.85、底 y 0.13）
+  front: [[2.345, 0], [2.345, 0.40], [2.337, 0.62], [2.315, 0.74], [2.265, 0.82], [2.17, 0.865], [2.04, 0.875]], back: 1.95, y: 0.118, rods: null,
+  canard: { S: [2.165, 0.818], t: [-0.96, 0.28], ys: [0.30, 0.235] },
+  skirt: { y: 0.125, x0: -0.95, x1: 0.85, z0: 0.80, z1: 0.92 },
+  diff: { x0: -1.85, x1: -2.10, x2: -2.28, y0: 0.122, y1: 0.146, y2: 0.165, w: 0.62, fin0: -1.95 },
 };
+// 第 71 批：影片那台 R34 的輪框（六根直直的輻條，接輪圈那頭變寬；中間平平的輪轂、黑色中心蓋、五顆螺帽）
+export function GTR_spokes(rim, w, mats) {
+  const zo = w / 2 - 0.026, zi = w / 2 - 0.066, C = [], K = [];
+  for (let k = 0; k < 6; k++) {
+    const sh = new THREE.Shape(), r0 = 0.072, r1 = rim - 0.004;
+    sh.moveTo(r0, -0.025); sh.lineTo(r1 - 0.045, -0.021); sh.quadraticCurveTo(r1 - 0.012, -0.021, r1, -0.036); sh.lineTo(r1, 0.036); sh.quadraticCurveTo(r1 - 0.012, 0.021, r1 - 0.045, 0.021); sh.lineTo(r0, 0.025); sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.02, curveSegments: 6, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.005, bevelSegments: 2 }), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const t = Math.min(1, Math.max(0, (p.getX(i) - r0) / (r1 - r0))); p.setZ(i, p.getZ(i) + zi + (zo - zi) * t); } // 外面那頭在輪唇裡面、中間往裡面凹一點
+    g.computeVertexNormals(); g.rotateZ((k * Math.PI) / 3 + Math.PI / 6); C.push(g);
+  }
+  C.push(rimLathe([[0.092, -0.01], [0.091, 0.012], [0.083, 0.019], [0.06, 0.022], [0, 0.023]].map(([r, z]) => [r, z + zi + 0.004]), 48)); // 輪轂：平平的、跟輻條根部一樣高
+  for (let k = 0; k < 5; k++) { const a = (k * 2 * Math.PI) / 5 + Math.PI / 2; C.push(rimCyl(0.0095, 0.0095, 0.016, 6, zi + 0.031, 0.054 * Math.cos(a), 0.054 * Math.sin(a))); } // 螺帽
+  K.push(rimCyl(0.03, 0.032, 0.012, 32, zi + 0.031)); // 中心蓋：黑的（沒有字）
+  const grp = new THREE.Group();
+  grp.add(new THREE.Mesh(rimMerge(C), mats.chrome), new THREE.Mesh(rimMerge(K), mats.black));
+  return grp;
+}
+GTR_spokes.own = true;
+// 第 71 批：車身換成高細節的（gtr-model.js，烘焙成 body-gtr-q.glb：node gc8-bake.mjs gtr）：尾翼、後照鏡、排氣管、尾燈都在車身檔裡
 export const GTR_SPEC = {
   look: GTR_LOOK, paint: '#1d4fc9', metal: 0.32, seat: 0x2a2b2f,
-  wheels: { xf: 1.29, xr: -1.375, R: 0.327, rim: 0.2286, trackF: 0.74, trackR: 0.745, wF: 0.245, wR: 0.245, style: 'multi' },
-  mirror: (paint, mats, s) => { const m = mirrorR34(paint, mats, s); m.position.set(0.46, 0.975, s * 0.77); return m; },
+  wheels: { xf: 1.29, xr: -1.375, R: 0.327, rim: 0.2286, trackF: 0.74, trackR: 0.745, wF: 0.245, wR: 0.245, style: GTR_spokes },
   wings: {
-    stock: (paint, mats) => r34Wing(paint, mats),
-    gt: (paint, mats) => gtWing({ mats, x: -1.90, y: 1.25, deck: 0.962, span: 1.62, chord: 0.30 }), // 支架插進行李箱一點（原本浮 1.7 公分）
+    stock: 'baked', // R34 尾翼（part＝wing）
+    gt: (paint, mats) => gtWing({ mats, x: -1.90, y: 1.27, deck: 0.99, span: 1.62, chord: 0.30 }), // 新車身的行李箱蓋高 0.993（gc8-bake.mjs 量的 WINGS_DECK.gtr）：支架插進去 3 公釐
   },
   wing: 'stock',
   interior: { dx: 0.06, cage: false, wheelZ: 0.36, dashX: 0.55, dashY: 0.87, bench: { x: -0.98, shelfX: -1.43, shelfY: 0.975 } },
-  build(body, paint, mats) { // 套件：原廠（什麼都不加）、玩命關頭（照片那台的碳纖維前下巴）、賽道（大下巴＋風刀＋側裙刀片＋擴散器）
-    body.add(exhaust(mats, -2.27, 0.28, -0.437, 1.2, 0.85)); // 排氣管在左後（照 Nick 的 R34 車尾照片）
-    const amber = new THREE.MeshStandardMaterial({ color: 0xff7a14, roughness: 0.2, emissive: 0x5a2200, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-    for (const s of [1, -1]) { // 內側圓尾燈中間的橘色方向燈
-      const d = new THREE.Mesh(new THREE.CircleGeometry(0.038, 28), amber); d.rotation.y = -Math.PI / 2; d.position.set(-2.289, 0.787, s * 0.45); body.add(d);
-    }
-    const lp = lip(mats, [[2.29, 0], [2.28, 0.30], [2.245, 0.49], [2.175, 0.635], [2.07, 0.745], [1.97, 0.80]], 2.0, 0.138);
+  build(body, paint, mats) { // 套件：原廠（車身本來就有黑色的下巴）、玩命關頭（下巴再加一片碳纖維，往前多 2 公分）、賽道（大下巴＋風刀＋側裙刀片＋擴散器）
+    const lp = lip(mats, [[2.357, 0], [2.354, 0.30], [2.342, 0.55], [2.30, 0.72], [2.20, 0.81], [2.10, 0.825]], 2.06, 0.133);
     const aero = aeroKit(mats, AERO_GTR);
     lp.visible = false; aero.visible = false; body.add(lp, aero);
     return (kit) => { lp.visible = kit === 'bomex'; aero.visible = kit === 'track'; };

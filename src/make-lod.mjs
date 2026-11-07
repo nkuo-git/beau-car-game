@@ -262,8 +262,8 @@ function weld(P, N, ang = 40) {
 const BK_CLS = { paint: 0, glass: 1, trim: 2, net: 2, netF: 2, dark: 3, reflector: 4, bulb: 4, frost: 4, amber: 7, bright: 10 }; // tail 照貼圖分 red／rev
 const BK_PLATE = BODY_CLS.length; // 車牌：custom 材質（顏色跟車庫的黑飾條頂點色一樣）
 const BK_PLATE_MAT = { color: '#e8e6df', roughness: 0.5, metalness: 0.1, clearcoat: 0, emissive: '#000000', ei: 1, opacity: 1 };
-const BK_ASYM = { gc8: [{ slots: ['bright', 'dark'], box: [-2.26, -1.97, 0.2, 0.31, -0.47, -0.33] }] }; // 只有一邊的東西（哪幾組、[x0, x1, y0, y1, z0, z1]）：排氣管（左後：亮的管子、裡面黑的）
-const BK_TAIL_V = 0.43; // 尾燈貼圖：v＜0.43 是倒車燈（灰），以下紅（中間一條暗線）
+const BK_ASYM = { gc8: [{ slots: ['bright', 'dark'], box: [-2.26, -1.97, 0.2, 0.31, -0.47, -0.33] }], gtr: [{ slots: ['bright', 'dark'], box: [-2.36, -2.12, 0.16, 0.27, -0.50, -0.37] }] }; // 只有一邊的東西（哪幾組、[x0, x1, y0, y1, z0, z1]）：排氣管（左後：亮的管子、裡面黑的）
+const BK_TAIL_V = { gc8: 0.43, gtr: -1 }; // 尾燈貼圖：v＜0.43 是倒車燈（灰），以下紅（中間一條暗線）；第 71 批：GT-R 的尾燈貼圖全部是紅的（倒車燈是自己的白色小燈，在飾條那組）
 async function bakedBuckets(file) { // glb 裡車身（part body）的每一組 → { slot, P, N, I, V（貼圖 v）, L（頂點色亮度）, Wm（頂點色紅減藍：橘色的導風口百葉，第 55 批）}（車子座標、公尺）
   const doc = await new NodeIO().registerExtensions([KHRMeshQuantization]).read(file), out = [], e = [];
   for (const nd of doc.getRoot().listNodes()) {
@@ -372,7 +372,7 @@ function bakedHalf(buckets, key) {
     if (BK_FLIP.includes(b.slot)) b = bakedFlip(b, paint);
     let TC; // 每個三角形的分類
     if (b.slot === 'tail') { // 尾燈：照貼圖的 v 切成倒車燈、紅的
-      const s = splitBy(b.P, b.N, b.I, b.V.map((v) => v - BK_TAIL_V));
+      const s = splitBy(b.P, b.N, b.I, b.V.map((v) => v - (BK_TAIL_V[key] ?? 0.43)));
       b = { ...b, P: s.P, N: s.N, I: s.I }; TC = Array.from(s.S, (x) => (x ? 8 : 9));
     } else if (b.slot === 'plate') TC = Array.from({ length: b.I.length / 3 }, () => BK_PLATE); // 第 54 批：車牌自己一組（有號碼的貼圖；輕量車還是淺色的板子）
     else if (BK_CLS[b.slot] === undefined) continue; // 大燈罩、車內、車底、除霧線（第 54 批）

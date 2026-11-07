@@ -1,5 +1,5 @@
 // 手機版 GC8（第 49 批）：把 gc8-model.js 的高細節車（一台約 9 秒、825 塊）先在 Chromium 組好，同材質的零件併成一組，簡化、量化，存成 body-gc8-q.glb
-// 用法：node gc8-bake.mjs [--inv] [--rebake] [--write]
+// 用法：node gc8-bake.mjs [gc8|gtr] [--inv] [--rebake] [--write]（第 71 批：gtr＝gtr-model.js 的 R34 → body-gtr-q.glb；沒給＝gc8）
 //   --inv：只印出每一塊零件是什麼；--rebake：重新在 Chromium 組（不然用 ../out/gc8b/bake.json）；--write：量好的 FIT／WINGS_DECK／WIDE 寫進 cabin.js、wings.js、wide.js
 //   1. Chromium：__CAR2.build(THREE, { bake: true })；每個網格照材質的 userData.slot 分組（尾翼、兩面照後鏡的玻璃自己一組；smoke 併進 trim）；
 //      頂點換到車子座標、貼圖的 repeat 算進 uv、同一組顏色不一樣的放進頂點色；貼圖存成 PNG（flipY 的上下翻過來，uv 不動：法線貼圖的方向才對）
@@ -15,8 +15,15 @@ import { Document, NodeIO } from '@gltf-transform/core';
 import { KHRMeshQuantization } from '@gltf-transform/extensions';
 import { serve, browser, DIR } from './lod-serve.mjs';
 
-const INV = process.argv.includes('--inv'), WRITE = process.argv.includes('--write'), RAWG = process.argv.includes('--raw'); // --raw：不簡化，寫到 ../out/gc8b/body-gc8-raw.glb（比對用）
-const OUT = path.join(DIR, '../out/gc8b'), CACHE = path.join(OUT, 'bake.json');
+const INV = process.argv.includes('--inv'), WRITE = process.argv.includes('--write'), RAWG = process.argv.includes('--raw'); // --raw：不簡化，寫到 ../out/<key>b/body-<key>-raw.glb（比對用）
+const KEY = process.argv.slice(2).find((a) => !a.startsWith('-')) || 'gc8';
+// 每台車：模型檔、暗影貼圖的高（gtr 的車漆貼圖下面多 256 行給車尾那一片）、車漆沒有縫的點（gtr 不在車頂正中間：那一行旁邊就是車尾那一片的貼圖）、尾翼表的起點、後照鏡殼（量車身不算）
+const CFG = {
+  gc8: { model: 'gc8-model.js', aoH: 256, clean: [-0.5, 2, 0], deckX0: -1.54, deckN: 30, wheels: async () => (await import('./gc8-spec.js')).GC8_SPEC.wheels, mirror: (x, y, z) => z > 0.835 && y > 0.85 },
+  gtr: { model: 'gtr-model.js', aoH: 320, clean: [-0.3, 2, 0.25], deckX0: -1.60, deckN: 35, wheels: async () => (await import('./supra.js')).GTR_SPEC.wheels, mirror: (x, y, z) => z > 0.80 && y > 0.90 && x > 0.40 && x < 0.62 },
+}[KEY];
+if (!CFG) throw new Error('不認得的車：' + KEY);
+const OUT = path.join(DIR, `../out/${KEY}b`), CACHE = path.join(OUT, 'bake.json');
 fs.mkdirSync(OUT, { recursive: true });
 
 // ---------- 1. Chromium 組車、分組 ----------
@@ -27,19 +34,19 @@ if (INV || process.argv.includes('--rebake') || !fs.existsSync(CACHE)) {
   p.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) console.log('console', m.text().slice(0, 300)); else if (m.type() === 'warning' || m.type() === 'log') console.log('page', m.text().slice(0, 300)); });
   await p.route('**/__bake.html', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><meta charset="utf-8"><script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script><body></body>' }));
   await p.goto(`${srv.url}/__bake.html`);
-  const R = await p.evaluate(async ({ INV }) => {
+  const R = await p.evaluate(async ({ INV, CFG }) => {
     const THREE = await import('three');
     const BGU = await import('three/addons/utils/BufferGeometryUtils.js');
     window.__THREE = THREE; window.__BGU = BGU;
-    for (const f of ['/gc8-model.js', '/gc8-ao.js']) await new Promise((ok) => { const s = document.createElement('script'); s.src = f; s.onload = ok; document.head.appendChild(s); });
+    for (const f of ['/' + CFG.model, '/gc8-ao.js']) await new Promise((ok) => { const s = document.createElement('script'); s.src = f; s.onload = ok; document.head.appendChild(s); });
     const t0 = performance.now(), car = window.__CAR2.build(THREE, { bake: true, color: 0xffffff }), ms = performance.now() - t0;
     const g = car.group; g.updateMatrixWorld(true);
     // 第 54 批：車子自己的暗影（gc8-ao.js）：車漆 → aoMap（512×256），其他不透明的零件 → 每個頂點（乘進頂點色）；輪胎照 gc8-model.js 的位置放圓柱
     const C2 = window.__CAR2, WH = [];
     for (const x of [C2.XF, C2.XR]) for (const s of [1, -1]) WH.push({ x, y: C2.RW, r: C2.RW, z0: s * C2.TRACK - C2.TW / 2, z1: s * C2.TRACK + C2.TW / 2 });
-    const AOS = INV ? null : window.__AO.bake(THREE, g, { N: 48, D: 0.35, W: 512, H: 256, wheels: WH, paintMat: car.mats.paint, body: g.getObjectByName('car2-body'), nose: 'noseCap' });
+    const AOS = INV ? null : window.__AO.bake(THREE, g, { N: 48, D: 0.35, W: 512, H: CFG.aoH, wheels: WH, paintMat: car.mats.paint, body: g.getObjectByName('car2-body'), nose: 'noseCap' });
     const AOK = 0.8; // 頂點的暗影：乘進顏色的強度（1＝全部）
-    const WING = new Set(['wing', 'wingLeg', 'wingFoot', 'wingBase', 'stopBox', 'stopLamp']);
+    const WING = new Set(['wing', 'wingLeg', 'wingFoot', 'wingBase', 'stopBox', 'stopLamp', 'wingFlap', 'wingKnob']); // 第 71 批：GT-R 的黑色副翼、立柱上面的圓頭
     const KEEPUV = new Set(['car2-body', 'noseCap', 'lip']); // 車漆：這幾塊的 uv 就是車身貼圖（門縫）的 uv；其他的車漆零件給一個沒有縫的地方
     const MERGE = { smoke: 'trim' }; // 太小的組併到顏色差不多的
     const b64 = (a) => { const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
@@ -111,9 +118,9 @@ if (INV || process.argv.includes('--rebake') || !fs.existsSync(CACHE)) {
         inv.push({ part, slot, side, name: o.name, tris: Math.floor(cnt / 3), col: '#' + m.color.getHexString(), tex: tex ? `${tex.map},${tex.normalMap},${tex.emissiveMap}` : '', uv: !!uv, keepUV: !!tx });
       }
     });
-    // 車漆沒有縫的點：車頂中間（x≈−0.5、剖面的最上面）→ uv 是 (i/(nx−1), j/(M−1))，直接找 car2-body 車頂那一點的 uv
-    const body = g.getObjectByName('car2-body'), bp = body.geometry.attributes.position, bu = body.geometry.attributes.uv;
-    let best = -1, bd = 1e9; for (let i = 0; i < bp.count; i++) { const d = Math.hypot(bp.getX(i) + 0.5, bp.getY(i) - 2, bp.getZ(i)); if (d < bd) { bd = d; best = i; } }
+    // 車漆沒有縫的點：車頂（CFG.clean 最近的頂點：gc8 車頂中間 x≈−0.5、剖面的最上面）→ 直接找 car2-body 車頂那一點的 uv
+    const body = g.getObjectByName('car2-body'), bp = body.geometry.attributes.position, bu = body.geometry.attributes.uv, CL = CFG.clean;
+    let best = -1, bd = 1e9; for (let i = 0; i < bp.count; i++) { const d = Math.hypot(bp.getX(i) - CL[0], bp.getY(i) - CL[1], bp.getZ(i) - CL[2]); if (d < bd) { bd = d; best = i; } }
     const clean = [bu.getX(best), bu.getY(best)];
     const out = [];
     for (const bk of B.values()) {
@@ -122,7 +129,7 @@ if (INV || process.argv.includes('--rebake') || !fs.existsSync(CACHE)) {
         P: b64(new Float32Array(bk.P)), N: b64(new Float32Array(bk.N)), U: b64(new Float32Array(bk.U)), C: b64(new Float32Array(bk.C)), I: b64(new Uint32Array(bk.I)) });
     }
     return { ms, inv, buckets: out, tex: texOut, clean, aos: AOS };
-  }, { INV });
+  }, { INV, CFG: { model: CFG.model, aoH: CFG.aoH, clean: CFG.clean } });
   await b.close(); srv.close();
   console.log('build', Math.round(R.ms), 'ms;', R.buckets.length, 'groups;', R.tex.length, 'textures; clean uv', R.clean.map((v) => v.toFixed(4)).join(','));
   if (R.aos) console.log('暗影：三角形', R.aos.tris, '節點', R.aos.nodes, '頂點', R.aos.verts, '（不一樣的', R.aos.uniq, '）車漆格子', R.aos.samples, '射線', R.aos.rays, '時間（BVH／頂點／車漆）', R.aos.ms.join('／'), 'ms');
@@ -196,7 +203,7 @@ for (const g of G) { tot0 += g.before; tot += g.tris; console.log(`${g.part}|${g
 console.log('total', tot0, '→', tot);
 
 // ---------- 3. 寫 glb ----------
-const doc = new Document(), buf = doc.createBuffer(), scene = doc.createScene('gc8');
+const doc = new Document(), buf = doc.createBuffer(), scene = doc.createScene(KEY);
 doc.createExtension(KHRMeshQuantization).setRequired(true);
 const TEX = R.tex.map((t, i) => doc.createTexture(`t${i}`).setImage(Buffer.from(t.png.split(',')[1], 'base64')).setMimeType('image/png'));
 const lin = (h) => [1, 3, 5].map((i) => { const c = parseInt(h.slice(i - 1, i + 1), 16) / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
@@ -239,8 +246,8 @@ for (const g of G) {
   scene.addChild(doc.createNode(name).setMesh(doc.createMesh(name).addPrimitive(prim)).setTranslation(QC).setScale([QH, QH, QH]).setExtras(ex));
 }
 const glb = await new NodeIO().registerExtensions([KHRMeshQuantization]).writeBinary(doc);
-fs.writeFileSync(RAWG ? path.join(OUT, 'body-gc8-raw.glb') : path.join(DIR, 'body-gc8-q.glb'), glb);
-console.log('body-gc8-q.glb', (glb.length / 1e6).toFixed(2), 'MB; textures', R.tex.map((t, i) => `t${i} ${t.w}x${t.h} ${(t.png.length * 0.75 / 1e3).toFixed(0)}KB`).join(', '));
+fs.writeFileSync(RAWG ? path.join(OUT, `body-${KEY}-raw.glb`) : path.join(DIR, `body-${KEY}-q.glb`), glb);
+console.log(`body-${KEY}-q.glb`, (glb.length / 1e6).toFixed(2), 'MB; textures', R.tex.map((t, i) => `t${i} ${t.w}x${t.h} ${(t.png.length * 0.75 / 1e3).toFixed(0)}KB`).join(', '));
 
 // ---------- 4. 量車身：沿著軸的射線打烘焙好的車身 → cabin.js 的 FIT.gc8、wings.js 的 WINGS_DECK.gc8、wide.js／wide.json 的 WIDE.gc8 ----------
 // 車身＝part body 的每一組（車內那一層不算）；後照鏡殼（車漆、中心 |z|＞0.835、y＞0.85）、車頂通風口（飾條／黑色、三點都 y＞1.38）不算：以前量的 SDF 車身也沒有這些
@@ -250,7 +257,7 @@ for (const g of G) {
   if (g.part !== 'body' || g.slot === 'inside' || g.slot === 'under' || g.slot === 'defrost') continue; // 第 54 批：車底的零件（消音器、油箱⋯）、除霧線不算（以前量的車身沒有）
   for (let t = 0; t < g.I.length; t += 3) {
     const v = [g.I[t], g.I[t + 1], g.I[t + 2]].map((i) => [g.P[i * 3], g.P[i * 3 + 1], g.P[i * 3 + 2]]);
-    if (g.slot === 'paint' && Math.abs(v[0][2] + v[1][2] + v[2][2]) / 3 > 0.835 && (v[0][1] + v[1][1] + v[2][1]) / 3 > 0.85) continue;
+    if (g.slot === 'paint' && CFG.mirror((v[0][0] + v[1][0] + v[2][0]) / 3, (v[0][1] + v[1][1] + v[2][1]) / 3, Math.abs(v[0][2] + v[1][2] + v[2][2]) / 3)) continue;
     if ((g.slot === 'trim' || g.slot === 'dark') && Math.min(v[0][1], v[1][1], v[2][1]) > 1.38) continue;
     const u = [0, 1, 2].map((k) => v[1][k] - v[0][k]), w = [0, 1, 2].map((k) => v[2][k] - v[0][k]);
     const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], l = Math.hypot(...n) || 1;
@@ -288,7 +295,7 @@ const topHit = (x, z) => {
   for (let i = H.length - 1; i >= 0; i--) { const h = H[i]; if (h.slot === 'dark') continue; if (h.slot === 'trim' && H.some((q) => q.slot === 'glass' && q.t < h.t && q.t > h.t - 0.03)) continue; return h; }
   return null;
 };
-const WHL = (await import('./gc8-spec.js')).GC8_SPEC.wheels, X0 = -1.9, NX = 32, Y0 = 0.2, NY = 12, NZ = 11;
+const WHL = await CFG.wheels(), X0 = -1.9, NX = 32, Y0 = 0.2, NY = 12, NZ = 11;
 // ---- cabin.js 的 FIT.gc8（格子、單位跟 cabin-fit.mjs 一樣）----
 const FIT = {};
 {
@@ -332,8 +339,8 @@ const FIT = {};
   Object.assign(FIT, { S: j(S), T: j(T), belt: j(belt), st: j(st), ws: j(ws), wf: j(wf), wt: j(wt), rg: j(rg), rt: j(rt), fa: arch(WHL.xf, WHL.R, -1), ra: arch(WHL.xr, WHL.R, 1), bot: Math.round((bs / bn) * 1000) / 1000 });
 }
 // ---- wings.js 的 WINGS_DECK.gc8：x0 往後每 2 公分 × z 每 5 公分，從上面往下第一個面的高度（公釐）；0＝那裡沒有車身 ----
-const DECK_X0 = -1.54, DECK = [];
-for (let k = 0; k <= 16; k++) { const row = []; for (let i = 0; i <= 30; i++) row.push(mm(topHit(DECK_X0 - i * 0.02, k * 0.05)?.t ?? 0)); DECK.push(row); }
+const DECK_X0 = CFG.deckX0, DECK = [];
+for (let k = 0; k <= 16; k++) { const row = []; for (let i = 0; i <= CFG.deckN; i++) row.push(mm(topHit(DECK_X0 - i * 0.02, k * 0.05)?.t ?? 0)); DECK.push(row); }
 // ---- wide.js 的 WIDE.gc8（跟 make-wide.mjs 的 axle() 一樣，車身側面 zs 用射線：從外面看第一個面，黑色的不算）----
 const zs = (x, y) => { const H = Zr(x, y).filter((h) => h.slot !== 'dark'), h = H[H.length - 1]; return h && h.t > 0.2 ? h.t : null; };
 function axle(x, R, track, w, NK = 9, DR = 0.02) {
@@ -364,30 +371,31 @@ const WIDE_GC8 = { f: axle(WHL.xf, WHL.RF ?? WHL.R, WHL.trackF, WHL.wF), r: axle
 // ---- 跟現在檔案裡的比 ----
 const CJ = path.join(DIR, 'cabin.js'), WJ = path.join(DIR, 'wings.js'), DJ = path.join(DIR, 'wide.js'), DN = path.join(DIR, 'wide.json');
 const csrc = fs.readFileSync(CJ, 'utf8'), wsrc = fs.readFileSync(WJ, 'utf8');
-const oldF = (() => { const m = csrc.match(/^ {4}gc8: (\{S: .*\}),$/m); return m ? Function(`return ${m[1]}`)() : null; })();
+const reF = new RegExp(`^ {4}${KEY}: \\{S: .*\\},$`, 'm'), reD = new RegExp(`^${KEY}: \\[[\\s\\S]*?\\]\\]\\],\\n`, 'm');
+const oldF = (() => { const m = csrc.match(new RegExp(`^ {4}${KEY}: (\\{S: .*\\}),$`, 'm')); return m ? Function(`return ${m[1]}`)() : null; })();
 const cmp = (a, b, name) => {
   if (a == null) return `${name}: 新的`;
   const A = String(a).split(' ').map(Number), B = String(b).split(' ').map(Number); let n = 0, s = 0, mx = 0, z = 0;
   A.forEach((v, i) => { const w = B[i]; if (!v !== !w) { z++; return; } if (!v) return; n++; s += Math.abs(v - w); mx = Math.max(mx, Math.abs(v - w)); });
   return `${name} ${n ? (s / n).toFixed(1) : '-'}/${mx}${z ? ` 0≠${z}` : ''}`;
 };
-console.log('FIT.gc8（平均差/最多差 公釐）', Object.keys(FIT).map((k) => (k === 'bot' || k === 'fa' || k === 'ra' ? `${k} ${oldF?.[k]}→${FIT[k]}` : cmp(oldF?.[k], FIT[k], k))).join(' | '));
-const deckOld = (() => { const m = wsrc.match(/^gc8: \[(-?[\d.]+), [\d.]+, (\[[\s\S]*?\]\])\],\n/m); return m ? JSON.parse(m[2]) : null; })();
-console.log('WINGS_DECK.gc8 z=0：', DECK[0].join(' '));
+console.log(`FIT.${KEY}（平均差/最多差 公釐）`, Object.keys(FIT).map((k) => (k === 'bot' || k === 'fa' || k === 'ra' ? `${k} ${oldF?.[k]}→${FIT[k]}` : cmp(oldF?.[k], FIT[k], k))).join(' | '));
+const deckOld = (() => { const m = wsrc.match(new RegExp(`^${KEY}: \\[(-?[\\d.]+), [\\d.]+, (\\[[\\s\\S]*?\\]\\])\\],\\n`, 'm')); return m ? JSON.parse(m[2]) : null; })();
+console.log(`WINGS_DECK.${KEY} z=0：`, DECK[0].join(' '));
 if (deckOld) console.log('              舊的：', deckOld[0].join(' '));
-const wideOld = JSON.parse(fs.readFileSync(DN, 'utf8')).gc8;
-for (const a of ['f', 'r']) console.log(`WIDE.gc8 ${a}：角度 ${WIDE_GC8[a].th.length}（${WIDE_GC8[a].th[0]}～${WIDE_GC8[a].th.at(-1)}）切 ${WIDE_GC8[a].yCut} 輪胎 ${WIDE_GC8[a].zt} ra ${Math.min(...WIDE_GC8[a].ra).toFixed(3)}～${Math.max(...WIDE_GC8[a].ra).toFixed(3)} z0 ${Math.min(...WIDE_GC8[a].z.map((r) => r[0])).toFixed(3)}～${Math.max(...WIDE_GC8[a].z.map((r) => r[0])).toFixed(3)}`
+const wideOld = JSON.parse(fs.readFileSync(DN, 'utf8'))[KEY];
+for (const a of ['f', 'r']) console.log(`WIDE.${KEY} ${a}：角度 ${WIDE_GC8[a].th.length}（${WIDE_GC8[a].th[0]}～${WIDE_GC8[a].th.at(-1)}）切 ${WIDE_GC8[a].yCut} 輪胎 ${WIDE_GC8[a].zt} ra ${Math.min(...WIDE_GC8[a].ra).toFixed(3)}～${Math.max(...WIDE_GC8[a].ra).toFixed(3)} z0 ${Math.min(...WIDE_GC8[a].z.map((r) => r[0])).toFixed(3)}～${Math.max(...WIDE_GC8[a].z.map((r) => r[0])).toFixed(3)}`
   + (wideOld ? ` ｜舊的：角度 ${wideOld[a].th.length} 切 ${wideOld[a].yCut} 輪胎 ${wideOld[a].zt} ra ${Math.min(...wideOld[a].ra).toFixed(3)}～${Math.max(...wideOld[a].ra).toFixed(3)}` : ''));
 if (WRITE) {
-  const line = `    gc8: {${Object.entries(FIT).map(([k, v]) => (k === 'bot' ? `bot: ${v}` : `${k}: '${v}'`)).join(', ')}},`;
-  if (!/^ {4}gc8: \{S: .*\},$/m.test(csrc)) throw new Error('cabin.js 找不到 FIT.gc8 那一行');
-  fs.writeFileSync(CJ, csrc.replace(/^ {4}gc8: \{S: .*\},$/m, () => line));
-  const deck = `gc8: [${DECK_X0.toFixed(2)}, 0.05, [\n${DECK.map((r) => `  [${r.join(',')}]`).join(',\n')}]],\n`;
-  if (!/^gc8: \[[\s\S]*?\]\]\],\n/m.test(wsrc)) throw new Error('wings.js 找不到 WINGS_DECK.gc8');
-  fs.writeFileSync(WJ, wsrc.replace(/^gc8: \[[\s\S]*?\]\]\],\n/m, () => deck));
-  const all = JSON.parse(fs.readFileSync(DN, 'utf8')); all.gc8 = WIDE_GC8;
+  const line = `    ${KEY}: {${Object.entries(FIT).map(([k, v]) => (k === 'bot' ? `bot: ${v}` : `${k}: '${v}'`)).join(', ')}},`;
+  if (!reF.test(csrc)) throw new Error(`cabin.js 找不到 FIT.${KEY} 那一行`);
+  fs.writeFileSync(CJ, csrc.replace(reF, () => line));
+  const deck = `${KEY}: [${DECK_X0.toFixed(2)}, 0.05, [\n${DECK.map((r) => `  [${r.join(',')}]`).join(',\n')}]],\n`;
+  if (!reD.test(wsrc)) throw new Error(`wings.js 找不到 WINGS_DECK.${KEY}`);
+  fs.writeFileSync(WJ, wsrc.replace(reD, () => deck));
+  const all = JSON.parse(fs.readFileSync(DN, 'utf8')); all[KEY] = WIDE_GC8;
   fs.writeFileSync(DN, JSON.stringify(all));
   const head = fs.readFileSync(DJ, 'utf8').split('\n')[0];
   fs.writeFileSync(DJ, head + '\nexport const WIDE = ' + JSON.stringify(all) + ';\n');
-  console.log('寫進 cabin.js（FIT.gc8）、wings.js（WINGS_DECK.gc8）、wide.js＋wide.json（WIDE.gc8）');
+  console.log(`寫進 cabin.js（FIT.${KEY}）、wings.js（WINGS_DECK.${KEY}）、wide.js＋wide.json（WIDE.${KEY}）`);
 }

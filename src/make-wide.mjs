@@ -1,9 +1,8 @@
 // 寬體套件的資料：從每台車的車身 SDF 量輪拱附近的車身側面（z），寫成 wide.js（WIDE[key]），車庫頁用 parts.js 的 wideKit() 做成加寬的葉子板
-// 用法：node make-wide.mjs [key ...]（沒給就全部；gc8 不在這裡量，是 gc8-bake.mjs 量烘焙的車身）
+// 用法：node make-wide.mjs [key ...]（沒給就全部；gc8、gtr 不在這裡量，是 gc8-bake.mjs <key> 量烘焙的車身）
 import fs from 'node:fs';
 const CARS = {
   supra: { mod: './body.mjs', opt: { kit: 'bomex' }, xf: 1.2125, xr: -1.3375, RF: 0.325, RR: 0.325, trackF: 0.76, trackR: 0.765, wF: 0.235, wR: 0.265 },
-  gtr: { mod: './gtr-body.mjs', xf: 1.29, xr: -1.375, RF: 0.327, RR: 0.327, trackF: 0.74, trackR: 0.745, wF: 0.245, wR: 0.245 },
   sp3: { mod: './sp3-body.mjs', xf: 1.21, xr: -1.441, RF: 0.3335, RR: 0.370, trackF: 0.8455, trackR: 0.8155, wF: 0.265, wR: 0.345 },
   jesko: { mod: './jesko-body.mjs', xf: 1.35, xr: -1.35, RF: 0.347, RR: 0.364, trackF: 0.85, trackR: 0.825, wF: 0.265, wR: 0.325 },
   yaris: { mod: './yaris-body.mjs', xf: 1.17, xr: -1.39, RF: 0.319, RR: 0.319, trackF: 0.7675, trackR: 0.7825, wF: 0.225, wR: 0.225 },
@@ -25,7 +24,7 @@ const keys = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(
 const NK = 9, DR = 0.02; // 每個角度往外量 9 點、間隔 2 公分
 for (const key of keys) {
   const C = CARS[key];
-  if (!C) { console.log(key, '不在這裡量', key === 'gc8' ? '（gc8 是烘焙的車身：node gc8-bake.mjs --write）' : ''); continue; }
+  if (!C) { console.log(key, '不在這裡量', key === 'gc8' || key === 'gtr' ? `（${key} 是烘焙的車身：node gc8-bake.mjs ${key} --write）` : ''); continue; }
   const { makeSDF } = await import(C.mod);
   const f = makeSDF(C.opt || {});
   // (x, y) 這一點車身最外面的 z（從外面往裡找），找不到回 null
@@ -82,7 +81,7 @@ for (const key of keys) {
   console.log(key, 'front', s.f.th.length, 'angles', s.f.th[0], '..', s.f.th.at(-1), 'cut', s.f.yCut, 'tire', s.f.zt, '| rear', s.r.th.length, s.r.th[0], '..', s.r.th.at(-1), 'cut', s.r.yCut, 'tire', s.r.zt);
 }
 fs.writeFileSync('wide.json', JSON.stringify(out));
-const js = '// 寬體套件的資料（node make-wide.mjs 從車身 SDF 量的；gc8 是 node gc8-bake.mjs --write 從烘焙的車身量的；不要手改）：每台車前後輪拱，每個角度 th 從輪拱邊緣 ra 往外每 dr 公尺車身側面的 z（低於 yCut 的點切平在 yCut）\n'
+const js = '// 寬體套件的資料（node make-wide.mjs 從車身 SDF 量的；gc8、gtr 是 node gc8-bake.mjs <key> --write 從烘焙的車身量的；不要手改）：每台車前後輪拱，每個角度 th 從輪拱邊緣 ra 往外每 dr 公尺車身側面的 z（低於 yCut 的點切平在 yCut）\n'
   + 'export const WIDE = ' + JSON.stringify(out) + ';\n';
 fs.writeFileSync('wide.js', js);
 console.log('wide.js', js.length, 'bytes');
