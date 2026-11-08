@@ -33,6 +33,7 @@
 //   walker.addColliders(list, tag) / removeColliders(tag)   跟 drive.js 一樣（{ t: 'box', x, z, hx, hz, rot, h, y0? } | { t: 'circle', x, z, r, h, y0? }）
 //                          world.colliders（村子的）的 tag 是 'world'：走進房子（interiors.js）removeColliders('world')，出來 addColliders(V.colliders, 'world')
 //                          y0（多的）：碰撞物的底有多高（天花板、捲起來一半的門）：比頭高的不擋人、只擋鏡頭（drive.js 不看 y0：這種不要給開車的）
+//   walker.shift(dx, dz, dth)       第 78 批：人（和鏡頭）一起搬一點（坐在捷運上跟著車走）
 //   walker.setMovers(array | null)   會動的東西（路上的車、居民）：陣列、裡面的物件頁面每一格自己改（x、z、rot⋯），走路每一格照現在的值擋人、擋鏡頭（不用再叫）
 //   walker.setMapTap({ label, onClick } | null)   點小地圖做什麼（大地圖）；label＝小地圖下面那一條字；walker.mapTap＝現在的字
 //   walker.setClock(字 | null)   小地圖上面一條字（第 31 批：遊戲的時間；null 就收起來）
@@ -1017,6 +1018,7 @@ function createWalker(o) {
   const api = {
     update, telemetry, teleport, setAction, setAction2, setCars: (list, op = {}) => { leadCars = Array.isArray(list) ? list.slice() : []; if (op.keepParked === false && st.mode !== 'in' && st.mode !== 'seat') parked = null; rebuildCars(); },
     getOut, getIn, exitAt, follow, setGarage, setDestination, setCamera, setCharacter, setButtons, pause, resume, dispose, toast,
+    shift: (dx, dz, dth) => { st.x += +dx || 0; st.z += +dz || 0; if (dth) { st.th = wrapA(st.th + dth); cam.yaw = wrapA(cam.yaw + dth); } }, // 第 78 批：坐在捷運上跟著車走（腳下的地板動了：人、鏡頭一起搬，沒有別的副作用）
     setDoors: (src) => { doorSrc = src; doorList = buildDoors(src); armDoors(); },
     setInput: (i) => { forced = i ? { x: clamp(+i.x || 0, -1, 1), y: clamp(+i.y || 0, -1, 1), run: i.run } : null; },
     setMovers: (list) => { movers = Array.isArray(list) ? list : null; },

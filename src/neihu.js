@@ -21,6 +21,8 @@ import { NEIHU_DATA } from './neihu-data.js';
 import { HOME_SITES, homeFront } from './village.js';
 import { TOWER_RAMP } from './tower.js';
 import { nhStreetPrep, nhStreetBuild, NH_STREET_TEXT } from './nhstreet.js'; // 第 72 批：內湖的街景（江南街、內湖路、環山路）
+import { MRT_TEXT } from './mrt.js'; // 第 78 批：捷運站（mrt.js 蓋；這裡只留軌道、隔音牆）
+const NH_MRT_V2 = true; // 第 78 批：車站、出入口、站名牌交給 mrt.js（false＝以前畫上去的站房）
 
 // 打包（build-art.mjs、build-app.mjs）：整個包在一個函式裡，只露出下面這些名字
 export const { buildNeihu, neihuFonts, NEIHU_TEXT, NEIHU_KEEP } = (() => {
@@ -53,7 +55,7 @@ const NEIHU_KEEP = []; // race.src.js：賽道旁邊的樹不要種在聯外道�
 const RIDGE_Z = 232; // 越野車場（圍籬 z 196、外面一圈地形到 z 229）南邊：內湖北邊那道矮山脊從這裡起
 // 世界本來的草地（village.js 的 ground、race.src.js 的賽道草地）在哪裡：內湖的山在這上面平的地方壓低一點（草地蓋過去），範圍裡面挖掉（carveWorld）
 const worldGround = (x, z) => (x >= -1450 && x <= -62 && Math.abs(z) <= 880) || (x > -62 && x <= 1300 && Math.abs(z) <= 1150);
-const NEIHU_TEXT = [...new Set([...D.names.map((n) => n[0]).join(''), ...D.stations.map((s) => s[0]).join(''), ...D.nsigns.map((s) => s[3]).join(''), ...SHOPS.join(''), ...SHOP_PRE.join(''), ...SHOP_KIND.join(''), ...SHOP_SUB.join(''), ...BOARD.join(''), ...'地圖資料©OpenStreetMap貢獻者到了', ...NH_STREET_TEXT].filter((ch) => ch.charCodeAt(0) > 0x2e80))].join('');
+const NEIHU_TEXT = [...new Set([...D.names.map((n) => n[0]).join(''), ...D.stations.map((s) => s[0]).join(''), ...D.nsigns.map((s) => s[3]).join(''), ...SHOPS.join(''), ...SHOP_PRE.join(''), ...SHOP_KIND.join(''), ...SHOP_SUB.join(''), ...BOARD.join(''), ...'地圖資料©OpenStreetMap貢獻者到了', ...NH_STREET_TEXT, ...MRT_TEXT].filter((ch) => ch.charCodeAt(0) > 0x2e80))].join('');
 function neihuFonts(ms = 1500) {
   const f = typeof document !== 'undefined' && document.fonts;
   if (!f || !f.load) return Promise.resolve();
@@ -688,6 +690,7 @@ function buildNeihu(V, opt = {}) {
   const ORA = col255('#e2661f'), MET = [150, 156, 162], GLS = [255, 255, 255];
   for (const s of N.stations) {
     const [x, z] = s.p, ux = Math.cos(s.ang), uz = Math.sin(s.ang), vx = -uz, vz = ux, rot = rotOf(ux, uz), hl = s.len / 2, hw = s.w / 2, g = bank('wall', x, z, TB);
+    if (NH_MRT_V2) { soundWalls(x, z, hl); continue; } // 第 78 批：站房、月台、出入口都在 mrt.js
     const y0 = 8.6, yg = 15.2, P = [[x - ux * hl - vx * hw, z - uz * hl - vz * hw], [x + ux * hl - vx * hw, z + uz * hl - vz * hw], [x + ux * hl + vx * hw, z + uz * hl + vz * hw], [x - ux * hl + vx * hw, z - uz * hl + vz * hw]];
     quad3(g, [[P[0][0], y0, P[0][1]], [P[1][0], y0, P[1][1]], [P[2][0], y0, P[2][1]], [P[3][0], y0, P[3][1]]], [[0.3, 0.3], [0.3, 0.7], [0.7, 0.7], [0.7, 0.3]], 20, [176, 176, 170]); // 底下
     quad3(g, [[P[3][0], y0 + 0.5, P[3][1]], [P[2][0], y0 + 0.5, P[2][1]], [P[1][0], y0 + 0.5, P[1][1]], [P[0][0], y0 + 0.5, P[0][1]]], [[0, 0], [0, hl / 3], [hw / 3, hl / 3], [hw / 3, 0]], 18, [222, 216, 202]); // 月台地板（米色磁磚）
@@ -725,7 +728,10 @@ function buildNeihu(V, opt = {}) {
       if (nearJunction(px, pz)) continue; // 路口轉彎的地方也不放
       boxG(g, px, pz, 0.7, 0.7, rot, 0, y0, CON, 20, false); colliders.push({ t: 'box', x: px, z: pz, hx: 0.7, hz: 0.7, rot, h: y0, noCrush: true });
     }
-    // 軌道兩邊：淺綠色的隔音牆（站前後各 130 公尺）
+    soundWalls(x, z, hl);
+  }
+  // 軌道兩邊：淺綠色的隔音牆（站前後各 130 公尺）
+  function soundWalls(x, z, hl) {
     const mrt = N.elev.find((e) => e.k === 'mrt');
     if (mrt) for (let i = 1; i < mrt.P.length; i++) {
       const a = mrt.P[i - 1], b = mrt.P[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.5) continue;
@@ -740,7 +746,7 @@ function buildNeihu(V, opt = {}) {
   }
   // 捷運出入口：港墘站的照參考照片（港墘站-2：灰色鋁板的罩子、花崗岩的台座、金色的站名牌）；別站的是玻璃的小房子
   const gq = N.stations.find((s2) => s2.nm === '港墘');
-  for (const e of N.entr) {
+  if (!NH_MRT_V2) for (const e of N.entr) {
     const [x, z] = e.p, g = bank('wall', x, z, TB), ux = Math.cos(e.ang), uz = Math.sin(e.ang), rot = rotOf(ux, uz), near = gq && Math.hypot(x - gq.p[0], z - gq.p[1]) < 130;
     if (near) {
       boxG(g, x, z, 4.0, 2.2, rot, 0, 0.5, [176, 170, 160], 20, false); // 花崗岩台座
@@ -1006,7 +1012,7 @@ function buildNeihu(V, opt = {}) {
     boxG(bank('wall', s.p[0], s.p[1], TB), s.p[0], s.p[1], 1.55, 0.18, rotOf(ux, uz), 0, 1.0, s.t === 'school' ? [190, 180, 170] : [150, 146, 136], 20);
     plate(s.p[0], 1.42, s.p[1], ux, uz, 2.9, 0.78, uv, true); colliders.push({ t: 'box', x: s.p[0], z: s.p[1], hx: 1.55, hz: 0.25, rot: rotOf(ux, uz), h: 1.8 });
   }
-  for (const s of N.stations) { // 站名（站房的兩邊）
+  if (!NH_MRT_V2) for (const s of N.stations) { // 站名（站房的兩邊）
     const uv = SA.uv['b' + bIdx((b) => b.t === 'station' && b.nm === s.nm)]; if (!uv) continue; const ux = Math.cos(s.ang), uz = Math.sin(s.ang), vx = -uz, vz = ux;
     for (const sd of [-1, 1]) { const x = s.p[0] + vx * sd * (s.w / 2 + 0.08), z = s.p[1] + vz * sd * (s.w / 2 + 0.08); plate(x, 13.6, z, ux * -sd, uz * -sd, 11, 2.9, uv, false); }
   }
@@ -1240,7 +1246,7 @@ function buildNeihu(V, opt = {}) {
     }
 
     // ---- 港墘站的出入口：金色的站名牌（照片 港墘站-2）----
-    if (LMP.mrt && gq) { const uv = lmUV('mrt');
+    if (LMP.mrt && gq && !NH_MRT_V2) { const uv = lmUV('mrt');
       if (uv) for (const e of N.entr) { const d = Math.hypot(e.p[0] - gq.p[0], e.p[1] - gq.p[1]); if (d > 130) continue; const ux = Math.cos(e.ang), uz = Math.sin(e.ang); plate(e.p[0] - uz * 2.1, 2.6, e.p[1] + ux * 2.1, ux, uz, 3.4, 0.62, uv, true); }
     }
   }
@@ -1493,7 +1499,9 @@ function buildNeihu(V, opt = {}) {
   if (V.info) V.info.neihu = info;
   if (NSB.poles.length) V.poles = (V.poles || []).concat(NSB.poles); // 第 72 批：內湖的路燈（look.js 晚上最近的幾支真的有光）
   const P = {
-    group, info, inside, update, uncull, place, routeTo, roadName, bigSigns, names: D.names, link: LK, destNode, pathTo: (x, z) => pathTo(x, z, destNode), data: N, hillH, inBox,
+    group, info, inside, update, uncull, place, routeTo, roadName, bigSigns,
+    names: D.names, link: LK, destNode, pathTo: (x, z) => pathTo(x, z, destNode), data: N, hillH, inBox,
+    roadAt: (x, z) => { const r = roadAt2(x, z); return r ? { d: r.d, w: r.r.w, sw: r.r.sw, nm: r.r.nm >= 0 ? D.names[r.r.nm][0] : '' } : null; }, // 第 78 批：最近的路（離路中線幾公尺、幾寬、人行道）：mrt.js 的柱子不放在車道上
     street: NSB.spots, // 第 72 批：街景的東西在哪裡（測試、截圖）
     ringAt, ringN, ringBox: RING.slice(), // 第 27 批：外面那圈山的地形（hills.js 包進 V.heightAt）
     dispose() {

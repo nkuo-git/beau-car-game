@@ -332,7 +332,7 @@ async function enterDrive() {
     await new Promise((r) => setTimeout(r, 30)); // 讓「出門中」先畫出來（蓋村子要一下子，這時候畫面不會動）
     try {
       if (!TR) TR = buildTrack();
-      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
+      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMrt(VIL, { renderer }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
       const L = VIL.places.garage.lot;
       GAR = buildRoom(renderer, { quality: 'low', exterior: true }); // 第 21 批：圓塔（tower.js）；村子裡看得到玻璃、名牌；地板不反射（省）
       GAR.group.position.set(L.x, VIL.places.garage.y || 0, L.z); GAR.group.rotation.y = L.heading; TR.scene.add(GAR.group);
@@ -952,6 +952,49 @@ const LD = { b: null, I: null, sc: null, proxy: null, t: 0, want: 0, far: 0, lea
 let LD_AT = null; // 「開門」對著的那一棟（外面）
 // 第 66 批：在 LD 那一棟的屋頂上（走樓梯上頂樓、走出樓梯間）：村子的場景、腳下＝屋頂的高度（y）、碰撞＝頂樓那一層（女兒牆、樓梯間）'ldroof'
 const LDR = { on: false, y: 0, dist0: 3 };
+// ==== 第 78 批：捷運站（mrt.js）：走路的人在哪一層（0 街上、1 大廳、2 月台、3 車上）→ 碰撞換那一層的、鏡頭的天花板；坐車跟著車走；叮咚、閘門的嗶 ====
+const MRTS = { lvl: 0, si: -1, dist0: null };
+const MRT_OFF = { label: '下車', onClick: () => mrtOff() };
+function mrtY() { return walker && walker.character ? walker.character.group.position.y : 0; }
+function mrtStep(dt) {
+  const M = VIL?.mrt; if (!M) return;
+  M.update(dcam, dt);
+  if (!walker) return;
+  const walking = walker.mode === 'walk' && !indoor && !APTU.on && !LDR.on && !doorFade && !sleep && trip;
+  const t = walker.telemetry(), r = M.step(dt, t.x, t.z, mrtY(), walking);
+  if (r.shift) walker.shift(r.shift[0], r.shift[1], r.shift[2]);
+  if (r.eject) walker.teleport({ x: r.eject.x, z: r.eject.z, heading: r.eject.heading ?? t.heading }, { keepCamera: true });
+  const lvl = r.lvl;
+  if (lvl !== MRTS.lvl || (lvl > 0 && lvl < 3 && r.si !== MRTS.si)) {
+    if (MRTS.lvl === 0 && lvl > 0) { walker.removeColliders('world'); walker.setCarReach(false); MRTS.dist0 = walker.cameraDist; }
+    walker.removeColliders('mrt1'); walker.removeColliders('mrt2');
+    if (lvl === 0) { if (MRTS.lvl > 0) { walker.addColliders(VIL.colliders, 'world'); walker.setMovers(NPC ? NPC.MOV : police?.movers || null); walker.setCarReach(true); walker.setCamera({ maxY: null, dist: MRTS.dist0 || 3.4 }); walker.setAction(null); } }
+    else { if (lvl < 3) walker.addColliders(M.cols(r.si, lvl), 'mrt' + lvl); walker.setMovers(M.movers); walker.setCamera({ dist: lvl === 3 ? Math.min(MRTS.dist0 || 3.4, 2.6) : MRTS.dist0 || 3.4 }); }
+    MRTS.lvl = lvl; MRTS.si = r.si;
+  }
+  if (lvl > 0) {
+    walker.setCamera({ maxY: r.cap }); // 天花板、出入口的罩子（mrt.js 算）
+    walker.setAction(r.action === 'off' ? MRT_OFF : null);
+  }
+  if (r.toast) walker.toast(r.toast, 2600);
+  if (r.chime) mrtSnd('chime'); if (r.beep) mrtSnd('beep');
+}
+function mrtOff() { // 「下車」：走到月台上
+  const M = VIL?.mrt; if (!M || !walker) return; const t = walker.telemetry(), p = M.getOff(t.x, t.z); if (!p) { walker.toast('車門還沒開', 1500); return; }
+  walker.teleport({ x: p.x, z: p.z, heading: p.heading }, { keepCamera: true }); walker.toast(`${p.nm}　下車了`, 2200);
+}
+function mrtDown() { // 直接回車庫、被抓：捷運的狀態清掉、碰撞換回街上的
+  const M = VIL?.mrt; if (M) M.leave();
+  if (MRTS.lvl && walker) { walker.removeColliders('mrt1'); walker.removeColliders('mrt2'); walker.addColliders(VIL.colliders, 'world'); walker.setMovers(NPC ? NPC.MOV : police?.movers || null); walker.setCarReach(true); walker.setCamera({ maxY: null, dist: MRTS.dist0 || 3.4 }); walker.setAction(null); }
+  MRTS.lvl = 0; MRTS.si = -1;
+}
+function mrtSnd(kind) { // 叮咚（列車到站）、嗶（閘門）：跟引擎聲同一條總輸出（音量、靜音）
+  try {
+    const ctx = engineAudio.context, out = engineAudio.input; if (!ctx || !out || engineAudio.muted) return;
+    const t0 = ctx.currentTime + 0.02, notes = kind === 'beep' ? [[1320, 0, 0.1, 0.12]] : [[988, 0, 0.4, 0.16], [784, 0.32, 0.55, 0.16]];
+    for (const [f, d, dur, lv] of notes) { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(lv, t0 + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + dur); o.connect(g); g.connect(out); o.start(t0 + d); o.stop(t0 + d + dur + 0.05); setTimeout(() => { try { g.disconnect(); } catch {} }, (d + dur) * 1000 + 300); }
+  } catch { /* 沒有聲音就算了 */ }
+}
 const LD_OPEN = { label: '開門', icon: 'door', onClick: () => ldOpenNow() };
 const LD_V2 = new THREE.Vector2(), LD_CC = new THREE.Color(), LD_FR = new THREE.Frustum(), LD_M4 = new THREE.Matrix4();
 function ldLocal(b, x, z) { const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot || 0), s = Math.sin(b.rot || 0); return [dx * c - dz * s, dx * s + dz * c]; }
@@ -1044,7 +1087,7 @@ function ldScan(t) {
 function ldStep(dt) {
   if (!walker) return;
   const walking = walker.mode === 'walk';
-  if (walking && !indoor && !APTU.on && !LDR.on && !doorFade) ldScan(walker.telemetry()); else if (!indoor) LD_AT = null;
+  if (walking && !indoor && !APTU.on && !LDR.on && !MRTS.lvl && !doorFade) ldScan(walker.telemetry()); else if (!indoor) LD_AT = null; // 第 78 批：在捷運站裡不掃房子
   if (!LD.b) return;
   if (LDR.on) { // 第 66 批：在屋頂上：走進樓梯間的門口＝回到裡面（頂樓那一層）；被搬走了（去這裡、被抓）＝收掉
     if (indoor) ldRoofDrop();
@@ -1403,7 +1446,7 @@ function aptHide(i, door, glass) {
 const aptW = (b, x, z) => { const c = Math.cos(b.rot), s = Math.sin(b.rot); return { x: b.x + x * c + z * s, z: b.z - x * s + z * c }; }; // 公寓本地 → 世界（b＝V.buildings 那一棟）
 const inApt = (x, z, m = 0) => { const b = APTU.b; if (!b) return false; const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot), s = Math.sin(b.rot); return Math.abs(dx * c - dz * s) < b.hx + m && Math.abs(dx * s + dz * c) < b.hz + m; };
 // 走路用的世界：房子裡面地板都在 0（公寓蓋在山頂那座也是）；在頂樓、陽台＝那一層的高度；其他照 PW
-function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? stairY(x, z) : APTU.on && inApt(x, z, 0.6) ? APTU.y : LDR.on && ldOnRoof(x, z) ? LDR.y : PW.heightAt(x, z)); return W; } // 第 66 批：透天厝的屋頂
+function walkWorld() { const W = Object.create(PW); W.heightAt = (x, z) => (indoor ? stairY(x, z) : APTU.on && inApt(x, z, 0.6) ? APTU.y : LDR.on && ldOnRoof(x, z) ? LDR.y : (VIL.mrt && VIL.mrt.heightAt(x, z)) ?? PW.heightAt(x, z)); return W; } // 第 66 批：透天厝的屋頂；第 78 批：捷運站的樓梯、大廳、月台、車廂
 // 第 61 批：樓梯自己走（interiors.js 的 I.stair，本地）：兩跑樓梯，同一個 xz 上面一跑、下面一跑 → 挑最接近上一格人的高度（STAIR.y）的那一面；
 //   過了平台一點（高度 > 一層的一半 + 0.12）就換到上一層（人的高度 −3.3，畫面一樣）、往下也一樣；五樓往上走到 8 成＝頂樓（aptOut）
 const STAIR = { y: 0, cam: null, busy: false };
@@ -2208,7 +2251,7 @@ function leaveDrive() {
   dvoice?.dispose(); dvoice = null;
   stopLiftSnd(); endSleep(); elEnd();
   if (doorFade) { doorFade = null; fadeEl.style.display = 'none'; }
-  aptDown(); // 第 60 批：在公寓的頂樓、陽台
+  aptDown(); mrtDown(); // 第 60 批：在公寓的頂樓、陽台；第 78 批：在捷運站裡、車上
   if (indoor) leaveHouse(null); // 在房子裡面按「直接回車庫」：碰撞、門、鏡頭換回村子的，你搬回村子的場景
   ldDrop(true); // 第 65 批：外面開著門的那一棟收掉
   crushFx?.reset(); junkVer = -1; // 第 7 批（輾扁）：墊子清掉、輾扁的車收回車流的池子、表演場的垃圾車擺回來
@@ -2473,7 +2516,7 @@ function onArrest(i) { // 畫面全黑：車拖到警察局的停車場、人關
   if (!DRIVE.on || !walker || !trip) return;
   if (doorFade) { doorFade = null; fadeEl.style.display = 'none'; }
   endSleep(); elEnd(); // 第 21 批：坐電梯中被抓
-  aptDown(); if (indoor) leaveHouse(null);
+  aptDown(); mrtDown(); if (indoor) leaveHouse(null);
   impounded = false;
   if (drv) { // 開的那台（或剛下車停著的那台）：開車的收掉，完整的車停到停車場
     drv.setInput(null); drv.dispose(); drv = null; dvoice?.dispose(); dvoice = null; if (home) home.open = null; obDoor.drv = null;
@@ -2681,11 +2724,12 @@ function driveStep(dt) {
   if (indoor?.kind === 'police') PI.update(dt); else if (indoor?.kind === 'gunshop' && walker) gsStep(dt); // 第 3 批：拘留室的鐵門；槍店的靶、店員、櫃台／靶場的按鈕
   if (DRIVE.on) ldStep(dt); // 第 65 批：門開關、走過門口換裡面／外面、外面的房子走近了蓋好
   if (walker && walker.mode === 'walk' && DRIVE.on) foldStep(dt, walker.telemetry().speed > 0.6); // 第 75 批：走起來了「去哪裡」「⋯」收起來（房子裡也一樣）
-  if (walker && walker.mode === 'walk' && DRIVE.on && !indoor && !APTU.on) { homeWalk(); oTick(walker.telemetry()); }
+  if (walker && walker.mode === 'walk' && DRIVE.on && !indoor && !APTU.on && !MRTS.lvl) { homeWalk(); oTick(walker.telemetry()); }
   else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.kind === 'apt') aptWalk();
   else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.live) walker.setAction(ldAct(walker.telemetry())); // 第 65 批：裡面走到大門：「開門」 // 第 60 批：公寓 4 樓的床、衣櫃 // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）
   if (DRIVE.on) npcStep(dt); // 路上的車、居民（走路的碰撞要在 walker.update 前面放好）
   if (DRIVE.on) crushStep(dt); // 第 7 批（輾扁）：怪獸卡車壓扁的東西（墊子、壓扁、表演場的垃圾車）
+  if (DRIVE.on) mrtStep(dt); // 第 78 批：捷運（列車的位置、車門；走路的人在哪一層、搭車跟著車走：walker.update 前面）
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
   if (indoor && walker && DRIVE.on) stairStep(); // 第 61 批：樓梯自己走（走到一半換樓層）
   riderStep(dt); // 第 56 批：沙灘車騎的人（walker 後面：上車那一格就坐上去）
