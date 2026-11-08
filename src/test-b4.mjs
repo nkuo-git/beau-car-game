@@ -453,12 +453,16 @@ await p.evaluate(() => { window.__hold = true; window.__noDraw = true; });
 await p.waitForFunction(() => window.__D().LODS.yaris?.lod?.car.parent?.name === 'towerBay1', null, { timeout: 120000 });
 const pillsAbove = (sel) => p.evaluate((s) => { const d = [...document.querySelectorAll('#dests button')].map((x) => { const r = x.getBoundingClientRect(); return { t: x.textContent, p: x.getAttribute('aria-pressed'), x: Math.round(r.x), y: Math.round(r.y), b: Math.round(r.bottom), w: Math.round(r.width) }; });
   const e = document.querySelector(s); return { d, top: e ? Math.round(e.getBoundingClientRect().top) : null, fs: document.body.classList.contains('fs') }; }, sel);
+const fold1 = await p.evaluate(() => { const B = document.body.classList, sh = B.contains('destsopen'), list0 = getComputedStyle(document.getElementById('dests')).display; document.getElementById('destTog').click(); return { sh, list0, op: B.contains('destsopen') }; }); // 第 75 批：走路也收起來，先按「📍 去哪裡 ▾」打開再量
+await p.waitForTimeout(80);
 const pw1 = await pillsAbove('#stage .wk-stick');
-console.log('2', el(), 'on foot, dests:', JSON.stringify(pw1));
+console.log('2', el(), 'on foot, dests:', JSON.stringify(fold1), JSON.stringify(pw1));
+check(!fold1.sh && fold1.list0 === 'none' && fold1.op, 'on foot (fullscreen) the destinations start folded into 「📍 去哪裡 ▾」 (batch 75); tapping it opens them');
 check(pw1.fs && pw1.d.length === 8 && new Set(pw1.d.map((q) => q.x)).size === 1 && new Set(pw1.d.map((q) => q.y)).size === 8 && pw1.top != null && Math.max(...pw1.d.map((q) => q.b)) <= pw1.top,
   `on foot (fullscreen): eight destination pills (內湖, 山頂 added) in one column above the joystick (last pill ends ${Math.max(...pw1.d.map((q) => q.b))}, joystick at ${pw1.top})`);
 let clash = await hudClash() || await sizeSweep();
 check(!clash, `on foot with eight destinations: nothing overlapping or off-screen on any screen size (${clash || 'ok'})`);
+await p.evaluate(() => { document.getElementById('destTog').click(); }); // 量完收起來
 const w2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker; W.teleport(H.gw(-4.6, -7.7, -1.05)); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); return { ok: r.ok, act: H.actText() }; });
 const bd2 = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(); H.step(40); const D = window.__D(); return { pressed, modes: r.modes, drv: !!D.drv, cur: D.cur, act: H.actText(), act2: H.act2() }; });
 console.log('  上車 GC8:', JSON.stringify(w2), JSON.stringify(bd2));

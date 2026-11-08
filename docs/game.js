@@ -9592,8 +9592,8 @@ function buildVillage(opts = {}) {
       for (const [a, b, c] of [[y0, Math.min(y1, 5), wall1], [Math.max(y0, 5), y1, wall2]]) if (b - a > 0.01) box('main', T, [x0, a, z0, x1, b, z1], { [out]: c, [IN[out]]: inner, _: mix(c, inner, 0.5) }, { _: U.corr });
       if (col) lbox(T, x0, z0, x1, z1, y1);
     };
-    wp(-18, -0.25, -14.5, 0, 0, 7.4, 'pz'); wp(-8.5, -0.25, -3, 0, 0, 7.4, 'pz'); wp(3, -0.25, 18, 0, 0, 7.4, 'pz'); // 前牆：西邊的門（開著，展示舉升機）、中間的門（開進去）
-    wp(-14.5, -0.25, -8.5, 0, 4.6, 7.4, 'pz', false); wp(-3, -0.25, 3, 0, 4.6, 7.4, 'pz', false);
+    wp(-18, -0.25, -14.5, 0, 0, 7.4, 'pz'); wp(-8.5, -0.25, -3, 0, 0, 7.4, 'pz'); wp(3, -0.25, 8.5, 0, 0, 7.4, 'pz'); wp(14.5, -0.25, 18, 0, 0, 7.4, 'pz'); // 前牆：西邊的門（開著，展示舉升機）、中間的門（開進去）、東邊的門（第 77 批：開著，開上馬力機）
+    wp(-14.5, -0.25, -8.5, 0, 4.6, 7.4, 'pz', false); wp(-3, -0.25, 3, 0, 4.6, 7.4, 'pz', false); wp(8.5, -0.25, 14.5, 0, 4.6, 7.4, 'pz', false);
     wp(-18, -18, -3, -17.75, 0, 7.4, 'nz'); wp(3, -18, 18, -17.75, 0, 7.4, 'nz'); wp(-3, -18, 3, -17.75, 4.6, 7.4, 'nz', false); // 後牆：中間後門
     wp(-18, -17.75, -17.75, -0.25, 0, 7.4, 'nx'); wp(17.75, -17.75, 18, -0.25, 0, 7.4, 'px'); // 兩邊
     for (const s of [1, -1]) { // 山牆（三角形）：外面、裡面
@@ -9606,14 +9606,14 @@ function buildVillage(opts = {}) {
       B.quad('main', a, b, c, d, U.corr, C('#8d9aa8')); B.quad('main', b, a, d, c, U.corr, C('#6c7580'));
     }
     for (const x of [-12, -6, 0, 6, 12]) box('main', T, [x - 0.1, 6.95, -17.75, x + 0.1, 7.2, -0.25], steel, { ny: WD }); // 鋼樑
-    for (const [x, open] of [[-11.5, true], [0, true], [11.5, false]]) { // 三個鐵捲門：兩個開著（捲在上面），東邊那個關著
+    for (const [x, open] of [[-11.5, true], [0, true], [11.5, true]]) { // 三個鐵捲門：都開著（捲在上面；第 77 批起東邊那個也開：進去是馬力機）
       if (!open) face('main', T, x - 3, x + 3, 0, 4.6, 0.03, U.rdoor);
       box('main', T, [x - 3.25, 4.6, 0, x + 3.25, 4.9, 0.3], C('#50555c'));
       if (open) box('main', T, [x - 3.1, 4.62, -0.75, x + 3.1, 5.0, -0.28], C('#8f969e'), { ny: WD }); // 捲起來的門
     }
     box('main', T, [-3.1, 4.62, -17.7, 3.1, 5.0, -17.25], C('#8f969e'), { ny: WD }); // 後門上面（捲起來的門）
     box('sign', T, [-7.2, 5.15, 0, 7.2, 7.25, 0.2], { pz: WHITE, _: C('#121316') }, { pz: SU.shop, _: SW }); // 大招牌：阿輝改車廠
-    box('main', T, [-18, 0, 0, -14.5, 0.25, 0.3], C('#50555c')); box('main', T, [-8.5, 0, 0, -3, 0.25, 0.3], C('#50555c')); box('main', T, [3, 0, 0, 18, 0.25, 0.3], C('#50555c'));
+    box('main', T, [-18, 0, 0, -14.5, 0.25, 0.3], C('#50555c')); box('main', T, [-8.5, 0, 0, -3, 0.25, 0.3], C('#50555c')); box('main', T, [3, 0, 0, 8.5, 0.25, 0.3], C('#50555c')); box('main', T, [14.5, 0, 0, 18, 0.25, 0.3], C('#50555c'));
     B.quad('sign', T.p(-18.02, 1.3, -2), T.p(-18.02, 1.3, -14), T.p(-18.02, 4.6, -14), T.p(-18.02, 4.6, -2), SU.mural, WHITE); // 西邊牆上的大字（從村子開過來看得到）
     // 地板：綠灰色 Epoxy、黃線（中間開過去的車道、西邊的舉升機位）
     floor('main', T, -17.75, -17.75, 17.75, -0.25, 0.03, dotUV(U.conc), C('#8aa196')); addPave(-160, -35, 17.75, 8.75, 0, null, 0, false);
@@ -9629,7 +9629,15 @@ function buildVillage(opts = {}) {
       for (const x of [x0, x1]) for (const dz of [-1.1, 1.1]) { const s = x < (x0 + x1) / 2 ? 1 : -1; box('main', T, [Math.min(x, x + s * 0.9), top ? 0.08 : 1.62, -9 + dz - 0.08, Math.max(x, x + s * 0.9), top ? 0.16 : 1.72, -9 + dz + 0.08], C('#50555c')); }
     }
     carProp(-171.5, 1.72, -35, Math.PI / 2, C('#2f6fd6')); // 舉起來的藍色車（車頭朝北）
-    carProp(-148.5, 0, -32, -Math.PI / 2, C('#f2f3f5')); const cc = T.p(11.5, 0, -6); addBox(cc[0], cc[2], 1, 2.3, 0, 1.5); // 東邊鐵捲門後面等著修的白車
+    // 第 77 批（Nick「改車廠裡要有一個馬力機」）：東邊的門進去＝馬力機：深色的台（黃黑斜紋邊）、兩條滾筒的槽（滾筒在 town.src.js：照這台車的輪子擺、會轉）、牆前面的大螢幕（town.src.js 畫車速、轉速、馬力曲線）、控制櫃
+    { const px = 10, pz = -8.5, hx = 1.9, hz = 4.3, dark = C('#2a2c30'), blk = C('#15161a');
+      box('main', T, [px - hx, 0.03, pz - hz, px + hx, 0.045, pz + hz], { py: dark, _: C('#3a3d42') }, { _: WD });
+      for (let i = 0; i < 2 * hz / 0.6; i++) { const z0 = pz - hz + i * 0.6, c = i % 2 ? yel : blk; floor('main', T, px - hx, z0, px - hx + 0.14, Math.min(z0 + 0.6, pz + hz), 0.05, WD, c); floor('main', T, px + hx - 0.14, z0, px + hx, Math.min(z0 + 0.6, pz + hz), 0.05, WD, c); } // 兩邊黃黑斜紋
+      for (let i = 0; i < 2 * hx / 0.6; i++) { const x0 = px - hx + i * 0.6, c = i % 2 ? yel : blk; floor('main', T, x0, pz - hz, Math.min(x0 + 0.6, px + hx), pz - hz + 0.14, 0.05, WD, c); floor('main', T, x0, pz + hz - 0.14, Math.min(x0 + 0.6, px + hx), pz + hz, 0.05, WD, c); }
+      box('main', T, [12.6, 0, -9.2, 13.4, 1.35, -7.8], { pz: WHITE, _: C('#2f6fd6') }, { pz: U.rack, _: WD }); box('main', T, [12.55, 1.35, -9.25, 13.45, 1.42, -7.75], C('#50555c')); lbox(T, 12.6, -9.2, 13.4, -7.8, 1.42); // 控制櫃（藍色，上面一條）
+      for (const x of [8.6, 11.0]) box('main', T, [x - 0.1, 0, -14.4, x + 0.1, 1.25, -14.2], C('#50555c')); box('main', T, [7.85, 1.2, -14.36, 11.75, 3.35, -14.24], blk); lbox(T, 7.85, -14.4, 11.75, -14.2, 3.35); // 螢幕的兩根柱子＋黑框（3.9 × 2.15 公尺；畫面在 town.src.js：朝南對著車）
+      box('main', T, [7.7, 3.35, -14.4, 11.9, 3.47, -14.2], yel); // 框上面一條黃的
+    }
     for (const [x, z] of [[-6.3, -6], [-6.3, -12], [6.3, -6], [6.3, -12]]) { box('main', T, [x - 0.18, 0, z - 0.18, x + 0.18, 6.95, z + 0.18], steel); const c = T.p(x, 0, z); addBox(c[0], c[2], 0.2, 0.2, 0, 7); } // 柱子
     // 西邊：工作台、洞洞板工具牆、空壓機
     box('main', T, [-17.75, 0, -15, -16.9, 0.88, -3], { py: C('#8a6a4a'), _: C('#5a5f66') }); lbox(T, -17.75, -15, -16.9, -3, 1);
@@ -10125,6 +10133,8 @@ function buildVillage(opts = {}) {
       exit: { x: -160, z: -50.5, heading: R2 }, spawn: { x: -160, z: -50.5, heading: R2 }, // 後門外面的院子：往前、右轉、東邊的小路回大路
       zone: { x: -160, z: -30, hx: 7, hz: 14, rot: 0 },                          // 改車區＋前門口
       view: { pos: [-164.6, 2.2, -27.6], look: [-159.2, 0.9, -36.5], fov: 52 },  // 改車的時候：前門裡面左邊，看改車區的車（左後方）、後門、輪胎架
+      dyno: { pad: { x: -150, z: -34.5, hx: 1.9, hz: 4.3, rot: 0 }, pose: { x: -150, z: -34.5, heading: R2 }, screen: { x: -150.2, y: 2.275, z: -40.22, w: 3.72, h: 2.09 }, // 第 77 批：馬力機（東邊的門進去）：台子、綁好的位置（車頭朝北對著螢幕）、螢幕（朝南）
+        off: { x: -150, z: -24.5, heading: R2 } },                                 // 下馬力機：倒車退到門口裡面
     },
     dealer: { // 阿財車行：大路東邊開進前庭、經過展示間前面、開進車棚（買車區）、西邊出去
       name: '阿財車行', pos: [-450, -38],
@@ -13345,6 +13355,7 @@ return { createRide, RIDE: { CLS, SURF } };
 //   drive.setCameraMode('chase' | 'eye' | 'none', view?)   追車／駕駛座／不管鏡頭；drive.cameraMode 是現在的
 //   drive.teleport({ x, z, heading }, { intro })   把車放到那裡停好（不叫 onZone）；intro：鏡頭從車前面繞到後面（出門的時候）
 //   drive.parkAt(pose, onDone)   自己開到 pose（{ x, z, heading }，或 { noseX, z, heading }＝車頭對齊 noseX）停好再叫 onDone
+//   drive.setDyno(pose | null)   第 77 批：馬力機：綁在 pose（{ x, z, heading }）的滾筒上：車不動、輪子照速度轉、油門／煞車／換檔照舊（方向盤、手煞車不算）；telemetry 多 dyno、whp（輪上馬力）、whpX（那時候的轉速÷紅線）、redline；null＝放開
 //   drive.pause() / resume()     暫停（不吃按鍵、藏 HUD／影子／光柱、車身擺正、前輪回正）／繼續
 //   drive.release()              把車交給別人（賽道、車庫）：pause＋車子放回原點、不轉、輪子歸零（race.src.js 的 carSize 用世界座標量車頭，一定要）
 //   drive.setInput({ throttle, brake, steer, handbrake } | null)   程式開車（測試）；null＝回到手指、鍵盤
@@ -13712,6 +13723,8 @@ function createDrive(o) {
     surf: 0, cap: vtop, bumps: 0, shifts: 0, touch: 0, blocked: 0, roll: 0, rollV: 0, pitch: 0, pitchV: 0, alat: 0, along: 0, kap: 0, scrub: 0, push: 0, jit: 0, jitT: 0, hitW: 0, hitT: -9, impT: -9, impW: 0 };
   // 第 3 批（甩尾）：slip＝甩的角度（走的方向＝th＋slip）、slipV＝它變多快、loose＝後輪多鬆（0–1）、dm＝甩了多少（0 抓地～1 甩）、skid＝輪胎叫、skidM＝胎痕／煙
   Object.assign(st, { slip: 0, slipV: 0, loose: 0, dm: 0, skid: 0, skidM: 0, flick: 0, sPrev: 0, thrMem: 0, pwT: 0, kick: 0, kickT: 0, dT: 0, drifts: 0, dShow: 0 });
+  Object.assign(st, { dyno: null, pw: 0, px: 0 }); // 第 77 批（馬力機）：dyno＝綁在滾筒上的位置（車不動、輪子轉）；pw＝這一步輪上的功率（瓦）、px＝那時候的轉速（÷紅線）
+  const DYI = { thr: 0, brk: 0, hb: 0, clu: 0, steer: 0 }; // 馬力機上的輸入：方向盤、手煞車不算（重用）
   // 第 68 批：手排（setGearbox('mt')）：mg＝排在哪一檔（−1 R、0 N、1–6；st.gear／st.rev 跟著它）、clu＝離合器接上多少（0 踩著～1 接上）、stall＝熄火了、crank＝發動中（秒）、
   //   grind＝「咔咔」沒換進去（秒；grindWhy 1 沒按離合器、2 太快不能倒車）、lim＝撞到紅線斷油中、limT＝計時（紅線噠噠噠、閃）、shq＝按了 ▲ ▼ 還沒處理的
   Object.assign(st, { mt: false, mg: 0, clu: 1, cluPrev: 1, stall: false, crank: 0, grind: 0, grindWhy: 0, lim: false, limT: 0, shq: [] });
@@ -13896,9 +13909,9 @@ function createDrive(o) {
     // 引擎：快到限速油門自己收（定速）；推頭的時候也收（像循跡控制）；load＝給引擎聲的（踩著就大聲）
     const gov = clamp((capS + (capS >= vmx ? 0.3 : 0) - u) / 0.5, 0, 1), lim = gov * (1 - Math.min(0.95, st.scrub / 7 + 0.7 * pk * (1 - st.dm))); // 定速在限速上（極速多 0.3 m/s：錶上看得到 250）
     st.thrEff = go * lim;
-    let a = 0; st.lim = false;
+    let a = 0; st.lim = false; st.pw = 0;
     if (st.rev) a = 2.8 * st.thrEff * Math.max(0.6, dmgP.power) * eng;
-    else if (st.cut <= 0 && eng > 0) { const x = xOf(u, st.gear); if (x < 1) a = (Math.min(R ? tract * R.k.trac : tract, (st.thrEff * Tpk * torqueAt(clamp(x, st.gear === 0 ? 0.6 : 0.2, 1)) * GR[st.gear] * fd * 0.88) / RR) / m) * dmgP.power * eng; else if (MT && go > 0.3) st.lim = true; } // 撞到紅線斷油；撞壞了出力變小；手排撞紅線＝噠噠噠（不自己升檔）
+    else if (st.cut <= 0 && eng > 0) { const x = xOf(u, st.gear); if (x < 1) { const fE = (st.thrEff * Tpk * torqueAt(clamp(x, st.gear === 0 ? 0.6 : 0.2, 1)) * GR[st.gear] * fd * 0.88) / RR; a = (Math.min(R ? tract * R.k.trac : tract, fE) / m) * dmgP.power * eng; st.pw = fE * dmgP.power * eng * u; st.px = x; } else if (MT && go > 0.3) st.lim = true; } // 第 77 批：pw＝引擎送到輪子的功率（抓地力吃不掉；馬力機的螢幕畫這個） // 撞到紅線斷油；撞壞了出力變小；手排撞紅線＝噠噠噠（不自己升檔）
     const D = slide(h, inp, R, u, go, gov, a, aG, ac); if (st.dm > 0) { a *= 1 + (D.fwd - 1) * st.dm; a += (Math.min(a, D.cap) - a) * st.dm; } // 第 3 批：甩尾（後輪空轉：往前推的少一點；抓地大部分拿去側滑了）
     const ov = u - capS - 0.5, over = ov > 0 ? (soft ? Math.min(sf.over[1], ov * sf.over[0]) : Math.min(8, ov * 2.5)) : 0; // 比限速快（開進草地、限速變低）：慢下來
     const res = stop * (9.5 + 2.5 * Math.min(1, (u * u) / 4900)) + (go < 0.05 ? (st.rev ? 1.2 : 1.4) : 0) + sf.drag + 0.147 + (AERO * 0.6 * P.cda * u * u) / m + over + (st.rev ? 0 : Math.min(9, st.scrub)) + D.bleed
@@ -14462,8 +14475,8 @@ function createDrive(o) {
     else {
       st.surf = world.surfaceAt ? world.surfaceAt(st.x + Math.cos(st.th) * CX, st.z - Math.sin(st.th) * CX) : 0;
       // 每步最少 1/120 秒、最多走 STEP 公尺（碰撞不會穿過去）
-      const inp = input(), n = Math.max(1, Math.ceil(dt * HZ - 1e-6), Math.ceil(((Math.abs(st.v) + 15 * dt) * dt) / STEP)), h = dt / n;
-      for (let i = 0; i < n; i++) { physics(h, inp); collide(); springs(h); if (ride) ride.step(h); zones(false); }
+      const inp0 = input(), inp = st.dyno ? dynoInp(inp0) : inp0, n = Math.max(1, Math.ceil(dt * HZ - 1e-6), Math.ceil(((Math.abs(st.v) + 15 * dt) * dt) / STEP)), h = dt / n;
+      for (let i = 0; i < n; i++) { physics(h, inp); if (st.dyno) dynoPin(); collide(); springs(h); if (ride) ride.step(h); zones(false); }
     }
     if (Math.abs(st.slip) > 0.175) { if (st.dT < 0.25 && st.dT + dt >= 0.25) st.drifts++; st.dT += dt; } else st.dT = 0; // 第 3 批：甩 10° 以上超過 0.25 秒＝甩了一次
     // 撞到：這一幀最大的一下（0.25 秒內只算一次）→ 鏡頭晃、onBump
@@ -14486,6 +14499,10 @@ function createDrive(o) {
       else if (e[0] === 'done') e[1]();
     }
   }
+  // ---- 第 77 批：馬力機（Nick「車就跟原本一樣快換檔啥的都一樣只是在原地」）：油門、煞車、離合器、換檔照舊，方向盤和手煞車不算；每一步算完車放回滾筒上（速度、轉速、檔位都留著：輪子照速度轉）----
+  const dynoInp = (i) => { DYI.thr = i.thr; DYI.brk = i.brk; DYI.clu = i.clu; DYI.hb = 0; DYI.steer = 0; return DYI; };
+  function dynoPin() { const D = st.dyno; st.x = D.x; st.z = D.z; st.th = D.heading; st.slip = st.slipV = st.loose = st.dm = 0; st.kap = st.alat = st.scrub = st.steer = 0; st.touch = st.blocked = 0; }
+  function setDyno(p) { st.dyno = p ? { x: +p.x, z: +p.z, heading: +p.heading || 0 } : null; if (st.dyno) { auto = null; dynoPin(); st.v = 0; st.spin = 0; } }
   function neutral() {
     st.slip = st.slipV = st.loose = st.dm = st.skid = st.skidM = st.flick = st.thrMem = st.kickT = st.pwT = st.dT = st.dShow = st.hb = 0; // 第 3 批：不甩
     st.roll = st.rollV = st.pitch = st.pitchV = st.kap = st.steer = st.v = st.scrub = st.push = 0; st.thr = st.brk = st.thrEff = st.load = 0; st.rpm = 0.13; st.hitW = st.touch = st.blocked = 0;
@@ -14526,6 +14543,7 @@ function createDrive(o) {
     slip: st.slip, travel: wrapA(st.th + st.slip), drift: st.dm, drifting: Math.abs(st.slip) > 0.175, drifts: st.drifts, loose: st.loose, skid: st.skid, handbrake: st.hb > 0 ? 1 : 0, // 第 3 批（甩尾）
     marks: SK ? SK.count() : 0, smoke: SK ? SK.alive() : 0, tilt: tilt.on ? tilt.val : null,
     ngears: NG, mt: st.mt, mgear: st.mt ? st.mg : null, clutch: st.mt ? +(1 - st.clu).toFixed(3) : 0, stalled: st.stall, cranking: st.crank > 0, grind: st.grind > 0 ? st.grindWhy : 0, limiter: st.lim, // 第 68 批：手排
+    dyno: !!st.dyno, whp: paused ? 0 : st.pw / 745.7, whpX: st.px, redline: P.red, // 第 77 批：馬力機：在滾筒上、輪上馬力（hp）、那時候的轉速（÷紅線）、紅線轉速
     ...(ride ? ride.tele() : null) });
 
   const api = {
@@ -14544,6 +14562,7 @@ function createDrive(o) {
     setPop, get pop() { return popOn; }, // 跳燈
     setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, clu: +i.clutch || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
     setGearbox, shift, get gearbox() { return st.mt ? 'mt' : 'at'; }, // 第 68 批：手排（'mt'）／自排（'at'）；shift(±1)＝按 ▲ ▼
+    setDyno, get dyno() { return !!st.dyno; }, // 第 77 批：馬力機：setDyno({ x, z, heading }) 綁上去（車不動、輪子轉、油門換檔照舊）、setDyno(null) 放開
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
     carInfo: { nose: info.nose, tail: info.tail, len: info.len, halfW: Math.max(info.halfW, +o.halfW || 0), wheelbase: L, vmax: P.vmax }, hud: hud && hud.root, // halfW：碰撞的半寬（怪獸卡車：輪胎比車身寬）
   };
@@ -16966,7 +16985,7 @@ function nhStreetPrep({ N, nx, nz, names }) {
 
 // ==== 第二步：路邊的東西 ====
 function nhStreetBuild(ctx) {
-  const { S, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV, GB } = ctx;
+  const { S, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV, GB, shopPlate, shopUV } = ctx; // shopPlate／shopUV（第 76 批）：neihu.js 每家店自己的招牌
   const info = { scooters: 0, cars: 0, bays: 0, palms: 0, lamps: 0, shelters: 0, signals: 0, uboxes: 0, wallM: 0, rwallM: 0, site: 0, guides: 0, bikes: 0, boxes: 0, hedgeTrees: 0 };
   const spots = { shelters: [], signals: [], guides: [], ubike: [], site: null, views: {}, parked: [], roads: S.roads.map((rd) => ({ key: rd.key, name: rd.name, pts: rd.pts })) }; // roads：三條路每一段 way 的中線（一條路好幾段；測試：哪些房子是照真的樓層蓋高的） // parked（第 74 批）：停車格裡停著的車 [x, z, 車頭方向, 亂數種子]：town.src.js／crush.js 開到附近才做成車店的車（輕量車）
   const WHITE = [255, 255, 255];
@@ -17259,9 +17278,12 @@ function nhStreetBuild(ctx) {
         const mx = (a[0] + c[0]) / 2, mz = (a[1] + c[1]) / 2, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L, k = S.fronting(mx + ox * 2, mz + oz * 2, 6); if (!k) continue; if (!b.gen && !(b.e[i] >= 1)) continue;
         const gh = b.e.includes(2) ? 4.2 : 3.6, m = Math.max(1, Math.round(L / 6)); let y0 = gh + 0.18, h = 0.92;
         for (let j = 0; j < m; j++) { const t0 = j / m, t1 = (j + 1) / m, cx = a[0] + (c[0] - a[0]) * (t0 + t1) / 2, cz = a[1] + (c[1] - a[1]) * (t0 + t1) / 2, w = L / m - 0.3; if (w < 2) continue;
-          const r = hh(bi, 400 + i * 7 + j), ci = r < 0.4 ? Math.floor(hh(bi, 410 + i * 7 + j) * CHAINS.length) : CHAINS.length + Math.floor(hh(bi, 420 + i * 7 + j) * GENERIC.length), key = 'h' + ci; if (!UV[key]) continue;
+          const r = hh(bi, 400 + i * 7 + j), chain = r < 0.4, key = chain ? 'h' + Math.floor(hh(bi, 410 + i * 7 + j) * CHAINS.length) : null; if (chain && !UV[key]) continue; // 四成諧音連鎖店（這裡的圖）、六成每家店自己的招牌（neihu.js 第 76 批；以前是 12 家 GENERIC 輪流）
           const dup = Math.round(cx / 3) + ',' + Math.round(cz / 3); if (used.has(dup)) continue; used.add(dup);
-          const g = wallG(cx, cz); boxG(g, cx + ox * 0.12, cz + oz * 0.12, w / 2, 0.11, rotOf(c[0] - a[0], c[1] - a[1]), y0, y0 + h, [60, 60, 64], 20, true); plate2(cx + ox * 0.24, y0 + h / 2, cz + oz * 0.24, (c[0] - a[0]) / L, (c[1] - a[1]) / L, w, h, key, false, WHITE, ox, oz); info.boxes++; }
+          const g = wallG(cx, cz); boxG(g, cx + ox * 0.12, cz + oz * 0.12, w / 2, 0.11, rotOf(c[0] - a[0], c[1] - a[1]), y0, y0 + h, [60, 60, 64], 20, true);
+          if (chain || !shopPlate) plate2(cx + ox * 0.24, y0 + h / 2, cz + oz * 0.24, (c[0] - a[0]) / L, (c[1] - a[1]) / L, w, h, key || 'h' + (CHAINS.length + Math.floor(hh(bi, 420 + i * 7 + j) * GENERIC.length)), false, WHITE, ox, oz);
+          else shopPlate(cx + ox * 0.24, y0 + h / 2, cz + oz * 0.24, (c[0] - a[0]) / L, (c[1] - a[1]) / L, w, h, shopUV(), ox, oz);
+          info.boxes++; }
       } });
   }
   // ---- InstancedMesh ----
@@ -17319,6 +17341,11 @@ const rotOf = (ux, uz) => Math.atan2(-uz, ux); // rotation.y：本地 +x 轉到 
 // ---- 店的招牌字（一般的店名，沒有牌子）----
 const NH_VARIETY = true; // 第 28 批（Nick 2026-10-23「內湖的房子都要不一樣」）：每間房子不一樣（12 種一樓住家、側牆、更多店面、女兒牆、水塔、太陽能、加蓋、斜屋頂、遮雨棚、冷氣）；Nick 2026-10-23 看過範例說「照這樣做」（試做頁 v47）
 const SHOPS = ['早餐', '豆漿', '麵店', '便當', '小吃', '水餃', '飲料', '咖啡', '藥局', '診所', '牙醫', '眼鏡', '文具', '書局', '洗衣', '美髮', '水電', '五金', '機車行', '寵物', '花店', '麵包', '鍋貼', '滷味', '火鍋', '補習班', '房屋', '冰店', '牛肉麵', '自助餐'];
+// 第 76 批（Nick 2026-11-08「內湖的店每間都要不一樣 房子也不要一樣」）：每家店自己的名字＝前面的字 × 賣什麼（都是自己編的，沒有真的店）；shopAtlas 一次畫 424 個招牌，店照順序輪著用
+const SHOP_PRE = ['王記', '阿財', '小林', '阿明', '港墘', '內湖', '碧湖', '西湖', '幸福', '好吃', '金好', '永安', '快樂', '美好', '新新', '老王', '阿嬤', '旺旺', '大同', '一品', '老街', '阿婆', '鴻運', '日日', '小馬', '黑熊', '大橘', '綠光', '星星', '月亮', '三好', '來來', '好棒', '元氣', '甜甜', '風車', '小豬', '大象', '長頸鹿', '彩虹'];
+const SHOP_KIND = ['早餐店', '豆漿店', '牛肉麵', '便當', '小吃', '水餃', '飲料店', '咖啡', '藥局', '診所', '牙醫', '眼鏡', '文具', '書局', '洗衣店', '美髮', '水電', '五金', '機車行', '寵物店', '花店', '麵包店', '鍋貼', '滷味', '火鍋', '補習班', '房屋', '冰店', '自助餐', '手機行',
+  '彩券行', '修車廠', '影印', '麵館', '鹹酥雞', '珍珠奶茶', '茶行', '鐘錶', '服飾', '童裝', '鞋店', '電器行', '網咖', '按摩', '美甲', '中醫', '燒烤', '壽司', '披薩', '炸雞', '蛋糕', '茶葉蛋', '玩具店', '腳踏車', '釣具', '水族館', '棉被', '窗簾', '鎖店', '相館'];
+const SHOP_SUB = ['歡迎光臨', '營業中', '外帶', '24小時', '老店', '新開幕', '可外送', '好吃便宜', '每天新鮮', '手工'];
 const BOARD = ['道路施工', '請改道', '內湖', '港墘', '往', '越野車場', '村子', '站'];
 const D = NEIHU_DATA;
 // 聯外道路（Nick 2026-10-05「去內湖的路太遠了 可以大概三四百公尺遠就好」）：越野車場的水泥路（offroad.js 的 ACCESS）在村子南邊的口（x −112、z 94）往南直走，
@@ -17328,7 +17355,7 @@ const NEIHU_KEEP = []; // race.src.js：賽道旁邊的樹不要種在聯外道�
 const RIDGE_Z = 232; // 越野車場（圍籬 z 196、外面一圈地形到 z 229）南邊：內湖北邊那道矮山脊從這裡起
 // 世界本來的草地（village.js 的 ground、race.src.js 的賽道草地）在哪裡：內湖的山在這上面平的地方壓低一點（草地蓋過去），範圍裡面挖掉（carveWorld）
 const worldGround = (x, z) => (x >= -1450 && x <= -62 && Math.abs(z) <= 880) || (x > -62 && x <= 1300 && Math.abs(z) <= 1150);
-const NEIHU_TEXT = [...new Set([...D.names.map((n) => n[0]).join(''), ...D.stations.map((s) => s[0]).join(''), ...D.nsigns.map((s) => s[3]).join(''), ...SHOPS.join(''), ...BOARD.join(''), ...'地圖資料©OpenStreetMap貢獻者到了', ...NH_STREET_TEXT].filter((ch) => ch.charCodeAt(0) > 0x2e80))].join('');
+const NEIHU_TEXT = [...new Set([...D.names.map((n) => n[0]).join(''), ...D.stations.map((s) => s[0]).join(''), ...D.nsigns.map((s) => s[3]).join(''), ...SHOPS.join(''), ...SHOP_PRE.join(''), ...SHOP_KIND.join(''), ...SHOP_SUB.join(''), ...BOARD.join(''), ...'地圖資料©OpenStreetMap貢獻者到了', ...NH_STREET_TEXT].filter((ch) => ch.charCodeAt(0) > 0x2e80))].join('');
 function neihuFonts(ms = 1500) {
   const f = typeof document !== 'undefined' && document.fonts;
   if (!f || !f.load) return Promise.resolve();
@@ -17427,8 +17454,8 @@ function facadeAtlas(aniso) {
   const shopFront = (g2, x, w, h, word, R2) => {
     const sc = [['#d6342b', '#fff'], ['#f3c623', '#222'], ['#1f5fae', '#fff'], ['#2a8a4a', '#fff'], ['#ffffff', '#c22'], ['#f28c28', '#fff'], ['#6b3fa0', '#fff']][(R2() * 7) | 0];
     g2.fillStyle = '#5a5650'; g2.fillRect(x, 0, w, h);
-    g2.fillStyle = sc[0]; g2.fillRect(x + 4, 6, w - 8, 56); g2.strokeStyle = 'rgba(0,0,0,0.25)'; g2.lineWidth = 2; g2.strokeRect(x + 5, 7, w - 10, 54);
-    g2.fillStyle = sc[1]; g2.textAlign = 'center'; g2.textBaseline = 'middle'; fitFont(g2, word, w - 22, 40); g2.fillText(word, x + w / 2, 35);
+    // 第 76 批：招牌那一條只畫深色的底框（名字是 shopAtlas 的牌子，每家不一樣，貼在這條的前面）；sc、word 留著只是亂數的順序不變（店面的樣子跟以前一樣）
+    void sc; void word; g2.fillStyle = '#26262b'; g2.fillRect(x + 4, 6, w - 8, 56); g2.strokeStyle = 'rgba(255,255,255,0.1)'; g2.lineWidth = 2; g2.strokeRect(x + 5, 7, w - 10, 54);
     const kind = R2();
     if (kind < 0.4) { g2.fillStyle = '#8e9296'; g2.fillRect(x + 6, 66, w - 12, h - 66); g2.fillStyle = '#a3a7ab'; for (let y = 68; y < h; y += 7) g2.fillRect(x + 6, y, w - 12, 3); g2.fillStyle = '#2a2622'; g2.fillRect(x + 6, h - 60, w - 12, 60); g2.fillStyle = '#e0c48a'; for (let k = 0; k < 6; k++) g2.fillRect(x + 12 + k * 17, h - 50 + (k % 2) * 12, 12, 10); } // 鐵捲門拉一半
     else if (kind < 0.75) { g2.fillStyle = '#c9d8e0'; g2.fillRect(x + 6, 66, w - 12, h - 66); g2.fillStyle = '#6d8a9a'; g2.fillRect(x + w / 2 - 2, 66, 4, h - 66); g2.fillStyle = 'rgba(255,240,200,0.5)'; g2.fillRect(x + 10, 80, w - 20, 40); g2.fillStyle = '#7a5a3a'; for (let k = 0; k < 4; k++) g2.fillRect(x + 14 + k * 26, h - 70, 18, 70); } // 玻璃門、裡面的架子
@@ -17506,6 +17533,30 @@ function facadeAtlas(aniso) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = aniso;
   const cells = []; for (let i = 0; i < (NH_VARIETY ? 64 : 32); i++) { const [cx, cy] = CELL(i); cells.push(new THREE.Vector4((cx * CS + 4) / W, 1 - (cy * CS + 4 + IN) / H, IN / W, IN / H)); }
   return { tex: t, cells };
+}
+// 第 76 批：每家店的招牌：一張 2048×2048：橫的 192×48 × 340（h0…h339）、直的 48×192 × 84（v0…v83）；名字每個組合只用一次、14 種顏色、三成多一行小字
+const SHOP_NH = 340, SHOP_NV = 84;
+function shopAtlas(aniso) {
+  const W = 2048, H = 2048, [c, g] = cv(W, H), uv = {}, names = [];
+  const SC = [['#d6342b', '#ffffff'], ['#f3c623', '#1a1a1a'], ['#1f5fae', '#ffffff'], ['#2a8a4a', '#ffffff'], ['#ffffff', '#c22020'], ['#f28c28', '#ffffff'], ['#6b3fa0', '#ffffff'], ['#ffffff', '#1f5fae'], ['#1a1a1a', '#f3c623'], ['#e5007d', '#ffffff'], ['#00a39a', '#ffffff'], ['#ffffff', '#2a8a4a'], ['#8a2b1a', '#ffe9b0'], ['#2b2b2b', '#e8c66a']];
+  const NC = SHOP_PRE.length * SHOP_KIND.length, R = rng(20261108);
+  const nameOf = (i) => { const k = (i * 1021) % NC; return SHOP_PRE[k % SHOP_PRE.length] + SHOP_KIND[Math.floor(k / SHOP_PRE.length)]; }; // 1021 跟 2400 互質：2400 個以內不重複
+  const reg = (key, x, y, w, h, draw) => { g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip(); g.translate(x, y); draw(g, w, h); g.restore(); uv[key] = [(x + 1) / W, 1 - (y + h - 1) / H, (x + w - 1) / W, 1 - (y + 1) / H]; };
+  const T = (g2, t, x, y, px, col, max, wt = 900) => { g2.fillStyle = col; g2.textAlign = 'center'; g2.textBaseline = 'middle'; fitFont(g2, t, max, px, wt); g2.fillText(t, x, y); };
+  for (let i = 0; i < SHOP_NH; i++) { const nm = nameOf(i), [bg, fg] = SC[Math.floor(R() * SC.length)], sub = R() < 0.3 ? SHOP_SUB[Math.floor(R() * SHOP_SUB.length)] : null, fr = R(); names.push(nm);
+    reg('h' + i, (i % 10) * 192, Math.floor(i / 10) * 48, 192, 48, (g2, w, h) => {
+      g2.fillStyle = bg; g2.fillRect(0, 0, w, h);
+      if (fr < 0.5) { g2.strokeStyle = fg; g2.lineWidth = 2; g2.strokeRect(3, 3, w - 6, h - 6); } else if (fr < 0.75) { g2.fillStyle = fg; g2.fillRect(0, h - 5, w, 5); } // 邊框／下面一條／什麼都沒有
+      if (sub) { T(g2, nm, w / 2, 18, 26, fg, w - 16); T(g2, sub, w / 2, 38, 12, fg, w - 20, 700); } else T(g2, nm, w / 2, h / 2, 32, fg, w - 14);
+    }); }
+  for (let i = 0; i < SHOP_NV; i++) { const nm = nameOf(SHOP_NH + i), [bg, fg] = SC[Math.floor(R() * SC.length)]; names.push(nm);
+    reg('v' + i, (i % 42) * 48, 1664 + Math.floor(i / 42) * 192, 48, 192, (g2, w, h) => {
+      g2.fillStyle = bg; g2.fillRect(0, 0, w, h); g2.strokeStyle = fg; g2.lineWidth = 2; g2.strokeRect(3, 3, w - 6, h - 6);
+      const ch = [...nm], step = Math.min(36, (h - 14) / ch.length); g2.fillStyle = fg; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.font = `900 ${Math.min(30, step * 0.86)}px ${SANS}`;
+      ch.forEach((k, j) => g2.fillText(k, w / 2, 7 + step * (j + 0.5) + (h - 14 - step * ch.length) / 2));
+    }); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = aniso;
+  return { tex: t, uv, names };
 }
 // 路名牌、直立招牌、車站、公園學校的牌子、施工欄杆：一張 1024×1536
 function signAtlas(aniso, names, boards, lms) {
@@ -17628,6 +17679,7 @@ function buildNeihu(V, opt = {}) {
   const LMS = [['bihu', 'stone', 'Bihu Park'], ['nhps', 'white', ''], ['lishan', 'red', ''], ['dgq', 'green', 'Dagangqian Park'], ['lib', 'grey', ''], ['church', 'frieze', ''], ['mrt', 'gold', 'GANGQIAN']]
     .filter(([k]) => N.lm[k]).map(([k, st, en]) => ({ k, st, en, nm: N.lm[k].nm }));
   const SA = signAtlas(aniso, D.names, boards, LMS);
+  const SH = shopAtlas(aniso); // 第 76 批：每家店的招牌
   const lmUV = (k) => SA.uv['L' + LMS.findIndex((m) => m.k === k)];
   const bIdx = (pred) => boards.findIndex(pred);
   const tAsph = detailTex(11, '#4f5156', ['#45474c', '#5b5d62', '#3e4044', '#66686c'], 5000, 256, aniso, 1.6), tPave = paveTex(aniso), tGround = detailTex(12, '#bdbab2', ['#b0ada5', '#c8c5bd', '#a9a69e'], 3000, 128, aniso, 2.5);
@@ -17635,6 +17687,7 @@ function buildNeihu(V, opt = {}) {
   const mats = {
     wall: std({ map: FA.tex, vertexColors: true, roughness: 0.85 }),
     sign: std({ map: SA.tex, vertexColors: true, emissive: 0xffffff, emissiveMap: SA.tex, emissiveIntensity: 0.25, roughness: 0.6 }),
+    shop: std({ map: SH.tex, vertexColors: true, emissive: 0xffffff, emissiveMap: SH.tex, emissiveIntensity: 0.25, roughness: 0.6 }), // 第 76 批：店的招牌（晚上跟 sign 一樣加亮：look.js 看 emissiveMap＝map）
     ground: std({ map: tGround, vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2 }),
     area: std({ map: tGround, vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
     walk: std({ map: tPave, vertexColors: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }),
@@ -17685,6 +17738,10 @@ function buildNeihu(V, opt = {}) {
 
   // 第 28 批：房子的小東西（遮雨棚、水塔、太陽能、加蓋、斜屋頂、女兒牆）
   const SHOP_CELLS = [12, 13, 14, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59];
+  // 第 76 批：房子的牆色每棟不一樣：淺色的樓（米、白、舊灰）乘上 12 種淡淡的顏色；有顏色的（紅磚、粉紅、淺綠）只有深淺不一樣
+  const LIGHT_ST = new Set([0, 1, 7]), TINTS = [[255, 255, 255], [252, 242, 224], [230, 234, 238], [248, 230, 226], [228, 238, 228], [228, 232, 244], [248, 240, 214], [238, 228, 216], [252, 234, 222], [234, 230, 242], [222, 222, 218], [240, 240, 234]];
+  const UP_ALT = [1, 6, 10, 4, 0]; // 淺色的樓三成五換別種窗戶的排法（白磁磚、米色藍窗帶、灰直條、灰藍）
+  const shopPl = []; let shopN = 0, vN = 0; const tintSet = new Set(); // 第 76 批：店的招牌（蓋完房子再畫進 shg）、幾種牆色
   const ROOF_COL = [[235, 233, 228], [150, 172, 150], [160, 170, 182]];
   const AWN = [[46, 125, 70], [196, 58, 48], [40, 92, 170], [226, 178, 40], [230, 230, 226], [120, 72, 40]];
   function quadUp(g, P, uv, cell, c) { // 四邊形，朝上的那面看得到（順序反了就倒過來）
@@ -17761,8 +17818,9 @@ function buildNeihu(V, opt = {}) {
     let bf = Math.min(b.f, NH_MAX_FL), top = VAR ? (b.e.includes(2) ? gh : gh * (0.94 + 0.16 * hh(bi, 71))) : Math.min(top0, gh + (NH_MAX_FL - 1) * 3.2); // 第 10 批（Nick「所有房子變矮」）：最多 2 層樓高；第 28 批：高高低低一點
     const ov = NS.floorsOf(b, bi, cx, cz); if (ov) { bf = ov.fl; top = gh + (bf - 1) * 3.2 + (hh(bi, 71) - 0.5) * 0.3; } // 第 72 批：三條街邊的房子照真的樓層（照片裡 4～15 樓）
     const one = !ov && b.f <= 1 && b.h <= 2; // 一層樓的房子：牆一次到屋頂
-    const st = ov && ov.st != null ? ov.st : b.st, base = VAR ? WHITE : STY_COL[st] || WHITE, tint = VAR ? 0.92 + hh(bi, 2) * 0.12 : 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, VAR ? 0.86 : 0.78), gcell = GROUND_OF[st] ?? 15;
+    const st = ov && ov.st != null ? ov.st : b.st, base = VAR ? (LIGHT_ST.has(st) ? TINTS[Math.floor(hh(bi, 72) * TINTS.length)] : WHITE) : STY_COL[st] || WHITE, tint = VAR ? 0.88 + hh(bi, 2) * 0.18 : 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, VAR ? 0.86 : 0.78), gcell = GROUND_OF[st] ?? 15;
     const fam = Math.floor(hh(bi, 70) * 12), fCell = 32 + fam, sCell = fam < 6 ? 26 + fam : 38 + fam, anyE = b.e.some((x) => x); // 第 28 批：12 種一樓住家（前面）＋同一種的側牆
+    const upSt = VAR && LIGHT_ST.has(st) && hh(bi, 73) < 0.35 ? UP_ALT[Math.floor(hh(bi, 74) * UP_ALT.length)] : st; if (VAR) tintSet.add(col.join()); // 第 76 批
     let faceR = null; // 第 28 批：每一面牆往外 3 公尺是不是路（人行道）；都不是的話，最靠近路的那一面（8 公尺內）
     if (VAR) { faceR = []; let bestI = -1, bestD = Infinity;
       for (let i = 0; i < n; i++) { const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); let f = false;
@@ -17775,12 +17833,16 @@ function buildNeihu(V, opt = {}) {
       const ca = C[i], cc = C[(i + 1) % n], Lc = Math.hypot(cc[0] - ca[0], cc[1] - ca[1]), e = b.e[i] || 0;
       const front = e > 0 || (faceR ? faceR[i] : b.gen ? i === 0 : !anyE);
       const shopCell = VAR ? SHOP_CELLS[Math.floor(hh(bi, 10 + i) * SHOP_CELLS.length)] : 12 + Math.floor(hh(bi, 10 + i) * 3), wcell = e ? shopCell : !VAR ? gcell : front ? fCell : sCell;
+      // 第 76 批：店的招牌（每家一個，照順序輪 340 種）貼在店面貼圖那條深色的底框前面（貼圖的 6～62 px → 牆高的 0.75～0.976）；三條街臨路的一樓 nhstreet.js 會掛燈箱，那裡不貼
+      const lbox = !!(VAR && e && !b.lm && !b.back && !b.site && L >= 3.5 && !(b.gen && i !== 0) && (b.gen || e >= 1) && NS.fronting((a[0] + c[0]) / 2 + (c[1] - a[1]) / L * 2, (a[1] + c[1]) / 2 - (c[0] - a[0]) / L * 2, 6));
+      const shopAt = (x0, z0, x1, z1, y1) => { if (!VAR || !e || lbox || b.back) return; const Lw = Math.hypot(x1 - x0, z1 - z0); if (Lw < 2.2) return; const ux = (x1 - x0) / Lw, uz = (z1 - z0) / Lw;
+        shopPl.push({ x: (x0 + x1) / 2 + uz * 0.05, z: (z0 + z1) / 2 - ux * 0.05, ux, uz, w: Math.min(Lw - 0.25, 5.8), y0: y1 * 0.75, y1: y1 * 0.976, fx: uz, fz: -ux, s: shopN++ }); };
       // 第 28 批：長的店面、長的一排住家，每 6 公尺換一家（不然整排都是同一家店）
       const gWall = (x0, z0, x1, z1, y1, Lw, u1) => {
-        if (!VAR || !(e || front) || Lw < 7) { wallQ(g, x0, z0, x1, z1, 0, y1, 0, u1, 0, 1, wcell, low, col); return; }
+        if (!VAR || !(e || front) || Lw < 7) { wallQ(g, x0, z0, x1, z1, 0, y1, 0, u1, 0, 1, wcell, low, col); shopAt(x0, z0, x1, z1, y1); return; }
         const k = Math.max(1, Math.round(Lw / 6));
         for (let j = 0; j < k; j++) { const t0 = j / k, t1 = (j + 1) / k, r = hh(bi, 100 + i * 17 + j), cl = e ? SHOP_CELLS[Math.floor(r * SHOP_CELLS.length)] : r < 0.5 ? fCell : 32 + Math.floor(hh(bi, 140 + i * 17 + j) * 12);
-          wallQ(g, x0 + (x1 - x0) * t0, z0 + (z1 - z0) * t0, x0 + (x1 - x0) * t1, z0 + (z1 - z0) * t1, 0, y1, 0, 1, 0, 1, cl, low, col); }
+          wallQ(g, x0 + (x1 - x0) * t0, z0 + (z1 - z0) * t0, x0 + (x1 - x0) * t1, z0 + (z1 - z0) * t1, 0, y1, 0, 1, 0, 1, cl, low, col); shopAt(x0 + (x1 - x0) * t0, z0 + (z1 - z0) * t0, x0 + (x1 - x0) * t1, z0 + (z1 - z0) * t1, y1); }
       };
       if (one) gWall(a[0], a[1], c[0], c[1], top, L, L / 6);
       else {
@@ -17788,7 +17850,7 @@ function buildNeihu(V, opt = {}) {
         // 一樓（騎樓的話退到裡面那條線）
         gWall(ca[0], ca[1], cc[0], cc[1], gw, Lc, Math.max(1, Math.round(Lc / 6)));
         // 樓上
-        if (top > gw + 0.01) wallQ(g, a[0], a[1], c[0], c[1], gw, top, 0, Math.max(1, Math.round(L / 6)), 0, (top - gw) / 6.4, LISHAN && inPoly(LISHAN, cx, cz) ? 24 : st, col, col);
+        if (top > gw + 0.01) wallQ(g, a[0], a[1], c[0], c[1], gw, top, 0, Math.max(1, Math.round(L / 6)), 0, (top - gw) / 6.4, LISHAN && inPoly(LISHAN, cx, cz) ? 24 : upSt, col, col);
       }
       if (VAR) { // 第 28 批：店門口的遮雨棚、牆上的冷氣
         const ux = (c[0] - a[0]) / L, uz = (c[1] - a[1]) / L, ox = uz, oz = -ux; // 往外
@@ -17808,7 +17870,7 @@ function buildNeihu(V, opt = {}) {
       }
       // 一樓臨路的店：樓上掛直立招牌（往外伸）
       if (e && bf >= 3 && L >= 6 && !b.back && vSigns.length < 2200 && hh(bi, 30 + i) < (e === 2 ? 0.95 : 0.45)) {
-        const m = Math.min(3, Math.floor(L / 7)); for (let j = 0; j < m; j++) { const t = (j + 0.5) / m, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L; vSigns.push({ x: a[0] + (c[0] - a[0]) * t, z: a[1] + (c[1] - a[1]) * t, ox, oz, y0: gh + 0.4, h: Math.min(top - gh - 0.6, 3 + hh(bi, 50 + j) * 2.6), s: Math.floor(hh(bi, 60 + i * 3 + j) * 16) }); }
+        const m = Math.min(3, Math.floor(L / 7)); for (let j = 0; j < m; j++) { const t = (j + 0.5) / m, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L; vSigns.push({ x: a[0] + (c[0] - a[0]) * t, z: a[1] + (c[1] - a[1]) * t, ox, oz, y0: gh + 0.4, h: Math.min(top - gh - 0.6, 3 + hh(bi, 50 + j) * 2.6), s: vN++ }); } // 第 76 批：直立招牌也照順序輪（shopAtlas 的 v0…v83）
       }
     }
     // 屋頂（第 28 批：灰的、綠的防水漆、藍灰的）
@@ -18176,8 +18238,17 @@ function buildNeihu(V, opt = {}) {
   }
 
   // ==== 牌子：路名牌（柱子＋兩面）、公園學校的牌子、車站的站名、往內湖的指示牌、施工欄杆、直立招牌 ====
-  const sg = new Geo(false);
-  const sq = (P, uv, c = WHITE) => { sg.grow(4, 6); const k = sg.v; for (let i = 0; i < 4; i++) sg.vert(P[i][0], P[i][1], P[i][2], uv[i][0], uv[i][1], c[0], c[1], c[2], 0); sg.tri(k, k + 1, k + 2); sg.tri(k, k + 2, k + 3); };
+  const sg = new Geo(false), shg = new Geo(false); // shg：第 76 批 店的招牌（材質 shop）
+  const sq = (P, uv, c = WHITE, G = sg) => { G.grow(4, 6); const k = G.v; for (let i = 0; i < 4; i++) G.vert(P[i][0], P[i][1], P[i][2], uv[i][0], uv[i][1], c[0], c[1], c[2], 0); G.tri(k, k + 1, k + 2); G.tri(k, k + 2, k + 3); };
+  // 第 76 批：店的招牌（中心 x y z，沿 (ux, uz) 寬 w、高 h）；(fx, fz) 給了＝只畫朝那邊的一面，沒給＝兩面
+  const shopPlate = (x, y, z, ux, uz, w, h, uv, fx, fz) => {
+    let a = [x - ux * w / 2, z - uz * w / 2], b = [x + ux * w / 2, z + uz * w / 2]; const [u0, v0, u1, v1] = uv, one = fx != null;
+    if (one && -uz * fx + ux * fz < 0) [a, b] = [b, a];
+    sq([[a[0], y - h / 2, a[1]], [b[0], y - h / 2, b[1]], [b[0], y + h / 2, b[1]], [a[0], y + h / 2, a[1]]], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], WHITE, shg);
+    if (!one) sq([[b[0], y - h / 2, b[1]], [a[0], y - h / 2, a[1]], [a[0], y + h / 2, a[1]], [b[0], y + h / 2, b[1]]], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], WHITE, shg);
+  };
+  const shopUV = (i) => SH.uv['h' + ((i * 97) % SHOP_NH)]; // 第 i 家店用哪一塊招牌：97 跟 340 互質＝340 家以內不重複
+  for (const s of shopPl) shopPlate(s.x, (s.y0 + s.y1) / 2, s.z, s.ux, s.uz, s.w, s.y1 - s.y0, shopUV(s.s), s.fx, s.fz);
   const plate = (x, y, z, ux, uz, w, h, uv, two = true) => { // 直立的牌子（中心 x y z，沿 (ux, uz) 寬 w、高 h），兩面都看得到字
     const a = [x - ux * w / 2, z - uz * w / 2], b = [x + ux * w / 2, z + uz * w / 2], [u0, v0, u1, v1] = uv;
     sq([[a[0], y - h / 2, a[1]], [b[0], y - h / 2, b[1]], [b[0], y + h / 2, b[1]], [a[0], y + h / 2, a[1]]], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]]);
@@ -18263,8 +18334,8 @@ function buildNeihu(V, opt = {}) {
     colliders.push({ t: 'box', x: bar.p[0], z: bar.p[1], hx: w / 2 + 0.5, hz: 0.35, rot: rotOf(vx, vz), h: 1.2, noCrush: true }); // 第 9 批：路封起來的欄杆（範圍的邊）不輾
   }
   for (const s of vSigns) { // 直立招牌：從牆往外伸 0.9 公尺、兩面都有字
-    const uv = SA.uv['v' + s.s]; if (!uv) continue; const x = s.x + s.ox * 0.55, z = s.z + s.oz * 0.55, ymid = s.y0 + s.h / 2;
-    plate(x, ymid, z, s.ox, s.oz, 0.9, s.h, uv, true);
+    const uv = SH.uv['v' + ((s.s * 29) % SHOP_NV)]; if (!uv) continue; const x = s.x + s.ox * 0.55, z = s.z + s.oz * 0.55, ymid = s.y0 + s.h / 2; // 第 76 批：shopAtlas 的直立招牌（29 跟 84 互質）
+    shopPlate(x, ymid, z, s.ox, s.oz, 0.9, s.h, uv);
   }
   // ==== 七個地標（Nick 2026-10-05「我只需要下面幾個跟實景一樣就好（位置也要正確喔）」）====
   //   形狀、位置都是 OSM 的（neihu-conv.mjs 的 lm）；外觀照 Nick 給的參考照片（/mnt/project-files/tune-game/neihu-photos）手工做，照片沒有進遊戲
@@ -18495,8 +18566,9 @@ function buildNeihu(V, opt = {}) {
   let nSkipT = 0;
   for (const [x, z, s] of N.trees) { if (NS.noTree(x, z)) { nSkipT++; continue; } addTree(x, 0, z, s); if (inBox(x, z)) { const c = { t: 'circle', x, z, r: 0.25, h: 3, tk: Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT), ti: treeTiles.get(Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT)).length / 4 - 1 }; colliders.push(c); treeCols.push(c); } }
   // 第 72 批：路邊的東西（機車、停著的車、大王椰子、路燈、公車亭、紅綠燈、變電箱、圍牆、擋土牆、工地、路牌、腳踏車站、燈箱招牌）；要在 signMesh 做出來以前（工地的「施工」牌用 plate）
-  const NSB = nhStreetBuild({ S: NS, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV: SA.uv['b' + bIdx((b) => b.t === 'work')], GB, roadAt, AX, AZ, names: D.names, plate });
+  const NSB = nhStreetBuild({ S: NS, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV: SA.uv['b' + bIdx((b) => b.t === 'work')], GB, roadAt, AX, AZ, names: D.names, plate, shopPlate, shopUV: () => shopUV(shopN++) }); // 第 76 批：三條街的燈箱六成用每家店自己的招牌
   const signMesh = new THREE.Mesh(sg.geometry(), mats.sign); signMesh.name = 'nh-signs'; signMesh.matrixAutoUpdate = false;
+  const shopMesh = new THREE.Mesh(shg.geometry(), mats.shop); shopMesh.name = 'nh-shops'; shopMesh.matrixAutoUpdate = false; // 第 76 批：店的招牌一個 mesh（跟路名牌一樣）
   { // 山上的樹（遠遠看的）：範圍外面一圈，山腳 4 公尺以上；近的密一點
     const R3 = rng(8); let n = 0;
     for (let tries = 0; n < 2600 && tries < 40000; tries++) {
@@ -18524,7 +18596,7 @@ function buildNeihu(V, opt = {}) {
     m.userData.c = [b.cx, b.cz]; m.userData.r = b.size * 0.75; m.userData.far = b.mat === 'paint' ? 420 : b.mat === 'sign2' || b.mat === 'sign3' ? 700 : b.mat === 'wall' ? 1300 : 1500;
     group.add(m); tileMeshes.push(m); tris += b.g.ni / 3; meshes++;
   }
-  group.add(hillMesh, signMesh); meshes += 2; tris += hillTris + sg.ni / 3;
+  group.add(hillMesh, signMesh, shopMesh); meshes += 3; tris += hillTris + sg.ni / 3 + shg.ni / 3;
   for (const m of treeMeshes) { group.add(m); meshes++; tris += m.count * (m.geometry.index.count / 3); }
   if (V.group) V.group.add(group);
 
@@ -18719,7 +18791,7 @@ function buildNeihu(V, opt = {}) {
   }
   update.x = 0; update.y = 0; update.z = 0;
 
-  const info = { meshes, tris: Math.round(tris), colliders: colliders.length, bigSigns: bigSigns.length, buildings: nb, arcades: nArc, sheds: nShed, shopSigns: vSigns.length, trees: N.trees.length - nSkipT, street: NSB.info, fixArc: nFix, ms: 0, at: [AX, AZ], box: [BX0, BZ0, BX1, BZ1] };
+  const info = { meshes, tris: Math.round(tris), colliders: colliders.length, bigSigns: bigSigns.length, buildings: nb, arcades: nArc, sheds: nShed, shopSigns: vSigns.length, shops: { plates: shopPl.length, total: shopN, v: vSigns.length, names: SH.names.length, tints: tintSet.size }, trees: N.trees.length - nSkipT, street: NSB.info, fixArc: nFix, ms: 0, at: [AX, AZ], box: [BX0, BZ0, BX1, BZ1] };
   if (V.info) V.info.neihu = info;
   if (NSB.poles.length) V.poles = (V.poles || []).concat(NSB.poles); // 第 72 批：內湖的路燈（look.js 晚上最近的幾支真的有光）
   const P = {
@@ -43345,7 +43417,7 @@ const PERF = {
 const TYRES = [[0, '原廠胎', '原本的輪胎'], [1, '半熱熔胎', '起步抓地 +8%'], [2, '直線加速胎', '起步抓地 +16%']];
 // 遊戲進度：錢（萬）、有哪些車、每台裝了哪些零件、輪胎（買過哪些、現在用哪個）、每個對手贏過幾次、車子停在車庫哪裡（park：town.src.js 的 normPark）、
 //   每台撞壞的樣子（dmg：damage.js 的 dmg.state；沒壞就沒有）、你自己的樣子（look：自訂角色，lookpanel.js；沒改過＝null＝PLAYER_LOOK；重新開始也留著）
-const GAME = { money: 0, owned: new Set(['gc8']), parts: {}, tyres: {}, wins: {}, park: null, dmg: {}, look: null, guns: gunSave.fresh(), best: { hill: {} }, home: null, key: null }; // key：借車的密碼（4 個數字；第 19 批，第一次進入世界自己給一組） // home：車庫街你那間（第 17 批）；best：最快的紀錄（hill＝爬山計時賽，每台車幾秒） // guns：第 3 批（b3-int）槍店買的槍、子彈、靶場紀錄（guns.js 的 gunSave）
+const GAME = { money: 0, owned: new Set(['gc8']), parts: {}, tyres: {}, wins: {}, park: null, dmg: {}, look: null, guns: gunSave.fresh(), best: { hill: {}, dyno: {} }, home: null, key: null }; // key：借車的密碼（4 個數字；第 19 批，第一次進入世界自己給一組） // home：車庫街你那間（第 17 批）；best：最快的紀錄（hill＝爬山計時賽，每台車幾秒） // guns：第 3 批（b3-int）槍店買的槍、子彈、靶場紀錄（guns.js 的 gunSave）
 // 試做頁（Nick 2026-10-07「那個試做頁所有都不用錢」）：發布前 make-free.mjs 把 false 換成 true → 錢用不完、什麼都買得起（花了也不會少）；App 一直是 false
 const TRIAL_FREE = false;
 if (TRIAL_FREE) Object.defineProperty(GAME, 'money', { get: () => 9999999, set: () => {}, enumerable: true });
@@ -43441,6 +43513,7 @@ function okValue(k, o, v) { // 存的值還是現在有的選項才用（改版�
   }
   for (const [id, n] of Object.entries(d.wins || {})) GAME.wins[id] = Math.max(0, Math.floor(+n || 0));
   for (const [k, n] of Object.entries((d.best && d.best.hill) || {})) if (CARS[k] && +n > 1 && +n < 3600) GAME.best.hill[k] = Math.round(+n * 100) / 100; // 爬山計時賽（以前的存檔沒有：空的）
+  for (const [k, r] of Object.entries((d.best && d.best.dyno) || {})) if (CARS[k] && r && +r.hp > 0 && Array.isArray(r.c) && r.c.length === 48) GAME.best.dyno[k] = { hp: Math.round(+r.hp), rpm: Math.round(+r.rpm) || 0, kmh: Math.round(+r.kmh) || 0, c: r.c.map((v) => Math.max(0, Math.round(+v || 0))) }; // 第 77 批：馬力機上次的曲線（每台車一組 48 格）
   GAME.key = typeof d.key === 'string' && /^[0-9]{4}$/.test(d.key) ? d.key : null; // 第 19 批：借車的密碼
   GAME.pop = Object.fromEntries(Object.entries(d.pop && typeof d.pop === 'object' ? d.pop : {}).filter(([k, v]) => CARS[k] && v === 1)); // 跳燈：開著燈的車（以前的存檔沒有＝都關著）
   GAME.home = Number.isInteger(d.home) && d.home >= 0 && d.home < 6 ? d.home : null; // 第 17 批：車庫街你那間（以前的存檔沒有：還沒進過世界＝1 號）
@@ -43852,7 +43925,7 @@ restartBtn.addEventListener('click', () => {
     clearTimeout(restartBtn.t); restartBtn.t = setTimeout(() => { restartBtn.classList.remove('armed'); restartBtn.textContent = '重新開始'; }, 3500); return;
   }
   clearTimeout(restartBtn.t); restartBtn.classList.remove('armed'); restartBtn.textContent = '重新開始';
-  Object.assign(GAME, { money: 0, owned: new Set(['gc8']), parts: {}, tyres: {}, wins: {}, park: null, dmg: {}, guns: gunSave.fresh(), best: { hill: {} } }); room?.setTrophies(0); // 槍也歸零（第 3 批）
+  Object.assign(GAME, { money: 0, owned: new Set(['gc8']), parts: {}, tyres: {}, wins: {}, park: null, dmg: {}, guns: gunSave.fresh(), best: { hill: {}, dyno: {} } }); room?.setTrophies(0); // 槍也歸零（第 3 批）
   if (typeof townReset === 'function') townReset(); // 第 3 批（b3-int）：星星清掉、槍收起來（town.src.js）
   for (const c of Object.values(built)) c.dmg?.repair(); // 撞壞的也歸零
   save(true); renderWallet(); refreshCarBtns();
@@ -44998,7 +45071,9 @@ destBtns.forEach((b) => b.addEventListener('click', () => { if (DRIVE.on) setDes
 // Nick 2026-10-10「按鈕不用總是全部顯示 可以效法目的地選單那樣 點了再列出來 再點一次就收起來」：去哪裡、⋯（聲音、全螢幕、換視角）
 //   平常收起來（garage.css）；停著打開的，開走了（超過 4 m/s）就收；開著的時候打開的，8 秒後收（FOLD：−1 開走就收、> 0 還有幾秒）
 const FOLD = { destsopen: -1, moreopen: -1 };
-const foldStart = () => { const t = drv && DRIVE.on ? drv.telemetry() : null; return t && Math.abs(t.v) > 4 ? 8 : -1; };
+// 第 75 批（Nick 2026-11-08「人在走路的時後…直接回車庫那些選項請收起來」）：走路也一樣收（garage.css 走路的 .dtog、.moretog）；「動起來」＝車超過 4 m/s、人走超過 0.6 m/s（走 1.4、跑 4.5）
+const hudMoving = () => { if (!DRIVE.on) return false; if (walker?.mode === 'walk') return walker.telemetry().speed > 0.6; const t = drv?.telemetry(); return !!t && Math.abs(t.v) > 4; };
+const foldStart = () => (hudMoving() ? 8 : -1);
 function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.destsopen = foldStart(); }
 function moreOpen(on) { if (!on) { sizeOpen(false); tiltOpen(false); lookOpen(false); musOpen(false); } if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
 // 按鈕大小（Nick 2026-10-10）：小 0.8、中 1（原本的）、大 1.15；每支手機自己記（carid.btnsize，不用搬家、不上雲端）
@@ -45102,9 +45177,9 @@ function popToggle() {
 }
 const popStep = (dt) => { if (POP.P) POP.P.step(dt); }; // 只有在轉的時候才改東西
 const popSend = () => (POP.P && POP.P.on && POP.P.mesh.parent && POP.P.mesh.parent === tripS?.body ? 1 : 0); // 送給朋友：燈開著嗎
-function foldStep(dt, v) { // 每一格（開車）
-  if (bodyFlags.destsopen && (FOLD.destsopen < 0 ? Math.abs(v) > 4 : (FOLD.destsopen -= dt) <= 0)) destOpen(false);
-  if (bodyFlags.moreopen && (FOLD.moreopen < 0 ? Math.abs(v) > 4 : (FOLD.moreopen -= dt) <= 0)) moreOpen(false);
+function foldStep(dt, moving) { // 每一格（開車、走路）：moving＝動起來了（hudMoving）
+  if (bodyFlags.destsopen && (FOLD.destsopen < 0 ? moving : (FOLD.destsopen -= dt) <= 0)) destOpen(false);
+  if (bodyFlags.moreopen && (FOLD.moreopen < 0 ? moving : (FOLD.moreopen -= dt) <= 0)) moreOpen(false);
 }
 $('destTog').addEventListener('click', () => destOpen(!bodyFlags.destsopen));
 $('moreTog').addEventListener('click', () => moreOpen(!bodyFlags.moreopen));
@@ -46295,6 +46370,102 @@ function bayAct(t) {
   }
   return null;
 }
+// ---- 第 77 批（Nick 2026-11-08「改車廠裡要有一個馬力機 可以自己把車開上去 車就跟原本一樣快 換檔啥的都一樣 只是在原地 旁邊要有一個螢幕顯示剛的車速跟馬力曲線圖」）：馬力機 ----
+//   阿輝改車廠東邊的門開進去＝馬力機（village.js places.shop.dyno：台子 pad、綁好的位置 pose、螢幕 screen、下來的位置 off）
+//   停在台子上「上馬力機」→ 自己開正、綁在滾筒上（drive.setDyno：車不動、輪子照速度轉、油門／煞車／換檔照舊，方向盤不算）
+//   滾筒（4 支，一個 InstancedMesh，照這台車的兩個軸擺、跟著車速轉）＋兩條槽；牆前面的大螢幕＝canvas 貼圖（3 格畫一次）：車速、轉速、檔位、輪上馬力，
+//   曲線：這一趟每個轉速（分 48 格）跑過最大的輪上馬力（橘）、算出來的扭力（藍）、上次這台車的（灰虛線；存檔 best.dyno[車] = { hp, rpm, kmh, c[48] }）
+//   「下馬力機」→ 放開、記下來、自己倒車退到門口（places.shop.dyno.off）；多 3 個 draw call（螢幕、滾筒、槽）
+const DYNO = { on: false, grp: null, cv: null, ctx: null, tex: null, roll: null, slot: null, ax: [1.3, -1.3], w: 1.6, ang: 0, bins: null, peak: 0, peakX: 0, kmh: 0, fr: 0, drv: null, key: null, dirty: true };
+const DY_N = 48, DY_R = 0.16; // 轉速 0～紅線分幾格；滾筒半徑
+const DYM = new THREE.Matrix4(), DYQ = new THREE.Quaternion(), DYP = new THREE.Vector3(), DYS = new THREE.Vector3(1, 1, 1), DYZ = new THREE.Vector3(0, 0, 1);
+function dynoBuild() {
+  const D = VIL.places.shop.dyno, g = new THREE.Group(); g.name = 'dyno';
+  const cv = document.createElement('canvas'); cv.width = 768; cv.height = 432;
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(D.screen.w, D.screen.h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })); scr.name = 'dyno-screen';
+  scr.position.set(D.screen.x, D.screen.y, D.screen.z); g.add(scr); // 朝 +z（南）：對著台子上的車
+  const rg = new THREE.Group(); rg.position.set(D.pose.x, 0, D.pose.z); rg.rotation.y = D.pose.heading; g.add(rg); // 本地 x＝車頭方向、z＝左右（跟 drive.js 的車一樣）
+  const roll = new THREE.InstancedMesh(new THREE.CylinderGeometry(DY_R, DY_R, 1, 18).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x9aa0a8, metalness: 0.75, roughness: 0.35 }), 4); roll.name = 'dyno-rollers';
+  const slot = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 0.02, 1), new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.9 }), 2); slot.name = 'dyno-slots';
+  roll.frustumCulled = false; slot.frustumCulled = false; rg.add(roll); rg.add(slot);
+  Object.assign(DYNO, { grp: g, cv, ctx: cv.getContext('2d'), tex, roll, slot });
+  dynoPlace([1.3, -1.3], 1.6); TR.scene.add(g); dynoDraw(null);
+}
+function dynoPlace(axles, width) { // 槽、滾筒擺到兩個軸下面（本地 x＝離車子中心多遠）；width＝左右多寬
+  DYNO.ax = axles; DYNO.w = width;
+  for (let i = 0; i < 2; i++) { DYM.compose(DYP.set(axles[i], 0.034, 0), DYQ.identity(), DYS.set(1, 1, width)); DYNO.slot.setMatrixAt(i, DYM); }
+  DYNO.slot.instanceMatrix.needsUpdate = true; dynoSpin(0);
+}
+function dynoSpin(ds) { // 滾筒跟著輪子轉：每個輪子前後各一支（輪胎卡在兩支中間，上面不會穿進輪胎）；車往前＝滾筒上面往後
+  DYNO.ang += ds / DY_R; DYQ.setFromAxisAngle(DYZ, DYNO.ang); DYS.set(1, 1, DYNO.w - 0.1);
+  for (let i = 0; i < 4; i++) { DYM.compose(DYP.set(DYNO.ax[i >> 1] + (i & 1 ? 0.24 : -0.24), -0.08, 0), DYQ, DYS); DYNO.roll.setMatrixAt(i, DYM); }
+  DYNO.roll.instanceMatrix.needsUpdate = true;
+}
+function dynoAct(t) {
+  const D = VIL.places.shop?.dyno; if (!D) return null;
+  if (DYNO.on) return { label: '下馬力機', icon: 'hand', onClick: dynoOff };
+  if (bayLock.dyno) { if (!inBox(D.pad, t.x, t.z, 3)) bayLock.dyno = false; return null; } // 下來以後要先開出去，再開上來才會再問
+  if (!inBox(D.pad, t.x, t.z, 0.5) || Math.abs(t.v) > 6) return null;
+  if (BORROW_K) { bayLock.dyno = true; drv.toast('借來的車不能上馬力機', 2400); return null; }
+  return { label: '上馬力機', icon: 'hand', onClick: dynoOn };
+}
+function dynoOn() {
+  const D = VIL.places.shop.dyno; if (!drv || DYNO.on) return;
+  bayLock.dyno = true; drv.setAction(null);
+  drv.parkAt(D.pose, () => {
+    if (!DRIVE.on || !drv) return;
+    drv.setDyno(D.pose); DYNO.on = true; DYNO.drv = drv; DYNO.bins = new Float32Array(DY_N); DYNO.peak = DYNO.peakX = DYNO.kmh = 0; DYNO.key = cur; DYNO.dirty = true;
+    const hubs = tripS.wheels.map((w) => w.parent.position), xs = [...new Set(hubs.map((p) => +p.x.toFixed(2)))].sort((a, b) => b - a), wd = Math.max(...hubs.map((p) => Math.abs(p.z))); // 這台車的兩個軸在哪裡、多寬（摩托車兩個看不到的輪子位置重疊：Set）
+    dynoPlace(xs.length >= 2 ? [xs[0], xs[xs.length - 1]] : [1.3, -1.3], Math.max(1.0, wd * 2 + 0.5));
+    drv.toast('綁好了！踩油門、換檔，看前面的螢幕', 3200);
+  });
+}
+function dynoOff() {
+  if (!DYNO.on) return; const D = VIL.places.shop.dyno, red = drv?.telemetry().redline || PERF[cur]?.red || 8000;
+  DYNO.on = false; if (drv) drv.setDyno(null);
+  if (DYNO.peak > 20 && !BORROW_K) { GAME.best.dyno = GAME.best.dyno || {}; GAME.best.dyno[cur] = { hp: Math.round(DYNO.peak), rpm: Math.round((DYNO.peakX * red) / 100) * 100, kmh: Math.round(DYNO.kmh), c: Array.from(DYNO.bins, (v) => Math.round(v)) }; save(true); }
+  const peak = DYNO.peak; DYNO.bins = null; DYNO.peak = 0; DYNO.dirty = true; dynoDraw(null); bayLock.dyno = true; // 螢幕換成「上次」的灰線（剛跑的這一趟）
+  if (drv) { drv.setAction(null); drv.parkAt(D.off, () => { if (DRIVE.on && drv) drv.toast(peak > 20 ? `最大 ${Math.round(peak)} 匹（輪上）：記下來了，下次來比` : '下來了', 2800); }); }
+}
+function dynoStep(dt) {
+  if (!DYNO.grp) { if (VIL?.places?.shop?.dyno) dynoBuild(); else return; }
+  if (DYNO.on && (DYNO.drv !== drv || !DRIVE.on)) { DYNO.on = false; DYNO.drv = null; DYNO.dirty = true; } // 沒按「下馬力機」就換車、回車庫了：放開
+  if (!DYNO.on) { if (DYNO.dirty || DYNO.key !== cur) dynoDraw(null); return; }
+  const t = drv.telemetry();
+  if (t.whp > 0) { const i = Math.min(DY_N - 1, Math.max(0, Math.floor(t.whpX * DY_N))); if (t.whp > DYNO.bins[i]) DYNO.bins[i] = t.whp; if (t.whp > DYNO.peak) { DYNO.peak = t.whp; DYNO.peakX = t.whpX; } }
+  if (t.kmh > DYNO.kmh) DYNO.kmh = t.kmh;
+  dynoSpin(t.v * dt);
+  if (++DYNO.fr % 3 === 0) dynoDraw(t);
+}
+function dynoDraw(t) { // 螢幕（768×432）：上面一條（店名、車名）、數字（車速、轉速、檔位、輪上馬力）、曲線圖（橫軸轉速、左邊馬力、右邊扭力）
+  const g = DYNO.ctx, W = 768, H = 432, red = (t && t.redline) || PERF[cur]?.red || 8000, last = GAME.best?.dyno?.[cur], name = CARS[cur]?.btn?.[0] || cur;
+  DYNO.dirty = false; DYNO.key = cur;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#0b0f16'; g.fillRect(0, 0, W, H); g.fillStyle = '#141a24'; g.fillRect(0, 0, W, 54);
+  g.textBaseline = 'middle'; g.fillStyle = '#FF6A1F'; g.font = 'bold 26px sans-serif'; g.textAlign = 'left'; g.fillText('阿輝改車廠 · 馬力機', 20, 27);
+  g.fillStyle = '#e6e9ef'; g.textAlign = 'right'; g.fillText(name, W - 20, 27);
+  const tile = (x, label, val, unit) => { g.textAlign = 'left'; g.fillStyle = '#8b95a5'; g.font = '19px sans-serif'; g.fillText(label, x, 78); g.fillStyle = '#ffffff'; g.font = 'bold 52px sans-serif'; g.fillText(val, x, 118); if (unit) { const w = g.measureText(val).width; g.fillStyle = '#8b95a5'; g.font = '19px sans-serif'; g.fillText(unit, x + w + 8, 128); } };
+  if (t) {
+    const gear = t.stalled ? '熄' : t.mt ? (t.mgear === 0 ? 'N' : t.mgear < 0 ? 'R' : String(t.mgear)) : t.gear < 0 ? 'R' : String(t.gear);
+    tile(20, '車速', String(Math.round(t.kmh)), 'km/h'); tile(240, '轉速', String(Math.round((t.rpm * red) / 100) * 100), 'rpm'); tile(455, '檔位', gear, ''); tile(560, '輪上馬力', String(Math.round(t.whp)), 'hp');
+  } else { g.fillStyle = '#e6e9ef'; g.font = 'bold 36px sans-serif'; g.textAlign = 'left'; g.fillText('把車開上台子，按「上馬力機」', 20, 104); }
+  const x0 = 64, x1 = W - 64, y0 = 398, y1 = 170, ymax = Math.max(50, Math.ceil(Math.max(hpOf(cur) * 0.95, DYNO.peak * 1.05, last ? last.hp * 1.05 : 0) / 50) * 50);
+  const px = (x) => x0 + (x1 - x0) * x, py = (v) => y0 - (y0 - y1) * Math.min(1, v / ymax);
+  let tq = null, tmax = 100;
+  if (DYNO.bins && DYNO.peak > 0) { tq = new Float32Array(DY_N); for (let i = 0; i < DY_N; i++) { const rpm = ((i + 0.5) / DY_N) * red; tq[i] = (DYNO.bins[i] * 745.7) / ((rpm * 2 * Math.PI) / 60); } tmax = Math.max(100, Math.ceil(Math.max(...tq) / 50) * 50); }
+  g.strokeStyle = '#243040'; g.lineWidth = 1; g.fillStyle = '#6b7687'; g.font = '15px sans-serif'; g.textAlign = 'center';
+  for (let r = 0; r <= red; r += 1000) { const x = px(r / red); g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke(); g.fillText(r / 1000 + 'k', x, y0 + 16); }
+  for (let k = 0; k <= 4; k++) { const y = py((ymax * k) / 4); g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); g.textAlign = 'right'; g.fillStyle = '#FF6A1F'; g.fillText(String(Math.round((ymax * k) / 4)), x0 - 8, y); if (tq) { g.textAlign = 'left'; g.fillStyle = '#3ec5ff'; g.fillText(String(Math.round((tmax * k) / 4)), x1 + 8, y); } }
+  g.fillStyle = '#6b7687'; g.textAlign = 'center'; g.fillText('轉速 rpm', (x0 + x1) / 2, H - 10);
+  const line = (arr, col, w, dash, scale) => { g.strokeStyle = col; g.lineWidth = w; g.setLineDash(dash); g.beginPath(); let pen = false; for (let i = 0; i < DY_N; i++) { const v = arr[i] * scale; if (!(v > 0)) { pen = false; continue; } const x = px((i + 0.5) / DY_N), y = py(v); if (pen) g.lineTo(x, y); else g.moveTo(x, y); pen = true; } g.stroke(); g.setLineDash([]); };
+  if (last && last.c) line(last.c, '#6b7280', 3, [9, 7], 1);
+  if (tq) { line(tq, '#3ec5ff', 2.5, [], ymax / tmax); line(DYNO.bins, '#FF6A1F', 4, [], 1); }
+  g.font = 'bold 19px sans-serif'; g.textAlign = 'left';
+  if (DYNO.bins && DYNO.peak > 0) { g.fillStyle = '#FF6A1F'; g.fillText(`最大 ${Math.round(DYNO.peak)} hp @ ${Math.round((DYNO.peakX * red) / 100) * 100} rpm`, x0, y1 - 16); }
+  if (last) { g.fillStyle = '#9aa3b2'; g.textAlign = 'right'; g.fillText(`上次 ${last.hp} hp @ ${last.rpm} rpm`, x1, y1 - 16); }
+  g.font = '14px sans-serif'; g.textAlign = 'left'; g.fillStyle = '#FF6A1F'; g.fillText('— 馬力 hp', x0 + 8, y1 + 14); g.fillStyle = '#3ec5ff'; g.fillText('— 扭力 Nm', x0 + 98, y1 + 14); g.fillStyle = '#9aa3b2'; g.fillText('- - 上次', x0 + 190, y1 + 14);
+  DYNO.tex.needsUpdate = true;
+}
 function panelOpen(el) {
   dvoice?.dispose(); dvoice = null; // 停好熄火（開走的時候再發動：剛裝的排氣、渦輪聽得到）
   document.body.classList.add('shopping'); driveBar.hidden = true; el.hidden = false;
@@ -47043,12 +47214,12 @@ function driveStep(dt) {
       dvoice?.set({ rpm: t.rpm, throttle: t.load, speed: Math.abs(t.v) });
       tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); tripS?.cabin?.userData.setSteer?.(t.steer); // 駕駛座視角看得到轉速表、速度表、方向盤跟著轉
       popStep(dt); // 跳燈：燈蓋在轉
-      foldStep(dt, t.v); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來
+      if (walker?.mode !== 'walk') foldStep(dt, Math.abs(t.v) > 4); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來（走路的時候下面那行管，不要兩邊都扣秒數）
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {
-        drv.setAction(elCallAct(t.x, t.z) || homeAct(t) || orbayAct(t) || bayAct(t)); // HUD 的大按鈕：叫電梯、開鐵捲門（車庫、越野車車庫）、停在這裡改車／看車
+        drv.setAction(elCallAct(t.x, t.z) || homeAct(t) || orbayAct(t) || dynoAct(t) || bayAct(t)); // HUD 的大按鈕：叫電梯、開鐵捲門（車庫、越野車車庫）、上／下馬力機（第 77 批）、停在這裡改車／看車
         const t2 = drv.telemetry(); // 停進改車區（parkAt）、開正停上升降機的時候就不能下車
-        drv.setAction2(!t2.paused && !t2.auto && Math.abs(t2.v) < 1 ? OUT_ACT : null); // 停住了：右邊多一顆「下車」
+        drv.setAction2(!t2.paused && !t2.auto && Math.abs(t2.v) < 1 && !DYNO.on ? OUT_ACT : null); // 停住了：右邊多一顆「下車」（綁在馬力機上不能下車）
         if (!drv.telemetry().paused) trackStep(t);
         if (drv && !drv.telemetry().paused) orStep(t); // 第 4 批：越野車場（展示台的車、起跑區）
         if (drv && !drv.telemetry().paused) ciStep(t); // 賽車場：報名處、比賽中沒有「下車」
@@ -47057,12 +47228,14 @@ function driveStep(dt) {
       if (snooze.track && Math.hypot(t.x - VIL.places.track.zone.x, t.z - VIL.places.track.zone.z) > 30) snooze.track = false;
     }
   }
+  if (DRIVE.on) dynoStep(dt); // 第 77 批：馬力機：螢幕、滾筒（走路也要有螢幕）
   if (DRIVE.on) tripS?.dmg?.update(dt); // 撞壞的：冒煙、掉下來的零件、碎玻璃（下車走路的時候也冒煙）
   if (sleep) sleepStep(dt); // 睡覺：躺著的時候走路的停住了（mode off）；醒來（慢慢亮的時候）就可以走了
   if (doorFade) fadeStep(dt); // 走進門口：黑掉 → 換成房子裡面（樓上、外面）→ 亮起來
   if (indoor) { indoor.t += dt; for (const f of indoor.folks) f.C.update(dt, FOLK_POSE); } // 裡面的人：站著、坐著會動一動
   if (indoor?.kind === 'police') PI.update(dt); else if (indoor?.kind === 'gunshop' && walker) gsStep(dt); // 第 3 批：拘留室的鐵門；槍店的靶、店員、櫃台／靶場的按鈕
   if (DRIVE.on) ldStep(dt); // 第 65 批：門開關、走過門口換裡面／外面、外面的房子走近了蓋好
+  if (walker && walker.mode === 'walk' && DRIVE.on) foldStep(dt, walker.telemetry().speed > 0.6); // 第 75 批：走起來了「去哪裡」「⋯」收起來（房子裡也一樣）
   if (walker && walker.mode === 'walk' && DRIVE.on && !indoor && !APTU.on) { homeWalk(); oTick(walker.telemetry()); }
   else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.kind === 'apt') aptWalk();
   else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.live) walker.setAction(ldAct(walker.telemetry())); // 第 65 批：裡面走到大門：「開門」 // 第 60 批：公寓 4 樓的床、衣櫃 // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）
@@ -49663,7 +49836,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 39; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 40; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
