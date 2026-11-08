@@ -200,3 +200,24 @@ so the 16-pad pool is not eaten. Model choice is a per-seed weighted hash in tow
 monster truck. Test: neihu-test 7s counts `N.street.parked`, 7t builds them at the 環山路 view (6 s), checks model mix,
 positions, visibility, colliders, hiding at 江南街.
 - Test lessons (batch 74): neihu-test 7t must yield between `__dstep` batches (a synchronous loop in one `evaluate` never lets the async `buildLodCar` promises run); `drv.colsNear` takes a half-width, so query 1500 m to see every street car's junk collider. crush-test's "Neihu ≤ 2 floors" check now skips boxes within 95 m of the three streets' ways (`V.neihu.street.roads`, an array: one road has several ways). Final: neihu-test 42 ok, crush-test 55 ok.
+
+## Batch 76 (trial v88, 2026-11-08): every shop and house different
+
+Nick: 「內湖的店每間都要不一樣 房子也不要一樣」. Daytime probe shots showed the cause: ~26 shop names baked into the
+13 shop cells of the 2048² facade atlas (so the same 13 storefronts repeated every block), 7 sign colours, and the
+residential upper styles all near-white.
+- **Shops** (neihu.js `shopAtlas`): a second 2048² atlas just for shop signs: 340 horizontal 192×48 + 84 vertical
+  48×192 plates, names generated from `SHOP_PRE` (40 made-up house names) × `SHOP_KIND` (60 trades) picked with
+  `(i*1021) % 2400` so all 424 differ, a small `SHOP_SUB` subtitle line, 14 colour schemes. The facade cell's sign strip
+  (`shopFront`) is now a plain dark box; the building loop records one `shopPl` entry per shop-fronted wall segment
+  (strip = 0.75–0.976 of the ground-floor height, width ≤ 5.8 m, skipped where an nhstreet lightbox already sits,
+  `b.back`, or the segment is < 2.2 m) and `shopPlate` draws a one-sided quad 1 cm in front of it; plate i uses atlas
+  slot `(i*97) % 340` (coprime → neighbours never share), vertical `vSigns` use `(i*29) % 84`. All plates go in one
+  `Geo` → mesh `nh-shops` with `mats.shop` (map = emissiveMap, intensity 0.25 → look.js SIGNS glows it at night).
+  +1 draw call. nhstreet.js lightboxes: 40 % stay 諧音 `CHAINS` (own atlas), 60 % take `ctx.shopPlate`/`shopUV`
+  (previously 12 `GENERIC` names cycling).
+- **Houses**: light wall styles (0, 1, 7) get a per-building pale tint from `TINTS` (12) × the old 0.88–1.06 shade
+  → 881 distinct colours; 35 % of light buildings swap their upper tile style via `UP_ALT`. `info.shops` reports
+  plates/total/v/names/tints.
+- Numbers (SwiftShader 960×576, 高, 13:00): 港墘站 195 calls / 594k tris (was 194 / 584k), 江南街 174 / 554k,
+  環山路 188 / 505k, 內湖路 234 / 733k, build 642 ms. Test: neihu-test 7u.

@@ -2,7 +2,7 @@
 //   0 轉換程式再跑一次＝一模一樣的 neihu-data.js；1 載入（內湖蓋好了：房子、車站、路名）；2 出門上 GC8、七個目的地有「去內湖」；
 //   3 機器人從車庫照「去內湖」的路線開到港墘站（直線加速賽道南邊的口、聯外道路、山谷、內湖路一段）、地圖資料的出處；
 //   4 沿著內湖路一段往東、港墘路往北、再整條往南開（不卡住、大部分在那條路上）；4b 內湖的車流和走路的人（修 10）；5 房子擋車；6 下車走路（人行道、騎樓、房子擋人）；
-//   7 截圖（路上、駕駛座、空拍、車站、學校、山邊、七個地標）＋ draw call／三角形；7s 第 72 批的街景（江南街、內湖路一段、環山路：機車、停著的車、椰子、路燈、公車亭、紅綠燈、工地、路牌、腳踏車站、燈箱招牌；傍晚「高」的截圖＋draw call）；8 直接回車庫：小村莊放回來、出處、路名收起來）
+//   7 截圖（路上、駕駛座、空拍、車站、學校、山邊、七個地標）＋ draw call／三角形；7s 第 72 批的街景（江南街、內湖路一段、環山路：機車、停著的車、椰子、路燈、公車亭、紅綠燈、工地、路牌、腳踏車站、燈箱招牌；傍晚「高」的截圖＋draw call）；7u 第 76 批：每家店自己的招牌、房子的牆色每棟不一樣；8 直接回車庫：小村莊放回來、出處、路名收起來）
 //   地標（碧湖公園、內湖國小、麗山國中、港墘站、湖光教會、西湖圖書館、大港墘公園）的位置照 OSM、牌子、擋得住；大路的路名牌、HUD 的路名
 import http from 'node:http';
 import fs from 'node:fs';
@@ -714,6 +714,17 @@ check(Object.keys(S7t.kinds).length >= 4 && S7t.cheap >= S7t.built * 0.6 && S7t.
   return { hidden: lots.filter((j) => !j.lod.car.visible && Math.hypot(j.x - me.x, j.z - me.z) > 130).length, shown: lots.filter((j) => j.lod.car.visible).length, farOnes: lots.filter((j) => Math.hypot(j.x - me.x, j.z - me.z) > 130).length }; });
   console.log('7t far', JSON.stringify(far));
   check(far.hidden === far.farOnes && far.farOnes > 0, `drive to 江南街: the ${far.farOnes} bay cars more than 130 m away are hidden (${far.shown} still shown)`); }
+// ==== 7u 第 76 批（Nick「內湖的店每間都要不一樣 房子也不要一樣」）：每家店自己的招牌（一張 2048² 的圖、幾百個不一樣的店名）、房子的牆色每棟不一樣 ====
+const S7u = await p.evaluate(() => { const D = window.__D(), N = D.VIL.neihu, I = D.VIL.info.neihu, sh = I.shops; let m = null; N.group.traverse((o) => { if (o.name === 'nh-shops') m = o; });
+  const uv = m?.geometry.getAttribute('uv'), tris = m ? m.geometry.index ? m.geometry.index.count / 3 : m.geometry.getAttribute('position').count / 3 : 0;
+  // 連續 60 塊招牌（每塊 4 個點＝一面）的左下角 uv：都要不一樣（鄰居不會同一家店）
+  const keys = new Set(); if (uv) for (let i = 0; i < 60 && i * 4 < uv.count; i++) keys.add(uv.getX(i * 4).toFixed(4) + ',' + uv.getY(i * 4).toFixed(4));
+  const map = m?.material.map, em = m?.material.emissiveMap;
+  return { sh, has: !!m, tris, uniq: keys.size, tex: map ? [map.image.width, map.image.height] : null, glow: !!m && em === map && m.material.emissiveIntensity > 0 && m.material.emissiveIntensity < 0.5 }; });
+console.log('7u shops', el(), JSON.stringify(S7u));
+check(S7u.has && S7u.sh && S7u.sh.plates > 3000 && S7u.sh.total > S7u.sh.plates && S7u.sh.names >= 400 && S7u.tex && S7u.tex[0] === 2048 && S7u.tris >= S7u.sh.plates * 2, `shop signs (第 76 批): ${S7u.sh?.plates} storefront plates + ${S7u.sh?.total - S7u.sh?.plates} street lightboxes / vertical signs on one ${S7u.tex?.join('×')} atlas of ${S7u.sh?.names} made-up names (mesh ${S7u.tris} tris)`);
+check(S7u.uniq >= 58 && S7u.glow, `60 neighbouring shop plates use ${S7u.uniq} different signs; the sign material glows at night (emissiveMap = map)`);
+check(S7u.sh && S7u.sh.tints >= 300, `house wall colours: ${S7u.sh?.tints} different tints over the city (was 1 near-white)`);
 await p.evaluate(() => { const D = window.__D(); D.LOOK.set(1); D.LOOK.setHour(18.1); D.LOOK.setRain(0); }); await p.waitForTimeout(1500); // 傍晚、畫質「高」（照片是傍晚拍的）
 for (const [k, [x, z, hd]] of Object.entries(S7s.views)) { perf['st_' + k] = await shotAt(`7s-${k}-dusk`, { x, z, heading: hd }); }
 if (S7s.site) { const [x, z] = S7s.site; perf.st_site = await shotAt('7s-site', null, 'air', { at: [x + 45, 22, z + 45], look: [x, 8, z] }); }

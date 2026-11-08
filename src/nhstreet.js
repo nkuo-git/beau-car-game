@@ -78,7 +78,7 @@ function nhStreetPrep({ N, nx, nz, names }) {
 
 // ==== 第二步：路邊的東西 ====
 function nhStreetBuild(ctx) {
-  const { S, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV, GB } = ctx;
+  const { S, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV, GB, shopPlate, shopUV } = ctx; // shopPlate／shopUV（第 76 批）：neihu.js 每家店自己的招牌
   const info = { scooters: 0, cars: 0, bays: 0, palms: 0, lamps: 0, shelters: 0, signals: 0, uboxes: 0, wallM: 0, rwallM: 0, site: 0, guides: 0, bikes: 0, boxes: 0, hedgeTrees: 0 };
   const spots = { shelters: [], signals: [], guides: [], ubike: [], site: null, views: {}, parked: [], roads: S.roads.map((rd) => ({ key: rd.key, name: rd.name, pts: rd.pts })) }; // roads：三條路每一段 way 的中線（一條路好幾段；測試：哪些房子是照真的樓層蓋高的） // parked（第 74 批）：停車格裡停著的車 [x, z, 車頭方向, 亂數種子]：town.src.js／crush.js 開到附近才做成車店的車（輕量車）
   const WHITE = [255, 255, 255];
@@ -371,9 +371,12 @@ function nhStreetBuild(ctx) {
         const mx = (a[0] + c[0]) / 2, mz = (a[1] + c[1]) / 2, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L, k = S.fronting(mx + ox * 2, mz + oz * 2, 6); if (!k) continue; if (!b.gen && !(b.e[i] >= 1)) continue;
         const gh = b.e.includes(2) ? 4.2 : 3.6, m = Math.max(1, Math.round(L / 6)); let y0 = gh + 0.18, h = 0.92;
         for (let j = 0; j < m; j++) { const t0 = j / m, t1 = (j + 1) / m, cx = a[0] + (c[0] - a[0]) * (t0 + t1) / 2, cz = a[1] + (c[1] - a[1]) * (t0 + t1) / 2, w = L / m - 0.3; if (w < 2) continue;
-          const r = hh(bi, 400 + i * 7 + j), ci = r < 0.4 ? Math.floor(hh(bi, 410 + i * 7 + j) * CHAINS.length) : CHAINS.length + Math.floor(hh(bi, 420 + i * 7 + j) * GENERIC.length), key = 'h' + ci; if (!UV[key]) continue;
+          const r = hh(bi, 400 + i * 7 + j), chain = r < 0.4, key = chain ? 'h' + Math.floor(hh(bi, 410 + i * 7 + j) * CHAINS.length) : null; if (chain && !UV[key]) continue; // 四成諧音連鎖店（這裡的圖）、六成每家店自己的招牌（neihu.js 第 76 批；以前是 12 家 GENERIC 輪流）
           const dup = Math.round(cx / 3) + ',' + Math.round(cz / 3); if (used.has(dup)) continue; used.add(dup);
-          const g = wallG(cx, cz); boxG(g, cx + ox * 0.12, cz + oz * 0.12, w / 2, 0.11, rotOf(c[0] - a[0], c[1] - a[1]), y0, y0 + h, [60, 60, 64], 20, true); plate2(cx + ox * 0.24, y0 + h / 2, cz + oz * 0.24, (c[0] - a[0]) / L, (c[1] - a[1]) / L, w, h, key, false, WHITE, ox, oz); info.boxes++; }
+          const g = wallG(cx, cz); boxG(g, cx + ox * 0.12, cz + oz * 0.12, w / 2, 0.11, rotOf(c[0] - a[0], c[1] - a[1]), y0, y0 + h, [60, 60, 64], 20, true);
+          if (chain || !shopPlate) plate2(cx + ox * 0.24, y0 + h / 2, cz + oz * 0.24, (c[0] - a[0]) / L, (c[1] - a[1]) / L, w, h, key || 'h' + (CHAINS.length + Math.floor(hh(bi, 420 + i * 7 + j) * GENERIC.length)), false, WHITE, ox, oz);
+          else shopPlate(cx + ox * 0.24, y0 + h / 2, cz + oz * 0.24, (c[0] - a[0]) / L, (c[1] - a[1]) / L, w, h, shopUV(), ox, oz);
+          info.boxes++; }
       } });
   }
   // ---- InstancedMesh ----

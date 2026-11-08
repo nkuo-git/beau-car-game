@@ -39,6 +39,11 @@ const rotOf = (ux, uz) => Math.atan2(-uz, ux); // rotation.y：本地 +x 轉到 
 // ---- 店的招牌字（一般的店名，沒有牌子）----
 const NH_VARIETY = true; // 第 28 批（Nick 2026-10-23「內湖的房子都要不一樣」）：每間房子不一樣（12 種一樓住家、側牆、更多店面、女兒牆、水塔、太陽能、加蓋、斜屋頂、遮雨棚、冷氣）；Nick 2026-10-23 看過範例說「照這樣做」（試做頁 v47）
 const SHOPS = ['早餐', '豆漿', '麵店', '便當', '小吃', '水餃', '飲料', '咖啡', '藥局', '診所', '牙醫', '眼鏡', '文具', '書局', '洗衣', '美髮', '水電', '五金', '機車行', '寵物', '花店', '麵包', '鍋貼', '滷味', '火鍋', '補習班', '房屋', '冰店', '牛肉麵', '自助餐'];
+// 第 76 批（Nick 2026-11-08「內湖的店每間都要不一樣 房子也不要一樣」）：每家店自己的名字＝前面的字 × 賣什麼（都是自己編的，沒有真的店）；shopAtlas 一次畫 424 個招牌，店照順序輪著用
+const SHOP_PRE = ['王記', '阿財', '小林', '阿明', '港墘', '內湖', '碧湖', '西湖', '幸福', '好吃', '金好', '永安', '快樂', '美好', '新新', '老王', '阿嬤', '旺旺', '大同', '一品', '老街', '阿婆', '鴻運', '日日', '小馬', '黑熊', '大橘', '綠光', '星星', '月亮', '三好', '來來', '好棒', '元氣', '甜甜', '風車', '小豬', '大象', '長頸鹿', '彩虹'];
+const SHOP_KIND = ['早餐店', '豆漿店', '牛肉麵', '便當', '小吃', '水餃', '飲料店', '咖啡', '藥局', '診所', '牙醫', '眼鏡', '文具', '書局', '洗衣店', '美髮', '水電', '五金', '機車行', '寵物店', '花店', '麵包店', '鍋貼', '滷味', '火鍋', '補習班', '房屋', '冰店', '自助餐', '手機行',
+  '彩券行', '修車廠', '影印', '麵館', '鹹酥雞', '珍珠奶茶', '茶行', '鐘錶', '服飾', '童裝', '鞋店', '電器行', '網咖', '按摩', '美甲', '中醫', '燒烤', '壽司', '披薩', '炸雞', '蛋糕', '茶葉蛋', '玩具店', '腳踏車', '釣具', '水族館', '棉被', '窗簾', '鎖店', '相館'];
+const SHOP_SUB = ['歡迎光臨', '營業中', '外帶', '24小時', '老店', '新開幕', '可外送', '好吃便宜', '每天新鮮', '手工'];
 const BOARD = ['道路施工', '請改道', '內湖', '港墘', '往', '越野車場', '村子', '站'];
 const D = NEIHU_DATA;
 // 聯外道路（Nick 2026-10-05「去內湖的路太遠了 可以大概三四百公尺遠就好」）：越野車場的水泥路（offroad.js 的 ACCESS）在村子南邊的口（x −112、z 94）往南直走，
@@ -48,7 +53,7 @@ const NEIHU_KEEP = []; // race.src.js：賽道旁邊的樹不要種在聯外道�
 const RIDGE_Z = 232; // 越野車場（圍籬 z 196、外面一圈地形到 z 229）南邊：內湖北邊那道矮山脊從這裡起
 // 世界本來的草地（village.js 的 ground、race.src.js 的賽道草地）在哪裡：內湖的山在這上面平的地方壓低一點（草地蓋過去），範圍裡面挖掉（carveWorld）
 const worldGround = (x, z) => (x >= -1450 && x <= -62 && Math.abs(z) <= 880) || (x > -62 && x <= 1300 && Math.abs(z) <= 1150);
-const NEIHU_TEXT = [...new Set([...D.names.map((n) => n[0]).join(''), ...D.stations.map((s) => s[0]).join(''), ...D.nsigns.map((s) => s[3]).join(''), ...SHOPS.join(''), ...BOARD.join(''), ...'地圖資料©OpenStreetMap貢獻者到了', ...NH_STREET_TEXT].filter((ch) => ch.charCodeAt(0) > 0x2e80))].join('');
+const NEIHU_TEXT = [...new Set([...D.names.map((n) => n[0]).join(''), ...D.stations.map((s) => s[0]).join(''), ...D.nsigns.map((s) => s[3]).join(''), ...SHOPS.join(''), ...SHOP_PRE.join(''), ...SHOP_KIND.join(''), ...SHOP_SUB.join(''), ...BOARD.join(''), ...'地圖資料©OpenStreetMap貢獻者到了', ...NH_STREET_TEXT].filter((ch) => ch.charCodeAt(0) > 0x2e80))].join('');
 function neihuFonts(ms = 1500) {
   const f = typeof document !== 'undefined' && document.fonts;
   if (!f || !f.load) return Promise.resolve();
@@ -147,8 +152,8 @@ function facadeAtlas(aniso) {
   const shopFront = (g2, x, w, h, word, R2) => {
     const sc = [['#d6342b', '#fff'], ['#f3c623', '#222'], ['#1f5fae', '#fff'], ['#2a8a4a', '#fff'], ['#ffffff', '#c22'], ['#f28c28', '#fff'], ['#6b3fa0', '#fff']][(R2() * 7) | 0];
     g2.fillStyle = '#5a5650'; g2.fillRect(x, 0, w, h);
-    g2.fillStyle = sc[0]; g2.fillRect(x + 4, 6, w - 8, 56); g2.strokeStyle = 'rgba(0,0,0,0.25)'; g2.lineWidth = 2; g2.strokeRect(x + 5, 7, w - 10, 54);
-    g2.fillStyle = sc[1]; g2.textAlign = 'center'; g2.textBaseline = 'middle'; fitFont(g2, word, w - 22, 40); g2.fillText(word, x + w / 2, 35);
+    // 第 76 批：招牌那一條只畫深色的底框（名字是 shopAtlas 的牌子，每家不一樣，貼在這條的前面）；sc、word 留著只是亂數的順序不變（店面的樣子跟以前一樣）
+    void sc; void word; g2.fillStyle = '#26262b'; g2.fillRect(x + 4, 6, w - 8, 56); g2.strokeStyle = 'rgba(255,255,255,0.1)'; g2.lineWidth = 2; g2.strokeRect(x + 5, 7, w - 10, 54);
     const kind = R2();
     if (kind < 0.4) { g2.fillStyle = '#8e9296'; g2.fillRect(x + 6, 66, w - 12, h - 66); g2.fillStyle = '#a3a7ab'; for (let y = 68; y < h; y += 7) g2.fillRect(x + 6, y, w - 12, 3); g2.fillStyle = '#2a2622'; g2.fillRect(x + 6, h - 60, w - 12, 60); g2.fillStyle = '#e0c48a'; for (let k = 0; k < 6; k++) g2.fillRect(x + 12 + k * 17, h - 50 + (k % 2) * 12, 12, 10); } // 鐵捲門拉一半
     else if (kind < 0.75) { g2.fillStyle = '#c9d8e0'; g2.fillRect(x + 6, 66, w - 12, h - 66); g2.fillStyle = '#6d8a9a'; g2.fillRect(x + w / 2 - 2, 66, 4, h - 66); g2.fillStyle = 'rgba(255,240,200,0.5)'; g2.fillRect(x + 10, 80, w - 20, 40); g2.fillStyle = '#7a5a3a'; for (let k = 0; k < 4; k++) g2.fillRect(x + 14 + k * 26, h - 70, 18, 70); } // 玻璃門、裡面的架子
@@ -226,6 +231,30 @@ function facadeAtlas(aniso) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = aniso;
   const cells = []; for (let i = 0; i < (NH_VARIETY ? 64 : 32); i++) { const [cx, cy] = CELL(i); cells.push(new THREE.Vector4((cx * CS + 4) / W, 1 - (cy * CS + 4 + IN) / H, IN / W, IN / H)); }
   return { tex: t, cells };
+}
+// 第 76 批：每家店的招牌：一張 2048×2048：橫的 192×48 × 340（h0…h339）、直的 48×192 × 84（v0…v83）；名字每個組合只用一次、14 種顏色、三成多一行小字
+const SHOP_NH = 340, SHOP_NV = 84;
+function shopAtlas(aniso) {
+  const W = 2048, H = 2048, [c, g] = cv(W, H), uv = {}, names = [];
+  const SC = [['#d6342b', '#ffffff'], ['#f3c623', '#1a1a1a'], ['#1f5fae', '#ffffff'], ['#2a8a4a', '#ffffff'], ['#ffffff', '#c22020'], ['#f28c28', '#ffffff'], ['#6b3fa0', '#ffffff'], ['#ffffff', '#1f5fae'], ['#1a1a1a', '#f3c623'], ['#e5007d', '#ffffff'], ['#00a39a', '#ffffff'], ['#ffffff', '#2a8a4a'], ['#8a2b1a', '#ffe9b0'], ['#2b2b2b', '#e8c66a']];
+  const NC = SHOP_PRE.length * SHOP_KIND.length, R = rng(20261108);
+  const nameOf = (i) => { const k = (i * 1021) % NC; return SHOP_PRE[k % SHOP_PRE.length] + SHOP_KIND[Math.floor(k / SHOP_PRE.length)]; }; // 1021 跟 2400 互質：2400 個以內不重複
+  const reg = (key, x, y, w, h, draw) => { g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip(); g.translate(x, y); draw(g, w, h); g.restore(); uv[key] = [(x + 1) / W, 1 - (y + h - 1) / H, (x + w - 1) / W, 1 - (y + 1) / H]; };
+  const T = (g2, t, x, y, px, col, max, wt = 900) => { g2.fillStyle = col; g2.textAlign = 'center'; g2.textBaseline = 'middle'; fitFont(g2, t, max, px, wt); g2.fillText(t, x, y); };
+  for (let i = 0; i < SHOP_NH; i++) { const nm = nameOf(i), [bg, fg] = SC[Math.floor(R() * SC.length)], sub = R() < 0.3 ? SHOP_SUB[Math.floor(R() * SHOP_SUB.length)] : null, fr = R(); names.push(nm);
+    reg('h' + i, (i % 10) * 192, Math.floor(i / 10) * 48, 192, 48, (g2, w, h) => {
+      g2.fillStyle = bg; g2.fillRect(0, 0, w, h);
+      if (fr < 0.5) { g2.strokeStyle = fg; g2.lineWidth = 2; g2.strokeRect(3, 3, w - 6, h - 6); } else if (fr < 0.75) { g2.fillStyle = fg; g2.fillRect(0, h - 5, w, 5); } // 邊框／下面一條／什麼都沒有
+      if (sub) { T(g2, nm, w / 2, 18, 26, fg, w - 16); T(g2, sub, w / 2, 38, 12, fg, w - 20, 700); } else T(g2, nm, w / 2, h / 2, 32, fg, w - 14);
+    }); }
+  for (let i = 0; i < SHOP_NV; i++) { const nm = nameOf(SHOP_NH + i), [bg, fg] = SC[Math.floor(R() * SC.length)]; names.push(nm);
+    reg('v' + i, (i % 42) * 48, 1664 + Math.floor(i / 42) * 192, 48, 192, (g2, w, h) => {
+      g2.fillStyle = bg; g2.fillRect(0, 0, w, h); g2.strokeStyle = fg; g2.lineWidth = 2; g2.strokeRect(3, 3, w - 6, h - 6);
+      const ch = [...nm], step = Math.min(36, (h - 14) / ch.length); g2.fillStyle = fg; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.font = `900 ${Math.min(30, step * 0.86)}px ${SANS}`;
+      ch.forEach((k, j) => g2.fillText(k, w / 2, 7 + step * (j + 0.5) + (h - 14 - step * ch.length) / 2));
+    }); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = aniso;
+  return { tex: t, uv, names };
 }
 // 路名牌、直立招牌、車站、公園學校的牌子、施工欄杆：一張 1024×1536
 function signAtlas(aniso, names, boards, lms) {
@@ -348,6 +377,7 @@ function buildNeihu(V, opt = {}) {
   const LMS = [['bihu', 'stone', 'Bihu Park'], ['nhps', 'white', ''], ['lishan', 'red', ''], ['dgq', 'green', 'Dagangqian Park'], ['lib', 'grey', ''], ['church', 'frieze', ''], ['mrt', 'gold', 'GANGQIAN']]
     .filter(([k]) => N.lm[k]).map(([k, st, en]) => ({ k, st, en, nm: N.lm[k].nm }));
   const SA = signAtlas(aniso, D.names, boards, LMS);
+  const SH = shopAtlas(aniso); // 第 76 批：每家店的招牌
   const lmUV = (k) => SA.uv['L' + LMS.findIndex((m) => m.k === k)];
   const bIdx = (pred) => boards.findIndex(pred);
   const tAsph = detailTex(11, '#4f5156', ['#45474c', '#5b5d62', '#3e4044', '#66686c'], 5000, 256, aniso, 1.6), tPave = paveTex(aniso), tGround = detailTex(12, '#bdbab2', ['#b0ada5', '#c8c5bd', '#a9a69e'], 3000, 128, aniso, 2.5);
@@ -355,6 +385,7 @@ function buildNeihu(V, opt = {}) {
   const mats = {
     wall: std({ map: FA.tex, vertexColors: true, roughness: 0.85 }),
     sign: std({ map: SA.tex, vertexColors: true, emissive: 0xffffff, emissiveMap: SA.tex, emissiveIntensity: 0.25, roughness: 0.6 }),
+    shop: std({ map: SH.tex, vertexColors: true, emissive: 0xffffff, emissiveMap: SH.tex, emissiveIntensity: 0.25, roughness: 0.6 }), // 第 76 批：店的招牌（晚上跟 sign 一樣加亮：look.js 看 emissiveMap＝map）
     ground: std({ map: tGround, vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2 }),
     area: std({ map: tGround, vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
     walk: std({ map: tPave, vertexColors: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }),
@@ -405,6 +436,10 @@ function buildNeihu(V, opt = {}) {
 
   // 第 28 批：房子的小東西（遮雨棚、水塔、太陽能、加蓋、斜屋頂、女兒牆）
   const SHOP_CELLS = [12, 13, 14, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59];
+  // 第 76 批：房子的牆色每棟不一樣：淺色的樓（米、白、舊灰）乘上 12 種淡淡的顏色；有顏色的（紅磚、粉紅、淺綠）只有深淺不一樣
+  const LIGHT_ST = new Set([0, 1, 7]), TINTS = [[255, 255, 255], [252, 242, 224], [230, 234, 238], [248, 230, 226], [228, 238, 228], [228, 232, 244], [248, 240, 214], [238, 228, 216], [252, 234, 222], [234, 230, 242], [222, 222, 218], [240, 240, 234]];
+  const UP_ALT = [1, 6, 10, 4, 0]; // 淺色的樓三成五換別種窗戶的排法（白磁磚、米色藍窗帶、灰直條、灰藍）
+  const shopPl = []; let shopN = 0, vN = 0; const tintSet = new Set(); // 第 76 批：店的招牌（蓋完房子再畫進 shg）、幾種牆色
   const ROOF_COL = [[235, 233, 228], [150, 172, 150], [160, 170, 182]];
   const AWN = [[46, 125, 70], [196, 58, 48], [40, 92, 170], [226, 178, 40], [230, 230, 226], [120, 72, 40]];
   function quadUp(g, P, uv, cell, c) { // 四邊形，朝上的那面看得到（順序反了就倒過來）
@@ -481,8 +516,9 @@ function buildNeihu(V, opt = {}) {
     let bf = Math.min(b.f, NH_MAX_FL), top = VAR ? (b.e.includes(2) ? gh : gh * (0.94 + 0.16 * hh(bi, 71))) : Math.min(top0, gh + (NH_MAX_FL - 1) * 3.2); // 第 10 批（Nick「所有房子變矮」）：最多 2 層樓高；第 28 批：高高低低一點
     const ov = NS.floorsOf(b, bi, cx, cz); if (ov) { bf = ov.fl; top = gh + (bf - 1) * 3.2 + (hh(bi, 71) - 0.5) * 0.3; } // 第 72 批：三條街邊的房子照真的樓層（照片裡 4～15 樓）
     const one = !ov && b.f <= 1 && b.h <= 2; // 一層樓的房子：牆一次到屋頂
-    const st = ov && ov.st != null ? ov.st : b.st, base = VAR ? WHITE : STY_COL[st] || WHITE, tint = VAR ? 0.92 + hh(bi, 2) * 0.12 : 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, VAR ? 0.86 : 0.78), gcell = GROUND_OF[st] ?? 15;
+    const st = ov && ov.st != null ? ov.st : b.st, base = VAR ? (LIGHT_ST.has(st) ? TINTS[Math.floor(hh(bi, 72) * TINTS.length)] : WHITE) : STY_COL[st] || WHITE, tint = VAR ? 0.88 + hh(bi, 2) * 0.18 : 0.9 + hh(bi, 2) * 0.16, col = shade(base, tint), low = shade(col, VAR ? 0.86 : 0.78), gcell = GROUND_OF[st] ?? 15;
     const fam = Math.floor(hh(bi, 70) * 12), fCell = 32 + fam, sCell = fam < 6 ? 26 + fam : 38 + fam, anyE = b.e.some((x) => x); // 第 28 批：12 種一樓住家（前面）＋同一種的側牆
+    const upSt = VAR && LIGHT_ST.has(st) && hh(bi, 73) < 0.35 ? UP_ALT[Math.floor(hh(bi, 74) * UP_ALT.length)] : st; if (VAR) tintSet.add(col.join()); // 第 76 批
     let faceR = null; // 第 28 批：每一面牆往外 3 公尺是不是路（人行道）；都不是的話，最靠近路的那一面（8 公尺內）
     if (VAR) { faceR = []; let bestI = -1, bestD = Infinity;
       for (let i = 0; i < n; i++) { const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); let f = false;
@@ -495,12 +531,16 @@ function buildNeihu(V, opt = {}) {
       const ca = C[i], cc = C[(i + 1) % n], Lc = Math.hypot(cc[0] - ca[0], cc[1] - ca[1]), e = b.e[i] || 0;
       const front = e > 0 || (faceR ? faceR[i] : b.gen ? i === 0 : !anyE);
       const shopCell = VAR ? SHOP_CELLS[Math.floor(hh(bi, 10 + i) * SHOP_CELLS.length)] : 12 + Math.floor(hh(bi, 10 + i) * 3), wcell = e ? shopCell : !VAR ? gcell : front ? fCell : sCell;
+      // 第 76 批：店的招牌（每家一個，照順序輪 340 種）貼在店面貼圖那條深色的底框前面（貼圖的 6～62 px → 牆高的 0.75～0.976）；三條街臨路的一樓 nhstreet.js 會掛燈箱，那裡不貼
+      const lbox = !!(VAR && e && !b.lm && !b.back && !b.site && L >= 3.5 && !(b.gen && i !== 0) && (b.gen || e >= 1) && NS.fronting((a[0] + c[0]) / 2 + (c[1] - a[1]) / L * 2, (a[1] + c[1]) / 2 - (c[0] - a[0]) / L * 2, 6));
+      const shopAt = (x0, z0, x1, z1, y1) => { if (!VAR || !e || lbox || b.back) return; const Lw = Math.hypot(x1 - x0, z1 - z0); if (Lw < 2.2) return; const ux = (x1 - x0) / Lw, uz = (z1 - z0) / Lw;
+        shopPl.push({ x: (x0 + x1) / 2 + uz * 0.05, z: (z0 + z1) / 2 - ux * 0.05, ux, uz, w: Math.min(Lw - 0.25, 5.8), y0: y1 * 0.75, y1: y1 * 0.976, fx: uz, fz: -ux, s: shopN++ }); };
       // 第 28 批：長的店面、長的一排住家，每 6 公尺換一家（不然整排都是同一家店）
       const gWall = (x0, z0, x1, z1, y1, Lw, u1) => {
-        if (!VAR || !(e || front) || Lw < 7) { wallQ(g, x0, z0, x1, z1, 0, y1, 0, u1, 0, 1, wcell, low, col); return; }
+        if (!VAR || !(e || front) || Lw < 7) { wallQ(g, x0, z0, x1, z1, 0, y1, 0, u1, 0, 1, wcell, low, col); shopAt(x0, z0, x1, z1, y1); return; }
         const k = Math.max(1, Math.round(Lw / 6));
         for (let j = 0; j < k; j++) { const t0 = j / k, t1 = (j + 1) / k, r = hh(bi, 100 + i * 17 + j), cl = e ? SHOP_CELLS[Math.floor(r * SHOP_CELLS.length)] : r < 0.5 ? fCell : 32 + Math.floor(hh(bi, 140 + i * 17 + j) * 12);
-          wallQ(g, x0 + (x1 - x0) * t0, z0 + (z1 - z0) * t0, x0 + (x1 - x0) * t1, z0 + (z1 - z0) * t1, 0, y1, 0, 1, 0, 1, cl, low, col); }
+          wallQ(g, x0 + (x1 - x0) * t0, z0 + (z1 - z0) * t0, x0 + (x1 - x0) * t1, z0 + (z1 - z0) * t1, 0, y1, 0, 1, 0, 1, cl, low, col); shopAt(x0 + (x1 - x0) * t0, z0 + (z1 - z0) * t0, x0 + (x1 - x0) * t1, z0 + (z1 - z0) * t1, y1); }
       };
       if (one) gWall(a[0], a[1], c[0], c[1], top, L, L / 6);
       else {
@@ -508,7 +548,7 @@ function buildNeihu(V, opt = {}) {
         // 一樓（騎樓的話退到裡面那條線）
         gWall(ca[0], ca[1], cc[0], cc[1], gw, Lc, Math.max(1, Math.round(Lc / 6)));
         // 樓上
-        if (top > gw + 0.01) wallQ(g, a[0], a[1], c[0], c[1], gw, top, 0, Math.max(1, Math.round(L / 6)), 0, (top - gw) / 6.4, LISHAN && inPoly(LISHAN, cx, cz) ? 24 : st, col, col);
+        if (top > gw + 0.01) wallQ(g, a[0], a[1], c[0], c[1], gw, top, 0, Math.max(1, Math.round(L / 6)), 0, (top - gw) / 6.4, LISHAN && inPoly(LISHAN, cx, cz) ? 24 : upSt, col, col);
       }
       if (VAR) { // 第 28 批：店門口的遮雨棚、牆上的冷氣
         const ux = (c[0] - a[0]) / L, uz = (c[1] - a[1]) / L, ox = uz, oz = -ux; // 往外
@@ -528,7 +568,7 @@ function buildNeihu(V, opt = {}) {
       }
       // 一樓臨路的店：樓上掛直立招牌（往外伸）
       if (e && bf >= 3 && L >= 6 && !b.back && vSigns.length < 2200 && hh(bi, 30 + i) < (e === 2 ? 0.95 : 0.45)) {
-        const m = Math.min(3, Math.floor(L / 7)); for (let j = 0; j < m; j++) { const t = (j + 0.5) / m, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L; vSigns.push({ x: a[0] + (c[0] - a[0]) * t, z: a[1] + (c[1] - a[1]) * t, ox, oz, y0: gh + 0.4, h: Math.min(top - gh - 0.6, 3 + hh(bi, 50 + j) * 2.6), s: Math.floor(hh(bi, 60 + i * 3 + j) * 16) }); }
+        const m = Math.min(3, Math.floor(L / 7)); for (let j = 0; j < m; j++) { const t = (j + 0.5) / m, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L; vSigns.push({ x: a[0] + (c[0] - a[0]) * t, z: a[1] + (c[1] - a[1]) * t, ox, oz, y0: gh + 0.4, h: Math.min(top - gh - 0.6, 3 + hh(bi, 50 + j) * 2.6), s: vN++ }); } // 第 76 批：直立招牌也照順序輪（shopAtlas 的 v0…v83）
       }
     }
     // 屋頂（第 28 批：灰的、綠的防水漆、藍灰的）
@@ -896,8 +936,17 @@ function buildNeihu(V, opt = {}) {
   }
 
   // ==== 牌子：路名牌（柱子＋兩面）、公園學校的牌子、車站的站名、往內湖的指示牌、施工欄杆、直立招牌 ====
-  const sg = new Geo(false);
-  const sq = (P, uv, c = WHITE) => { sg.grow(4, 6); const k = sg.v; for (let i = 0; i < 4; i++) sg.vert(P[i][0], P[i][1], P[i][2], uv[i][0], uv[i][1], c[0], c[1], c[2], 0); sg.tri(k, k + 1, k + 2); sg.tri(k, k + 2, k + 3); };
+  const sg = new Geo(false), shg = new Geo(false); // shg：第 76 批 店的招牌（材質 shop）
+  const sq = (P, uv, c = WHITE, G = sg) => { G.grow(4, 6); const k = G.v; for (let i = 0; i < 4; i++) G.vert(P[i][0], P[i][1], P[i][2], uv[i][0], uv[i][1], c[0], c[1], c[2], 0); G.tri(k, k + 1, k + 2); G.tri(k, k + 2, k + 3); };
+  // 第 76 批：店的招牌（中心 x y z，沿 (ux, uz) 寬 w、高 h）；(fx, fz) 給了＝只畫朝那邊的一面，沒給＝兩面
+  const shopPlate = (x, y, z, ux, uz, w, h, uv, fx, fz) => {
+    let a = [x - ux * w / 2, z - uz * w / 2], b = [x + ux * w / 2, z + uz * w / 2]; const [u0, v0, u1, v1] = uv, one = fx != null;
+    if (one && -uz * fx + ux * fz < 0) [a, b] = [b, a];
+    sq([[a[0], y - h / 2, a[1]], [b[0], y - h / 2, b[1]], [b[0], y + h / 2, b[1]], [a[0], y + h / 2, a[1]]], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], WHITE, shg);
+    if (!one) sq([[b[0], y - h / 2, b[1]], [a[0], y - h / 2, a[1]], [a[0], y + h / 2, a[1]], [b[0], y + h / 2, b[1]]], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], WHITE, shg);
+  };
+  const shopUV = (i) => SH.uv['h' + ((i * 97) % SHOP_NH)]; // 第 i 家店用哪一塊招牌：97 跟 340 互質＝340 家以內不重複
+  for (const s of shopPl) shopPlate(s.x, (s.y0 + s.y1) / 2, s.z, s.ux, s.uz, s.w, s.y1 - s.y0, shopUV(s.s), s.fx, s.fz);
   const plate = (x, y, z, ux, uz, w, h, uv, two = true) => { // 直立的牌子（中心 x y z，沿 (ux, uz) 寬 w、高 h），兩面都看得到字
     const a = [x - ux * w / 2, z - uz * w / 2], b = [x + ux * w / 2, z + uz * w / 2], [u0, v0, u1, v1] = uv;
     sq([[a[0], y - h / 2, a[1]], [b[0], y - h / 2, b[1]], [b[0], y + h / 2, b[1]], [a[0], y + h / 2, a[1]]], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]]);
@@ -983,8 +1032,8 @@ function buildNeihu(V, opt = {}) {
     colliders.push({ t: 'box', x: bar.p[0], z: bar.p[1], hx: w / 2 + 0.5, hz: 0.35, rot: rotOf(vx, vz), h: 1.2, noCrush: true }); // 第 9 批：路封起來的欄杆（範圍的邊）不輾
   }
   for (const s of vSigns) { // 直立招牌：從牆往外伸 0.9 公尺、兩面都有字
-    const uv = SA.uv['v' + s.s]; if (!uv) continue; const x = s.x + s.ox * 0.55, z = s.z + s.oz * 0.55, ymid = s.y0 + s.h / 2;
-    plate(x, ymid, z, s.ox, s.oz, 0.9, s.h, uv, true);
+    const uv = SH.uv['v' + ((s.s * 29) % SHOP_NV)]; if (!uv) continue; const x = s.x + s.ox * 0.55, z = s.z + s.oz * 0.55, ymid = s.y0 + s.h / 2; // 第 76 批：shopAtlas 的直立招牌（29 跟 84 互質）
+    shopPlate(x, ymid, z, s.ox, s.oz, 0.9, s.h, uv);
   }
   // ==== 七個地標（Nick 2026-10-05「我只需要下面幾個跟實景一樣就好（位置也要正確喔）」）====
   //   形狀、位置都是 OSM 的（neihu-conv.mjs 的 lm）；外觀照 Nick 給的參考照片（/mnt/project-files/tune-game/neihu-photos）手工做，照片沒有進遊戲
@@ -1215,8 +1264,9 @@ function buildNeihu(V, opt = {}) {
   let nSkipT = 0;
   for (const [x, z, s] of N.trees) { if (NS.noTree(x, z)) { nSkipT++; continue; } addTree(x, 0, z, s); if (inBox(x, z)) { const c = { t: 'circle', x, z, r: 0.25, h: 3, tk: Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT), ti: treeTiles.get(Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT)).length / 4 - 1 }; colliders.push(c); treeCols.push(c); } }
   // 第 72 批：路邊的東西（機車、停著的車、大王椰子、路燈、公車亭、紅綠燈、變電箱、圍牆、擋土牆、工地、路牌、腳踏車站、燈箱招牌）；要在 signMesh 做出來以前（工地的「施工」牌用 plate）
-  const NSB = nhStreetBuild({ S: NS, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV: SA.uv['b' + bIdx((b) => b.t === 'work')], GB, roadAt, AX, AZ, names: D.names, plate });
+  const NSB = nhStreetBuild({ S: NS, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV: SA.uv['b' + bIdx((b) => b.t === 'work')], GB, roadAt, AX, AZ, names: D.names, plate, shopPlate, shopUV: () => shopUV(shopN++) }); // 第 76 批：三條街的燈箱六成用每家店自己的招牌
   const signMesh = new THREE.Mesh(sg.geometry(), mats.sign); signMesh.name = 'nh-signs'; signMesh.matrixAutoUpdate = false;
+  const shopMesh = new THREE.Mesh(shg.geometry(), mats.shop); shopMesh.name = 'nh-shops'; shopMesh.matrixAutoUpdate = false; // 第 76 批：店的招牌一個 mesh（跟路名牌一樣）
   { // 山上的樹（遠遠看的）：範圍外面一圈，山腳 4 公尺以上；近的密一點
     const R3 = rng(8); let n = 0;
     for (let tries = 0; n < 2600 && tries < 40000; tries++) {
@@ -1244,7 +1294,7 @@ function buildNeihu(V, opt = {}) {
     m.userData.c = [b.cx, b.cz]; m.userData.r = b.size * 0.75; m.userData.far = b.mat === 'paint' ? 420 : b.mat === 'sign2' || b.mat === 'sign3' ? 700 : b.mat === 'wall' ? 1300 : 1500;
     group.add(m); tileMeshes.push(m); tris += b.g.ni / 3; meshes++;
   }
-  group.add(hillMesh, signMesh); meshes += 2; tris += hillTris + sg.ni / 3;
+  group.add(hillMesh, signMesh, shopMesh); meshes += 3; tris += hillTris + sg.ni / 3 + shg.ni / 3;
   for (const m of treeMeshes) { group.add(m); meshes++; tris += m.count * (m.geometry.index.count / 3); }
   if (V.group) V.group.add(group);
 
@@ -1439,7 +1489,7 @@ function buildNeihu(V, opt = {}) {
   }
   update.x = 0; update.y = 0; update.z = 0;
 
-  const info = { meshes, tris: Math.round(tris), colliders: colliders.length, bigSigns: bigSigns.length, buildings: nb, arcades: nArc, sheds: nShed, shopSigns: vSigns.length, trees: N.trees.length - nSkipT, street: NSB.info, fixArc: nFix, ms: 0, at: [AX, AZ], box: [BX0, BZ0, BX1, BZ1] };
+  const info = { meshes, tris: Math.round(tris), colliders: colliders.length, bigSigns: bigSigns.length, buildings: nb, arcades: nArc, sheds: nShed, shopSigns: vSigns.length, shops: { plates: shopPl.length, total: shopN, v: vSigns.length, names: SH.names.length, tints: tintSet.size }, trees: N.trees.length - nSkipT, street: NSB.info, fixArc: nFix, ms: 0, at: [AX, AZ], box: [BX0, BZ0, BX1, BZ1] };
   if (V.info) V.info.neihu = info;
   if (NSB.poles.length) V.poles = (V.poles || []).concat(NSB.poles); // 第 72 批：內湖的路燈（look.js 晚上最近的幾支真的有光）
   const P = {
