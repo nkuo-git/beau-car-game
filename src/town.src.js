@@ -516,7 +516,9 @@ destBtns.forEach((b) => b.addEventListener('click', () => { if (DRIVE.on) setDes
 // Nick 2026-10-10「按鈕不用總是全部顯示 可以效法目的地選單那樣 點了再列出來 再點一次就收起來」：去哪裡、⋯（聲音、全螢幕、換視角）
 //   平常收起來（garage.css）；停著打開的，開走了（超過 4 m/s）就收；開著的時候打開的，8 秒後收（FOLD：−1 開走就收、> 0 還有幾秒）
 const FOLD = { destsopen: -1, moreopen: -1 };
-const foldStart = () => { const t = drv && DRIVE.on ? drv.telemetry() : null; return t && Math.abs(t.v) > 4 ? 8 : -1; };
+// 第 75 批（Nick 2026-11-08「人在走路的時後…直接回車庫那些選項請收起來」）：走路也一樣收（garage.css 走路的 .dtog、.moretog）；「動起來」＝車超過 4 m/s、人走超過 0.6 m/s（走 1.4、跑 4.5）
+const hudMoving = () => { if (!DRIVE.on) return false; if (walker?.mode === 'walk') return walker.telemetry().speed > 0.6; const t = drv?.telemetry(); return !!t && Math.abs(t.v) > 4; };
+const foldStart = () => (hudMoving() ? 8 : -1);
 function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.destsopen = foldStart(); }
 function moreOpen(on) { if (!on) { sizeOpen(false); tiltOpen(false); lookOpen(false); musOpen(false); } if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
 // 按鈕大小（Nick 2026-10-10）：小 0.8、中 1（原本的）、大 1.15；每支手機自己記（carid.btnsize，不用搬家、不上雲端）
@@ -620,9 +622,9 @@ function popToggle() {
 }
 const popStep = (dt) => { if (POP.P) POP.P.step(dt); }; // 只有在轉的時候才改東西
 const popSend = () => (POP.P && POP.P.on && POP.P.mesh.parent && POP.P.mesh.parent === tripS?.body ? 1 : 0); // 送給朋友：燈開著嗎
-function foldStep(dt, v) { // 每一格（開車）
-  if (bodyFlags.destsopen && (FOLD.destsopen < 0 ? Math.abs(v) > 4 : (FOLD.destsopen -= dt) <= 0)) destOpen(false);
-  if (bodyFlags.moreopen && (FOLD.moreopen < 0 ? Math.abs(v) > 4 : (FOLD.moreopen -= dt) <= 0)) moreOpen(false);
+function foldStep(dt, moving) { // 每一格（開車、走路）：moving＝動起來了（hudMoving）
+  if (bodyFlags.destsopen && (FOLD.destsopen < 0 ? moving : (FOLD.destsopen -= dt) <= 0)) destOpen(false);
+  if (bodyFlags.moreopen && (FOLD.moreopen < 0 ? moving : (FOLD.moreopen -= dt) <= 0)) moreOpen(false);
 }
 $('destTog').addEventListener('click', () => destOpen(!bodyFlags.destsopen));
 $('moreTog').addEventListener('click', () => moreOpen(!bodyFlags.moreopen));
@@ -2561,7 +2563,7 @@ function driveStep(dt) {
       dvoice?.set({ rpm: t.rpm, throttle: t.load, speed: Math.abs(t.v) });
       tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); tripS?.cabin?.userData.setSteer?.(t.steer); // 駕駛座視角看得到轉速表、速度表、方向盤跟著轉
       popStep(dt); // 跳燈：燈蓋在轉
-      foldStep(dt, t.v); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來
+      if (walker?.mode !== 'walk') foldStep(dt, Math.abs(t.v) > 4); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來（走路的時候下面那行管，不要兩邊都扣秒數）
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {
         drv.setAction(elCallAct(t.x, t.z) || homeAct(t) || orbayAct(t) || bayAct(t)); // HUD 的大按鈕：叫電梯、開鐵捲門（車庫、越野車車庫）、停在這裡改車／看車
@@ -2581,6 +2583,7 @@ function driveStep(dt) {
   if (indoor) { indoor.t += dt; for (const f of indoor.folks) f.C.update(dt, FOLK_POSE); } // 裡面的人：站著、坐著會動一動
   if (indoor?.kind === 'police') PI.update(dt); else if (indoor?.kind === 'gunshop' && walker) gsStep(dt); // 第 3 批：拘留室的鐵門；槍店的靶、店員、櫃台／靶場的按鈕
   if (DRIVE.on) ldStep(dt); // 第 65 批：門開關、走過門口換裡面／外面、外面的房子走近了蓋好
+  if (walker && walker.mode === 'walk' && DRIVE.on) foldStep(dt, walker.telemetry().speed > 0.6); // 第 75 批：走起來了「去哪裡」「⋯」收起來（房子裡也一樣）
   if (walker && walker.mode === 'walk' && DRIVE.on && !indoor && !APTU.on) { homeWalk(); oTick(walker.telemetry()); }
   else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.kind === 'apt') aptWalk();
   else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.live) walker.setAction(ldAct(walker.telemetry())); // 第 65 批：裡面走到大門：「開門」 // 第 60 批：公寓 4 樓的床、衣櫃 // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）

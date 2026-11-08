@@ -492,6 +492,41 @@ check(fullView(fi) && fi.walking && fi.pressed === 'true' && fi.pref === null &&
 check(!clash, `on foot: joystick, destination chip, map, eye, destination buttons, 直接回車庫, sound and fullscreen buttons all on screen, none overlapping (${clash || 'ok'})`);
 clash = await sizeSweep();
 check(!clash, `on foot on other screens (360×800, 412×915, landscape 915×412 and 800×360, 1280×720): all on screen, none overlapping (${clash || 'ok'})`);
+// 第 75 批（Nick 2026-11-08「人在走路的時後那個什麼直接回車庫那些選項請收起來不要擋視線」）：走路全螢幕也跟開車一樣只剩「📍 去哪裡 ▾」（搖桿上面）＋「⋯」（小地圖下面）；
+//   按了打開（不重疊）、選了地方收、走起來收（走著的時候打開＝8 秒後收）；聲音、全螢幕、換視角收在「⋯」裡；橫拿也一樣
+const wfState = () => p.evaluate(() => { const H = window.__H, B = document.body.classList, w = window.__D().walker.telemetry();
+  return { tog: H.visible('#destTog'), dests: H.visible('#dests button[data-d="shop"]'), home: H.visible('#driveHome'), open: B.contains('destsopen'), more: H.visible('#moreTog'), mopen: B.contains('moreopen'),
+    snd: H.visible('#dSndBtn'), fs: H.visible('#fsBtn'), cam: H.visible('#stage .wk-cam'), aa: H.visible('#sizeTog'), dest: w.dest ?? window.__D().drv?.telemetry().dest, speed: +w.speed.toFixed(2), walking: B.contains('walking') }; });
+await p.evaluate(() => window.__D().setDest(null)); // 先清掉目的地（setDest 也會把「去哪裡」收起來）
+const wf0 = await wfState(), wfc0 = await hudClash();
+await p.click('#destTog'); await p.waitForTimeout(80);
+const wf1 = await wfState(), wfc1 = await hudClash();
+await p.click('#dests button[data-d="shop"]'); await p.waitForTimeout(80);
+const wf2 = await wfState();
+await p.click('#moreTog'); await p.waitForTimeout(80);
+const wf3 = await wfState(), wfc3 = await hudClash();
+await p.evaluate(() => { document.getElementById('destTog').click(); }); await p.waitForTimeout(80);
+const wf4 = await wfState(); // 「去哪裡」和「⋯」可以同時開著
+// 走起來（繞著圓台走 1.5 秒：不會撞到牆、車）→ 兩個都收；走著的時候再打開「⋯」→ 8 秒後收
+const wf5 = await p.evaluate(() => { const D = window.__D(), H = window.__H, w = D.walker, c = H.gw(0, 0), t0 = w.telemetry();
+  const go = (n) => { const t = w.telemetry(), a = Math.atan2(-(c.z - t.z), c.x - t.x) + Math.PI / 2 - t.camYaw; w.setInput({ x: -Math.sin(a) * 0.9, y: Math.cos(a) * 0.9 }); H.step(n); };
+  go(90); const B = document.body.classList, a = { open: B.contains('destsopen'), mopen: B.contains('moreopen'), speed: +w.telemetry().speed.toFixed(2) };
+  document.getElementById('moreTog').click(); go(7 * 60); const b = { mopen: B.contains('moreopen'), speed: +w.telemetry().speed.toFixed(2) }; go(90); const c2 = { mopen: B.contains('moreopen') };
+  w.setInput({ x: 0, y: 0 }); H.step(20); w.setInput(null); w.teleport({ x: t0.x, z: t0.z, heading: t0.heading }); H.step(5); return { a, b, c: c2 }; });
+console.log('  on foot fold:', JSON.stringify({ wf0, wf1, wf2, wf3, wf4, wf5 }), '| clash', wfc0 || '-', '|', wfc1 || '-', '|', wfc3 || '-');
+check(wf0.walking && wf0.tog && wf0.more && !wf0.open && !wf0.mopen && !wf0.dests && !wf0.home && !wf0.snd && !wf0.fs && !wf0.cam && !wf0.aa && !wfc0, `on foot (fullscreen): only 📍 去哪裡 ▾ and ⋯ show; the 8 places, 直接回車庫, sound, fullscreen and eye are folded away (${wfc0 || 'ok'})`);
+check(wf1.open && wf1.dests && wf1.home && !wf1.snd && !wfc1 && wf2.dest === 'shop' && !wf2.open && !wf2.dests, `tap 📍 去哪裡: the places and 直接回車庫 unfold without overlapping (${wfc1 || 'ok'}); picking 去改車廠 sets the destination and folds them again`);
+check(wf3.mopen && wf3.snd && wf3.fs && wf3.cam && !wf3.aa && !wfc3 && wf4.open && wf4.mopen, `tap ⋯: sound, fullscreen and eye unfold beside it (no Aa/🎮/✨ on foot), none overlapping (${wfc3 || 'ok'}); 去哪裡 can be open at the same time`);
+check(wf5.a.speed > 0.6 && !wf5.a.open && !wf5.a.mopen && wf5.b.mopen && wf5.b.speed > 0.6 && !wf5.c.mopen, `start walking (${wf5.a.speed} m/s): both fold at once; opened while walking, ⋯ stays 7 s and folds by 8 s`);
+await p.setViewportSize({ width: 800, height: 360 }); await p.waitForTimeout(250); await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+const wl0 = await wfState(), wlc0 = await hudClash(); await p.click('#destTog'); await p.waitForTimeout(80); const wl1 = await wfState(), wlc1 = await hudClash();
+await p.click('#moreTog'); await p.waitForTimeout(80); const wl2 = await wfState(), wlc2 = await hudClash(); await drawAndShot('2-foot-fold-land');
+await p.evaluate(() => { document.getElementById('destTog').click(); document.getElementById('moreTog').click(); });
+await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(250); await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+console.log('  on foot fold (landscape):', JSON.stringify({ wl0, wl1, wl2 }), '| clash', wlc0 || '-', '|', wlc1 || '-', '|', wlc2 || '-');
+check(wl0.tog && wl0.more && !wl0.dests && !wl0.cam && !wlc0 && wl1.open && wl1.dests && wl1.home && !wlc1 && wl2.mopen && wl2.snd && wl2.fs && wl2.cam && !wlc2, `landscape 800×360 on foot: folded, then 去哪裡 open (two rows beside the joystick) and ⋯ open, none overlapping (${[wlc0, wlc1, wlc2].filter(Boolean).join(' / ') || 'ok'})`);
+await drawAndShot('2-foot-fold');
+if (process.env.B1_STOP === 'fold') { console.log('B1_STOP=fold: stopping here;', fails.length ? `${fails.length} FAIL` : 'ALL CHECKS OK so far'); await b.close(); srv.close(); process.exit(fails.length ? 1 : 0); } // 只看這一段（第 75 批）
 // 碰撞：後牆、關著的鐵捲門（裡面）、停著的車（GC8）
 const col = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, W = D.walker, R = W.character.radius;
@@ -796,7 +831,8 @@ const mv = await p.evaluate(() => {
 check(Math.abs(mv.moving.v) > 1 && mv.moving.act2 == null && Math.abs(mv.stopped.v) < 1 && mv.stopped.act2 === '下車', `下車 only when stopped (${JSON.stringify(mv)})`);
 const kn = await p.evaluate(() => {
   const N = window.__N(), D = window.__D(), f = N.focus, h0 = N.hits;
-  const q = N.peds.people.filter((o) => !o.gone && o.mode === 'walk').sort((a, b) => Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z))[0]; if (!q) return null;
+  const alive = N.peds.people.filter((o) => !o.gone), lonely = (o) => alive.every((u) => u === o || Math.hypot(u.x - o.x, u.z - o.z) > 6); // 旁邊 6 公尺沒有別人（不然假的車先撞到別人，onHit 的 scare 把他嚇跑＝flee）
+  const q = alive.filter((o) => o.mode === 'walk' && lonely(o)).sort((a, b) => Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z))[0]; if (!q) return null;
   q.freeze = 3; // 嚇呆了（不會跳開）
   const fx = Math.cos(q.heading), fz = -Math.sin(q.heading), car = { id: 'test', x: q.x + fx * (2.2 + q.r + 0.4), z: q.z + fz * (2.2 + q.r + 0.4), heading: q.heading + Math.PI, v: 9, hx: 2.2, hz: 0.9, ai: false };
   for (let i = 0; i < 30 && N.hits === h0; i++) { car.x -= fx * 9 / 60; car.z -= fz * 9 / 60; N.peds.update(1 / 60, f, [car], N.NONE); }

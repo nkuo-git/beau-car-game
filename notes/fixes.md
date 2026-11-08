@@ -58,6 +58,19 @@ destination, or drive off (> 4 m/s; 8 s timer if opened while already moving) fo
 Neihu people: sidestepping someone on a `side` edge may not step onto a car lane (`onLane`); stepping around a
 parked car still can, after checking for traffic.
 
+## 11b Walking HUD folds too (batch 75, trial v87)
+Nick 2026-11-08: 「人在走路的時後那個什麼直接回車庫那些選項請收起來不要擋視線」. In fullscreen walking the
+`#drivebar` column above the joystick used to show all 8 destinations plus 「直接回車庫」, and the sound /
+fullscreen / eye row stayed open. Now garage.css applies the same fold rules as driving (the `:not(.walking)` guards
+on the `.dtog`, `#dests`, `.moretog`, `.snd`/`.fsbtn` rules were dropped; `.wk-cam` joins `.dv-cam`): only 「📍 去哪裡 ▾」
+and 「⋯」 show; 「⋯」 reveals sound, fullscreen and eye (Aa / 🎮 / ✨ / 🎵 / AT stay driving-only, their rules still
+carry `:not(.walking)`). Landscape open state reuses the 5-column grid. town.src.js: `hudMoving()` (walker speed
+> 0.6 m/s while walking, car > 4 m/s otherwise) feeds `foldStart` and `foldStep(dt, moving)`; the walking branch
+calls `foldStep` every frame (indoors too) and the driving branch skips it while walking so the 8 s timer is not
+decremented twice. Tests: test-b1 section 2 「on foot fold」 (5 checks, portrait + 800×360; `B1_STOP=fold` env
+stops test-b1 right after that section for quick iteration); mind that `setDest()` also folds the list, so clear the
+destination before opening it in a test.
+
 ## 12 Police / traffic cars stopped you like a wall
 npc.js and police-ai.js colliders carry `vx/vz/m/dvx/dvz`; drive.js resolves the bump by momentum and the car consumes
 the push next frame (see notes/bigmap.md for the rear-end bump model).

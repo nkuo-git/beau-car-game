@@ -255,22 +255,22 @@ body.fs #drivebar .minirow .snd[aria-pressed="false"] { color: #9AA1AC; }
 @media (max-height: 560px) { body.fs #dests { display: grid; grid-template-columns: none; grid-template-rows: repeat(2, auto); grid-auto-flow: column; grid-auto-columns: auto; justify-items: start; } }
 /* 修 11（Nick 2026-10-10 兩張截圖：顯示大小調大的手機，目的地蓋住路和車）＋ Nick「按鈕不用總是全部顯示…點了再列出來 再點一次就收起來」：
    全螢幕「開車」的時候（直拿、橫拿都一樣）目的地收成一顆「📍 去哪裡 ▾」，右上的聲音、全螢幕、換視角收成一顆「⋯」；
-   按了才打開、再按一次收起來；選了地方、開走了也會收（town.src.js 的 destOpen、moreOpen）。走路、比賽、不是全螢幕的照舊 */
+   按了才打開、再按一次收起來；選了地方、開走了也會收（town.src.js 的 destOpen、moreOpen）。比賽、不是全螢幕的照舊。第 75 批（Nick 2026-11-08「人在走路的時後…直接回車庫那些選項請收起來不要擋視線」）：走路也一樣收：「📍 去哪裡 ▾」在搖桿上面、「⋯」在小地圖下面（聲音、全螢幕、換視角；Aa、🎮、✨、🎵、AT 只有開車才有），走起來就收（town.src.js foldStep） */
 .dtog, .moretog { display: none; }
-body.fs.driving:not(.walking) #drivebar .dtog { display: block; height: 34px; padding: 0 13px; border: 0; border-radius: 999px; background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 13px/1 var(--sans); white-space: nowrap; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-body.fs.driving:not(.walking).destsopen #drivebar .dtog { background: var(--accent); color: var(--on-accent); }
-body.fs.driving:not(.walking):not(.destsopen) #dests, body.fs.driving:not(.walking):not(.destsopen) #drivebar .minirow .ghost:not(.snd) { display: none; }
-@media (min-height: 561px) { body.fs.driving:not(.walking) #drivebar .dtog { order: 1; } } /* 直拿：「去哪裡」在方向鍵正上面，打開的地方往上排 */
+body.fs.driving #drivebar .dtog { display: block; height: 34px; padding: 0 13px; border: 0; border-radius: 999px; background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 13px/1 var(--sans); white-space: nowrap; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+body.fs.driving.destsopen #drivebar .dtog { background: var(--accent); color: var(--on-accent); }
+body.fs.driving:not(.destsopen) #dests, body.fs.driving:not(.destsopen) #drivebar .minirow .ghost:not(.snd) { display: none; }
+@media (min-height: 561px) { body.fs.driving #drivebar .dtog { order: 1; } } /* 直拿：「去哪裡」在方向鍵正上面，打開的地方往上排 */
 /* 橫拿打開：「去哪裡」＋8 個地方＋「直接回車庫」排成 5 個一排、兩排（不會往上疊到「開鐵捲門」） */
-@media (max-height: 560px) { body.fs.driving:not(.walking).destsopen #drivebar { display: grid; grid-template-columns: repeat(5, auto); justify-items: start; }
-  body.fs.driving:not(.walking).destsopen #drivebar #dests, body.fs.driving:not(.walking).destsopen #drivebar .minirow { display: contents; } }
-body.fs.driving:not(.walking):not(.racing) #drivebar .moretog { display: grid; place-items: center; position: fixed; top: calc(var(--fs-t) + 142px); right: calc(var(--fs-r) + 10px); width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+@media (max-height: 560px) { body.fs.driving.destsopen #drivebar { display: grid; grid-template-columns: repeat(5, auto); justify-items: start; }
+  body.fs.driving.destsopen #drivebar #dests, body.fs.driving.destsopen #drivebar .minirow { display: contents; } }
+body.fs.driving:not(.racing) #drivebar .moretog { display: grid; place-items: center; position: fixed; top: calc(var(--fs-t) + 142px); right: calc(var(--fs-r) + 10px); width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
   background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 20px/1 var(--sans); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: margin-top .2s; }
-body.fs.driving:not(.walking):not(.racing).moreopen #drivebar .moretog { background: var(--accent); color: var(--on-accent); font-size: 16px; }
-body.fs.driving:not(.walking):not(.racing):not(.moreopen) #drivebar .minirow .snd, body.fs.driving:not(.walking):not(.racing):not(.moreopen) #stage .fsbtn, body.fs.driving:not(.walking):not(.racing):not(.moreopen) #stage .dv-cam { display: none; }
-body.fs.driving:not(.walking):not(.racing).moreopen #drivebar .minirow .snd { right: calc(var(--fs-r) + 166px); }
-body.fs.driving:not(.walking):not(.racing).moreopen #stage .fsbtn { right: calc(var(--fs-r) + 114px); }
-body.fs.driving:not(.walking):not(.racing).moreopen #stage .dv-cam { right: 62px; }
+body.fs.driving:not(.racing).moreopen #drivebar .moretog { background: var(--accent); color: var(--on-accent); font-size: 16px; }
+body.fs.driving:not(.racing):not(.moreopen) #drivebar .minirow .snd, body.fs.driving:not(.racing):not(.moreopen) #stage .fsbtn, body.fs.driving:not(.racing):not(.moreopen) #stage .dv-cam, body.fs.driving.walking:not(.moreopen) #stage .wk-cam { display: none; }
+body.fs.driving:not(.racing).moreopen #drivebar .minirow .snd { right: calc(var(--fs-r) + 166px); }
+body.fs.driving:not(.racing).moreopen #stage .fsbtn { right: calc(var(--fs-r) + 114px); }
+body.fs.driving:not(.racing).moreopen #stage .dv-cam, body.fs.driving.walking.moreopen #stage .wk-cam { right: 62px; } /* 第 75 批：走路的換視角（.wk-cam）也一樣往左讓「⋯」 */
 /* 按鈕大小（Nick 2026-10-10「加個遊戲設定的選項 可以讓他自訂想看到的大小」）：「⋯」打開那一排多一顆「Aa」，按了那一排換成「按鈕大小 小 中 大」；
    開車、走路畫面裡的按鈕照 --hudz 縮放（小 0.8、中 1、大 1.15；每支手機記在 carid.btnsize） */
 :root { --hudz: 1; }
