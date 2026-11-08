@@ -111,8 +111,8 @@ const st = () => p.evaluate(() => { const D = window.__D(), t = D.walker.telemet
 const walkTo = async (u, v, si, py, heading) => { await p.evaluate(([u, v, si, py, heading]) => { const D = window.__D(), M = D.M, S = M.stations[si], [x, z] = S.toW(u, v); M.py = py; D.walker.teleport({ x, z, heading: S.rot + heading }); window.__wstep(3); }, [u, v, si, py, heading]); return st(); };
 const walk = async (frames, y = 1, x = 0) => { await p.evaluate(([n, y, x]) => { const D = window.__D(); D.walker.setInput({ x, y }); for (let i = 0; i < n; i++) window.__wstep(1); D.walker.setInput(null); }, [frames, y, x]); return st(); };
 const toasts = () => p.evaluate(() => window.__T.splice(0));
-const e1 = ST[0].ent[0]; // 港墘 出口 1：+v 那邊，樓梯往 −u 上去（dir 1：u1 在門口、u0 在平台）
-let w = await walkTo(e1.u1 + 3 * e1.dir, (e1.v0 + e1.v1) / 2, 0, 0, Math.PI); // 門口外面，面向樓梯（−u）
+const e1 = ST[0].ent[0]; // 港墘 出口 1：+v 那邊（第 80 批：樓梯往 +u 上去（dir −1：u1 在門口、u0 在平台）；帶子靠翼那一邊 2.6 公尺是樓梯、外面是電扶梯）
+let w = await walkTo(e1.u1 + 3 * e1.dir, e1.v0 + e1.s * 1.3, 0, 0, e1.dir > 0 ? Math.PI : 0); // 門口外面，面向樓梯
 const ys = await p.evaluate(() => { const D = window.__D(); D.walker.setInput({ x: 0, y: 1 }); const ys = []; for (let i = 0; i < 60 * 9; i++) { window.__wstep(1); if (i % 30 === 0) ys.push(+D.walker.character.group.position.y.toFixed(2)); } D.walker.setInput(null); return ys; });
 w = await st();
 console.log('2', el(), 'stairs', JSON.stringify(ys), JSON.stringify(w));
@@ -122,7 +122,7 @@ await shot('2-stairs-top');
 w = await walkTo(e1.u0 + 1.5 * e1.dir, e1.v0, 0, 6, (Math.PI / 2) * e1.s); // 平台上，面向大廳（−v）
 w = await walk(60 * 6);
 console.log('  bridge → hall', JSON.stringify(w));
-check(w.y === 6 && w.lvl === 1 && Math.abs(w.v) < 9.5, `over the footbridge into the concourse (v ${w.v}, still ${w.y} m up)`);
+check(w.y === 6 && w.lvl === 1 && Math.abs(w.v) < 10, `over the footbridge into the concourse (v ${w.v}, still ${w.y} m up)`);
 const s3 = await shot('3-hall');
 w = await walkTo(-16, 0.825, 0, 6, 0); await toasts(); w = await walk(60 * 8); const tg = await toasts(); // 走過閘門（u −8）
 console.log('  gates', JSON.stringify(w), JSON.stringify(tg));
@@ -186,7 +186,7 @@ await p.evaluate(() => { window.__D().LOOK?.setHour?.(22); window.__wstep(40); }
 await p.evaluate(() => { window.__D().LOOK?.setHour?.(13); window.__wstep(4); });
 check(s7.calls > 40 && s7.calls < 400 && s8.calls > 40 && s8.calls < 400 && s8n.calls > 40 && s8n.calls < 450, `riding ${s7.calls} calls / ${s7.tris} tris; 文德 platform ${s8.calls} / ${s8.tris}, at night ${s8n.calls} / ${s8n.tris}`);
 
-// ---- 5 走出文德站（出口 2：+v 那邊，u 28 的天橋，樓梯往 +u 下去）；車還在港墘 ----
+// ---- 5 走出文德站（出口 2：+v 那邊，u 17…22 的翼，第 80 批起樓梯往 −u 下去）；車還在港墘 ----
 console.log('== 5 走出文德站 ==');
 const e2 = ST[1].ent.find((e) => e.s === 1) || ST[1].ent[1];
 w = await walkTo(12.5, 5.5, 1, 12.6, Math.PI); // 斜坡上面，面向 −u 走下去
@@ -199,7 +199,7 @@ check(w.u > 16 && tg2.some((s) => /嗶/.test(s)), `through the second gate row a
 w = await walkTo((e2.bu0 + e2.bu1) / 2, 8.5, 1, 6, -Math.PI / 2); w = await walk(60 * 7); // 天橋往 +v 到平台
 console.log('  bridge', JSON.stringify(w));
 check(w.y === 6 && w.lvl === 1 && w.v > Math.min(e2.v0, e2.v1) - 0.5, `across the 出口 2 footbridge to the stair landing (v ${w.v})`);
-w = await walkTo(e2.uS - 0.5 * e2.dir, (e2.v0 + e2.v1) / 2, 1, 6, e2.dir > 0 ? 0 : Math.PI); // 樓梯頭，面向樓梯往下
+w = await walkTo(e2.uS - 0.5 * e2.dir, e2.v0 + e2.s * 1.3, 1, 6, e2.dir > 0 ? 0 : Math.PI); // 樓梯頭（靠翼那一邊是樓梯），面向樓梯往下
 const ysx = await p.evaluate(() => { const D = window.__D(); D.walker.setInput({ x: 0, y: 1 }); const ys = []; for (let i = 0; i < 60 * 9; i++) { window.__wstep(1); if (i % 30 === 0) ys.push(+D.walker.character.group.position.y.toFixed(2)); } D.walker.setInput(null); return ys; });
 w = await st();
 console.log('  exit stairs', JSON.stringify(ysx), JSON.stringify(w));
@@ -209,6 +209,22 @@ const back = await p.evaluate(() => { const D = window.__D(), M = D.M, S0 = M.st
 console.log('  back on the street', JSON.stringify(back));
 check(back.carAt港墘 != null && back.carAt港墘 < 80 && back.meAt文德 < 60, `the GC8 is still parked by 港墘站 (${back.carAt港墘} m from it) while you are at 文德 (${back.meAt文德} m)`);
 await shot('9-wende-street');
+
+// ---- 10 第 80 批：電扶梯、地上的標示和路線圖、新的車頭、跟車站重疊的房子拿掉 ----
+console.log('== 10 電扶梯、標示、房子 ==');
+const b80 = await p.evaluate(() => { const D = window.__D(), M = D.M; let deco = 0, noses = null, steps = null, carN = 0; M.group.traverse((o) => { if (o.name === 'mrt-deco') deco++; if (o.name === 'mrt-noses') noses = o; if (o.name === 'mrt-cars') carN = o.count; if (o.name === 'mrt-esc-steps') steps = o; });
+  const tex = M.group.children.flatMap((g) => g.children || []).find((o) => o.name === 'mrt-deco')?.material?.map?.image;
+  return { esc: M.info.esc, escSteps: M.info.escSteps, deco, noseN: noses ? noses.count : -1, carN, stepN: steps ? steps.count : -1, texW: tex ? tex.width : 0, gone: D.VIL.neihu.data.mrtGone }; });
+console.log('  b80', JSON.stringify(b80));
+check(b80.esc >= 8 && b80.escSteps > 150 && b80.stepN === b80.escSteps, `escalators: ${b80.esc} (platform ↔ concourse, street ↔ exit), ${b80.escSteps} moving steps in one InstancedMesh`);
+check(b80.deco === 2 && b80.texW === 1024, `each station has its own decoration mesh (route map, posters, floor marks 下車／排隊／禁止跨越): ${b80.deco} meshes, atlas ${b80.texW}px`);
+check(b80.carN >= 4 && b80.noseN === b80.carN / 2, `train noses at both ends of every train: ${b80.noseN} noses for ${b80.carN / 4} trains on the line now`);
+check(b80.gone >= 1 && b80.gone < 30, `${b80.gone} Neihu houses overlapping the stations were removed`);
+const escR = await p.evaluate(() => { const D = window.__D(), M = D.M, S = M.stations[0], e = S.ent[0]; const vE = e.v0 + e.s * 3.7, [x, z] = S.toW(e.u1 + 1.5 * e.dir, vE); M.py = 0; D.walker.teleport({ x, z, heading: S.rot + (e.dir > 0 ? Math.PI : 0) }); window.__wstep(3);
+  const ys = []; D.walker.setInput({ x: 0, y: 0.35 }); for (let i = 0; i < 60 * 14; i++) { window.__wstep(1); if (i % 60 === 0) ys.push(+D.walker.character.group.position.y.toFixed(2)); } D.walker.setInput(null); for (let i = 0; i < 60 * 4; i++) window.__wstep(1); ys.push(+D.walker.character.group.position.y.toFixed(2)); return { ys, lvl: D.MRTS.lvl }; });
+console.log('  escalator', JSON.stringify(escR));
+check(escR.ys[0] === 0 && escR.ys[escR.ys.length - 1] === 6 && escR.lvl === 1 && escR.ys.every((y, i) => i === 0 || y >= escR.ys[i - 1] - 0.01), `slow walk onto the 出口 1 escalator carries you up 0 → 6 (${escR.ys.join(' ')}), concourse level`);
+await shot('10-escalator');
 
 check(errs.length === 0, `no page errors${errs.length ? ': ' + errs.join(' | ') : ''}`);
 await b.close(); srv.close();

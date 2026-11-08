@@ -21,7 +21,7 @@ import { NEIHU_DATA } from './neihu-data.js';
 import { HOME_SITES, homeFront } from './village.js';
 import { TOWER_RAMP } from './tower.js';
 import { nhStreetPrep, nhStreetBuild, NH_STREET_TEXT } from './nhstreet.js'; // 第 72 批：內湖的街景（江南街、內湖路、環山路）
-import { MRT_TEXT } from './mrt.js'; // 第 78 批：捷運站（mrt.js 蓋；這裡只留軌道、隔音牆）
+import { MRT_TEXT, mrtKeepOut, mrtHits } from './mrt.js'; // 第 78 批：捷運站（mrt.js 蓋；這裡只留軌道、隔音牆）
 const NH_MRT_V2 = true; // 第 78 批：車站、出入口、站名牌交給 mrt.js（false＝以前畫上去的站房）
 
 // 打包（build-art.mjs、build-app.mjs）：整個包在一個函式裡，只露出下面這些名字
@@ -507,9 +507,10 @@ function buildNeihu(V, opt = {}) {
   const NH_MAX_FL = 1; // 第 10 批：內湖一般的房子最多幾層（地標不變）；第 18 批（Nick 2026-10-14「對 把房子變矮」）：1 層
   const GB = 1e6; // 第 9 批：房子的編號（碰撞物的 g；村子的房子沒有 g）
   const roadAtH = NH_VARIETY ? mkRoadGrid() : null; // 第 28 批：哪一面牆對著路（那一面畫門、窗；其他畫側牆）
+  { const KO = typeof mrtKeepOut === 'function' && typeof NH_MRT_V2 !== 'undefined' && NH_MRT_V2 ? mrtKeepOut(N) : []; let nk = 0; if (KO.length) N.bld.forEach((b) => { if (!b.lm && b.P && mrtHits(KO, b.P)) { b.mrt = true; nk++; } }); N.mrtGone = nk; N.mrtIn = KO.length ? (x, z) => mrtHits(KO, [[x, z]]) : null; } // 第 80 批（Nick「可把會與捷運站重疊的房子去除」）：跟捷運站重疊的房子不蓋
   const NS = nhStreetPrep({ N, nx, nz, names: D.names }); let nFix = 0; N.bld.forEach((b, bi) => { if (NS.arcadeFix(b, bi)) nFix++; }); // 第 72 批：江南街、內湖路、環山路邊的房子照真的樓層、江南街補騎樓、一棟換成工地
   N.bld.forEach((b, bi) => {
-    if (b.lm) return; // 地標的房子（西湖圖書館、湖光教會）：下面自己做
+    if (b.lm || b.mrt) return; // 地標的房子（西湖圖書館、湖光教會）：下面自己做
     if (b.site) { nb++; return; } // 第 72 批：工地（nhstreet.js 自己蓋）
     const P = b.P, n = P.length; let cx = 0, cz = 0; for (const p of P) { cx += p[0]; cz += p[1]; } cx /= n; cz /= n;
     const g = bank('wall', cx, cz, TB);
@@ -1268,7 +1269,7 @@ function buildNeihu(V, opt = {}) {
   const addTree = (x, y, z, s, hill = false) => { const key = hill ? 'hill' : Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT); let L = treeTiles.get(key); if (!L) treeTiles.set(key, (L = [])); L.push(x, y, z, s); };
   const treeCols = []; // 第 9 批：碰撞物記著是哪一格的第幾棵（越野車輾到 → 那一棵壓扁：crush.js 改 InstancedMesh 的矩陣）
   let nSkipT = 0;
-  for (const [x, z, s] of N.trees) { if (NS.noTree(x, z)) { nSkipT++; continue; } addTree(x, 0, z, s); if (inBox(x, z)) { const c = { t: 'circle', x, z, r: 0.25, h: 3, tk: Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT), ti: treeTiles.get(Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT)).length / 4 - 1 }; colliders.push(c); treeCols.push(c); } }
+  for (const [x, z, s] of N.trees) { if (NS.noTree(x, z) || (N.mrtIn && N.mrtIn(x, z))) { nSkipT++; continue; } addTree(x, 0, z, s); if (inBox(x, z)) { const c = { t: 'circle', x, z, r: 0.25, h: 3, tk: Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT), ti: treeTiles.get(Math.floor((x - AX) / TT) + ',' + Math.floor((z - AZ) / TT)).length / 4 - 1 }; colliders.push(c); treeCols.push(c); } }
   // 第 72 批：路邊的東西（機車、停著的車、大王椰子、路燈、公車亭、紅綠燈、變電箱、圍牆、擋土牆、工地、路牌、腳踏車站、燈箱招牌）；要在 signMesh 做出來以前（工地的「施工」牌用 plate）
   const NSB = nhStreetBuild({ S: NS, N, nx, nz, deg, jR, bank, boxG, wallQ, quad3, flatPoly, colliders, addTree, TB, TG, inBox, cv, fitFont, mats, aniso, Geo, workUV: SA.uv['b' + bIdx((b) => b.t === 'work')], GB, roadAt, AX, AZ, names: D.names, plate, shopPlate, shopUV: () => shopUV(shopN++) }); // 第 76 批：三條街的燈箱六成用每家店自己的招牌
   const signMesh = new THREE.Mesh(sg.geometry(), mats.sign); signMesh.name = 'nh-signs'; signMesh.matrixAutoUpdate = false;
@@ -1419,7 +1420,7 @@ function buildNeihu(V, opt = {}) {
   let mapReady = false;
   function mapBuild() {
     if (mapReady || typeof Path2D === 'undefined') return; mapReady = true;
-    for (const b of N.bld) { if (b.back) continue; const t = mt(b.P[0][0], b.P[0][1]); if (!t.bld) t.bld = new Path2D(); b.P.forEach((p, i) => (i ? t.bld.lineTo(p[0], p[1]) : t.bld.moveTo(p[0], p[1]))); t.bld.closePath(); }
+    for (const b of N.bld) { if (b.back || b.mrt) continue; const t = mt(b.P[0][0], b.P[0][1]); if (!t.bld) t.bld = new Path2D(); b.P.forEach((p, i) => (i ? t.bld.lineTo(p[0], p[1]) : t.bld.moveTo(p[0], p[1]))); t.bld.closePath(); }
     for (const a of N.areas) { if ((a.t !== 'park' && a.t !== 'pitch' && a.t !== 'water') || areaOut(a)) continue; const t = mt(a.P[0][0], a.P[0][1]); const key = a.t === 'water' ? 'water' : 'park'; if (!t[key]) t[key] = new Path2D(); a.P.forEach((p, i) => (i ? t[key].lineTo(p[0], p[1]) : t[key].moveTo(p[0], p[1]))); t[key].closePath(); }
     for (const r of N.roads) for (let k = 1; k < r.n.length; k++) { const a = r.n[k - 1], b = r.n[k], t = mt((nx(a) + nx(b)) / 2, (nz(a) + nz(b)) / 2), wk = Math.max(5, Math.round(r.w * 0.95)) + (r.cls <= 2 ? 100 : 0); let p = t.roads.get(wk); if (!p) t.roads.set(wk, (p = new Path2D())); p.moveTo(nx(a), nz(a)); p.lineTo(nx(b), nz(b)); }
   }

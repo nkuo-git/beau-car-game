@@ -59,3 +59,26 @@ walk in, ride (shift > 150 m, toasts), 「下車」 at 文德, walk down the sec
 ## Batch 79 (trial v91): smooth start/stop
 - Nick: train "jumps to the next station"; wants slow start and slow stop, not too long. `runP(L, t)` is now an S-curve (jerk-limited: v = Vp·s²(3−2s) over TA = Vp/ACC), `VM 36`, `ACC 2.0` (peak 3 m/s²). 港墘 → 文德 ≈ 46 s (was 65).
 - A probe ride showed no teleport: ~100 m per 5 s, smooth. The car interior is a plain white box and the camera faces the doors, so motion is hard to see — fix with the station/train rework (windows, outside visible).
+
+## Batch 80 (trial v92): station + train rework
+Nick 2026-11-08: 「捷運太假了」「捷運站做成橫跨內湖路的建築…把會與捷運站重疊的房子去除…有電扶梯跟樓梯…不要太小」
+「等候區大一點顏色也不要那麼單調譬如說禁止跨越區捷運路線圖」「有些東西要做的有棱有角不要那麼方正」.
+- Bigger station: platform PV1 10.4, concourse CV 11. Gabled roof with chamfered brown eaves and slanted fins; pillars and
+  street columns are octagonal prisms (`M.prism`).
+- Platform: floor hole to `HOLE1` 8.8; per door 下車 hatch + two green 排隊 lanes; 禁止跨越 zones at both ends (yellow/black
+  barrier + collider at u ±(PL−2.6) + wall sign); back wall of 10 coloured bays with the 文湖線 route map (`WENHU`, 24 real
+  station names, `routeMap`) and posters (all made up). All drawn from one 1024² canvas per station (`decoAtlas`, mesh `mrt-deco`).
+- Escalators (`escal` → `ESCS`): platform ↔ concourse beside each stair, street ↔ exit beside each exit stair. Steps are one
+  InstancedMesh (`mrt-esc-steps`) moved in `drawSteps()` only when near. A walker on one gets `out.shift` along the run at
+  `ESC_V` 0.55 m/s (still walks too).
+- Exits: per-station table `entDefs` from a road probe (港墘 over 內湖路一段: both exits north of the road at v 19.5/21.5;
+  文德: one each side). Each exit = 5 m enclosed wing from the concourse + 2.6 m stair + 1.5 m escalator under a sloped roof
+  (`e.roofAt(u)` for the camera cap, `exitCap`).
+- Houses: `mrtKeepOut(N)` (station footprint + exit boxes + wings, in world rects) is checked in neihu.js before building;
+  overlapping buildings get `b.mrt` and are skipped (neihu.js, nhstreet.js, minimap). 6 removed. `N.mrtIn(x, z)` also drops
+  street trees and nhstreet props (palms, lamps, shelters, scooters) inside — a 9 m palm under the concourse poked through the floor.
+- Train: grey body, green stripe, black window band, big windows, navy/blue longitudinal seats, poles, handrails, gangway ends;
+  separate nose mesh (sloped windscreen, round lamps) on both ends; door glass; a generic route strip over the doors.
+- Numbers (960×576, 高): 19 meshes / 37k tris for both stations + trains; street 198/218 calls, concourse 131, platform 194,
+  riding 119, 文德 platform 105, 文德 street 244 / 0.77M.
+- mrt-test section 10: escalator count + steps, deco meshes, noses, houses removed, escalator ride 0 → 6.

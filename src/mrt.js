@@ -17,9 +17,9 @@
 import * as THREE from 'three';
 
 // 整個包在一個函式裡（打包是把檔案接在一起：名字不要跟別的檔案撞到）
-export const { buildMrt, MRT_TEXT } = (() => {
+export const { buildMrt, MRT_TEXT, mrtKeepOut, mrtHits } = (() => {
 
-const MRT_TEXT = '往文德西湖港墘南港展覽館下一班約秒站出口捷運文湖線終點請下車叮咚月台列車進了到大廳閘門嗶免費本站是';
+const MRT_TEXT = '往文德西湖港墘南港展覽館下一班約秒站出口捷運文湖線終點請下車叮咚月台列車進了到大廳閘門嗶免費本站是路線圖動物園木柵萬芳社區醫院辛亥麟光六張犁科技大樓安忠孝復興南京中山國松山機場直劍路內湖公東軟體園區熊貓在等你學港墘阿輝改車廠馬力機開張多喝水一天杯排隊禁止跨越危險請勿進入電扶梯靠右站穩下一班車內湖科學園區港墘站文德站下車馬力機開張一天杯 Wenhu Line No Entry';
 const rotOf = (ux, uz) => Math.atan2(-uz, ux);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const TAU = Math.PI * 2, wrapA = (a) => { a = (a + Math.PI) % TAU; return a < 0 ? a + Math.PI : a - Math.PI; };
@@ -27,9 +27,11 @@ const SANS = '"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif';
 
 // ---- 尺寸（公尺）----
 const YC = 6.0, CEIL1 = 9.4; // 大廳的地板、天花板（高架橋的底是 9.6）
-const PL = 30, PV0 = 3.3, PV1 = 7.8; // 月台：長 ±30、月台門在 3.3、後面的玻璃牆在 7.8
-const CU = 22, CV = 9; // 大廳 ±22 × ±9
-const RAMP = { u0: 0, u1: 12, v0: 4.4, v1: 6.6 }; // 月台 ↔ 大廳的樓梯（兩邊各一條，v 照 ±）
+const PL = 30, PV0 = 3.3, PV1 = 10.4; // 月台：長 ±30、月台門在 3.3、後面的牆在 10.4（第 80 批：Nick「捷運等候區大一點」，以前 7.8）
+const CU = 22, CV = 11; // 大廳 ±22 × ±11（第 80 批：以前 ±9）
+const RAMP = { u0: 0, u1: 12, v0: 4.6, v1: 6.8 }; // 月台 ↔ 大廳的樓梯（兩邊各一條，v 照 ±）
+const ESCV = [7.1, 8.5], HOLE1 = 8.8; // 第 80 批（Nick「要有電扶梯跟樓梯可上去」）：樓梯旁邊的電扶梯（往上：大廳 → 月台）；月台地板的洞到 8.8
+const ESC_V = 0.55, STEP_D = 0.42; // 電扶梯：每秒走 0.55 公尺（水平）、一階 0.42
 const GATE_U = -8; // 閘門那一排
 const TRK_V = 1.95; // 兩條軌道離中線多遠（往東的在 +v＝行進方向的右手邊；車廂的外側離月台門 3.3 − 1.95 − 1.28 ＝ 7 公分）
 const CAR_L = 13.8, CAR_P = 14.4, CAR_W = 1.28, DOOR_X = 3.6, DOOR_W = 1.3, CAR_H = 3.3; // 車廂：長、間距、半寬、車門在 ±3.6（寬 1.3）、車身高
@@ -38,6 +40,9 @@ const H = 90, DWELL = 15, VM = 36, ACC = 2.0, CYCLE = 180; // 每 90 秒一班�
 const DOOR_U = []; for (let i = 0; i < 4; i++) for (const d of [-DOOR_X, DOOR_X]) DOOR_U.push((i - 1.5) * CAR_P + d);
 // 顏色（0–1）
 const WHITE = [0.93, 0.93, 0.91], WALL = [0.86, 0.86, 0.84], CONC = [0.70, 0.70, 0.68], TILE = [0.80, 0.78, 0.72], TILE2 = [0.62, 0.63, 0.66], ORA = [0.89, 0.40, 0.12], DARK = [0.22, 0.23, 0.25], STEEL = [0.60, 0.63, 0.66], ALU = [0.76, 0.78, 0.80], GLS = [0.74, 0.86, 0.90], GLSD = [0.30, 0.42, 0.50], BROWN = [0.47, 0.30, 0.17], SEAT = [0.17, 0.33, 0.66], YEL = [0.96, 0.80, 0.15], RED = [0.85, 0.15, 0.12], GREEN = [0.25, 0.70, 0.35];
+const LGRY = [0.84, 0.86, 0.87], TGRN = [0.12, 0.58, 0.40], WBAND = [0.10, 0.11, 0.13], ROOFC = [0.46, 0.52, 0.58], TEAL = [0.20, 0.62, 0.66], PEACH = [0.96, 0.66, 0.42], LEMON = [0.98, 0.86, 0.36], SKY = [0.45, 0.70, 0.92], NAVY = [0.13, 0.25, 0.56], RUBBER = [0.08, 0.08, 0.09]; // 第 80 批：列車（淺灰、綠色帶子、黑色窗帶）、屋頂、月台的顏色
+// 文湖線真的站名（路線圖用；站名不是商標）
+const WENHU = ['動物園', '木柵', '萬芳社區', '萬芳醫院', '辛亥', '麟光', '六張犁', '科技大樓', '大安', '忠孝復興', '南京復興', '中山國中', '松山機場', '大直', '劍南路', '西湖', '港墘', '文德', '內湖', '大湖公園', '葫洲', '東湖', '南港軟體園區', '南港展覽館'];
 
 // ---- 幾何（頂點色；本地座標 u（沿軌道）、y（世界高度）、v（橫過軌道，+v＝往東走的右手邊）----
 function mesher() {
@@ -67,18 +72,70 @@ function mesher() {
       vqU(ua, v0, v1, Math.min(yp, yt), Math.max(yp, yt), colR, y1 < y0 ? false : true);
     }
   };
+  const prism = (u, v, r, y0, y1, col, n = 8) => { // 第 80 批：切角的柱子（八角）
+    for (let i = 0; i < n; i++) { const a0 = ((i + 0.5) / n) * TAU, a1 = ((i + 1.5) / n) * TAU, p0 = [u + r * Math.cos(a0), v + r * Math.sin(a0)], p1 = [u + r * Math.cos(a1), v + r * Math.sin(a1)];
+      quad([p1[0], y0, p1[1]], [p0[0], y0, p0[1]], [p0[0], y1, p0[1]], [p1[0], y1, p1[1]], col); }
+  };
+  const tri = (a, b, c, col) => quad(a, b, c, c, col);
   const geometry = () => {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
     g.setIndex(I); g.computeBoundingSphere(); return g;
   };
-  return { quad, hq, vqU, vqV, bx, slopeV, slopeY, stairs, geometry, get tris() { return I.length / 3; }, get empty() { return !I.length; } };
+  return { quad, hq, vqU, vqV, bx, slopeV, slopeY, stairs, prism, tri, geometry, get tris() { return I.length / 3; }, get empty() { return !I.length; } };
 }
 function mkCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 function fit(g, text, px, maxW) { for (let s = px; s >= 10; s -= 2) { g.font = `700 ${s}px ${SANS}`; if (g.measureText(text).width <= maxW) return s; } return 10; }
 function signMat(tex) { const m = new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.22, roughness: 0.6, transparent: true }); m.userData.role = 'sign'; return m; } // 只畫正面（背面透過玻璃看到會是反的字）
 function texOf(cv) { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; }
+
+// 第 80 批（Nick「捷運等候區大一點顏色也不要那麼單調譬如說禁止跨越區捷運路線圖」）：一站一張 1024² 的圖：路線圖（本站亮起來）、4 張自己編的海報、地上的「下車」「排隊」「禁止跨越」
+function routeMap(g, x0, y0, w, h, here) { // 文湖線的路線圖（站名是真的站名）
+  g.fillStyle = '#fbfaf6'; g.fillRect(x0, y0, w, h); g.fillStyle = '#8a5a2b'; g.fillRect(x0, y0, w, Math.round(h * 0.2));
+  g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.textAlign = 'left'; g.font = `700 ${Math.round(h * 0.13)}px ${SANS}`; g.fillText('文湖線　路線圖', x0 + 18, y0 + h * 0.1); g.textAlign = 'right'; g.font = `600 ${Math.round(h * 0.09)}px ${SANS}`; g.fillText('Wenhu Line', x0 + w - 18, y0 + h * 0.1);
+  const n = WENHU.length, lx0 = x0 + 34, lx1 = x0 + w - 34, ly = y0 + h * 0.33, dx = (lx1 - lx0) / (n - 1);
+  g.fillStyle = '#8a5a2b'; g.fillRect(lx0, ly - h * 0.03, lx1 - lx0, h * 0.06);
+  const fs = Math.max(10, Math.min(Math.round(dx * 0.62), Math.round(h * 0.085)));
+  for (let i = 0; i < n; i++) { const x = lx0 + i * dx, me = WENHU[i] === here;
+    g.beginPath(); g.arc(x, ly, me ? h * 0.075 : h * 0.042, 0, TAU); g.fillStyle = me ? '#ffd23a' : '#fff'; g.fill(); g.lineWidth = Math.max(2, h * 0.018); g.strokeStyle = me ? '#c0392b' : '#8a5a2b'; g.stroke();
+    g.fillStyle = me ? '#c0392b' : '#25272b'; g.textAlign = 'center'; g.font = `${me ? 800 : 600} ${fs}px ${SANS}`;
+    [...WENHU[i]].forEach((ch, k) => g.fillText(ch, x, ly + h * 0.13 + k * fs * 1.04)); }
+  if (here) { const i = WENHU.indexOf(here); if (i >= 0) { const x = lx0 + i * dx; g.fillStyle = '#c0392b'; g.font = `800 ${Math.round(h * 0.09)}px ${SANS}`; g.textAlign = 'center'; g.fillText('本站', x, ly - h * 0.12); } }
+}
+function decoAtlas(g, S) {
+  const R = {};
+  routeMap(g, 0, 0, 1024, 200, S.nm); R.map = [0, 0, 1024, 200];
+  const ads = [ // 自己編的海報（沒有真的牌子）
+    (x, y, w, h) => { g.fillStyle = '#ffd9e6'; g.fillRect(x, y, w, h); g.fillStyle = '#7ccf7a'; g.fillRect(x, y + h * 0.72, w, h * 0.28); const cx = x + w / 2, cy = y + h * 0.47, r = w * 0.27;
+      g.fillStyle = '#222'; for (const q of [-1, 1]) { g.beginPath(); g.arc(cx + q * r * 0.75, cy - r * 0.75, r * 0.32, 0, TAU); g.fill(); } g.fillStyle = '#fff'; g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
+      g.fillStyle = '#222'; for (const q of [-1, 1]) { g.beginPath(); g.ellipse(cx + q * r * 0.4, cy - r * 0.05, r * 0.22, r * 0.3, q * 0.5, 0, TAU); g.fill(); } g.beginPath(); g.arc(cx, cy + r * 0.32, r * 0.12, 0, TAU); g.fill();
+      g.fillStyle = '#c2185b'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 ${Math.round(w * 0.17)}px ${SANS}`; g.fillText('動物園', cx, y + h * 0.12); g.font = `700 ${Math.round(w * 0.1)}px ${SANS}`; g.fillStyle = '#1b5e20'; g.fillText('熊貓在等你！', cx, y + h * 0.86); },
+    (x, y, w, h) => { const gr = g.createLinearGradient(x, y, x, y + h); gr.addColorStop(0, '#2b6cb0'); gr.addColorStop(1, '#90cdf4'); g.fillStyle = gr; g.fillRect(x, y, w, h);
+      g.fillStyle = 'rgba(255,255,255,0.85)'; for (const [bx, bw, bh] of [[0.08, 0.18, 0.42], [0.3, 0.16, 0.6], [0.5, 0.2, 0.5], [0.74, 0.18, 0.36]]) { g.fillRect(x + w * bx, y + h * (0.88 - bh), w * bw, h * bh); }
+      g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 ${Math.round(w * 0.13)}px ${SANS}`; g.fillText('內湖科學園區', x + w / 2, y + h * 0.13); g.font = `600 ${Math.round(w * 0.085)}px ${SANS}`; g.fillText('港墘站、文德站下車', x + w / 2, y + h * 0.94); },
+    (x, y, w, h) => { g.fillStyle = '#ff8a1f'; g.fillRect(x, y, w, h); g.fillStyle = '#1e1e22'; g.fillRect(x, y + h * 0.62, w, h * 0.06);
+      g.fillStyle = '#e53935'; g.beginPath(); g.moveTo(x + w * 0.12, y + h * 0.58); g.lineTo(x + w * 0.2, y + h * 0.44); g.lineTo(x + w * 0.42, y + h * 0.38); g.lineTo(x + w * 0.66, y + h * 0.4); g.lineTo(x + w * 0.88, y + h * 0.5); g.lineTo(x + w * 0.9, y + h * 0.58); g.closePath(); g.fill();
+      g.fillStyle = '#222'; for (const q of [0.27, 0.73]) { g.beginPath(); g.arc(x + w * q, y + h * 0.59, w * 0.08, 0, TAU); g.fill(); }
+      g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 ${Math.round(w * 0.15)}px ${SANS}`; g.fillText('阿輝改車廠', x + w / 2, y + h * 0.14); g.font = `700 ${Math.round(w * 0.1)}px ${SANS}`; g.fillText('馬力機開張！', x + w / 2, y + h * 0.82); },
+    (x, y, w, h) => { g.fillStyle = '#26a69a'; g.fillRect(x, y, w, h); const cx = x + w / 2, cy = y + h * 0.5;
+      g.fillStyle = '#e0f7fa'; g.beginPath(); g.moveTo(cx, cy - h * 0.22); g.bezierCurveTo(cx + w * 0.32, cy + h * 0.02, cx + w * 0.24, cy + h * 0.2, cx, cy + h * 0.2); g.bezierCurveTo(cx - w * 0.24, cy + h * 0.2, cx - w * 0.32, cy + h * 0.02, cx, cy - h * 0.22); g.fill();
+      g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 ${Math.round(w * 0.17)}px ${SANS}`; g.fillText('多喝水', cx, y + h * 0.12); g.font = `700 ${Math.round(w * 0.1)}px ${SANS}`; g.fillText('一天 8 杯', cx, y + h * 0.88); },
+  ];
+  R.ads = ads.map((f, i) => { const r = [i * 256 + 8, 208, i * 256 + 248, 552]; g.fillStyle = '#fff'; g.fillRect(i * 256, 200, 256, 360); f(r[0], r[1], r[2] - r[0], r[3] - r[1]); return [i * 256, 200, i * 256 + 256, 560]; });
+  // 地上：下車（黃色斜線＋往外的箭頭）、排隊（綠色箭頭往軌道）、禁止跨越（紅白斜線）
+  const hatch = (x, y, w, h, c1, c2, k = 28) => { g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip(); g.fillStyle = c1; g.fillRect(x, y, w, h); g.strokeStyle = c2; g.lineWidth = k * 0.45; for (let t = -h; t < w + h; t += k) { g.beginPath(); g.moveTo(x + t, y + h); g.lineTo(x + t + h, y); g.stroke(); } g.restore(); };
+  { const x = 0, y = 560, w = 256, h = 256; g.fillStyle = '#c9c3b8'; g.fillRect(x, y, w, h); hatch(x + 10, y + 10, w - 20, h - 20, '#c9c3b8', '#f2c10f', 30); g.fillStyle = '#c9c3b8'; g.fillRect(x + 50, y + 70, w - 100, h - 140);
+    g.fillStyle = '#f2c10f'; g.beginPath(); g.moveTo(x + w / 2, y + h - 78); g.lineTo(x + w / 2 - 40, y + h - 120); g.lineTo(x + w / 2 + 40, y + h - 120); g.closePath(); g.fill();
+    g.fillStyle = '#3b3b3b'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 52px ${SANS}`; g.fillText('下車', x + w / 2, y + 112); R.off = [x, y, x + w, y + h]; }
+  { const x = 256, y = 560, w = 128, h = 256; g.fillStyle = '#c9c3b8'; g.fillRect(x, y, w, h); g.fillStyle = '#2e9d57'; g.fillRect(x + 14, y + 8, w - 28, h - 16); g.fillStyle = '#c9c3b8'; g.fillRect(x + 24, y + 18, w - 48, h - 36);
+    g.fillStyle = '#2e9d57'; for (const yy of [46, 120]) { g.beginPath(); g.moveTo(x + w / 2, y + yy); g.lineTo(x + w / 2 - 30, y + yy + 34); g.lineTo(x + w / 2 + 30, y + yy + 34); g.closePath(); g.fill(); }
+    g.font = `800 30px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('排', x + w / 2, y + 196); g.fillText('隊', x + w / 2, y + 228); R.queue = [x, y, x + w, y + h]; }
+  { const x = 384, y = 560, w = 256, h = 256; hatch(x, y, w, h, '#f4f4f0', '#d32f2f', 36); g.fillStyle = '#f4f4f0'; g.fillRect(x + 28, y + 92, w - 56, 72); g.fillStyle = '#d32f2f'; g.font = `800 50px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('禁止跨越', x + w / 2, y + h / 2); R.nox = [x, y, x + w, y + h]; }
+  { const x = 640, y = 560, w = 384, h = 120; g.fillStyle = '#d32f2f'; g.fillRect(x, y, w, h); g.fillStyle = '#fff'; g.fillRect(x + 8, y + 8, w - 16, h - 16); g.fillStyle = '#d32f2f'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 50px ${SANS}`; g.fillText('禁止跨越', x + w / 2, y + 48); g.font = `600 26px ${SANS}`; g.fillStyle = '#333'; g.fillText('No Entry　危險 請勿進入', x + w / 2, y + 92); R.noxSign = [x, y, x + w, y + h]; }
+  { const x = 640, y = 690, w = 384, h = 190; g.fillStyle = '#1f2326'; g.fillRect(x, y, w, h); g.fillStyle = '#8a5a2b'; g.fillRect(x, y, 16, h); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 64px ${SANS}`; g.fillText('電扶梯 ↑', x + w / 2 + 8, y + 70); g.font = `600 34px ${SANS}`; g.fillStyle = '#ffd24a'; g.fillText('請站穩、握好扶手', x + w / 2 + 8, y + 140); R.escSign = [x, y, x + w, y + h]; }
+  return R;
+}
 
 // 列車跑一段（從停到停）：第 79 批（Nick「捷運自己慢慢啟動到慢慢停止 不要花太多時間」）：起步、進站的加速度從 0 慢慢變大再變小（S 形：
 //   速度 v＝Vp·(3s²−2s³)，s＝t/TA），中間用 Vp 跑；平均加速度 ACC、最大 1.5·ACC；短的一段沒有中間（Vp＝√(L·ACC)）
@@ -93,6 +150,42 @@ function runP(L, t) { // t 秒以後走了多遠、速度
   const [q, v] = up(T - t); return [L - q, v];
 }
 
+// 出入口：哪一邊（s）、平台的頭在 u 幾（往 dir 的方向：5 公尺平台＋10.5 公尺樓梯下到街上）、樓梯那條帶子從 v 幾起（往外 4.6 公尺：樓梯＋電扶梯）
+// 第 80 批：照探針量的路（港墘在內湖路一段上面：兩邊的車道 v −19…17；文德在文德路上面：車道 v 0…16）重新擺；跟車站重疊的房子 neihu.js 拿掉（mrtKeepOut）
+function entDefs(nm) { return nm === '文德' ? [{ s: -1, uTop: -14, vTop: 13, dir: -1 }, { s: 1, uTop: 22, vTop: 19, dir: -1 }] : [{ s: 1, uTop: -14, vTop: 19.5, dir: -1 }, { s: -1, uTop: -14, vTop: 21.5, dir: -1 }]; }
+function entOf(e, i) { const dir = e.dir || 1, u0 = e.uTop, uS = u0 + 5 * dir, u1 = u0 + 15.5 * dir; return { ...e, dir, n: i + 1, u0, uS, u1, bu0: Math.min(u0, uS), bu1: Math.max(u0, uS), v0: e.vTop * e.s, v1: (e.vTop + 4.6) * e.s }; }
+function trackOf(E) { // 軌道（折線）：累積長度、s → 位置和方向、投影
+  const TP = E.P, cum = [0]; for (let i = 1; i < TP.length; i++) cum.push(cum[i - 1] + Math.hypot(TP[i][0] - TP[i - 1][0], TP[i][1] - TP[i - 1][1]));
+  const LT = cum[cum.length - 1], AT = [0, 0, 1, 0];
+  const at = (s, out = AT) => { s = clamp(s, 0, LT); let i = 1; while (i < TP.length - 1 && cum[i] < s) i++; const a = TP[i - 1], b = TP[i], L = cum[i] - cum[i - 1] || 1, t = (s - cum[i - 1]) / L; out[0] = a[0] + (b[0] - a[0]) * t; out[1] = a[1] + (b[1] - a[1]) * t; out[2] = (b[0] - a[0]) / L; out[3] = (b[1] - a[1]) / L; return out; };
+  const proj = (x, z) => { let bs = 0, bd = Infinity; for (let i = 1; i < TP.length; i++) { const a = TP[i - 1], b = TP[i], dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1, t = clamp(((x - a[0]) * dx + (z - a[1]) * dz) / L2, 0, 1), px = a[0] + dx * t, pz = a[1] + dz * t, d = (x - px) ** 2 + (z - pz) ** 2; if (d < bd) { bd = d; bs = cum[i - 1] + Math.sqrt(L2) * t; } } return bs; };
+  return { TP, cum, LT, at, proj };
+}
+// 第 80 批（Nick「可把會與捷運站重疊的房子去除」）：車站（月台、屋頂、大廳、翼、出入口）在地上佔的長方形（站的 u、v）；neihu.js 蓋房子以前叫
+function mrtKeepOut(N) {
+  const E = N && N.elev && N.elev.find((e) => e.k === 'mrt'); if (!E || !N.stations || !N.stations.length) return [];
+  const T = trackOf(E), out = [];
+  for (const st of N.stations) { const q = T.at(T.proj(st.p[0], st.p[1])), S = { x: q[0], z: q[1], ux: q[2], uz: q[3] }, R = [];
+    R.push([-(PL + 2.5), PL + 2.5, -(PV1 + 1.8), PV1 + 1.8]);
+    for (const e of entDefs(st.nm).map(entOf)) { const ua = Math.min(e.u0, e.u1 + 1.8 * e.dir), ub = Math.max(e.u0, e.u1 + 1.8 * e.dir); R.push([ua - 1.2, ub + 1.2, Math.min(e.v0, e.v1) - 1.2, Math.max(e.v0, e.v1) + 1.2]); R.push([e.bu0 - 1, e.bu1 + 1, Math.min(e.s * CV, e.v0), Math.max(e.s * CV, e.v0)]); }
+    for (const [u0, u1, v0, v1] of R) out.push({ ...S, u0, u1, v0, v1, nm: st.nm }); }
+  return out;
+}
+function mrtHits(K, P) { // 這個多邊形（房子）碰到哪一個長方形：頂點在裡面、長方形的角在多邊形裡面、或邊相交
+  const loc = (r, x, z) => { const dx = x - r.x, dz = z - r.z; return [dx * r.ux + dz * r.uz, -dx * r.uz + dz * r.ux]; };
+  for (const r of K) { const L = P.map((p) => loc(r, p[0], p[1]));
+    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity; for (const [u, v] of L) { minU = Math.min(minU, u); maxU = Math.max(maxU, u); minV = Math.min(minV, v); maxV = Math.max(maxV, v); }
+    if (maxU < r.u0 || minU > r.u1 || maxV < r.v0 || minV > r.v1) continue;
+    if (L.some(([u, v]) => u >= r.u0 && u <= r.u1 && v >= r.v0 && v <= r.v1)) return true;
+    const inP = (u, v) => { let c = false; for (let i = 0, j = L.length - 1; i < L.length; j = i++) { const a = L[i], b = L[j]; if ((a[1] > v) !== (b[1] > v) && u < ((b[0] - a[0]) * (v - a[1])) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
+    if (inP(r.u0, r.v0) || inP(r.u1, r.v0) || inP(r.u0, r.v1) || inP(r.u1, r.v1) || inP((r.u0 + r.u1) / 2, (r.v0 + r.v1) / 2)) return true;
+    const segX = (a, b, c, d) => { const o = (p, q, r2) => (q[0] - p[0]) * (r2[1] - p[1]) - (q[1] - p[1]) * (r2[0] - p[0]); return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0; };
+    const E4 = [[[r.u0, r.v0], [r.u1, r.v0]], [[r.u1, r.v0], [r.u1, r.v1]], [[r.u1, r.v1], [r.u0, r.v1]], [[r.u0, r.v1], [r.u0, r.v0]]];
+    for (let i = 0; i < L.length; i++) { const a = L[i], b = L[(i + 1) % L.length]; if (E4.some(([c, d]) => segX(a, b, c, d))) return true; }
+  }
+  return false;
+}
+
 function buildMrt(V, opt = {}) {
   const NH = V.neihu; if (!NH || !NH.data) return null;
   const D = NH.data, E = D.elev.find((e) => e.k === 'mrt'); if (!E || !D.stations.length) return null;
@@ -100,11 +193,7 @@ function buildMrt(V, opt = {}) {
   const group = new THREE.Group(); group.name = 'mrt';
   const YT = E.y, YP = YT + 1.1, CEIL2 = YP + 4.4, ROOF = CEIL2 + 0.5;
   // ---- 軌道（折線）：累積長度、s → 位置和方向、投影 ----
-  const TP = E.P, cum = [0]; for (let i = 1; i < TP.length; i++) cum.push(cum[i - 1] + Math.hypot(TP[i][0] - TP[i - 1][0], TP[i][1] - TP[i - 1][1]));
-  const LT = cum[cum.length - 1];
-  const AT = [0, 0, 1, 0];
-  const at = (s, out = AT) => { s = clamp(s, 0, LT); let i = 1; while (i < TP.length - 1 && cum[i] < s) i++; const a = TP[i - 1], b = TP[i], L = cum[i] - cum[i - 1] || 1, t = (s - cum[i - 1]) / L; out[0] = a[0] + (b[0] - a[0]) * t; out[1] = a[1] + (b[1] - a[1]) * t; out[2] = (b[0] - a[0]) / L; out[3] = (b[1] - a[1]) / L; return out; };
-  const proj = (x, z) => { let bs = 0, bd = Infinity; for (let i = 1; i < TP.length; i++) { const a = TP[i - 1], b = TP[i], dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1, t = clamp(((x - a[0]) * dx + (z - a[1]) * dz) / L2, 0, 1), px = a[0] + dx * t, pz = a[1] + dz * t, d = (x - px) ** 2 + (z - pz) ** 2; if (d < bd) { bd = d; bs = cum[i - 1] + Math.sqrt(L2) * t; } } return bs; };
+  const { LT, at, proj } = trackOf(E);
   // 列車跑的範圍（跟 neihu.js 一樣：範圍裡面，山比橋面高的地方＝隧道口）
   let sA = 0, sB = LT;
   { let s0 = -1, s1 = -1; for (let s = 0; s <= LT; s += 2) { const q = at(s); if (NH.inBox(q[0], q[1])) { if (s0 < 0) s0 = s; s1 = s; } }
@@ -127,6 +216,15 @@ function buildMrt(V, opt = {}) {
   let tris = 0, meshes = 0;
   const addMesh = (geo, mat, parent, name) => { const m = new THREE.Mesh(geo, mat); m.name = name; m.frustumCulled = true; parent.add(m); meshes++; tris += (geo.index ? geo.index.count : geo.attributes.position.count) / 3; return m; };
 
+  // 第 80 批：電扶梯：不動的部分（兩邊的玻璃扶手、黑色扶手帶、底下的斜面、上下的鋁板）；會動的階梯另外（InstancedMesh）；ua／ya＝下面、ub／yb＝上面
+  const ESCS = [];
+  function escal(M, G, S, ua, ub, ya, yb, vlo, vhi) {
+    const lo = Math.min(ua, ub), hi = Math.max(ua, ub), yl = ua < ub ? ya : yb, yh = ua < ub ? yb : ya;
+    M.slopeY(lo, hi, vlo, vhi, yl - 0.05, yh - 0.05, RUBBER, true); // 階梯底下暗暗的
+    for (const vv of [vlo, vhi]) { M.slopeV(vv, lo, hi, yl - 0.05, yh - 0.05, 0.22, STEEL, vv > (vlo + vhi) / 2 ? false : true); G.slopeV(vv, lo, hi, yl + 0.17, yh + 0.17, 0.8, GLS, true); M.slopeY(lo, hi, vv - 0.05, vv + 0.05, yl + 1.0, yh + 1.0, RUBBER, true); M.slopeV(vv - 0.05, lo, hi, yl + 0.92, yh + 0.92, 0.08, RUBBER, false); M.slopeV(vv + 0.05, lo, hi, yl + 0.92, yh + 0.92, 0.08, RUBBER, true); }
+    for (const [u, y, dd] of [[ua, ya, ua < ub ? -1 : 1], [ub, yb, ua < ub ? 1 : -1]]) M.bx(Math.min(u, u + dd * 1.0), Math.max(u, u + dd * 1.0), y - 0.05, y + 0.006, vlo, vhi, ALU); // 上下的鋁板
+    ESCS.push({ S, ua, ub, ya, yb, vc: (vlo + vhi) / 2, w: vhi - vlo });
+  }
   for (let si = 0; si < stations.length; si++) {
     const S = stations[si], ux = S.ux, uz = S.uz, vx = -uz, vz = ux, rot = rotOf(ux, uz);
     const toW = (u, v) => [S.x + ux * u + vx * v, S.z + uz * u + vz * v];
@@ -135,53 +233,88 @@ function buildMrt(V, opt = {}) {
     const box = (u0, u1, v0, v1, y0, h, tag, extra) => { const [x, z] = toW((u0 + u1) / 2, (v0 + v1) / 2); const c = { t: 'box', x, z, hx: Math.abs(u1 - u0) / 2, hz: Math.abs(v1 - v0) / 2, rot, h, noCrush: true, ...extra }; if (y0 != null) c.y0 = y0; return c; };
     const cols1 = [], cols2 = []; S.cols = { 1: cols1, 2: cols2 };
     // 出入口：哪一邊（s）、樓梯的頭在 u 幾（往 dir 的方向下去 13.5 公尺：3 公尺平台＋10.5 公尺樓梯）、樓梯那條帶子從 v 幾起（往外 3 公尺）；照探針量的：路、人行道、房子都避開
-    const ENT = S.nm === '文德' ? [{ s: -1, uTop: -19, vTop: 10.5, dir: 1 }, { s: 1, uTop: 27, vTop: 19, dir: -1 }] : [{ s: 1, uTop: -19, vTop: 19.5, dir: 1 }, { s: -1, uTop: -19, vTop: 21.5, dir: 1 }];
-    S.ent = ENT.map((e, i) => { const dir = e.dir || 1, u0 = e.uTop, uS = u0 + 3 * dir, u1 = u0 + 13.5 * dir; return { ...e, dir, n: i + 1, u0, uS, u1, bu0: Math.min(u0, uS), bu1: Math.max(u0, uS), v0: e.vTop * e.s, v1: (e.vTop + 3) * e.s }; });
+    S.ent = entDefs(S.nm).map(entOf);
     S.gates = S.ent.some((e) => e.bu1 > RAMP.u1) ? [GATE_U, 16] : [GATE_U]; // 閘門那幾排（出入口在兩頭的站：兩排，中間是付費區）
-    // ==== 月台層 ====
+    // ==== 第 80 批：裝飾的圖（路線圖、海報、地上的線）：一張 1024² 一站一張 ====
+    const dcv = mkCanvas(1024, 1024), dgx = dcv.getContext('2d'), DEC = decoAtlas(dgx, S), DCM = mesher(), dcuv = [];
+    const decUV = (P4, r) => { const k0 = [r[0] / 1024, 1 - r[1] / 1024], k1 = [r[2] / 1024, 1 - r[3] / 1024], uv4 = [[k0[0], k0[1]], [k1[0], k0[1]], [k1[0], k1[1]], [k0[0], k1[1]]]; // P4＝左上、右上、右下、左下（看的人看到的）
+      const a = P4[0], b = P4[1], c = P4[2], d = P4[3], ux2 = c[0] - a[0], uy2 = c[1] - a[1], uz2 = c[2] - a[2], vx2 = d[0] - b[0], vy2 = d[1] - b[1], vz2 = d[2] - b[2], ny2 = uz2 * vx2 - ux2 * vz2;
+      DCM.quad(a, b, c, d, [1, 1, 1]); dcuv.push(...uv4); return ny2; };
+    const decFloor = (uc, vNear, vFar, w, r, y = YP + 0.008) => { const sd = Math.sign(vFar - vNear) || 1; decUV([[uc - sd * w / 2, y, vNear], [uc + sd * w / 2, y, vNear], [uc + sd * w / 2, y, vFar], [uc - sd * w / 2, y, vFar]], r); }; // 字的上面朝 vNear（軌道那邊）
+    const decWall = (u, y, v, w, h, r, face) => { const hw = w / 2, hh = h / 2; // face：朝哪邊（pv nv pu nu）
+      const P4 = face === 'pv' ? [[u - hw, y + hh, v], [u + hw, y + hh, v], [u + hw, y - hh, v], [u - hw, y - hh, v]] : face === 'nv' ? [[u + hw, y + hh, v], [u - hw, y + hh, v], [u - hw, y - hh, v], [u + hw, y - hh, v]] : face === 'pu' ? [[u, y + hh, v + hw], [u, y + hh, v - hw], [u, y - hh, v - hw], [u, y - hh, v + hw]] : [[u, y + hh, v - hw], [u, y + hh, v + hw], [u, y - hh, v + hw], [u, y - hh, v - hw]];
+      decUV(P4, r); };
+    // ==== 月台層（第 80 批：深 7.1 公尺、樓梯＋電扶梯、地上的線、路線圖、海報、顏色）====
+    const BAYC = [TEAL, PEACH, LEMON, SKY];
     for (const sd of [-1, 1]) {
-      const a = sd * PV0, b = sd * PV1, r0 = sd * RAMP.v0, r1 = sd * RAMP.v1;
-      // 地板（厚 0.6）：樓梯的洞那一段分兩塊
-      for (const [u0, u1, va, vb] of [[-PL, RAMP.u0, a, b], [RAMP.u0, RAMP.u1, a, r0], [RAMP.u0, RAMP.u1, r1, b], [RAMP.u1, PL, a, b]]) M.bx(u0, u1, YP - 0.6, YP, Math.min(va, vb), Math.max(va, vb), CONC, null, { py: TILE });
-      M.hq(-PL, PL, Math.min(a + sd * 0.25, a + sd * 0.55), Math.max(a + sd * 0.25, a + sd * 0.55), YP + 0.004, YEL, true); // 月台邊的黃線
-      // 月台門（全高）：門口 1.9 寬，門片另外（InstancedMesh）；固定的玻璃＋門框、上面的橫樑
+      const a = sd * PV0, b = sd * PV1, r0 = sd * RAMP.v0, r1 = sd * RAMP.v1, h1 = sd * HOLE1, e0 = sd * ESCV[0], e1 = sd * ESCV[1], face = sd > 0 ? 'nv' : 'pv'; // face：後面的牆朝軌道
+      // 地板（厚 0.6）：樓梯＋電扶梯的洞那一段分兩塊
+      for (const [u0, u1, va, vb] of [[-PL, RAMP.u0, a, b], [RAMP.u0, RAMP.u1, a, r0], [RAMP.u0, RAMP.u1, h1, b], [RAMP.u1, PL, a, b]]) M.bx(u0, u1, YP - 0.6, YP, Math.min(va, vb), Math.max(va, vb), CONC, null, { py: TILE });
+      M.hq(-PL, PL, Math.min(a + sd * 0.25, a + sd * 0.55), Math.max(a + sd * 0.25, a + sd * 0.55), YP + 0.004, YEL, true); // 月台邊的黃線（導盲磚）
+      M.hq(-PL, PL, Math.min(b - sd * 1.4, b - sd * 0.3), Math.max(b - sd * 1.4, b - sd * 0.3), YP + 0.003, [0.70, 0.66, 0.60], true); // 後面一條深一點的地磚
+      // 月台門（全高）：門口 1.9 寬，門片另外（InstancedMesh）；固定的玻璃＋門框、上面的橫樑（咖啡色＝文湖線）
       let u = -PL;
       const edges = DOOR_U.map((d) => [d - PSD_W / 2, d + PSD_W / 2]);
-      for (const [e0, e1] of edges) {
-        G.vqV(a, u, e0, YP, YP + 3.0, GLS, sd > 0); M.bx(e0 - 0.08, e0, YP, YP + 3.0, a - 0.05, a + 0.05, WHITE); M.bx(e1, e1 + 0.08, YP, YP + 3.0, a - 0.05, a + 0.05, WHITE);
-        G.vqV(a, e0, e1, YP + 2.2, YP + 3.0, GLS, sd > 0); // 門口上面的玻璃
-        cols2.push(box(u, e0, a - 0.06, a + 0.06, YP - 0.3, YP + 3.3)); u = e1;
+      for (const [e0d, e1d] of edges) {
+        G.vqV(a, u, e0d, YP, YP + 3.0, GLS, sd > 0); M.bx(e0d - 0.08, e0d, YP, YP + 3.0, a - 0.05, a + 0.05, WHITE); M.bx(e1d, e1d + 0.08, YP, YP + 3.0, a - 0.05, a + 0.05, WHITE);
+        G.vqV(a, e0d, e1d, YP + 2.2, YP + 3.0, GLS, sd > 0); // 門口上面的玻璃
+        cols2.push(box(u, e0d, a - 0.06, a + 0.06, YP - 0.3, YP + 3.3)); u = e1d;
       }
       G.vqV(a, u, PL, YP, YP + 3.0, GLS, sd > 0); cols2.push(box(u, PL, a - 0.06, a + 0.06, YP - 0.3, YP + 3.3));
-      M.bx(-PL, PL, YP + 3.0, YP + 3.35, a - 0.12, a + 0.12, WHITE); M.bx(-PL, PL, YP + 3.35, CEIL2, a - 0.06, a + 0.06, WALL); // 橫樑＋到天花板的板子
-      // 後面的牆：下面白板、上面玻璃、柱子
-      M.bx(-PL, PL, YP, YP + 1.0, b - 0.08, b + 0.08, WALL); G.vqV(b, -PL, PL, YP + 1.0, CEIL2, GLS, sd > 0);
+      M.bx(-PL, PL, YP + 3.0, YP + 3.35, a - 0.12, a + 0.12, BROWN); M.bx(-PL, PL, YP + 3.35, CEIL2, a - 0.06, a + 0.06, WALL); // 橫樑＋到天花板的板子
+      // 地上的線：每個門口前面黃色斜線的「下車」、兩邊綠色的「排隊」箭頭
+      for (const d of DOOR_U) { decFloor(d, a + sd * 0.6, a + sd * 2.0, 1.5, DEC.off); for (const q of [-1, 1]) decFloor(d + q * 1.35, a + sd * 0.6, a + sd * 3.0, 0.8, DEC.queue); }
+      // 兩頭：禁止跨越（紅白斜線＋黃黑欄杆，走不過去）
+      for (const su of [-1, 1]) { const ub = su * (PL - 2.6); decFloor(su * (PL - 1.3), a + sd * 0.1, b - sd * 0.1, 2.5, DEC.nox); // 字朝那一頭的外面
+        M.bx(ub - 0.05, ub + 0.05, YP, YP + 1.0, Math.min(a, b) + 0.1, Math.max(a, b) - 0.1, [0.95, 0.8, 0.1]); for (let k = 0; k < 6; k++) { const vv = a + (b - a) * (k + 0.5) / 6; M.bx(ub - 0.06, ub + 0.06, YP + 0.45, YP + 0.62, vv - 0.28, vv + 0.28, [0.1, 0.1, 0.1]); }
+        decWall(ub + su * -0.07, YP + 1.35, (a + b) / 2, 1.6, 0.5, DEC.noxSign, su > 0 ? 'nu' : 'pu');
+        cols2.push(box(ub - 0.08, ub + 0.08, a, b, YP - 0.3, YP + 1.2)); }
+      // 後面的牆：每 6 公尺一格：下面有顏色的板子、咖啡色帶子；路線圖、海報、玻璃輪流
+      for (let k = 0; k < 10; k++) { const t0 = -PL + k * 6, t1 = t0 + 6, tm = t0 + 3, kind = k === 2 || k === 7 ? 'map' : k === 4 || k === 5 ? 'ads' : 'glass';
+        M.bx(t0, t1, YP, YP + 1.0, b - 0.08, b + 0.08, BAYC[(k + (sd > 0 ? 0 : 2)) % 4]); M.bx(t0, t1, YP + 1.0, YP + 1.12, b - 0.1, b + 0.1, BROWN);
+        if (kind === 'glass') G.vqV(b, t0, t1, YP + 1.12, CEIL2, GLS, sd > 0);
+        else { M.bx(t0, t1, YP + 1.12, YP + 2.75, b - 0.06, b + 0.06, WALL); G.vqV(b, t0, t1, YP + 2.75, CEIL2, GLS, sd > 0);
+          if (kind === 'map') decWall(tm, YP + 1.93, b - sd * 0.08, 5.4, 1.06, DEC.map, face);
+          else for (const q of [-1, 1]) decWall(tm + q * 1.3, YP + 1.93, b - sd * 0.08, 1.05, 1.5, DEC.ads[(k * 2 + (q > 0 ? 1 : 0) + (sd > 0 ? 0 : 1)) % 4], face); }
+      }
       for (let t = -PL; t <= PL + 0.01; t += 6) M.bx(t - 0.08, t + 0.08, YP, CEIL2, b - 0.1, b + 0.1, WHITE);
       cols2.push(box(-PL, PL, b - 0.1, b + 0.1, YP - 0.3, CEIL2));
       // 兩頭的牆
       M.bx(-PL - 0.15, -PL, YP, CEIL2, Math.min(a, b), Math.max(a, b), WALL); M.bx(PL, PL + 0.15, YP, CEIL2, Math.min(a, b), Math.max(a, b), WALL);
       cols2.push(box(-PL - 0.2, -PL, a, b, YP - 0.3, CEIL2)); cols2.push(box(PL, PL + 0.2, a, b, YP - 0.3, CEIL2));
-      // 橘色的柱子、椅子、垃圾桶
-      for (const t of [-24, -12, 12, 24]) M.bx(t - 0.18, t + 0.18, YP, CEIL2, sd * 7.1 - 0.18, sd * 7.1 + 0.18, ORA);
-      for (const t of [-18, 18]) { M.bx(t - 1.2, t + 1.2, YP + 0.4, YP + 0.48, sd * 7.0 - 0.25, sd * 7.0 + 0.25, STEEL); for (const q of [-1, 1]) M.bx(t + q * 1.0 - 0.04, t + q * 1.0 + 0.04, YP, YP + 0.4, sd * 7.0 - 0.2, sd * 7.0 + 0.2, DARK); cols2.push(box(t - 1.2, t + 1.2, sd * 7.0 - 0.3, sd * 7.0 + 0.3, YP - 0.3, YP + 0.5)); }
-      // 樓梯（大廳 → 月台）：36 階、兩邊斜的玻璃欄杆（在月台這一層＝洞的欄杆：橫的）
+      // 切角的柱子（橘）、有顏色的椅子
+      for (const t of [-24, -12, 12, 24]) { M.prism(t, sd * 9.7, 0.26, YP, CEIL2, ORA); cols2.push(box(t - 0.27, t + 0.27, sd * 9.7 - 0.27, sd * 9.7 + 0.27, YP - 0.3, CEIL2)); }
+      for (const [t, col] of [[-18, TEAL], [-6, LEMON], [18, PEACH]]) { M.bx(t - 1.2, t + 1.2, YP + 0.4, YP + 0.48, sd * 9.4 - 0.25, sd * 9.4 + 0.25, col); M.bx(t - 1.2, t + 1.2, YP + 0.48, YP + 0.95, sd * 9.68 - 0.04, sd * 9.68 + 0.04, col); for (const q of [-1, 1]) M.bx(t + q * 1.0 - 0.04, t + q * 1.0 + 0.04, YP, YP + 0.4, sd * 9.4 - 0.2, sd * 9.4 + 0.2, DARK); cols2.push(box(t - 1.2, t + 1.2, sd * 9.4 - 0.3, sd * 9.4 + 0.3, YP - 0.3, YP + 0.5)); }
+      // 樓梯（大廳 → 月台）：36 階＋旁邊往上的電扶梯
       M.stairs(RAMP.u0, RAMP.u1, YC, YP, Math.min(r0, r1), Math.max(r0, r1), 36, TILE2, CONC);
-      M.slopeY(RAMP.u0, RAMP.u1, Math.min(r0, r1), Math.max(r0, r1), YC - 0.45, YP - 0.45, CONC, false); // 樓梯的底
-      for (const rv of [r0, r1]) { G.slopeV(rv, RAMP.u0, RAMP.u1, YC, YP, 1.05, GLS, rv > 0); M.bx(RAMP.u0, RAMP.u1 + 0.001, YC + 1.05, YC + 1.12, rv - 0.03, rv + 0.03, STEEL, ['py', 'ny']); }
-      for (const rv of [r0, r1]) { G.vqV(rv, RAMP.u0, RAMP.u1, YP, YP + 1.05, GLS, rv > 0); M.bx(RAMP.u0, RAMP.u1, YP + 1.05, YP + 1.12, rv - 0.03, rv + 0.03, STEEL); cols2.push(box(RAMP.u0, RAMP.u1, rv - 0.05, rv + 0.05, YP - 0.3, YP + 1.2)); cols1.push(box(RAMP.u0, RAMP.u1, rv - 0.05, rv + 0.05, null, YP + 1.2)); }
-      G.vqU(RAMP.u0, Math.min(r0, r1), Math.max(r0, r1), YP, YP + 1.05, GLS, true); M.bx(RAMP.u0 - 0.03, RAMP.u0 + 0.03, YP + 1.05, YP + 1.12, Math.min(r0, r1), Math.max(r0, r1), STEEL);
-      cols2.push(box(RAMP.u0 - 0.05, RAMP.u0 + 0.05, r0, r1, YP - 0.3, YP + 1.2)); // 洞的低的那一頭
-      // 月台的燈（天花板一條）
-      LI.hq(-PL + 1, PL - 1, sd * 5.5 - 0.15, sd * 5.5 + 0.15, CEIL2 - 0.02, [1, 1, 1], false);
+      M.slopeY(RAMP.u0, RAMP.u1, Math.min(r0, h1), Math.max(r0, h1), YC - 0.45, YP - 0.45, CONC, false); // 樓梯、電扶梯的底
+      M.slopeY(RAMP.u0, RAMP.u1, Math.min(r1, e0), Math.max(r1, e0), YC + 0.02, YP + 0.02, CONC, true); // 中間的分隔
+      M.slopeY(RAMP.u0, RAMP.u1, Math.min(e1, h1), Math.max(e1, h1), YC + 0.02, YP + 0.02, CONC, true);
+      escal(M, G, S, RAMP.u0, RAMP.u1, YC, YP, Math.min(e0, e1), Math.max(e0, e1));
+      for (const rv of [r0, h1]) { G.slopeV(rv, RAMP.u0, RAMP.u1, YC, YP, 1.05, GLS, rv > 0); M.bx(RAMP.u0, RAMP.u1 + 0.001, YC + 1.05, YC + 1.12, rv - 0.03, rv + 0.03, STEEL, ['py', 'ny']); }
+      for (const rv of [r0, h1]) { G.vqV(rv, RAMP.u0, RAMP.u1, YP, YP + 1.05, GLS, rv > 0); M.bx(RAMP.u0, RAMP.u1, YP + 1.05, YP + 1.12, rv - 0.03, rv + 0.03, STEEL); cols2.push(box(RAMP.u0, RAMP.u1, rv - 0.05, rv + 0.05, YP - 0.3, YP + 1.2)); cols1.push(box(RAMP.u0, RAMP.u1, rv - 0.05, rv + 0.05, null, YP + 1.2)); }
+      G.vqU(RAMP.u0, Math.min(r0, h1), Math.max(r0, h1), YP, YP + 1.05, GLS, true); M.bx(RAMP.u0 - 0.03, RAMP.u0 + 0.03, YP + 1.05, YP + 1.12, Math.min(r0, h1), Math.max(r0, h1), STEEL);
+      cols2.push(box(RAMP.u0 - 0.05, RAMP.u0 + 0.05, r0, h1, YP - 0.3, YP + 1.2)); // 洞的低的那一頭
+      // 月台的燈（天花板兩條）
+      for (const lv of [5.5, 8.4]) LI.hq(-PL + 1, PL - 1, sd * lv - 0.15, sd * lv + 0.15, CEIL2 - 0.02, [1, 1, 1], false);
     }
-    // 屋頂（整個站，含軌道上面）：天花板白、上面灰
-    M.bx(-PL - 1.5, PL + 1.5, CEIL2, ROOF, -(PV1 + 0.8), PV1 + 0.8, CONC, null, { ny: WHITE, py: [0.52, 0.54, 0.56] });
+    // 屋頂（第 80 批：斜的，有稜有角）：天花板白；上面兩片斜的屋頂（中間高）、兩頭斜下來、屋簷切角
+    { const EV = PV1 + 1.4, EU = PL + 1.6, RG = ROOF + 2.2, RU = PL - 2.0;
+      M.bx(-EU + 0.4, EU - 0.4, CEIL2, ROOF, -(PV1 + 0.4), PV1 + 0.4, CONC, null, { ny: WHITE, py: ROOFC });
+      for (const q of [-1, 1]) { M.quad([-EU, ROOF, q * EV], [EU, ROOF, q * EV], [RU, RG, 0], [-RU, RG, 0], ROOFC); // 長的兩片（梯形）
+        M.tri([q * EU, ROOF, -EV], [q * EU, ROOF, EV], [q * RU, RG, 0], ROOFC); } // 兩頭的三角形
+      for (const q of [-1, 1]) { M.quad([-EU, ROOF, q * EV], [EU, ROOF, q * EV], [EU - 0.5, ROOF - 0.55, q * (EV - 0.7)], [-EU + 0.5, ROOF - 0.55, q * (EV - 0.7)], BROWN); // 屋簷下面斜的咖啡色
+        M.quad([q * EU, ROOF, -EV], [q * EU, ROOF, EV], [q * (EU - 0.5), ROOF - 0.55, EV - 0.7], [q * (EU - 0.5), ROOF - 0.55, -(EV - 0.7)], BROWN); }
+      for (let t = -PL + 3; t <= PL - 3 + 0.01; t += 6) for (const q of [-1, 1]) M.quad([t - 0.05, YP - 0.6, q * (PV1 + 0.12)], [t + 0.05, YP - 0.6, q * (PV1 + 0.12)], [t + 0.75, ROOF - 0.5, q * (PV1 + 0.9)], [t + 0.65, ROOF - 0.5, q * (PV1 + 0.9)], WHITE); } // 外面斜的白色鰭片
     for (let t = -PL + 6; t <= PL - 6; t += 12) M.bx(t - 0.25, t + 0.25, CEIL2 - 0.5, CEIL2, -PV1 - 0.6, PV1 + 0.6, ORA); // 橫樑
     // 軌道旁邊（月台門裡面）：兩條軌道的導軌墩（深色）
     for (const tv of [-TRK_V, TRK_V]) for (const q of [-1.05, 1.05]) M.bx(-PL, PL, YT, YT + 0.12, tv + q - 0.22, tv + q + 0.22, DARK, ['py', 'pv', 'nv']);
     // ==== 大廳層 ====
     M.bx(-CU, CU, YC - 0.5, YC, -CV, CV, CONC, null, { py: TILE2 });
-    for (const [u0, u1, v0, v1] of [[-CU, 2, -CV, CV], [2, RAMP.u1, -RAMP.v0, RAMP.v0], [2, RAMP.u1, RAMP.v1, CV], [2, RAMP.u1, -CV, -RAMP.v1], [RAMP.u1, CU, -CV, CV]]) M.bx(u0, u1, CEIL1, CEIL1 + 0.2, v0, v1, WHITE, null, { py: CONC }); // 天花板（樓梯穿過去的地方挖掉）
+    for (const [u0, u1, v0, v1] of [[-CU, 2, -CV, CV], [2, RAMP.u1, -RAMP.v0, RAMP.v0], [2, RAMP.u1, HOLE1, CV], [2, RAMP.u1, -CV, -HOLE1], [RAMP.u1, CU, -CV, CV]]) M.bx(u0, u1, CEIL1, CEIL1 + 0.2, v0, v1, WHITE, null, { py: CONC }); // 天花板（樓梯穿過去的地方挖掉）
+    for (let k = 0; k < 11; k++) { const t0 = -CU + k * 4; M.hq(t0 + 0.1, t0 + 3.9, -1.2, 1.2, YC + 0.004, k % 2 ? [0.78, 0.72, 0.62] : [0.86, 0.82, 0.74], true); } M.hq(-CU, CU, -1.35, -1.2, YC + 0.005, BROWN, true); M.hq(-CU, CU, 1.2, 1.35, YC + 0.005, BROWN, true); // 第 80 批：大廳中間一條米色的走道、兩邊咖啡色
+    decWall(-CU + 0.12, YC + 2.0, 0, 8.0, 1.56, DEC.map, 'pu'); decWall(CU - 0.12, YC + 2.0, 0, 8.0, 1.56, DEC.map, 'nu'); // 大廳兩頭的牆：大的路線圖
+    for (const [t, q, k] of [[-6, 1, 0], [-2.5, 1, 1], [-6, -1, 2], [-2.5, -1, 3]]) decWall(t, YC + 1.7, q * (CV - 0.14), 1.4, 2.0, DEC.ads[k], q > 0 ? 'nv' : 'pv'); // 海報
     LI.hq(-CU + 2, CU - 2, -0.15, 0.15, CEIL1 - 0.02, [1, 1, 1], false); for (const t of [-14, 14]) LI.hq(t - 0.15, t + 0.15, -CV + 1, CV - 1, CEIL1 - 0.02, [1, 1, 1], false);
     // 四周的牆：下面白板、上面玻璃；天橋接進來的地方開口
     const wallV = (sd) => { const v = sd * CV, gaps = S.ent.filter((e) => e.s === sd).map((e) => [e.bu0, e.bu1]).sort((p, q) => p[0] - q[0]); let u = -CU; for (const [g0, g1] of gaps) { if (g0 > u) { M.bx(u, g0, YC, YC + 0.6, v - 0.08, v + 0.08, WALL); G.vqV(v, u, g0, YC + 0.6, CEIL1, GLS, sd > 0); cols1.push(box(u, g0, v - 0.1, v + 0.1, YC - 0.3, CEIL1)); } M.bx(g0 - 0.1, g0, YC, CEIL1, v - 0.1, v + 0.1, WHITE); M.bx(g1, g1 + 0.1, YC, CEIL1, v - 0.1, v + 0.1, WHITE); u = g1; } if (u < CU) { M.bx(u, CU, YC, YC + 0.6, v - 0.08, v + 0.08, WALL); G.vqV(v, u, CU, YC + 0.6, CEIL1, GLS, sd > 0); cols1.push(box(u, CU, v - 0.1, v + 0.1, YC - 0.3, CEIL1)); } for (let t = -CU; t <= CU + 0.01; t += 5.5) if (!gaps.some(([g0, g1]) => t > g0 - 0.2 && t < g1 + 0.2)) M.bx(t - 0.08, t + 0.08, YC, CEIL1, v - 0.1, v + 0.1, WHITE); };
@@ -193,48 +326,59 @@ function buildMrt(V, opt = {}) {
       for (const sd of [-1, 1]) { const a = sd * span / 2, b = sd * CV; G.vqU(GU, Math.min(a, b), Math.max(a, b), YC, YC + 1.15, GLS, true); M.bx(GU - 0.03, GU + 0.03, YC + 1.15, YC + 1.22, Math.min(a, b), Math.max(a, b), STEEL); cols1.push(box(GU - 0.05, GU + 0.05, a, b, YC - 0.3, YC + 1.3)); }
       S.gatePass = []; for (let i = 0; i < n - 1; i++) S.gatePass.push(v0 + i * (bw + pw) + bw + pw / 2); }
     // 詢問處（櫃台）、售票機、柱子
-    M.bx(-15, -12.5, YC, YC + 1.1, -CV + 0.4, -CV + 1.9, [0.55, 0.42, 0.30], null, { py: ALU }); cols1.push(box(-15, -12.5, -CV + 0.4, -CV + 1.9, YC - 0.3, YC + 1.2));
-    for (const t of [-17.5, -16.5, -15.5]) { M.bx(t - 0.4, t + 0.4, YC, YC + 1.8, CV - 1.0, CV - 0.3, [0.26, 0.36, 0.60], null, { nv: [0.75, 0.80, 0.86] }); cols1.push(box(t - 0.4, t + 0.4, CV - 1.0, CV - 0.3, YC - 0.3, YC + 1.9)); }
+    M.bx(-12.5, -10, YC, YC + 1.1, -CV + 0.4, -CV + 1.9, [0.55, 0.42, 0.30], null, { py: ALU }); cols1.push(box(-12.5, -10, -CV + 0.4, -CV + 1.9, YC - 0.3, YC + 1.2)); // 第 80 批：搬到翼的旁邊（不擋路）
+    for (const t of [-12.5, -11.5, -10.5]) { M.bx(t - 0.4, t + 0.4, YC, YC + 1.8, CV - 1.0, CV - 0.3, [0.26, 0.36, 0.60], null, { nv: [0.75, 0.80, 0.86] }); cols1.push(box(t - 0.4, t + 0.4, CV - 1.0, CV - 0.3, YC - 0.3, YC + 1.9)); }
     for (const t of [-14, 14]) for (const q of [-3, 3]) { M.bx(t - 0.2, t + 0.2, YC, CEIL1, q - 0.2, q + 0.2, ORA); cols1.push(box(t - 0.2, t + 0.2, q - 0.2, q + 0.2, YC - 0.3, CEIL1)); }
-    // ==== 天橋＋出入口的樓梯（每個出入口）====
+    // ==== 第 80 批：通到出入口的翼（6 公尺寬、有牆有屋頂的房子，橫過內湖路兩邊的人行道）＋出入口（樓梯＋往上的電扶梯，斜的屋頂）====
     for (const e of S.ent) {
       const sd = e.s, dr = e.dir, vIn = sd * CV, vOut = e.v0, b0 = e.bu0, b1 = e.bu1, lo = Math.min(vIn, vOut), hi = Math.max(vIn, vOut);
       const R2 = (a, b) => [Math.min(a, b), Math.max(a, b)];
-      // 天橋：3 公尺寬（b0…b1），從大廳的牆到樓梯的平台；地板、兩邊欄杆、屋頂＋柱子
-      M.bx(b0, b1, YC - 0.4, YC, lo, hi, CONC, null, { py: TILE2 });
-      for (const uu of [b0, b1]) { G.vqU(uu, lo, hi, YC, YC + 1.1, GLS, uu === b0); M.bx(uu - 0.04, uu + 0.04, YC + 1.1, YC + 1.17, lo, hi, STEEL); cols1.push(box(uu - 0.06, uu + 0.06, lo, hi, YC - 0.3, YC + 1.3)); }
-      M.bx(b0 - 0.3, b1 + 0.3, YC + 2.9, YC + 3.1, lo - 0.3, hi + 0.3, ALU, null, { ny: WHITE });
-      for (const uu of [b0 + 0.1, b1 - 0.1]) for (const vv of [lo + 0.3, hi - 0.3]) M.bx(uu - 0.06, uu + 0.06, YC + 1.1, YC + 2.9, vv - 0.06, vv + 0.06, STEEL);
-      { const um = (b0 + b1) / 2, vm = (vIn + vOut) / 2, [cx, cz] = toW(um, vm); if (Math.abs(vOut - vIn) > 4 && !onRoad(cx, cz, 0.8)) { M.bx(um - 0.35, um + 0.35, 0, YC - 0.4, vm - 0.35, vm + 0.35, CONC); colliders0.push(box(um - 0.35, um + 0.35, vm - 0.35, vm + 0.35, null, YC - 0.4)); } }
-      // 樓梯的帶子：平台（u0…uS）在 YC，樓梯 uS…u1 下到 0（往 dir 的方向）；兩邊鋁板的牆（到踏面上面 2.6）、斜的罩子、門口的平罩子
+      // 翼：地板、下面鋁板＋上面玻璃的牆、斜的屋頂（中間高）、柱子
+      M.bx(b0, b1, YC - 0.4, YC, lo, hi, CONC, null, { py: TILE2 }); M.hq(b0 + 0.6, b1 - 0.6, lo, hi, YC + 0.004, [0.84, 0.80, 0.72], true); M.hq((b0 + b1) / 2 - 0.08, (b0 + b1) / 2 + 0.08, lo, hi, YC + 0.005, BROWN, true);
+      for (const uu of [b0, b1]) { M.bx(uu - 0.06, uu + 0.06, YC, YC + 1.0, lo, hi, ALU); G.vqU(uu, lo, hi, YC + 1.0, YC + 3.2, GLS, uu === b0); M.bx(uu - 0.08, uu + 0.08, YC + 3.2, YC + 3.35, lo, hi, BROWN); cols1.push(box(uu - 0.08, uu + 0.08, lo, hi, YC - 0.3, YC + 3.3)); }
+      { const um = (b0 + b1) / 2, ey = YC + 3.35, ry = YC + 4.5; for (const [ea, eb] of [[b0 - 0.5, um], [b1 + 0.5, um]]) M.quad([ea, ey, lo], [ea, ey, hi], [eb, ry, hi], [eb, ry, lo], ROOFC); M.hq(b0, b1, lo, hi, YC + 3.3, WHITE, false);
+        for (const vv of [lo, hi]) M.tri([b0 - 0.5, ey, vv], [b1 + 0.5, ey, vv], [um, ry, vv], ROOFC); }
+      for (let vv = lo + 0.2; vv <= hi - 0.19; vv += Math.max(2, (hi - lo - 0.4) / Math.max(1, Math.round((hi - lo) / 5)))) for (const uu of [b0, b1]) M.bx(uu - 0.09, uu + 0.09, YC, YC + 3.2, vv - 0.09, vv + 0.09, WHITE);
+      for (const vv of [lo + (hi - lo) * 0.33, lo + (hi - lo) * 0.67]) LI.hq((b0 + b1) / 2 - 1.2, (b0 + b1) / 2 + 1.2, vv - 0.12, vv + 0.12, YC + 3.28, [1, 1, 1], false);
+      { const um = (b0 + b1) / 2; for (const vm of [lo + (hi - lo) * 0.35, lo + (hi - lo) * 0.7]) { const [cx, cz] = toW(um, vm); if (Math.abs(vOut - vIn) > 4 && !onRoad(cx, cz, 0.8)) { M.prism(um, vm, 0.4, 0, YC - 0.4, CONC); colliders0.push(box(um - 0.4, um + 0.4, vm - 0.4, vm + 0.4, null, YC - 0.4)); } } }
+      // 出入口：平台（u0…uS）在 YC、樓梯 uS…u1 下到 0；樓梯在靠翼的那一邊（ST），往上的電扶梯在外面那一邊（ES）
       const va = Math.min(e.v0, e.v1), vb = Math.max(e.v0, e.v1), [p0, p1] = R2(e.u0, e.uS), [s0, s1] = R2(e.uS, e.u1), yAt = (u) => YC * (1 - (u - e.uS) / (e.u1 - e.uS));
+      const ST = R2(e.v0, e.v0 + sd * 2.6), ES = R2(e.v0 + sd * 2.95, e.v0 + sd * 4.45), DV = R2(e.v0 + sd * 2.6, e.v0 + sd * 2.95);
       M.bx(p0, p1, YC - 0.4, YC, va, vb, CONC, null, { py: TILE2 });
-      M.stairs(e.uS, e.u1, YC, 0, va, vb, 35, TILE2, CONC);
+      M.stairs(e.uS, e.u1, YC, 0, ST[0], ST[1], 35, TILE2, CONC);
       M.slopeY(s0, s1, va, vb, yAt(s0) - 0.4, yAt(s1) - 0.4, CONC, false); // 樓梯的底（斜的）
-      // 出入口＝一個高的玻璃盒子（第 78 批第 2 版：平的屋頂在 YC + 3.4，鏡頭跟在後面、在樓梯上面也不會穿出罩子）：下面 1.1 鋁板、上面玻璃；天橋接進來那一邊的平台沒有牆
-      const HT = YC + 3.4, bridgeSide = (vv) => Math.abs(vv - e.v0) < 1e-6, og = (vv) => vv + (vv > (va + vb) / 2 ? 0.03 : -0.03);
-      for (const vv of [va, vb]) {
-        M.slopeV(vv, s0, s1, yAt(s0), yAt(s1), 1.1, ALU, vv > 0); G.vqV(og(vv), s0, s1, 1.1, HT, GLS, vv > 0); // 樓梯旁邊：斜的鋁板＋玻璃到屋頂
-        if (!bridgeSide(vv)) { M.bx(p0, p1, YC, YC + 1.1, vv - 0.06, vv + 0.06, ALU); G.vqV(og(vv), p0, p1, YC + 1.1, HT, GLS, vv > 0); } // 平台旁邊
-      }
-      M.bx(...R2(e.u0, e.u0 - 0.1 * dr), YC, YC + 1.1, va, vb, ALU); G.vqU(e.u0 - 0.05 * dr, va, vb, YC + 1.1, HT, GLS, dr < 0); // 平台外面那一頭的牆（上面玻璃）
-      G.vqU(e.u1 + 0.05 * dr, va, vb, 2.7, HT, GLS, dr > 0); // 門口上面的玻璃
-      M.bx(...R2(e.u0 - 0.3 * dr, e.u1 + 0.3 * dr), HT, HT + 0.2, va - 0.25, vb + 0.25, ALU, null, { ny: WHITE }); // 平的屋頂（整條：平台＋樓梯）
-      M.bx(...R2(e.u1, e.u1 + 1.6 * dr), 2.5, 2.7, va - 0.25, vb + 0.25, ALU, null, { ny: WHITE }); // 門口外面的平罩子
-      for (const vv of [va - 0.15, vb + 0.15]) M.bx(...R2(e.u1 + 1.2 * dr, e.u1 + 1.4 * dr), 0, 2.5, vv - 0.1, vv + 0.1, ALU); // 門口的柱子
-      M.bx(...R2(e.u0 - 0.1 * dr, e.u0 + 0.9 * dr), 0, 0.5, va - 0.3, vb + 0.3, [0.66, 0.64, 0.60]); // 花崗岩的台座（樓梯頭下面）
-      M.bx(p0 - 0.1, p1 + 0.1, 0.5, YC - 0.4, va - 0.1, vb + 0.1, ALU); // 平台下面包起來（鋁板的小房子）
-      for (const vv of [va, vb]) { // 兩邊的牆：街上、大廳那一層都擋（樓梯那段兩邊都有；平台那段天橋那一邊沒有）
-        const c = box(...R2(e.uS, e.u1), vv - 0.1, vv + 0.1, null, HT); colliders0.push(c); cols1.push(c);
-        if (!bridgeSide(vv)) { const c2 = box(...R2(e.u0 - 0.1 * dr, e.uS), vv - 0.1, vv + 0.1, null, HT); colliders0.push(c2); cols1.push(c2); }
-      }
+      M.slopeY(s0, s1, DV[0], DV[1], yAt(s0) + 0.02, yAt(s1) + 0.02, CONC, true); // 中間的分隔
+      M.slopeY(s0, s1, ES[1], vb, yAt(s0) + 0.02, yAt(s1) + 0.02, CONC, true);
+      escal(M, G, S, e.u1, e.uS, 0, YC, ES[0], ES[1]);
+      // 盒子：下面鋁板、上面玻璃；屋頂斜的（平台上面 HT，樓梯上面斜下來到門口 RD）
+      const HT = YC + 3.4, RD = 6.2, roofAt = (u) => { const f = clamp((u - e.uS) / (e.u1 - e.uS), 0, 1); return HT + (RD - HT) * f; }, bridgeSide = (vv) => Math.abs(vv - e.v0) < 1e-6, og = (vv) => vv + (vv > (va + vb) / 2 ? 0.03 : -0.03);
+      e.roofAt = roofAt;
+      for (const vv of [va, vb]) { const pos = vv > 0;
+        M.slopeV(vv, s0, s1, yAt(s0), yAt(s1), 1.1, ALU, pos); // 樓梯旁邊斜的鋁板
+        const ra = roofAt(s0), rb = roofAt(s1), ya = yAt(s0) + 1.1, yb = yAt(s1) + 1.1, ov = og(vv); G.quad(pos ? [s0, ya, ov] : [s1, yb, ov], pos ? [s1, yb, ov] : [s0, ya, ov], pos ? [s1, rb, ov] : [s0, ra, ov], pos ? [s0, ra, ov] : [s1, rb, ov], GLS); // 玻璃到斜的屋頂
+        if (!bridgeSide(vv)) { M.bx(p0, p1, YC, YC + 1.1, vv - 0.06, vv + 0.06, ALU); G.vqV(og(vv), p0, p1, YC + 1.1, HT, GLS, pos); }
+        for (let k = 0; k <= 4; k++) { const uu = s0 + ((s1 - s0) * k) / 4; M.bx(uu - 0.07, uu + 0.07, Math.max(0, yAt(uu) - 0.4), roofAt(uu), vv - 0.08, vv + 0.08, WHITE); } } // 斜的白色框
+      M.bx(...R2(e.u0, e.u0 - 0.1 * dr), YC, YC + 1.1, va, vb, ALU); G.vqU(e.u0 - 0.05 * dr, va, vb, YC + 1.1, HT, GLS, dr < 0); // 平台外面那一頭
+      G.vqU(e.u1 + 0.05 * dr, va, vb, 2.7, RD, GLS, dr > 0); // 門口上面的玻璃
+      { const ea = e.u0 - 0.4 * dr, eb = e.u1 + 0.4 * dr, yE = RD + 0.2 - 0.4 * ((HT - RD) / Math.abs(e.u1 - e.uS)); // 屋頂：平台那一段平的、樓梯那一段斜的（往外凸 0.4，切角的邊）
+        M.bx(...R2(ea, e.uS), HT, HT + 0.2, va - 0.35, vb + 0.35, ROOFC, null, { ny: WHITE });
+        for (const [y0, y1, col, up] of [[HT + 0.2, yE, ROOFC, true], [HT, yE - 0.2, WHITE, false]]) M.slopeY(...(dr > 0 ? [e.uS, eb] : [eb, e.uS]), va - 0.35, vb + 0.35, ...(dr > 0 ? [y0, y1] : [y1, y0]), col, up);
+        for (const vv of [va - 0.35, vb + 0.35]) M.slopeV(vv, ...(dr > 0 ? [e.uS, eb] : [eb, e.uS]), ...(dr > 0 ? [HT, yE - 0.2] : [yE - 0.2, HT]), 0.2, BROWN, vv > 0); }
+      M.bx(...R2(e.u1, e.u1 + 1.8 * dr), 2.5, 2.7, va - 0.3, vb + 0.3, BROWN, null, { ny: WHITE }); // 門口外面的罩子（咖啡色）
+      for (const vv of [va - 0.15, vb + 0.15]) M.prism(e.u1 + 1.5 * dr, vv, 0.11, 0, 2.5, ALU); // 門口的柱子
+      M.bx(...R2(e.u0 - 0.1 * dr, e.u0 + 0.9 * dr), 0, 0.5, va - 0.3, vb + 0.3, [0.66, 0.64, 0.60]); // 花崗岩的台座
+      M.bx(p0 - 0.1, p1 + 0.1, 0.5, YC - 0.4, va - 0.1, vb + 0.1, ALU); // 平台下面包起來
+      for (const vv of [va, vb]) { const c = box(...R2(e.uS, e.u1), vv - 0.1, vv + 0.1, null, HT); colliders0.push(c); cols1.push(c);
+        if (!bridgeSide(vv)) { const c2 = box(...R2(e.u0 - 0.1 * dr, e.uS), vv - 0.1, vv + 0.1, null, HT); colliders0.push(c2); cols1.push(c2); } }
       { const c = box(...R2(e.u0 - 0.15 * dr, e.u0), va, vb, null, HT); colliders0.push(c); cols1.push(c); }
-      for (const vv of [va - 0.15, vb + 0.15]) colliders0.push(box(...R2(e.u1 + 1.2 * dr, e.u1 + 1.4 * dr), vv - 0.12, vv + 0.12, null, 2.5));
-      e.sign = { u: e.u1 + 1.62 * dr, v: (va + vb) / 2, y: 2.2, w: 3.0, h: 0.55, face: dr > 0 ? 'pu' : 'nu' }; // 門口的罩子前面的牌子（朝走過來的人）
+      { const c = box(...R2(e.uS, e.u1), DV[0], DV[1], null, YC + 1.0); colliders0.push(c); cols1.push(c); } // 樓梯和電扶梯中間（不會從旁邊跳上去）
+      for (const vv of [va - 0.15, vb + 0.15]) colliders0.push(box(...R2(e.u1 + 1.4 * dr, e.u1 + 1.6 * dr), vv - 0.12, vv + 0.12, null, 2.5));
+      e.sign = { u: e.u1 + 1.82 * dr, v: (va + vb) / 2, y: 2.2, w: 3.6, h: 0.6, face: dr > 0 ? 'pu' : 'nu' };
+      decWall(e.u1 + 0.02 * dr, 1.6, (ES[0] + ES[1]) / 2, 1.0, 0.5, DEC.escSign, dr > 0 ? 'pu' : 'nu'); // 電扶梯口的牌子
     }
     // ==== 柱子（街上）：月台邊 ±8.6、中間 0；車道上不放 ====
-    for (const t of [-27, -16, -5, 6, 17, 27]) for (const vv of [-8.6, 8.6]) { const [x, z] = toW(t, vv); if (onRoad(x, z, 0.6)) continue; M.bx(t - 0.45, t + 0.45, 0, YP - 0.6, vv - 0.45, vv + 0.45, CONC); colliders0.push(box(t - 0.5, t + 0.5, vv - 0.5, vv + 0.5, null, YP - 0.6)); }
-    for (const t of [-21, -10, 10, 21]) { const [x, z] = toW(t, 0); if (onRoad(x, z, 0.6)) continue; M.bx(t - 0.4, t + 0.4, 0, YC - 0.5, -0.4, 0.4, CONC); colliders0.push(box(t - 0.45, t + 0.45, -0.45, 0.45, null, YC - 0.5)); }
+    for (const t of [-27, -16, -5, 6, 17, 27]) for (const vv of [-(PV1 + 0.8), PV1 + 0.8]) { const [x, z] = toW(t, vv); if (onRoad(x, z, 0.6)) continue; M.prism(t, vv, 0.5, 0, YP - 0.6, CONC); colliders0.push(box(t - 0.5, t + 0.5, vv - 0.5, vv + 0.5, null, YP - 0.6)); }
+    for (const t of [-21, -10, 10, 21]) { const [x, z] = toW(t, 0); if (onRoad(x, z, 0.6)) continue; M.prism(t, 0, 0.45, 0, YC - 0.5, CONC); colliders0.push(box(t - 0.45, t + 0.45, -0.45, 0.45, null, YC - 0.5)); }
     // 大廳的底、月台底下的樑
     M.hq(-CU, CU, -CV, CV, YC - 0.5, [0.6, 0.6, 0.58], false);
     // ==== 字：一張圖（站名、出口、大廳的牌子、往哪裡的月台）====
@@ -262,6 +406,8 @@ function buildMrt(V, opt = {}) {
     for (const e of S.ent) plateUV(e.sign.u, e.sign.y, e.sign.v, e.sign.w, e.sign.h, uvOf(R.exit[e.n - 1]), e.sign.face);
     const sgeo = SM.geometry(); sgeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs.flat(), 2));
     addMesh(sgeo, signMat(tex), sg, 'mrt-signs');
+    { const dt = texOf(dcv), dm = new THREE.MeshStandardMaterial({ map: dt, emissive: 0xffffff, emissiveMap: dt, emissiveIntensity: 0.1, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide }); // 第 80 批：路線圖、海報、地上的線
+      const g2 = DCM.geometry(); g2.setAttribute('uv', new THREE.Float32BufferAttribute(dcuv.flat(), 2)); addMesh(g2, dm, sg, 'mrt-deco'); mats['deco' + si] = dm; }
     // 月台的看板（會變：下一班幾秒）：一張 512×128，上半＝+v 那邊、下半＝−v 那邊
     const dc = mkCanvas(512, 128), dg = dc.getContext('2d'), dtex = texOf(dc), DM = mesher(), duv = [];
     for (const sd of [-1, 1]) { const uv = sd > 0 ? [0, 0.5, 1, 1] : [0, 0, 1, 0.5]; for (const f of ['pu', 'nu']) { const P4 = f === 'pu' ? [[14, YP + 2.3, sd * 5.5 + 1.6], [14, YP + 2.3, sd * 5.5 - 1.6], [14, YP + 3.1, sd * 5.5 - 1.6], [14, YP + 3.1, sd * 5.5 + 1.6]] : [[14, YP + 2.3, sd * 5.5 - 1.6], [14, YP + 2.3, sd * 5.5 + 1.6], [14, YP + 3.1, sd * 5.5 + 1.6], [14, YP + 3.1, sd * 5.5 - 1.6]]; DM.quad(P4[0], P4[1], P4[2], P4[3], [1, 1, 1]); duv.push([uv[0], uv[1]], [uv[2], uv[1]], [uv[2], uv[3]], [uv[0], uv[3]]); } M.bx(13.97, 14.03, YP + 3.1, CEIL2, sd * 5.5 - 0.04, sd * 5.5 + 0.04, STEEL); }
@@ -278,38 +424,62 @@ function buildMrt(V, opt = {}) {
   const leafGeo = (() => { const Lm = mesher(); Lm.bx(-0.475, 0.475, 0, 2.2, -0.03, 0.03, WHITE, null, { pv: GLSD, nv: GLSD }); Lm.bx(-0.475, 0.475, 0, 0.5, -0.035, 0.035, WHITE); Lm.bx(-0.475, -0.40, 0, 2.2, -0.035, 0.035, WHITE); Lm.bx(0.40, 0.475, 0, 2.2, -0.035, 0.035, WHITE); return Lm.geometry(); })();
   const psdList = []; for (const S of stations) for (const d of S.psd) for (const q of [-1, 1]) psdList.push({ S, d, q });
   const psdIM = new THREE.InstancedMesh(leafGeo, mats.leaf, psdList.length); psdIM.name = 'mrt-psd'; psdIM.frustumCulled = false; group.add(psdIM); meshes++; tris += (leafGeo.index.count / 3) * psdList.length;
+  // ==== 第 80 批：電扶梯會動的階梯（全部的電扶梯一組 InstancedMesh）====
+  const stepGeo = (() => { const Sm = mesher(); Sm.bx(-STEP_D / 2 + 0.01, STEP_D / 2 - 0.01, -0.24, 0, -0.5, 0.5, [0.32, 0.33, 0.35], null, { py: [0.40, 0.41, 0.43] }); for (const q of [-1, 1]) Sm.hq(-STEP_D / 2 + 0.01, STEP_D / 2 - 0.01, q * 0.5 - q * 0.06 - 0.03, q * 0.5 - q * 0.06 + 0.03, 0.002, YEL, true); Sm.hq(STEP_D / 2 - 0.06, STEP_D / 2 - 0.01, -0.5, 0.5, 0.003, YEL, true); return Sm.geometry(); })();
+  for (const e of ESCS) { e.L = Math.abs(e.ub - e.ua); e.n = Math.floor(e.L / STEP_D); }
+  const nSteps = ESCS.reduce((a, e) => a + e.n, 0);
+  const stepIM = new THREE.InstancedMesh(stepGeo, mats.wall, Math.max(1, nSteps)); stepIM.name = 'mrt-esc-steps'; stepIM.frustumCulled = false; group.add(stepIM); meshes++; tris += (stepGeo.index.count / 3) * nSteps;
+  const SSC = new THREE.Vector3();
+  function drawSteps() {
+    let i = 0; const o = (time * ESC_V) % STEP_D;
+    for (const e of ESCS) { const sg = Math.sign(e.ub - e.ua); Q4.setFromAxisAngle(YAX, e.S.rot); SSC.set(sg, 1, e.w - 0.16);
+      for (let k = 0; k < e.n; k++) { const d = Math.min(e.L, k * STEP_D + o + STEP_D / 2), u = e.ua + sg * d, y = e.ya + ((e.yb - e.ya) * d) / e.L, [x, z] = e.S.toW(u, e.vc); V3.set(x, y, z); M4.compose(V3, Q4, SSC); stepIM.setMatrixAt(i++, M4); } }
+    stepIM.count = i; stepIM.instanceMatrix.needsUpdate = true;
+  }
   // ==== 列車：一節車廂的幾何（本地：x 往前、y 從橋面起、z 左右）====
+  // 第 80 批（Nick「請上網查捷運的圖片 捷運太假了」）：照文湖線的車子（膠輪、4 節、無人駕駛）：淺灰的車身、綠色的帶子、黑色的窗帶、大窗、
+  //   兩頭的車頭（斜的大擋風玻璃、圓的車燈；另外一組 InstancedMesh）、裡面藍色的長椅子、扶手的柱子和橫桿、深色的地板、車門上面的路線圖
+  const F0 = 1.1, YS0 = F0 + 0.72, YS1 = F0 + 0.84, YW0 = F0 + 0.92, YW1 = F0 + 2.32, YTT = F0 + 2.5, YDOOR = F0 + 1.9, CX = 6.9;
+  const WIN = [[-6.6, -4.45], [-2.8, -0.2], [0.2, 2.8], [4.45, 6.6]];
   const carGeo = (() => {
-    const C = mesher(), hw = CAR_W, f0 = 1.1, hb = f0 + CAR_H; // 地板 1.1、車頂 4.4
-    C.bx(-6.9, 6.9, 0.55, f0, -1.15, 1.15, DARK); // 底架
+    const C = mesher(), hw = CAR_W, f0 = F0, hb = f0 + CAR_H, ROOFL = [0.90, 0.91, 0.92];
+    C.bx(-CX, CX, 0.55, f0, -1.15, 1.15, DARK); // 底架
     for (const bx0 of [-4.6, 4.6]) { C.bx(bx0 - 1.1, bx0 + 1.1, 0.2, 0.6, -1.0, 1.0, [0.16, 0.17, 0.18]); for (const q of [-1, 1]) for (const w of [-0.75, 0.75]) C.bx(bx0 + w - 0.3, bx0 + w + 0.3, 0, 0.95, q * 0.95 - 0.16, q * 0.95 + 0.16, [0.1, 0.1, 0.1]); }
-    const pieces = [[-6.9, -6.5, 's'], [-6.5, -4.6, 'w'], [-4.6, -DOOR_X - DOOR_W / 2, 's'], [-DOOR_X - DOOR_W / 2, -DOOR_X + DOOR_W / 2, 'd'], [-DOOR_X + DOOR_W / 2, -2.7, 's'], [-2.7, -0.3, 'w'], [-0.3, 0.3, 's'], [0.3, 2.7, 'w'], [2.7, DOOR_X - DOOR_W / 2, 's'], [DOOR_X - DOOR_W / 2, DOOR_X + DOOR_W / 2, 'd'], [DOOR_X + DOOR_W / 2, 4.6, 's'], [4.6, 6.5, 'w'], [6.5, 6.9, 's']];
-    const y0 = f0, yb0 = f0 + 0.95, yb1 = f0 + 1.1, yw1 = f0 + 2.25, yt = f0 + 2.5, ydoor = f0 + 1.9;
+    const pieces = [[-CX, -6.6, 's'], [-6.6, -4.45, 'w'], [-4.45, -DOOR_X - DOOR_W / 2, 's'], [-DOOR_X - DOOR_W / 2, -DOOR_X + DOOR_W / 2, 'd'], [-DOOR_X + DOOR_W / 2, -2.8, 's'], [-2.8, -0.2, 'w'], [-0.2, 0.2, 's'], [0.2, 2.8, 'w'], [2.8, DOOR_X - DOOR_W / 2, 's'], [DOOR_X - DOOR_W / 2, DOOR_X + DOOR_W / 2, 'd'], [DOOR_X + DOOR_W / 2, 4.45, 's'], [4.45, 6.6, 'w'], [6.6, CX, 's']];
     for (const q of [-1, 1]) { const z = q * hw, pos = q > 0;
       const V2 = (x0, x1, a, b, col) => C.vqV(z, x0, x1, a, b, col, pos);
       for (const [x0, x1, k] of pieces) {
-        if (k === 's') { V2(x0, x1, y0, yb0, WHITE); V2(x0, x1, yb0, yb1, BROWN); V2(x0, x1, yb1, yt, WHITE); }
-        else if (k === 'w') { V2(x0, x1, y0, yb0, WHITE); V2(x0, x1, yb0, yb1, BROWN); V2(x0, x1, yw1, yt, WHITE); }
-        else { V2(x0, x1, ydoor, yt, WHITE); }
+        if (k === 'd') { V2(x0, x1, YDOOR, YW1, WBAND); V2(x0, x1, YW1, YTT, LGRY); continue; }
+        V2(x0, x1, f0, YS0, LGRY); V2(x0, x1, YS0, YS1, TGRN); V2(x0, x1, YS1, YW0, LGRY); if (k === 's') V2(x0, x1, YW0, YW1, WBAND); V2(x0, x1, YW1, YTT, LGRY);
       }
-      // 車頂的斜面
-      C.quad(pos ? [-6.9, yt, z] : [6.9, yt, z], pos ? [6.9, yt, z] : [-6.9, yt, z], pos ? [6.9, hb, q * 0.9] : [-6.9, hb, q * 0.9], pos ? [-6.9, hb, q * 0.9] : [6.9, hb, q * 0.9], [0.84, 0.84, 0.82]);
-      // 裡面的椅子（避開車門）
-      for (const [x0, x1] of [[-6.6, -4.45], [-2.75, 2.75], [4.45, 6.6]]) { C.bx(x0, x1, f0, f0 + 0.45, Math.min(q * 0.82, q * 1.2), Math.max(q * 0.82, q * 1.2), SEAT); C.bx(x0, x1, f0 + 0.45, f0 + 1.05, Math.min(q * 1.13, q * 1.2), Math.max(q * 1.13, q * 1.2), SEAT); }
+      C.quad(pos ? [-CX, YTT, z] : [CX, YTT, z], pos ? [CX, YTT, z] : [-CX, YTT, z], pos ? [CX, hb, q * 0.9] : [-CX, hb, q * 0.9], pos ? [-CX, hb, q * 0.9] : [CX, hb, q * 0.9], ROOFL); // 車頂的斜面（切角）
+      for (const [x0, x1] of [[-6.6, -4.45], [-2.8, 2.8], [4.45, 6.6]]) { C.bx(x0, x1, f0, f0 + 0.45, Math.min(q * 0.8, q * 1.2), Math.max(q * 0.8, q * 1.2), SEAT); C.bx(x0, x1, f0 + 0.45, f0 + 1.08, Math.min(q * 1.12, q * 1.2), Math.max(q * 1.12, q * 1.2), NAVY); } // 藍色的長椅子（面對面）
+      for (const x of [-4.45, -2.8, 2.8, 4.45]) C.bx(x - 0.03, x + 0.03, f0, f0 + 2.3, q * 0.76 - 0.03, q * 0.76 + 0.03, STEEL); // 扶手的柱子
+      C.bx(-6.6, 6.6, f0 + 2.0, f0 + 2.04, q * 0.6 - 0.02, q * 0.6 + 0.02, STEEL); // 上面的橫桿
     }
-    C.hq(-6.9, 6.9, -0.9, 0.9, hb, [0.84, 0.84, 0.82], true); // 車頂
-    C.hq(-6.9, 6.9, -hw, hw, f0 + 0.01, [0.42, 0.44, 0.47], true); C.hq(-6.9, 6.9, -hw, hw, f0 + 2.3, WHITE, false); // 地板、天花板
-    for (const q of [-1, 1]) C.hq(-6.6, 6.6, q * 0.5 - 0.08, q * 0.5 + 0.08, f0 + 2.29, [1, 1, 0.95], false); // 車裡的燈
-    for (const q of [-1, 1]) { const x = q * 6.9, neg = q < 0; // 兩頭（駕駛室的樣子：白色、咖啡色的帶子、大窗（玻璃另外）、車燈）
-      C.vqU(x, -hw, hw, y0, yb0, WHITE, neg); C.vqU(x, -hw, hw, yb0, yb1, BROWN, neg); C.vqU(x, -hw, -0.95, yb1, yt, WHITE, neg); C.vqU(x, 0.95, hw, yb1, yt, WHITE, neg); C.vqU(x, -0.95, 0.95, yt - 0.25, yt, WHITE, neg);
-      C.vqU(x, -hw, hw, yt, hb, [0.84, 0.84, 0.82], neg);
-      for (const s of [-0.85, 0.85]) C.vqU(x + q * 0.01, s - 0.14, s + 0.14, y0 + 0.45, y0 + 0.65, [1, 0.97, 0.8], neg);
-      for (const s of [-0.5, 0.5]) C.vqU(x + q * 0.01, s - 0.12, s + 0.12, y0 + 0.45, y0 + 0.65, RED, neg);
-    }
+    C.hq(-CX, CX, -0.9, 0.9, hb, ROOFL, true); // 車頂
+    C.hq(-CX, CX, -hw, hw, f0 + 0.01, [0.30, 0.32, 0.36], true); C.hq(-CX, CX, -0.35, 0.35, f0 + 0.012, [0.38, 0.40, 0.44], true); C.hq(-CX, CX, -hw, hw, f0 + 2.3, WHITE, false); // 地板（中間淺一點）、天花板
+    for (const q of [-1, 1]) C.hq(-6.6, 6.6, q * 0.45 - 0.1, q * 0.45 + 0.1, f0 + 2.29, [1, 1, 0.95], false); // 車裡的燈
+    for (const q of [-1, 1]) { const x = q * CX, neg = q < 0; // 兩頭（車廂中間的走道門：深色）
+      C.vqU(x, -hw, -0.5, f0, YTT, LGRY, neg); C.vqU(x, 0.5, hw, f0, YTT, LGRY, neg); C.vqU(x, -0.5, 0.5, f0 + 2.0, YTT, LGRY, neg); C.vqU(x, -0.5, 0.5, f0, f0 + 2.0, [0.2, 0.22, 0.25], neg);
+      C.vqU(x, -hw, hw, YTT, hb, ROOFL, neg); }
     return C.geometry();
   })();
-  const carGlass = (() => { const Gm = mesher(), hw = CAR_W, f0 = 1.1, yb1 = f0 + 1.1, yw1 = f0 + 2.25; for (const q of [-1, 1]) { for (const [x0, x1] of [[-6.5, -4.6], [-2.7, -0.3], [0.3, 2.7], [4.6, 6.5]]) Gm.vqV(q * hw, x0, x1, yb1, yw1, [1, 1, 1], q > 0); } for (const q of [-1, 1]) Gm.vqU(q * 6.9, -0.95, 0.95, yb1, f0 + 2.25, [1, 1, 1], q < 0); return Gm.geometry(); })();
-  const carLeaf = (() => { const Lm = mesher(); Lm.bx(-DOOR_W / 4, DOOR_W / 4, 1.1, 3.0, -0.03, 0.03, WHITE, null, { pv: GLSD, nv: GLSD }); Lm.bx(-DOOR_W / 4, DOOR_W / 4, 1.1, 2.0, -0.035, 0.035, WHITE); Lm.bx(-DOOR_W / 4, -DOOR_W / 4 + 0.07, 1.1, 3.0, -0.035, 0.035, WHITE); Lm.bx(DOOR_W / 4 - 0.07, DOOR_W / 4, 1.1, 3.0, -0.035, 0.035, WHITE); return Lm.geometry(); })();
+  const noseGeo = (() => { // 車頭（放在最前面、最後面那一節的外面那一頭；本地 x＝CX 往外）
+    const C = mesher(), f0 = F0, hb = f0 + CAR_H;
+    const prof = [[CX, 0.55, 1.15], [CX + 0.7, 0.62, 0.98], [CX + 0.78, YS0, 1.0], [CX + 0.79, YS1, 1.0], [CX + 0.8, f0 + 0.95, 1.0], [CX + 0.28, f0 + 2.5, 1.12], [CX, hb - 0.12, 0.9]]; // x、y、半寬（前面窄＝切角）
+    const cols = [DARK, LGRY, TGRN, LGRY, [0.06, 0.08, 0.10], [0.9, 0.91, 0.92]];
+    for (let i = 0; i < prof.length - 1; i++) { const [xa, ya, wa] = prof[i], [xb, yb, wb] = prof[i + 1]; C.quad([xa, ya, wa], [xa, ya, -wa], [xb, yb, -wb], [xb, yb, wb], cols[i]); }
+    for (const q of [-1, 1]) { const P = prof.map(([x, y, w]) => [x, y, q * Math.max(w, 0.9)]); for (let i = 1; i < P.length - 1; i++) C.tri(P[0], P[i], P[i + 1], i >= 4 ? [0.06, 0.08, 0.10] : LGRY); } // 兩邊（窗那一段黑的）
+    C.vqU(CX, -CAR_W, CAR_W, f0, YTT, LGRY, false); // 接到車身的那一面
+    const disc = (z, y, r, col) => { const x = CX + 0.795, n = 10; for (let i = 0; i < n; i++) { const a0 = (i / n) * TAU, a1 = ((i + 1) / n) * TAU; C.tri([x, y, z], [x, y + r * Math.sin(a0), z + r * Math.cos(a0)], [x, y + r * Math.sin(a1), z + r * Math.cos(a1)], col); } };
+    for (const q of [-1, 1]) { disc(q * 0.66, f0 + 0.42, 0.13, [1, 0.97, 0.84]); disc(q * 0.66, f0 + 0.42, 0.17, [0.2, 0.2, 0.22]); disc(q * 0.36, f0 + 0.42, 0.06, [0.9, 0.12, 0.1]); } // 圓的車燈（外面一圈黑）、小的紅燈
+    return C.geometry();
+  })();
+  const carGlass = (() => { const Gm = mesher(), hw = CAR_W; for (const q of [-1, 1]) for (const [x0, x1] of WIN) Gm.vqV(q * hw, x0, x1, YW0, YW1, [1, 1, 1], q > 0); return Gm.geometry(); })();
+  const carLeaf = (() => { const Lm = mesher(), w = DOOR_W / 4; Lm.bx(-w, w, 1.1, 3.0, -0.03, 0.03, LGRY, null, { pv: GLSD, nv: GLSD }); Lm.bx(-w, w, 1.1, 1.62, -0.035, 0.035, LGRY); Lm.bx(-w, w, 2.86, 3.0, -0.035, 0.035, LGRY); Lm.bx(-w, -w + 0.07, 1.1, 3.0, -0.035, 0.035, LGRY); Lm.bx(w - 0.07, w, 1.1, 3.0, -0.035, 0.035, LGRY); return Lm.geometry(); })();
+  const carSignGeo = (() => { const Sm = mesher(); for (const q of [-1, 1]) for (const dx of [-DOOR_X, DOOR_X]) Sm.vqV(q * (CAR_W - 0.1), dx - 0.7, dx + 0.7, F0 + 2.04, F0 + 2.28, [1, 1, 1], q < 0); const g = Sm.geometry(), uv = []; for (let i = 0; i < 4; i++) uv.push(0, 0, 1, 0, 1, 1, 0, 1); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); return g; })();
+  const carSignMat = (() => { const c = mkCanvas(1024, 128), g = c.getContext('2d'); routeMap(g, 0, 0, 1024, 128, null); const t = texOf(c), m = new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.35, roughness: 0.6 }); mats.csign = m; return m; })();
   // ---- 時刻：兩個方向，各自從隧道口出來、停每一站、開進另一頭的隧道口 ----
   const dirs = [1, -1].map((dir) => {
     const L = sB - sA, stops = stations.map((S, i) => ({ p: dir > 0 ? S.s - sA : sB - S.s, si: i })).sort((a, b) => a.p - b.p);
@@ -322,7 +492,9 @@ function buildMrt(V, opt = {}) {
   const carIM = new THREE.InstancedMesh(carGeo, mats.train, maxAct * 4); carIM.name = 'mrt-cars'; carIM.frustumCulled = false; group.add(carIM);
   const glsIM = new THREE.InstancedMesh(carGlass, mats.tglass, maxAct * 4); glsIM.name = 'mrt-car-glass'; glsIM.frustumCulled = false; group.add(glsIM);
   const dorIM = new THREE.InstancedMesh(carLeaf, mats.leaf, maxAct * 4 * 8); dorIM.name = 'mrt-car-doors'; dorIM.frustumCulled = false; group.add(dorIM);
-  meshes += 3; tris += (carGeo.index.count / 3 + carGlass.index.count / 3 + (carLeaf.index.count / 3) * 8) * maxAct * 4;
+  const noseIM = new THREE.InstancedMesh(noseGeo, mats.train, maxAct * 2); noseIM.name = 'mrt-noses'; noseIM.frustumCulled = false; group.add(noseIM); // 第 80 批：車頭
+  const csIM = new THREE.InstancedMesh(carSignGeo, carSignMat, maxAct * 4); csIM.name = 'mrt-car-signs'; csIM.frustumCulled = false; group.add(csIM); // 車門上面的路線圖
+  meshes += 5; tris += (carGeo.index.count / 3 + carGlass.index.count / 3 + (carLeaf.index.count / 3) * 8 + 8) * maxAct * 4 + (noseGeo.index.count / 3) * maxAct * 2;
   const posAt = (d, tau) => { // → { p, v, open, si（停著的站，沒有＝−1）, seg }
     for (const s of d.segs) if (tau < s.t1 || s === d.segs[d.segs.length - 1]) {
       if (s.k === 'dwell') return { p: s.p, v: 0, open: clamp(Math.min(tau - s.t0 - 0.8, s.t1 - tau - 0.8) / 1.2, 0, 1), si: s.si, seg: s };
@@ -356,12 +528,13 @@ function buildMrt(V, opt = {}) {
   // ---- 畫 ----
   const camP = [0, 0];
   function drawTrains() {
-    let n = 0, nd = 0;
-    for (const tr of active) for (const c of tr.cars) {
-      Q4.setFromAxisAngle(YAX, c.th); V3.set(c.x, YT, c.z); M4.compose(V3, Q4, S3); carIM.setMatrixAt(n, M4); glsIM.setMatrixAt(n, M4); n++;
+    let n = 0, nd = 0, nn = 0;
+    for (const tr of active) for (let ci = 0; ci < tr.cars.length; ci++) { const c = tr.cars[ci];
+      Q4.setFromAxisAngle(YAX, c.th); V3.set(c.x, YT, c.z); M4.compose(V3, Q4, S3); carIM.setMatrixAt(n, M4); glsIM.setMatrixAt(n, M4); csIM.setMatrixAt(n, M4); n++;
+      if (ci === 3) noseIM.setMatrixAt(nn++, M4); else if (ci === 0) { Q4.setFromAxisAngle(YAX, c.th + Math.PI); M4.compose(V3, Q4, S3); noseIM.setMatrixAt(nn++, M4); Q4.setFromAxisAngle(YAX, c.th); }
       for (const q of [-1, 1]) for (const dx of [-DOOR_X, DOOR_X]) for (const lf of [-1, 1]) { const off = lf * (DOOR_W / 4 + (q > 0 ? tr.open : 0) * (DOOR_W / 2)), lu = dx + off, lv = q * (CAR_W - 0.06), [x, z] = carW(c, lu, lv); V3.set(x, YT, z); M4.compose(V3, Q4, S3); dorIM.setMatrixAt(nd++, M4); } // 只開月台那一邊（右手邊）的門
     }
-    carIM.count = n; glsIM.count = n; dorIM.count = nd; carIM.instanceMatrix.needsUpdate = true; glsIM.instanceMatrix.needsUpdate = true; dorIM.instanceMatrix.needsUpdate = true;
+    carIM.count = n; glsIM.count = n; csIM.count = n; dorIM.count = nd; noseIM.count = nn; for (const im of [carIM, glsIM, csIM, dorIM, noseIM]) im.instanceMatrix.needsUpdate = true;
   }
   function drawPsd() {
     let i = 0;
@@ -386,7 +559,7 @@ function buildMrt(V, opt = {}) {
   }
   // ---- 走路的人 ----
   const P = {
-    group, stations, info: { meshes, tris: Math.round(tris), stations: stations.map((s) => s.nm), T: CYCLE, H, dwell: DWELL, maxTrains: maxAct, sA, sB, len: sB - sA, dirs: dirs.map((d) => ({ dir: d.dir, phase: d.phase, total: Math.round(d.total * 10) / 10, stops: d.stops.map((s) => Math.round(s.p)), dwells: d.segs.filter((s) => s.k === 'dwell').map((s) => ({ si: s.si, t0: Math.round(s.t0 * 10) / 10, t1: Math.round(s.t1 * 10) / 10 })) })) },
+    group, stations, info: { meshes, tris: Math.round(tris), stations: stations.map((s) => s.nm), esc: ESCS.length, escSteps: nSteps, T: CYCLE, H, dwell: DWELL, maxTrains: maxAct, sA, sB, len: sB - sA, dirs: dirs.map((d) => ({ dir: d.dir, phase: d.phase, total: Math.round(d.total * 10) / 10, stops: d.stops.map((s) => Math.round(s.p)), dwells: d.segs.filter((s) => s.k === 'dwell').map((s) => ({ si: s.si, t0: Math.round(s.t0 * 10) / 10, t1: Math.round(s.t1 * 10) / 10 })) })) },
     YT, YP, YC, ride: null, lvl: 0, si: -1, py: 0, movers: [],
     get time() { return time; }, setTime(t) { time = ((t % CYCLE) + CYCLE) % CYCLE; prev.clear(); trainsNow(); events.length = 0; },
     trains: () => active.map((t) => ({ dir: t.dir, k: t.k, p: Math.round(t.p * 10) / 10, s: Math.round(t.s * 10) / 10, x: t.cars[0].x, z: t.cars[0].z, stop: t.si, si: t.si, open: t.open, v: t.v, tau: Math.round(t.tau * 10) / 10, cars: t.cars.map((c) => ({ x: c.x, z: c.z, th: c.th, ux: c.ux, uz: c.uz })) })),
@@ -397,7 +570,7 @@ function buildMrt(V, opt = {}) {
     heightAt(x, z) { // 候選的高度裡挑最接近上一格的（大廳在月台下面、街在天橋下面：夾層）
       if (P.ride) { const c = P.ride.tr.cars[P.ride.car]; if (inCar(c, x, z, 1.0)) return YP; }
       const si = P.at(x, z); if (si < 0) return null; const S = stations[si], [u, v] = S.loc(x, z), av = Math.abs(v), cand = [];
-      if (Math.abs(u) <= PL + 0.2 && av >= PV0 - 0.4 && av <= PV1 + 0.3) { if (u >= RAMP.u0 && u <= RAMP.u1 && av >= RAMP.v0 && av <= RAMP.v1) return YC + ((YP - YC) * (u - RAMP.u0)) / (RAMP.u1 - RAMP.u0); cand.push(YP); }
+      if (Math.abs(u) <= PL + 0.2 && av >= PV0 - 0.4 && av <= PV1 + 0.3) { if (u >= RAMP.u0 && u <= RAMP.u1 && av >= RAMP.v0 && av <= HOLE1) return YC + ((YP - YC) * (u - RAMP.u0)) / (RAMP.u1 - RAMP.u0); cand.push(YP); }
       if (Math.abs(u) <= PL + 0.2 && av < PV0 - 0.4) { let on = false; for (const tr of active) if (tr.si === si) for (const c of tr.cars) if (inCar(c, x, z, 0.35)) on = true; cand.push(on ? YP : YT); }
       if (Math.abs(u) <= CU + 0.3 && av <= CV + 0.3) cand.push(YC);
       for (const e of S.ent) { const vlo = Math.min(e.v0, e.v1) - 0.3, vhi = Math.max(e.v0, e.v1) + 0.3, bl = Math.min(e.s * CV, e.v0) - 0.3, bh = Math.max(e.s * CV, e.v0) + 0.3, inB = u >= e.bu0 - 0.3 && u <= e.bu1 + 0.3;
@@ -416,12 +589,12 @@ function buildMrt(V, opt = {}) {
       time = (time + Math.max(0, Math.min(0.2, +dt || 0))) % CYCLE; trainsNow();
       if (camera) { camP[0] = camera.position.x; camP[1] = camera.position.z; }
       let near = false; for (const S of stations) { const d = Math.hypot(S.x - camP[0], S.z - camP[1]); S.group.visible = d < 1500; if (d < 2600) near = true; }
-      carIM.visible = glsIM.visible = dorIM.visible = psdIM.visible = near;
-      if (near) { drawTrains(); drawPsd(); if (time - boardT > 1 || time < boardT) { boardT = time; drawBoards(); } }
+      carIM.visible = glsIM.visible = dorIM.visible = psdIM.visible = noseIM.visible = csIM.visible = stepIM.visible = near;
+      if (near) { drawTrains(); drawPsd(); drawSteps(); if (time - boardT > 1 || time < boardT) { boardT = time; drawBoards(); } }
     },
     // 走路的人在 (px, pz)、腳下 py；回傳這一格要做的事
     step(dt, px, pz, py, walking) {
-      const out = { shift: null, lvl: 0, si: -1, ride: !!P.ride, toast: null, chime: false, beep: false, action: null, eject: null, cap: null }, evs = events.splice(0); // cap＝鏡頭最高（天花板、罩子）
+      const out = { shift: null, esc: false, lvl: 0, si: -1, ride: !!P.ride, toast: null, chime: false, beep: false, action: null, eject: null, cap: null }, evs = events.splice(0); // cap＝鏡頭最高（天花板、罩子）
       P.py = py;
       if (!walking) { P.ride = null; P.movers.length = 0; P.lvl = 0; P.si = -1; P.lastU = null; return out; }
       const mv = P.movers; mv.length = 0;
@@ -450,7 +623,9 @@ function buildMrt(V, opt = {}) {
       out.lvl = lvl; out.si = si; P.si = si;
       if (si >= 0 && lvl > 0) { const S = stations[si], [u, v] = S.loc(px, pz); // 鏡頭最高：月台的天花板、大廳的天花板、出入口的罩子（樓梯上照腳下的高度）
         let inC = false; if (lvl === 2) for (const tr of active) if (tr.si === si) for (const c of tr.cars) if (inCar(c, px, pz, 0.35)) inC = true;
-        out.cap = lvl === 2 ? (inC ? YP + 2.0 : py >= YP - 0.3 ? CEIL2 - 0.15 : null) : Math.abs(u) <= CU + 0.3 && Math.abs(v) <= CV + 0.3 ? CEIL1 - 0.1 : YC + 3.2; } // 車廂裡 2.2 高、出入口的盒子 3.4 高
+        out.cap = lvl === 2 ? (inC ? YP + 2.0 : py >= YP - 0.3 ? CEIL2 - 0.15 : null) : Math.abs(u) <= CU + 0.3 && Math.abs(v) <= CV + 0.3 ? CEIL1 - 0.1 : exitCap(S, u, v); } // 車廂裡 2.2 高、出入口的盒子 3.4 高
+      if (si >= 0) for (const e of ESCS) if (e.S === stations[si]) { const [u, v] = e.S.loc(px, pz), lo = Math.min(e.ua, e.ub), hi = Math.max(e.ua, e.ub); // 第 80 批：站在電扶梯上＝跟著往上走
+        if (u >= lo - 0.1 && u <= hi + 0.1 && Math.abs(v - e.vc) < e.w / 2) { const f = clamp((u - e.ua) / (e.ub - e.ua), 0, 1), y = e.ya + (e.yb - e.ya) * f; if (Math.abs(py - y) < 0.7 && f < 1) { const d = ESC_V * Math.min(0.2, dt) * Math.sign(e.ub - e.ua); out.shift = [e.S.ux * d, e.S.uz * d, 0]; out.esc = true; } } }
       if (si >= 0 && lvl === 2) {
         const S = stations[si], [u, v] = S.loc(px, pz);
         for (const tr of active) if (tr.si === si) for (const c of tr.cars) carWalls(c, tr.open, mv);
@@ -465,6 +640,10 @@ function buildMrt(V, opt = {}) {
     },
     dispose() { group.removeFromParent(); group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); for (const m of Object.values(mats)) m.dispose(); },
   };
+  function exitCap(S, u, v) { // 第 80 批：出入口斜的屋頂、翼的天花板：鏡頭最高
+    for (const e of S.ent) { const vlo = Math.min(e.v0, e.v1) - 0.3, vhi = Math.max(e.v0, e.v1) + 0.3; if (v >= vlo && v <= vhi && u >= Math.min(e.u0, e.u1) - 0.3 && u <= Math.max(e.u0, e.u1) + 0.3) return e.roofAt(u) - 0.35; }
+    return YC + 3.05;
+  }
   function carWalls(c, open, mv) { // 一節車廂的牆（走路擋人）：兩邊（車門開著就留口）、兩頭、椅子
     const push = (lu0, lu1, lv, hz) => { const [x, z] = carW(c, (lu0 + lu1) / 2, lv); mv.push({ t: 'box', x, z, hx: (lu1 - lu0) / 2, hz, rot: c.th, h: YP + 2.4, y0: YP - 0.3 }); };
     for (const q of [-1, 1]) { const lv = q * CAR_W, op = q > 0 ? open : 0; // 門只開月台那一邊（行進方向的右手邊）
@@ -474,7 +653,7 @@ function buildMrt(V, opt = {}) {
     }
     for (const q of [-1, 1]) { const [x, z] = carW(c, q * 6.9, 0); mv.push({ t: 'box', x, z, hx: 0.06, hz: CAR_W, rot: c.th, h: YP + 2.4, y0: YP - 0.3 }); }
   }
-  trainsNow(); drawTrains(); drawPsd(); drawBoards();
+  trainsNow(); drawTrains(); drawPsd(); drawSteps(); drawBoards();
   V.group.add(group);
   P.info.ms = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - T0);
   P.info.colliders = colliders0.length; P.street = colliders0; // 街上的碰撞（柱子、樓梯的牆；測試看有沒有放到車道上）
@@ -484,5 +663,5 @@ function buildMrt(V, opt = {}) {
   return P;
 }
 
-return { buildMrt, MRT_TEXT };
+return { buildMrt, MRT_TEXT, mrtKeepOut, mrtHits };
 })();

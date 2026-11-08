@@ -70,7 +70,7 @@ function nhStreetPrep({ N, nx, nz, names }) {
     return true;
   }
   // 工地：環山路中段、臨路、夠大的補的長方形
-  { let best = null; N.bld.forEach((b, bi) => { if (!b.gen || !b.rect || b.back || b.rect[2] < 8 || b.rect[3] < 8 || b.rect[2] > 20 || b.rect[3] > 20) return; const fx = (b.P[0][0] + b.P[1][0]) / 2, fz = (b.P[0][1] + b.P[1][1]) / 2, k = fronting(fx, fz, 1.5); if (!k || k.key !== 'hs') return; const sc = Math.abs(fx - 520) + hh(bi, 310) * 60; if (!best || sc < best.sc) best = { b, bi, sc }; });
+  { let best = null; N.bld.forEach((b, bi) => { if (!b.gen || !b.rect || b.back || b.mrt || b.rect[2] < 8 || b.rect[3] < 8 || b.rect[2] > 20 || b.rect[3] > 20) return; const fx = (b.P[0][0] + b.P[1][0]) / 2, fz = (b.P[0][1] + b.P[1][1]) / 2, k = fronting(fx, fz, 1.5); if (!k || k.key !== 'hs') return; const sc = Math.abs(fx - 520) + hh(bi, 310) * 60; if (!best || sc < best.sc) best = { b, bi, sc }; });
     if (best) { site = { b: best.b, bi: best.bi, rect: best.b.rect }; best.b.site = true; } }
   const noTree = (x, z) => { const k = nearKey(x, z); if (k.key === 'nh' && k.d < k.seg.w / 2 + k.seg.sw + 0.6) return true; if (site) { const [cx, cz, hx, hz] = site.rect; if (Math.abs(x - cx) < hx + 2 && Math.abs(z - cz) < hz + 2) return true; } return false; };
   return { segs, roads, nearKey, fronting, floorsOf, arcadeFix, noTree, site, KEY_NAME };
@@ -144,7 +144,7 @@ function nhStreetBuild(ctx) {
   const nearCross = (x, z, d) => { for (const c of N.cross) { const dx = c.p[0] - x, dz = c.p[1] - z; if (dx * dx + dz * dz < d * d) return true; } return false; };
   // 房子在不在附近（20 公尺一格）
   const BG = new Map(), BGS = 20, bkey = (i, j) => i * 73856093 + j, bInfo = [];
-  N.bld.forEach((b, bi) => { if (b.back || b.lm) return; let cx = 0, cz = 0; for (const p of b.P) { cx += p[0]; cz += p[1]; } cx /= b.P.length; cz /= b.P.length; let rad = 0; for (const p of b.P) rad = Math.max(rad, Math.hypot(p[0] - cx, p[1] - cz)); const o = { P: b.P, cx, cz, rad, bi }; bInfo.push(o);
+  N.bld.forEach((b, bi) => { if (b.back || b.lm || b.mrt) return; let cx = 0, cz = 0; for (const p of b.P) { cx += p[0]; cz += p[1]; } cx /= b.P.length; cz /= b.P.length; let rad = 0; for (const p of b.P) rad = Math.max(rad, Math.hypot(p[0] - cx, p[1] - cz)); const o = { P: b.P, cx, cz, rad, bi }; bInfo.push(o);
     for (let i = Math.floor((cx - rad) / BGS); i <= Math.floor((cx + rad) / BGS); i++) for (let j = Math.floor((cz - rad) / BGS); j <= Math.floor((cz + rad) / BGS); j++) { const k = bkey(i, j); let L = BG.get(k); if (!L) BG.set(k, (L = [])); L.push(o); } });
   const bldNear = (x, z, r) => { for (let i = Math.floor((x - r) / BGS); i <= Math.floor((x + r) / BGS); i++) for (let j = Math.floor((z - r) / BGS); j <= Math.floor((z + r) / BGS); j++) { const L = BG.get(bkey(i, j)); if (!L) continue; for (const o of L) { if (Math.hypot(o.cx - x, o.cz - z) > o.rad + r) continue; if (inPoly(o.P, x, z)) return true; const P = o.P; for (let q = 0; q < P.length; q++) { const a = P[q], b = P[(q + 1) % P.length]; if (segD(x, z, a[0], a[1], b[0], b[1]) < r) return true; } } } return false; };
   const inArea = (x, z) => { for (const a of N.areas) if (a.t !== 'school' && inPoly(a.P, x, z)) return true; return false; };
@@ -191,7 +191,8 @@ function nhStreetBuild(ctx) {
   const along = (road, step, s0, fn) => { const P = road.pts; let acc = 0, next = s0; const L = P.reduce((t, p, i) => (i ? t + Math.hypot(p[0] - P[i - 1][0], p[1] - P[i - 1][1]) : 0), 0);
     for (let i = 1; i < P.length; i++) { const a = P[i - 1], b = P[i], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (l < 0.01) continue; const ux = (b[0] - a[0]) / l, uz = (b[1] - a[1]) / l;
       while (next <= acc + l) { const t = (next - acc) / l; fn(a[0] + ux * l * t, a[1] + uz * l * t, ux, uz, -uz, ux, next, L); next += step; } acc += l; } return L; };
-  const ok = (x, z, jx = 2.5) => inBox(x, z, 2) && !nearJ(x, z, jx) && Math.hypot(x - entP[0], z - entP[1]) > 45;
+  const KO = N.mrtIn || null; // 第 80 批：捷運站（大廳、出口、兩邊的翼）下面不放東西（椰子、路燈會穿過大廳的地板）
+  const ok = (x, z, jx = 2.5) => inBox(x, z, 2) && !nearJ(x, z, jx) && Math.hypot(x - entP[0], z - entP[1]) > 45 && !(KO && KO(x, z));
 
   // ==== 1 停著的機車 ====
   for (const rd of S.roads) {
@@ -366,7 +367,7 @@ function nhStreetBuild(ctx) {
   }
   // ==== 12 店門口的燈箱招牌（三條路臨路的一樓）====
   { const used = new Set();
-    N.bld.forEach((b, bi) => { if (b.lm || b.back || b.site) return; const P = b.P, n = P.length;
+    N.bld.forEach((b, bi) => { if (b.lm || b.back || b.site || b.mrt) return; const P = b.P, n = P.length;
       for (let i = 0; i < n; i++) { const a = P[i], c = P[(i + 1) % n], L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L < 3.5) continue; if (b.gen && i !== 0) continue;
         const mx = (a[0] + c[0]) / 2, mz = (a[1] + c[1]) / 2, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L, k = S.fronting(mx + ox * 2, mz + oz * 2, 6); if (!k) continue; if (!b.gen && !(b.e[i] >= 1)) continue;
         const gh = b.e.includes(2) ? 4.2 : 3.6, m = Math.max(1, Math.round(L / 6)); let y0 = gh + 0.18, h = 0.92;
