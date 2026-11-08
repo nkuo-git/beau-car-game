@@ -91,6 +91,7 @@ const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[
 const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
 const pick = (r, list) => list[(r() * list.length) | 0];
 const HOUSE_MAX_FL = 1; // 第 10 批（Nick 2026-10-09「所有房子變矮」）：透天厝最多 2 層；第 18 批（Nick 2026-10-14「對 把房子變矮」）：1 層
+const DYNO_H = 0.22, DYNO_RAMP = 2.8; // 第 79 批（Nick「馬力機稍微墊高用一個小斜坡開上去」）：馬力機的台子高 22 公分、南邊斜坡 2.8 公尺（約 4.5°）
 // 本地座標框：原點 (x, y, z)、繞 y 轉 ry（跟 three.js rotation.y 一樣：本地 +x → (cos, 0, −sin)）
 function frame(x, y, z, ry = 0, s = 1) {
   const c = Math.cos(ry) * s, n = Math.sin(ry) * s;
@@ -1529,10 +1530,13 @@ function buildVillage(opts = {}) {
     }
     carProp(-171.5, 1.72, -35, Math.PI / 2, C('#2f6fd6')); // 舉起來的藍色車（車頭朝北）
     // 第 77 批（Nick「改車廠裡要有一個馬力機」）：東邊的門進去＝馬力機：深色的台（黃黑斜紋邊）、兩條滾筒的槽（滾筒在 town.src.js：照這台車的輪子擺、會轉）、牆前面的大螢幕（town.src.js 畫車速、轉速、馬力曲線）、控制櫃
-    { const px = 10, pz = -8.5, hx = 1.9, hz = 4.3, dark = C('#2a2c30'), blk = C('#15161a');
-      box('main', T, [px - hx, 0.03, pz - hz, px + hx, 0.045, pz + hz], { py: dark, _: C('#3a3d42') }, { _: WD });
-      for (let i = 0; i < 2 * hz / 0.6; i++) { const z0 = pz - hz + i * 0.6, c = i % 2 ? yel : blk; floor('main', T, px - hx, z0, px - hx + 0.14, Math.min(z0 + 0.6, pz + hz), 0.05, WD, c); floor('main', T, px + hx - 0.14, z0, px + hx, Math.min(z0 + 0.6, pz + hz), 0.05, WD, c); } // 兩邊黃黑斜紋
-      for (let i = 0; i < 2 * hx / 0.6; i++) { const x0 = px - hx + i * 0.6, c = i % 2 ? yel : blk; floor('main', T, x0, pz - hz, Math.min(x0 + 0.6, px + hx), pz - hz + 0.14, 0.05, WD, c); floor('main', T, x0, pz + hz - 0.14, Math.min(x0 + 0.6, px + hx), pz + hz, 0.05, WD, c); }
+    { const px = 10, pz = -8.5, hx = 1.9, hz = 4.3, dark = C('#2a2c30'), blk = C('#15161a'), H = DYNO_H, ys = H + 0.005, rz = pz + hz + DYNO_RAMP, side = C('#3a3d42');
+      box('main', T, [px - hx, 0, pz - hz, px + hx, H, pz + hz], { py: dark, _: side }, { _: WD }); // 第 79 批（Nick「馬力機稍微墊高用一個小斜坡開上去」）：台子墊高 DYNO_H
+      B.quad('main', T.p(px - hx, 0.004, rz), T.p(px + hx, 0.004, rz), T.p(px + hx, H, pz + hz), T.p(px - hx, H, pz + hz), WD, C('#34363b')); // 南邊的小斜坡（門那邊開上去）
+      for (const [x, sg] of [[px - hx, -1], [px + hx, 1]]) { const a = T.p(x, 0, rz), b = T.p(x, 0, pz + hz), c = T.p(x, H, pz + hz); B.quad('main', ...(sg > 0 ? [a, b, c, c] : [c, b, a, a]), WD, side); } // 斜坡兩邊的三角形
+      for (let i = 0; i < 2 * hx / 0.6; i++) { const x0 = px - hx + i * 0.6, x1 = Math.min(x0 + 0.6, px + hx), c = i % 2 ? yel : blk; B.quad('main', T.p(x0, 0.008, rz), T.p(x1, 0.008, rz), T.p(x1, 0.008 + H * 0.14 / DYNO_RAMP, rz - 0.14), T.p(x0, 0.008 + H * 0.14 / DYNO_RAMP, rz - 0.14), WD, c); } // 斜坡最下面一條黃黑
+      for (let i = 0; i < 2 * hz / 0.6; i++) { const z0 = pz - hz + i * 0.6, c = i % 2 ? yel : blk; floor('main', T, px - hx, z0, px - hx + 0.14, Math.min(z0 + 0.6, pz + hz), ys, WD, c); floor('main', T, px + hx - 0.14, z0, px + hx, Math.min(z0 + 0.6, pz + hz), ys, WD, c); } // 兩邊黃黑斜紋
+      for (let i = 0; i < 2 * hx / 0.6; i++) { const x0 = px - hx + i * 0.6, c = i % 2 ? yel : blk; floor('main', T, x0, pz - hz, Math.min(x0 + 0.6, px + hx), pz - hz + 0.14, ys, WD, c); floor('main', T, x0, pz + hz - 0.14, Math.min(x0 + 0.6, px + hx), pz + hz, ys, WD, c); }
       box('main', T, [12.6, 0, -9.2, 13.4, 1.35, -7.8], { pz: WHITE, _: C('#2f6fd6') }, { pz: U.rack, _: WD }); box('main', T, [12.55, 1.35, -9.25, 13.45, 1.42, -7.75], C('#50555c')); lbox(T, 12.6, -9.2, 13.4, -7.8, 1.42); // 控制櫃（藍色，上面一條）
       for (const x of [8.6, 11.0]) box('main', T, [x - 0.1, 0, -14.4, x + 0.1, 1.25, -14.2], C('#50555c')); box('main', T, [7.85, 1.2, -14.36, 11.75, 3.35, -14.24], blk); lbox(T, 7.85, -14.4, 11.75, -14.2, 3.35); // 螢幕的兩根柱子＋黑框（3.9 × 2.15 公尺；畫面在 town.src.js：朝南對著車）
       box('main', T, [7.7, 3.35, -14.4, 11.9, 3.47, -14.2], yel); // 框上面一條黃的
@@ -2032,7 +2036,7 @@ function buildVillage(opts = {}) {
       exit: { x: -160, z: -50.5, heading: R2 }, spawn: { x: -160, z: -50.5, heading: R2 }, // 後門外面的院子：往前、右轉、東邊的小路回大路
       zone: { x: -160, z: -30, hx: 7, hz: 14, rot: 0 },                          // 改車區＋前門口
       view: { pos: [-164.6, 2.2, -27.6], look: [-159.2, 0.9, -36.5], fov: 52 },  // 改車的時候：前門裡面左邊，看改車區的車（左後方）、後門、輪胎架
-      dyno: { pad: { x: -150, z: -34.5, hx: 1.9, hz: 4.3, rot: 0 }, pose: { x: -150, z: -34.5, heading: R2 }, screen: { x: -150.2, y: 2.275, z: -40.22, w: 3.72, h: 2.09 }, // 第 77 批：馬力機（東邊的門進去）：台子、綁好的位置（車頭朝北對著螢幕）、螢幕（朝南）
+      dyno: { h: DYNO_H, ramp: { x: -150, hx: 1.9, z0: -30.2, z1: -30.2 + DYNO_RAMP }, pad: { x: -150, z: -34.5, hx: 1.9, hz: 4.3, rot: 0 }, pose: { x: -150, z: -34.5, heading: R2 }, screen: { x: -150.2, y: 2.275, z: -40.22, w: 3.72, h: 2.09 }, // 第 77 批：馬力機（東邊的門進去）：台子、綁好的位置（車頭朝北對著螢幕）、螢幕（朝南）
         off: { x: -150, z: -24.5, heading: R2 } },                                 // 下馬力機：倒車退到門口裡面
     },
     dealer: { // 阿財車行：大路東邊開進前庭、經過展示間前面、開進車棚（買車區）、西邊出去

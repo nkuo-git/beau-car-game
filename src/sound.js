@@ -117,13 +117,13 @@ function SND_core(P, sr, seed) {
   // ---- 控制率的狀態 ----
   let tR = P.idle, tT = 0, tS = -1, tL = 1, tG = 1, dead = false, t = 0, ctlN = 0;
   let r1 = P.idle, r2 = P.idle, rn = P.idle, thr = 0, spd = 0, gE = 0, wn = 0, aw = 0, ddph = 0, ld = 0, fuelCut = false, cutT = 0, limOn = false, limP = 0;
-  let aF = 0, aM = 0, vr = 0, rF = 0.3, sF = 0.3, jit = 0, raspA = 0, flowA = 0, iA = 0, hsA = 0, gI = 1;
+  let aF = 0, aM = 0, aO = 0, vr = 0, rF = 0.3, sF = 0.3, jit = 0, raspA = 0, flowA = 0, iA = 0, hsA = 0, gI = 1;
   let sp = 0, bst = 0, wA = 0, wNz = 0, whA = 0, tdC = 1, wcw = 1, wsw = 0, wcw2 = 1, wsw2 = 0;
   let bvA = 0, bvK = 0, bvAt = -9, flA = 0, flT = 0, flK = 0, flInc = 0, pK = 0;
-  let popSeq = 0, popRate = 0, thrPk = 0, liftArm = false, pqN = 0;
+  let popSeq = 0, popRate = 0, thrPk = 0, liftArm = false, pqN = 0, ovr = 0; // ovr：第 79 批 放油門的聲浪（0–1）
   const pq = new Float64Array(3 * 12); // 排好的放炮：[幾秒後, 大小, 長度]
   let mcw = 1, msw = 0, mA = 0, mrcw = 1, mrsw = 0, mrA = 0, sccw = 1, scsw = 0, scA = 0;
-  const sm = P.smooth || 0.01, kR = kc(sm), kTu = kc(0.025), kTd = kc(0.04), kSp = kc(0.06), kG = kc(0.012), kWn = kc(0.3), kAw = kc(0.15);
+  const sm = P.smooth || 0.01, kR = kc(sm), kTu = kc(0.025), kTd = kc(0.04), kSp = kc(0.06), kG = kc(0.012), kWn = kc(0.3), kAw = kc(0.15), kOvU = kc(0.18), kOvD = kc(0.05); // 第 79 批：放油門的聲浪 0.18 秒起來（先讓油門那一下掉下去）、踩油門 0.05 秒收掉
   const kBu = kc(0.12), kBd = kc(0.045);
 
   function qpop(dt, lvl, dur) {
@@ -157,6 +157,7 @@ function SND_core(P, sr, seed) {
       if (PP.als > 0 && rnd() < PP.als * 0.3) qpop(0.004 + 0.012 * rnd(), PP.lvl * 0.7 * (0.5 + 0.5 * rnd()), 0.0025);
     }
     if (f) { amp[i] = aF * ca[i] * (1 + vr * gs()); rr[i] = rF; sh[i] = sF; }
+    else if (fuelCut && cutT <= 0 && aO > aM) { amp[i] = aO * ca[i] * (1 + 0.35 * gs()); rr[i] = 0.3; sh[i] = 0.35; } // 第 79 批：斷油的時候排氣管還是「轟轟」（放油門的聲浪）
     else {
       amp[i] = aM * ca[i] * (1 + 0.2 * gs()); rr[i] = 0.4; sh[i] = 0;
       if (cutT > 0 && PP.shift > 0 && rnd() < 0.1 * PP.shift) qpop(0.003 + 0.01 * rnd(), PP.lvl * 0.45 * (0.5 + rnd()), 0.002);
@@ -187,14 +188,18 @@ function SND_core(P, sr, seed) {
     if (cutT > 0) cutT -= dtc;
     limOn = tT > 0.5 && rn >= tL - 0.004;
     limP = 0.15 + 0.75 * cl((rn - tL + 0.004) * 50, 0, 1);
+    // 第 79 批（Nick「油門放開後的聲浪要大一點」）：放油門（引擎煞車、斷油）排氣還是很大聲，轉速越高越大（以前跟著負載掉到 0.18，比怠速還小聲）
+    const ovT = tT < 0.15 ? P.over * (0.7 + 0.3 * cl((rn - 0.2) / 0.55, 0, 1)) * cl((rn - 0.14) * 12, 0, 1) : 0;
+    ovr += (ovT - ovr) * (ovT > ovr ? kOvU : kOvD);
+    const ldA = Math.max(ld, ovr);
     const aR = 0.28 + 0.72 * Math.min(rn, 1.05);
-    aF = aR * (0.18 + 0.82 * Math.pow(ld, 0.7)) * (1 + P.wander * aw); aM = aR * 0.09;
-    const shp = Math.max(ld, 0.6 * idl); // 怠速的排氣脈衝也滿尖的（汽缸裡還有壓力），聽得到「噗噗」
+    aF = aR * (0.18 + 0.82 * Math.pow(ldA, 0.7)) * (1 + P.wander * aw); aM = aR * 0.09; aO = aR * (0.09 + (0.36 + 0.34 * (1 - cl((rn - 0.2) / 0.5, 0, 1))) * Math.pow(ovr, 0.8)); // 低轉的時候脈衝比較疏，每一下大一點（不然比怠速還小聲）
+    const shp = Math.max(ld, 0.6 * idl, 0.55 * ovr); // 怠速的排氣脈衝也滿尖的（汽缸裡還有壓力），聽得到「噗噗」
     rF = 0.32 + (P.rise - 0.32) * shp; sF = 0.1 + (P.decay - 0.1) * shp;
     gI = 1 + (P.idleGain - 1) * idl;
     vr = P.vari * (1 + 1.2 * idl); jit = P.jit * (1 + idl);
-    raspA = P.rasp * (0.2 + 0.8 * ld) * (fuelCut ? 0.35 : 1);
-    flowA = P.flow * (0.12 + 0.88 * ld) * (0.15 + 0.85 * Math.min(rn, 1)) * (fuelCut ? 0.5 : 1);
+    raspA = P.rasp * (0.2 + 0.8 * ldA) * (fuelCut ? 0.6 : 1);
+    flowA = P.flow * (0.12 + 0.88 * ldA) * (0.15 + 0.85 * Math.min(rn, 1)) * (fuelCut ? 0.75 : 1);
     iA = I.lvl * (0.12 + 0.88 * thr) * (0.25 + 0.75 * rn) * (fuelCut ? 0.6 : 1);
     hsA = I.hiss * (0.1 + 0.9 * thr) * rn;
     // 放油門
@@ -204,6 +209,7 @@ function SND_core(P, sr, seed) {
       liftArm = false;
       if (thrPk > 0.45) { blow(bst); if (PP.lift > 0 && rn > 0.4) { popSeq = PP.dur; popRate = PP.rate * PP.lift; } }
     }
+    if (fuelCut && P.burble > 0 && rn > 0.35 && rnd() < P.burble * (rn - 0.3) * dtc) pop(PP.lvl * (0.18 + 0.3 * rnd()), 0.001 + 0.002 * rnd()); // 第 79 批：放油門排氣管裡「啵啵」的小爆（聲浪）
     if (popSeq > 0) {
       popSeq -= dtc;
       if (tT < 0.15 && rn > 0.3 && rnd() < popRate * dtc * Math.min(1, (2 * popSeq) / PP.dur)) pop(PP.lvl * (0.35 + 0.75 * rnd()), 0.0015 + 0.003 * rnd());
@@ -449,7 +455,7 @@ function SND_core(P, sr, seed) {
     shift: doShift,
     render,
     dead: () => dead,
-    info: () => ({ rpm: rn, throttle: thr, load: ld, spool: sp, boost: bst, cut: cutT > 0, pops: pqN }),
+    info: () => ({ rpm: rn, throttle: thr, load: ld, over: ovr, spool: sp, boost: bst, cut: cutT > 0, pops: pqN }),
   };
 }
 
@@ -467,6 +473,7 @@ const SND_BASE = {
   intake: { lvl: 0.1, f: 450, q: 1.5, f2: 1500, q2: 2, mix2: 0.5, tone: 0.3, hiss: 0.04 },
   pops: { lift: 0, shift: 0, lvl: 0.8, rate: 10, dur: 1.0, als: 0, crack: 0.25, burp: 0.6 },
   turbo: null, motor: null, sc: null,
+  over: 0.5, burble: 6, // 第 79 批：放油門的聲浪（負載的下限 0–1）、斷油的時候每秒幾個小爆（照轉速）
 };
 const SND_I6 = [0, 120, 240, 360, 480, 600], SND_V8 = [0, 90, 180, 270, 360, 450, 540, 630];
 const SND_CARS = {

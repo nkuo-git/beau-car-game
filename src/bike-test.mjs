@@ -11,7 +11,7 @@ import pw from '/opt/node22/lib/node_modules/playwright/index.js';
 const dir = path.dirname(new URL(import.meta.url).pathname);
 const three = path.join(dir, '../node_modules/three');
 const K = process.env.BIKE === 'road' ? 'road' : 'mtb';
-const CAR = K === 'mtb' ? { name: '越野腳踏車', what: 'mountain bike', price: 3, vmax: 30, top: 32, hwMin: 26, off: true, wx: 0.9, hx: 0.08 } : { name: '一般腳踏車', what: 'road bike', price: 2, vmax: 35, top: 37, hwMin: 30, off: false, wx: 0.8, hx: 0.03 }; // hwMin：20 秒要踩到的速度；wx：輕量車的輪子最前最後（公尺）
+const CAR = K === 'mtb' ? { name: '越野腳踏車', what: 'mountain bike', price: 3, vmax: 55, top: 60, hwMin: 26, off: true, wx: 0.9, hx: 0.08 } : { name: '一般腳踏車', what: 'road bike', price: 2, vmax: 58, top: 60, hwMin: 30, off: false, wx: 0.8, hx: 0.03 }; // hwMin：20 秒要踩到的速度；wx：輕量車的輪子最前最後（公尺）
 const [prefix = `../out/bike/${K}`] = process.argv.slice(2);
 if (path.dirname(prefix) !== '.') fs.mkdirSync(path.dirname(prefix), { recursive: true });
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
@@ -115,7 +115,7 @@ const g0 = await p.evaluate(() => {
 console.log('  garage:', JSON.stringify(g0));
 check(g0.cur === K && g0.name === CAR.name && g0.btn === '你的車' && g0.mid === K, `garage page: the ${CAR.what} is your car, parked on the lobby lift`);
 check(!g0.cabin && !g0.interior && g0.bars && g0.eye && g0.eye[1] > 1.1, `you ride it: no car cockpit, no box interior; the handlebars are their own group (they turn); first-person eye ${g0.eye?.[1]} m up`);
-check(g0.perf.price === CAR.price && g0.perf.offroad === CAR.off && g0.perf.light === CAR.off && g0.perf.lean === 1 && !g0.perf.big && g0.perf.bike && g0.perf.shop === 'dealer' && g0.perf.vmax === CAR.vmax && g0.perf.top === CAR.top && g0.perf.hp < 2, `${CAR.price} 萬, ${CAR.off ? 'off-road suspension but light (never crushes things)' : 'a road vehicle'}, normal size (fits the tower), leans into turns, pedalled by you (${g0.perf.hp} hp), top ${CAR.vmax} km/h (${CAR.top} fully tuned), sold at 阿財車行`);
+check(g0.perf.price === CAR.price && g0.perf.offroad === CAR.off && g0.perf.light === CAR.off && g0.perf.lean === 1 && !g0.perf.big && g0.perf.bike && g0.perf.shop === 'dealer' && g0.perf.vmax === CAR.vmax && g0.perf.top === CAR.top && g0.perf.hp < 3, `${CAR.price} 萬, ${CAR.off ? 'off-road suspension but light (never crushes things)' : 'a road vehicle'}, normal size (fits the tower), leans into turns, pedalled by you (${g0.perf.hp} hp), top ${CAR.vmax} km/h (${CAR.top} fully tuned), sold at 阿財車行`);
 check(g0.snd && g0.snd.gain === 0 && g0.snd.idleGain === 0, `no engine sound at all (a bicycle): sound profile 「${g0.snd?.name}」 gain ${g0.snd?.gain}`);
 check(g0.wheels.n === 4 && g0.wheels.front && g0.wheels.rear && g0.wheels.inBars && g0.wheels.hubMeshes === 0 && g0.wheels.tyres === 2, `two wheels (${g0.wheels.tyres} tyres; the front one in the handlebar group, so it steers); the four wheel slots drive.js spins are invisible points sharing the real wheels' rotation`);
 const sale = await p.evaluate(() => { const D = window.__D(), G = window.__G(); G.owned.delete(window.__K); const s = D.saleOf('dealer'), o = D.saleOf('odealer'); G.owned.add(window.__K); return { dealer: s.includes(window.__K), first: s[0], odealer: o.includes(window.__K) }; });
@@ -325,10 +325,10 @@ const lean = await p.evaluate(() => {
   const tilt = (o) => { const q = o.getWorldQuaternion(new body.quaternion.constructor()), u = new body.position.constructor(0, 1, 0).applyQuaternion(q); return Math.acos(Math.min(1, u.y)); };
   let n = 0; for (; n < 900 && d.telemetry().kmh < 20; n++) { d.setInput({ throttle: 1, brake: 0, steer: 0 }); window.__dstep(1); }
   const v0 = d.telemetry().kmh, b0 = d.telemetry().bumps, straight = +body.rotation.x.toFixed(3);
-  const res = { R: { lean: 0 }, L: { lean: 0 } }; // 右 35 格、左 70 格、右 35 格：方向轉回來，不會騎到護欄
+  const res = { R: { lean: 0 }, L: { lean: 0 } }; // 右 35 格、左 70 格、右 35 格：方向轉回來，不會騎到護欄；第 79 批起腳踏車最快 60：轉彎的時候速度留在 24 公里左右（不然越騎越快、彎變大，騎到護欄）
   for (const [sg, n2] of [[1, 50], [-1, 100], [1, 50]]) {
     const o = res[sg > 0 ? 'R' : 'L'];
-    for (let i = 0; i < n2; i++) { d.setInput({ throttle: 1, brake: 0, steer: 0.35 * sg }); window.__dstep(1); const t = d.telemetry(); if (sg * body.rotation.x > sg * o.lean) Object.assign(o, { lean: +body.rotation.x.toFixed(3), rider: +tilt(C.group).toFixed(3), kmh: Math.round(t.kmh), steer: +t.steer.toFixed(2) }); }
+    for (let i = 0; i < n2; i++) { d.setInput({ throttle: d.telemetry().kmh < 24 ? 1 : 0, brake: 0, steer: 0.35 * sg }); window.__dstep(1); const t = d.telemetry(); if (sg * body.rotation.x > sg * o.lean) Object.assign(o, { lean: +body.rotation.x.toFixed(3), rider: +tilt(C.group).toFixed(3), kmh: Math.round(t.kmh), steer: +t.steer.toFixed(2) }); }
   }
   d.setInput(null); window.__stop(240); window.__dstep(60);
   return { v0: Math.round(v0), straight, ...res, bumps: d.telemetry().bumps - b0, stopKmh: +d.telemetry().kmh.toFixed(1), stopped: +body.rotation.x.toFixed(3), riderStopped: +tilt(C.group).toFixed(3), riderChild: C.group.parent === body };

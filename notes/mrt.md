@@ -55,3 +55,7 @@ Mock: https://claude.ai/artifact/ENbFFWeqJxurXLgrTaE3j6 (card 「兩個都做」
 `node mrt-test.mjs ../out/mrt/mt` (browser only, 960×576, gc8 save, 高): station built (names, levels, timetable, no street collider
 on a carriageway), walk up 出口 1 → gates beep → ramp → platform; `M.setTime` to just before the eastbound train, chime toast,
 walk in, ride (shift > 150 m, toasts), 「下車」 at 文德, walk down the second gate row and out; day + night shots, draw calls.
+
+## Batch 79 (trial v91): smooth start/stop
+- Nick: train "jumps to the next station"; wants slow start and slow stop, not too long. `runP(L, t)` is now an S-curve (jerk-limited: v = Vp·s²(3−2s) over TA = Vp/ACC), `VM 36`, `ACC 2.0` (peak 3 m/s²). 港墘 → 文德 ≈ 46 s (was 65).
+- A probe ride showed no teleport: ~100 m per 5 s, smooth. The car interior is a plain white box and the camera faces the doors, so motion is hard to see — fix with the station/train rework (windows, outside visible).

@@ -43,3 +43,8 @@ limiter sits at 1.02 × redline so the last bin is a bit over).
 `node dyno-test.mjs ../out/dyno/dy`: Node (setDyno pins the car, 0.88 × hp, release moves) + browser (east door open and drivable, pad button, strap,
 6 s full throttle with the wheel turned → no drift, curve on the canvas (pixel count), screenshots chase/eye/night, 下馬力機 backs out, save + reload, lock).
 Lesson: in a test never hold the brake after the car has stopped (AT: brake while stopped = reverse gear), use throttle 0 / brake only while moving.
+
+## Batch 79 (trial v91): raised pad + ramp
+- Nick: 「馬力機稍微墊高用一個小斜坡開上去」. village.js `DYNO_H = 0.22`, `DYNO_RAMP = 2.8` (south side, ~4.5°); `places.shop.dyno.h` / `.ramp {x, hx, z0, z1}`.
+- town.src.js `proxyWorld`: `dyH(x, z)` feeds heightAt / terrainAt / normalAt (ramp normal `DYN`) / surfaceAt (0). Rollers group sits at `D.h`.
+- Gotcha: once the pad counts as terrain, terrain.js `createRide` is on and its traction (`k.trac`, TAB grip × compression) capped the drive force on the rollers (GC8 6 s: 102 km/h vs 120). drive.js now ignores the ride in physics while `st.dyno` (ride still poses the height). dyno-test spin back to 720 rad.

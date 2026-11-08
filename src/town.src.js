@@ -309,10 +309,13 @@ function proxyWorld() {
   };
   // 第 27 批：隧道那段（hills.js）：玩家在上面那層（開到山上了）＝山的地面；下面那層（隧道裡）＝VIL 的（路）
   const HL = VIL.hills, top = (x, z) => !!HL && HL.high && HL.tunAt(x, z) >= 0;
-  W.heightAt = (x, z) => { if (inT(x, z)) return base(); const h = rampH(x, z); return h != null ? h : top(x, z) ? HL.topAt(x, z) : VIL.heightAt ? VIL.heightAt(x, z) : 0; };
-  W.terrainAt = (x, z) => (inT(x, z) ? base() !== 0 : rampH(x, z) != null || top(x, z) || (VIL.terrainAt ? VIL.terrainAt(x, z) : false));
-  W.normalAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? UP : top(x, z) ? HL.topN(x, z) : VIL.normalAt ? VIL.normalAt(x, z) : UP);
-  W.surfaceAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? 0 : top(x, z) ? 1 : VIL.surfaceAt(x, z));
+  // 第 79 批（Nick「馬力機稍微墊高用一個小斜坡開上去」）：改車廠的馬力機台子（DY.h 高）＋南邊的斜坡；不配置記憶體
+  const DY = VIL.places?.shop?.dyno, DR = DY && DY.ramp, dyZ0 = DR ? DY.pad.z - DY.pad.hz : 0, dyL = DR ? DR.z1 - DR.z0 : 1, DYN = DR ? (() => { const k = DY.h / dyL, n = Math.hypot(1, k); return [0, 1 / n, k / n]; })() : UP;
+  const dyH = (x, z) => (!DR || Math.abs(x - DR.x) > DR.hx || z < dyZ0 || z > DR.z1 ? null : z <= DR.z0 ? DY.h : (DY.h * (DR.z1 - z)) / dyL);
+  W.heightAt = (x, z) => { if (inT(x, z)) return base(); const h = rampH(x, z); if (h != null) return h; const d = dyH(x, z); return d != null ? d : top(x, z) ? HL.topAt(x, z) : VIL.heightAt ? VIL.heightAt(x, z) : 0; };
+  W.terrainAt = (x, z) => (inT(x, z) ? base() !== 0 : rampH(x, z) != null || dyH(x, z) != null || top(x, z) || (VIL.terrainAt ? VIL.terrainAt(x, z) : false));
+  W.normalAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? UP : dyH(x, z) != null ? (z > DR.z0 ? DYN : UP) : top(x, z) ? HL.topN(x, z) : VIL.normalAt ? VIL.normalAt(x, z) : UP);
+  W.surfaceAt = (x, z) => (inT(x, z) || rampH(x, z) != null || dyH(x, z) != null ? 0 : top(x, z) ? 1 : VIL.surfaceAt(x, z));
   return W;
 }
 
@@ -1873,7 +1876,7 @@ function dynoBuild() {
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const scr = new THREE.Mesh(new THREE.PlaneGeometry(D.screen.w, D.screen.h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })); scr.name = 'dyno-screen';
   scr.position.set(D.screen.x, D.screen.y, D.screen.z); g.add(scr); // 朝 +z（南）：對著台子上的車
-  const rg = new THREE.Group(); rg.position.set(D.pose.x, 0, D.pose.z); rg.rotation.y = D.pose.heading; g.add(rg); // 本地 x＝車頭方向、z＝左右（跟 drive.js 的車一樣）
+  const rg = new THREE.Group(); rg.position.set(D.pose.x, D.h || 0, D.pose.z); // 第 79 批：台子墊高了 rg.rotation.y = D.pose.heading; g.add(rg); // 本地 x＝車頭方向、z＝左右（跟 drive.js 的車一樣）
   const roll = new THREE.InstancedMesh(new THREE.CylinderGeometry(DY_R, DY_R, 1, 18).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x9aa0a8, metalness: 0.75, roughness: 0.35 }), 4); roll.name = 'dyno-rollers';
   const slot = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 0.02, 1), new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.9 }), 2); slot.name = 'dyno-slots';
   roll.frustumCulled = false; slot.frustumCulled = false; rg.add(roll); rg.add(slot);

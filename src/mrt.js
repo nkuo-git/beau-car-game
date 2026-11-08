@@ -34,7 +34,7 @@ const GATE_U = -8; // 閘門那一排
 const TRK_V = 1.95; // 兩條軌道離中線多遠（往東的在 +v＝行進方向的右手邊；車廂的外側離月台門 3.3 − 1.95 − 1.28 ＝ 7 公分）
 const CAR_L = 13.8, CAR_P = 14.4, CAR_W = 1.28, DOOR_X = 3.6, DOOR_W = 1.3, CAR_H = 3.3; // 車廂：長、間距、半寬、車門在 ±3.6（寬 1.3）、車身高
 const PSD_W = 1.9; // 月台門一個口的寬
-const H = 90, DWELL = 15, VM = 22, ACC = 1.2, CYCLE = 180; // 每 90 秒一班、停 15 秒、最快 22 m/s（80 公里）、1.2 m/s²
+const H = 90, DWELL = 15, VM = 36, ACC = 2.0, CYCLE = 180; // 每 90 秒一班、停 15 秒；第 79 批：最快 36 m/s（130 公里）、平均 2.0 m/s²（S 形：起步、進站慢慢來），港墘→文德約 46 秒（以前 65 秒）
 const DOOR_U = []; for (let i = 0; i < 4; i++) for (const d of [-DOOR_X, DOOR_X]) DOOR_U.push((i - 1.5) * CAR_P + d);
 // 顏色（0–1）
 const WHITE = [0.93, 0.93, 0.91], WALL = [0.86, 0.86, 0.84], CONC = [0.70, 0.70, 0.68], TILE = [0.80, 0.78, 0.72], TILE2 = [0.62, 0.63, 0.66], ORA = [0.89, 0.40, 0.12], DARK = [0.22, 0.23, 0.25], STEEL = [0.60, 0.63, 0.66], ALU = [0.76, 0.78, 0.80], GLS = [0.74, 0.86, 0.90], GLSD = [0.30, 0.42, 0.50], BROWN = [0.47, 0.30, 0.17], SEAT = [0.17, 0.33, 0.66], YEL = [0.96, 0.80, 0.15], RED = [0.85, 0.15, 0.12], GREEN = [0.25, 0.70, 0.35];
@@ -80,13 +80,17 @@ function fit(g, text, px, maxW) { for (let s = px; s >= 10; s -= 2) { g.font = `
 function signMat(tex) { const m = new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.22, roughness: 0.6, transparent: true }); m.userData.role = 'sign'; return m; } // 只畫正面（背面透過玻璃看到會是反的字）
 function texOf(cv) { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; }
 
-// 列車跑一段（從停到停）：梯形的速度曲線
-function runT(L) { const da = (VM * VM) / (2 * ACC); return L >= 2 * da ? (2 * VM) / ACC + (L - 2 * da) / VM : 2 * Math.sqrt(L / ACC); }
+// 列車跑一段（從停到停）：第 79 批（Nick「捷運自己慢慢啟動到慢慢停止 不要花太多時間」）：起步、進站的加速度從 0 慢慢變大再變小（S 形：
+//   速度 v＝Vp·(3s²−2s³)，s＝t/TA），中間用 Vp 跑；平均加速度 ACC、最大 1.5·ACC；短的一段沒有中間（Vp＝√(L·ACC)）
+function runV(L) { const da = (VM * VM) / (2 * ACC); return L >= 2 * da ? VM : Math.sqrt(L * ACC); }
+function runT(L) { if (L <= 0) return 0; const Vp = runV(L), TA = Vp / ACC, da = (Vp * TA) / 2; return 2 * TA + Math.max(0, L - 2 * da) / Vp; }
 function runP(L, t) { // t 秒以後走了多遠、速度
-  const da = (VM * VM) / (2 * ACC), T = runT(L);
-  if (t <= 0) return [0, 0]; if (t >= T) return [L, 0];
-  if (L >= 2 * da) { const ta = VM / ACC; if (t < ta) return [0.5 * ACC * t * t, ACC * t]; if (t < T - ta) return [da + VM * (t - ta), VM]; const r = T - t; return [L - 0.5 * ACC * r * r, ACC * r]; }
-  const th = T / 2; if (t < th) return [0.5 * ACC * t * t, ACC * t]; const r = T - t; return [L - 0.5 * ACC * r * r, ACC * r];
+  const T = runT(L); if (t <= 0 || L <= 0) return [0, 0]; if (t >= T) return [L, 0];
+  const Vp = runV(L), TA = Vp / ACC, da = (Vp * TA) / 2;
+  const up = (tt) => { const s = tt / TA; return [Vp * TA * (s * s * s - 0.5 * s * s * s * s), Vp * s * s * (3 - 2 * s)]; };
+  if (t < TA) return up(t);
+  if (t < T - TA) return [da + Vp * (t - TA), Vp];
+  const [q, v] = up(T - t); return [L - q, v];
 }
 
 function buildMrt(V, opt = {}) {
