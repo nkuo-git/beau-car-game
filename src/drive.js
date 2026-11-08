@@ -55,6 +55,7 @@
 //   drive.setCameraMode('chase' | 'eye' | 'none', view?)   追車／駕駛座／不管鏡頭；drive.cameraMode 是現在的
 //   drive.teleport({ x, z, heading }, { intro })   把車放到那裡停好（不叫 onZone）；intro：鏡頭從車前面繞到後面（出門的時候）
 //   drive.parkAt(pose, onDone)   自己開到 pose（{ x, z, heading }，或 { noseX, z, heading }＝車頭對齊 noseX）停好再叫 onDone
+//   drive.setDyno(pose | null)   第 77 批：馬力機：綁在 pose（{ x, z, heading }）的滾筒上：車不動、輪子照速度轉、油門／煞車／換檔照舊（方向盤、手煞車不算）；telemetry 多 dyno、whp（輪上馬力）、whpX（那時候的轉速÷紅線）、redline；null＝放開
 //   drive.pause() / resume()     暫停（不吃按鍵、藏 HUD／影子／光柱、車身擺正、前輪回正）／繼續
 //   drive.release()              把車交給別人（賽道、車庫）：pause＋車子放回原點、不轉、輪子歸零（race.src.js 的 carSize 用世界座標量車頭，一定要）
 //   drive.setInput({ throttle, brake, steer, handbrake } | null)   程式開車（測試）；null＝回到手指、鍵盤
@@ -424,6 +425,8 @@ function createDrive(o) {
     surf: 0, cap: vtop, bumps: 0, shifts: 0, touch: 0, blocked: 0, roll: 0, rollV: 0, pitch: 0, pitchV: 0, alat: 0, along: 0, kap: 0, scrub: 0, push: 0, jit: 0, jitT: 0, hitW: 0, hitT: -9, impT: -9, impW: 0 };
   // 第 3 批（甩尾）：slip＝甩的角度（走的方向＝th＋slip）、slipV＝它變多快、loose＝後輪多鬆（0–1）、dm＝甩了多少（0 抓地～1 甩）、skid＝輪胎叫、skidM＝胎痕／煙
   Object.assign(st, { slip: 0, slipV: 0, loose: 0, dm: 0, skid: 0, skidM: 0, flick: 0, sPrev: 0, thrMem: 0, pwT: 0, kick: 0, kickT: 0, dT: 0, drifts: 0, dShow: 0 });
+  Object.assign(st, { dyno: null, pw: 0, px: 0 }); // 第 77 批（馬力機）：dyno＝綁在滾筒上的位置（車不動、輪子轉）；pw＝這一步輪上的功率（瓦）、px＝那時候的轉速（÷紅線）
+  const DYI = { thr: 0, brk: 0, hb: 0, clu: 0, steer: 0 }; // 馬力機上的輸入：方向盤、手煞車不算（重用）
   // 第 68 批：手排（setGearbox('mt')）：mg＝排在哪一檔（−1 R、0 N、1–6；st.gear／st.rev 跟著它）、clu＝離合器接上多少（0 踩著～1 接上）、stall＝熄火了、crank＝發動中（秒）、
   //   grind＝「咔咔」沒換進去（秒；grindWhy 1 沒按離合器、2 太快不能倒車）、lim＝撞到紅線斷油中、limT＝計時（紅線噠噠噠、閃）、shq＝按了 ▲ ▼ 還沒處理的
   Object.assign(st, { mt: false, mg: 0, clu: 1, cluPrev: 1, stall: false, crank: 0, grind: 0, grindWhy: 0, lim: false, limT: 0, shq: [] });
@@ -608,9 +611,9 @@ function createDrive(o) {
     // 引擎：快到限速油門自己收（定速）；推頭的時候也收（像循跡控制）；load＝給引擎聲的（踩著就大聲）
     const gov = clamp((capS + (capS >= vmx ? 0.3 : 0) - u) / 0.5, 0, 1), lim = gov * (1 - Math.min(0.95, st.scrub / 7 + 0.7 * pk * (1 - st.dm))); // 定速在限速上（極速多 0.3 m/s：錶上看得到 250）
     st.thrEff = go * lim;
-    let a = 0; st.lim = false;
+    let a = 0; st.lim = false; st.pw = 0;
     if (st.rev) a = 2.8 * st.thrEff * Math.max(0.6, dmgP.power) * eng;
-    else if (st.cut <= 0 && eng > 0) { const x = xOf(u, st.gear); if (x < 1) a = (Math.min(R ? tract * R.k.trac : tract, (st.thrEff * Tpk * torqueAt(clamp(x, st.gear === 0 ? 0.6 : 0.2, 1)) * GR[st.gear] * fd * 0.88) / RR) / m) * dmgP.power * eng; else if (MT && go > 0.3) st.lim = true; } // 撞到紅線斷油；撞壞了出力變小；手排撞紅線＝噠噠噠（不自己升檔）
+    else if (st.cut <= 0 && eng > 0) { const x = xOf(u, st.gear); if (x < 1) { const fE = (st.thrEff * Tpk * torqueAt(clamp(x, st.gear === 0 ? 0.6 : 0.2, 1)) * GR[st.gear] * fd * 0.88) / RR; a = (Math.min(R ? tract * R.k.trac : tract, fE) / m) * dmgP.power * eng; st.pw = fE * dmgP.power * eng * u; st.px = x; } else if (MT && go > 0.3) st.lim = true; } // 第 77 批：pw＝引擎送到輪子的功率（抓地力吃不掉；馬力機的螢幕畫這個） // 撞到紅線斷油；撞壞了出力變小；手排撞紅線＝噠噠噠（不自己升檔）
     const D = slide(h, inp, R, u, go, gov, a, aG, ac); if (st.dm > 0) { a *= 1 + (D.fwd - 1) * st.dm; a += (Math.min(a, D.cap) - a) * st.dm; } // 第 3 批：甩尾（後輪空轉：往前推的少一點；抓地大部分拿去側滑了）
     const ov = u - capS - 0.5, over = ov > 0 ? (soft ? Math.min(sf.over[1], ov * sf.over[0]) : Math.min(8, ov * 2.5)) : 0; // 比限速快（開進草地、限速變低）：慢下來
     const res = stop * (9.5 + 2.5 * Math.min(1, (u * u) / 4900)) + (go < 0.05 ? (st.rev ? 1.2 : 1.4) : 0) + sf.drag + 0.147 + (AERO * 0.6 * P.cda * u * u) / m + over + (st.rev ? 0 : Math.min(9, st.scrub)) + D.bleed
@@ -1174,8 +1177,8 @@ function createDrive(o) {
     else {
       st.surf = world.surfaceAt ? world.surfaceAt(st.x + Math.cos(st.th) * CX, st.z - Math.sin(st.th) * CX) : 0;
       // 每步最少 1/120 秒、最多走 STEP 公尺（碰撞不會穿過去）
-      const inp = input(), n = Math.max(1, Math.ceil(dt * HZ - 1e-6), Math.ceil(((Math.abs(st.v) + 15 * dt) * dt) / STEP)), h = dt / n;
-      for (let i = 0; i < n; i++) { physics(h, inp); collide(); springs(h); if (ride) ride.step(h); zones(false); }
+      const inp0 = input(), inp = st.dyno ? dynoInp(inp0) : inp0, n = Math.max(1, Math.ceil(dt * HZ - 1e-6), Math.ceil(((Math.abs(st.v) + 15 * dt) * dt) / STEP)), h = dt / n;
+      for (let i = 0; i < n; i++) { physics(h, inp); if (st.dyno) dynoPin(); collide(); springs(h); if (ride) ride.step(h); zones(false); }
     }
     if (Math.abs(st.slip) > 0.175) { if (st.dT < 0.25 && st.dT + dt >= 0.25) st.drifts++; st.dT += dt; } else st.dT = 0; // 第 3 批：甩 10° 以上超過 0.25 秒＝甩了一次
     // 撞到：這一幀最大的一下（0.25 秒內只算一次）→ 鏡頭晃、onBump
@@ -1198,6 +1201,10 @@ function createDrive(o) {
       else if (e[0] === 'done') e[1]();
     }
   }
+  // ---- 第 77 批：馬力機（Nick「車就跟原本一樣快換檔啥的都一樣只是在原地」）：油門、煞車、離合器、換檔照舊，方向盤和手煞車不算；每一步算完車放回滾筒上（速度、轉速、檔位都留著：輪子照速度轉）----
+  const dynoInp = (i) => { DYI.thr = i.thr; DYI.brk = i.brk; DYI.clu = i.clu; DYI.hb = 0; DYI.steer = 0; return DYI; };
+  function dynoPin() { const D = st.dyno; st.x = D.x; st.z = D.z; st.th = D.heading; st.slip = st.slipV = st.loose = st.dm = 0; st.kap = st.alat = st.scrub = st.steer = 0; st.touch = st.blocked = 0; }
+  function setDyno(p) { st.dyno = p ? { x: +p.x, z: +p.z, heading: +p.heading || 0 } : null; if (st.dyno) { auto = null; dynoPin(); st.v = 0; st.spin = 0; } }
   function neutral() {
     st.slip = st.slipV = st.loose = st.dm = st.skid = st.skidM = st.flick = st.thrMem = st.kickT = st.pwT = st.dT = st.dShow = st.hb = 0; // 第 3 批：不甩
     st.roll = st.rollV = st.pitch = st.pitchV = st.kap = st.steer = st.v = st.scrub = st.push = 0; st.thr = st.brk = st.thrEff = st.load = 0; st.rpm = 0.13; st.hitW = st.touch = st.blocked = 0;
@@ -1238,6 +1245,7 @@ function createDrive(o) {
     slip: st.slip, travel: wrapA(st.th + st.slip), drift: st.dm, drifting: Math.abs(st.slip) > 0.175, drifts: st.drifts, loose: st.loose, skid: st.skid, handbrake: st.hb > 0 ? 1 : 0, // 第 3 批（甩尾）
     marks: SK ? SK.count() : 0, smoke: SK ? SK.alive() : 0, tilt: tilt.on ? tilt.val : null,
     ngears: NG, mt: st.mt, mgear: st.mt ? st.mg : null, clutch: st.mt ? +(1 - st.clu).toFixed(3) : 0, stalled: st.stall, cranking: st.crank > 0, grind: st.grind > 0 ? st.grindWhy : 0, limiter: st.lim, // 第 68 批：手排
+    dyno: !!st.dyno, whp: paused ? 0 : st.pw / 745.7, whpX: st.px, redline: P.red, // 第 77 批：馬力機：在滾筒上、輪上馬力（hp）、那時候的轉速（÷紅線）、紅線轉速
     ...(ride ? ride.tele() : null) });
 
   const api = {
@@ -1256,6 +1264,7 @@ function createDrive(o) {
     setPop, get pop() { return popOn; }, // 跳燈
     setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, clu: +i.clutch || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
     setGearbox, shift, get gearbox() { return st.mt ? 'mt' : 'at'; }, // 第 68 批：手排（'mt'）／自排（'at'）；shift(±1)＝按 ▲ ▼
+    setDyno, get dyno() { return !!st.dyno; }, // 第 77 批：馬力機：setDyno({ x, z, heading }) 綁上去（車不動、輪子轉、油門換檔照舊）、setDyno(null) 放開
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
     carInfo: { nose: info.nose, tail: info.tail, len: info.len, halfW: Math.max(info.halfW, +o.halfW || 0), wheelbase: L, vmax: P.vmax }, hud: hud && hud.root, // halfW：碰撞的半寬（怪獸卡車：輪胎比車身寬）
   };

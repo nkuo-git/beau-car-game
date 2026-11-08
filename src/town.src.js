@@ -1815,6 +1815,102 @@ function bayAct(t) {
   }
   return null;
 }
+// ---- 第 77 批（Nick 2026-11-08「改車廠裡要有一個馬力機 可以自己把車開上去 車就跟原本一樣快 換檔啥的都一樣 只是在原地 旁邊要有一個螢幕顯示剛的車速跟馬力曲線圖」）：馬力機 ----
+//   阿輝改車廠東邊的門開進去＝馬力機（village.js places.shop.dyno：台子 pad、綁好的位置 pose、螢幕 screen、下來的位置 off）
+//   停在台子上「上馬力機」→ 自己開正、綁在滾筒上（drive.setDyno：車不動、輪子照速度轉、油門／煞車／換檔照舊，方向盤不算）
+//   滾筒（4 支，一個 InstancedMesh，照這台車的兩個軸擺、跟著車速轉）＋兩條槽；牆前面的大螢幕＝canvas 貼圖（3 格畫一次）：車速、轉速、檔位、輪上馬力，
+//   曲線：這一趟每個轉速（分 48 格）跑過最大的輪上馬力（橘）、算出來的扭力（藍）、上次這台車的（灰虛線；存檔 best.dyno[車] = { hp, rpm, kmh, c[48] }）
+//   「下馬力機」→ 放開、記下來、自己倒車退到門口（places.shop.dyno.off）；多 3 個 draw call（螢幕、滾筒、槽）
+const DYNO = { on: false, grp: null, cv: null, ctx: null, tex: null, roll: null, slot: null, ax: [1.3, -1.3], w: 1.6, ang: 0, bins: null, peak: 0, peakX: 0, kmh: 0, fr: 0, drv: null, key: null, dirty: true };
+const DY_N = 48, DY_R = 0.16; // 轉速 0～紅線分幾格；滾筒半徑
+const DYM = new THREE.Matrix4(), DYQ = new THREE.Quaternion(), DYP = new THREE.Vector3(), DYS = new THREE.Vector3(1, 1, 1), DYZ = new THREE.Vector3(0, 0, 1);
+function dynoBuild() {
+  const D = VIL.places.shop.dyno, g = new THREE.Group(); g.name = 'dyno';
+  const cv = document.createElement('canvas'); cv.width = 768; cv.height = 432;
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(D.screen.w, D.screen.h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })); scr.name = 'dyno-screen';
+  scr.position.set(D.screen.x, D.screen.y, D.screen.z); g.add(scr); // 朝 +z（南）：對著台子上的車
+  const rg = new THREE.Group(); rg.position.set(D.pose.x, 0, D.pose.z); rg.rotation.y = D.pose.heading; g.add(rg); // 本地 x＝車頭方向、z＝左右（跟 drive.js 的車一樣）
+  const roll = new THREE.InstancedMesh(new THREE.CylinderGeometry(DY_R, DY_R, 1, 18).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x9aa0a8, metalness: 0.75, roughness: 0.35 }), 4); roll.name = 'dyno-rollers';
+  const slot = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 0.02, 1), new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.9 }), 2); slot.name = 'dyno-slots';
+  roll.frustumCulled = false; slot.frustumCulled = false; rg.add(roll); rg.add(slot);
+  Object.assign(DYNO, { grp: g, cv, ctx: cv.getContext('2d'), tex, roll, slot });
+  dynoPlace([1.3, -1.3], 1.6); TR.scene.add(g); dynoDraw(null);
+}
+function dynoPlace(axles, width) { // 槽、滾筒擺到兩個軸下面（本地 x＝離車子中心多遠）；width＝左右多寬
+  DYNO.ax = axles; DYNO.w = width;
+  for (let i = 0; i < 2; i++) { DYM.compose(DYP.set(axles[i], 0.034, 0), DYQ.identity(), DYS.set(1, 1, width)); DYNO.slot.setMatrixAt(i, DYM); }
+  DYNO.slot.instanceMatrix.needsUpdate = true; dynoSpin(0);
+}
+function dynoSpin(ds) { // 滾筒跟著輪子轉：每個輪子前後各一支（輪胎卡在兩支中間，上面不會穿進輪胎）；車往前＝滾筒上面往後
+  DYNO.ang += ds / DY_R; DYQ.setFromAxisAngle(DYZ, DYNO.ang); DYS.set(1, 1, DYNO.w - 0.1);
+  for (let i = 0; i < 4; i++) { DYM.compose(DYP.set(DYNO.ax[i >> 1] + (i & 1 ? 0.24 : -0.24), -0.08, 0), DYQ, DYS); DYNO.roll.setMatrixAt(i, DYM); }
+  DYNO.roll.instanceMatrix.needsUpdate = true;
+}
+function dynoAct(t) {
+  const D = VIL.places.shop?.dyno; if (!D) return null;
+  if (DYNO.on) return { label: '下馬力機', icon: 'hand', onClick: dynoOff };
+  if (bayLock.dyno) { if (!inBox(D.pad, t.x, t.z, 3)) bayLock.dyno = false; return null; } // 下來以後要先開出去，再開上來才會再問
+  if (!inBox(D.pad, t.x, t.z, 0.5) || Math.abs(t.v) > 6) return null;
+  if (BORROW_K) { bayLock.dyno = true; drv.toast('借來的車不能上馬力機', 2400); return null; }
+  return { label: '上馬力機', icon: 'hand', onClick: dynoOn };
+}
+function dynoOn() {
+  const D = VIL.places.shop.dyno; if (!drv || DYNO.on) return;
+  bayLock.dyno = true; drv.setAction(null);
+  drv.parkAt(D.pose, () => {
+    if (!DRIVE.on || !drv) return;
+    drv.setDyno(D.pose); DYNO.on = true; DYNO.drv = drv; DYNO.bins = new Float32Array(DY_N); DYNO.peak = DYNO.peakX = DYNO.kmh = 0; DYNO.key = cur; DYNO.dirty = true;
+    const hubs = tripS.wheels.map((w) => w.parent.position), xs = [...new Set(hubs.map((p) => +p.x.toFixed(2)))].sort((a, b) => b - a), wd = Math.max(...hubs.map((p) => Math.abs(p.z))); // 這台車的兩個軸在哪裡、多寬（摩托車兩個看不到的輪子位置重疊：Set）
+    dynoPlace(xs.length >= 2 ? [xs[0], xs[xs.length - 1]] : [1.3, -1.3], Math.max(1.0, wd * 2 + 0.5));
+    drv.toast('綁好了！踩油門、換檔，看前面的螢幕', 3200);
+  });
+}
+function dynoOff() {
+  if (!DYNO.on) return; const D = VIL.places.shop.dyno, red = drv?.telemetry().redline || PERF[cur]?.red || 8000;
+  DYNO.on = false; if (drv) drv.setDyno(null);
+  if (DYNO.peak > 20 && !BORROW_K) { GAME.best.dyno = GAME.best.dyno || {}; GAME.best.dyno[cur] = { hp: Math.round(DYNO.peak), rpm: Math.round((DYNO.peakX * red) / 100) * 100, kmh: Math.round(DYNO.kmh), c: Array.from(DYNO.bins, (v) => Math.round(v)) }; save(true); }
+  const peak = DYNO.peak; DYNO.bins = null; DYNO.peak = 0; DYNO.dirty = true; dynoDraw(null); bayLock.dyno = true; // 螢幕換成「上次」的灰線（剛跑的這一趟）
+  if (drv) { drv.setAction(null); drv.parkAt(D.off, () => { if (DRIVE.on && drv) drv.toast(peak > 20 ? `最大 ${Math.round(peak)} 匹（輪上）：記下來了，下次來比` : '下來了', 2800); }); }
+}
+function dynoStep(dt) {
+  if (!DYNO.grp) { if (VIL?.places?.shop?.dyno) dynoBuild(); else return; }
+  if (DYNO.on && (DYNO.drv !== drv || !DRIVE.on)) { DYNO.on = false; DYNO.drv = null; DYNO.dirty = true; } // 沒按「下馬力機」就換車、回車庫了：放開
+  if (!DYNO.on) { if (DYNO.dirty || DYNO.key !== cur) dynoDraw(null); return; }
+  const t = drv.telemetry();
+  if (t.whp > 0) { const i = Math.min(DY_N - 1, Math.max(0, Math.floor(t.whpX * DY_N))); if (t.whp > DYNO.bins[i]) DYNO.bins[i] = t.whp; if (t.whp > DYNO.peak) { DYNO.peak = t.whp; DYNO.peakX = t.whpX; } }
+  if (t.kmh > DYNO.kmh) DYNO.kmh = t.kmh;
+  dynoSpin(t.v * dt);
+  if (++DYNO.fr % 3 === 0) dynoDraw(t);
+}
+function dynoDraw(t) { // 螢幕（768×432）：上面一條（店名、車名）、數字（車速、轉速、檔位、輪上馬力）、曲線圖（橫軸轉速、左邊馬力、右邊扭力）
+  const g = DYNO.ctx, W = 768, H = 432, red = (t && t.redline) || PERF[cur]?.red || 8000, last = GAME.best?.dyno?.[cur], name = CARS[cur]?.btn?.[0] || cur;
+  DYNO.dirty = false; DYNO.key = cur;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#0b0f16'; g.fillRect(0, 0, W, H); g.fillStyle = '#141a24'; g.fillRect(0, 0, W, 54);
+  g.textBaseline = 'middle'; g.fillStyle = '#FF6A1F'; g.font = 'bold 26px sans-serif'; g.textAlign = 'left'; g.fillText('阿輝改車廠 · 馬力機', 20, 27);
+  g.fillStyle = '#e6e9ef'; g.textAlign = 'right'; g.fillText(name, W - 20, 27);
+  const tile = (x, label, val, unit) => { g.textAlign = 'left'; g.fillStyle = '#8b95a5'; g.font = '19px sans-serif'; g.fillText(label, x, 78); g.fillStyle = '#ffffff'; g.font = 'bold 52px sans-serif'; g.fillText(val, x, 118); if (unit) { const w = g.measureText(val).width; g.fillStyle = '#8b95a5'; g.font = '19px sans-serif'; g.fillText(unit, x + w + 8, 128); } };
+  if (t) {
+    const gear = t.stalled ? '熄' : t.mt ? (t.mgear === 0 ? 'N' : t.mgear < 0 ? 'R' : String(t.mgear)) : t.gear < 0 ? 'R' : String(t.gear);
+    tile(20, '車速', String(Math.round(t.kmh)), 'km/h'); tile(240, '轉速', String(Math.round((t.rpm * red) / 100) * 100), 'rpm'); tile(455, '檔位', gear, ''); tile(560, '輪上馬力', String(Math.round(t.whp)), 'hp');
+  } else { g.fillStyle = '#e6e9ef'; g.font = 'bold 36px sans-serif'; g.textAlign = 'left'; g.fillText('把車開上台子，按「上馬力機」', 20, 104); }
+  const x0 = 64, x1 = W - 64, y0 = 398, y1 = 170, ymax = Math.max(50, Math.ceil(Math.max(hpOf(cur) * 0.95, DYNO.peak * 1.05, last ? last.hp * 1.05 : 0) / 50) * 50);
+  const px = (x) => x0 + (x1 - x0) * x, py = (v) => y0 - (y0 - y1) * Math.min(1, v / ymax);
+  let tq = null, tmax = 100;
+  if (DYNO.bins && DYNO.peak > 0) { tq = new Float32Array(DY_N); for (let i = 0; i < DY_N; i++) { const rpm = ((i + 0.5) / DY_N) * red; tq[i] = (DYNO.bins[i] * 745.7) / ((rpm * 2 * Math.PI) / 60); } tmax = Math.max(100, Math.ceil(Math.max(...tq) / 50) * 50); }
+  g.strokeStyle = '#243040'; g.lineWidth = 1; g.fillStyle = '#6b7687'; g.font = '15px sans-serif'; g.textAlign = 'center';
+  for (let r = 0; r <= red; r += 1000) { const x = px(r / red); g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke(); g.fillText(r / 1000 + 'k', x, y0 + 16); }
+  for (let k = 0; k <= 4; k++) { const y = py((ymax * k) / 4); g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); g.textAlign = 'right'; g.fillStyle = '#FF6A1F'; g.fillText(String(Math.round((ymax * k) / 4)), x0 - 8, y); if (tq) { g.textAlign = 'left'; g.fillStyle = '#3ec5ff'; g.fillText(String(Math.round((tmax * k) / 4)), x1 + 8, y); } }
+  g.fillStyle = '#6b7687'; g.textAlign = 'center'; g.fillText('轉速 rpm', (x0 + x1) / 2, H - 10);
+  const line = (arr, col, w, dash, scale) => { g.strokeStyle = col; g.lineWidth = w; g.setLineDash(dash); g.beginPath(); let pen = false; for (let i = 0; i < DY_N; i++) { const v = arr[i] * scale; if (!(v > 0)) { pen = false; continue; } const x = px((i + 0.5) / DY_N), y = py(v); if (pen) g.lineTo(x, y); else g.moveTo(x, y); pen = true; } g.stroke(); g.setLineDash([]); };
+  if (last && last.c) line(last.c, '#6b7280', 3, [9, 7], 1);
+  if (tq) { line(tq, '#3ec5ff', 2.5, [], ymax / tmax); line(DYNO.bins, '#FF6A1F', 4, [], 1); }
+  g.font = 'bold 19px sans-serif'; g.textAlign = 'left';
+  if (DYNO.bins && DYNO.peak > 0) { g.fillStyle = '#FF6A1F'; g.fillText(`最大 ${Math.round(DYNO.peak)} hp @ ${Math.round((DYNO.peakX * red) / 100) * 100} rpm`, x0, y1 - 16); }
+  if (last) { g.fillStyle = '#9aa3b2'; g.textAlign = 'right'; g.fillText(`上次 ${last.hp} hp @ ${last.rpm} rpm`, x1, y1 - 16); }
+  g.font = '14px sans-serif'; g.textAlign = 'left'; g.fillStyle = '#FF6A1F'; g.fillText('— 馬力 hp', x0 + 8, y1 + 14); g.fillStyle = '#3ec5ff'; g.fillText('— 扭力 Nm', x0 + 98, y1 + 14); g.fillStyle = '#9aa3b2'; g.fillText('- - 上次', x0 + 190, y1 + 14);
+  DYNO.tex.needsUpdate = true;
+}
 function panelOpen(el) {
   dvoice?.dispose(); dvoice = null; // 停好熄火（開走的時候再發動：剛裝的排氣、渦輪聽得到）
   document.body.classList.add('shopping'); driveBar.hidden = true; el.hidden = false;
@@ -2566,9 +2662,9 @@ function driveStep(dt) {
       if (walker?.mode !== 'walk') foldStep(dt, Math.abs(t.v) > 4); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來（走路的時候下面那行管，不要兩邊都扣秒數）
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {
-        drv.setAction(elCallAct(t.x, t.z) || homeAct(t) || orbayAct(t) || bayAct(t)); // HUD 的大按鈕：叫電梯、開鐵捲門（車庫、越野車車庫）、停在這裡改車／看車
+        drv.setAction(elCallAct(t.x, t.z) || homeAct(t) || orbayAct(t) || dynoAct(t) || bayAct(t)); // HUD 的大按鈕：叫電梯、開鐵捲門（車庫、越野車車庫）、上／下馬力機（第 77 批）、停在這裡改車／看車
         const t2 = drv.telemetry(); // 停進改車區（parkAt）、開正停上升降機的時候就不能下車
-        drv.setAction2(!t2.paused && !t2.auto && Math.abs(t2.v) < 1 ? OUT_ACT : null); // 停住了：右邊多一顆「下車」
+        drv.setAction2(!t2.paused && !t2.auto && Math.abs(t2.v) < 1 && !DYNO.on ? OUT_ACT : null); // 停住了：右邊多一顆「下車」（綁在馬力機上不能下車）
         if (!drv.telemetry().paused) trackStep(t);
         if (drv && !drv.telemetry().paused) orStep(t); // 第 4 批：越野車場（展示台的車、起跑區）
         if (drv && !drv.telemetry().paused) ciStep(t); // 賽車場：報名處、比賽中沒有「下車」
@@ -2577,6 +2673,7 @@ function driveStep(dt) {
       if (snooze.track && Math.hypot(t.x - VIL.places.track.zone.x, t.z - VIL.places.track.zone.z) > 30) snooze.track = false;
     }
   }
+  if (DRIVE.on) dynoStep(dt); // 第 77 批：馬力機：螢幕、滾筒（走路也要有螢幕）
   if (DRIVE.on) tripS?.dmg?.update(dt); // 撞壞的：冒煙、掉下來的零件、碎玻璃（下車走路的時候也冒煙）
   if (sleep) sleepStep(dt); // 睡覺：躺著的時候走路的停住了（mode off）；醒來（慢慢亮的時候）就可以走了
   if (doorFade) fadeStep(dt); // 走進門口：黑掉 → 換成房子裡面（樓上、外面）→ 亮起來
