@@ -1134,7 +1134,7 @@ function ldEnter() { // 走過大門進來（不黑掉）
   walker.toast(I.name, 1600);
 }
 function ldLeave() { // 走出大門（不黑掉）
-  const H = indoor; indoor = null;
+  const H = indoor; martLeave(H); indoor = null; // 第 81 批：拿著沒付錢的走出超商
   walker.removeColliders('interior'); walker.addColliders(VIL.colliders, 'world'); walker.addColliders(LD.I.colliders, 'ldcols');
   walker.setDoors('village'); walker.setCarReach(true);
   walker.setCamera({ maxY: null, dist: H.dist0 });
@@ -1578,6 +1578,7 @@ function homeWalk() {
   const t = walker.telemetry(), q = garLocal(t.x, t.z), Z = GAR.zones, inT = GAR.isInside(q.x, q.z);
   let act = null;
   if (inT && !GAR.floor && !GV.on) { if (inBox(Z.bedSide, q.x, q.z)) act = SLEEP_ACT; else if (inBox(Z.dress, q.x, q.z)) act = DRESS_ACT; } // 第 23 批：朋友家的床、衣櫃不能用
+  if (!act && !inT) act = martTrunkAct(t); // 第 81 批：車子後面「打開後車廂」「放進去」「關後車廂」（mart.src.js）
   if (!act && inT) act = elCallAct(t.x, t.z); // 第 21 批：電梯不在這層
   if (!act && !t.near) act = orbayAct(t); // 第 6 批：站在越野車車庫門口（旁邊沒有車可以上）：「開鐵捲門」
   if (!act) act = hideAct(t.x, t.z, 0.3); // 第 3 批（b3-int）：通緝中躲回車庫：「關鐵捲門」
@@ -2519,7 +2520,7 @@ function onArrest(i) { // 畫面全黑：車拖到警察局的停車場、人關
   if (!DRIVE.on || !walker || !trip) return;
   if (doorFade) { doorFade = null; fadeEl.style.display = 'none'; }
   endSleep(); elEnd(); // 第 21 批：坐電梯中被抓
-  aptDown(); mrtDown(); if (indoor) leaveHouse(null);
+  aptDown(); mrtDown(); if (indoor) leaveHouse(null); martArrest(); // 第 81 批：偷的東西還給超商
   impounded = false;
   if (drv) { // 開的那台（或剛下車停著的那台）：開車的收掉，完整的車停到停車場
     drv.setInput(null); drv.dispose(); drv = null; dvoice?.dispose(); dvoice = null; if (home) home.open = null; obDoor.drv = null;
@@ -2729,7 +2730,7 @@ function driveStep(dt) {
   if (walker && walker.mode === 'walk' && DRIVE.on) foldStep(dt, walker.telemetry().speed > 0.6); // 第 75 批：走起來了「去哪裡」「⋯」收起來（房子裡也一樣）
   if (walker && walker.mode === 'walk' && DRIVE.on && !indoor && !APTU.on && !MRTS.lvl) { homeWalk(); oTick(walker.telemetry()); }
   else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.kind === 'apt') aptWalk();
-  else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.live) walker.setAction(ldAct(walker.telemetry())); // 第 65 批：裡面走到大門：「開門」 // 第 60 批：公寓 4 樓的床、衣櫃 // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）
+  else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.live) walker.setAction(martAct(walker.telemetry()) || ldAct(walker.telemetry())); // 第 81 批：超商的貨架「拿」、櫃台「結帳」 // 第 65 批：裡面走到大門：「開門」 // 第 60 批：公寓 4 樓的床、衣櫃 // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）
   if (DRIVE.on) npcStep(dt); // 路上的車、居民（走路的碰撞要在 walker.update 前面放好）
   if (DRIVE.on) crushStep(dt); // 第 7 批（輾扁）：怪獸卡車壓扁的東西（墊子、壓扁、表演場的垃圾車）
   if (DRIVE.on) mrtStep(dt); // 第 78 批：捷運（列車的位置、車門；走路的人在哪一層、搭車跟著車走：walker.update 前面）
@@ -2739,7 +2740,7 @@ function driveStep(dt) {
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
   netStep(dt); // 一起開車（net.src.js）：朋友的車、人、名字、表情、一起比賽
-  seatsStep(dt); // 第 57 批：坐別的位子、坐朋友的車、朋友坐在車上（netStep 後面：朋友的車這一格的位置才是新的）
+  seatsStep(dt); martStep(dt); // 第 81 批：超商的籃子、後車廂（seatsStep 後面：右邊第二顆按鈕） // 第 57 批：坐別的位子、坐朋友的車、朋友坐在車上（netStep 後面：朋友的車這一格的位置才是新的）
   pxStep(); clockStep(); ambStep(); // 第 31 批：角落的時間（小地圖上面）、環境聲（風、鳥、蟲、路上的車；下車走路也有）
   mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）

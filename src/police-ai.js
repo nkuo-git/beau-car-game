@@ -79,7 +79,7 @@ const SANS = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif', 
 
 // ---- 預設值 ----
 const TUNE = {
-  add: { punch: 1, hit: 2, cop: 1, shoot: 3, shootCop: 1, gunfire: 1, crush: 1, crushCop: 2 }, // crushCop＝第 9 批：越野車輾扁警車 +2★（警察先下車跑掉，不會受傷） // 幾顆星（shoot：直接變 3★）；crush＝第 7 批：怪獸卡車輾扁別人的車、路邊的東西（＋1★，跟撞車一樣）
+  add: { steal: 1, punch: 1, hit: 2, cop: 1, shoot: 3, shootCop: 1, gunfire: 1, crush: 1, crushCop: 2 }, // crushCop＝第 9 批：越野車輾扁警車 +2★（警察先下車跑掉，不會受傷） // 幾顆星（shoot：直接變 3★）；crush＝第 7 批：怪獸卡車輾扁別人的車、路邊的東西（＋1★，跟撞車一樣）
   gunfireR: 60, cool: 1.5, // 開槍沒打到人：警察在幾公尺內才算；同一種犯罪幾秒內只算一次
   seeR: 180, nearR: 30, lose: 25, loseNext: 10, hunt: 45, // 看得到的距離、轉角也算看到的距離、幾秒沒被看到掉一顆星、之後每幾秒再掉一顆
   catchR: 7, catchV: 5 / 3.6, catchT: 2.5, boxT: 1.5, boxR: 6.2, // 開車被抓：幾公尺內、比多慢、幾秒；兩台以上夾著：幾秒、幾公尺
@@ -808,7 +808,7 @@ function createPolice(o = {}) {
   const markerList = []; // 現在有的（drive.setMarkers／walker.setMarkers 讀這個陣列）
 
   // ---- 犯罪 ----
-  const CRIME_MSG = { punch: '你揍人了！警察來了', hit: '你撞到人了！警察來了', cop: '你惹到警察了！', shoot: '你開槍打人了！警察全部出動', shootCop: '你開槍打警察了！', gunfire: '你開槍了！警察來了',
+  const CRIME_MSG = { steal: '嗶嗶嗶！還沒結帳！警察來了', punch: '你揍人了！警察來了', hit: '你撞到人了！警察來了', cop: '你惹到警察了！', shoot: '你開槍打人了！警察全部出動', shootCop: '你開槍打警察了！', gunfire: '你開槍了！警察來了',
     crush: '你把別人的東西輾扁了！警察來了', crushCop: '你把警車輾扁了！' }; // crushCop：第 9 批 // 第 7 批：怪獸卡車輾東西（越野車場裡面不算：呼叫的人不報）
   function nearestPolice(x, z) {
     let best = Infinity;

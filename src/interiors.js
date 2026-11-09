@@ -2097,6 +2097,10 @@ function storeFloor(b) {
   const gs = [['goods1', 'goods2', 'goods3'], ['goods3', 'goods1', 'goods2'], ['goods2', 'goods3', 'goods1']];
   [2.2, -0.6, -3.4].forEach((z, i) => gondola(F, frame(-1.6, 0, z), 9.6, { tex: gs[i], seed: i }));
   for (const [z, i] of [[2.2, 0], [-0.6, 1], [-3.4, 2]]) for (const s of [-1, 1]) spot(F, 'stand', frame(-1.6 + (i - 1) * 1.5, 0, z), 0, s * 0.9, s > 0 ? HP : -HP, null, rm);
+  // 第 81 批（Nick「超商的東西都要可以買 要自己從貨架上挑 要跟店員結帳」）：每樣東西站哪裡拿（mart.src.js 用：靠近了「拿 · 洋芋片」）、櫃台結帳站哪裡
+  F.spots.shop = []; F.spots.till = [];
+  for (const [item, x, z, h] of [['chips', -3.5, 3.1, Math.PI], ['bread', -3.5, 1.3, 0], ['noodle', -3.5, 0.3, Math.PI], ['onigiri', 1.0, 0.3, Math.PI], ['egg', 1.0, 3.1, Math.PI], ['drink', -5.5, -4.9, Math.PI], ['water', -1.0, -4.9, Math.PI], ['icecream', 5.4, 5.1, -HP], ['toycar', -7.6, -1.4, HP]]) spot(F, 'shop', F0, x, z, h).item = item;
+  spot(F, 'till', F0, 5.0, 2.3, -HP);
   // 後面一排冰箱、西邊的貨架、提款機、靠窗的吧台
   drinkFridge(F, frame(-3.0, 0, Z0), 13, { room: rm });
   wallShelf(F, frame(X0, 0, -1.4, HP), 5.2, { tex: ['goods3', 'goods1'], h: 1.9 });
@@ -2488,7 +2492,7 @@ function buildInterior(b, o = {}) {
     tris += F.B.tris; draws = Math.max(draws, dc);
     const moving = F.moving.map((m) => movingPiece(g, m, mats)); // 第 65 批：門片、自動門（本地；town.src.js 叫 setDoorT）
     for (const m of moving) { tris += m.tris; }
-    const spots = {}; for (const [k, list] of Object.entries(F.spots)) spots[k] = list.map((s) => { const r = { ...xz(s.x, s.z), heading: wrapA(s.heading + rot) }; if (s.y != null) r.y = s.y; if (s.room) r.room = s.room; if (s.edge) r.edge = true; return r; });
+    const spots = {}; for (const [k, list] of Object.entries(F.spots)) spots[k] = list.map((s) => { const r = { ...xz(s.x, s.z), heading: wrapA(s.heading + rot) }; if (s.y != null) r.y = s.y; if (s.room) r.room = s.room; if (s.edge) r.edge = true; if (s.item) r.item = s.item; return r; });
     const rs = F.rooms.length ? F.rooms : [{ x0: -1, x1: 1, z0: -1, z1: 1 }];
     const bx0 = Math.min(...rs.map((r) => r.x0)), bx1 = Math.max(...rs.map((r) => r.x1)), bz0 = Math.min(...rs.map((r) => r.z0)), bz1 = Math.max(...rs.map((r) => r.z1));
     // 第 70 批：走路的格子給裡面的人（folks.js）：擺東西的時候算好的（透天厝、公寓）；店、廟、三合院這裡才算；補上後來加的碰撞
