@@ -21,3 +21,23 @@ Nick 2026-11-08: buy anything in the store, pick it off the shelf yourself, pay 
 
 ## Numbers
 Trunk open on the street: 227 calls / 0.63M triangles (+6 small meshes). Store till frame: 116 calls / 0.44M.
+
+# Batch 83 (trial v94): the trunk opens like the real car (lid cut out of the body)
+
+Nick 2026-11-09: 「你去查那些車是如何開後車箱的 不是直接在原車加上一片東西」. The batch 81 overlay lid (a paint-coloured board on top of the body) is gone; the moving part is now cut out of the car's own body meshes.
+
+## How each car opens (`TRUNK_KIND` in mart.src.js)
+- `trunk` (sedans: gc8, gtr, altis, evo): boot lid hinged just behind the rear window, swings up −1.15 rad. Region: x ≤ xh−0.03, yC ≤ y ≤ h0+0.12, |z| ≤ 0.35 W (taillights at the corners stay on the body). A wing whose centre is in the region rides on the lid.
+- `hatch` (yaris, supra, rx7, ae86, civic): whole tailgate incl. the rear window, hinged at the roof edge, −1.25 rad.
+- `frunk` (mid-engine: p918, sp3, jesko, chiron, aventador, huayra, laferrari): the storage is at the front (KBB "What is a frunk"); front lid hinged at the windshield base (`xw`: first 0.1 m step from the nose where the top rises > 0.055 m, clamped x1−2 … x1−0.75), +1.1 rad. Button 「打開前車廂」, toasts say 前車廂.
+- `swing` (jp4, k2): side-hinged rear door with the spare wheel (like the real Wrangler/Jimny), hinge on the right rear corner, swings 1.75 rad about y.
+- `drop` (p8): tailgate hinged at the bottom (bumper top), drops 1.5 rad. Bed: put in without opening, 「放下尾門」/「關尾門」/「放進車斗」.
+- `none`: senna (no usable trunk) → no trunk buttons. Ridden vehicles and the monster truck still have none.
+
+## Cut
+- `trunkProbe(S)` additionally finds `yB` (bumper top) with horizontal rays from behind (lower half only), `xr` (tailgate face), `yTop`, and per kind `hinge`, `axis`, `ang`, `inR(x,y,z)` (car-local test), `cav` (dark BackSide box for the cavity), `bagAt`.
+- `trunkCut(S,P)`: for each body mesh (interior group excluded), triangles whose centroid is in `inR` go to a `lid` geometry, the rest to `rest`. Both share the original attributes (only a new index; Uint32 when > 65535 verts), so mask shaders/uv stay the same. Cached in `S._lidCut`; never dispose the split geometries (shared attributes).
+- `trunkSplit(V,on)`: on open, the mesh gets `rest` and a lid mesh (same material, `matrixAutoUpdate=false`, matrix = inv(car.matrixWorld)·mesh.matrixWorld) goes under hinge → inner (offset −hinge). On close, everything is restored (the body is whole again).
+
+## Test
+mart-test: GC8 checks the lid is cut (lids > 0, > 300 triangles, body not whole while open, whole again after closing). `MCAR=yaris|p918|jp4|p8` (any car in TRUNK_KIND works) run the trunk part only: kind, angle, cut, put 4 things → 2 bags, close → body whole.

@@ -571,7 +571,7 @@ function buildNeihu(V, opt = {}) {
       }
       // 一樓臨路的店：樓上掛直立招牌（往外伸）
       if (e && bf >= 3 && L >= 6 && !b.back && vSigns.length < 2200 && hh(bi, 30 + i) < (e === 2 ? 0.95 : 0.45)) {
-        const m = Math.min(3, Math.floor(L / 7)); for (let j = 0; j < m; j++) { const t = (j + 0.5) / m, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L; vSigns.push({ x: a[0] + (c[0] - a[0]) * t, z: a[1] + (c[1] - a[1]) * t, ox, oz, y0: gh + 0.4, h: Math.min(top - gh - 0.6, 3 + hh(bi, 50 + j) * 2.6), s: vN++ }); } // 第 76 批：直立招牌也照順序輪（shopAtlas 的 v0…v83）
+        const m = Math.min(3, Math.floor(L / 7)); for (let j = 0; j < m; j++) { const t = (j + 0.5) / m, ox = (c[1] - a[1]) / L, oz = -(c[0] - a[0]) / L; if (N.mrtIn && N.mrtIn(a[0] + (c[0] - a[0]) * t + ox * 1.2, a[1] + (c[1] - a[1]) * t + oz * 1.2)) continue; vSigns.push({ x: a[0] + (c[0] - a[0]) * t, z: a[1] + (c[1] - a[1]) * t, ox, oz, y0: gh + 0.4, h: Math.min(top - gh - 0.6, 3 + hh(bi, 50 + j) * 2.6), s: vN++ }); } // 第 76 批：直立招牌也照順序輪（shopAtlas 的 v0…v83）
       }
     }
     // 屋頂（第 28 批：灰的、綠的防水漆、藍灰的）
@@ -978,6 +978,7 @@ function buildNeihu(V, opt = {}) {
     const crossUV = (ni, r) => { const L = atNode.get(ni); if (!L) return null; let best = null; for (const o of L) if (o.nm >= 0 && o.nm !== r.nm && (!best || o.w > best.w)) best = o; return best ? SA.uv['n' + best.nm] : null; };
     const post = (px, pz, ux, uz, w, uv, uv2, nm) => { // 桿子（右邊）、橫桿、牌子（朝 −u）
       const rx = -uz, rz = ux, g = bank('wall', px, pz, TB), arm = Math.min(5.5, w * 0.3 + 1.4), cx = px - rx * arm, cz = pz - rz * arm;
+      if (N.mrtIn && (N.mrtIn(px, pz) || N.mrtIn(cx, cz))) return; // 第 82 批：捷運站、出口那裡不放大路牌（會穿過樓梯）
       boxG(g, px, pz, 0.14, 0.14, 0, 0, 6.3, [148, 152, 156], 20); // 柱子
       boxG(g, (px + cx) / 2, (pz + cz) / 2, arm / 2, 0.09, rotOf(rx, rz), 6.0, 6.25, [148, 152, 156], 20, false); // 橫桿
       colliders.push({ t: 'circle', x: px, z: pz, r: 0.22, h: 6.3, reach: arm + 1 }); bigSigns.push([cx, cz, ux, uz, nm]);

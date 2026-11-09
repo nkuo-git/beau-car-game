@@ -210,9 +210,17 @@ function buildMrt(V, opt = {}) {
     glass: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.12, metalness: 0.15, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }),
     light: new THREE.MeshBasicMaterial({ color: 0xfff3dd, toneMapped: false }),
     train: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.2, side: THREE.DoubleSide }),
-    tglass: new THREE.MeshStandardMaterial({ color: 0x2a3a46, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }),
+    tglass: new THREE.MeshStandardMaterial({ color: 0xa9bcc6, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }), // 第 82 批：淺一點（以前 0x2a3a46、0.45：車裡看出去整片暗）
     leaf: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.2 }),
   };
+  // 第 82 批（Nick「捷運站內光線太暗 車廂裡也太暗」）：站裡、車廂裡有日光燈：牆、地板、車廂自己亮一點（頂點色 × SELF），燈（三個顏色都 ≥ 0.945 的）亮很多；白天晚上、普通也一樣
+  const SELF = { wall: [0.24, 1.6], train: [0.34, 1.8] };
+  for (const k of Object.keys(SELF)) { const m = mats[k], [self, lamp] = SELF[k];
+    m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+#ifdef USE_COLOR
+  { float lampK = step(0.945, min(vColor.r, min(vColor.g, vColor.b))); totalEmissiveRadiance += vColor.rgb * (${self.toFixed(3)} + lampK * ${lamp.toFixed(3)}); }
+#endif`); };
+    m.customProgramCacheKey = () => 'mrt-self-' + k; }
   let tris = 0, meshes = 0;
   const addMesh = (geo, mat, parent, name) => { const m = new THREE.Mesh(geo, mat); m.name = name; m.frustumCulled = true; parent.add(m); meshes++; tris += (geo.index ? geo.index.count : geo.attributes.position.count) / 3; return m; };
 
@@ -568,7 +576,7 @@ function buildMrt(V, opt = {}) {
     cols: (si, lvl) => (si >= 0 && stations[si].cols[lvl]) || [],
     dirLabel,
     heightAt(x, z) { // 候選的高度裡挑最接近上一格的（大廳在月台下面、街在天橋下面：夾層）
-      if (P.ride) { const c = P.ride.tr.cars[P.ride.car]; if (inCar(c, x, z, 1.0)) return YP; }
+      if (P.ride) { const c = P.ride.tr.cars[P.ride.car]; if (inCar(c, x, z, 3.0)) return YP; } // 第 82 批：坐車的時候車廂附近都是車廂的地板（不會掉到街上）
       const si = P.at(x, z); if (si < 0) return null; const S = stations[si], [u, v] = S.loc(x, z), av = Math.abs(v), cand = [];
       if (Math.abs(u) <= PL + 0.2 && av >= PV0 - 0.4 && av <= PV1 + 0.3) { if (u >= RAMP.u0 && u <= RAMP.u1 && av >= RAMP.v0 && av <= HOLE1) return YC + ((YP - YC) * (u - RAMP.u0)) / (RAMP.u1 - RAMP.u0); cand.push(YP); }
       if (Math.abs(u) <= PL + 0.2 && av < PV0 - 0.4) { let on = false; for (const tr of active) if (tr.si === si) for (const c of tr.cars) if (inCar(c, x, z, 0.35)) on = true; cand.push(on ? YP : YT); }
@@ -596,6 +604,10 @@ function buildMrt(V, opt = {}) {
     step(dt, px, pz, py, walking) {
       const out = { shift: null, esc: false, lvl: 0, si: -1, ride: !!P.ride, toast: null, chime: false, beep: false, action: null, eject: null, cap: null }, evs = events.splice(0); // cap＝鏡頭最高（天花板、罩子）
       P.py = py;
+      if (!walking && P.ride) { // 第 82 批：坐車的時候停一下（換視角、跳出來的東西⋯）：人還是跟著車走，不會留在半空中、掉到街上
+        const R = P.ride, tr = active.find((t) => t.key === R.key);
+        if (tr) { const c = tr.cars[R.car], c0 = R.pose, [lu, lv] = carLoc(c0, px, pz), [nx, nz] = carW(c, lu, lv); out.shift = [nx - px, nz - pz, wrapA(c.th - c0.th)]; R.pose = { x: c.x, z: c.z, th: c.th, ux: c.ux, uz: c.uz }; R.tr = tr; out.lvl = 3; out.ride = true; out.si = tr.si; out.cap = YP + 2.0; return out; }
+      }
       if (!walking) { P.ride = null; P.movers.length = 0; P.lvl = 0; P.si = -1; P.lastU = null; return out; }
       const mv = P.movers; mv.length = 0;
       if (P.ride) {
@@ -606,8 +618,11 @@ function buildMrt(V, opt = {}) {
           R.tr = tr; px = nx; pz = nz;
           carWalls(c, tr.open, mv);
           const [u2, v2] = carLoc(c, px, pz);
-          if (tr.open > 0.5 && (Math.abs(v2) > CAR_W + 0.05 || Math.abs(u2) > 6.95)) { P.ride = null; out.toast = `${stations[tr.si].nm}　下車了`; } // 走出車門＝下車
+          if (Math.abs(u2) > 12 || Math.abs(v2) > 5) { P.ride = null; P.movers.length = 0; } // 第 82 批：被搬走了（去這裡⋯）：不是坐車了
+          else if (tr.open > 0.5 && (Math.abs(v2) > CAR_W + 0.05 || Math.abs(u2) > 6.95)) { P.ride = null; out.toast = `${stations[tr.si].nm}　下車了`; } // 走出車門＝下車
           else {
+            if (tr.open < 0.5 && (Math.abs(u2) > 6.9 - 0.3 || Math.abs(v2) > CAR_W - 0.3)) { // 第 82 批：車門關著跑到車廂的牆外面（手機一格很久、轉彎）：拉回車廂裡面
+              const cu = clamp(u2, -6.6, 6.6), cv = clamp(v2, -(CAR_W - 0.3), CAR_W - 0.3), [qx, qz] = carW(c, cu, cv); out.shift[0] += qx - px; out.shift[1] += qz - pz; px = qx; pz = qz; }
             if (tr.si >= 0 && tr.si !== R.lastSi && tr.open > 0) { R.lastSi = tr.si; const last = tr.d.stops[tr.d.stops.length - 1].si === tr.si; out.toast = last ? `叮咚！${stations[tr.si].nm}　到了（終點站，請下車）` : `叮咚！${stations[tr.si].nm}　到了`; out.chime = true; }
             if (tr.si >= 0 && tr.open > 0.5) out.action = 'off';
             if (tr.si >= 0 && tr.open === 0 && tr.tau > tr.seg.t0 + 2 && tr.d.stops[tr.d.stops.length - 1].si === tr.si) { // 終點站車門關了還在車上：請他下車（搬到月台上）

@@ -82,3 +82,15 @@ Nick 2026-11-08: 「捷運太假了」「捷運站做成橫跨內湖路的建築
 - Numbers (960×576, 高): 19 meshes / 37k tris for both stations + trains; street 198/218 calls, concourse 131, platform 194,
   riding 119, 文德 platform 105, 文德 street 244 / 0.77M.
 - mrt-test section 10: escalator count + steps, deco meshes, noses, houses removed, escalator ride 0 → 6.
+
+## Batch 82 (trial v94, 2026-11-09): brighter station and train, ride can't drop you to the street
+
+Nick: station and train interior too dark, view out of the windows too dark, "halfway through the ride I'm suddenly on the ground", stairs overlap shops/signs, no escalators. (Escalators and the house removal exist since v92; the phone build, content 41, is still v90.)
+
+- Self-lit fill: `mats.wall` and `mats.train` get an `onBeforeCompile` that adds `vColor * self` to emissive, plus `vColor * lamp` when all three channels ≥ 0.945 (the ceiling lamp strips in the cars). `SELF = { wall: [0.24, 1.6], train: [0.34, 1.8] }`; cache keys `mrt-self-wall` / `mrt-self-train` (look.js appends `|lk1`). Works at every look level and hour.
+- look.js `indoor(cam)` may now return a number 0..1; town.src.js returns 0.7 while `MRTS.lvl > 0` (station or train), 1 inside the tower.
+- Train window glass `tglass` 0xa9bcc6, opacity 0.16 (was 0x2a3a46 / 0.45).
+- Ride hardening in `step`: when `walking` is false but `P.ride` is set, the walker is still carried (shift) and stays riding; with doors closed a walker outside the car's inner box is clamped back (|lu| ≤ 6.6, |lv| ≤ CAR_W − 0.3) by adding to `out.shift`; a walker more than 12 / 5 m from the car (teleported) stops riding. `heightAt` while riding: YP within 3 m of the car (was 1 m).
+- Could not reproduce the drop in the browser (both directions, 15 fps, walking around inside); these close the paths that would put a rider at street height.
+- neihu.js: vertical shop signs whose tip is in `N.mrtIn`, and road sign posts at/over the keep-out, are not built.
+- mrt-test 7b checks the pause, the push through the wall, the self-lit keys and the glass.

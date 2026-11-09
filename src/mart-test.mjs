@@ -1,5 +1,5 @@
 // 第 81 批：超商買東西＋後車廂（mart.src.js、interiors.js storeFloor 的 spots.shop／till、town.src.js）
-// node mart-test.mjs [prefix]；MCAR=yaris（掀背的尾門）／MCAR=p8（皮卡的車斗）只跑後車廂那一段
+// node mart-test.mjs [prefix]；MCAR=yaris（掀背的尾門）／p918（前車廂）／jp4（側開的尾門）／p8（皮卡的尾門）只跑後車廂那一段
 // 走進村口超商 → 每個貨架前面「拿 · 洋芋片 39 元」→ 左上「🛒 籃子 9 樣 · 458 元」、清單「放回」→ 錢不夠 → 櫃台「結帳」（萬拆成元、嗶嗶）→ 袋子
 // → 拿了沒付錢走出大門＝1★、「嗶嗶嗶！還沒結帳！」→ 被抓：偷的還回去 → 走到車子後面「打開後車廂」（蓋子翻起來）→「放進去」→「關後車廂」→ 存檔、重新載入還在；截圖＋draw calls
 import http from 'node:http';
@@ -249,12 +249,15 @@ const c0 = await L(() => { const D = window.__D(), b = D.VIL.buildings.find((q) 
 console.log('  car parked', JSON.stringify(c0));
 check(/^上車/.test(b0.pressed || '') && b0.drv && b0.cur === K && c0.pressed === '下車' && c0.mode === 'walk' && c0.paused, `got in the ${K}, moved it to the street in front of 「${c0.store}」, got out (it stays parked)`);
 // 走到車子後面
-const rear = () => L(() => { const D = window.__D(), M = window.__MT(), H = window.__H, S = M.tripS, P = M.trunkProbe(S), c = S.car; c.updateMatrixWorld();
-  const q = new window.__T3.Vector3(P.x0 - 0.55, 0, 0).applyMatrix4(c.matrixWorld), q2 = new window.__T3.Vector3(P.x0 - 2.2, 0, 0.6).applyMatrix4(c.matrixWorld);
+const rear = () => L(() => { const D = window.__D(), M = window.__MT(), H = window.__H, S = M.tripS, P = M.trunkProbe(S), c = S.car; c.updateMatrixWorld(); const fr = P.front ? -1 : 1; // 前車廂（超跑）：走到車頭前面
+  const q = new window.__T3.Vector3(P.front ? P.x1 + 0.55 : P.x0 - 0.55, 0, 0).applyMatrix4(c.matrixWorld), q2 = new window.__T3.Vector3(P.front ? P.x1 + 2.2 : P.x0 - 2.2, 0, 0.6).applyMatrix4(c.matrixWorld);
   D.walker.teleport({ x: q2.x, z: q2.z, heading: 0 }); H.step(10); const r = H.walkTo(q.x, q.z, { tol: 0.25 }); H.step(5);
-  const f = new window.__T3.Vector3(1, 0, 0).transformDirection(c.matrixWorld); D.walker.setCamera({ yaw: Math.atan2(-f.z, f.x) + 0.5, pitch: 0.28 }); H.step(20);
-  const R = (v) => +v.toFixed(2); return { P: { x0: R(P.x0), xh: R(P.xh), y: R(P.y), W: R(P.W), H: R(P.H), hatch: P.hatch, bed: P.bed }, r: r.ok, act: H.actText(), act2: window.__D().walker.action2 }; });
-const lid = () => L(() => { const V = window.__MT().MART.vis; return V ? { rot: +(V.hinge ? V.hinge.rotation.z : 0).toFixed(2), t: +V.t.toFixed(2), bags: V.bags.filter((b) => b.visible).length, cav: !!V.cav?.visible } : null; });
+  const f = new window.__T3.Vector3(fr, 0, 0).transformDirection(c.matrixWorld); D.walker.setCamera({ yaw: Math.atan2(-f.z, f.x) + 0.5, pitch: 0.28 }); H.step(20);
+  const R = (v) => +v.toFixed(2); return { P: { kind: P.kind, x0: R(P.x0), x1: R(P.x1), xh: R(P.xh), xr: R(P.xr), y: R(P.y), yB: R(P.yB), W: R(P.W), H: R(P.H), hinge: P.hinge?.map(R), hatch: P.hatch, bed: P.bed }, r: r.ok, act: H.actText(), act2: window.__D().walker.action2 }; });
+// 第 83 批：蓋子是車身切下來的那一塊（不是另外加的板子）：幾個網格、幾個三角形；關好了車身換回原本的網格
+const lid = () => L(() => { const V = window.__MT().MART.vis; if (!V) return null; const C = V.S._lidCut;
+  return { rot: +(V.hinge ? V.hinge.rotation[V.P.axis] : 0).toFixed(2), axis: V.P.axis, t: +V.t.toFixed(2), bags: V.bags.filter((b) => b.visible).length, cav: !!V.cav?.visible,
+    lids: V.lids.length, tris: V.lids.reduce((n, m) => n + m.geometry.index.count / 3, 0), moved: (V.moved || []).length, restored: C ? C.parts.every((p) => p.mesh.geometry === p.g0) : null, parts: C ? C.parts.length : 0 }; });
 const pressAnd = (n = 50) => L((n) => { const H = window.__H, s = H.press(); H.step(n); return { s, act: H.actText(), act2: window.__D().walker.action2, vis2: H.visible('#stage .wk-act2'), toast: H.toast() }; }, n);
 const tr0 = await rear();
 console.log('  rear', JSON.stringify(tr0));
@@ -263,9 +266,10 @@ if (FULL) {
   const o1 = await pressAnd(), l1 = await lid();
   console.log('  open', JSON.stringify(o1), JSON.stringify(l1));
   check(o1.s === '打開後車廂' && /後車廂是空的/.test(o1.toast) && l1 && l1.rot < -1.1 && l1.cav && l1.bags === 0 && o1.act === '關後車廂', `opened it: the lid swung up (${l1?.rot} rad), 「後車廂是空的」, the button says 「關後車廂」`);
+  check(l1.lids > 0 && l1.tris > 300 && !l1.restored, `the lid is the GC8's own boot lid cut out of the body (${l1.lids} meshes, ${l1.tris} triangles; the body shows the rest), not an added plate`);
   await drawAndShot('0-trunk-empty');
   const o2 = await pressAnd(), l2 = await lid();
-  check(o2.s === '關後車廂' && l2.rot === 0 && !l2.cav && o2.act === '打開後車廂', 'closed it again (lid flat)');
+  check(o2.s === '關後車廂' && l2.rot === 0 && !l2.cav && o2.act === '打開後車廂' && l2.restored && l2.lids === 0, 'closed it again (lid flat, the body is back to its original mesh)');
 }
 // ---- 1 走進超商：每個貨架前面「拿」 ----
 if (FULL) {
@@ -342,25 +346,22 @@ if (FULL) {
   console.log('5', el(), JSON.stringify(r8));
   check(r8.trunk?.split(',').length === 8 && r8.yuan === 9741 && r8.money === 469 && r8.bag === 0, `reloaded: the GC8's boot still has ${r8.trunk?.split(',').length} things, change 9741 元`);
 } else {
-  // ---- YARIS（掀背）／P8（車斗） ----
-  const want = K === 'p8' ? 'bed' : 'hatch';
-  check(tr0.r && (want === 'bed' ? tr0.P.bed : tr0.P.hatch), `${K}: probed as a ${want === 'bed' ? 'pickup bed' : 'hatchback'} (${JSON.stringify(tr0.P)})`);
-  if (want === 'hatch') {
-    check(tr0.act === '打開後車廂', `behind the ${K}: 「${tr0.act}」`);
-    const o1 = await pressAnd(), l1 = await lid();
-    check(l1.rot < -1.2 && l1.cav, `the whole tailgate swung up (${l1.rot} rad)`);
-    await drawAndShot(`${K}-open`);
-    await L(() => { window.__MT().MART.bag.push('chips', 'water', 'noodle', 'egg'); window.__H.step(5); });
-    const o2 = await pressAnd(20), l2 = await lid();
-    check(o2.s === '放進去' && l2.bags === 2, `「放進去」: 2 bags in the back`);
-    await drawAndShot(`${K}-bags`);
-  } else {
-    check(tr0.act === null || tr0.act !== '打開後車廂', `behind the pickup with nothing to put: no trunk button (${tr0.act})`);
-    await L(() => { window.__MT().MART.bag.push('chips', 'water', 'noodle', 'egg'); window.__H.step(5); });
-    const o2 = await pressAnd(20), l2 = await lid(), sv = await L(() => window.__MT().GAME.trunk.p8?.length);
-    check(o2.s === '放進車斗' && /放進車斗了/.test(o2.toast) && l2.bags === 2 && sv === 4, `with a bag: 「放進車斗」 → 2 bags sitting in the bed (${sv} things saved)`);
-    await drawAndShot(`${K}-bed`);
-  }
+  // ---- 別的車：照真的車怎麼開（第 83 批）：YARIS 掀背、918 前車廂、J4 側開、P8 尾門往下 ----
+  const KIND = { yaris: 'hatch', supra: 'hatch', rx7: 'hatch', ae86: 'hatch', civic: 'hatch', p918: 'frunk', sp3: 'frunk', jesko: 'frunk', chiron: 'frunk', aventador: 'frunk', huayra: 'frunk', laferrari: 'frunk', jp4: 'swing', k2: 'swing', p8: 'drop' }[K] || 'trunk'; // 照真的車（中置引擎的超跑放前面）
+  const nm = KIND === 'frunk' ? '前車廂' : '後車廂', openTxt = KIND === 'drop' ? '放下尾門' : `打開${nm}`, closeTxt = KIND === 'drop' ? '關尾門' : `關${nm}`, putTxt = KIND === 'drop' ? '放進車斗' : '放進去';
+  check(tr0.r && tr0.P.kind === KIND && tr0.act === openTxt, `${K}: opens like the real car (${KIND}): 「${tr0.act}」 (${JSON.stringify(tr0.P)})`);
+  const o1 = await pressAnd(), l1 = await lid();
+  console.log('  open', JSON.stringify(o1), JSON.stringify(l1));
+  const angOK = { hatch: l1.rot < -1.2 && l1.axis === 'z', frunk: l1.rot > 1.0 && l1.axis === 'z', swing: l1.rot > 1.6 && l1.axis === 'y', drop: l1.rot > 1.4 && l1.axis === 'z', trunk: l1.rot < -1.1 }[KIND];
+  check(angOK && l1.lids > 0 && l1.tris > 200 && !l1.restored && (KIND === 'drop' || l1.cav), `the ${KIND === 'frunk' ? 'front lid' : KIND === 'swing' ? 'side-hinged rear door' : KIND === 'trunk' ? 'boot lid' : 'tailgate'} cut out of the body swung open (${l1.axis} ${l1.rot} rad; ${l1.lids} meshes, ${l1.tris} triangles${l1.moved ? `, ${l1.moved} parts riding on it` : ''})`);
+  await drawAndShot(`${K}-open`);
+  await L(() => { window.__MT().MART.bag.push('chips', 'water', 'noodle', 'egg'); window.__H.step(5); });
+  const o2 = await pressAnd(20), l2 = await lid(), sv = await L((k) => window.__MT().GAME.trunk[k]?.length, K);
+  console.log('  put', JSON.stringify(o2), JSON.stringify(l2), sv);
+  check(o2.s === putTxt && l2.bags === 2 && sv === 4 && o2.act === closeTxt, `「${putTxt}」: 2 bags inside (${sv} things saved); the button says 「${o2.act}」`);
+  await drawAndShot(`${K}-bags`);
+  const o3 = await pressAnd(60), l3 = await lid();
+  check(o3.s === closeTxt && l3.rot === 0 && l3.restored && l3.lids === 0 && (KIND === 'drop' ? l3.bags === 2 : l3.bags === 0), `「${closeTxt}」: shut, the body is whole again${KIND === 'drop' ? ' (bags still visible in the bed)' : ''}`);
 }
 check(errs.length === 0, `no page errors (${errs.length})`);
 console.log(fails.length ? `FAILED (${fails.length}):\n  ${fails.join('\n  ')}` : 'ALL CHECKS OK', el());

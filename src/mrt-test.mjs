@@ -168,6 +168,19 @@ check(tr3.some((s) => /上車了.*往文德/.test(s)) && tr3.some((s) => /下一
 const s7 = await shot('7-riding');
 await p.evaluate(() => { window.__D().walker.setCamera({ mode: 'eye' }); window.__wstep(4); }); await shot('7-riding-eye');
 await p.evaluate(() => { window.__D().walker.setCamera({ mode: 'follow' }); window.__wstep(4); });
+// 第 82 批（Nick「開到一半我就突然跑到地面」）：坐車的時候停一下（換視角、跳出來的東西）、被推到車廂的牆外面：還是在車上、地板 12.6、拉回車廂裡
+const hold = await p.evaluate(() => { const D = window.__D(), M = D.M, W = D.walker;
+  const where = () => { const t = W.telemetry(); for (const tr of M.trains()) for (const c of tr.cars) { const dx = t.x - c.x, dz = t.z - c.z, lu = dx * c.ux + dz * c.uz, lv = -dx * c.uz + dz * c.ux; if (Math.abs(lu) <= 6.9 && Math.abs(lv) <= 1.28) return { lu: +lu.toFixed(2), lv: +lv.toFixed(2) }; } return null; };
+  W.pause(); for (let i = 0; i < 120; i++) window.__wstep(1); W.resume(); window.__wstep(3);
+  const a = { ride: !!M.ride, y: +W.character.group.position.y.toFixed(2), in: where() };
+  const tr = M.trains().find((t) => t.dir === 1), c = tr.cars[0]; W.shift(-c.uz * 2.2, c.ux * 2.2, 0); window.__wstep(1, 1 / 8); window.__wstep(4);
+  const b = { ride: !!M.ride, y: +W.character.group.position.y.toFixed(2), in: where() };
+  const car = D.VIL.mrt.group.getObjectByName('mrt-cars'), gls = D.VIL.mrt.group.getObjectByName('mrt-car-glass'), wall = D.VIL.mrt.stations[0].group.getObjectByName('mrt-walls');
+  return { a, b, keys: [car.material.customProgramCacheKey?.(), wall.material.customProgramCacheKey?.()], glass: gls.material.opacity };
+});
+console.log('  hold', JSON.stringify(hold));
+check(hold.a.ride && hold.a.y === 12.6 && hold.a.in && hold.b.ride && hold.b.y === 12.6 && hold.b.in, `riding survives a 2 s pause (${JSON.stringify(hold.a)}) and being pushed 2.2 m through the car wall (pulled back inside: ${JSON.stringify(hold.b)}), floor stays 12.6`);
+check(/^mrt-self-train/.test(hold.keys[0]) && /^mrt-self-wall/.test(hold.keys[1]) && hold.glass < 0.3, `station and train are self-lit (fluorescent fill: ${hold.keys.join(', ')}), train windows light (opacity ${hold.glass})`);
 
 // ---- 4 到文德、下車 ----
 console.log('== 4 文德到了 ==');

@@ -975,7 +975,7 @@ function createLook(o) {
       dl.target.position.copy(V3); dl.position.copy(V3).addScaledVector(sun, 300); dl.target.updateMatrixWorld(); dl.updateMatrixWorld();
     }
     // 隧道裡面（hills.js 變暗）、圓塔裡面：太陽被擋住了，天空光補一點
-    { const H = hl(), k = H && H.dimK != null ? H.dimK : 1; ind += ((indoor(cam) ? 1 : 0) - ind) * (1 - Math.exp(-dt * 6)); cave = Math.max(clamp((1 - k) / 0.58, 0, 1), ind);
+    { const H = hl(), k = H && H.dimK != null ? H.dimK : 1; ind += ((+indoor(cam) || 0) - ind) * (1 - Math.exp(-dt * 6)); cave = Math.max(clamp((1 - k) / 0.58, 0, 1), ind);
       scene.environmentIntensity = TD.envI * k + cave * 0.3;
       if (hemi) { hemi.intensity = TD.hemiI + (CAVE_I - TD.hemiI) * cave; hemi.color.lerpColors(TD.hemiC, CC, cave); hemi.groundColor.lerpColors(TD.hemiG, CG, cave); } }
     WL.value = LV === 1 ? wetK * (1 - cave) : 0;
