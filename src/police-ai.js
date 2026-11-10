@@ -819,6 +819,7 @@ function createPolice(o = {}) {
   function crime(type, pos) {
     if (!alive || !enabled || state === 'caught' || state === 'jail' || state === 'release') return wanted; // 第 3 批（b3-int）：關掉的時候（比賽中）沒人管
     const add = T.add[type]; if (add == null) return wanted;
+    if ((type === 'hit' || type === 'punch') && pos && pos.animal) return wanted; // 第 86 批：撞到、碰到路上的動物不會被抓
     const x = pos && isFinite(pos.x) ? +pos.x : P.cx, z = pos && isFinite(pos.z) ? +pos.z : P.cz;
     if (type === 'gunfire' && !(nearestPolice(x, z) <= T.gunfireR)) return wanted; // 附近沒有警察：沒人管
     if (lastCrime[type] != null && T0 - lastCrime[type] < T.cool) return wanted; // 同一件事好幾幀、連發：算一次
@@ -1806,7 +1807,7 @@ function createPolice(o = {}) {
       if ((dx * fx + dz * fz) / d < 0.5) continue; best = f; bd = d; isCop = true;
     }
     if (people) for (let i = 0; i < people.length; i++) {
-      const p = people[i]; if (!p || isDown(p) || p.age === 'kid') continue; // 小孩永遠打不到
+      const p = people[i]; if (!p || isDown(p) || p.age === 'kid' || p.animal) continue; // 小孩永遠打不到；第 86 批：動物也不揍
       const dx = p.x - me.x, dz = p.z - me.z, d = Math.hypot(dx, dz); if (d > bd || d < 1e-3) continue;
       if ((dx * fx + dz * fz) / d < 0.5) continue; best = p; bd = d; isCop = false;
     }
@@ -1827,7 +1828,7 @@ function createPolice(o = {}) {
     if (people) for (let i = 0; i < people.length; i++) {
       const p = people[i]; if (!p || isDown(p) || p.age === 'kid' || Math.abs(p.x - P.cx) > 5 || Math.abs(p.z - P.cz) > 5 || !circleVsBox(p.x, p.z, 0.3, TMPB)) continue;
       if (knock) try { knock(p, p.x - P.cx, p.z - P.cz); } catch (e) { console.warn(e); }
-      crime('hit', p); hit = p;
+      if (!p.animal) crime('hit', p); hit = p; // 第 86 批：撞到動物不會被抓
     }
     return hit;
   }

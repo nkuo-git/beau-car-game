@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}canvas{display:block}</style>
+</head><body>
+<script type="module">
+// 三隻動物做圖用（第 86 批）：?a=all|pig|pinky|cham&st=idle|walk|run|sit|fall|getup|wave&sp=公尺/秒&t=先跑幾秒&v=side|front34|front|top|low&human=1
+//   &frames=N&fdt=秒（一張圖排 N 格：同一隻每隔 fdt 秒，看走法）&cols=&W=&H=（每一格）
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { buildAnimal } from './animals.js';
+import { buildCharacter, PLAYER_LOOK } from './character.js';
+const Q = new URLSearchParams(location.search), W = +(Q.get('W') || 1200), H = +(Q.get('H') || 700);
+const which = Q.get('a') || 'all', st = Q.get('st') || 'idle', sp = +(Q.get('sp') || (st === 'run' ? 2.6 : st === 'walk' ? 1.1 : 0));
+const N = +(Q.get('frames') || 0), cols = +(Q.get('cols') || Math.min(N, 4)) || 1, rows = N ? Math.ceil(N / cols) : 1, CW = Math.round(W / cols), CH = Math.round(H / rows);
+const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+r.setSize(CW, CH); r.setPixelRatio(1); r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.6;
+scene.background = new THREE.Color(0xd9dce1);
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(3, 6, 2); scene.add(sun, new THREE.HemisphereLight(0xffffff, 0x666655, 0.7));
+// 地板：格子（看腳有沒有滑）
+const cv = document.createElement('canvas'); cv.width = cv.height = 256; const g = cv.getContext('2d');
+g.fillStyle = '#c3c6cb'; g.fillRect(0, 0, 256, 256); g.fillStyle = '#b3b7bd'; g.fillRect(0, 0, 128, 128); g.fillRect(128, 128, 128, 128);
+g.strokeStyle = '#8d9197'; g.lineWidth = 2; g.strokeRect(0, 0, 256, 256);
+const tx = new THREE.CanvasTexture(cv); tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(40, 40); tx.colorSpace = THREE.SRGBColorSpace;
+const fl = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.9 })); fl.rotation.x = -Math.PI / 2; scene.add(fl); // 一格 0.5 公尺
+const list = [];
+const add = (kind, x, z = 0) => { const C = kind === 'human' ? buildCharacter(PLAYER_LOOK, { state: 'idle' }) : buildAnimal({ animal: kind }); C.group.position.set(x, 0, z); scene.add(C.group); list.push({ C, kind, x0: x }); return C; };
+if (which === 'all') { if (Q.has('human')) add('human', -1.1); add('pig', 0); add('pinky', 0.85); add('cham', 2.45); }
+else { if (Q.has('human')) add('human', 0, -1.0); add(which, 0); }
+const stepAll = (t) => { for (let i = 0; i < Math.round(t * 60); i++) for (const o of list) { o.C.update(1 / 60, { state: st, speed: sp }); if (Q.get('move') !== '0') o.C.group.position.x += sp / 60; } };
+const CAMS = { side: { a: 90, d: 5.2, h: 0.55, ty: 0.42, fov: 30 }, front34: { a: 35, d: 4.2, h: 1.25, ty: 0.42, fov: 30 }, rear34: { a: 150, d: 4.2, h: 1.2, ty: 0.42, fov: 30 },
+  front: { a: 0, d: 5, h: 0.5, ty: 0.42, fov: 24 }, top: { a: 90, d: 0.01, h: 7, ty: 0, fov: 30 }, low: { a: 25, d: 2.6, h: 0.3, ty: 0.38, fov: 40 }, close: { a: 40, d: 1.9, h: 0.75, ty: 0.48, fov: 32 } };
+const v = Q.get('v') || 'side', c = CAMS[v] || CAMS.side;
+const cam = new THREE.PerspectiveCamera(c.fov, CW / CH, 0.05, 200), a = c.a * Math.PI / 180;
+const aim = () => {
+  const cx = which === 'all' ? 0.7 + (list[1]?.C.group.position.x - list[1]?.x0 || 0) : list[list.length - 1].C.group.position.x + (which === 'cham' ? -0.2 : 0);
+  const d = c.d * (which === 'all' ? 1.35 : which === 'cham' ? 1.1 : 0.75) * (+(Q.get('zoom') || 1));
+  cam.position.set(cx + Math.cos(a) * d, c.h, -Math.sin(a) * d); if (v === 'top') cam.up.set(-1, 0, 0); cam.lookAt(cx, c.ty, 0);
+};
+stepAll(+(Q.get('t') || 1.2));
+if (!N) { document.body.appendChild(r.domElement); aim(); r.render(scene, cam); }
+else {
+  const out = document.createElement('canvas'); out.width = W; out.height = H; document.body.appendChild(out);
+  const o2 = out.getContext('2d'), fdt = +(Q.get('fdt') || 0.1);
+  for (let i = 0; i < N; i++) { if (i) stepAll(fdt); aim(); r.render(scene, cam); o2.drawImage(r.domElement, (i % cols) * CW, Math.floor(i / cols) * CH); o2.fillStyle = '#222'; o2.font = '20px sans-serif'; o2.fillText((i * fdt).toFixed(2) + ' s', (i % cols) * CW + 10, Math.floor(i / cols) * CH + 26); }
+}
+window.info = { calls: r.info.render.calls, tris: r.info.render.triangles, an: list.filter((o) => o.kind !== 'human').map((o) => ({ k: o.kind, ...o.C.info, h: +new THREE.Box3().setFromObject(o.C.mesh).max.y.toFixed(3) })) };
+window.done = true;
+</script></body></html>

@@ -832,22 +832,62 @@ check(Math.abs(mv.moving.v) > 1 && mv.moving.act2 == null && Math.abs(mv.stopped
 const kn = await p.evaluate(() => {
   const N = window.__N(), D = window.__D(), f = N.focus, h0 = N.hits;
   const alive = N.peds.people.filter((o) => !o.gone), lonely = (o) => alive.every((u) => u === o || Math.hypot(u.x - o.x, u.z - o.z) > 6); // 旁邊 6 公尺沒有別人（不然假的車先撞到別人，onHit 的 scare 把他嚇跑＝flee）
-  const q = alive.filter((o) => o.mode === 'walk' && lonely(o)).sort((a, b) => Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z))[0]; if (!q) return null;
+  const q = alive.filter((o) => o.mode === 'walk' && !o.animal && lonely(o)).sort((a, b) => Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z))[0]; if (!q) return null; // 人（第 86 批：動物下面另外測）
   q.freeze = 3; // 嚇呆了（不會跳開）
   const fx = Math.cos(q.heading), fz = -Math.sin(q.heading), car = { id: 'test', x: q.x + fx * (2.2 + q.r + 0.4), z: q.z + fz * (2.2 + q.r + 0.4), heading: q.heading + Math.PI, v: 9, hx: 2.2, hz: 0.9, ai: false };
   for (let i = 0; i < 30 && N.hits === h0; i++) { car.x -= fx * 9 / 60; car.z -= fz * 9 / 60; N.peds.update(1 / 60, f, [car], N.NONE); }
   const hitMode = q.mode; window.__dstep(3);
-  const toast = [...document.querySelectorAll('#stage .dv-toast, #stage .dv [class*=toast]')].map((e) => e.textContent).join('|');
+  const toast = [...document.querySelectorAll('#stage .dv-toast, #stage .dv [class*=toast]')].map((e) => e.textContent).join('|'), stars = window.__pol?.()?.wanted;
   const cars = N.traffic.cars, withDriver = cars.filter((c) => c.kind === 'car'), sc = cars.filter((c) => c.kind === 'scooter');
-  return { hits: N.hits - h0, hitMode, toast, cars: cars.length, drivers: withDriver.length && withDriver.every((c) => c.lod?.driver && c.lod.driver.group.parent === c.lod.body && c.lod.driver.anim?.hands === 'wheel' && !c.lod.driver.shadow),
+  return { hits: N.hits - h0, hitMode, toast, stars, cars: cars.length, drivers: withDriver.length && withDriver.every((c) => c.lod?.driver && c.lod.driver.group.parent === c.lod.body && c.lod.driver.anim?.hands === 'wheel' && !c.lod.driver.shadow),
     riders: sc.every((c) => c.rider?.rider && c.rider.rider.anim?.hands === 'bars' && !c.rider.rider.shadow), nScoot: sc.length,
     dims: Object.fromEntries(withDriver.map((c) => [c.key, [+c.hx.toFixed(2), +c.hz.toFixed(2)]])) };
 });
 console.log('  hit a person:', JSON.stringify(kn));
-check(kn && kn.hits === 1 && kn.hitMode === 'fall' && /撞到人/.test(kn.toast), `driving into a person (9 m/s): they fall over (${kn?.hitMode}), onHit counted once, 「${kn?.toast}」`);
+check(kn && kn.hits === 1 && kn.hitMode === 'fall' && /撞到人/.test(kn.toast) && (kn.stars == null || kn.stars >= 2), `driving into a person (9 m/s): they fall over (${kn?.hitMode}), onHit counted once, 「${kn?.toast}」, ${kn?.stars}★`);
 await p.evaluate(() => window.__pol?.()?.clear()); // 第 3 批（b3-int）：撞到人 → 2★ 警察會來抓（test-b3.mjs 測）；這裡接著測開車去改車廠，先把星星清掉
 check(kn && kn.cars > 0 && kn.drivers && kn.riders, `other people's cars have someone at the wheel (hands on the wheel), scooter riders hold the handlebars (${kn?.cars} on the road, ${kn?.nScoot} scooters)`);
 check(kn && Object.keys(kn.dims).length && Object.values(kn.dims).every(([hx, hz]) => hx > 1.7 && hx < 2.6 && hz > 0.7 && hz < 1.15), `other people's cars are measured without the driver in them (half length × half width: ${JSON.stringify(kn?.dims)})`);
+
+// ---- 2c 第 86 批：路上的動物（Nick「把很多的行人換成這三隻動物但撞到它們不會被抓」）：大約一半是動物、三種都有、撞到會倒會爬起來、沒有星星、揍不到 ----
+const an = await p.evaluate(() => {
+  const N = window.__N(), f = N.focus, pol = window.__pol?.(), h0 = N.hits; pol?.clear();
+  const alive = N.peds.people.filter((o) => !o.gone), ani = alive.filter((o) => o.animal);
+  const kinds = [...new Set(ani.map((o) => o.animal))].sort();
+  const bad = alive.filter((o) => o.animal && (o.mode === 'sit' || o.mode === 'sitdown' || o.mode === 'talk' || o.ch?.animal !== o.animal)).length;
+  const humansOk = alive.filter((o) => !o.animal).every((o) => !o.ch?.animal);
+  const sp = Object.fromEntries(ani.map((o) => [o.animal, +o.baseV.toFixed(2)]));
+  const lonely = (o) => alive.every((u) => u === o || Math.hypot(u.x - o.x, u.z - o.z) > 6);
+  const q = ani.filter((o) => (o.mode === 'walk' || o.mode === 'idle' || o.mode === 'wait' || o.mode === 'return')).sort((a, b) => +lonely(b) - +lonely(a) || Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z))[0];
+  if (!q) return { n: alive.length, animals: ani.length, kinds, err: 'no animal to hit' };
+  q.freeze = 3;
+  const fx = Math.cos(q.heading), fz = -Math.sin(q.heading), car = { id: 'test', x: q.x + fx * (2.2 + q.r + 0.4), z: q.z + fz * (2.2 + q.r + 0.4), heading: q.heading + Math.PI, v: 9, hx: 2.2, hz: 0.9, ai: false };
+  for (let i = 0; i < 30 && N.hits === h0; i++) { car.x -= fx * 9 / 60; car.z -= fz * 9 / 60; N.peds.update(1 / 60, f, [car], N.NONE); }
+  const hitMode = q.mode, kind = q.animal; window.__dstep(3);
+  const toast = [...document.querySelectorAll('#stage .dv-toast, #stage .dv [class*=toast]')].map((e) => e.textContent).join('|'), stars = pol ? pol.wanted : null;
+  const modes = [], states = []; let lowest = 0;
+  for (let i = 0; i < 300 && q.active && !q.gone; i++) { N.peds.update(1 / 30, f, [], N.NONE); if (modes[modes.length - 1] !== q.mode) modes.push(q.mode); if (states[states.length - 1] !== q.ch?.state) states.push(q.ch?.state); if (q.mode !== 'fall' && q.mode !== 'lie' && q.mode !== 'getup' && i > 30) break; }
+  // 揍：動物不算（跟小孩一樣打不到）、警察的 crime('hit') 碰到動物不算
+  const w2 = pol ? pol.crime('hit', { x: q.x, z: q.z, animal: kind }) : 0;
+  return { n: alive.length, animals: ani.length, kinds, bad, humansOk, sp, kind, hits: N.hits - h0, hitMode, toast, stars, w2, modes, states, r: +q.r.toFixed(2), h: q.ch?.height };
+});
+console.log('  animals:', JSON.stringify(an));
+check(an && an.animals >= Math.round(an.n * 0.2) && an.animals <= Math.round(an.n * 0.8) && an.kinds.length >= 2 && !an.bad && an.humansOk, `about half the people on the street are animals (${an?.animals} of ${an?.n}: ${an?.kinds}), none sitting on benches or chatting`);
+check(an && Object.values(an.sp || {}).every((v) => v > 0.6 && v < 1), `animals walk a bit slower than people (${JSON.stringify(an?.sp)} m/s)`);
+check(an && an.hits === 1 && an.hitMode === 'fall' && /小動物/.test(an.toast) && !/撞到人/.test(an.toast) && (an.stars == null || an.stars === 0) && (an.w2 == null || an.w2 === 0), `driving into a ${an?.kind}: it falls over, 「${an?.toast}」, no police stars (${an?.stars}, crime('hit') on an animal → ${an?.w2})`);
+check(an && an.modes.includes('lie') && an.states.includes('fall') && an.states.includes('getup') && !['fall', 'lie', 'getup'].includes(an.modes[an.modes.length - 1]), `the ${an?.kind} lies down and gets back up (${an?.modes?.join('→')}; animation ${an?.states?.join('→')})`);
+// 截圖：三隻排在車子前面
+const ash = await p.evaluate(() => {
+  const N = window.__N(), D = window.__D(), t = D.drv.telemetry(), fx = Math.cos(t.heading), fz = -Math.sin(t.heading), rx = -fz, rz = fx;
+  const pick = {}; for (const o of N.peds.people) if (!o.gone && o.animal && !pick[o.animal]) pick[o.animal] = o;
+  const ps = Object.values(pick), out = [];
+  ps.forEach((o, i) => { const s = (i - (ps.length - 1) / 2) * 2.4; o.x = t.x + fx * 7.5 + rx * s; o.z = t.z + fz * 7.5 + rz * s; o.mode = 'idle'; o.timer = 30; o.v = 0; o.hd = o.heading = t.heading + Math.PI + 0.6; o.ch.group.position.set(o.x, 0, o.z); o.ch.group.rotation.y = o.heading; out.push(o.animal); });
+  window.__dstep(2);
+  return { out };
+});
+console.log('  animals in front of the car:', JSON.stringify(ash.out));
+await drawAndShot('2c-animals'); // 畫面上的 draw calls／三角形印在這一行
+if (process.env.B1_STOP === 'animals') { console.log('B1_STOP=animals: stopping here;', fails.length ? `${fails.length} FAIL` : 'ALL CHECKS OK so far'); await b.close(); srv.close(); process.exit(fails.length ? 1 : 0); } // 只看到這一段（第 86 批）
 
 // ---- 3 開出去，開去改車廠：自己開進改車區停好 → 改車廠打開 ----
 const shopBay = await p.evaluate(() => window.__D().VIL.places.shop.bay);

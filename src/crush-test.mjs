@@ -504,10 +504,10 @@ check(gsb.big === 0 && gsb.z < gsb.front + 0.5, `driving into the gun shop: it j
 // 6e 路上的人：越野車衝過去 → 大叫、往旁邊撲倒、爬起來跑掉（大人、小孩都一樣；不會被輾、不會被撞）
 const dive = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, N = window.__N(), C = window.__C(), P = window.__pol(), out = [];
-  for (const kid of [false, true]) {
+  for (const kid of [false, true, 'animal']) { // 第 86 批：路上的動物也一樣撲開（永遠不會被輾）
     P.clear();
     const x0 = -228, z0 = -3.3; D.drv.teleport({ x: x0, z: z0, heading: 0 }); H.step(30); // 村子的大路（超商前面往東，右邊的車道）
-    const q = N.peds.people.find((k) => k.active && !k.gone && (kid ? k.age === 'kid' : k.age !== 'kid') && (k.mode === 'walk' || k.mode === 'idle' || k.mode === 'wait' || k.mode === 'return'));
+    const q = N.peds.people.find((k) => k.active && !k.gone && (kid === 'animal' ? !!k.animal : (kid ? k.age === 'kid' : k.age !== 'kid' && !k.animal)) && (k.mode === 'walk' || k.mode === 'idle' || k.mode === 'wait' || k.mode === 'return'));
     if (!q) { out.push({ kid, none: true }); continue; }
     if (q.seat && q.seat.by === q.id) q.seat.by = -1; q.seat = null; q.partner = null;
     q.x = x0 + 22; q.z = z0 + (kid ? -0.3 : 0.4); q.y = 0; q.mode = 'idle'; q.timer = 30; q.v = 0; q.rn = 0;
@@ -524,16 +524,17 @@ const dive = await p.evaluate(() => {
     const tA = D.drv.telemetry();
     let stood = -1; for (let i = 0; i < 60 * 6; i++) { H.step(1); saw.add(q.mode); if (stood < 0 && q.mode !== 'fall' && q.mode !== 'lie' && q.mode !== 'getup' && saw.has('getup')) stood = +(i / 60).toFixed(1); }
     D.drv.setInput(null);
-    out.push({ kid, age: q.age, dives: N.peds.stats.dives - d0, knocks: N.peds.stats.knocks - k0, under, minLat: +minLat.toFixed(2), hz, modes: [...saw], mode: q.mode, stood, passed: +(tA.x - (x0 + 22)).toFixed(1), crimes: P.telemetry().crimes.map((c) => c.type), gone: q.gone });
+    out.push({ kid, age: q.age, animal: q.animal, dives: N.peds.stats.dives - d0, knocks: N.peds.stats.knocks - k0, under, minLat: +minLat.toFixed(2), hz, modes: [...saw], mode: q.mode, stood, passed: +(tA.x - (x0 + 22)).toFixed(1), crimes: P.telemetry().crimes.map((c) => c.type), gone: q.gone });
   }
   return out;
 });
 console.log('  pedestrian in the path:', JSON.stringify(dive));
 for (const d of dive) {
-  if (d.none) { console.log(`  (no ${d.kid ? 'child' : 'adult'} around to test)`); continue; }
+  const who = d.kid === 'animal' ? `an animal (${d.animal || ''})` : d.kid ? 'a child' : 'a person';
+  if (d.none) { console.log(`  (no ${d.kid === 'animal' ? 'animal' : d.kid ? 'child' : 'adult'} around to test)`); continue; }
   check(d.dives >= 1 && d.under === 0 && d.minLat >= d.hz && d.passed > 3 && d.knocks === 0 && !d.crimes.includes('hit'),
-    `${d.kid ? 'a child' : 'a person'} in the truck's path shouted and dived aside (never under it: closest ${d.minLat} m from the middle, truck half width ${d.hz}; not knocked, no crime)`);
-  check(d.stood >= 0 && !['fall', 'lie', 'getup'].includes(d.mode), `${d.kid ? 'the child' : 'the person'} got up again after ${d.stood} s and ran off (${d.modes.join('→')})`);
+    `${who} in the truck's path shouted and dived aside (never under it: closest ${d.minLat} m from the middle, truck half width ${d.hz}; not knocked, no crime)`);
+  check(d.stood >= 0 && !['fall', 'lie', 'getup'].includes(d.mode), `${who} got up again after ${d.stood} s and ran off (${d.modes.join('→')})`);
 }
 // 6f 內湖的大樓（好幾個盒子的那種）：整棟一起扁
 const nh = await p.evaluate(() => {

@@ -3,7 +3,7 @@
 # 用法：cd src && ./run-tests.sh [測試名 ...]（沒給就全部）；記錄在 ../out/logs/<測試>.log，截圖在 ../out/<測試>/
 # 先 build：node build-art.mjs --yaris && node make-free.mjs（試做頁）、node build-site.mjs <版號>（網站 docs/；app 測試用）
 cd "$(dirname "$0")"
-ALL="test-b1 dyno-test mrt-test mart-test ramp-test under-test jeep-test k2-test p8-test z2-test n4-test mirror-test test-b4 test-b3 neihu-test circuit-test drift-test bump-test top-test sound-test crush-test mountain-test hills-test look-test rain-test free-test test-app-b1 test-app-b4 site-test cloud-test online-test world-test"
+ALL="animal-test test-b1 dyno-test mrt-test mart-test ramp-test under-test jeep-test k2-test p8-test z2-test n4-test mirror-test test-b4 test-b3 neihu-test circuit-test drift-test bump-test top-test sound-test crush-test mountain-test hills-test look-test rain-test free-test test-app-b1 test-app-b4 site-test cloud-test online-test world-test"
 LIST="${*:-$ALL}"
 mkdir -p ../out/logs
 for t in $LIST; do
@@ -11,7 +11,7 @@ for t in $LIST; do
     test-app-b1|test-app-b4) args="../docs ../out/$t/app" ;;
     site-test) args="../docs ../out/$t/site" ;;
     online-test|cloud-test|world-test) args="../docs ../out/$t/${t%-test}" ;; # 試玩頁就給 ../docs/try
-    free-test|bump-test|top-test) args="" ;;
+    free-test|bump-test|top-test|sound-test|animal-test) args="" ;;
     *) args="../out/$t/$t" ;;
   esac
   start=$(date +%s)

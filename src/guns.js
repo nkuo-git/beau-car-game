@@ -1026,7 +1026,7 @@ const gunTargets = {
     const DOWN = { fall: 1, lie: 1, getup: 1, enter: 1, sit: 0 };
     return {
       kind: 'ped', list: () => (peds && peds.people) || [],
-      skip: (p) => !p || p.gone || p.active === false || p.age === 'kid' || DOWN[p.mode] === 1 || (p.ch && p.ch.group && p.ch.group.visible === false),
+      skip: (p) => !p || p.gone || p.active === false || p.age === 'kid' || p.animal || DOWN[p.mode] === 1 || (p.ch && p.ch.group && p.ch.group.visible === false),
       r: (p) => Math.max(0.28, p.r || 0.3), h: (p) => (p.mode === 'sit' ? 1.3 : p.age === 'kid' ? 1.3 : p.ch && p.ch.height ? p.ch.height : 1.7),
       knock: (p, hit) => { if (peds && peds.knock) peds.knock(p, hit.dx, hit.dz, 3.5 + hit.power * 3, null); },
       scare: (x, z, r) => { if (peds && peds.scare) peds.scare(x, z, r); },

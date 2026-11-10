@@ -800,7 +800,7 @@ const mv = await p.evaluate(() => {
 check(Math.abs(mv.moving.v) > 1 && mv.moving.act2 == null && Math.abs(mv.stopped.v) < 1 && mv.stopped.act2 === '下車', `下車 only when stopped (${JSON.stringify(mv)})`);
 const kn = await p.evaluate(() => {
   const N = window.__N(), D = window.__D(), f = N.focus, h0 = N.hits;
-  const q = N.peds.people.filter((o) => !o.gone && o.mode === 'walk').sort((a, b) => Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z))[0]; if (!q) return null;
+  const q = N.peds.people.filter((o) => !o.gone && o.mode === 'walk' && !o.animal).sort((a, b) => Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z))[0]; if (!q) return null;
   q.freeze = 3; // 嚇呆了（不會跳開）
   const fx = Math.cos(q.heading), fz = -Math.sin(q.heading), car = { id: 'test', x: q.x + fx * (2.2 + q.r + 0.4), z: q.z + fz * (2.2 + q.r + 0.4), heading: q.heading + Math.PI, v: 9, hx: 2.2, hz: 0.9, ai: false };
   for (let i = 0; i < 30 && N.hits === h0; i++) { car.x -= fx * 9 / 60; car.z -= fz * 9 / 60; N.peds.update(1 / 60, f, [car], N.NONE); }

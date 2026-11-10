@@ -378,7 +378,7 @@ await p.addInitScript(() => {
   // 離 (x, z) 最近的人（age：'adult' | 'kid'；站著、走著的）
   X.person = (x, z, age, maxD = 200, ok = null) => { // ok(q)：另外的條件（例如離警察局夠遠）
     let best = null, bd = maxD;
-    for (const q of P3().NPC.peds.people) { if ((ok && !ok(q)) || q.gone || q.active === false || (age === 'adult' ? q.age === 'kid' : q.age !== age) || !['walk', 'idle', 'stand', 'talk', 'wait'].includes(q.mode) || q.y > 0.1) continue; const d = Math.hypot(q.x - x, q.z - z); if (d < bd) { bd = d; best = q; } }
+    for (const q of P3().NPC.peds.people) { if ((ok && !ok(q)) || q.gone || q.active === false || (age === 'adult' ? q.age === 'kid' : q.age !== age) || q.animal || !['walk', 'idle', 'stand', 'talk', 'wait'].includes(q.mode) || q.y > 0.1) continue; const d = Math.hypot(q.x - x, q.z - z); if (d < bd) { bd = d; best = q; } }
     return best;
   };
   // 第 18 批：村子少了 21 棟房子，路上的人重新排過：有時候附近唯一的小孩坐在板凳上（坐 20～100 秒）→ 讓他的「坐著」時間到（照遊戲自己的 standup 站起來、走開），等他走起來
@@ -586,7 +586,7 @@ const s4a = await ev(() => {
   let ad = null;
   for (let k = 0; k < 30 && !ad; k++) {
     if (k) X.step(60);
-    const t = w.telemetry(), qs = P3.NPC.peds.people.filter((q) => q.age !== 'kid' && !q.gone && q.active !== false && ['walk', 'idle', 'stand', 'talk', 'wait'].includes(q.mode) && q.y <= 0.1 && Math.hypot(q.x - t.x, q.z - t.z) < 300 && X.farFromPolice(q) && X.hidFromPolice(q.x, q.z)).sort((p, q) => stD(q) - stD(p));
+    const t = w.telemetry(), qs = P3.NPC.peds.people.filter((q) => q.age !== 'kid' && !q.animal && !q.gone && q.active !== false && ['walk', 'idle', 'stand', 'talk', 'wait'].includes(q.mode) && q.y <= 0.1 && Math.hypot(q.x - t.x, q.z - t.z) < 300 && X.farFromPolice(q) && X.hidFromPolice(q.x, q.z)).sort((p, q) => stD(q) - stD(p));
     for (const q of qs) if (X.faceTo(q, 0.75, (x, z) => X.hidFromPolice(x, z))) { ad = q; break; }
   }
   if (!ad) return { err: 'no adult' };

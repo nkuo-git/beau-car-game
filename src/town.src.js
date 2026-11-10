@@ -2296,6 +2296,8 @@ driveOutBtn.addEventListener('click', enterDrive);
 //   車一台＝輕量車 4 個 draw call、2 萬多個三角形＋駕駛 1 個；人一個 2 個（身體＋腳下的影子）、約 4 千個三角形
 //   visible：多遠以外的人不畫；animNear／animMid：多遠以內每一格動、隔一格動（再遠 4 格一次）
 const NPC_MAX = { cars: 8, people: 14, visible: 110, animNear: 35, animMid: 70 };
+// 第 86 批（Nick 2026-11-08「把很多的行人換成這三隻動物但撞到它們不會被抓」）：路上走的一半是動物（animals.js：小豬、粉紅、變色龍；一隻 2 個 draw call、5～15 千個三角形）
+const NPC_ANIMALS = 0.5;
 const NPC_SND = { ctx: () => engineAudio.context, get out() { return engineAudio.input; }, gain: 0.16, muted: () => engineAudio.muted }; // 喇叭：跟引擎聲同一條總輸出（音量、靜音）
 const NPC_SIT = { speed: 0, state: 'sit' };
 const npcRnd = ((s) => () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; })(20260929); // 駕駛的樣子（固定的亂數）
@@ -2321,7 +2323,7 @@ async function makeNpc() {
   const lod = { keys: Object.keys(LOD_CARS), load: (k) => LOD_CARS[k].load(), build: (k, sc, look) => withDriver(k, buildLodCar(k, sc, look)) };
   const traffic = createTraffic({ world: VIL, scene: g, lod, camera: dcam, max: NPC_MAX.cars, makeCharacter: buildCharacter, randomLook, sound: NPC_SND, onCarHit: npcCarHit, onCrush: npcCrush });
   const peds = createPedestrians({ world: VIL, scene: g, camera: dcam, max: NPC_MAX.people, visible: NPC_MAX.visible, animNear: NPC_MAX.animNear, animMid: NPC_MAX.animMid,
-    makeCharacter: buildCharacter, randomLook, onHit: npcHit, onEnter: npcEnter });
+    makeCharacter: buildCharacter, randomLook, makeAnimal: buildAnimal, randomAnimal, animalShare: NPC_ANIMALS, onHit: npcHit, onEnter: npcEnter });
   const warm = await Promise.race([traffic.prewarm(NPC_MAX.cars + 3), new Promise((r) => setTimeout(() => r(-1), 12000))]); // 多做 3 台（npc.js 最多做 max＋3 台）：之後開車不用再做車（一台 10～25 毫秒，手機會頓一下）
   const T2 = performance.now(), nPeds = peds.prewarm(), T3 = performance.now();
   // 每一格重複用的物件（不要每格 new）：me＝你（開車：車身中心；走路：0.3 公尺的人）、pk＝你停著的車、wme＝走路的你（居民讓開）
@@ -2375,6 +2377,7 @@ function npcHit(p, speed, car) {
   NPC.hits++;
   NPC.peds.scare(p.x, p.z, 14);
   engineAudio.crash({ strength: Math.min(0.3, 0.06 + speed / 40), glass: 0 });
+  if (p.animal) { if (drv && DRIVE.on) drv.toast(speed > 6 ? '撞到小動物了！牠會自己爬起來' : '小心，有小動物！', 1800); return; } // 第 86 批：撞到動物不會被抓（police-ai.js crime 也不算）
   if (drv && DRIVE.on) drv.toast(speed > 6 ? '撞到人了！開慢一點' : '小心，有人！', 1800);
   police?.crime('hit', p); // 第 3 批（b3-int）：開車撞人 +2★（小孩 npc.js 不會撞到）
 }

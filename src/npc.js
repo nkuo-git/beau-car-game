@@ -34,7 +34,9 @@
 //   peds.update(dt, focus, cars = [玩家的車, traffic.cars], walkers = [走路的玩家 { x, z, r }])   每幀叫；cars 裡可以放陣列（會攤開）
 //     cars：{ x, z, heading, v, hx, hz, ai }：ai 不是 true 的（玩家、之後的警車）開快（> 2.2 m/s）撞到人 → 撞飛、onHit；慢慢碰到 → 推開、生氣；
 //           開過來 → 1.3 秒內會撞到的人往旁邊跳開（嚇呆的不會）；停著的車（停在人行道上）→ 繞過去
-//   peds.people：[{ id, x, z, y, heading, v, r, mode, age: 'kid' | 'adult' | 'elder', ch（buildCharacter 的角色）, … }]（唯讀）
+//   第 86 批：makeAnimal(look)、randomAnimal(rng)、animalShare（0～1）：路上的人這麼多換成動物（animals.js buildAnimal；跟角色一樣的 API）
+//     動物：p.animal＝'pig' | 'pinky' | 'cham'；不坐板凳、不聊天、不跳車（車上的人一定是人）、不進你開了門的那一家；走得慢一點；被車撞也會倒、爬起來（onHit 照叫，要不要報警是外面決定的）
+//   peds.people：[{ id, x, z, y, heading, v, r, mode, age: 'kid' | 'adult' | 'elder', animal（第 86 批：動物＝種類、人＝''）, ch（buildCharacter 的角色）, … }]（唯讀）
 //     mode：walk 走路、wait 路邊等過馬路、talk 聊天、sitdown／sit／standup 坐板凳、enter 進門、idle 站一下、dodge 跳開、flee 嚇跑、
 //           fall 撞飛、lie 躺著、getup 爬起來、angry 生氣揮手、return 走回人行道
 //   peds.colliders(x, z, r) → [{ t: 'circle', x, z, r, h, npc: 'ped', person }]   給走路的玩家擋（不要加到開車的碰撞：開車撞人用 onHit）
@@ -1433,6 +1435,7 @@ const RMAX = 400;
 function createPedestrians(o = {}) {
   const V = o.world, scene = o.scene || null, max = o.max ?? 20, radius = o.radius ?? 150, R = rngOf(o.seed ?? 4242);
   const mkChar = o.makeCharacter || null, rLook = o.randomLook || null, visR = o.visible ?? 125;
+  const mkAni = o.makeAnimal || null, rAni = o.randomAnimal || null, aShare = mkAni ? clamp(o.animalShare ?? 0, 0, 1) : 0; // 第 86 批：動物
   const onEnter = o.onEnter || null; let HOME = null; // 第 70 批：蓋好的那一棟（folks.js）：走到它的門口 onEnter(p, d) → true＝裡面接走了、'wait'＝門還沒開先等；setHome(b)＝附近的人比較常回這一家
   const AN = new Float64Array([o.animNear ?? 45, o.animMid ?? 90]); // 動畫：這麼近每幀、再遠一點隔一幀、更遠四幀一次（角色的 update 比較貴的話調小）
   const W = npcGraphs(V).walk, NODES = W.nodes, EDGES = W.edges, NN = NODES.length, cg = W.cg;
@@ -1452,7 +1455,7 @@ function createPedestrians(o = {}) {
   const P = [], people = [], chFree = [];
   for (let i = 0; i < max; i++) P.push({ id: i, active: false, gone: false, ch: null, age: 'adult', x: -0, z: -0, y: -0, r: 0.3, heading: -0, hd: -0, v: -0, baseV: 1.3, run: false,
     mode: 'idle', state: 'idle', sent: '', timer: -0, t2: -0, route: new Int32Array(RMAX), rdir: new Int8Array(RMAX), cum: new Float64Array(RMAX + 1), rn: 0, ri: 0, s: -0, lim: 0, goal: -1, gk: '',
-    lat: -0, latT: -0, latHold: -0, vx: -0, vz: -0, vy: -0, mx: -0, mz: -0, seat: null, door: null, partner: null, talkCool: -0, hitCool: -0, react: 0.35, freeze: -0, from: null, tx: -0, tz: -0, te: -1, ts: -0,
+    animal: '', lat: -0, latT: -0, latHold: -0, vx: -0, vz: -0, vy: -0, mx: -0, mz: -0, seat: null, door: null, partner: null, talkCool: -0, hitCool: -0, react: 0.35, freeze: -0, from: null, tx: -0, tz: -0, te: -1, ts: -0,
     fx: -0, fz: -0, lookT: -0, waitT: -0, clearT: -0, stuck: -0, lastD: -0, prog: -0, far: -0, animAcc: -0, animT: -0, knockBy: null, dive: 0 }); // dive：第 9 批（撲開越野車） // 小數欄位用 -0 開始（見 createTraffic）
   const T = pt(), T2 = pt();
   const CARS = [], NONE2 = [], ARG = { speed: 0, state: 'idle' };
@@ -1505,15 +1508,22 @@ function createPedestrians(o = {}) {
 
   // ---- 角色 ----
   let budget = 1; // 這一幀還可以做幾個新的角色（一幀最多一個；第一次補滿、prewarm 不限）
-  function takeChar() {
-    if (chFree.length) return chFree.pop();
-    if (!mkChar || budget <= 0) return null;
-    budget--;
-    const ch = mkChar(rLook ? rLook(R) : {}); st.built++;
-    ch.group.matrixAutoUpdate = true; if (scene) scene.add(ch.group);
-    return ch;
+  // 第 86 批：kind 'h'＝一定要人（坐板凳、聊天、跳車、從房子走出來）、'a'＝一定要動物、沒寫＝照 animalShare 抽（池子裡沒有那一種、這一幀也不能再做，就拿池子裡別種的）
+  const isAni = (ch) => !!(ch && ch.animal);
+  function build(a) { budget--; const ch = a ? mkAni(rAni ? rAni(R) : {}) : mkChar(rLook ? rLook(R) : {}); st.built++; ch.group.matrixAutoUpdate = true; if (scene) scene.add(ch.group); return ch; }
+  function takeChar(kind) {
+    const want = kind === 'h' ? false : kind === 'a' ? true : aShare > 0 && R() < aShare;
+    if (want && !mkAni) return null;
+    for (let i = chFree.length - 1; i >= 0; i--) if (isAni(chFree[i]) === want) { const ch = chFree[i]; chFree[i] = chFree[chFree.length - 1]; chFree.pop(); return ch; }
+    if (budget > 0 && (want ? mkAni : mkChar)) return build(want);
+    if (!kind && chFree.length) return chFree.pop();
+    return null;
   }
-  function prewarm(n = max + 4) { budget = Infinity; const a = []; for (let i = 0; i < n; i++) { const ch = takeChar(); if (!ch) break; ch.group.visible = false; a.push(ch); } budget = 1; for (const ch of a) chFree.push(ch); return a.length; }
+  function prewarm(n = max + 4) { // 人和動物照 animalShare 各做幾個
+    budget = Infinity; const a = [], na = Math.round(n * aShare);
+    for (let i = 0; i < n; i++) { const want = i < na, ch = (want ? mkAni : mkChar) ? build(want) : null; if (!ch) break; ch.group.visible = false; a.push(ch); }
+    budget = 1; for (const ch of a) chFree.push(ch); return a.length;
+  }
   function send(p, state, speed, dt) { // 叫角色的 update（一次性的動作只送一次）
     p.state = state;
     const s = (state === 'getup' || state === 'wave' || state === 'punch') && p.sent === state ? 'idle' : state;
@@ -1524,14 +1534,14 @@ function createPedestrians(o = {}) {
   function nodeOf(p) { return p.rn ? NODES[p.rdir[p.ri] > 0 ? EDGES[p.route[p.ri]].b : EDGES[p.route[p.ri]].a].id : -1; }
   function newGoal(p, eid, st0) { // 從 edge eid 的 st0 出發
     const e = EDGES[eid], cp = W.comp[e.a], x = p.x, z = p.z, r = R(), elder = p.age === 'elder';
-    if (r < (elder ? 0.5 : 0.16)) { // 板凳
+    if (r < (elder ? 0.5 : 0.16) && !p.animal) { // 板凳（動物不坐）
       for (let k = 0; k < 6; k++) {
         const s = W.seats[(R() * W.seats.length) | 0]; if (!s || s.by >= 0 || W.comp[s.node] !== cp || hyp(s.x - x, s.z - z) > 130) continue;
         if (plan(p, eid, st0, s.node)) { p.gk = 'seat'; p.seat = s; s.by = p.id; return true; }
       }
     }
     if (r < 0.62) { // 回家／去別人家
-      if (HOME && W.comp[HOME.node] === cp && R() < 0.5) { const dd = hyp(HOME.x - x, HOME.z - z); if (dd > 8 && dd < 150 && plan(p, eid, st0, HOME.node)) { p.gk = 'door'; p.door = HOME; return true; } } // 第 70 批：你開了門的那一家
+      if (HOME && !p.animal && W.comp[HOME.node] === cp && R() < 0.5) { const dd = hyp(HOME.x - x, HOME.z - z); if (dd > 8 && dd < 150 && plan(p, eid, st0, HOME.node)) { p.gk = 'door'; p.door = HOME; return true; } } // 第 70 批：你開了門的那一家
       for (let k = 0; k < 8; k++) {
         const d = W.doors[(R() * W.doors.length) | 0], dd = hyp(d.x - x, d.z - z); if (W.comp[d.node] !== cp || dd < 20 || dd > 150) continue;
         if (plan(p, eid, st0, d.node)) { p.gk = 'door'; p.door = d; return true; }
@@ -1572,10 +1582,10 @@ function createPedestrians(o = {}) {
 
   // ---- 生人、收人 ----
   function activate(p, ch, x, z, heading) {
-    const look = ch.look || {};
-    Object.assign(p, { active: true, gone: false, ch, age: look.age || 'adult', x, z, y: 0, heading, hd: heading, v: 0, r: Math.max(0.24, Math.min(0.34, ch.radius || 0.3)), lat: 0, latT: 0, latHold: 0,
+    const look = ch.look || {}, an = ch.animal || '';
+    Object.assign(p, { active: true, gone: false, ch, age: look.age || 'adult', animal: an, x, z, y: 0, heading, hd: heading, v: 0, r: Math.max(0.24, Math.min(an ? 0.45 : 0.34, ch.radius || 0.3)), lat: 0, latT: 0, latHold: 0,
       seat: null, door: null, partner: null, talkCool: 5 + R() * 20, hitCool: 0, react: 0.25 + R() * 0.3, freeze: 0, knockBy: null, dive: 0, sent: '', timer: 0, rn: 0, ri: 0, s: 0, lim: 0, stuck: 0, lookT: 0, waitT: 0, clearT: 0, vy: 0, vx: 0, vz: 0, mx: 0, mz: 0, animAcc: 0 });
-    p.baseV = p.age === 'kid' ? 1.45 + R() * 0.25 : p.age === 'elder' ? 0.82 + R() * 0.2 : 1.2 + R() * 0.3;
+    p.baseV = an ? (an === 'cham' ? 0.78 : an === 'pig' ? 0.72 : 0.68) + R() * 0.16 : p.age === 'kid' ? 1.45 + R() * 0.25 : p.age === 'elder' ? 0.82 + R() * 0.2 : 1.2 + R() * 0.3; // 第 86 批：動物小小的，走慢一點
     if (p.age === 'elder') p.react += 0.25;
     ch.group.visible = true; ch.group.position.set(x, 0, z); ch.group.rotation.set(0, heading, 0);
     people.push(p); st.spawned++;
@@ -1639,7 +1649,7 @@ function createPedestrians(o = {}) {
     const p = freeOrFar(x, z, 'spawnAt'); if (!p) return false;
     let d = null, bd = Infinity; for (const q of W.doors) { const dd = hyp(q.x - x, q.z - z); if (dd < bd) { bd = dd; d = q; } }
     if (!d || bd > 4) { st.lastFail = 'spawnAt:no door near ' + bd.toFixed(1); return false; }
-    const b0 = budget; budget = Math.max(budget, 1); const ch = takeChar(); budget = b0; if (!ch) { st.lastFail = 'spawnAt:no character'; return false; }
+    const b0 = budget; budget = Math.max(budget, 1); const ch = takeChar('h'); budget = b0; if (!ch) { st.lastFail = 'spawnAt:no character'; return false; }
     if (look) { try { ch.setLook(look); } catch (e) { console.error(e); } }
     activate(p, ch, x, z, heading);
     const e = EDGES[NODES[d.node].e[0]];
@@ -1651,7 +1661,7 @@ function createPedestrians(o = {}) {
     if (!HOME) return false; const p = freeOrFar(HOME.x, HOME.z, 'spawnHome'); if (!p) return false;
     // 從附近（back～back+25 公尺）別家的門口出發，走到你開了門的這一家（跟 newGoal 挑到 HOME 一樣）
     const cp = W.comp[HOME.node], ds = W.doors.filter((d) => d !== HOME && W.comp[d.node] === cp && hyp(d.x - HOME.x, d.z - HOME.z) > back && hyp(d.x - HOME.x, d.z - HOME.z) < back + 25).sort((a, c) => hyp(a.x - HOME.x, a.z - HOME.z) - hyp(c.x - HOME.x, c.z - HOME.z));
-    const b0 = budget; budget = Math.max(budget, 1); const ch = takeChar(); budget = b0; if (!ch) { st.lastFail = 'spawnHome:no character'; return false; }
+    const b0 = budget; budget = Math.max(budget, 1); const ch = takeChar('h'); budget = b0; if (!ch) { st.lastFail = 'spawnHome:no character'; return false; }
     if (look) { try { ch.setLook(look); } catch (err) { console.error(err); } }
     for (const d of ds) {
       const e = EDGES[NODES[d.node].e[0]];
@@ -1667,7 +1677,7 @@ function createPedestrians(o = {}) {
       const s = W.seats[(R() * W.seats.length) | 0]; if (!s || s.by >= 0) continue;
       const d = hyp(s.x - fx, s.z - fz); if (d > radius - 10 || d < (initial ? 6 : 30)) continue;
       if (!initial && seenAt(s.x, s.z, fx, fz, fh)) continue;
-      const ch = takeChar(); if (!ch) return false;
+      const ch = takeChar('h'); if (!ch) return false;
       activate(p, ch, s.x, s.z, headOf(s.fx, s.fz)); s.by = p.id; p.seat = s; p.mode = 'sit'; p.timer = 20 + R() * 80; st.sits++;
       return true;
     }
@@ -1678,7 +1688,7 @@ function createPedestrians(o = {}) {
     const sl = pickSlot(fx, fz, initial ? 10 : 40, fh, !initial); if (!sl) return false;
     const e = EDGES[sl[0]], s2 = sl[1] + 1.1; if (s2 > e.len) return false;
     lineAt(e.line, s2, T2);
-    const c1 = takeChar(); if (!c1) return false; const c2 = takeChar(); if (!c2) { chFree.push(c1); return false; }
+    const c1 = takeChar('h'); if (!c1) return false; const c2 = takeChar('h'); if (!c2) { chFree.push(c1); return false; }
     activate(a, c1, sl[2], sl[3], headOf(T2.x - sl[2], T2.z - sl[3])); activate(b, c2, T2.x, T2.z, headOf(sl[2] - T2.x, sl[3] - T2.z));
     for (const [p, q, st0] of [[a, b, sl[1]], [b, a, s2]]) { p.mode = 'talk'; p.partner = q; p.timer = 12 + R() * 30; p.te = e.id; p.ts = st0; p.rn = 0; }
     b.timer = a.timer + R() * 2; st.talks++;
@@ -1731,8 +1741,8 @@ function createPedestrians(o = {}) {
       }
       if (!p) break;
       let ch = null; // 池子裡找一個大人（開車的不是小孩）
-      for (let i = chFree.length - 1; i >= 0; i--) if ((chFree[i].look || {}).age !== 'kid') { ch = chFree.splice(i, 1)[0]; break; }
-      if (!ch) { ch = takeChar(); if (!ch) break; }
+      for (let i = chFree.length - 1; i >= 0; i--) if ((chFree[i].look || {}).age !== 'kid' && !isAni(chFree[i])) { ch = chFree.splice(i, 1)[0]; break; }
+      if (!ch) { ch = takeChar('h'); if (!ch) break; }
       const px = x + dx * (0.9 + k * 0.9) + dz * (k ? 0.8 : 0), pz = z + dz * (0.9 + k * 0.9) - dx * (k ? 0.8 : 0);
       activate(p, ch, px, pz, headOf(dx, dz));
       if (p.age === 'kid') { p.age = 'adult'; p.baseV = 1.3; }
@@ -1810,7 +1820,7 @@ function createPedestrians(o = {}) {
         if (blockL < 0.75) vt = Math.min(vt, 0.25);
       }
       // 迎面遇到認識的人：停下來聊天
-      if (oncoming && q0 && q0.mode === 'walk' && p.talkCool <= 0 && q0.talkCool <= 0 && blockL < 2.2 && p.age !== 'kid' && q0.age !== 'kid' && EDGES[p.route[p.ri]].kind === 'side' && q0.rn && EDGES[q0.route[q0.ri]].kind === 'side') {
+      if (oncoming && q0 && q0.mode === 'walk' && p.talkCool <= 0 && q0.talkCool <= 0 && blockL < 2.2 && p.age !== 'kid' && q0.age !== 'kid' && !p.animal && !q0.animal && EDGES[p.route[p.ri]].kind === 'side' && q0.rn && EDGES[q0.route[q0.ri]].kind === 'side') {
         p.talkCool = q0.talkCool = 25 + R() * 30;
         if (R() < 0.3) { for (const [a, b] of [[p, q0], [q0, p]]) { a.mode = 'talk'; a.partner = b; a.timer = 8 + R() * 18; a.v = 0; } st.talks++; return; }
       }
@@ -1876,7 +1886,7 @@ function createPedestrians(o = {}) {
   function stepPerson(p, h) {
     p.talkCool -= h; p.hitCool -= h; p.mx = 0; p.mz = 0; // mx、mz：這一步的速度（車子用來預測）
     switch (p.mode) {
-      case 'walk': walkStep(p, h); if (HOME && p.door === HOME && p.gk === 'door' && onEnter && hyp(p.x - HOME.hx, p.z - HOME.hz) < 4) onEnter(p, HOME, true); break; // 第 70 批：快到你開了門的這一家：門先開（onEnter near）
+      case 'walk': walkStep(p, h); if (HOME && p.door === HOME && p.gk === 'door' && onEnter && !p.animal && hyp(p.x - HOME.hx, p.z - HOME.hz) < 4) onEnter(p, HOME, true); break; // 第 70 批：快到你開了門的這一家：門先開（onEnter near）
       case 'wait': { // 路邊：左右看、等空檔
         p.waitT += h; p.lookT += h; st.waitMax = Math.max(st.waitMax, p.waitT);
         { const dx = p.tx - p.x, dz = p.tz - p.z; if (dx * dx + dz * dz > 0.0025) { moveToward(p, p.tx, p.tz, p.baseV * 0.7, h); pushOut(p, false); } } // 走到排隊的位置
@@ -1889,7 +1899,7 @@ function createPedestrians(o = {}) {
       case 'enter': { // 進門：走到門裡面一點就不見了
         // 門口有東西（花台、機車）擋住、走不到門裡面：4 秒以後就算進去了（不然會一直卡在門口，那個人永遠不會換）
         // 第 70 批：那一棟蓋好了（folks.js）：門自己開（onEnter 'wait'＝門口等一下）、走進去變成裡面的人（true）
-        const d = p.door, r = onEnter ? onEnter(p, d) : 0;
+        const d = p.door, r = onEnter && !p.animal ? onEnter(p, d) : 0;
         if (r === true) { st.entered++; st.handed = (st.handed || 0) + 1; release(p); break; }
         if (r === 'wait') { p.v = 0; p.waitDoor = true; if ((p.timer += h * 0.25) > 4) { st.entered++; release(p); } break; }
         p.waitDoor = false;
@@ -1934,7 +1944,7 @@ function createPedestrians(o = {}) {
         break;
       }
       case 'dodge': case 'flee': { // 跳開、跑走
-        const sp = p.mode === 'dodge' ? 4.6 : 3.6; p.v = sp;
+        const sp = (p.mode === 'dodge' ? 4.6 : 3.6) * (p.animal ? 0.62 : 1); p.v = sp; // 第 86 批：動物跑不快
         p.x += p.fx * sp * h; p.z += p.fz * sp * h; p.mx = p.fx * sp; p.mz = p.fz * sp; p.hd = Math.atan2(-p.fz, p.fx);
         pushOut(p, false);
         if ((p.timer -= h) <= 0) { if (p.mode === 'dodge') angry(p, p.from); else { p.v = 0; if (!reattach(p)) p.stuck += 5; } }
@@ -2053,7 +2063,7 @@ function createPedestrians(o = {}) {
     q.p = p; q.t = 0; q.m.visible = true;
   }
   function shoutTick(dt) {
-    for (const q of SH) { if (!q.p) continue; q.t += dt; const p = q.p; if (q.t > 1.1 || p.gone || !p.active) { q.p = null; q.m.visible = false; continue; } q.m.position.set(p.x, 2.15 + p.y + Math.min(0.25, q.t * 0.6), p.z); }
+    for (const q of SH) { if (!q.p) continue; q.t += dt; const p = q.p; if (q.t > 1.1 || p.gone || !p.active) { q.p = null; q.m.visible = false; continue; } q.m.position.set(p.x, (p.animal && p.ch ? p.ch.height + 0.45 : 2.15) + p.y + Math.min(0.25, q.t * 0.6), p.z); }
   }
   // ---- 每一幀 ----
   let WALKERS = NONE2;
@@ -2144,7 +2154,7 @@ function createPedestrians(o = {}) {
     for (let i = 0; i < people.length; i++) {
       const p = people[i]; if (p.gone || (x != null && hyp(p.x - x, p.z - z) > r + 0.5)) continue;
       const c = colPool[colOut.length] || (colPool[colOut.length] = { t: 'circle', x: -0, z: -0, r: 0.3, h: 1.7, npc: 'ped', person: null });
-      c.x = p.x; c.z = p.z; c.r = p.r; c.person = p; c.h = p.mode === 'fall' || p.mode === 'lie' ? 0.35 : p.mode === 'sit' ? 1.3 : 1.7; colOut.push(c);
+      c.x = p.x; c.z = p.z; c.r = p.r; c.person = p; c.h = p.mode === 'fall' || p.mode === 'lie' ? 0.35 : p.mode === 'sit' ? 1.3 : p.animal && p.ch ? p.ch.height : 1.7; colOut.push(c);
     }
     return colOut;
   }
