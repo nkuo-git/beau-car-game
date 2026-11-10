@@ -342,12 +342,16 @@ await L(() => { const F = window.__IN().LD.folks, f = F.list[F.list.length - 1],
 await drawAndShot('5-newcomer');
 // ---- 6 走出去、走遠：房子收掉（人也收掉）；再回來：同樣的人在 ----
 const g6 = await L(() => { const X = window.__IN(), H = window.__H, I = X.LD.I, b = window.__hb, dp = X.LD.folks.doorPts(), W = window.__D().walker;
+  // 有人正要走進這一家（門口 8 公尺內、要來這個門），門會自己開著：先等他進來、門關好，才站到門裡面按「開門」（第 86 批：路人的亂數變了才碰到）
+  const N = window.__N(), wo = I.world(dp.outX, dp.outZ), coming = () => N.peds.people.filter((q) => !q.gone && q.door && q.door === N.peds.home && Math.hypot(q.x - wo[0], q.z - wo[1]) < 8).length;
+  let waitF = 0, sawComing = 0; for (; waitF < 60 * 30 && (X.LD.t > 0 || X.LD.hold > 0 || coming()); waitF++) { sawComing = Math.max(sawComing, coming()); H.step(1); }
   const wi = I.world(dp.inX, dp.inZ); W.teleport({ x: wi[0], z: wi[1], heading: 0 }); H.step(5); // 站到門裡面：按「開門」走出去
+  const dbg = { waited: +(waitF / 60).toFixed(1), sawComing, t: +X.LD.t.toFixed(2), hold: +X.LD.hold.toFixed(2), near: N.peds.people.filter((q) => !q.gone && Math.hypot(q.x - wo[0], q.z - wo[1]) < 5).map((q) => [q.animal || 'h', q.mode, q.door === N.peds.home, +Math.hypot(q.x - wo[0], q.z - wo[1]).toFixed(2)]), folks: X.LD.folks.list.map((f) => [f.st, +Math.hypot(f.x - dp.inX, f.z - dp.inZ).toFixed(2)]) };
   const act = H.press(); let n = 0; for (; n < 120 && X.LD.t < 1; n++) H.step(1);
   const r = window.__L.walkOut(b, 2.5), e = X.interiorFor(b).enter, nx = Math.sin(b.rot), nz = Math.cos(b.rot); const far = H.walkTo(e.x + nx * 8, e.z + nz * 8); H.step(90);
   const gone = { b: X.LD.b, folks: X.LD.folks, t: X.LD.t };
   window.__L.approach(b); H.press(); for (n = 0; n < 120 && X.LD.t < 1; n++) H.step(1); const r2 = window.__L.walkIn(b, 3); const F = window.__IN().LD.folks;
-  return { act, out: !r.indoor && r.inWorld, far: far.ok, gone: gone.b === null && gone.folks === null && gone.t === 0, back: r2.indoor && r2.live, count: F?.count, sts: F?.list.map((f) => f.st) }; });
+  return { act, dbg, out: !r.indoor && r.inWorld, far: far.ok, gone: gone.b === null && gone.folks === null && gone.t === 0, back: r2.indoor && r2.live, count: F?.count, sts: F?.list.map((f) => f.st) }; });
 console.log('6', el(), JSON.stringify(g6));
 check(g6.act === '開門' && g6.out && g6.far && g6.gone && g6.back && g6.count === h1.count, `walked out and 8 m away: the house and its residents are put away; came back in: the same ${g6.count} resident(s) are home again (${g6.sts?.join(', ')})`);
 // ---- 7 店（有櫃台）：老闆站櫃台不走 ----
