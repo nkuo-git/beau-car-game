@@ -160,6 +160,7 @@ await p.addInitScript(() => {
     }
     return out[0][1] < out[out.length - 1][1] ? out : out.reverse(); // 往南開
   };
+  H.lane = (T, s0, s1, off, step = 2) => { const P = [], f = {}; for (let s = s0; s <= s1 + 1e-6; s += step) { T.frame(s, f); P.push([f.x - f.tz * off, f.z + f.tx * off]); } return P; }; // 第 85 批：沿著隧道（直的、彎的）第 s0…s1 公尺，往前開的右手邊 off 公尺
   H.line = (ax, az, bx, bz, step = 2) => { const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / step)), P = []; for (let k = 0; k <= n; k++) P.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]); return P; };
   H.stop = () => { const d = window.__D().drv; d.setInput({ throttle: 0, brake: 1, steer: 0 }); for (let i = 0; i < 400 && Math.abs(d.telemetry().v) > 0.05; i++) H.step(1); d.setInput(null); H.step(20); return d.telemetry(); };
 });
@@ -222,7 +223,7 @@ const w1 = await p.evaluate(() => {
     run: [V.surfaceAt(770, 0), V.surfaceAt(900, 5), V.surfaceAt(1005, 0), V.terrainAt(900, 0)], hillT: V.terrainAt(-805, 185), hillS: V.surfaceAt(-805, 185) };
 });
 console.log('1', el(), JSON.stringify(w1));
-check(w1.info.hills === 24 && w1.info.tunnels.length === 2 && w1.info.tunnels[0].name === '快速道路隧道' && w1.info.tunnels[1].name === '內湖隧道' && w1.info.tunnels.every((t) => t.len > 50),
+check(w1.info.hills === 24 && w1.info.tunnels.length === 2 && w1.info.tunnels[0].name === '快速道路隧道' && w1.info.tunnels[1].name === '內湖隧道' && w1.info.tunnels.every((t) => t.len > 50) && w1.info.tunnels[1].curved && w1.info.tunnels[1].len > 225 && w1.info.tunnels[1].clr.every((c) => c >= 9.4), // 第 85 批：內湖隧道彎的、約 234 公尺（以前 58）、兩個洞口上面的山都夠高
   `24 hills, two tunnels (${w1.info.tunnels.map((t) => `${t.name} ${Math.round(t.len)} m`).join(', ')}); built in ${w1.info.ms} ms, ${w1.info.meshes} meshes, ${w1.info.tris} triangles`);
 check(w1.walls === 0 && w1.stripEnd === 0, `no invisible walls: village north/south edge ${w1.walls}, end of the 400 m strip ${w1.stripEnd}`);
 check(w1.n > 300 && w1.maxD < 0.05, `the hill meshes match the ground height (${w1.n} points, max ${w1.maxD} m off${w1.maxD >= 0.05 ? ' at ' + JSON.stringify(w1.worst) : ''})`);
@@ -274,15 +275,17 @@ check(!down.err && down.r.end && down.r.airT < 0.5 && down.r.maxDY < 0.6 && down
 const tun = await p.evaluate(() => {
   const D = window.__D(), V = D.VIL, Hl = V.hills, H = window.__H, out = {};
   const dir = (k) => { const L = (Hl.lights || []).find(([o]) => o.isDirectionalLight); return L ? +(L[0].intensity / L[1]).toFixed(3) : null; };
-  for (const [k, T, pts] of [['t1', Hl.tunnels[0], H.hwyLane(-330, 40, 3.175)], ['t2', Hl.tunnels[1], H.line(-115.4, 165, -115.4, 296)]]) {
+  // 第 85 批：內湖隧道是彎的（半徑 44～45 公尺）：照著隧道開右邊那條車道、50 公里（快速道路隧道照舊 22 m/s）；「中間那段」照沿著隧道的 s 算
+  const T2 = Hl.tunnels[1], NQ = { s: 0, u: 0, d: 0 };
+  for (const [k, T, pts, vmax] of [['t1', Hl.tunnels[0], H.hwyLane(-330, 40, 3.175), 22], ['t2', T2, H.lane(T2, T2.s0 - 50, T2.s1 + 25, 3.4), 14]]) {
     const [x, z0] = pts[0]; H.put(x, z0, Math.atan2(-(pts[1][1] - z0), pts[1][0] - x), 60);
-    const s = { high: false, camMax: -99, dimMin: 1, inside: 0, light: 1 };
-    const r = H.follow(pts, 60, { vmax: 22, each: (q) => {
+    const s = { high: false, camMax: -99, dimMin: 1, inside: 0, light: 1, maxU: 0 };
+    const r = H.follow(pts, 60, { vmax, each: (q) => {
       if (Hl.high) s.high = true;
-      if (Hl.tunAt(q.x, q.z) >= 0) { s.inside++; if (q.z > T.z0 + 25 && q.z < T.z1 - 25) { s.camMax = Math.max(s.camMax, D.dcam.position.y); s.dimMin = Math.min(s.dimMin, Hl.dimK); s.light = Math.min(s.light, dir() ?? 1); } }
+      if (Hl.tunAt(q.x, q.z) >= 0) { s.inside++; const sq = T.near(q.x, q.z, NQ).s; s.maxU = Math.max(s.maxU, Math.abs(NQ.u)); if (sq > T.s0 + 25 && sq < T.s1 - 25) { s.camMax = Math.max(s.camMax, D.dcam.position.y); s.dimMin = Math.min(s.dimMin, Hl.dimK); s.light = Math.min(s.light, dir() ?? 1); } }
     } });
     H.step(120);
-    out[k] = { r, ...s, camMax: +s.camMax.toFixed(2), dimMin: +s.dimMin.toFixed(2), light: +s.light.toFixed(2), after: +Hl.dimK.toFixed(3), lightAfter: dir(), ceil: Hl.ceil };
+    out[k] = { r, ...s, len: +(T.s1 - T.s0).toFixed(1), maxU: +s.maxU.toFixed(2), camMax: +s.camMax.toFixed(2), dimMin: +s.dimMin.toFixed(2), light: +s.light.toFixed(2), after: +Hl.dimK.toFixed(3), lightAfter: dir(), ceil: Hl.ceil };
   }
   return out;
 });
@@ -405,6 +408,11 @@ await p.evaluate(() => { window.__H.put(-1765, 20, Math.PI, 90); });
 perf.beach = await drawAndShot('9-beach');
 await p.evaluate(() => { window.__H.put(-115.4, 172, -Math.PI / 2, 90); });
 perf.home4 = await drawAndShot('9-home4-tunnel');
+// 第 85 批：彎的內湖隧道：裡面（彎的地方）、東邊的洞口（從內湖那邊開過來看）
+await p.evaluate(() => { const T = window.__D().VIL.hills.tunnels[1], f = T.frame(120, {}); window.__H.put(f.x - f.tz * 3.4, f.z + f.tx * 3.4, Math.atan2(-f.tz, f.tx), 90); });
+perf.nhIn = await drawAndShot('9-neihu-tunnel-in');
+await p.evaluate(() => { const T = window.__D().VIL.hills.tunnels[1]; window.__H.put(T.xE + 30, T.zE - 3.4, Math.PI, 90); });
+perf.nhEast = await drawAndShot('9-neihu-tunnel-east');
 await p.evaluate(() => { window.__H.put(-1033.2, -262, -Math.PI / 2, 90); });
 perf.portalTraffic = await drawAndShot('9-portal-traffic');
 const upd = await p.evaluate(() => {

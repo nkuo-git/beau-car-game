@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import { NEIHU_DATA } from './neihu-data.js';
 import { HOME_SITES, homeFront } from './village.js';
 import { TOWER_RAMP } from './tower.js';
+import { NTUN_LINK } from './hills.js'; // 第 85 批：內湖隧道（彎的）的中線
 import { nhStreetPrep, nhStreetBuild, NH_STREET_TEXT } from './nhstreet.js'; // 第 72 批：內湖的街景（江南街、內湖路、環山路）
 import { MRT_TEXT, mrtKeepOut, mrtHits } from './mrt.js'; // 第 78 批：捷運站（mrt.js 蓋；這裡只留軌道、隔音牆）
 const NH_MRT_V2 = true; // 第 78 批：車站、出入口、站名牌交給 mrt.js（false＝以前畫上去的站房）
@@ -594,11 +595,14 @@ function buildNeihu(V, opt = {}) {
   });
 
   // ==== 聯外道路：越野車場的水泥路在村子南邊的口 LINK_J (−112, 94) → 往南直走 → 轉往東 → 內湖西北角的環山路二段（入口） ====
+  //      第 85 批（內湖隧道變長 4 倍）：往南直走到內湖隧道北邊的洞口（z 215.5）→ 照著隧道彎（hills.js NTUN_LINK：往西南、再繞回來往東）→ 東邊的洞口出來往東直走 25 公尺出山 → 轉往入口
   const LK = (() => {
     const [jx, jz] = LINK_J, E = N.entP, d = N.entDir, W0 = 13.5, pts = []; // 第 9 批（路變大）：9 → 13.5
-    const P2 = [E[0] - d[0] * 30, E[1] - d[1] * 30], A = [jx, P2[1] - 45]; // 進範圍前 30 公尺照入口那條路的方向；轉彎前 45 公尺還是往南
-    for (let z = jz; z < A[1] - 1; z += 20) pts.push([jx, z]); pts.push(A.slice());
-    const nS = pts.length - 1, C1 = [A[0], A[1] + 30], C2 = [P2[0] - d[0] * 30, P2[1] - d[1] * 30];
+    const P2 = [E[0] - d[0] * 30, E[1] - d[1] * 30], T0 = NTUN_LINK.pts[0], TE = NTUN_LINK.end, td = NTUN_LINK.dir, A = [TE[0] + td[0] * 25, TE[1] + td[1] * 25]; // 進範圍前 30 公尺照入口那條路的方向
+    for (let z = jz; z < T0[1] - 8; z += 20) pts.push([jx, z]);
+    for (const q of NTUN_LINK.pts) pts.push([q[0], q[1]]);
+    pts.push(A.slice());
+    const nS = pts.length - 1, C1 = [A[0] + td[0] * 15, A[1] + td[1] * 15], C2 = [P2[0] - d[0] * 15, P2[1] - d[1] * 15];
     for (let i = 1; i <= 16; i++) { const t = i / 16, a = (1 - t) ** 3, b = 3 * (1 - t) ** 2 * t, c = 3 * (1 - t) * t * t, e = t ** 3; pts.push([a * A[0] + b * C1[0] + c * C2[0] + e * P2[0], a * A[1] + b * C1[1] + c * C2[1] + e * P2[1]]); }
     pts.push([E[0] - d[0] * 15, E[1] - d[1] * 15], [E[0], E[1]]);
     // 入口那幾條路（雙向分開的）：寬度要包得住

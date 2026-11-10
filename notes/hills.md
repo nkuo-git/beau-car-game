@@ -80,3 +80,33 @@ by home 4 177 / 1.14M. `HL.update` ~0.0002 ms a frame; one `heightAt` ~0.0002 ms
 
 ## Batch 34 fix (2026-10-24): NaN position crashed `hillsMax`
 world-test (two phones, 400 m together) threw `Cannot read properties of undefined (reading 'length')` every frame from `surfaceAt → lift → hillsMax`: the bucket lookup `near(x, z)` compared `i < 0 || i >= nx` and NaN passes both, so `BUCK[NaN]` is undefined. The friend's car has no position until its first packet arrives, and proxyWorld asks the ground height for it. `near` now returns `EMPTY` unless the index is in range (NaN included), which gives the same NaN height the pre-hills world gave, without throwing. Found because world-test had not been run since the hills shipped (content 19).
+
+## Batch 85 (2026-11-10, trial v96): 內湖隧道 4× longer, curved
+Nick: 「內湖隧道變長4倍」 (was 58 m, straight on x −112, z 215.5–273.5). A straight 232 m tunnel does not fit: home 4 is
+just north, and 80 m south of the north portal the road has to turn east to home 5 / the Neihu entrance (portal to
+home 5's frontage is only ~150 m). So the road now goes into the hill at the same north portal and loops through it:
+- **Path** (`NTUN_DEF`, `arcPath` → `NTUN = { P, len, G }`): from (−112, 215.5) heading south: arc R 45 turning 75° west,
+  9.8 m straight, arc R 44 turning back 165°, 38.4 m straight east → east portal (−105.0, 348.0) heading +x. 233.8 m (4.03×).
+  `G` = segments (line: start + direction; arc: centre, radius, start heading, sweep) for exact `segNear` / `segFrame`.
+- **Hill** (`NT_HILL`, `ridgeH`): the old ellipse (`NT_OV`, unchanged near home 4) max a ridge of round bumps every 3 m
+  along the path (22 m high / 64 m radius in the middle; low and narrow at the north end where it joins the ellipse; 14 m /
+  33 m at the east end, stopping 6 m before the portal so the slope by home 5's apartment stays under 35°). Grid cell 4 m
+  (`H.cs`). Portal cover: north 9.87 m, east 10.18 m (`T.clr`, ≥ CLR 9.4). Steepest 33.7° at (−98, 326).
+- **Tunnel object** (`tunnels()`): every tunnel now has `near(x, z, o)` → `o.s` (along), `o.u` (sideways, + = n = (tz, −tx)),
+  `o.d`, and `frame(s, o)` → position + tangent. Straight: s = z, u = x − centre. Curved (`T.path`): `SG` = north extension
+  (straight north to the grid edge) + the path + east extension (straight east to the grid edge); s0 0, s1 len are the
+  portals, sc0/sc1 the cut ends; `bb` = bounding box for early-out. `tunAt` = |u| < hw and s0 < s < s1, `corrAt` = sc0…sc1;
+  `inTunnel` (module level, used by village.js / look.js) goes through `tunIn`.
+- `hillsMax(x, z, h, skipK)` now skips only the hill of tunnel `skipK` (was: x range of any tunnel hill).
+- Build: grid lines on x0/x1/xE and zN/ze0/ze1; cut cells = north strip (x0…x1, z < zN) + east strip (ze0…ze1, x > xE);
+  retaining walls through one `retain(alongZ, line, side, keep)` (z-lines for the north cut, x-lines for the east cut);
+  interior sweep, lamps, dark road, portals, plates, railings all through `PT(s, u, y, a)` (straight tunnel output is the
+  same as before); inside walls (`lowCols`) for the curve = rotated 4 m boxes along both sides; portal railing collider
+  rotated with the tangent; trees skip within hw + 9 of the path; minimap strokes the path.
+- **Road** (neihu.js `LK`): straight south from LINK_J to z 194, then `NTUN_LINK.pts` (every 3 m), then 25 m east out of
+  the cut to (−80, 348), then a short bezier to P2 and the entrance as before. Guardrails, markings, gantries, the valley
+  carve and the route graph all follow LK automatically; the "back to the village" gantry lands at (−80, 348), outside.
+- Test: hills-test drives the curved one in the right lane at 50 km/h (`H.lane(T, s0, s1, 3.4)`; the straight one still
+  22 m/s), "middle of the tunnel" by s, info check `curved && len > 225 && clr ≥ 9.4`, new shots `9-neihu-tunnel-in`,
+  `9-neihu-tunnel-east`. Perf: north portal 153 calls / 0.49M, inside the bend 133 / 0.44M, east portal 143 / 0.47M;
+  hills total 13 meshes / 68k triangles (was 63k).

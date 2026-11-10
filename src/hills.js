@@ -5,6 +5,7 @@
 //   山變矮一點（高 ÷ 半徑 ≈ 0.33，最陡大約 30°，不超過 35°）：一般的車開得上去（草地限速 50），陡的地方慢慢爬；山上的樹有碰撞（怪獸卡車輾得扁，跟山上的樹一樣）
 //   4 號家（往內湖的聯外道路西邊）旁邊那座 (−214, 182) 往西搬到 (−262, 196)：塔外面的斜坡露出來
 // 隧道（都是沿著 z 的直路）：快速道路西邊直線（x −1030，雙孔：中間護欄那裡一道牆）穿過新的山 (−1012, −140)；往內湖的聯外道路（x −112）穿過新的山 (−122, 243)（橫的長圓）
+//   第 85 批：內湖隧道照著路彎（S 形，58 → 234 公尺；NTUN_DEF），山變成「原本那座橢圓＋沿著隧道的山脊」（ridgeH）；聯外道路（neihu.js）照 NTUN_LINK 走
 //   山比路高 9.4 公尺以上的那段＝隧道（拱頂 7.4）；山腳到洞口＝挖開的路（兩邊擋土牆，牆頂多 0.8 公尺當欄杆）；洞口一面水泥牆＋名牌
 //   兩層：開在路上（下面）＝隧道的牆擋、地面＝路；開到山上（上面）＝山的地面、洞口上面的欄杆擋。誰在哪一層：只有玩家（town.src.js 的 proxyWorld 問 high）；
 //   車流、警察、路人用 V.heightAt（隧道那段永遠是路）
@@ -25,7 +26,7 @@ import * as THREE from 'three';
 import { TOWER_RAMP } from './tower.js';
 import { APT, aptLotOf } from './apt.js'; // 第 60 批：家旁邊的公寓那塊也要平
 
-export const { buildHills, hillsFonts, HILL_TEXT, HILL_LIST, hillH, inTunnel, tunnels, COAST, coastD, coastY } = (() => {
+export const { buildHills, hillsFonts, HILL_TEXT, HILL_LIST, hillH, inTunnel, tunnels, COAST, coastD, coastY, NTUN_LINK } = (() => {
 const TAU = Math.PI * 2;
 const SANS = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", "WenQuanYi Zen Hei", sans-serif';
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -46,6 +47,54 @@ const C = (hex) => { let v = CC.get(hex); if (!v) { const c = new THREE.Color(he
 const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
+// ---- 第 85 批（Nick 2026-11-10「內湖隧道變長4倍」）：內湖隧道照著路彎 ----
+// 直的放不下（北邊是 4 號家，北邊的洞口往南 80 公尺就是轉往 5 號家、內湖入口的彎），所以聯外道路從北邊的洞口（x −112、z 215.5，跟以前一樣）進山以後
+// 先往西南彎、再往回彎一大圈（S 形），從東邊的洞口（x −105、z 348）出來，再 25 公尺出山接到 5 號家門口、內湖的入口：隧道 58 → 約 234 公尺
+// 中線：A＝圓弧（半徑、轉幾度：正的往西）、L＝直線（從北邊的洞口往南出發）；山＝原本那座橢圓（北邊的洞口、4 號家那邊不變）＋沿著隧道的一串圓圓的山（山脊）
+const NTUN_DEF = { x: -112, z: 215.5, segs: [['A', 45, 75], ['L', 9.8], ['A', 44, -165], ['L', 38.4]] };
+function arcPath(x, z, segs, step) { // 從 (x, z) 往南（+z）出發；回傳 P＝[[x, z, s]…]（大約每 step 公尺一點）、len、G＝每一段（直線：起點、方向；圓弧：圓心、半徑、從哪個方向開始轉幾度）
+  let psi = Math.PI / 2, s = 0; const P = [[x, z, 0]], G = [];
+  for (const g of segs) {
+    if (g[0] === 'L') {
+      G.push({ t: 'L', x, z, dx: Math.cos(psi), dz: Math.sin(psi), s0: s, L: g[1] });
+      const n = Math.max(1, Math.round(g[1] / step)), d = g[1] / n; for (let i = 0; i < n; i++) { x += Math.cos(psi) * d; z += Math.sin(psi) * d; s += d; P.push([x, z, s]); } continue;
+    }
+    const R = g[1], A = (g[2] * Math.PI) / 180, sg = Math.sign(A), n = Math.max(1, Math.round(Math.abs(R * A) / step)), cx = x - R * Math.sin(psi) * sg, cz = z + R * Math.cos(psi) * sg;
+    G.push({ t: 'A', cx, cz, R, sg, p0: psi, A, s0: s, L: Math.abs(R * A) });
+    for (let i = 1; i <= n; i++) { const p = psi + (A * i) / n; x = cx + R * Math.sin(p) * sg; z = cz - R * Math.cos(p) * sg; s += Math.abs(R * A) / n; P.push([x, z, s]); }
+    psi += A;
+  }
+  return { P, len: s, G };
+}
+// 一段（直線、圓弧）上：點 (x, z) 最近的地方 → o.s（沿著路多遠；超出這段就停在頭尾）、o.u（往前看右手邊的反方向 n＝(tz, −tx) 是正的）、o.d（離那一點多遠）
+function segNear(g, x, z, o) {
+  if (g.t === 'L') { const px = x - g.x, pz = z - g.z, a = px * g.dx + pz * g.dz, u = px * g.dz - pz * g.dx, ac = a < 0 ? 0 : a > g.L ? g.L : a; o.s = g.s0 + ac; o.u = u; o.d = a === ac ? Math.abs(u) : Math.hypot(a - ac, u); return o; }
+  const dx = x - g.cx, dz = z - g.cz, r = Math.hypot(dx, dz), p = Math.atan2(g.sg * dx, -g.sg * dz), mid = g.p0 + g.A / 2;
+  const t = (p - mid - TAU * Math.round((p - mid) / TAU)) / g.A + 0.5, tc = t < 0 ? 0 : t > 1 ? 1 : t;
+  o.s = g.s0 + g.L * tc; o.u = g.sg * (r - g.R);
+  if (t === tc) o.d = Math.abs(o.u); else { const q = g.p0 + g.A * tc; o.d = Math.hypot(x - (g.cx + g.R * g.sg * Math.sin(q)), z - (g.cz - g.R * g.sg * Math.cos(q))); }
+  return o;
+}
+function segFrame(g, s, o) { // 那一段上第 s 公尺：位置、方向（tx, tz）；直線可以超出頭尾
+  if (g.t === 'L') { const a = s - g.s0; o.x = g.x + g.dx * a; o.z = g.z + g.dz * a; o.tx = g.dx; o.tz = g.dz; return o; }
+  const q = g.p0 + (g.A * clamp((s - g.s0) / g.L, 0, 1)); o.x = g.cx + g.R * g.sg * Math.sin(q); o.z = g.cz - g.R * g.sg * Math.cos(q); o.tx = Math.cos(q); o.tz = Math.sin(q); return o;
+}
+const NTUN = arcPath(NTUN_DEF.x, NTUN_DEF.z, NTUN_DEF.segs, 1);
+const KOUT = 1.12; // 山的邊最多凸出去多少（外形不是正圓）
+const NT_OV = { x: -122, z: 243, r: 82, rx: 82, rz: 54, h: 22, s: 52 }; // 原本內湖隧道的山（橫的長圓：北邊不要碰到 4 號家）
+const NT_HILL = (() => { // 山脊：每 3 公尺一顆（高 H、半徑 W；最高的那顆算數）：中間高 22、寬 64；北頭（接橢圓）低、窄，東邊的洞口那頭 14、33（山要在洞口前 6 公尺停：5 號家的公寓那邊才不會太陡）
+  const L = NTUN.len, B = [];
+  NTUN.P.forEach(([x, z, s], i) => {
+    if (i % 3 || s < 25.5 || s > L - 6) return;
+    const t = ss(L - 70, L, s), t0 = ss(25.5, 65.5, s), H = (22 - 8 * t) * (0.55 + 0.45 * t0), W = (64 - 31 * t) * (0.7 + 0.3 * t0);
+    B.push({ x, z, H, W2: W * W, W });
+  });
+  let x0 = NT_OV.x - NT_OV.rx * KOUT, x1 = NT_OV.x + NT_OV.rx * KOUT, z0 = NT_OV.z - NT_OV.rz * KOUT, z1 = NT_OV.z + NT_OV.rz * KOUT;
+  for (const b of B) { x0 = Math.min(x0, b.x - b.W); x1 = Math.max(x1, b.x + b.W); z0 = Math.min(z0, b.z - b.W); z1 = Math.max(z1, b.z + b.W); }
+  x0 -= 2; x1 += 2; z0 -= 2; z1 += 2;
+  const rx = (x1 - x0) / 2 / KOUT, rz = (z1 - z0) / 2 / KOUT; // 格子的範圍＝中心 ± r × KOUT（跟別的山一樣）
+  return { x: (x0 + x1) / 2, z: (z0 + z1) / 2, r: Math.max(rx, rz), rx, rz, h: 22, s: 52, t: 26, tun: 1, cs: 4, ov: NT_OV, ridge: { B, box: [x0, z0, x1, z1] } };
+})();
 // ---- 山的清單：中心、半徑、高、種子、樹幾棵（t）、隧道（tun：TUN 的第幾條）----
 const HILL_LIST = [
   { x: -800, z: -165, r: 135, h: 46, s: 21, t: 20 }, { x: -805, z: 185, r: 145, h: 48, s: 22, t: 22 }, // 快速道路一圈裡面（原本 72、80 公尺高）
@@ -56,18 +105,25 @@ const HILL_LIST = [
   { x: -300, z: 540, r: 210, h: 70, s: 27 }, { x: -230, z: 680, r: 190, h: 62, s: 28 }, // 村子南邊遠的（第一座本來在 (−320, 500) 半徑 230：蓋到快速道路旁邊的透天厝、鐵皮工廠）
   { x: 120, z: -985, r: 150, h: 42, s: 41 }, { x: 560, z: -1010, r: 170, h: 48, s: 42 }, { x: 1000, z: -975, r: 140, h: 39, s: 43 }, // 賽車場北邊（race.src.js 本來的半球；往北挪一點，不要蓋到賽車場的樹）
   { x: -1012, z: -140, r: 105, h: 36, s: 51, t: 14, tun: 0 }, // 快速道路隧道的山
-  { x: -122, z: 243, r: 82, rx: 82, rz: 54, h: 22, s: 52, t: 9, tun: 1 }, // 內湖隧道的山（橫的長圓：北邊不要碰到 4 號家，南邊不要蓋到聯外道路轉彎的地方）
+  NT_HILL, // 內湖隧道的山（第 85 批：原本的橢圓 (−122, 243)＋沿著彎的隧道的山脊）
 ];
-const KOUT = 1.12; // 山的邊最多凸出去多少（外形不是正圓）
 // 山比地面高多少（≤ 0：不在山上）；外形：(1 − u²)^1.5（最陡在半山腰）×（1 ± 5% 大雜訊）＋ 0.15 公尺小起伏；邊上歪歪的（不是正圓）；rx、rz：長圓的山（沒有就是 r）
 const RX = (H) => H.rx || H.r, RZ = (H) => H.rz || H.r;
 function shapeH(H, x, z) {
+  if (H.ridge) return ridgeH(H, x, z);
   const dx = (x - H.x) / RX(H), dz = (z - H.z) / RZ(H), d2 = dx * dx + dz * dz;
   if (d2 >= KOUT * KOUT) return -1;
   const a = Math.atan2(-dz, dx), k = 1 + 0.07 * Math.sin(3 * a + H.s) + 0.04 * Math.sin(5 * a + H.s * 1.7), u = Math.sqrt(d2) / k;
   if (u >= 1) return -1;
   const w = 1 - u * u, n1 = vnoise(x, z, 1 / Math.max(60, H.r * 0.5), H.s * 13), n2 = vnoise(x, z, 1 / 24, H.s * 7 + 3);
   return H.h * Math.pow(w, 1.5) * (1 + 0.05 * n1) + 0.15 * n2 * w * Math.min(1, u * 4); // 起伏不要太陡太密：下坡開 50 公里不會一直彈起來
+}
+function ridgeH(H, x, z) { // 第 85 批：內湖隧道的山＝原本的橢圓、山脊（一串圓圓的山）比較高的那個
+  const bx = H.ridge.box; if (x < bx[0] || x > bx[2] || z < bx[1] || z > bx[3]) return -1;
+  const o = shapeH(H.ov, x, z); let m = 0, w = 0;
+  for (const b of H.ridge.B) { const dx = x - b.x, dz = z - b.z, d2 = dx * dx + dz * dz; if (d2 < b.W2) { const q = 1 - d2 / b.W2, v = b.H * q * Math.sqrt(q); if (v > m) { m = v; w = q; } } }
+  if (!(m > 0)) return o;
+  return Math.max(o, m * (1 + 0.05 * vnoise(x, z, 1 / 60, H.s * 13)) + 0.15 * vnoise(x, z, 1 / 24, H.s * 7 + 3) * w);
 }
 function hillH(x, z) { let m = -1; for (const H of HILL_LIST) { const v = shapeH(H, x, z); if (v > m) m = v; } return m; }
 
@@ -91,13 +147,30 @@ const RING0 = [-600, -520, 2456, 2281]; // neihu.js 山的格子（buildHills �
 const TOP = 7.4, WALL_H = 5.0, CLR = 9.4; // 拱頂、直的牆多高；山比路高 CLR 以上才算隧道
 const TUN = [
   { name: '快速道路隧道', x: -1030, hw: 14.5, bores: [[-14.5, -0.6], [0.6, 14.5]], hill: 22 },
-  { name: '內湖隧道', x: -112, hw: 9.6, bores: [[-9.6, 9.6]], hill: 23 },
+  { name: '內湖隧道', x: -112, hw: 9.6, bores: [[-9.6, 9.6]], hill: 23, path: NTUN }, // 第 85 批：彎的（照 NTUN 走）
 ];
 let TP = null;
 function tunnels() { // 洞口在哪（照山的外形算：整個寬度都比路高 CLR 以上的那段）；z0…z1＝隧道、cz0…cz1＝挖開的路（山的範圍）
+  // 每條隧道都有 s（沿著路多遠）、u（左右）：直的 s＝z、u＝x − 中線；frame(s)＝那裡的位置和方向，near(x, z)＝最近的那一點
+  // 第 85 批：彎的（path）：從北邊的洞口（s 0）沿著 NTUN 走到東邊的洞口（s len）；兩頭挖開的路是直的：北邊往北（−z）、東邊往東（+x）一直到山的格子外面
   if (TP) return TP;
   TP = TUN.map((t, k) => {
-    const H = HILL_LIST[t.hill], xs = [-4, 0, 0.25, 0.5, 0.75, 1, 4].map((f, i) => (i === 0 ? t.x - t.hw - 4 : i === 6 ? t.x + t.hw + 4 : t.x - t.hw + 2 * t.hw * f));
+    const H = HILL_LIST[t.hill];
+    if (t.path) {
+      const P = t.path.P, len = t.path.len, [xN, zN] = P[0], [xE, zE] = P[P.length - 1], G = t.path.G, gl = G[G.length - 1];
+      const gx1 = H.x + RX(H) * KOUT, gz0 = H.z - RZ(H) * KOUT;
+      const SG = [{ t: 'L', x: xN, z: gz0 - 2, dx: 0, dz: 1, s0: -(zN - gz0 + 2), L: zN - gz0 + 2 }, ...G, { t: 'L', x: xE, z: zE, dx: gl.dx, dz: gl.dz, s0: len, L: gx1 + 2 - xE }];
+      const bb = [Infinity, Infinity, -Infinity, -Infinity], pad = t.hw + 6;
+      for (const [x, z] of P) { bb[0] = Math.min(bb[0], x - pad); bb[1] = Math.min(bb[1], z - pad); bb[2] = Math.max(bb[2], x + pad); bb[3] = Math.max(bb[3], z + pad); }
+      bb[1] = Math.min(bb[1], gz0 - 2); bb[2] = Math.max(bb[2], gx1 + 2);
+      const Q = { s: 0, u: 0, d: 0 };
+      const near = (x, z, o = Q) => { let bd = Infinity, bs = 0, bu = 0; for (const g of SG) { segNear(g, x, z, o); if (o.d < bd) { bd = o.d; bs = o.s; bu = o.u; } } o.s = bs; o.u = bu; o.d = bd; return o; };
+      const frame = (s, o) => { let g = SG[0]; for (const q of SG) if (s >= q.s0) g = q; return segFrame(g, s, o); };
+      // 洞口的山夠不夠高（試算用；照設計北 11.7、東 10.2 公尺）
+      const FR = { x: 0, z: 0, tx: 0, tz: 1 }, clr = [0, len].map((s, i) => { frame(s + (i ? -0.5 : 0.5), FR); let m = Infinity; for (const u of [-t.hw - 4, -t.hw, -t.hw / 2, 0, t.hw / 2, t.hw, t.hw + 4]) m = Math.min(m, shapeH(H, FR.x + FR.tz * u, FR.z - FR.tx * u)); return +m.toFixed(2); });
+      return { ...t, path: t.path, k, SG, near, frame, bb, clr, s0: 0, s1: len, sc0: SG[0].s0, sc1: len + SG[SG.length - 1].L, x0: xN - t.hw, x1: xN + t.hw, xN, zN, xE, zE, ze0: zE - t.hw, ze1: zE + t.hw, z0: zN, z1: zE, cz0: gz0, cz1: zN };
+    }
+    const xs = [-4, 0, 0.25, 0.5, 0.75, 1, 4].map((f, i) => (i === 0 ? t.x - t.hw - 4 : i === 6 ? t.x + t.hw + 4 : t.x - t.hw + 2 * t.hw * f));
     let best = null, cur = null;
     for (let z = Math.ceil(H.z - RZ(H) * KOUT); z <= H.z + RZ(H) * KOUT; z += 0.5) {
       let m = Infinity; for (const x of xs) m = Math.min(m, shapeH(H, x, z));
@@ -105,11 +178,22 @@ function tunnels() { // 洞口在哪（照山的外形算：整個寬度都比�
     }
     if (cur && (!best || cur[1] - cur[0] > best[1] - best[0])) best = cur;
     if (!best) best = [H.z, H.z];
-    return { ...t, k, z0: best[0], z1: best[1], cz0: H.z - RZ(H) * KOUT, cz1: H.z + RZ(H) * KOUT, x0: t.x - t.hw, x1: t.x + t.hw };
+    const near = (x, z, o = { s: 0, u: 0, d: 0 }) => { o.s = z; o.u = x - t.x; o.d = Math.abs(o.u); return o; };
+    const frame = (s, o) => { o.x = t.x; o.z = s; o.tx = 0; o.tz = 1; return o; };
+    return { ...t, k, near, frame, z0: best[0], z1: best[1], s0: best[0], s1: best[1], cz0: H.z - RZ(H) * KOUT, cz1: H.z + RZ(H) * KOUT, x0: t.x - t.hw, x1: t.x + t.hw };
   });
   return TP;
 }
-function inTunnel(x, z, pad = 0) { for (const t of tunnels()) if (Math.abs(x - t.x) < t.hw + pad && z > t.z0 - pad && z < t.z1 + pad) return true; return false; }
+// 在不在隧道（照 s、u；pad＝外面多算幾公尺）
+const TQ = { s: 0, u: 0, d: 0 };
+function tunIn(t, x, z, pad) {
+  if (!t.path) return Math.abs(x - t.x) < t.hw + pad && z > t.z0 - pad && z < t.z1 + pad;
+  const b = t.bb; if (x < b[0] - pad || x > b[2] + pad || z < b[1] - pad || z > b[3] + pad) return false;
+  t.near(x, z, TQ); return Math.abs(TQ.u) < t.hw + pad && TQ.s > t.s0 - pad && TQ.s < t.s1 + pad;
+}
+function inTunnel(x, z, pad = 0) { for (const t of tunnels()) if (tunIn(t, x, z, pad)) return true; return false; }
+// 第 85 批：內湖的聯外道路照著隧道走（neihu.js）：從北邊的洞口到東邊的洞口每 3 公尺一點、最後的方向
+const NTUN_LINK = (() => { const P = NTUN.P, pts = []; for (let i = 0; i < P.length; i += 3) pts.push([P[i][0], P[i][1]]); const e = P[P.length - 1]; if (pts[pts.length - 1][0] !== e[0] || pts[pts.length - 1][1] !== e[1]) pts.push([e[0], e[1]]); const g = NTUN.G[NTUN.G.length - 1]; return { pts, end: [e[0], e[1]], dir: [g.dx, g.dz], len: NTUN.len }; })();
 const HILL_TEXT = TUN.map((t) => t.name).join('');
 function hillsFonts(ms = 1500) {
   const f = typeof document !== 'undefined' && document.fonts;
@@ -199,16 +283,18 @@ function buildHills(V, opts = {}) {
     return m;
   };
   // 1) 每座山一張格子
+  const NQ = { s: 0, u: 0, d: 0 };
   const HS = HILL_LIST.map((H, hi) => {
-    const cs = clamp(Math.min(RX(H), RZ(H)) / 14, 3.5, 13), ex = [], ez = [];
+    const cs = H.cs || clamp(Math.min(RX(H), RZ(H)) / 14, 3.5, 13), ex = [], ez = [];
     const T = H.tun != null ? TS[H.tun] : null;
-    if (T) { ex.push(T.x0, T.x1); ez.push(T.z0, T.z1); }
+    if (T) { if (T.path) { ex.push(T.x0, T.x1, T.xE); ez.push(T.zN, T.ze0, T.ze1); } else { ex.push(T.x0, T.x1); ez.push(T.z0, T.z1); } } // 第 85 批：彎的隧道：北邊挖開的路兩邊（x）、北邊的洞口（z）、東邊的洞口（x）、東邊挖開的路兩邊（z）都是格子線
     const xs = axis(H.x - RX(H) * KOUT, H.x + RX(H) * KOUT, cs, ex), zs = axis(H.z - RZ(H) * KOUT, H.z + RZ(H) * KOUT, cs, ez), W1 = xs.length, Y = new Float32Array(W1 * zs.length), S = new Float32Array(W1 * zs.length);
     for (let j = 0; j < zs.length; j++) for (let i = 0; i < W1; i++) {
       const x = xs[i], z = zs[j], s0 = shapeH(H, x, z), s = s0 > 0 ? s0 * homeKeep(x, z) : s0, b = coastY(coastD(x, z)); let y = s > 0 ? b + s : b - 0.15;
-      if (T && x > T.x0 - 4.5 && x < T.x1 + 4.5 && z >= T.z0 - 0.01 && z <= T.z1 + 0.01) y = Math.max(y, TOP + 1.6); // 隧道上面：山一定蓋得住拱頂
+      if (T && (T.path ? (T.near(x, z, NQ), Math.abs(NQ.u) < T.hw + 4.5 && NQ.s >= T.s0 - 0.01 && NQ.s <= T.s1 + 0.01) : x > T.x0 - 4.5 && x < T.x1 + 4.5 && z >= T.z0 - 0.01 && z <= T.z1 + 0.01)) y = Math.max(y, TOP + 1.6); // 隧道上面：山一定蓋得住拱頂
       Y[j * W1 + i] = y; S[j * W1 + i] = s;
     }
+    if (T && T.path && (![T.x0, T.x1, T.xE].every((v) => xs.indexOf(v) >= 0) || ![T.zN, T.ze0, T.ze1].every((v) => zs.indexOf(v) >= 0))) console.warn('hills: 內湖隧道的格子線沒對上');
     return { ...H, hi, T, G: { xs, zs, Y }, S, bx0: xs[0], bx1: xs[W1 - 1], bz0: zs[0], bz1: zs[zs.length - 1] };
   });
   // 找山：250 公尺一格的桶
@@ -217,8 +303,10 @@ function buildHills(V, opts = {}) {
   const EMPTY = [];
   const near = (x, z) => { const i = Math.floor((x - BK.x0) / BK.s), j = Math.floor((z - BK.z0) / BK.s); return i >= 0 && j >= 0 && i < BK.nx && j < BK.nz ? BUCK[j * BK.nx + i] : EMPTY; }; // 第 34 批：x、z 是 NaN（一起比 400 公尺，朋友的車還沒有位置）以前拿到 undefined 就爆（每一格 pageerror、比賽開不起來）；現在跟沒有山的時候一樣算 NaN 不爆
   // 隧道的範圍：tunAt＝隧道那段（下面那層是路）、corrAt＝整段（隧道＋挖開的路）
-  const tunAt = (x, z) => { for (let k = 0; k < TS.length; k++) { const t = TS[k]; if (x > t.x0 && x < t.x1 && z > t.z0 && z < t.z1) return k; } return -1; };
-  const corrAt = (x, z) => { for (let k = 0; k < TS.length; k++) { const t = TS[k]; if (x > t.x0 && x < t.x1 && z > t.cz0 && z < t.cz1) return k; } return -1; };
+  //     第 85 批：彎的隧道照 s、u 算（先看大方框）；挖開的路＝北邊、東邊直直的那兩段＋隧道
+  const pathIn = (t, x, z, a, b) => { const q = t.bb; if (x < q[0] || x > q[2] || z < q[1] || z > q[3]) return false; t.near(x, z, NQ); return Math.abs(NQ.u) < t.hw && NQ.s > a && NQ.s < b; };
+  const tunAt = (x, z) => { for (let k = 0; k < TS.length; k++) { const t = TS[k]; if (t.path ? pathIn(t, x, z, t.s0, t.s1) : x > t.x0 && x < t.x1 && z > t.z0 && z < t.z1) return k; } return -1; };
+  const corrAt = (x, z) => { for (let k = 0; k < TS.length; k++) { const t = TS[k]; if (t.path ? pathIn(t, x, z, t.sc0, t.sc1) : x > t.x0 && x < t.x1 && z > t.cz0 && z < t.cz1) return k; } return -1; };
 
   // 2) 島的格子（沙灘、海底、沒有地的地方鋪草地）：40 公尺一格，邊對齊本來的地
   const IS = (() => {
@@ -240,28 +328,28 @@ function buildHills(V, opts = {}) {
   const h0 = V.heightAt || (() => 0), n0 = V.normalAt || null, t0 = V.terrainAt || (() => false), s0 = V.surfaceAt || (() => 0);
   const SRC = { g: null, ring: false }; // 最後是誰（法線用）
   function baseH(x, z) { const v = isAt(x, z); if (v === v) { SRC.g = IS.G; return v; } SRC.g = null; return h0(x, z); }
-  function hillsMax(x, z, h, skipCorr) {
+  function hillsMax(x, z, h, skipK) { // skipK：在第幾條隧道的挖開的路／隧道裡（−1＝沒有）
     const L = near(x, z);
     for (let k = 0; k < L.length; k++) {
       const H = L[k]; if (x < H.bx0 || x > H.bx1 || z < H.bz0 || z > H.bz1) continue;
-      if (skipCorr && H.T && x > H.T.x0 && x < H.T.x1) continue; // 挖開的路、隧道：這座山不算（下面那層）
+      if (skipK >= 0 && H.T && H.T.k === skipK) continue; // 挖開的路、隧道：這座山不算（下面那層）
       const v = gridAt(H.G, x, z); if (v > h) { h = v; SRC.g = H.G; SRC.ring = false; }
     }
     if (ring && x >= RB[0] && x <= RB[2] && z >= RB[1] && z <= RB[3]) { const v = ring.ringAt(x, z); if (v > h) { h = v; SRC.g = null; SRC.ring = true; } }
     return h;
   }
-  const heightAt = (x, z) => { SRC.ring = false; return hillsMax(x, z, baseH(x, z), corrAt(x, z) >= 0); };
-  const topAt = (x, z) => { SRC.ring = false; return hillsMax(x, z, baseH(x, z), false); }; // 上面那層（隧道上面的山）
+  const heightAt = (x, z) => { SRC.ring = false; return hillsMax(x, z, baseH(x, z), corrAt(x, z)); };
+  const topAt = (x, z) => { SRC.ring = false; return hillsMax(x, z, baseH(x, z), -1); }; // 上面那層（隧道上面的山）
   const NRM = [0, 1, 0];
   function normalAt(x, z) {
-    SRC.ring = false; hillsMax(x, z, baseH(x, z), corrAt(x, z) >= 0);
+    SRC.ring = false; hillsMax(x, z, baseH(x, z), corrAt(x, z));
     if (SRC.ring) return ring.ringN(x, z, NRM);
     if (SRC.g) return gridN(SRC.g, x, z, NRM);
     if (n0) return n0(x, z); NRM[0] = 0; NRM[1] = 1; NRM[2] = 0; return NRM;
   }
-  function topN(x, z) { SRC.ring = false; hillsMax(x, z, baseH(x, z), false); if (SRC.ring) return ring.ringN(x, z, NRM); if (SRC.g) return gridN(SRC.g, x, z, NRM); if (n0) return n0(x, z); NRM[0] = 0; NRM[1] = 1; NRM[2] = 0; return NRM; }
+  function topN(x, z) { SRC.ring = false; hillsMax(x, z, baseH(x, z), -1); if (SRC.ring) return ring.ringN(x, z, NRM); if (SRC.g) return gridN(SRC.g, x, z, NRM); if (n0) return n0(x, z); NRM[0] = 0; NRM[1] = 1; NRM[2] = 0; return NRM; }
   const lift = (x, z) => { // 山（或內湖外面的山）比底下的地高多少
-    const b = baseH(x, z); return hillsMax(x, z, b, corrAt(x, z) >= 0) - b;
+    const b = baseH(x, z); return hillsMax(x, z, b, corrAt(x, z)) - b;
   };
   function terrainAt(x, z) { // 不平的地方（terrain.js 照三角形算）：原本的、沙灘和海、山、內湖外面的山
     if (t0(x, z) || coastD(x, z) > -COAST.beach - 4 || inRun(x, z)) return true; // 沙地也算（terrain.js 的沙：慢下來）
@@ -310,7 +398,7 @@ function buildHills(V, opts = {}) {
     const xs = H.G.xs, zs = H.G.zs, W1 = xs.length, T = H.T;
     const m = gridMesh(H.G, (i, j) => {
       const s = H.S; if (s[j * W1 + i] <= 0 && s[j * W1 + i + 1] <= 0 && s[(j + 1) * W1 + i] <= 0 && s[(j + 1) * W1 + i + 1] <= 0) return false; // 整格都在山外面
-      if (T) { const mx = (xs[i] + xs[i + 1]) / 2, mz = (zs[j] + zs[j + 1]) / 2; if (mx > T.x0 && mx < T.x1 && (mz < T.z0 || mz > T.z1)) return false; } // 挖開的路
+      if (T) { const mx = (xs[i] + xs[i + 1]) / 2, mz = (zs[j] + zs[j + 1]) / 2; if (T.path ? (mx > T.x0 && mx < T.x1 && mz < T.zN) || (mz > T.ze0 && mz < T.ze1 && mx > T.xE) : mx > T.x0 && mx < T.x1 && (mz < T.z0 || mz > T.z1)) return false; } // 挖開的路（彎的隧道：北邊往北那段、東邊往東那段）
       return true;
     }, hillCol(H), hillSand);
     if (!m) continue;
@@ -371,73 +459,93 @@ function buildHills(V, opts = {}) {
   const plates = [];
   for (const T of TS) {
     const H = HS[T.hill], xs = H.G.xs, zs = H.G.zs, W1 = xs.length, Y = H.G.Y;
-    const iL = xs.indexOf(T.x0), iR = xs.indexOf(T.x1);
-    // 擋土牆：挖開的路（z 在洞口外面、山比地高的地方）
-    for (const [ii, sd] of [[iL, -1], [iR, 1]]) {
-      const x = xs[ii], xo = x + sd * 0.35; let run = null;
-      const flush = () => { if (!run) return; const zc = (run.z0 + run.z1) / 2, c = { t: 'box', x: x + sd * 0.3, z: zc, hx: 0.3, hz: (run.z1 - run.z0) / 2, rot: 0, h: run.h + 0.8, noCrush: true, hl: 'wall' }; colliders.push(c); run = null; };
-      for (let j = 0; j < zs.length - 1; j++) {
-        const za = zs[j], zb = zs[j + 1]; if (!(zb <= T.z0 + 0.01 || za >= T.z1 - 0.01)) { flush(); continue; } // 隧道那段：裡面的牆
-        const ya = Y[j * W1 + ii], yb = Y[(j + 1) * W1 + ii], ha = ya - coastY(coastD(x, za)), hb = yb - coastY(coastD(x, zb));
+    const FR = { x: 0, z: 0, tx: 0, tz: 1 };
+    const PT = (s, u, y, a = 0) => { T.frame(s, FR); return [FR.x + FR.tz * u + FR.tx * a, y, FR.z - FR.tx * u + FR.tz * a]; }; // 沿著隧道第 s 公尺、左右 u、往前 a（直的：x＝中線＋u、z＝s＋a）
+    // 擋土牆：挖開的路兩邊（山比地高的地方）；直的：x0、x1 兩條格子線（z 在洞口外面）；彎的（第 85 批）：北邊那段（x0、x1，洞口北邊）、東邊那段（ze0、ze1 兩條 z 的格子線，洞口東邊）
+    const retain = (alongZ, li, sd, keep) => {
+      const A = alongZ ? zs : xs, f = alongZ ? xs[li] : zs[li], yIdx = alongZ ? (j) => j * W1 + li : (j) => li * W1 + j;
+      const P = alongZ ? (a, y, o) => [f + o, y, a] : (a, y, o) => [a, y, f + o], at = alongZ ? (a) => [f, a] : (a) => [a, f], xo = sd * 0.35;
+      let run = null;
+      const flush = () => { if (!run) return; const ac = (run.a0 + run.a1) / 2, hl = (run.a1 - run.a0) / 2; colliders.push(alongZ ? { t: 'box', x: f + sd * 0.3, z: ac, hx: 0.3, hz: hl, rot: 0, h: run.h + 0.8, noCrush: true, hl: 'wall' } : { t: 'box', x: ac, z: f + sd * 0.3, hx: hl, hz: 0.3, rot: 0, h: run.h + 0.8, noCrush: true, hl: 'wall' }); run = null; };
+      for (let j = 0; j < A.length - 1; j++) {
+        const za = A[j], zb = A[j + 1]; if (!keep(za, zb)) { flush(); continue; } // 隧道那段：裡面的牆
+        const pa = at(za), pb = at(zb), ya = Y[yIdx(j)], yb = Y[yIdx(j + 1)], ha = ya - coastY(coastD(pa[0], pa[1])), hb = yb - coastY(coastD(pb[0], pb[1]));
         if (ha < 0.25 && hb < 0.25) { flush(); continue; }
-        const pa = 0.8 * ss(0.25, 1.5, ha), pb = 0.8 * ss(0.25, 1.5, hb), ta = ya + pa, tb = yb + pb;
+        const qa = 0.8 * ss(0.25, 1.5, ha), qb = 0.8 * ss(0.25, 1.5, hb), ta = ya + qa, tb = yb + qb;
         // 對著路那面、上面、山那面（高出地面那段）
-        if (sd < 0) { quad(TW, [x, -0.3, zb], [x, -0.3, za], [x, ta, za], [x, tb, zb], CONC); quad(TW, [x, ta, za], [xo, ta, za], [xo, tb, zb], [x, tb, zb], CAP); quad(TW, [xo, ya - 0.3, za], [xo, yb - 0.3, zb], [xo, tb, zb], [xo, ta, za], CONC2); }
-        else { quad(TW, [x, -0.3, za], [x, -0.3, zb], [x, tb, zb], [x, ta, za], CONC); quad(TW, [x, ta, za], [x, tb, zb], [xo, tb, zb], [xo, ta, za], CAP); quad(TW, [xo, yb - 0.3, zb], [xo, ya - 0.3, za], [xo, ta, za], [xo, tb, zb], CONC2); }
-        if (Math.max(ha, hb) > 0.8) { if (!run) run = { z0: za, z1: zb, h: Math.max(ya, yb) }; else { run.z1 = zb; run.h = Math.max(run.h, ya, yb); } if (run.z1 - run.z0 > 18) flush(); } else flush();
+        if (sd < 0) { quad(TW, P(zb, -0.3, 0), P(za, -0.3, 0), P(za, ta, 0), P(zb, tb, 0), CONC); quad(TW, P(za, ta, 0), P(za, ta, xo), P(zb, tb, xo), P(zb, tb, 0), CAP); quad(TW, P(za, ya - 0.3, xo), P(zb, yb - 0.3, xo), P(zb, tb, xo), P(za, ta, xo), CONC2); }
+        else { quad(TW, P(za, -0.3, 0), P(zb, -0.3, 0), P(zb, tb, 0), P(za, ta, 0), CONC); quad(TW, P(za, ta, 0), P(zb, tb, 0), P(zb, tb, xo), P(za, ta, xo), CAP); quad(TW, P(zb, yb - 0.3, xo), P(za, ya - 0.3, xo), P(za, ta, xo), P(zb, tb, xo), CONC2); }
+        if (Math.max(ha, hb) > 0.8) { if (!run) run = { a0: za, a1: zb, h: Math.max(ya, yb) }; else { run.a1 = zb; run.h = Math.max(run.h, ya, yb); } if (run.a1 - run.a0 > 18) flush(); } else flush();
       }
       flush();
+    };
+    const iL = xs.indexOf(T.x0), iR = xs.indexOf(T.x1);
+    if (!T.path) { const out = (za, zb) => zb <= T.z0 + 0.01 || za >= T.z1 - 0.01; retain(true, iL, -1, out); retain(true, iR, 1, out); }
+    else {
+      const north = (za, zb) => zb <= T.zN + 0.01, east = (xa) => xa >= T.xE - 0.01;
+      retain(true, iL, -1, north); retain(true, iR, 1, north); retain(false, zs.indexOf(T.ze0), -1, east); retain(false, zs.indexOf(T.ze1), 1, east);
     }
-    // 裡面：每一孔的剖面（直牆 → 半橢圓的拱），每 4 公尺一段；從洞口外面 0.5 公尺開始（接洞口的牆）
+    // 裡面：每一孔的剖面（直牆 → 半橢圓的拱），每 4 公尺一段（彎的 3 公尺）；從洞口外面 0.6 公尺開始（接洞口的牆）
     const prof = (a, b) => { const c = (a + b) / 2, r = (b - a) / 2, out = [[a, 0], [a, WALL_H]]; for (let k = 1; k < 12; k++) { const th = Math.PI - (k / 12) * Math.PI; out.push([c + r * Math.cos(th), WALL_H + (TOP - WALL_H) * Math.sin(th)]); } out.push([b, WALL_H], [b, 0]); return out; };
-    const zA = T.z0 - 0.6, zB = T.z1 + 0.6, nz = Math.max(1, Math.ceil((zB - zA) / 4));
+    const zA = T.s0 - 0.6, zB = T.s1 + 0.6, nz = Math.max(1, Math.ceil((zB - zA) / (T.path ? 3 : 4)));
     for (const [a, b] of T.bores) {
       const pr = prof(a, b);
       for (let q = 0; q < nz; q++) {
         const z0 = zA + ((zB - zA) * q) / nz, z1 = zA + ((zB - zA) * (q + 1)) / nz;
-        for (let k = 0; k < pr.length - 1; k++) { const [u0, y0] = pr[k], [u1, y1] = pr[k + 1], col = y0 < 1.1 && y1 < 1.1 ? INB : y0 >= WALL_H && y1 >= WALL_H ? INC : INW; quad(IN, [T.x + u0, y0, z0], [T.x + u1, y1, z0], [T.x + u1, y1, z1], [T.x + u0, y0, z1], col); }
+        for (let k = 0; k < pr.length - 1; k++) { const [u0, y0] = pr[k], [u1, y1] = pr[k + 1], col = y0 < 1.1 && y1 < 1.1 ? INB : y0 >= WALL_H && y1 >= WALL_H ? INC : INW; quad(IN, PT(z0, u0, y0), PT(z0, u1, y1), PT(z1, u1, y1), PT(z1, u0, y0), col); }
       }
       // 燈：拱的兩邊各一排（6 公尺一盞）
-      for (let z = T.z0 + 3; z < T.z1 - 1; z += 6) for (const f of [0.2, 0.8]) {
+      for (let z = T.s0 + 3; z < T.s1 - 1; z += 6) for (const f of [0.2, 0.8]) {
         const th = Math.PI - f * Math.PI, c = (a + b) / 2, r = (b - a) / 2 - 0.12, u = c + r * Math.cos(th), y = WALL_H + (TOP - WALL_H - 0.12) * Math.sin(th);
-        quad(TL, [T.x + u, y - 0.05, z - 0.9], [T.x + u, y - 0.05, z + 0.9], [T.x + u + (c - u) * 0.06, y - 0.2, z + 0.9], [T.x + u + (c - u) * 0.06, y - 0.2, z - 0.9], LAMP);
+        quad(TL, PT(z, u, y - 0.05, -0.9), PT(z, u, y - 0.05, 0.9), PT(z, u + (c - u) * 0.06, y - 0.2, 0.9), PT(z, u + (c - u) * 0.06, y - 0.2, -0.9), LAMP);
       }
     }
     // 中間的牆（雙孔：兩孔中間到拱腳那麼高，上面接山）
-    if (T.bores.length > 1) for (let q = 0; q < nz; q++) { const z0 = zA + ((zB - zA) * q) / nz, z1 = zA + ((zB - zA) * (q + 1)) / nz, a = T.bores[0][1], b = T.bores[1][0]; quad(IN, [T.x + a, 0, z0], [T.x + b, 0, z0], [T.x + b, 0, z1], [T.x + a, 0, z1], INB); }
+    if (T.bores.length > 1) for (let q = 0; q < nz; q++) { const z0 = zA + ((zB - zA) * q) / nz, z1 = zA + ((zB - zA) * (q + 1)) / nz, a = T.bores[0][1], b = T.bores[1][0]; quad(IN, PT(z0, a, 0), PT(z0, b, 0), PT(z1, b, 0), PT(z1, a, 0), INB); }
     // 路面的黑（洞口進來 14 公尺慢慢變黑）
-    { const n = Math.max(2, Math.ceil((T.z1 - T.z0) / 7)), al = (z) => 0.5 * Math.min(ss(T.z0 - 0.5, T.z0 + 14, z), 1 - ss(T.z1 - 14, T.z1 + 0.5, z));
-      for (let q = 0; q < n; q++) { const z0 = T.z0 - 0.6 + ((T.z1 - T.z0 + 1.2) * q) / n, z1 = T.z0 - 0.6 + ((T.z1 - T.z0 + 1.2) * (q + 1)) / n, y = 0.09; TD.P.push(T.x0, y, z0, T.x0, y, z1, T.x1, y, z1, T.x0, y, z0, T.x1, y, z1, T.x1, y, z0); for (const z of [z0, z1, z1, z0, z1, z0]) TD.C.push(0, 0, 0, al(z)); } }
+    { const n = Math.max(2, Math.ceil((T.s1 - T.s0) / (T.path ? 3 : 7))), al = (z) => 0.5 * Math.min(ss(T.s0 - 0.5, T.s0 + 14, z), 1 - ss(T.s1 - 14, T.s1 + 0.5, z));
+      for (let q = 0; q < n; q++) { const z0 = T.s0 - 0.6 + ((T.s1 - T.s0 + 1.2) * q) / n, z1 = T.s0 - 0.6 + ((T.s1 - T.s0 + 1.2) * (q + 1)) / n, y = 0.09; TD.P.push(...PT(z0, -T.hw, y), ...PT(z1, -T.hw, y), ...PT(z1, T.hw, y), ...PT(z0, -T.hw, y), ...PT(z1, T.hw, y), ...PT(z0, T.hw, y)); for (const z of [z0, z1, z1, z0, z1, z0]) TD.C.push(0, 0, 0, al(z)); } }
     // 洞口：一面水泥牆（剖面挖空）、上面一圈、名牌；牆頂的欄杆（上面那層擋）
     const W = T.hw + 4;
-    for (const [zp, sd] of [[T.z0 - 0.6, -1], [T.z1 + 0.6, 1]]) {
-      let Hf = TOP + 2.2; for (let i = 0; i < W1; i++) if (xs[i] >= T.x - W && xs[i] <= T.x + W) Hf = Math.max(Hf, gridAt(H.G, xs[i], zp - sd * 1.2) + 1.0);
+    for (const [zp, sd] of [[T.s0 - 0.6, -1], [T.s1 + 0.6, 1]]) {
+      let Hf = TOP + 2.2;
+      if (!T.path) { for (let i = 0; i < W1; i++) if (xs[i] >= T.x - W && xs[i] <= T.x + W) Hf = Math.max(Hf, gridAt(H.G, xs[i], zp - sd * 1.2) + 1.0); }
+      else for (let u = -W; u <= W + 0.01; u += 1) { const p = PT(zp, u, 0, -sd * 1.2), v = gridAt(H.G, p[0], p[2]); if (v === v) Hf = Math.max(Hf, v + 1.0); }
       const cont = [[-W, 0]]; for (const [a, b] of T.bores) for (const p of prof(a, b)) cont.push(p); cont.push([W, 0], [W, Hf], [-W, Hf]);
       const tr = THREE.ShapeUtils.triangulateShape(cont.map(([u, y]) => new THREE.Vector2(u, y)), []);
-      const P3 = (u, y, z) => [T.x + u, y, z];
       for (const [i0, i1, i2] of tr) {
-        const A = cont[i0], B = cont[i1], Cc = cont[i2], ccw = (B[0] - A[0]) * (Cc[1] - A[1]) - (B[1] - A[1]) * (Cc[0] - A[0]) > 0, fwd = sd > 0 ? ccw : !ccw; // 朝外（−z 或 +z）
+        const A = cont[i0], B = cont[i1], Cc = cont[i2], ccw = (B[0] - A[0]) * (Cc[1] - A[1]) - (B[1] - A[1]) * (Cc[0] - A[0]) > 0, fwd = sd > 0 ? ccw : !ccw; // 朝外（往回看、往前看）
         const k = (A[1] + B[1] + Cc[1]) / 3 > TOP + 0.4 ? 0.9 : 1, col = mul(CONC, k);
-        if (fwd) { TW.P.push(...P3(A[0], A[1], zp), ...P3(B[0], B[1], zp), ...P3(Cc[0], Cc[1], zp)); } else { TW.P.push(...P3(A[0], A[1], zp), ...P3(Cc[0], Cc[1], zp), ...P3(B[0], B[1], zp)); }
+        if (fwd) { TW.P.push(...PT(zp, A[0], A[1]), ...PT(zp, B[0], B[1]), ...PT(zp, Cc[0], Cc[1])); } else { TW.P.push(...PT(zp, A[0], A[1]), ...PT(zp, Cc[0], Cc[1]), ...PT(zp, B[0], B[1])); }
         for (let q = 0; q < 3; q++) TW.C.push(...col);
       }
-      const zb = zp - sd * 1.6; // 牆的厚度：上面、兩邊
-      if (sd < 0) { quad(TW, [T.x - W, Hf, zp], [T.x + W, Hf, zp], [T.x + W, Hf, zb], [T.x - W, Hf, zb], CAP); quad(TW, [T.x - W, 0, zb], [T.x - W, 0, zp], [T.x - W, Hf, zp], [T.x - W, Hf, zb], CONC2); quad(TW, [T.x + W, 0, zp], [T.x + W, 0, zb], [T.x + W, Hf, zb], [T.x + W, Hf, zp], CONC2); }
-      else { quad(TW, [T.x - W, Hf, zb], [T.x + W, Hf, zb], [T.x + W, Hf, zp], [T.x - W, Hf, zp], CAP); quad(TW, [T.x - W, 0, zp], [T.x - W, 0, zb], [T.x - W, Hf, zb], [T.x - W, Hf, zp], CONC2); quad(TW, [T.x + W, 0, zb], [T.x + W, 0, zp], [T.x + W, Hf, zp], [T.x + W, Hf, zb], CONC2); }
+      const zb = -sd * 1.6; // 牆的厚度：上面、兩邊
+      if (sd < 0) { quad(TW, PT(zp, -W, Hf), PT(zp, W, Hf), PT(zp, W, Hf, zb), PT(zp, -W, Hf, zb), CAP); quad(TW, PT(zp, -W, 0, zb), PT(zp, -W, 0), PT(zp, -W, Hf), PT(zp, -W, Hf, zb), CONC2); quad(TW, PT(zp, W, 0), PT(zp, W, 0, zb), PT(zp, W, Hf, zb), PT(zp, W, Hf), CONC2); }
+      else { quad(TW, PT(zp, -W, Hf, zb), PT(zp, W, Hf, zb), PT(zp, W, Hf), PT(zp, -W, Hf), CAP); quad(TW, PT(zp, -W, 0), PT(zp, -W, 0, zb), PT(zp, -W, Hf, zb), PT(zp, -W, Hf), CONC2); quad(TW, PT(zp, W, 0, zb), PT(zp, W, 0), PT(zp, W, Hf), PT(zp, W, Hf, zb), CONC2); }
       // 洞口上面的帶子（深一點）＋名牌
-      const yb0 = TOP + 0.35, yb1 = Math.min(Hf - 0.3, TOP + 1.95), pw = Math.min(2 * T.hw - 4, 16), zq = zp + sd * 0.03;
-      quad(TW, sd < 0 ? [T.x - W, yb0 - 0.2, zq] : [T.x + W, yb0 - 0.2, zq], sd < 0 ? [T.x + W, yb0 - 0.2, zq] : [T.x - W, yb0 - 0.2, zq], sd < 0 ? [T.x + W, yb0 - 0.05, zq] : [T.x - W, yb0 - 0.05, zq], sd < 0 ? [T.x - W, yb0 - 0.05, zq] : [T.x + W, yb0 - 0.05, zq], C('#8b2f28'));
-      plates.push({ T, x0: sd < 0 ? T.x + pw / 2 : T.x - pw / 2, x1: sd < 0 ? T.x - pw / 2 : T.x + pw / 2, y0: yb0, y1: yb1, z: zp + sd * 0.05 }); // 字的左邊：北邊的洞口（往南看）在東邊
+      const yb0 = TOP + 0.35, yb1 = Math.min(Hf - 0.3, TOP + 1.95), pw = Math.min(2 * T.hw - 4, 16), zq = sd * 0.03;
+      quad(TW, PT(zp, sd < 0 ? -W : W, yb0 - 0.2, zq), PT(zp, sd < 0 ? W : -W, yb0 - 0.2, zq), PT(zp, sd < 0 ? W : -W, yb0 - 0.05, zq), PT(zp, sd < 0 ? -W : W, yb0 - 0.05, zq), C('#8b2f28'));
+      const pa = PT(zp, sd < 0 ? pw / 2 : -pw / 2, 0, sd * 0.05), pb = PT(zp, sd < 0 ? -pw / 2 : pw / 2, 0, sd * 0.05);
+      plates.push({ T, ax: pa[0], az: pa[2], bx: pb[0], bz: pb[2], y0: yb0, y1: yb1 }); // 字的左邊：從外面看洞口的左手邊（北邊的洞口往南看＝東邊）
       // 牆頂的欄杆：柱子＋兩根橫桿（上面那層才擋：玩家在山上）
-      const ry = Hf;
-      for (let u = -W; u <= W + 0.01; u += 2) quad(TW, [T.x + u - 0.06, ry, zp - sd * 0.25], [T.x + u + 0.06, ry, zp - sd * 0.25], [T.x + u + 0.06, ry + 1.05, zp - sd * 0.25], [T.x + u - 0.06, ry + 1.05, zp - sd * 0.25], C('#9aa0a6'));
-      for (const yy of [0.55, 1.0]) quad(TW, [T.x - W, ry + yy, zp - sd * 0.22], [T.x + W, ry + yy, zp - sd * 0.22], [T.x + W, ry + yy + 0.09, zp - sd * 0.22], [T.x - W, ry + yy + 0.09, zp - sd * 0.22], C('#c9ccd0'));
-      highCols.push({ t: 'box', x: T.x, z: zp - sd * 0.25, hx: W, hz: 0.3, rot: 0, h: ry + 1.1, noCrush: true, hl: 'portal', off: true });
+      const ry = Hf, ra = -sd * 0.25, rb = -sd * 0.22;
+      for (let u = -W; u <= W + 0.01; u += 2) quad(TW, PT(zp, u - 0.06, ry, ra), PT(zp, u + 0.06, ry, ra), PT(zp, u + 0.06, ry + 1.05, ra), PT(zp, u - 0.06, ry + 1.05, ra), C('#9aa0a6'));
+      for (const yy of [0.55, 1.0]) quad(TW, PT(zp, -W, ry + yy, rb), PT(zp, W, ry + yy, rb), PT(zp, W, ry + yy + 0.09, rb), PT(zp, -W, ry + yy + 0.09, rb), C('#c9ccd0'));
+      const pc = PT(zp, 0, 0, ra); T.frame(zp, FR);
+      highCols.push({ t: 'box', x: pc[0], z: pc[2], hx: W, hz: 0.3, rot: Math.atan2(FR.tx, FR.tz), h: ry + 1.1, noCrush: true, hl: 'portal', off: true });
     }
-    // 裡面的牆（下面那層才擋）：兩邊＋雙孔中間
-    const zc = (T.z0 + T.z1) / 2, hz = (T.z1 - T.z0) / 2 + 0.6;
-    for (const x of [T.x0 - 0.3, T.x1 + 0.3]) lowCols.push({ t: 'box', x, z: zc, hx: 0.3, hz, rot: 0, h: TOP, noCrush: true, hl: 'tunnel' });
-    if (T.bores.length > 1) lowCols.push({ t: 'box', x: T.x, z: zc, hx: 0.6, hz, rot: 0, h: TOP, noCrush: true, hl: 'tunnel' });
+    // 裡面的牆（下面那層才擋）：兩邊＋雙孔中間；彎的：每 4 公尺一塊（照那一段的方向轉）
+    if (!T.path) {
+      const zc = (T.z0 + T.z1) / 2, hz = (T.z1 - T.z0) / 2 + 0.6;
+      for (const x of [T.x0 - 0.3, T.x1 + 0.3]) lowCols.push({ t: 'box', x, z: zc, hx: 0.3, hz, rot: 0, h: TOP, noCrush: true, hl: 'tunnel' });
+      if (T.bores.length > 1) lowCols.push({ t: 'box', x: T.x, z: zc, hx: 0.6, hz, rot: 0, h: TOP, noCrush: true, hl: 'tunnel' });
+    } else {
+      const n = Math.max(1, Math.ceil((zB - zA) / 4));
+      for (let q = 0; q < n; q++) {
+        const sa = zA + ((zB - zA) * q) / n, sb = zA + ((zB - zA) * (q + 1)) / n;
+        for (const u of [-T.hw - 0.3, T.hw + 0.3]) { const p0 = PT(sa, u, 0), p1 = PT(sb, u, 0), dx = p1[0] - p0[0], dz = p1[2] - p0[2]; lowCols.push({ t: 'box', x: (p0[0] + p1[0]) / 2, z: (p0[2] + p1[2]) / 2, hx: 0.3, hz: Math.hypot(dx, dz) / 2 + 0.3, rot: Math.atan2(dx, dz), h: TOP, noCrush: true, hl: 'tunnel' }); }
+      }
+    }
   }
   const listMesh = (L, mat, name) => {
     if (!L.P.length) return null;
@@ -456,7 +564,7 @@ function buildHills(V, opts = {}) {
     TS.forEach((T, k) => { g.fillStyle = '#1f5f3a'; g.fillRect(0, k * RH, RW, RH); g.strokeStyle = '#f2f3f5'; g.lineWidth = 5; g.strokeRect(6, k * RH + 6, RW - 12, RH - 12); g.fillStyle = '#f2f3f5'; fitFont(g, T.name, RW - 60, 60); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(T.name, RW / 2, k * RH + RH / 2 + 3); });
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
     const P = [], UV = [];
-    for (const p of plates) { const k = p.T.k, v0 = 1 - (k + 1) / TS.length, v1 = 1 - k / TS.length; P.push(p.x0, p.y0, p.z, p.x1, p.y0, p.z, p.x1, p.y1, p.z, p.x0, p.y0, p.z, p.x1, p.y1, p.z, p.x0, p.y1, p.z); UV.push(0, v0, 1, v0, 1, v1, 0, v0, 1, v1, 0, v1); }
+    for (const p of plates) { const k = p.T.k, v0 = 1 - (k + 1) / TS.length, v1 = 1 - k / TS.length; P.push(p.ax, p.y0, p.az, p.bx, p.y0, p.bz, p.bx, p.y1, p.bz, p.ax, p.y0, p.az, p.bx, p.y1, p.bz, p.ax, p.y1, p.az); UV.push(0, v0, 1, v0, 1, v1, 0, v0, 1, v1, 0, v1); }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); geo.computeBoundingSphere();
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })); m.name = 'hl-tunnel-names'; m.matrixAutoUpdate = false; group.add(m); meshes++; tris += P.length / 9;
   }
@@ -478,7 +586,7 @@ function buildHills(V, opts = {}) {
     if (!H.t) continue;
     for (let n = 0, tries = 0; n < H.t && tries < H.t * 12; tries++) {
       const a = R() * TAU, u = 0.14 + R() * 0.58, x = H.x + Math.cos(a) * RX(H) * u, z = H.z - Math.sin(a) * RZ(H) * u;
-      if (H.T && Math.abs(x - H.T.x) < H.T.hw + 9) continue; // 隧道、挖開的路上面不種（洞口上面也不要）
+      if (H.T && (H.T.path ? H.T.near(x, z, NQ).d < H.T.hw + 9 : Math.abs(x - H.T.x) < H.T.hw + 9)) continue; // 隧道、挖開的路上面不種（洞口上面也不要）
       if (homes.some(([hx, hz]) => Math.hypot(x - hx, z - hz) < 30)) continue;
       const y = gridAt(H.G, x, z) - 0.15, sz = 1.25 + R() * 0.9, kind = R(), seed = (R() * 1e6) | 0;
       if (!(y > 0.5)) continue;
@@ -501,7 +609,7 @@ function buildHills(V, opts = {}) {
     g.save();
     for (const H of HS) { g.save(); g.translate(H.x, H.z); g.scale(RX(H) / H.r, RZ(H) / H.r); const gr = g.createRadialGradient(0, 0, 0, 0, 0, H.r); gr.addColorStop(0, `rgba(70,112,62,${0.28 + Math.min(0.2, H.h / 400)})`); gr.addColorStop(1, 'rgba(70,112,62,0)'); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, H.r, 0, TAU); g.fill(); g.restore(); }
     g.fillStyle = 'rgba(214,196,150,0.75)'; g.fillRect(RUN.x0, -RUN.hz, RUN.x1 - RUN.x0, RUN.hz * 2); g.beginPath(); g.arc(RUN.x1, 0, RUN.hz, -Math.PI / 2, Math.PI / 2); g.fill();
-    g.fillStyle = 'rgba(40,40,44,0.55)'; for (const T of TS) g.fillRect(T.x0, T.z0, T.x1 - T.x0, T.z1 - T.z0);
+    g.fillStyle = g.strokeStyle = 'rgba(40,40,44,0.55)'; for (const T of TS) { if (!T.path) { g.fillRect(T.x0, T.z0, T.x1 - T.x0, T.z1 - T.z0); continue; } g.lineWidth = 2 * T.hw; g.lineJoin = 'round'; g.beginPath(); T.path.P.forEach(([x, z], i) => (i ? g.lineTo(x, z) : g.moveTo(x, z))); g.stroke(); } // 第 85 批：彎的隧道畫一條粗線
     const hx = (COAST.x1 - COAST.x0) / 2, hz = (COAST.z1 - COAST.z0) / 2, cx = COAST.x0 + hx, cz = COAST.z0 + hz;
     const rr = (ins) => { const R2 = COAST.r - ins, ax = hx - ins - R2, az = hz - ins - R2; g.beginPath(); g.moveTo(cx + ax + R2, cz - az); g.arc(cx + ax, cz + az, R2, 0, Math.PI / 2); g.arc(cx - ax, cz + az, R2, Math.PI / 2, Math.PI); g.arc(cx - ax, cz - az, R2, Math.PI, 1.5 * Math.PI); g.arc(cx + ax, cz - az, R2, 1.5 * Math.PI, 2 * Math.PI); g.closePath(); };
     g.fillStyle = 'rgba(214,196,150,0.8)'; rr(-6); g.rect(cx - 9000, cz - 9000, 18000, 18000); rr(COAST.beach); g.fill('evenodd'); // 沙灘（水邊往裡 70 公尺）
@@ -539,7 +647,7 @@ function buildHills(V, opts = {}) {
     info: null,
   };
   const ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - T0;
-  API.info = { meshes, tris, hills: HS.length, trees, tunCols: tunVil.length, tunnels: TS.map((T) => ({ name: T.name, x: T.x, z0: T.z0, z1: T.z1, len: +(T.z1 - T.z0).toFixed(1) })), ms: +ms.toFixed(1) };
+  API.info = { meshes, tris, hills: HS.length, trees, tunCols: tunVil.length, tunnels: TS.map((T) => ({ name: T.name, x: T.x, z0: T.z0, z1: T.z1, len: +(T.s1 - T.s0).toFixed(1), ...(T.path ? { curved: true, end: [+T.xE.toFixed(1), +T.zE.toFixed(1)], clr: T.clr } : {}) })), ms: +ms.toFixed(1) };
   if (V.info) V.info.hills = API.info;
   V.hills = API;
   return API;
@@ -559,5 +667,5 @@ function mergeGeos(L) { // 同樣屬性的幾個（有 index）併成一個
   out.setIndex(new THREE.BufferAttribute(I, 1)); out.computeBoundingSphere(); return out;
 }
 
-return { buildHills, hillsFonts, HILL_TEXT, HILL_LIST, hillH, inTunnel, tunnels, COAST, coastD, coastY };
+return { buildHills, hillsFonts, HILL_TEXT, HILL_LIST, hillH, inTunnel, tunnels, COAST, coastD, coastY, NTUN_LINK };
 })();
