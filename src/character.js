@@ -2400,6 +2400,10 @@ const QB_SUP = (() => { const f = [0.756, 0, 0.655], y = [-f[0], 0, -f[2]], z = 
 const QB_FISTH = basisQ([0, 0, -1], [-1, 0, 0], [0, 1, 0]); // 右手拳頭手背朝上
 const QB_LAP = [basisQ([0, 0, 1], [-1, 0, 0], [0, -1, 0]), basisQ([0, 0, -1], [-1, 0, 0], [0, 1, 0])]; // 手平放在大腿上
 const QB_BAR = [basisQ([0, 0, 1], [-0.96, 0.29, 0], [-0.29, -0.96, 0]), basisQ([0, 0, -1], [-0.96, 0.29, 0], [0.29, 0.96, 0])]; // 握機車把手
+const QB_EAT = (() => { // 吃東西：右手握拳在嘴巴前面，手指朝左前（往臉的中間）、大拇指朝上、手心對著臉
+  const f = new THREE.Vector3(0.3, 0.25, -0.92).normalize(), t = new THREE.Vector3(0, 1, 0).addScaledVector(f, -f.y).normalize(), y = f.clone().negate(), z = new THREE.Vector3().crossVectors(t, y);
+  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(t, y, z));
+})();
 const QB_BACK = [basisQ([0, 0.86, 0.51], [0, 0.51, -0.86], [-1, 0, 0]), basisQ([0, 0.86, -0.51], [0, 0.51, 0.86], [1, 0, 0])]; // 背著手
 const AD = new THREE.Vector3(), AU = new THREE.Vector3(), AR = new THREE.Vector3(0, 0, 1), G1 = new THREE.Vector3(), G2 = new THREE.Vector3(), QH1 = new THREE.Quaternion(), QRC = new THREE.Quaternion(), PL = new THREE.Vector3(), WQ = new THREE.Quaternion(), WP = new THREE.Vector3(), V_F = new THREE.Vector3(), V_U = new THREE.Vector3();
 function aimArms(S, M) {
@@ -2458,6 +2462,15 @@ function sitLegs(S, M) {
     footQ(yaw, th, Q_F);
     ik2(M, S.Q, S.HP, b.thigh, b.shin, M.thigh, M.shin, V_A, V_POLE, true, Q_F, b.foot);
   }
+}
+// 第 84 批：吃東西（C.eat(sec)）：右手舉到嘴巴前面，中間一口一口（手往嘴巴靠一點）
+const eatK = (S) => (S.eatD > 0 ? sstep(0, 0.35, S.eatT) * (1 - sstep(S.eatD - 0.35, S.eatD, S.eatT)) : 0);
+function eatArm(S, M, w) {
+  const A = M.restAbs, hb = B.head * 3, bite = Math.max(0, Math.sin(TAU * 1.6 * S.eatT));
+  boneWorld(M, S.Q, S.HP, B.head, WQ, WP);
+  V_F.set(M.headX + (0.15 - 0.035 * bite) * M.hs - A[hb], M.eyeY - 0.1 * M.hs - A[hb + 1], 0.035 * M.hs).applyQuaternion(WQ).add(WP);
+  G1.copy(V_F); PL.set(-0.3, -1, 0.9);
+  armSave(S, 1); handIK(S, M, 1, G1, QB_EAT, PL); armMix(S, 1, w);
 }
 function backHands(S, M) { // 老人背著手走路
   M.torso(M.waistY, TT);
@@ -2549,7 +2562,7 @@ function animate(C, S, dt, o) {
   if (o.leanAdd !== undefined) S.leanAdd = o.leanAdd; // 'sit' 再多往前傾幾弧度（腳踏車：手才握得到低低的把手）
   const want = o.state;
   if (want && want !== S.state && STATES[want]) request(C, S, want, o);
-  S.t += dt; S.time += dt; S.rec += dt;
+  S.t += dt; S.time += dt; S.rec += dt; if (S.eatD) { S.eatT += dt; if (S.eatT >= S.eatD) S.eatD = 0; }
   const T1 = ONCE_T[S.state];
   if (T1 && S.t >= T1) switchTo(C, S, S.state === 'shoot' ? 'aim' : 'idle');
   if (S.state === 'fall' && S.upAt >= 0 && S.t >= S.upAt) switchTo(C, S, 'getup');
@@ -2566,6 +2579,7 @@ function animate(C, S, dt, o) {
     baseStand(M, P);
     gait = st === 'walk' || st === 'run' || ((st === 'aim' || st === 'shoot') && speed > 0.15);
     if (gait) { gaitStep(S, M, dt, speed, st === 'run'); gaitBody(S, M, P, speed); } else { idleFeet(S, M, dt); idleBody(S, M, P, S.time); }
+    const eatW = st === 'punch' || st === 'aim' || st === 'shoot' ? 0 : eatK(S); if (eatW) { P[SO[1] + X_FI] = lerp(P[SO[1] + X_FI], 1.35, eatW); P[SO[1] + X_TH] = lerp(P[SO[1] + X_TH], 0.7, eatW); }
     if (st === 'talk') talkBody(S, M, P, S.time, sstep(0, 0.4, S.t));
     else if (st === 'wave') waveBody(S, M, P, S.t);
     else if (st === 'punch') { punchBody(S, M, P, S.t); const w = punchW(S.t).on; for (const k of SO) { P[k + X_FI] = lerp(P[k + X_FI], 1.5, w); P[k + X_TH] = lerp(P[k + X_TH], 0.9, w); } }
@@ -2578,6 +2592,7 @@ function animate(C, S, dt, o) {
     if (st === 'aim' || st === 'shoot') aimArms(S, M);
     else if (st === 'punch') punchArms(S, M, S.t);
     else if (back) backHands(S, M);
+    if (eatW) eatArm(S, M, eatW);
   } else if (st === 'sit') {
     S.home = false;
     sitBody(S, M, P, o);
@@ -2585,6 +2600,7 @@ function animate(C, S, dt, o) {
     lookBody(C, S, M, P, dt, true);
     fk(P, S.Q); S.HP[0] = P[CI.hx]; S.HP[1] = P[CI.hy]; S.HP[2] = P[CI.hz];
     sitLegs(S, M); toesIK(S, M); sitArms(S, M, o);
+    const eatS = eatK(S); if (eatS) eatArm(S, M, eatS);
   } else { // fall、getup
     S.home = false;
     keyedBody(S, M, P);
@@ -2712,6 +2728,8 @@ function buildCharacter(look = {}, opts = {}) {
     update(dt, o) { animate(C, C.anim, dt, o || NO_OPTS); if (C.shadow) placeShadow(C); },
     lookAt(x, y, z) { const S = C.anim; if (x === null || x === undefined || x === false) S.look = null; else { S.look = S.look || new THREE.Vector3(); if (typeof x === 'object') S.look.copy(x); else S.look.set(+x || 0, +y || 0, +z || 0); } },
     recoil() { C.anim.rec = 0; },
+    eat(sec = 2) { C.anim.eatT = 0; C.anim.eatD = Math.max(0.8, sec); }, // 第 84 批：右手拿東西到嘴巴（站著、走路、坐著都可以；sec 秒，前後 0.35 秒舉起來、放下）
+    get eating() { return C.anim.eatD > 0; },
     dispose() { group.removeFromParent(); mesh.geometry.dispose(); skeleton.dispose(); },
   };
   if (opts.shadow !== false) { const sh = shadowMat(); C.shadow = new THREE.Mesh(sh.geo, sh.mat); C.shadow.name = 'character-shadow'; C.shadow.position.y = 0.012; C.shadow.renderOrder = -1; group.add(C.shadow); C.info.draws = 2; }

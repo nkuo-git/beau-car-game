@@ -41,3 +41,12 @@ Nick 2026-11-09: 「你去查那些車是如何開後車箱的 不是直接在�
 
 ## Test
 mart-test: GC8 checks the lid is cut (lids > 0, > 300 triangles, body not whole while open, whole again after closing). `MCAR=yaris|p918|jp4|p8` (any car in TRUNK_KIND works) run the trunk part only: kind, angle, cut, put 4 things → 2 bags, close → body whole.
+
+## Batch 84 (trial v95): eat / drink from the bag, take things out of the trunk
+Nick: 「食物可以拿出來吃」 → mock Jz22TfmdCqk5R49G1QkxMC, chose 「照這樣做」 (no effect from eating, ice cream doesn't melt).
+- Bag list (`martHud`): one row per item kind with 「吃」/「喝」 (`MART_FOOD`: drink/water 喝, toycar not edible → 「不能吃」). Pill also shows while seated (`martSeated` = PAX or HOP), placed under `.ps-who`.
+- `martEat(k)`: removes one from the bag (and from `stolen`), attaches `martFoodMesh(k)` to `C.hand`, `C.eat(2)`; walking → `walker.setInput({x:0,y:0})` so you stop; two crunch/gulp sounds at 0.7 s / 1.35 s (`martEatSnd`, engine bus). `martEatStep` (start of `martStep`): seated character gets `C.update(dt, MYSIT.P)` each frame while eating (normally static); first person (seat `SCAM.mode === 'eye'` or walker `cameraMode === 'eye'`) shows a clone in front of `dcam`. Ends with toast 「😋 好吃！X」/「好喝」 and `setInput(null)`.
+- character.js: `C.eat(sec)`, `C.eating`; `eatK` blend (0.35 s in/out), `eatArm` = right-arm IK target in front of the mouth (head bone frame), hand orientation `QB_EAT`, small bite motion; fingers curl. Applied in the stand branch (not while punching/aiming) and the sit branch.
+- Trunk: open with items → second button 「拿出來」 (`trunkTake`: all items back to the bag, `GAME.trunk[cur] = []`, save).
+- Driving: `martCanEat()` false and the pill hides.
+- mart-test section 6 (GC8 only): take out, list rows, eat chips walking (stop, hand +0.73 m, toast), drink water, sit in passenger seat and eat an egg (first-person clone 0.32 m from camera), get in to drive → pill hidden.

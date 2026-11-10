@@ -70,6 +70,87 @@ function martArrest() { // 被抓：偷的東西還給超商
   setTimeout(() => walker?.toast('偷的東西還給超商了', 2200), 2500);
 }
 
+// ---- 第 84 批：袋子裡的東西「吃」「喝」（Nick 2026-11-10 卡片選「照這樣做」；草稿 https://claude.ai/artifact/Jz22TfmdCqk5R49G1QkxMC ）----
+//   左上「🛍 袋子」打開：每樣一行「吃」（飲料、礦泉水「喝」；玩具小車不能吃）→ 人停下來、右手拿到嘴巴 2 秒（character.js eat()）、咔滋／咕嚕 → 「😋 好吃！洋芋片」、那一樣不見
+//   走路、坐在車上（坐別的位子、坐朋友的車）都可以；自己開車的時候不行。吃了沒有效果（Nick 沒選「吃了跑快一點」）、冰淇淋不會融化
+const MART_FOOD = { drink: { v: '喝', s: 'gulp' }, water: { v: '喝', s: 'gulp' }, onigiri: { v: '吃', s: 'crunch' }, bread: { v: '吃', s: 'crunch' }, noodle: { v: '吃', s: 'crunch' },
+  chips: { v: '吃', s: 'crunch' }, icecream: { v: '吃', s: 'gulp' }, egg: { v: '吃', s: 'crunch' } };
+const martSeated = () => !!(PAX.on || HOP.on) && !!MYSIT.C;
+function martCanEat() {
+  if (!DRIVE.on || !walker || RACE.on || sleep || jailed() || doorFade) return false;
+  return walker.mode === 'walk' || martSeated();
+}
+const MART_FOODG = {};
+function martFoodMesh(k) { // 手上拿的（手的座標：+x 手指、+y 大拇指＝上）；每種做一次
+  if (MART_FOODG[k]) return MART_FOODG[k];
+  const g = new THREE.Group(), c = MART_ITEMS[k]?.c || '#ccc', M = (col, o) => new THREE.MeshStandardMaterial({ color: col, roughness: 0.6, ...o });
+  const add = (geo, m, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); g.add(o); return o; };
+  if (k === 'drink' || k === 'water') { const h = k === 'water' ? 0.14 : 0.12; add(new THREE.CylinderGeometry(0.03, 0.03, h, 14), M(c, k === 'water' ? { transparent: true, opacity: 0.75, roughness: 0.2 } : {})); add(new THREE.CylinderGeometry(0.014, 0.014, 0.02, 10), M('#f2f2f2'), 0, h / 2 + 0.01); }
+  else if (k === 'onigiri') { const o = add(new THREE.CylinderGeometry(0.05, 0.05, 0.035, 3), M(c)); o.rotation.set(Math.PI / 2, 0, Math.PI / 2); add(new THREE.BoxGeometry(0.036, 0.04, 0.04), M('#1d2a1f'), 0, -0.022); }
+  else if (k === 'bread') add(new THREE.BoxGeometry(0.06, 0.1, 0.05), M(c, { roughness: 0.9 }));
+  else if (k === 'noodle') { add(new THREE.CylinderGeometry(0.045, 0.035, 0.075, 16), M(c)); add(new THREE.CylinderGeometry(0.046, 0.046, 0.004, 16), M('#f6f3ea'), 0, 0.039); }
+  else if (k === 'chips') add(new THREE.BoxGeometry(0.03, 0.13, 0.095), M(c, { roughness: 0.35 }));
+  else if (k === 'icecream') { const o = add(new THREE.ConeGeometry(0.026, 0.085, 12), M('#d39a52', { roughness: 0.9 }), 0, -0.02); o.rotation.x = Math.PI; add(new THREE.SphereGeometry(0.032, 14, 10), M(c), 0, 0.035); }
+  else if (k === 'egg') { const o = add(new THREE.SphereGeometry(0.025, 14, 10), M(c)); o.scale.y = 1.25; }
+  else add(new THREE.BoxGeometry(0.05, 0.08, 0.05), M(c));
+  g.name = 'mart-food'; g.position.set(0.03, 0.06, 0);
+  return (MART_FOODG[k] = g);
+}
+function martEatSnd(kind, at) { // 咔滋（餅乾、飯糰⋯：雜音一下一下）、咕嚕（喝的：低音往下滑）；跟引擎聲同一條總輸出（音量、靜音）
+  try {
+    const ctx = engineAudio.context, out = engineAudio.input; if (!ctx || !out || engineAudio.muted) return;
+    const t0 = ctx.currentTime + at;
+    if (kind === 'crunch') {
+      if (!MART.noise) { const n = ctx.sampleRate * 0.2 | 0, b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; MART.noise = b; }
+      for (const d of [0, 0.09, 0.17]) {
+        const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = MART.noise; f.type = 'bandpass'; f.frequency.value = 2400 + Math.random() * 1200; f.Q.value = 0.9;
+        g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(0.32, t0 + d + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.07);
+        s.connect(f); f.connect(g); g.connect(out); s.start(t0 + d); s.stop(t0 + d + 0.1); setTimeout(() => { try { g.disconnect(); } catch {} }, (at + d) * 1000 + 400);
+      }
+    } else {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(420, t0); o.frequency.exponentialRampToValueAtTime(140, t0 + 0.16);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.28, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+      o.connect(g); g.connect(out); o.start(t0); o.stop(t0 + 0.25); setTimeout(() => { try { g.disconnect(); } catch {} }, at * 1000 + 600);
+    }
+  } catch { /* 沒有聲音就算了 */ }
+}
+const martToast = (txt, ms) => (martSeated() ? seatToast(txt, ms) : walker.toast(txt, ms));
+const MART_EAT_S = 2;
+function martEat(k) {
+  const f = MART_FOOD[k], i = MART.bag.indexOf(k);
+  if (MART.eat || i < 0) return;
+  if (!f) { martToast(`${martName(k)}不能吃啦`, 1400); return; }
+  if (!martCanEat()) { martToast('停下來（下車或坐別的位子）才能吃', 1600); return; }
+  const sit = martSeated(), C = sit ? MYSIT.C : walker.character; if (!C?.hand || !C.eat) return;
+  MART.bag.splice(i, 1); const j = MART.stolen.indexOf(k); if (j >= 0) MART.stolen.splice(j, 1);
+  const m = martFoodMesh(k); C.hand.add(m); C.eat(MART_EAT_S);
+  if (!sit) walker.setInput({ x: 0, y: 0 }); // 走路的人停下來吃
+  MART.eat = { k, C, m, sit, t: 0 }; MART.sig = null;
+  for (const at of [0.7, 1.35]) martEatSnd(f.s, at);
+}
+function martEatEnd(done) {
+  const E = MART.eat; if (!E) return; MART.eat = null; MART.sig = null;
+  E.m.removeFromParent(); E.fp?.removeFromParent();
+  if (!E.sit) walker?.setInput(null);
+  if (E.sit && E.C === MYSIT.C && MYSIT.S) E.C.update(1 / 30, MYSIT.P); // 坐著的：手放回去
+  if (done) martToast(`😋 ${MART_FOOD[E.k].v === '喝' ? '好喝' : '好吃'}！${martName(E.k)}`, 1600);
+}
+function martEatStep(dt) {
+  const E = MART.eat; if (!E) return;
+  E.t += dt;
+  if (!DRIVE.on || (E.sit ? !martSeated() || E.C !== MYSIT.C : walker.mode !== 'walk' || walker.character !== E.C)) { martEatEnd(false); return; } // 上車開走、回車庫⋯：吃完了算了
+  if (E.sit && MYSIT.S) E.C.update(dt, MYSIT.P); // 坐著的人平常不動：吃的時候每一格動
+  // 第一人稱（自己看不到自己）：吃的東西從畫面下面拿上來到嘴巴前面（鏡頭這一格已經放好：seatsStep、walker 都在前面）
+  const fp = E.sit ? SCAM.on && SCAM.mode === 'eye' : walker.cameraMode === 'eye';
+  if (fp && dcam) {
+    if (!E.fp) { E.fp = E.m.clone(); E.fp.name = 'mart-food-fp'; }
+    if (E.fp.parent !== TR.scene) TR.scene.add(E.fp);
+    const ss = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); }, k = ss(0, 0.35, E.t) * (1 - ss(MART_EAT_S - 0.35, MART_EAT_S, E.t)), bite = Math.max(0, Math.sin(Math.PI * 3.2 * E.t));
+    dcam.updateMatrixWorld(); E.fp.position.set(0.05, -0.36 + 0.26 * k, -0.3 + 0.03 * bite * k).applyMatrix4(dcam.matrixWorld); dcam.getWorldQuaternion(E.fp.quaternion);
+  } else E.fp?.removeFromParent();
+  if (E.t >= MART_EAT_S) martEatEnd(true);
+}
+
 // ---- 左上的籃子／袋子（按一下打開清單；超商裡面可以「放回」）----
 function martUI() {
   if (MART.ui) return MART.ui;
@@ -79,25 +160,25 @@ function martUI() {
     + '.mt-list{position:absolute;top:48px;left:10px;z-index:30;min-width:190px;max-width:calc(100% - 20px);max-height:50%;overflow:auto;padding:6px;border-radius:12px;background:rgba(14,15,18,0.85);color:#fff;font:500 13px/1.3 system-ui,sans-serif}'
     + '.mt-list div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 6px}'
     + '.mt-list button{border:0;border-radius:999px;padding:4px 10px;background:#f39a1e;color:#1d2420;font:700 12px/1 system-ui,sans-serif;cursor:pointer}'
-    + '.mt-list p{margin:4px 6px;color:#c9d1cc;font-size:12px}';
+    + '.mt-list p{margin:4px 6px;color:#c9d1cc;font-size:12px}.mt-list .mt-no{color:#c9d1cc;font-size:12px}';
   document.head.appendChild(st);
   const pill = document.createElement('button'); pill.type = 'button'; pill.className = 'mt-pill'; pill.hidden = true;
   const list = document.createElement('div'); list.className = 'mt-list'; list.hidden = true;
   pill.addEventListener('click', (e) => { e.stopPropagation(); MART.open = !MART.open; MART.sig = null; });
-  list.addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (!b) return; e.stopPropagation(); martPutBack(+b.dataset.i); });
+  list.addEventListener('click', (e) => { const b = e.target.closest('button[data-i], button[data-e]'); if (!b || b.disabled) return; e.stopPropagation(); if (b.dataset.e != null) martEat(b.dataset.e); else martPutBack(+b.dataset.i); });
   for (const el of [pill, list]) for (const ev of ['pointerdown', 'touchstart']) el.addEventListener(ev, (e) => e.stopPropagation(), { passive: true });
   stage.appendChild(pill); stage.appendChild(list);
   return (MART.ui = { pill, list });
 }
 function martHud() {
-  const show = DRIVE.on && walker && walker.mode === 'walk' && !doorFade && (MART.basket.length || MART.bag.length);
+  const sit = martSeated(), show = DRIVE.on && walker && (walker.mode === 'walk' || sit) && !doorFade && (MART.basket.length || MART.bag.length);
   if (!show && !MART.ui) return;
   const U = martUI(), inS = martInStore();
-  if (show) { // 左邊那一排（路線、大按鈕、第二顆）下面：哪幾顆在就排在它們下面
-    const L = [...stage.querySelectorAll('.wk-chip, .wk-act, .wk-act2')], key = L.map((e) => (e.hidden ? 0 : 1)).join('') + stage.clientHeight;
+  if (show) { // 左邊那一排（路線、大按鈕、第二顆）下面：哪幾顆在就排在它們下面；坐在車上：左上（坐朋友的車：「坐在 X 的車上」下面）
+    const L = sit ? [...stage.querySelectorAll('.ps-who')] : [...stage.querySelectorAll('.wk-chip, .wk-act, .wk-act2')], key = (sit ? 's' : '') + L.map((e) => (e.hidden ? 0 : 1)).join('') + stage.clientHeight;
     if (key !== MART.lay) { MART.lay = key; const top = stage.getBoundingClientRect().top; let y = 10; for (const e of L) if (!e.hidden) { const r = e.getBoundingClientRect(); if (r.height) y = Math.max(y, r.bottom - top + 8); } U.pill.style.top = `${Math.round(y)}px`; U.list.style.top = `${Math.round(y) + 38}px`; }
   }
-  const sig = show ? `${MART.basket.join()}|${MART.bag.join()}|${MART.open}|${inS}` : 'off';
+  const can = martCanEat(), sig = show ? `${MART.basket.join()}|${MART.bag.join()}|${MART.open}|${inS}|${can}|${!!MART.eat}` : 'off';
   if (sig === MART.sig) return; MART.sig = sig;
   U.pill.hidden = !show; if (!show) { U.list.hidden = true; return; }
   U.pill.textContent = MART.basket.length ? `🛒 籃子 ${MART.basket.length} 樣 · ${martSum(MART.basket)} 元` : `🛍 袋子 ${MART.bag.length} 樣`;
@@ -106,7 +187,13 @@ function martHud() {
   let h = '';
   MART.basket.forEach((k, i) => { h += `<div><span>${martName(k)} ${MART_ITEMS[k].p} 元</span>${inS ? `<button type="button" data-i="${i}">放回</button>` : ''}</div>`; });
   if (MART.basket.length) h += `<p>${inS ? '去櫃台結帳' : '還沒付錢！'}</p>`;
-  if (MART.bag.length) h += `<p>袋子：${martList(MART.bag)}${trunkOK(cur) ? '（走到車子後面放進後車廂）' : ''}</p>`;
+  if (MART.bag.length) { // 第 84 批：袋子裡每樣一行：吃／喝（玩具小車不能吃）
+    h += '<p>袋子：</p>';
+    const seen = new Map(); for (const k of MART.bag) seen.set(k, (seen.get(k) || 0) + 1);
+    for (const [k, n] of seen) { const f = MART_FOOD[k]; h += `<div><span>${martName(k)}${n > 1 ? ` ×${n}` : ''}</span>${f ? `<button type="button" data-e="${k}"${can && !MART.eat ? '' : ' disabled style="opacity:.45"'}>${f.v}</button>` : '<span class="mt-no">不能吃</span>'}</div>`; }
+    if (!can) h += '<p>停下來（下車或坐別的位子）才能吃</p>';
+    if (trunkOK(cur) && !sit) h += '<p>也可以走到車子後面放進後車廂</p>';
+  }
   U.list.innerHTML = h;
 }
 
@@ -262,8 +349,8 @@ function trunkRear(t) { // 打開的地方（世界）：後車廂＝車尾後�
 const TRUNK_ACT = {};
 function trunkAct(kind, what) { // 按鈕的字照種類：打開後車廂／打開前車廂／打開尾門（皮卡）
   const key = kind + what; if (TRUNK_ACT[key]) return TRUNK_ACT[key];
-  const nm = TRUNK_TXT[kind] || '後車廂', lab = what === 'open' ? (kind === 'drop' ? '放下尾門' : `打開${nm}`) : what === 'close' ? (kind === 'drop' ? '關尾門' : `關${nm}`) : (kind === 'drop' ? '放進車斗' : '放進去');
-  return (TRUNK_ACT[key] = { label: lab, icon: 'hand', onClick: what === 'open' ? () => trunkSet(1) : what === 'close' ? () => trunkSet(0) : trunkPut });
+  const nm = TRUNK_TXT[kind] || '後車廂', lab = what === 'open' ? (kind === 'drop' ? '放下尾門' : `打開${nm}`) : what === 'close' ? (kind === 'drop' ? '關尾門' : `關${nm}`) : what === 'take' ? '拿出來' : (kind === 'drop' ? '放進車斗' : '放進去');
+  return (TRUNK_ACT[key] = { label: lab, icon: 'hand', onClick: what === 'open' ? () => trunkSet(1) : what === 'close' ? () => trunkSet(0) : what === 'take' ? trunkTake : trunkPut });
 }
 function martTrunkAct(t) { // homeWalk（走路、在外面）：車子後面（前面）的大按鈕
   if (!DRIVE.on || !walker || walker.mode !== 'walk' || indoor || doorFade || sleep || jailed() || RACE.on) return null;
@@ -285,8 +372,14 @@ function trunkPut() {
   walker.toast(`放進${TRUNK_TXT[trunkVis(tripS).P.kind] || '後車廂'}了：${martList(MART.bag)}`, 2000);
   MART.bag = []; MART.stolen = []; MART.sig = null; save(true);
 }
+function trunkTake() { // 第 84 批：後車廂的東西全部拿出來放回袋子（才能吃）
+  const L = trunkItems(); if (!L.length || !tripS || !trunkOK(cur)) return;
+  MART.bag.push(...L); GAME.trunk[cur] = []; MART.sig = null; save(true);
+  walker.toast(`拿出來了：${martList(L)}（按左上的袋子可以吃）`, 2200);
+}
 // 每一格（seatsStep 後面）：蓋子慢慢翻、袋子、走遠了自己關、右邊第二顆「關後車廂」、左上的籃子
 function martStep(dt) {
+  martEatStep(dt);
   if (!DRIVE.on) { if (MART.vis) trunkDrop(); MART.basket = []; martHud(); return; }
   if (MART.basket.length && !martInStore() && !doorFade) { MART.basket = []; MART.sig = null; } // 沒有走大門出來（直接回車庫、被抓）：籃子裡的放回去
   if (MART.vis && (MART.vis.S !== tripS || !drv)) trunkDrop();
@@ -302,7 +395,8 @@ function martStep(dt) {
     if (V.cav) V.cav.visible = V.t > 0.02;
     const n = Math.min(4, Math.ceil(trunkItems().length / 3)), vis = V.P.bed || V.t > 0.3;
     for (let i = 0; i < 4; i++) V.bags[i].visible = vis && i < n;
-    if (t && V.want > 0 && MART.bag.length) walker.setAction2(trunkAct(V.P.kind, 'close')); // 開著、還有袋子：大按鈕「放進去」、右邊「關後車廂」
+    if (t && V.want > 0 && trunkItems().length) walker.setAction2(trunkAct(V.P.kind, 'take')); // 第 84 批：開著、裡面有東西：右邊「拿出來」（走遠了自己關）
+    else if (t && V.want > 0 && MART.bag.length) walker.setAction2(trunkAct(V.P.kind, 'close')); // 開著、還有袋子：大按鈕「放進去」、右邊「關後車廂」
   }
   martHud();
 }

@@ -24,7 +24,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__look = () => LOOKP; window.__cam = () => ({ maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
   + ' window.__T3 = THREE; window.__LK = () => LOOK; window.__box = (o) => new THREE.Box3().setFromObject(o); window.__GH = () => GH; window.__ghostUnpack = (g) => ghostUnpack(g); window.__ghostAt = (G, t, o) => ghostAt(G, t, o);' // 鬼影車排行榜（ghost.src.js）
-  + ' window.__MT = () => ({ MART, MART_ITEMS, trunkProbe, trunkVis, trunkRear, trunkItems, martInStore, tripS, cur, GAME, martArrest, indoor });'
+  + ' window.__MT = () => ({ MART, MART_ITEMS, MART_FOOD, trunkProbe, trunkVis, trunkRear, trunkItems, martInStore, tripS, cur, GAME, martArrest, indoor, martCanEat, PAX, MYSIT, SCAM, drv });'
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -345,6 +345,72 @@ if (FULL) {
   const r8 = await L(() => { window.__noDraw = true; window.__H.step(10); const M = window.__MT(); return { trunk: M.GAME.trunk.gc8?.join(), yuan: M.GAME.yuan, money: M.GAME.money, bag: M.MART.bag.length }; });
   console.log('5', el(), JSON.stringify(r8));
   check(r8.trunk?.split(',').length === 8 && r8.yuan === 9741 && r8.money === 469 && r8.bag === 0, `reloaded: the GC8's boot still has ${r8.trunk?.split(',').length} things, change 9741 元`);
+
+  // ---- 6 第 84 批：後車廂「拿出來」、袋子「吃」「喝」（走路、坐在車上；開車不行）----
+  const p6 = await L(() => { const D = window.__D(), H = window.__H, W = D.walker, c = D.tripS.car; c.updateMatrixWorld(); window.__noDraw = true;
+    for (const s of [1, -1]) { const q = new window.__T3.Vector3(0.2, 0, s * 1.45).applyMatrix4(c.matrixWorld); W.teleport({ x: q.x, z: q.z, heading: 0 }); H.step(20); if (/^上車/.test(H.actText() || '')) break; }
+    H.press(); H.board(); H.step(30);
+    const b = (window.__sb = D.VIL.buildings.find((q) => window.__IN().interiorFor(q)?.kind === 'store')), e = window.__IN().interiorFor(b).enter, r = b.rot || 0, nx = Math.sin(r), nz = Math.cos(r);
+    window.__D().drv.teleport({ x: e.x + nx * 7 + Math.cos(r) * 6, z: e.z + nz * 7 - Math.sin(r) * 6, heading: r }); window.__dstep(60);
+    H.press2(); let m = 0; for (; m < 400 && window.__D().walker.mode !== 'walk'; m++) H.step(1); H.step(20); return { mode: window.__D().walker.mode }; });
+  const t6 = await rear(), o6a = await pressAnd();
+  console.log('6', el(), JSON.stringify(p6), JSON.stringify(t6), JSON.stringify(o6a));
+  check(p6.mode === 'walk' && o6a.s === '打開後車廂' && o6a.act2 === '拿出來' && o6a.vis2, 'drove back to the store: opened the boot with 8 things inside; the second button says 「拿出來」');
+  const o6b = await L(() => { const H = window.__H, M = window.__MT(); document.querySelector('#stage .wk-act2').click(); H.step(5); const sv = JSON.parse(localStorage.getItem('carid.tune'));
+    return { bag: M.MART.bag.length, trunk: M.GAME.trunk.gc8.length, saved: sv.trunk.gc8.length, toast: H.toast(), pill: document.querySelector('.mt-pill')?.textContent, pv: H.visible('.mt-pill'), act2: window.__D().walker.action2 }; });
+  console.log('  take', JSON.stringify(o6b));
+  check(o6b.bag === 8 && o6b.trunk === 0 && o6b.saved === 0 && /拿出來了/.test(o6b.toast) && o6b.pv && /袋子 8 樣/.test(o6b.pill) && o6b.act2 === '關後車廂', `「拿出來」: the 8 things go back into the bag (boot empty, saved): 「${o6b.toast}」`);
+  // 袋子的清單：每樣一行，吃／喝，玩具小車不能吃
+  const o6c = await L(() => { const H = window.__H, M = window.__MT(); M.MART.bag.push('toycar', 'water', 'chips'); M.MART.sig = null; H.step(2); document.querySelector('.mt-pill').click(); H.step(3);
+    const rows = [...document.querySelectorAll('.mt-list div')].map((d) => ({ t: d.querySelector('span').textContent, b: d.querySelector('button')?.textContent || null, dis: !!d.querySelector('button')?.disabled }));
+    return { rows, keys: [...new Set(M.MART.bag)], can: M.martCanEat() }; });
+  console.log('  list', JSON.stringify(o6c));
+  const rowOf = (n) => o6c.rows.find((r) => r.t.startsWith(n));
+  check(o6c.can && o6c.rows.length === o6c.keys.length && rowOf('玩具小車')?.b === null && rowOf('礦泉水')?.b === '喝' && rowOf('洋芋片')?.b === '吃' && /×2/.test(rowOf('洋芋片')?.t) && o6c.rows.every((r) => !r.dis && (r.t.startsWith('玩具小車') ? !r.b : r.b === (/飲料|礦泉水/.test(r.t) ? '喝' : '吃'))),
+    `the bag list: one row per thing (${o6c.rows.map((r) => r.t + (r.b ? '「' + r.b + '」' : '（不能吃）')).join(' ')}); drinks 「喝」, the toy car can't be eaten`);
+  // 吃洋芋片：人停下來、右手拿到嘴巴、2 秒、「😋 好吃！洋芋片」、少一包
+  const eatAt = (k, seat) => L(([k, seat]) => { const H = window.__H, M = window.__MT(), D = window.__D(), C = seat ? M.MYSIT.C : D.walker.character, T = window.__T3, hp = () => C.hand.getWorldPosition(new T.Vector3());
+    const n0 = M.MART.bag.filter((q) => q === k).length, h0 = hp(); if (!seat) D.walker.setInput({ x: 0, y: 1 }); H.step(seat ? 2 : 30); const v0 = seat ? 0 : D.walker.telemetry().speed;
+    document.querySelector(`.mt-list button[data-e="${k}"]`).click(); H.step(60);
+    const fpo = M.MART.eat?.fp, fpIn = !!fpo?.parent, fpD = fpIn ? +fpo.position.distanceTo(D.dcam.getWorldPosition(new T.Vector3())).toFixed(2) : null;
+    const h1 = hp(), mid = { eating: C.eating, k: M.MART.eat?.k, food: C.hand.children.some((o) => o.name === 'mart-food'), up: +(h1.y - h0.y).toFixed(2), sp: seat ? 0 : +D.walker.telemetry().speed.toFixed(2), n: M.MART.bag.filter((q) => q === k).length, fp: fpIn, fpD, eye: seat ? M.SCAM.mode : D.walker.cameraMode };
+    return { v0: +v0.toFixed(2), mid, n0 }; }, [k, seat]);
+  const eatEnd = (seat) => L((seat) => { const H = window.__H, M = window.__MT(), D = window.__D(), C = seat ? M.MYSIT.C : D.walker.character; H.step(75);
+    const toast = seat ? document.querySelector('#stage .ps-toast')?.textContent : H.toast(); if (!seat) D.walker.setInput(null);
+    return { toast, eating: C.eating, food: C.hand.children.some((o) => o.name === 'mart-food'), busy: !!M.MART.eat }; }, seat);
+  const e1 = await eatAt('chips', false);
+  console.log('  eat chips', JSON.stringify(e1));
+  check(e1.v0 > 0.5 && e1.mid.eating && e1.mid.k === 'chips' && e1.mid.food && e1.mid.up > 0.3 && e1.mid.sp < 0.1 && e1.mid.n === e1.n0 - 1, `「吃」 chips while walking: you stop (${e1.v0} → ${e1.mid.sp} m/s), the right hand comes up ${e1.mid.up} m to the mouth holding the bag`);
+  await drawAndShot('6-eat-walk');
+  const e1b = await eatEnd(false);
+  console.log('  done', JSON.stringify(e1b));
+  check(e1b.toast === '😋 好吃！洋芋片' && !e1b.eating && !e1b.food && !e1b.busy, `after 2 s: 「${e1b.toast}」, the food is gone from the hand`);
+  const e2 = await eatAt('water', false), e2b = await eatEnd(false);
+  console.log('  drink', JSON.stringify(e2), JSON.stringify(e2b));
+  check(e2.mid.eating && e2.mid.food && e2.mid.n === e2.n0 - 1 && e2b.toast === '😋 好喝！礦泉水', `「喝」 water: 「${e2b.toast}」`);
+  // 坐在副駕駛座吃
+  const st6 = await L(() => { const H = window.__H, M = window.__MT(), D = window.__D(), W = D.walker; M.MART.vis.want = 0; H.step(60);
+    const car = W.cars.find((c) => c.key === M.cur), cs = Math.cos(car.heading), sn = Math.sin(car.heading);
+    W.teleport({ x: car.x + sn * (car.hz + 1.0), z: car.z + cs * (car.hz + 1.0), heading: car.heading + Math.PI / 2 }, { keepCamera: false }); H.step(40);
+    const a2 = W.action2; document.querySelector('#stage .wk-act2').click(); H.step(2); document.querySelector('#stage .sp-seat[data-i="1"]').click();
+    let n = 0; for (; n < 1200 && !(M.PAX.on && W.mode === 'off'); n++) H.step(1); window.__dstep(60);
+    document.querySelector('.mt-pill').click(); window.__dstep(3); if (!window.__H.visible('.mt-list')) { document.querySelector('.mt-pill').click(); window.__dstep(3); }
+    return { a2, pax: M.PAX.on, i: M.PAX.i, can: M.martCanEat(), pill: window.__H.visible('.mt-pill'), list: window.__H.visible('.mt-list'), btns: [...document.querySelectorAll('.mt-list button[data-e]')].filter((b) => !b.disabled).length }; });
+  console.log('  seat', JSON.stringify(st6));
+  check(st6.a2 === '選位子' && st6.pax && st6.i === 1 && st6.can && st6.pill && st6.list && st6.btns > 3, `sat in the passenger seat: the bag is still top-left and its 「吃」「喝」 buttons work (${st6.btns})`);
+  const e3 = await eatAt('egg', true);
+  await L(() => window.__H.step(0)); await drawAndShot('6-eat-seat');
+  const e3b = await eatEnd(true);
+  console.log('  eat seated', JSON.stringify(e3), JSON.stringify(e3b));
+  check(e3.mid.eating && e3.mid.food && e3.mid.up > 0.2 && e3.mid.n === e3.n0 - 1 && e3b.toast === '😋 好吃！茶葉蛋' && !e3b.food, `ate a tea egg sitting in the car (hand up ${e3.mid.up} m): 「${e3b.toast}」`);
+  check(e3.mid.eye === 'eye' && e3.mid.fp && e3.mid.fpD > 0.15 && e3.mid.fpD < 0.5 && e1.mid.eye === 'follow' && !e1.mid.fp, `first person in the seat: the egg is held up in front of the camera (${e3.mid.fpD} m away); the walking camera from behind shows the hand instead`);
+  // 開車的時候不能吃（袋子收起來）
+  const d6 = await L(() => { const H = window.__H, M = window.__MT(), D = window.__D(), W = D.walker; document.querySelector('#stage .ps-out').click();
+    let n = 0; for (; n < 600 && W.mode !== 'walk'; n++) H.step(1); H.step(30);
+    const car = W.cars.find((c) => c.key === M.cur); W.teleport({ x: car.x + Math.sin(car.heading) * (car.hz + 0.6), z: car.z + Math.cos(car.heading) * (car.hz + 0.6), heading: 0 }); H.step(30);
+    const a = H.press(); H.board(); H.step(30); return { a, mode: W.mode, can: M.martCanEat(), pill: H.visible('.mt-pill'), bag: M.MART.bag.length }; });
+  console.log('  drive', JSON.stringify(d6));
+  check(/^上車/.test(d6.a || '') && d6.mode === 'off' && !d6.can && !d6.pill && d6.bag > 0, 'got in to drive: no eating while driving (the bag pill hides; the things stay in the bag)');
 } else {
   // ---- 別的車：照真的車怎麼開（第 83 批）：YARIS 掀背、918 前車廂、J4 側開、P8 尾門往下 ----
   const KIND = { yaris: 'hatch', supra: 'hatch', rx7: 'hatch', ae86: 'hatch', civic: 'hatch', p918: 'frunk', sp3: 'frunk', jesko: 'frunk', chiron: 'frunk', aventador: 'frunk', huayra: 'frunk', laferrari: 'frunk', jp4: 'swing', k2: 'swing', p8: 'drop' }[K] || 'trunk'; // 照真的車（中置引擎的超跑放前面）
