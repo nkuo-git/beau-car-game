@@ -175,10 +175,10 @@ function drawFrontLivery(style = 'ff', kit = 'bomex') {
   g.clearRect(-2, -1, 4, 3);
   if (style !== 'ff') return c;
   g.fillStyle = g.strokeStyle = '#0d0e0d';
-  if (kit === 'stock') { emblem(g); return c; } // 原廠保桿上沒有 NOS、STILLEN 那些，只留車頭的圖騰
+  if (kit === 'stock') { emblem(g); return c; } // 原廠保桿上沒有那些貼紙，只留車頭的圖騰
   for (const s of [1, -1]) {
-    text(g, 'NOS', 0.765 * s, 0.285, 0.034, { italic: true });
-    text(g, 'STILLEN', 0.64 * s, 0.155, 0.03, { italic: true, weight: 900 });
+    text(g, 'N2O', 0.765 * s, 0.285, 0.034, { italic: true }); // 第 87 批：以前是真的牌子，換成自己編的字
+    text(g, 'BEAU', 0.64 * s, 0.155, 0.03, { italic: true, weight: 900 });
   }
   text(g, '12', -0.21, 0.198, 0.125, { italic: true, skew: 0.25 });
   emblem(g);
@@ -303,9 +303,9 @@ export function drawLivery(side, style = 'ff') {
   line(g, [[0.46, 0.575], [0.30, 0.575]], 0.004); line(g, [[0.08, 0.60], [0.26, 0.585]], 0.004);
   g.fillStyle = '#e9ecef'; g.beginPath(); g.arc(0.61, 0.565, 0.025, 0, Math.PI * 2); g.fill(); g.stroke(); // 拳頭
   g.restore();
-  // 下面一排贊助商貼紙（黑字、斜體）
+  // 下面一排贊助商貼紙（黑字、斜體；第 87 批：以前是真的牌子，換成自己編的字）
   g.fillStyle = INK;
-  const names = ['NOS', 'SPARCO', 'DAZZ', 'HKS', 'TRD', 'GREDDY'];
+  const names = ['N2O', 'BEAU', 'DRAGON', 'TURBO', 'GT', 'NITRO'];
   names.forEach((t, i) => text(g, t, 0.55 - i * 0.24, 0.31, 0.036, { italic: true, mirror: side < 0 }));
   return c;
 }

@@ -39,7 +39,7 @@ const DRIVERS = {
 };
 const OPPS = [
   { id: 'classmate', name: '隔壁同學', sub: '剛拿到駕照', key: 'gc8', hp: 280, tyre: 0, drv: 'rookie', prize: 5, look: { paint: '#f2f3f5', rim: 'chrome', wing: 'none', livery: 'none' } },
-  { id: 'uncle', name: '巷口阿伯', sub: '開 Yaris 去買菜', key: 'yaris', hp: 300, tyre: 0, drv: 'ok', prize: 12, look: { paint: '#0e0f11', rim: 'black', wing: 'stock', livery: 'none' } },
+  { id: 'uncle', name: '巷口阿伯', sub: '開小車去買菜', key: 'yaris', hp: 300, tyre: 0, drv: 'ok', prize: 12, look: { paint: '#0e0f11', rim: 'black', wing: 'stock', livery: 'none' } },
   { id: 'courier', name: '送貨小哥', sub: '趕著送貨', key: 'gc8', hp: 400, tyre: 1, drv: 'good', prize: 25, parts: ['exhaust', 'turbo'], look: { paint: '#c3c8ce', rim: 'gunmetal', wing: 'lip', livery: 'none' } },
   { id: 'nightmarket', name: '夜市小霸王', sub: '車子整台都是紫的', key: 'supra', hp: 650, tyre: 1, drv: 'good', prize: 60, parts: ['exhaust', 'intake', 'ecu'], look: { paint: '#5b2d9e', rim: 'chrome', rimStyle: 'fan', glow: '#9b4dff', wing: 'gt', kit: 'bomex', livery: 'flames' } },
   { id: 'shop', name: '修車廠老闆', sub: '自己改的 R34', key: 'gtr', hp: 750, tyre: 1, drv: 'good', prize: 150, parts: ['exhaust', 'turbo', 'ecu'], look: { paint: '#141518', rim: 'gunmetal', rimStyle: 'mesh', wing: 'swan', kit: 'stock', livery: 'none' } },

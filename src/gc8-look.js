@@ -131,7 +131,7 @@ export const GC8_LOOK = (() => {
     ]);
   }
 
-  // ---- 拉花：照片那台的 STI 貼紙（後葉子板的爪痕＋WRX 字、車門的細線）----
+  // ---- 拉花：照片那台的貼紙樣子（後葉子板的爪痕＋字、車門的細線；第 87 批起字是自己編的 BEAU）----
   function livery(sd, style = 'wrx') {
     const { c, g } = canvas(BOX.side);
     g.clearRect(-3, -1, 6, 3);
@@ -148,11 +148,11 @@ export const GC8_LOOK = (() => {
       const x0 = -0.905 + i * 0.047, h = 0.10 - i * 0.008, w = 0.02 - i * 0.0012;
       poly(g, [[x0, 0.548], [x0 + w * 0.7, 0.548], [x0 + 0.055 + w, 0.548 - h], [x0 + 0.05, 0.548 - h + 0.012]]); g.fill();
     }
-    // WRX 字：白字＋薄荷綠的邊
+    // 字：白字＋薄荷綠的邊（第 87 批：以前是真的車款字，換成自己的 BEAU）
     g.fillStyle = '#7fc9b0';
-    text(g, 'WRX', -0.706, 0.452, 0.058, { italic: true, mirror: sd < 0, skew: 0.25 });
+    text(g, 'BEAU', -0.706, 0.452, 0.050, { italic: true, mirror: sd < 0, skew: 0.25 });
     g.fillStyle = '#f4f5f6';
-    text(g, 'WRX', -0.709, 0.455, 0.056, { italic: true, mirror: sd < 0, skew: 0.25 });
+    text(g, 'BEAU', -0.709, 0.455, 0.048, { italic: true, mirror: sd < 0, skew: 0.25 });
     // 下面的粉紅細線＋小方塊
     g.fillStyle = '#e8246e';
     poly(g, [[-0.83, 0.424], [-0.62, 0.424], [-0.62, 0.419], [-0.83, 0.419]]); g.fill();

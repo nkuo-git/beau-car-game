@@ -142,7 +142,7 @@ export const GTR_LOOK = (() => {
     ]);
   }
 
-  // ---- 拉花：白色側條＋後葉子板的 GT-R 字（照片那台沒有拉花，所以預設關掉）----
+  // ---- 拉花：白色側條＋後葉子板的字（照片那台沒有拉花，所以預設關掉；第 87 批：以前寫車款名字，換成自己的 BEAU）----
   function livery(sd, style = 'ff') {
     const { c, g } = canvas(BOX.side);
     g.clearRect(-3, -1, 6, 3);
@@ -150,7 +150,7 @@ export const GTR_LOOK = (() => {
     g.fillStyle = '#f4f5f6';
     poly(g, [[-2.32, 0.365], [2.0, 0.335], [2.0, 0.375], [-2.32, 0.405]]); g.fill();
     poly(g, [[-2.32, 0.42], [2.0, 0.39], [2.0, 0.40], [-2.32, 0.43]]); g.fill();
-    text(g, 'GT-R', -1.10, 0.80, 0.095, { italic: true, mirror: sd < 0, skew: 0.2 });
+    text(g, 'BEAU', -1.10, 0.80, 0.095, { italic: true, mirror: sd < 0, skew: 0.2 });
     return c;
   }
   function frontLivery() { const { c, g } = canvas(BOX.front); g.clearRect(-2, -1, 4, 3); return c; }

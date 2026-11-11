@@ -3,6 +3,7 @@
 //   走上出口 1 的樓梯（高度 0 → 6、換成大廳那一層的碰撞）→ 天橋 → 大廳 → 走過閘門（嗶）→ 斜坡上月台（12.6）→ 月台的牌子；
 //   時間跳到往文德的車快到：叮咚、車停好、門開（車門、月台門一起）→ 走進車廂 → 門關了＝上車了、跟著車走 → 「下一站 文德」→ 到了（終點站）→「下車」在月台上 →
 //   走下斜坡、過閘門、天橋、出口 2 的樓梯回到街上（碰撞換回來）；車還停在港墘；截圖（街上、大廳、月台、車上、晚上）＋draw calls
+// 第 87 批 11：捷運站裡的小動物（大廳、月台、走路不穿牆、擋人、上車坐車到文德下車、從隧道來的下車、看得到）；列車的 key 過 180 秒不換
 // node mrt-test.mjs [../out/mrt/mt]
 import http from 'node:http';
 import fs from 'node:fs';
@@ -238,6 +239,87 @@ const escR = await p.evaluate(() => { const D = window.__D(), M = D.M, S = M.sta
 console.log('  escalator', JSON.stringify(escR));
 check(escR.ys[0] === 0 && escR.ys[escR.ys.length - 1] === 6 && escR.lvl === 1 && escR.ys.every((y, i) => i === 0 || y >= escR.ys[i - 1] - 0.01), `slow walk onto the 出口 1 escalator carries you up 0 → 6 (${escR.ys.join(' ')}), concourse level`);
 await shot('10-escalator');
+
+// ---- 11 第 87 批（Nick「捷運站也要有生物」）：捷運站裡的小動物；列車的 key 過 180 秒不會換（以前坐車剛好碰到就被當成開進隧道） ----
+console.log('== 11 捷運站的小動物 ==');
+const wrap = await p.evaluate(() => { const M = window.__D().M; M.setTime(178.5); window.__wstep(2); const a = M.trains().map((t) => ({ key: t.key, dir: t.dir, s: t.s }));
+  for (let i = 0; i < 150; i++) window.__wstep(1); const b = M.trains().map((t) => ({ key: t.key, dir: t.dir, s: t.s }));
+  return { t: +M.time.toFixed(1), a, same: a.filter((x) => b.some((y) => y.key === x.key && y.dir === x.dir && Math.abs(y.s - x.s) < 90)).length, gone: a.filter((x) => !b.some((y) => y.key === x.key)).map((x) => x.key + '@' + x.s) }; });
+console.log('  wrap', JSON.stringify(wrap));
+check(wrap.t < 10 && wrap.a.length >= 2 && wrap.gone.every((g) => { const s = +g.split('@')[1]; return s < I.sA + 150 || s > I.sB - 150; }) && wrap.same >= wrap.a.length - wrap.gone.length,
+  `the clock wrapped 180 → ${wrap.t} s and every train between the tunnels kept its key (${wrap.same}/${wrap.a.length}; gone only into a tunnel: ${JSON.stringify(wrap.gone)}) — a rider is not dropped halfway`);
+w = await walkTo(-16, 0.825, 0, 6, 0); // 港墘的大廳
+const zooAt = () => p.evaluate(() => { const D = window.__D(), M = D.M, A = M.animals(), bad = [];
+  for (const a of A) { if (a.lvl !== 1 && a.lvl !== 2) continue; if (!['idle', 'walk', 'queue'].includes(a.st)) continue; const S = M.stations[a.si];
+    const yOk = a.y === (a.lvl === 2 ? M.YP : M.YC), floor = a.lvl === 2 ? Math.abs(a.v) > 3.3 && Math.abs(a.v) < 10.4 && Math.sign(a.v) === a.sd && Math.abs(a.u) < 60 : Math.abs(a.v) < 11 && Math.abs(a.u) < 40;
+    const inCol = M.cols(a.si, a.lvl).some((c) => { const [cu, cv] = S.loc(c.x, c.z); return Math.abs(a.u - cu) < c.hx - 0.02 && Math.abs(a.v - cv) < c.hz - 0.02; });
+    if (!yOk || !floor || inCol) bad.push({ ...a, yOk, floor, inCol }); }
+  return { A, bad }; });
+let z = await zooAt();
+const nOf = (A, f) => A.filter(f).length;
+const zs = { n: z.A.length, built: nOf(z.A, (a) => a.built), kinds: [...new Set(z.A.map((a) => a.k))].sort().join(','), hall: [0, 1].map((si) => nOf(z.A, (a) => a.si === si && a.lvl === 1)), plat: [0, 1].map((si) => [-1, 1].map((sd) => nOf(z.A, (a) => a.si === si && a.lvl === 2 && a.sd === sd))) };
+console.log('11', el(), JSON.stringify(zs), 'bad', JSON.stringify(z.bad));
+check(zs.n >= 12 && zs.built === zs.n && zs.kinds === 'cham,pig,pinky' && zs.hall.every((n) => n === 4) && zs.plat.every((s) => s.every((n) => n >= 1 && n <= 7)),
+  `animals live in both stations: ${zs.n} in all (pig, pinky, chameleon all there), concourse ${zs.hall.join('/')} (2 outside + 2 inside the gates), platforms ${zs.plat.map((s) => s.join('+')).join(' / ')} (each side)`);
+check(z.bad.length === 0, `every standing / walking animal is on its floor (concourse y 6, platform y 12.6 on its own side of the tracks) and not inside a wall, gate or bench (${z.bad.length ? JSON.stringify(z.bad.slice(0, 3)) : 'ok'})`);
+const mv = await p.evaluate(() => { const D = window.__D(), M = D.M, Z = M.zoo; const live = Z.list.filter((a) => !a.free && (a.lvl === 1 || a.lvl === 2) && a.si >= 0);
+  const p0 = live.map((a) => [a.x, a.z]); let fast = 0, wrong = 0, maxSp = 0, walking = 0; let last = live.map((a) => [a.x, a.z, a.st]);
+  for (let i = 0; i < 60 * 14; i++) { window.__wstep(1); if (i % 15 !== 14) continue;
+    live.forEach((a, j) => { const [x, z, st] = last[j]; if (st === 'ride' || a.st === 'ride' || a.free) { last[j] = [a.x, a.z, a.st]; return; } const sp = Math.hypot(a.x - x, a.z - z) / 0.25; maxSp = Math.max(maxSp, sp); if (sp > 1.4) fast++; if (a.st === 'walk') walking++; last[j] = [a.x, a.z, a.st]; }); }
+  const moved = live.filter((a, j) => !a.free && Math.hypot(a.x - p0[j][0], a.z - p0[j][1]) > 1).length;
+  return { live: live.length, moved, fast, maxSp: +maxSp.toFixed(2), walking }; });
+z = await zooAt();
+console.log('  14 s later', JSON.stringify(mv), 'bad', JSON.stringify(z.bad));
+check(mv.moved >= 4 && mv.walking > 10 && mv.fast === 0 && mv.maxSp < 1.2 && z.bad.length === 0, `14 s later ${mv.moved}/${mv.live} animals have walked somewhere else, never faster than ${mv.maxSp} m/s (slow animal walk), still on their floors and out of the walls`);
+// 擋路：一隻站著不動，你走過去會被擋住（走路的人撞得到）
+const blk = await p.evaluate(() => { const D = window.__D(), M = D.M, Z = M.zoo, W = D.walker;
+  const a = Z.list.find((a) => !a.free && a.si === 0 && a.lvl === 1 && a.C && (a.st === 'idle' || a.st === 'walk')); if (!a) return null;
+  a.st = 'idle'; a.t = 60; a.wp = null; a.v = 0; const N = a.N, S = N.S, [au, av] = S.loc(a.x, a.z);
+  let spot = null; for (let r = 2.4; r < 4 && !spot; r += 0.3) for (let k = 0; k < 16 && !spot; k++) { const an = (k / 16) * Math.PI * 2, u = au + Math.cos(an) * r, v = av + Math.sin(an) * r; let ok = true; for (let t = 0; t <= 1.0001 && ok; t += 0.05) { const i = Math.floor((au + (u - au) * t - N.U0) / 0.25), j = Math.floor((av + (v - av) * t - N.V0) / 0.25); ok = N.free[j * N.nu + i] === 1; } if (ok) spot = [u, v]; }
+  if (!spot) return { noSpot: true }; const [x, z] = S.toW(spot[0], spot[1]); M.py = 6; W.teleport({ x, z, heading: Math.atan2(-(a.z - z), a.x - x) }); window.__wstep(3);
+  const movers = M.movers.filter((m) => m.t === 'circle').length; let dmin = Infinity; W.setInput({ x: 0, y: 1 });
+  for (let i = 0; i < 60 * 5; i++) { window.__wstep(1); const t = W.telemetry(); dmin = Math.min(dmin, Math.hypot(t.x - a.x, t.z - a.z)); } W.setInput(null); a.t = 1;
+  return { kind: a.kind, r: +Math.min(0.42, a.C.radius || 0.35).toFixed(2), dmin: +dmin.toFixed(2), movers }; });
+console.log('  blocked', JSON.stringify(blk));
+check(blk && blk.movers >= 4 && blk.dmin > blk.r + 0.15, `walking straight at a standing ${blk && blk.kind}: you stop ${blk && blk.dmin} m from it (its radius ${blk && blk.r}); ${blk && blk.movers} animal colliders on this concourse`);
+// 截圖：站在一隻小動物前面 d 公尺、看著牠旁邊一點（鏡頭在你後面，人才不會擋住牠）
+const faceAnimal = (si, lvl, sd, d) => p.evaluate(([si, lvl, sd, d]) => { const D = window.__D(), M = D.M, Z = M.zoo, W = D.walker;
+  const list = Z.list.filter((a) => !a.free && a.C && a.si === si && a.lvl === lvl && (sd == null || a.sd === sd) && (a.st === 'idle' || a.st === 'queue' || a.st === 'walk'));
+  for (const a of list) { const N = a.N, S = N.S, [au, av] = S.loc(a.x, a.z);
+    for (const an of [0, Math.PI, 0.6, -0.6, Math.PI + 0.6, Math.PI - 0.6, Math.PI / 2, -Math.PI / 2]) { const u = au + Math.cos(an) * d, v = av + Math.sin(an) * d; let ok = true;
+      for (let t = 0; t <= 1.0001 && ok; t += 0.05) { const i = Math.floor((au + (u - au) * t - N.U0) / 0.25), j = Math.floor((av + (v - av) * t - N.V0) / 0.25); ok = i >= 0 && j >= 0 && i < N.nu && j < N.nv && N.free[j * N.nu + i] === 1; }
+      if (!ok) continue; a.st = 'idle'; a.t = 3; a.wp = null; a.v = 0; const [x, z] = S.toW(u, v); M.py = N.y; W.teleport({ x, z, heading: Math.atan2(-(a.z - z), a.x - x) + 0.45 }); window.__wstep(20); return a.kind; } }
+  return null; }, [si, lvl, sd, d]);
+const fa1 = await faceAnimal(0, 1, null, 3.2); console.log('  face', fa1);
+const sz1 = await shot('11-hall-animals');
+// 往文德的車進港墘：有的上車、坐車跟著車走（站在車廂裡、12.6）、到文德走出來站在月台上；從隧道開出來的車也帶小動物下車
+const zb = await p.evaluate(([ph, t0, t1, t0b]) => { const D = window.__D(), M = D.M, Z = M.zoo;
+  M.setTime(ph + t0 - 4); window.__wstep(1);
+  const on = (a) => !a.free && a.si === 0 && a.lvl === 2 && a.sd === 1 && a.st !== 'board' && a.st !== 'alight';
+  const before = Z.list.filter(on).length, pre = new Set(Z.list.filter((a) => !a.free));
+  const boarded = new Set(), rode = new Set(), fromTunnel = new Set(); let key = null, rideN = 0, rideBad = [], arrive = null;
+  for (let i = 0; i < 60 * (t0b - t0 + 24); i++) { window.__wstep(1);
+    for (const a of Z.list) { if (a.free) continue;
+      if (a.st === 'board' && a.si === 0 && a.sd === 1 && pre.has(a)) boarded.add(a); // 往文德那一邊（另一邊上的車往西開，開進隧道就不見了）
+      if (a.st === 'alight' && a.si === 0 && !pre.has(a)) fromTunnel.add(a);
+      if (a.st === 'ride' && boarded.has(a)) { rode.add(a); key = a.ride.key; rideN++; const tr = M.trains().find((t) => t.key === a.ride.key); const c = tr && tr.cars[a.ride.ci];
+        if (!c) rideBad.push('no car'); else { const dx = a.x - c.x, dz = a.z - c.z, lu = dx * c.ux + dz * c.uz, lv = -dx * c.uz + dz * c.ux; if (Math.abs(lu) > 6.9 || Math.abs(lv) > 1.28 || a.y !== M.YP) rideBad.push([+lu.toFixed(2), +lv.toFixed(2), a.y]); } } }
+    if (arrive == null && key) { const tr = M.trains().find((t) => t.key === key); if (tr && tr.si === 1 && tr.open > 0.7) arrive = +M.time.toFixed(1); }
+  }
+  const B = [...rode], end = B.map((a) => { const [u, v] = a.si >= 0 ? M.stations[a.si].loc(a.x, a.z) : [0, 0]; return { k: a.kind, st: a.st, si: a.si, lvl: a.lvl, y: +a.y.toFixed(2), u: +u.toFixed(1), v: +v.toFixed(1) }; });
+  const T = [...fromTunnel].map((a) => { const [u, v] = M.stations[0].loc(a.x, a.z); return { k: a.kind, st: a.st, lvl: a.lvl, y: +a.y.toFixed(2), u: +u.toFixed(1), v: +v.toFixed(1) }; });
+  return { before, boarded: boarded.size, rode: B.length, key, rideN, rideBad: rideBad.slice(0, 4), rideBadN: rideBad.length, arrive, end, T }; }, [dwell.phase, dw0.t0, dw0.t1, dw1.t0]);
+console.log('  ride', JSON.stringify(zb));
+check(zb.before >= 1 && zb.rode >= 1 && zb.key && zb.rideN > 600 && zb.rideBadN === 0, `the 往文德 train at 港墘: ${zb.rode} of the ${zb.before} animals waiting walked in through the doors and rode it (${zb.boarded} started to) (${zb.rideN} animal-frames inside their car, at floor 12.6, ${zb.rideBadN} outside)`);
+check(zb.arrive != null && zb.end.length >= 1 && zb.end.every((e) => e.si === 1 && e.lvl === 2 && e.y === 12.6 && e.v > 3.3 && e.v < 10.4 && ['idle', 'walk', 'queue'].includes(e.st)), `at 文德 (t ${zb.arrive}) they walked out onto the platform: ${JSON.stringify(zb.end)}`);
+check(zb.T.length >= (zb.before < 4 ? 1 : 0) && zb.T.every((e) => e.lvl === 2 && e.y === 12.6 && e.v > 3.3 && e.v < 10.4 && ['idle', 'walk', 'queue'].includes(e.st)), `the train coming out of the tunnel brought ${zb.T.length} animal(s) who got off at 港墘 and stand on the platform (${JSON.stringify(zb.T)})`);
+// 月台上（白天）：排隊、看得到；draw calls
+w = await walkTo(-14, 6.2, 0, 12.6, Math.PI / 2 + 0.5); await p.evaluate(() => window.__wstep(20)); const fa2 = await faceAnimal(0, 2, 1, 3.2); console.log('  face', fa2);
+const vis = await p.evaluate(() => { const D = window.__D(), M = D.M; let groups = 0, meshes = 0; M.group.traverse((o) => { if (/^mrt-animal-/.test(o.name) && o.visible) { groups++; o.traverse((m) => { if (m.isMesh) meshes++; }); } }); return { groups, meshes, near: M.animals().filter((a) => a.vis).length }; });
+const sz2 = await shot('11-platform-animals');
+console.log('  visible', JSON.stringify(vis));
+check(vis.groups >= 4 && vis.meshes === vis.groups * 2 && vis.near === vis.groups, `${vis.groups} animals drawn near you (2 meshes each = ${vis.meshes}), the far ones hidden`);
+check(sz1.calls > 40 && sz1.calls < 400 && sz2.calls > 40 && sz2.calls < 400, `with animals: concourse ${sz1.calls} calls / ${sz1.tris} tris, platform ${sz2.calls} / ${sz2.tris}`);
 
 check(errs.length === 0, `no page errors${errs.length ? ': ' + errs.join(' | ') : ''}`);
 await b.close(); srv.close();

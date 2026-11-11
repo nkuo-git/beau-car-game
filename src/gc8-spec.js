@@ -53,13 +53,13 @@ export const GC8_CAMS = {
 };
 
 export const GC8_GARAGE = {
-  name: 'Subaru Impreza WRX STI', sub: 'GC8 雙門 · 金色輪框那台 · 3D 試做版',
+  name: 'GC8 雙門拉力', sub: '藍色雙門 · 金色輪框那台 · 3D 試做版',
   paints: [['#1a4cc0', 'WR 藍'], ['#f2f3f5', '白'], ['#141518', '黑'], ['#c3c8ce', '銀'], ['#c8141e', '紅'], ['#f2c200', '音速黃'], ['#1e5b35', '綠']],
   opts: {
-    wing: [['sti', 'STI 尾翼'], ['none', '不要']],
+    wing: [['sti', '原廠尾翼'], ['none', '不要']],
     kit: [['stock', '原廠'], ['track', '賽道']],
     height: [['0', '原廠'], ['-0.03', '降低'], ['-0.05', '貼地']],
-    livery: [['wrx', 'WRX 貼紙'], ['none', '不要']],
+    livery: [['wrx', 'BEAU 貼紙'], ['none', '不要']],
   },
   state: { paint: '#1a4cc0', rim: 'gold', caliper: '#c8141e', wing: 'sti', kit: 'stock', height: '0', livery: 'wrx', tint: 'light' },
 };

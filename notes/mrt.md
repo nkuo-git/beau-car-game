@@ -94,3 +94,34 @@ Nick: station and train interior too dark, view out of the windows too dark, "ha
 - Could not reproduce the drop in the browser (both directions, 15 fps, walking around inside); these close the paths that would put a rider at street height.
 - neihu.js: vertical shop signs whose tip is in `N.mrtIn`, and road sign posts at/over the keep-out, are not built.
 - mrt-test 7b checks the pause, the push through the wall, the self-lit keys and the glass.
+
+## Batch 87 (trial v98, 2026-11-11): animals in the stations; train key no longer changes at the 180 s wrap
+
+Nick's original 2026-11-08 ask included 「捷運站也要有生物」; on 2026-11-11 he said 「做1. 2」 (1 = this).
+
+- `buildMrt(V, { makeAnimal })` — town.src.js passes animals.js `buildAnimal`. Nothing is built until the camera is within
+  400 m of a station (`zInit`), then up to 3 models per frame (`mrt-animal-<kind>`, 2 draw calls each, hidden past 90 m).
+- Per station: concourse 4 (2 in each of the two biggest walkable areas = outside / inside the gates), platform 3 per side.
+- Walking: per level a 0.25 m grid in station-local u/v (`zNav`): level colliders inflated 0.5 m, the stair/escalator
+  holes, the track (|v| < PV0) and the footbridge mouths blocked; 4-neighbour components so an animal never paths to an
+  area it can't reach. BFS (8-neighbour, no corner cutting) + greedy line-of-sight string-pull (`zPath`); at most one path
+  search per frame (`Z.budget`). They stop for you or another animal 0.75 m ahead and re-pick after 1.6 s blocked.
+- Platform life: 45 % of picks go to a free queue spot (door ± 1.35 m at v = PV0 + 0.95); doors in front of the stair hole
+  are skipped (`zDoorsOK`). When a train's doors open (`open > 0.7`, once per `key@si`, `Z.done` cleared when the doors
+  close): its riders alight (`zAlight`: door → PSD gap → platform cell); at the train's first stop it also brings up to 2
+  riders from the tunnel (`zPlaceRider`); then waiting animals board (`zBoard`): queueing ones always, others 55 %
+  (85 % when > 3), always leaving ≥ 1 on the platform; if none boarded, the one nearest a door (≤ 6 m) does. A boarder that
+  hasn't reached the doorway 2.4 s before the doors close goes back to the platform. Riders store car-local `lu/lv` and
+  follow the car; a rider whose train leaves the line (tunnel) is recycled (`st 'gone'`, record reused).
+- Walker collision: `zMovers` pushes a circle per standing/walking animal into `M.movers` (platform/concourse of your
+  station, or the riders of your car while you ride). Boarding/alighting animals don't block.
+- **Bug fixed while testing**: the train key was `dir:k mod 1000` with `k` from the wrapped clock (`time % 180`), so every
+  train got a new key at the wrap. A rider (you) was then treated as "列車開進隧道了" mid-ride and left in the air → fell to
+  the street. This is very likely Nick's batch-82 report 「開到一半我就突然跑到地面」 (a 46 s ride crosses the wrap about
+  one time in four; the test never did). Now `key = dir:(k + lap·CYCLE/H)` with `lap` counting wraps.
+- `M.trains()` now includes `key`; `M.animals()` and `M.zoo` are for tests.
+- mrt-test section 11: keys survive the wrap; counts per station/side, three kinds, floors/walls, 14 s of walking (speed
+  ≤ 1.2 m/s), you're blocked by a standing one, an eastbound dwell at 港墘 (some board, ride inside their car at 12.6,
+  walk out at 文德; tunnel riders get off at 港墘), visible count = 2 meshes each, draw calls.
+- Numbers (960×576, 高, same views as section 2): concourse 133 calls / 0.43M (v97 131), platform 198 / 0.54M (v97 194) —
+  +2 calls per animal in view; animal close-ups 108 / 0.32M and 96 / 0.25M. update+step stays small (≤ 1 path search a frame).

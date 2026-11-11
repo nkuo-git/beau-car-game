@@ -1,5 +1,5 @@
 <title>3D 車庫試做</title>
-<meta name="description" content="改車遊戲的 3D 車庫：照 Nick 的照片做的 Supra、R34 GT-R、法拉利 Daytona SP3、Koenigsegg Jesko、GR Yaris、Impreza GC8、保時捷 918，用手指轉著看，車色、輪框、卡鉗、尾翼、套件、寬體、車身高度、拉花、隔熱紙都能換，白色大理石車庫停你所有的車，走去坐上車、打開鐵捲門自己開出去（停下來可以下車走來走去）：開進改車廠買零件、開去車店買新車再開回家停好、在快速道路開到極速、開去賽道跑 400 公尺直線加速。">
+<meta name="description" content="改車遊戲的 3D 車庫：照 Nick 的照片做的 SUPRA、GT-R、SP3、JESKO、YARIS、GC8、918，用手指轉著看，車色、輪框、卡鉗、尾翼、套件、寬體、車身高度、拉花、隔熱紙都能換，白色大理石車庫停你所有的車，走去坐上車、打開鐵捲門自己開出去（停下來可以下車走來走去）：開進改車廠買零件、開去車店買新車再開回家停好、在快速道路開到極速、開去賽道跑 400 公尺直線加速。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
 <style>
@@ -83,7 +83,7 @@ body.fs .wrap > header { display: none; } /* 全螢幕（開車、比賽）：�
     <button type="button" class="cta buy" id="dealerBuy" hidden><b id="dealerBuyHead">買這台</b><span id="dealerBuyNote"></span></button>
     <div class="minirow"><button type="button" class="ghost" id="dealerHome">直接回車庫</button><span>不用開，一下就回到車庫</span></div>
   </section>
-  <div class="name"><b id="carName">Toyota Supra</b><span id="carSub">玩命關頭那台 · 3D 試做版</span></div>
+  <div class="name"><b id="carName">SUPRA 直六</b><span id="carSub">玩命關頭那台 · 3D 試做版</span></div>
   <p class="spec" id="carSpec"></p>
   <button type="button" class="cta" id="driveOut"><b>出門</b><span>走去坐上車，開鐵捲門開出去：改車廠、車店、賽車場、快速道路、越野車場</span></button>
   <div class="lookrow" id="lookRow"><div class="lr-top"><b>畫質</b><span>出門的畫面</span></div><div class="lr-seg" role="group" aria-label="畫質"><button type="button" data-l="2" aria-pressed="false">超高</button><button type="button" data-l="1" aria-pressed="false">高</button><button type="button" data-l="0" aria-pressed="false">普通</button></div><p class="lr-tip" id="lookTip"></p></div>
@@ -264,7 +264,7 @@ const PAINT_COMMON = [['#f2f3f5', '白'], ['#141518', '黑'], ['#c3c8ce', '銀']
 const SIZES = __SIZES__;
 const CARS = {
   supra: {
-    file: 'car-glb.txt', size: SIZES.supra, spec: SUPRA_SPEC, btn: ['SUPRA', '橘 · 玩命關頭'], name: 'Toyota Supra', sub: '玩命關頭那台 · 3D 試做版',
+    file: 'car-glb.txt', size: SIZES.supra, spec: SUPRA_SPEC, btn: ['SUPRA', '橘 · 玩命關頭'], name: 'SUPRA 直六', sub: '玩命關頭那台 · 3D 試做版',
     paints: [['#ff7414', '玩命關頭橘'], ...PAINT_COMMON, ['#1d4fb8', '藍']],
     opts: {
       wing: [['stock', '原廠'], ['gt', 'GT 大尾翼'], ['none', '不要']],
@@ -275,7 +275,7 @@ const CARS = {
     state: { paint: '#ff7414', rim: 'chrome', caliper: '#9da1a6', wing: 'gt', kit: 'bomex', height: '0', livery: 'ff', tint: 'light' },
   },
   gtr: {
-    file: 'car-gtr.txt', size: SIZES.gtr, spec: GTR_SPEC, btn: ['GT-R R34', '藍 · 玩命關頭 4'], name: 'Nissan Skyline GT-R', sub: '玩命關頭 4 那台 R34 · 3D 試做版',
+    file: 'car-gtr.txt', size: SIZES.gtr, spec: GTR_SPEC, btn: ['GT-R R34', '藍 · 玩命關頭 4'], name: 'GT-R 四驅', sub: '玩命關頭 4 那台 R34 · 3D 試做版',
     paints: [['#1d4fc9', '灣岸藍'], ...PAINT_COMMON, ['#ff7414', '橘']],
     opts: {
       wing: [['stock', '原廠'], ['gt', 'GT 大尾翼'], ['none', '不要']],
@@ -286,11 +286,11 @@ const CARS = {
     state: { paint: '#1d4fc9', rim: 'gunmetal', caliper: '#c8141e', wing: 'stock', kit: 'bomex', height: '-0.03', livery: 'none', tint: 'light' },
   },
   // 之後加的車：車子的名字、車色、選項、預設值寫在各自的 <KEY>_GARAGE（sp3-spec.js 等）
-  sp3: { file: 'car-sp3.txt', size: SIZES.sp3, spec: SP3_SPEC, btn: ['SP3', '法拉利 · 紅'], ...SP3_GARAGE },
-  jesko: { file: 'car-jesko.txt', size: SIZES.jesko, spec: JESKO_SPEC, btn: ['JESKO', '柯尼賽格 · 白'], ...JESKO_GARAGE },
+  sp3: { file: 'car-sp3.txt', size: SIZES.sp3, spec: SP3_SPEC, btn: ['SP3', '經典超跑 · 紅'], ...SP3_GARAGE },
+  jesko: { file: 'car-jesko.txt', size: SIZES.jesko, spec: JESKO_SPEC, btn: ['JESKO', '火箭超跑 · 白'], ...JESKO_GARAGE },
   /*__YARIS__*/
-  gc8: { file: 'car-gc8.txt', size: SIZES.gc8, spec: GC8_SPEC, btn: ['GC8', '速霸陸 · 藍'], ...GC8_GARAGE },
-  p918: { file: 'car-p918.txt', size: SIZES.p918, spec: P918_SPEC, btn: ['918', '保時捷 · 灰'], ...P918_GARAGE },
+  gc8: { file: 'car-gc8.txt', size: SIZES.gc8, spec: GC8_SPEC, btn: ['GC8', '雙門拉力 · 藍'], ...GC8_GARAGE },
+  p918: { file: 'car-p918.txt', size: SIZES.p918, spec: P918_SPEC, btn: ['918', '油電超跑 · 灰'], ...P918_GARAGE },
   // 2026-10-17 新的 10 台車（照 Wikimedia 照片做的；車名是自己編的，不能用真的牌子）
   rx7: { file: 'car-rx7.txt', size: SIZES.rx7, spec: RX7_SPEC, btn: ['R7', '轉子跑車 · 紅'], ...RX7_GARAGE },
   chiron: { file: 'car-chiron.txt', size: SIZES.chiron, spec: CHIRON_SPEC, btn: ['C16', '馬蹄超跑 · 藍'], ...CHIRON_GARAGE },
