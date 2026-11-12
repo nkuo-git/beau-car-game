@@ -564,11 +564,11 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - **真的牌子的字**：車庫頁的車名（Toyota Supra → SUPRA 直六、Nissan Skyline GT-R → GT-R 四驅、Subaru Impreza WRX STI → GC8 雙門拉力、Toyota GR Yaris → YARIS 小鋼砲、Ferrari Daytona SP3 → SP3 紅色經典、Koenigsegg Jesko Attack → JESKO 白色火箭、Porsche 918 Spyder → 918 油電）、按鈕下面那行（豐田 GR、法拉利、柯尼賽格、速霸陸、保時捷 → 小鋼砲、經典超跑、火箭超跑、雙門拉力、油電超跑）、選項（STI 尾翼、WRX 貼紙、GR 大尾翼、GR 條紋 → 原廠尾翼、BEAU 貼紙、大尾翼、賽車條紋）、GC8／GT-R 車身上的字（WRX、GT-R → BEAU）、SUPRA 的貼紙（NOS、STILLEN、SPARCO、HKS、TRD、GREDDY⋯ → N2O、BEAU、DRAGON、TURBO、GT、NITRO）、比賽對手「開 Yaris 去買菜」→「開小車去買菜」。存檔的 key（`wrx`、`gr`、`sti`）沒改，舊存檔照樣讀。
   - 測試：mrt-test 46 ok（第 11 段，新的）、neihu-test 45、test-b1 160（「直接回車庫」那一項以前用 /Yaris/ 認車名，改成 /YARIS/i；test-app-b1 一樣）、animal-test 24、free-test 2。效能：港墘大廳 133 calls（v97 131）、月台 198（v97 194）：畫面裡每隻 +2。說明在 `notes/mrt.md` 第 87 批。
   - 2026-11-11 放上試做頁（只換頁面；artifact 第 100 版）。
-- **試做頁 v99（2026-11-12；第 88 批）＝ 短的車名也換成自己編的**：第 87 批留著的短代號，Nick 卡片「SUPRA、GT-R、YARIS 這些短的車名也要換掉嗎？」選「也換掉」。
+- **試做頁 v99（2026-11-12；第 88 批；artifact 第 101 版）＝ 短的車名也換成自己編的**：第 87 批留著的短代號，Nick 卡片「SUPRA、GT-R、YARIS 這些短的車名也要換掉嗎？」選「也換掉」。
   - 車名（按鈕上、車店、跳出來的字、排行榜、朋友看到的都用 `CARS[k].btn[0]`）：SUPRA → **SU6**（「SU6 直六」、直六跑車 · 橘）、GT-R R34 → **R34**（「R34 四驅」、四驅跑車 · 藍、「照 Nick 的藍色小車做的」）、YARIS → **YR3**、JESKO → **JS8**、918 → **PH9**、SP3 → **DT3**。key、存檔都沒變。
   - 引擎：PERF `eng`、sound.js 的 `name` 換成排氣量＋汽缸（EJ20 → 2.0 水平對臥四缸渦輪、G16E → 1.6 三缸渦輪、2JZ → 3.0 直六雙渦輪、RB26 → 2.6 直六雙渦輪、13B → 1.3 雙轉子、4A-GE → 1.6 直列四缸、4G63／K20C → 2.0）；零件「TD05 大渦輪」→「雙滾珠大渦輪」、「RB28 鍛造曲軸」→「2.8 鍛造曲軸」、說明裡的 2JZ／4G63 →「引擎」；918 駕駛座螢幕 E-POWER → HYBRID。
   - 「玩命關頭」：SU6、R34 的套件 bomex →「街頭」、SU6 的拉花 ff →「綠色火焰」、車色「火焰橘」、說明「橘色直六雙渦輪」。
-  - 測試認車名的地方跟著改（test-b1／test-app-b1 車店 /JS8/、/SU6/、「SU6 停好了」、「上車 · YR3」、「YR3 發動中」、「DT3 坐電梯」；under-test「YR3 坐電梯」；drift-test「上車 · SU6」；online-test 排行榜 JS8、R34）。
+  - 測試：drift-test 66 ok、under-test 30、test-b1 160、free-test 2。認車名的地方跟著改（test-b1／test-app-b1 車店 /JS8/、/SU6/、「SU6 停好了」、「上車 · YR3」、「YR3 發動中」、「DT3 坐電梯」；under-test「YR3 坐電梯」；drift-test「上車 · SU6」；online-test 排行榜 JS8、R34）。
 - **還沒做（爸爸 2026-10-24 問，已回；前三項 v50 做了、路和房子內容 22 做了一部分）**：泥巴賽一起比；更多越野車（吉普車內容 28、小越野車 K2 內容 30、皮卡 P8 內容 31、沙灘車 Z2 內容 32 好了，其他一台一台做）；車子／建築再往目標圖靠近（新的 GC8 內容 29、A 柱和 B 柱內容 30、細節＋門縫＋車燈內容 31、GT-R 照影片重做內容 38 上線了）；iPhone 沒測；音量沒真的聽過。
 - **已知問題**
   - 內湖的路是平的（真的港墘一帶本來就很平）。
