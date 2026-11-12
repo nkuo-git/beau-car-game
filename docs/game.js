@@ -185,10 +185,10 @@ function drawFrontLivery(style = 'ff', kit = 'bomex') {
   g.clearRect(-2, -1, 4, 3);
   if (style !== 'ff') return c;
   g.fillStyle = g.strokeStyle = '#0d0e0d';
-  if (kit === 'stock') { emblem(g); return c; } // 原廠保桿上沒有 NOS、STILLEN 那些，只留車頭的圖騰
+  if (kit === 'stock') { emblem(g); return c; } // 原廠保桿上沒有那些貼紙，只留車頭的圖騰
   for (const s of [1, -1]) {
-    text(g, 'NOS', 0.765 * s, 0.285, 0.034, { italic: true });
-    text(g, 'STILLEN', 0.64 * s, 0.155, 0.03, { italic: true, weight: 900 });
+    text(g, 'N2O', 0.765 * s, 0.285, 0.034, { italic: true }); // 第 87 批：以前是真的牌子，換成自己編的字
+    text(g, 'BEAU', 0.64 * s, 0.155, 0.03, { italic: true, weight: 900 });
   }
   text(g, '12', -0.21, 0.198, 0.125, { italic: true, skew: 0.25 });
   emblem(g);
@@ -313,9 +313,9 @@ function drawLivery(side, style = 'ff') {
   line(g, [[0.46, 0.575], [0.30, 0.575]], 0.004); line(g, [[0.08, 0.60], [0.26, 0.585]], 0.004);
   g.fillStyle = '#e9ecef'; g.beginPath(); g.arc(0.61, 0.565, 0.025, 0, Math.PI * 2); g.fill(); g.stroke(); // 拳頭
   g.restore();
-  // 下面一排贊助商貼紙（黑字、斜體）
+  // 下面一排贊助商貼紙（黑字、斜體；第 87 批：以前是真的牌子，換成自己編的字）
   g.fillStyle = INK;
-  const names = ['NOS', 'SPARCO', 'DAZZ', 'HKS', 'TRD', 'GREDDY'];
+  const names = ['N2O', 'BEAU', 'DRAGON', 'TURBO', 'GT', 'NITRO'];
   names.forEach((t, i) => text(g, t, 0.55 - i * 0.24, 0.31, 0.036, { italic: true, mirror: side < 0 }));
   return c;
 }
@@ -783,7 +783,7 @@ const GTR_LOOK = (() => {
     ]);
   }
 
-  // ---- 拉花：白色側條＋後葉子板的 GT-R 字（照片那台沒有拉花，所以預設關掉）----
+  // ---- 拉花：白色側條＋後葉子板的字（照片那台沒有拉花，所以預設關掉；第 87 批：以前寫車款名字，換成自己的 BEAU）----
   function livery(sd, style = 'ff') {
     const { c, g } = canvas(BOX.side);
     g.clearRect(-3, -1, 6, 3);
@@ -791,7 +791,7 @@ const GTR_LOOK = (() => {
     g.fillStyle = '#f4f5f6';
     poly(g, [[-2.32, 0.365], [2.0, 0.335], [2.0, 0.375], [-2.32, 0.405]]); g.fill();
     poly(g, [[-2.32, 0.42], [2.0, 0.39], [2.0, 0.40], [-2.32, 0.43]]); g.fill();
-    text(g, 'GT-R', -1.10, 0.80, 0.095, { italic: true, mirror: sd < 0, skew: 0.2 });
+    text(g, 'BEAU', -1.10, 0.80, 0.095, { italic: true, mirror: sd < 0, skew: 0.2 });
     return c;
   }
   function frontLivery() { const { c, g } = canvas(BOX.front); g.clearRect(-2, -1, 4, 3); return c; }
@@ -17444,6 +17444,7 @@ return { nhStreetPrep, nhStreetBuild, NH_STREET_TEXT };
 //   M.leave()                                  下車、被搬走（直接回車庫、被抓）：坐車的狀態清掉
 //   M.setTime(t) / M.time                      測試用：時間跳到 t（秒；一個循環 180 秒）
 //   M.trains() → [{ dir, k, p, s, x, z, stop, open }]  現在在跑的列車（測試）
+//   M.animals() → [{ k, si, lvl, sd, st, x, y, z, u, v, ride, … }]  第 87 批：捷運站裡的小動物（opt.makeAnimal＝animals.js buildAnimal；走近內湖才做）
 //   M.info                                     { meshes, tris, stations: [...], T, H }
 
 // 整個包在一個函式裡（打包是把檔案接在一起：名字不要跟別的檔案撞到）
@@ -17941,7 +17942,8 @@ function buildMrt(V, opt = {}) {
     return null;
   };
   // ---- 狀態 ----
-  let time = (Date.now() / 1000) % CYCLE;
+  let time = (Date.now() / 1000) % CYCLE, lap = 0; // 第 87 批：lap＝時間繞了幾圈（列車的 key 才不會在 180 秒那一下換掉：以前坐車剛好碰到就被當成「開進隧道了」、人留在半空中掉到街上）
+  const LAPK = Math.round(CYCLE / H);
   const active = []; // 現在在跑的列車：{ dir, k, d, tau, p, s, open, si, cars: [{ x, z, th }], key }
   const prev = new Map(); // key → 上一格的 open（叮咚）
   const M4 = new THREE.Matrix4(), Q4 = new THREE.Quaternion(), V3 = new THREE.Vector3(), S3 = new THREE.Vector3(1, 1, 1), ZERO = new THREE.Matrix4().makeScale(0, 0, 0), YAX = new THREE.Vector3(0, 1, 0);
@@ -17951,7 +17953,7 @@ function buildMrt(V, opt = {}) {
     for (const d of dirs) {
       const k1 = Math.floor((time - d.phase) / H), k0 = Math.ceil((time - d.phase - d.total) / H);
       for (let k = k0; k <= k1; k++) { const tau = time - d.phase - k * H; if (tau < 0 || tau >= d.total) continue; const ps = posAt(d, tau); if (!ps) continue;
-        const key = `${d.dir}:${((k % 1000) + 1000) % 1000}`, s = d.dir > 0 ? sA + ps.p : sB - ps.p, tr = { dir: d.dir, k, d, tau, p: ps.p, s, open: ps.open, si: ps.si, seg: ps.seg, v: ps.v, cars: [], key };
+        const key = `${d.dir}:${k + lap * LAPK}`, s = d.dir > 0 ? sA + ps.p : sB - ps.p, tr = { dir: d.dir, k, d, tau, p: ps.p, s, open: ps.open, si: ps.si, seg: ps.seg, v: ps.v, cars: [], key };
         for (let i = 0; i < 4; i++) { const cs = s + d.dir * (i - 1.5) * CAR_P, q = at(cs), tv = TRK_V * d.dir; tr.cars.push({ x: q[0] - q[3] * tv, z: q[1] + q[2] * tv, th: Math.atan2(-q[3] * d.dir, q[2] * d.dir), ux: q[2] * d.dir, uz: q[3] * d.dir, s: cs }); }
         active.push(tr);
         const po = prev.get(key); if (po != null) { if (po === 0 && ps.open > 0 && ps.si >= 0) events.push({ k: 'arrive', tr, si: ps.si }); if (po > 0 && ps.open === 0 && ps.si >= 0) events.push({ k: 'close', tr, si: ps.si }); } prev.set(key, ps.open);
@@ -17995,12 +17997,196 @@ function buildMrt(V, opt = {}) {
         const g = S.board.g, y = row * 64; g.fillStyle = '#101214'; g.fillRect(0, y, 512, 64); g.fillStyle = '#8a5a2b'; g.fillRect(0, y, 10, 64); g.fillStyle = w === 0 ? '#ffd24a' : '#ffffff'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = `700 ${fit(g, txt, 34, 470)}px ${SANS}`; g.fillText(txt, 26, y + 33); }
       if (ch) S.board.tex.needsUpdate = true; }
   }
+  // ==== 第 87 批（Nick 2026-11-11「做1」＝原本那句「捷運站也要有生物」）：捷運站裡的小動物 ====
+  // 路上的三隻動物（animals.js，opt.makeAnimal）也住進捷運站：每站大廳 4 隻（閘門外、閘門裡各 2）、月台每邊 3 隻（有的在車門旁邊排隊）；
+  // 車來了，車門附近的走進車廂坐車（站在車廂裡、跟著車走），到下一站走出來；從隧道開出來的車也會帶 1～2 隻下車；開進隧道的車上的就不見了。
+  // 走路用 0.25 公尺的格子（那一層的碰撞＋樓梯、軌道那邊不能走，往外 0.5 公尺），BFS 找路再拉直（一格最多找一次路）；你、別隻擋在前面就停下來等。
+  // 一隻 2 個 draw call；90 公尺外藏起來、不算動作。走路的人撞得到（M.movers 的圓），上下車那一下不擋人。
+  const mkAni = typeof opt.makeAnimal === 'function' ? opt.makeAnimal : null;
+  const ZG = 0.25, ZR = 0.5, ZMAX = 32, ZKINDS = ['pig', 'pinky', 'cham'], ZSPD = { pig: 0.62, pinky: 0.74, cham: 0.58 }, ZQV = PV0 + 0.95; // 排隊的地方離軌道中線多遠
+  const Z = { on: false, list: [], seed: 20261111, done: new Map(), pp: null, budget: 0, navs: [], spots: [] };
+  const zr = () => { let t = (Z.seed = (Z.seed + 0x6d2b79f5) >>> 0); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]], D8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  const ZWALK = { state: 'walk', speed: 0 }, ZIDLE = { state: 'idle', speed: 0 }, ZPP = [0, 0, 0];
+  function zNav(S, lvl) { // 那一層哪裡可以走（本地 u、v 的格子）、連在一起的區域
+    const U1 = lvl === 2 ? PL : CU, V1 = lvl === 2 ? PV1 : CV, U0 = -U1, V0 = -V1, nu = Math.round((U1 - U0) / ZG), nv = Math.round((V1 - V0) / ZG), free = new Uint8Array(nu * nv);
+    for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) free[j * nu + i] = Math.abs(U0 + (i + 0.5) * ZG) <= U1 - ZR && Math.abs(V0 + (j + 0.5) * ZG) <= V1 - ZR ? 1 : 0;
+    const block = (a0, a1, b0, b1) => { const i0 = Math.max(0, Math.floor((Math.min(a0, a1) - ZR - U0) / ZG)), i1 = Math.min(nu - 1, Math.floor((Math.max(a0, a1) + ZR - U0) / ZG)), j0 = Math.max(0, Math.floor((Math.min(b0, b1) - ZR - V0) / ZG)), j1 = Math.min(nv - 1, Math.floor((Math.max(b0, b1) + ZR - V0) / ZG));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) free[j * nu + i] = 0; };
+    for (const c of S.cols[lvl]) { const [cu, cv] = S.loc(c.x, c.z); block(cu - c.hx, cu + c.hx, cv - c.hz, cv + c.hz); }
+    for (const q of [-1, 1]) block(RAMP.u0 - 0.6, RAMP.u1 + 0.6, q * (RAMP.v0 - 0.1), q * (HOLE1 + 0.1)); // 樓梯、電扶梯（不走上去、不擋在口）
+    if (lvl === 2) block(-PL, PL, -PV0, PV0); // 月台門外面＝軌道
+    else for (const q of [-1, 1]) block(-CU, CU, q * (CV - 0.15), q * (CV + 1)); // 大廳：天橋的口
+    const comp = new Int16Array(nu * nv).fill(-1), comps = [], q = new Int32Array(nu * nv);
+    for (let k = 0; k < nu * nv; k++) if (free[k] && comp[k] < 0) { const id = comps.length, cells = []; let h = 0, t = 0; q[t++] = k; comp[k] = id;
+      while (h < t) { const c = q[h++]; cells.push(c); const i = c % nu, j = (c - i) / nu; for (const [di, dj] of D4) { const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= nu || jj >= nv) continue; const n = jj * nu + ii; if (free[n] && comp[n] < 0) { comp[n] = id; q[t++] = n; } } }
+      comps.push(cells); }
+    return { S, lvl, U0, V0, nu, nv, free, comp, comps, q, prev: new Int32Array(nu * nv), seen: new Uint32Array(nu * nv), stamp: 0, y: lvl === 2 ? YP : YC };
+  }
+  const zCell = (N, u, v) => { const i = Math.floor((u - N.U0) / ZG), j = Math.floor((v - N.V0) / ZG); return i < 0 || j < 0 || i >= N.nu || j >= N.nv ? -1 : j * N.nu + i; };
+  const zU = (N, k) => N.U0 + ((k % N.nu) + 0.5) * ZG, zV = (N, k) => N.V0 + (Math.floor(k / N.nu) + 0.5) * ZG;
+  const zOk = (N, u, v) => { const k = zCell(N, u, v); return k >= 0 && N.free[k] === 1; };
+  function zNear(N, u, v, id) { // 最近的可以走的格子（id＝只要那一區）
+    const k0 = zCell(N, u, v); if (k0 >= 0 && N.free[k0] && (id == null || N.comp[k0] === id)) return k0;
+    const i0 = Math.floor((u - N.U0) / ZG), j0 = Math.floor((v - N.V0) / ZG);
+    for (let r = 1; r <= 16; r++) { let best = -1, bd = Infinity;
+      for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue; const i = i0 + di, j = j0 + dj; if (i < 0 || j < 0 || i >= N.nu || j >= N.nv) continue;
+        const k = j * N.nu + i; if (N.free[k] && (id == null || N.comp[k] === id)) { const d = di * di + dj * dj; if (d < bd) { bd = d; best = k; } } }
+      if (best >= 0) return best; }
+    return -1;
+  }
+  function zLos(N, u0, v0, u1, v1) { const n = Math.ceil(Math.hypot(u1 - u0, v1 - v0) / 0.1); for (let t = 1; t < n; t++) if (!zOk(N, u0 + ((u1 - u0) * t) / n, v0 + ((v1 - v0) * t) / n)) return false; return true; }
+  function zPath(N, u0, v0, k1) { // (u0, v0) → 格子 k1：拉直過的點 [[u, v] …]；找不到＝null
+    const k0 = zNear(N, u0, v0, N.comp[k1]); if (k0 < 0) return null;
+    const { nu, nv, free, prev, seen, q } = N, st = ++N.stamp; let h = 0, t = 0, found = k0 === k1; q[t++] = k0; seen[k0] = st; prev[k0] = -1;
+    while (h < t && !found) { const c = q[h++], i = c % nu, j = (c - i) / nu;
+      for (const [di, dj] of D8) { const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= nu || jj >= nv) continue; const n = jj * nu + ii; if (!free[n] || seen[n] === st) continue;
+        if (di && dj && (!free[j * nu + ii] || !free[jj * nu + i])) continue; seen[n] = st; prev[n] = c; if (n === k1) { found = true; break; } q[t++] = n; } }
+    if (!found) return null;
+    const cells = []; for (let c = k1; c >= 0; c = prev[c]) cells.push(c); cells.reverse();
+    const out = []; let cu = u0, cv = v0, i = 0;
+    while (i < cells.length - 1) { let j = i + 1; while (j + 1 < cells.length && zLos(N, cu, cv, zU(N, cells[j + 1]), zV(N, cells[j + 1]))) j++; cu = zU(N, cells[j]); cv = zV(N, cells[j]); out.push([cu, cv]); i = j; }
+    if (!out.length) out.push([zU(N, k1), zV(N, k1)]);
+    return out;
+  }
+  const zAct = (key) => { for (const t of active) if (t.key === key) return t; return null; };
+  const zDoneCk = (key, k) => { const t = zAct(key); if (!t || t.si < 0 || t.open === 0) Z.done.delete(k); };
+  const zNavOf = (si, lvl) => Z.navs[si * 2 + lvl - 1];
+  function zNew(kind) { // 一隻（還沒做模型；update 裡一格做 3 隻）
+    const a = { kind, C: null, free: true, si: -1, lvl: 0, sd: 0, N: null, comp: -1, x: 0, z: 0, y: 0, hd: 0, v: 0, st: 'idle', t: 0, wp: null, wi: 0, bk: 0, blk: 0, spd: ZSPD[kind] * (0.9 + 0.2 * zr()), spot: null, ride: null, tkey: null, tci: 0, fx: 0, fz: 0 };
+    Z.list.push(a); return a;
+  }
+  function zTake() { for (const a of Z.list) if (a.free && a.st === 'gone') return a; return Z.list.length < ZMAX ? zNew(ZKINDS[Math.floor(zr() * 3)]) : null; }
+  function zGone(a) { zUnspot(a); a.free = true; a.st = 'gone'; a.ride = null; a.wp = null; a.v = 0; if (a.C) a.C.group.visible = false; }
+  function zPut(a, si, lvl, k, sd = 0) { // 放在那一層的格子 k
+    const N = zNavOf(si, lvl), [x, z] = N.S.toW(zU(N, k), zV(N, k)); Object.assign(a, { free: false, si, lvl, sd, N, comp: N.comp[k], x, z, fx: x, fz: z, y: N.y, hd: N.S.rot + (zr() - 0.5) * 6, st: 'idle', t: 1 + zr() * 4, wp: null, ride: null });
+  }
+  function zUnspot(a) { if (a.spot) { a.spot.a = null; a.spot = null; } }
+  function zBusy(a, x, z, r) { // 那裡有別隻（或牠要去的地方）、或你
+    for (const b of Z.list) if (b !== a && !b.free && b.lvl === a.lvl && b.si === a.si && (Math.hypot(b.x - x, b.z - z) < r || Math.hypot(b.fx - x, b.fz - z) < r)) return true;
+    const pp = Z.pp; return !!(pp && Math.abs(pp[2] - a.y) < 1.5 && Math.hypot(pp[0] - x, pp[1] - z) < r + 0.3);
+  }
+  function zGo(a, u, v, wantK = null) { // 走去 (u, v)（同一區最近的格子）
+    const N = a.N, k1 = wantK ?? zNear(N, u, v, a.comp); if (k1 < 0) return false;
+    const [u0, v0] = N.S.loc(a.x, a.z), p = zPath(N, u0, v0, k1); if (!p) return false;
+    a.wp = p.map(([pu, pv]) => N.S.toW(pu, pv)); a.wi = 0; a.st = 'walk'; a.blk = 0; const e = a.wp[a.wp.length - 1]; a.fx = e[0]; a.fz = e[1]; return true;
+  }
+  function zPick(a) { // 下一個要去哪裡（一格最多找一次路）
+    if (Z.budget <= 0) { a.t = 0.05; return; } Z.budget--;
+    const N = a.N, S = N.S;
+    if (a.lvl === 2 && zr() < 0.45) { // 去車門旁邊排隊
+      const list = Z.spots[a.si * 2 + (a.sd > 0 ? 1 : 0)].filter((s) => !s.a && s.comp === a.comp && !zBusy(a, s.x, s.z, 1.1));
+      if (list.length) { const s = list[Math.floor(zr() * list.length)]; if (zGo(a, s.u, s.v, s.k)) { zUnspot(a); a.spot = s; s.a = a; return; } } }
+    zUnspot(a);
+    const cells = N.comps[a.comp];
+    for (let tries = 0; tries < 8; tries++) { const k = cells[Math.floor(zr() * cells.length)], [x, z] = S.toW(zU(N, k), zV(N, k)); if (Math.hypot(x - a.x, z - a.z) < 3 || zBusy(a, x, z, 1.4)) continue; if (zGo(a, 0, 0, k)) return; }
+    a.st = 'idle'; a.t = 1 + zr() * 2;
+  }
+  function zBlocked(a, fx, fz) { // 前面有你、別隻
+    const pp = Z.pp; if (pp && Math.abs(pp[2] - a.y) < 1.2 && Math.hypot(pp[0] - fx, pp[1] - fz) < 0.8) return true;
+    for (const b of Z.list) if (b !== a && !b.free && b.lvl === a.lvl && b.si === a.si && b.st !== 'ride' && Math.hypot(b.x - fx, b.z - fz) < 0.75 && Math.hypot(b.x - a.x, b.z - a.z) > 0.2) return true;
+    return false;
+  }
+  function zMove(a, dt, check) { // 沿著 a.wp 走；走到最後一點回傳 true
+    const tg = a.wp[a.wi], dx = tg[0] - a.x, dz = tg[1] - a.z, d = Math.hypot(dx, dz);
+    if (d < 0.06) { a.wi++; a.v = a.spd; return a.wi >= a.wp.length; }
+    const dh = wrapA(Math.atan2(-dz, dx) - a.hd), turn = 3.4 * dt; a.hd = wrapA(a.hd + clamp(dh, -turn, turn));
+    if (check && zBlocked(a, a.x + Math.cos(a.hd) * 0.75, a.z - Math.sin(a.hd) * 0.75)) { a.v = 0; a.blk += dt; return false; }
+    a.blk = 0; const sp = a.spd * (Math.abs(dh) > 1.0 ? 0.3 : 1), s = Math.min(d, sp * dt); a.x += (dx / d) * s; a.z += (dz / d) * s; a.v = sp; return false;
+  }
+  function zDoorsOK(S, si, sd) { // 這一邊哪幾個車門前面可以站（樓梯旁邊那兩個不行）
+    const N = zNavOf(si, 2); return DOOR_U.filter((du) => zOk(N, du, sd * ZQV));
+  }
+  function zCarOf(tr, S, du, sd) { const [x, z] = S.toW(du, sd * PV0); for (let i = 0; i < tr.cars.length; i++) { const [lu, lv] = carLoc(tr.cars[i], x, z); if (Math.abs(lu) <= 6.9 && Math.abs(lv) < CAR_W + 0.6) return [i, lu]; } return null; }
+  function zRide(a, tr, ci) { // 站進車廂裡（車廂本地的位置記起來）
+    if (!tr) { zGone(a); return; } const c = tr.cars[ci], [lu, lv] = carLoc(c, a.x, a.z);
+    zUnspot(a); a.ride = { key: tr.key, ci, lu: clamp(lu, -6.4, 6.4), lv: clamp(lv, -0.55, 0.55), lh: wrapA(c.th - a.hd) }; a.st = 'ride'; a.lvl = 3; a.y = YP; a.v = 0; a.wp = null;
+  }
+  function zDoorD(a, sd) { const [u0, v0] = a.N.S.loc(a.x, a.z); let bd = Infinity; for (const d of zDoorsOK(a.N.S, a.si, sd)) bd = Math.min(bd, Math.hypot(d - u0, sd * ZQV - v0)); return bd; }
+  function zBoard(a, tr, delay, maxD = 3.5) { // 走去最近的車門（maxD 公尺內）、走進車廂
+    const si = tr.si, sd = tr.dir, S = stations[si], N = a.N, [u0, v0] = S.loc(a.x, a.z);
+    let du = null, bd = maxD; for (const d of zDoorsOK(S, si, sd)) { const dd = Math.hypot(d - u0, sd * ZQV - v0); if (dd < bd) { bd = dd; du = d; } }
+    if (du == null) return false; const cl = zCarOf(tr, S, du, sd); if (!cl) return false;
+    const k1 = zNear(N, du, sd * ZQV, a.comp); if (k1 < 0) return false; const p = zPath(N, u0, v0, k1); if (!p) return false;
+    const c = tr.cars[cl[0]], dlu = Math.sign(cl[1]) * DOOR_X;
+    a.wp = [...p.map(([pu, pv]) => S.toW(pu, pv)), S.toW(du, sd * (PV0 + 0.2)), carW(c, dlu, CAR_W - 0.35), carW(c, dlu + (zr() - 0.5) * 1.4, (zr() - 0.5) * 0.9)];
+    a.bk = a.wp.length - 2; a.wi = 0; a.st = 'board'; a.t = delay; a.tkey = tr.key; a.tci = cl[0]; zUnspot(a); const e = a.wp[a.wp.length - 1]; a.fx = e[0]; a.fz = e[1]; return true;
+  }
+  function zAlight(a, tr, delay) { // 從最近的（可以站的）車門走出去、站到月台上
+    const si = tr.si, sd = tr.dir, S = stations[si], N = zNavOf(si, 2), c = tr.cars[a.ride.ci], ok = zDoorsOK(S, si, sd);
+    let dlu = Math.abs(a.ride.lu - DOOR_X) < Math.abs(a.ride.lu + DOOR_X) ? DOOR_X : -DOOR_X;
+    for (const d of [dlu, -dlu]) { const [du] = S.loc(...carW(c, d, 0)); if (ok.some((o) => Math.abs(o - du) < 0.5)) { dlu = d; break; } }
+    const [du] = S.loc(...carW(c, dlu, 0)), k = zNear(N, du + (zr() - 0.5) * 1.6, sd * (ZQV + 0.3 + zr() * 1.2)); if (k < 0) { zGone(a); return; }
+    a.wp = [carW(c, dlu, 0.2), carW(c, dlu, CAR_W + 0.15), S.toW(du, sd * (PV0 + 0.45)), S.toW(zU(N, k), zV(N, k))]; a.wi = 0;
+    Object.assign(a, { st: 'alight', t: delay, si, sd, N, comp: N.comp[k], tkey: tr.key, ride: null, lvl: 2 }); const e = a.wp[3]; a.fx = e[0]; a.fz = e[1];
+  }
+  function zPlaceRider(a, tr, sd) { // 從隧道開出來的車上本來就有的：站在可以下車的車門旁邊
+    const si = tr.si, S = stations[si], ok = zDoorsOK(S, si, sd); if (!ok.length) return false;
+    const du = ok[Math.floor(zr() * ok.length)], cl = zCarOf(tr, S, du, sd); if (!cl) return false;
+    const c = tr.cars[cl[0]], dlu = Math.sign(cl[1]) * DOOR_X, lu = dlu + (zr() - 0.5) * 1.4, lv = (zr() - 0.5) * 0.9, [x, z] = carW(c, lu, lv);
+    Object.assign(a, { free: false, si, sd, x, z, y: YP, lvl: 3, st: 'ride', ride: { key: tr.key, ci: cl[0], lu, lv, lh: (zr() - 0.5) * 6 }, wp: null, v: 0 }); a.hd = c.th - a.ride.lh; return true;
+  }
+  const zCount = (si, sd) => { let n = 0; for (const a of Z.list) if (!a.free && a.lvl === 2 && a.si === si && a.sd === sd && a.st !== 'board') n++; return n; };
+  function zArrive(tr) { // 列車到站、門開了：車上的下車、從隧道來的帶幾隻、車門旁邊的上車
+    const si = tr.si, sd = tr.dir; let n = 0;
+    for (const a of Z.list) if (!a.free && a.st === 'ride' && a.ride.key === tr.key) zAlight(a, tr, 0.2 + 0.7 * n++);
+    if (tr.d.stops[0].si === si) { const add = Math.min(2, Math.max(0, 4 - zCount(si, sd))); for (let i = 0; i < add; i++) { const a = zTake(); if (!a || !zPlaceRider(a, tr, sd)) break; zAlight(a, tr, 0.2 + 0.7 * n++); } }
+    let left = zCount(si, sd), nb = 0; const p = left > 3 ? 0.85 : 0.55; // 月台上（含剛下車的）至少留 1 隻
+    const ok = (a) => !a.free && a.lvl === 2 && a.si === si && a.sd === sd && (a.st === 'idle' || a.st === 'queue' || a.st === 'walk');
+    for (const a of Z.list) if (left > 1 && ok(a) && (a.st === 'queue' || zr() < p)) if (zBoard(a, tr, 1.0 + 0.6 * n + zr() * 0.6)) { left--; nb++; } // 在車門旁邊排隊的一定上車
+    if (!nb && left > 1) { let best = null, bd = 6; for (const a of Z.list) if (ok(a)) { const d = zDoorD(a, sd); if (d < bd) { bd = d; best = a; } } if (best) zBoard(best, tr, 0.6, 6); } // 沒有人上：離車門最近的那隻上
+  }
+  function zInit() {
+    Z.on = true;
+    for (let si = 0; si < stations.length; si++) { const S = stations[si]; Z.navs.push(zNav(S, 1), zNav(S, 2));
+      for (const sd of [-1, 1]) { const N = zNavOf(si, 2), sp = []; for (const du of zDoorsOK(S, si, sd)) for (const q of [-1, 1]) { const u = du + q * 1.35, v = sd * ZQV, k = zCell(N, u, v); if (k >= 0 && N.free[k]) { const [x, z] = S.toW(u, v); sp.push({ u, v, k, x, z, comp: N.comp[k], a: null }); } } Z.spots[si * 2 + (sd > 0 ? 1 : 0)] = sp; } }
+    for (let si = 0; si < stations.length; si++) {
+      const H1 = zNavOf(si, 1), big = H1.comps.map((c, i) => [c.length, i]).filter((c) => c[0] > 400).sort((p, q) => q[0] - p[0]).slice(0, 2);
+      for (const [, id] of big) for (let n = 0; n < 2; n++) { const cells = H1.comps[id], a = zNew(ZKINDS[Math.floor(zr() * 3)]); let k = cells[0];
+        for (let t = 0; t < 12; t++) { k = cells[Math.floor(zr() * cells.length)]; const [x, z] = H1.S.toW(zU(H1, k), zV(H1, k)); if (!Z.list.some((b) => !b.free && Math.hypot(b.x - x, b.z - z) < 2)) break; }
+        zPut(a, si, 1, k); }
+      const P2 = zNavOf(si, 2);
+      for (const sd of [-1, 1]) { const side = P2.comps.filter((c) => c.length > 200 && Math.sign(zV(P2, c[0])) === sd), tot = side.reduce((s, c) => s + c.length, 0); if (!tot) continue;
+        for (let n = 0; n < 3; n++) { const a = zNew(ZKINDS[Math.floor(zr() * 3)]); let k = side[0][0];
+          for (let t = 0; t < 12; t++) { let r = zr() * tot, c = side[0]; for (const cc of side) { if (r < cc.length) { c = cc; break; } r -= cc.length; } k = c[Math.floor(zr() * c.length)]; const [x, z] = P2.S.toW(zU(P2, k), zV(P2, k)); if (!Z.list.some((b) => !b.free && Math.hypot(b.x - x, b.z - z) < 2)) break; }
+          zPut(a, si, 2, k, sd); } } }
+  }
+  function zStep(dt) { // 每一格（在內湖附近）：上下車、走路、站著；畫的位置
+    if (!Z.on) { if (!mkAni) return; let d = Infinity; for (const S of stations) d = Math.min(d, Math.hypot(S.x - camP[0], S.z - camP[1])); if (d > 400) return; zInit(); }
+    Z.budget = 1; dt = Math.min(dt, 0.2);
+    for (const tr of active) if (tr.si >= 0 && tr.open > 0.7) { const k = tr.key + '@' + tr.si; if (!Z.done.has(k)) { Z.done.set(k, tr.key); zArrive(tr); } }
+    Z.done.forEach(zDoneCk); // 車門關好、開走了＝下次到站再算一次
+    let nb = 0;
+    for (const a of Z.list) {
+      if (a.free) continue;
+      if (!a.C && nb < 3) { nb++; a.C = mkAni({ animal: a.kind, age: 'adult' }); a.C.group.name = 'mrt-animal-' + a.kind; group.add(a.C.group); }
+      if (a.st === 'ride') { const tr = zAct(a.ride.key); if (!tr) { zGone(a); continue; } const c = tr.cars[a.ride.ci], [x, z] = carW(c, a.ride.lu, a.ride.lv); a.x = x; a.z = z; a.hd = c.th - a.ride.lh; a.y = YP; a.v = 0; }
+      else if (a.st === 'board') {
+        const tr = zAct(a.tkey); if (!tr || tr.si !== a.si || tr.tau > tr.seg.t1 - 2.4) { if (tr && a.wi >= a.bk) zRide(a, tr, a.tci); else if (!tr && a.wi >= a.bk) zGone(a); else { a.st = 'idle'; a.t = 0.5; a.wp = null; a.v = 0; const k = zNear(a.N, ...a.N.S.loc(a.x, a.z), a.comp); if (k >= 0) { const [x, z] = a.N.S.toW(zU(a.N, k), zV(a.N, k)); a.x = x; a.z = z; } } continue; } // 車門要關了（關門前 2 秒）：還沒走進車門＝回月台
+        if (a.t > 0) { a.t -= dt; a.v = 0; continue; }
+        if (zMove(a, dt, a.wi < a.bk - 1)) zRide(a, tr, a.tci);
+      } else if (a.st === 'alight') { if (a.t > 0) { a.t -= dt; const tr = zAct(a.tkey); if (!tr) { zGone(a); continue; } a.v = 0; continue; } if (zMove(a, dt, false)) { a.st = 'idle'; a.t = 0.8 + zr() * 2; a.wp = null; a.v = 0; } }
+      else if (a.st === 'walk') { if (zMove(a, dt, true)) { a.wp = null; a.v = 0; if (a.spot) { a.st = 'queue'; a.t = 10 + zr() * 20; a.hd = a.N.S.rot + (a.sd > 0 ? Math.PI / 2 : -Math.PI / 2); } else { a.st = 'idle'; a.t = 2 + zr() * 6; } } else if (a.blk > 1.6) { a.st = 'idle'; a.t = 0.3 + zr() * 0.6; a.wp = null; a.v = 0; zUnspot(a); a.fx = a.x; a.fz = a.z; } }
+      else if (a.st === 'idle' || a.st === 'queue') { a.v = 0; a.t -= dt; if (a.t <= 0) zPick(a); }
+    }
+    for (const a of Z.list) { if (!a.C) continue; const g = a.C.group;
+      const vis = !a.free && Math.hypot(a.x - camP[0], a.z - camP[1]) < 90; g.visible = vis; if (!vis) continue;
+      g.position.set(a.x, a.y, a.z); g.rotation.y = a.hd; const o = a.v > 0.02 ? ZWALK : ZIDLE; ZWALK.speed = a.v; a.C.update(dt, o); }
+  }
+  function zMovers(mv, si, y, key, ci) { // 走路的人撞得到（站著、走著的；上下車那一下不擋）
+    if (!Z.on) return;
+    for (const a of Z.list) { if (a.free || !a.C || a.st === 'board' || a.st === 'alight') continue;
+      if (key != null ? !(a.st === 'ride' && a.ride.key === key && a.ride.ci === ci) : a.si !== si || a.st === 'ride' || Math.abs(a.y - y) > 0.5) continue;
+      mv.push({ t: 'circle', x: a.x, z: a.z, r: Math.min(0.42, a.C.radius || 0.35), h: a.y + (a.C.height || 0.8), y0: a.y - 0.3 }); }
+  }
   // ---- 走路的人 ----
   const P = {
     group, stations, info: { meshes, tris: Math.round(tris), stations: stations.map((s) => s.nm), esc: ESCS.length, escSteps: nSteps, T: CYCLE, H, dwell: DWELL, maxTrains: maxAct, sA, sB, len: sB - sA, dirs: dirs.map((d) => ({ dir: d.dir, phase: d.phase, total: Math.round(d.total * 10) / 10, stops: d.stops.map((s) => Math.round(s.p)), dwells: d.segs.filter((s) => s.k === 'dwell').map((s) => ({ si: s.si, t0: Math.round(s.t0 * 10) / 10, t1: Math.round(s.t1 * 10) / 10 })) })) },
     YT, YP, YC, ride: null, lvl: 0, si: -1, py: 0, movers: [],
     get time() { return time; }, setTime(t) { time = ((t % CYCLE) + CYCLE) % CYCLE; prev.clear(); trainsNow(); events.length = 0; },
-    trains: () => active.map((t) => ({ dir: t.dir, k: t.k, p: Math.round(t.p * 10) / 10, s: Math.round(t.s * 10) / 10, x: t.cars[0].x, z: t.cars[0].z, stop: t.si, si: t.si, open: t.open, v: t.v, tau: Math.round(t.tau * 10) / 10, cars: t.cars.map((c) => ({ x: c.x, z: c.z, th: c.th, ux: c.ux, uz: c.uz })) })),
+    animals: () => Z.list.filter((a) => !a.free).map((a) => { const [u, v] = a.si >= 0 ? stations[a.si].loc(a.x, a.z) : [0, 0]; return { k: a.kind, si: a.si, lvl: a.lvl, sd: a.sd, st: a.st, x: +a.x.toFixed(2), z: +a.z.toFixed(2), y: +a.y.toFixed(2), u: +u.toFixed(2), v: +v.toFixed(2), hd: +a.hd.toFixed(2), ride: a.ride ? a.ride.key : null, ci: a.ride ? a.ride.ci : null, spot: !!a.spot, vis: !!(a.C && a.C.group.visible), built: !!a.C }; }), // 第 87 批：捷運站的小動物（測試）
+    zoo: Z,
+    trains: () => active.map((t) => ({ key: t.key, dir: t.dir, k: t.k, p: Math.round(t.p * 10) / 10, s: Math.round(t.s * 10) / 10, x: t.cars[0].x, z: t.cars[0].z, stop: t.si, si: t.si, open: t.open, v: t.v, tau: Math.round(t.tau * 10) / 10, cars: t.cars.map((c) => ({ x: c.x, z: c.z, th: c.th, ux: c.ux, uz: c.uz })) })),
     at(x, z) { for (let i = 0; i < stations.length; i++) { const [u, v] = stations[i].loc(x, z); if (Math.abs(u) < 50 && Math.abs(v) < 32) return i; } return -1; },
     loc: (si, x, z) => stations[si].loc(x, z), toW: (si, u, v) => stations[si].toW(u, v),
     cols: (si, lvl) => (si >= 0 && stations[si].cols[lvl]) || [],
@@ -18024,16 +18210,17 @@ function buildMrt(V, opt = {}) {
       P.ride = null; P.movers.length = 0; return { x, z, heading: Math.atan2(-(z - pz), x - px), nm: S.nm };
     },
     update(camera, dt) {
-      time = (time + Math.max(0, Math.min(0.2, +dt || 0))) % CYCLE; trainsNow();
+      const t2 = time + Math.max(0, Math.min(0.2, +dt || 0)); if (t2 >= CYCLE) lap++; time = t2 % CYCLE; trainsNow();
       if (camera) { camP[0] = camera.position.x; camP[1] = camera.position.z; }
       let near = false; for (const S of stations) { const d = Math.hypot(S.x - camP[0], S.z - camP[1]); S.group.visible = d < 1500; if (d < 2600) near = true; }
       carIM.visible = glsIM.visible = dorIM.visible = psdIM.visible = noseIM.visible = csIM.visible = stepIM.visible = near;
-      if (near) { drawTrains(); drawPsd(); drawSteps(); if (time - boardT > 1 || time < boardT) { boardT = time; drawBoards(); } }
+      if (near) { drawTrains(); drawPsd(); drawSteps(); if (time - boardT > 1 || time < boardT) { boardT = time; drawBoards(); } zStep(dt); }
+      else if (Z.on) for (const a of Z.list) if (a.C) a.C.group.visible = false;
     },
     // 走路的人在 (px, pz)、腳下 py；回傳這一格要做的事
     step(dt, px, pz, py, walking) {
       const out = { shift: null, esc: false, lvl: 0, si: -1, ride: !!P.ride, toast: null, chime: false, beep: false, action: null, eject: null, cap: null }, evs = events.splice(0); // cap＝鏡頭最高（天花板、罩子）
-      P.py = py;
+      P.py = py; if (walking) { ZPP[0] = px; ZPP[1] = pz; ZPP[2] = py; Z.pp = ZPP; } else Z.pp = null; // 第 87 批：小動物看得到你（每格不 new）
       if (!walking && P.ride) { // 第 82 批：坐車的時候停一下（換視角、跳出來的東西⋯）：人還是跟著車走，不會留在半空中、掉到街上
         const R = P.ride, tr = active.find((t) => t.key === R.key);
         if (tr) { const c = tr.cars[R.car], c0 = R.pose, [lu, lv] = carLoc(c0, px, pz), [nx, nz] = carW(c, lu, lv); out.shift = [nx - px, nz - pz, wrapA(c.th - c0.th)]; R.pose = { x: c.x, z: c.z, th: c.th, ux: c.ux, uz: c.uz }; R.tr = tr; out.lvl = 3; out.ride = true; out.si = tr.si; out.cap = YP + 2.0; return out; }
@@ -18046,7 +18233,7 @@ function buildMrt(V, opt = {}) {
           const c = tr.cars[R.car], c0 = R.pose, [lu, lv] = carLoc(c0, px, pz); // 上一格車廂的本地座標 → 這一格的世界座標
           const [nx, nz] = carW(c, lu, lv); out.shift = [nx - px, nz - pz, wrapA(c.th - c0.th)]; R.pose = { x: c.x, z: c.z, th: c.th, ux: c.ux, uz: c.uz };
           R.tr = tr; px = nx; pz = nz;
-          carWalls(c, tr.open, mv);
+          carWalls(c, tr.open, mv); zMovers(mv, -1, 0, R.key, R.car);
           const [u2, v2] = carLoc(c, px, pz);
           if (Math.abs(u2) > 12 || Math.abs(v2) > 5) { P.ride = null; P.movers.length = 0; } // 第 82 批：被搬走了（去這裡⋯）：不是坐車了
           else if (tr.open > 0.5 && (Math.abs(v2) > CAR_W + 0.05 || Math.abs(u2) > 6.95)) { P.ride = null; out.toast = `${stations[tr.si].nm}　下車了`; } // 走出車門＝下車
@@ -18081,6 +18268,7 @@ function buildMrt(V, opt = {}) {
         for (const ev of evs) if (ev.k === 'arrive' && ev.si === si) { out.toast = `叮咚！${dirLabel(si, ev.tr.dir)}的列車進站了`; out.chime = true; }
       }
       if (si >= 0 && lvl === 1) { const S = stations[si], [u] = S.loc(px, pz); if (P.lastU != null) for (const GU of S.gates) if ((P.lastU - GU) * (u - GU) < 0) { out.toast = '嗶！（免費）'; out.beep = true; } P.lastU = u; } else P.lastU = null; // 走過閘門
+      if (si >= 0 && (lvl === 1 || lvl === 2)) zMovers(mv, si, lvl === 2 ? YP : YC); // 第 87 批：小動物擋人
       P.lvl = lvl; return out;
     },
     dispose() { group.removeFromParent(); group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); for (const m of Object.values(mats)) m.dispose(); },
@@ -27514,7 +27702,7 @@ const SP3_CAMS = {
   photo2: { a: -152.417, d: 6.7108, h: 1.1264, tx: -0.6628, ty: 0.5682, fov: 22.9076, rl: 0.3138 },
 };
 const SP3_GARAGE = {
-  name: 'Ferrari Daytona SP3', sub: '照片那台紅色 SP3 · 3D 試做版',
+  name: 'SP3 紅色經典', sub: '照片那台紅色 SP3 · 3D 試做版',
   paints: [['#c3141c', '賽車紅'], ['#f4c21b', '摩德納黃'], ['#141518', '黑'], ['#f2f3f5', '白'], ['#1c3f94', '藍'], ['#8a9098', '銀灰'], ['#123f2c', '英國綠'], ['#ff7414', '橘']],
   opts: {
     wing: [['none', '不要'], ['gt', 'GT 大尾翼']],
@@ -27875,7 +28063,7 @@ const JESKO_CAMS = {
   photo2: { a: 147.25, d: 8.22, h: 0.25, tx: -0.284, ty: 0.733, fov: 19.24, rl: 0.5 },
 };
 const JESKO_GARAGE = {
-  name: 'Koenigsegg Jesko Attack', sub: '白色紅點綴那台 · 3D 試做版',
+  name: 'JESKO 白色火箭', sub: '白色紅點綴那台 · 3D 試做版',
   paints: [['#f1f2f3', '白（照片 1）'], ['#c5c9ce', '月光銀（照片 2）'], ['#ff6a13', '柑橘橘'], ['#16171a', '碳黑'], ['#1c3f9e', '藍'], ['#0e6b4b', '翡翠綠'], ['#c8141e', '紅'], ['#d6b25c', '金']],
   opts: {
     wing: [['stock', '原廠大尾翼'], ['none', '不要']],
@@ -28249,13 +28437,13 @@ const YARIS_CAMS = {
 };
 
 const YARIS_GARAGE = {
-  name: 'Toyota GR Yaris', sub: '白色 GR Yaris · 3D 試做版',
+  name: 'YARIS 小鋼砲', sub: '白色三缸小鋼砲 · 3D 試做版',
   paints: [['#eceeef', '珍珠白'], ['#b30f1f', '情熱紅'], ['#0e0f11', '寶石黑'], ['#5d6166', '金屬灰'], ['#c3c7cc', '銀'], ['#1f4fb8', '藍'], ['#f2c21a', '黃'], ['#1e7f4a', '綠']],
   opts: {
-    wing: [['gr', 'GR 大尾翼'], ['stock', '原廠'], ['none', '不要']],
+    wing: [['gr', '大尾翼'], ['stock', '原廠'], ['none', '不要']],
     kit: [['stock', '原廠'], ['track', '賽道']],
     height: [['0', '原廠'], ['-0.03', '降低'], ['-0.05', '貼地']],
-    livery: [['gr', 'GR 條紋'], ['none', '不要']],
+    livery: [['gr', '賽車條紋'], ['none', '不要']],
   },
   state: { paint: '#eceeef', rim: 'black', caliper: '#c8141e', wing: 'gr', kit: 'stock', height: '0', livery: 'none', tint: 'light' },
 };
@@ -28393,7 +28581,7 @@ const GC8_LOOK = (() => {
     ]);
   }
 
-  // ---- 拉花：照片那台的 STI 貼紙（後葉子板的爪痕＋WRX 字、車門的細線）----
+  // ---- 拉花：照片那台的貼紙樣子（後葉子板的爪痕＋字、車門的細線；第 87 批起字是自己編的 BEAU）----
   function livery(sd, style = 'wrx') {
     const { c, g } = canvas(BOX.side);
     g.clearRect(-3, -1, 6, 3);
@@ -28410,11 +28598,11 @@ const GC8_LOOK = (() => {
       const x0 = -0.905 + i * 0.047, h = 0.10 - i * 0.008, w = 0.02 - i * 0.0012;
       poly(g, [[x0, 0.548], [x0 + w * 0.7, 0.548], [x0 + 0.055 + w, 0.548 - h], [x0 + 0.05, 0.548 - h + 0.012]]); g.fill();
     }
-    // WRX 字：白字＋薄荷綠的邊
+    // 字：白字＋薄荷綠的邊（第 87 批：以前是真的車款字，換成自己的 BEAU）
     g.fillStyle = '#7fc9b0';
-    text(g, 'WRX', -0.706, 0.452, 0.058, { italic: true, mirror: sd < 0, skew: 0.25 });
+    text(g, 'BEAU', -0.706, 0.452, 0.050, { italic: true, mirror: sd < 0, skew: 0.25 });
     g.fillStyle = '#f4f5f6';
-    text(g, 'WRX', -0.709, 0.455, 0.056, { italic: true, mirror: sd < 0, skew: 0.25 });
+    text(g, 'BEAU', -0.709, 0.455, 0.048, { italic: true, mirror: sd < 0, skew: 0.25 });
     // 下面的粉紅細線＋小方塊
     g.fillStyle = '#e8246e';
     poly(g, [[-0.83, 0.424], [-0.62, 0.424], [-0.62, 0.419], [-0.83, 0.419]]); g.fill();
@@ -28490,13 +28678,13 @@ const GC8_CAMS = {
 };
 
 const GC8_GARAGE = {
-  name: 'Subaru Impreza WRX STI', sub: 'GC8 雙門 · 金色輪框那台 · 3D 試做版',
+  name: 'GC8 雙門拉力', sub: '藍色雙門 · 金色輪框那台 · 3D 試做版',
   paints: [['#1a4cc0', 'WR 藍'], ['#f2f3f5', '白'], ['#141518', '黑'], ['#c3c8ce', '銀'], ['#c8141e', '紅'], ['#f2c200', '音速黃'], ['#1e5b35', '綠']],
   opts: {
-    wing: [['sti', 'STI 尾翼'], ['none', '不要']],
+    wing: [['sti', '原廠尾翼'], ['none', '不要']],
     kit: [['stock', '原廠'], ['track', '賽道']],
     height: [['0', '原廠'], ['-0.03', '降低'], ['-0.05', '貼地']],
-    livery: [['wrx', 'WRX 貼紙'], ['none', '不要']],
+    livery: [['wrx', 'BEAU 貼紙'], ['none', '不要']],
   },
   state: { paint: '#1a4cc0', rim: 'gold', caliper: '#c8141e', wing: 'sti', kit: 'stock', height: '0', livery: 'wrx', tint: 'light' },
 };
@@ -28872,7 +29060,7 @@ const P918_CAMS = {
 };
 
 const P918_GARAGE = {
-  name: 'Porsche 918 Spyder', sub: '照片那台消光灰 Weissach · 3D 試做版',
+  name: '918 油電', sub: '照片那台消光灰 · 3D 試做版',
   paints: [['#5a5e63', '消光灰'], ['#1c1d20', '消光黑'], ['#c5c9ce', '液態金屬銀'], ['#a9acb0', 'GT 銀'], ['#f1f1ee', '白'], ['#c30f24', '紅'], ['#a4cc1e', '螢光綠']],
   opts: {
     wing: [['stock', '原廠（升起）'], ['none', '不要']],
@@ -44606,7 +44794,7 @@ const PAINT_COMMON = [['#f2f3f5', '白'], ['#141518', '黑'], ['#c3c8ce', '銀']
 const SIZES = {"supra":1304976,"gtr":2991120,"sp3":1379416,"jesko":1696900,"yaris":1544848,"gc8":2659380,"p918":1745044,"rx7":1428492,"chiron":1783564,"ae86":1340704,"aventador":1777496,"altis":1599208,"senna":1650428,"huayra":1724012,"laferrari":1775872,"civic":1742452,"evo":1619536,"monster":138756,"jp4":1325416,"k2":1070412,"p8":1657880,"z2":422064,"n4":342112,"mtb":1536,"road":1548};
 const CARS = {
   supra: {
-    file: 'tune/supra.glb?h=f69628b4', size: SIZES.supra, spec: SUPRA_SPEC, btn: ['SUPRA', '橘 · 玩命關頭'], name: 'Toyota Supra', sub: '玩命關頭那台 · 3D 試做版',
+    file: 'tune/supra.glb?h=f69628b4', size: SIZES.supra, spec: SUPRA_SPEC, btn: ['SUPRA', '橘 · 玩命關頭'], name: 'SUPRA 直六', sub: '玩命關頭那台 · 3D 試做版',
     paints: [['#ff7414', '玩命關頭橘'], ...PAINT_COMMON, ['#1d4fb8', '藍']],
     opts: {
       wing: [['stock', '原廠'], ['gt', 'GT 大尾翼'], ['none', '不要']],
@@ -44617,7 +44805,7 @@ const CARS = {
     state: { paint: '#ff7414', rim: 'chrome', caliper: '#9da1a6', wing: 'gt', kit: 'bomex', height: '0', livery: 'ff', tint: 'light' },
   },
   gtr: {
-    file: 'tune/gtr.glb?h=59f20452', size: SIZES.gtr, spec: GTR_SPEC, btn: ['GT-R R34', '藍 · 玩命關頭 4'], name: 'Nissan Skyline GT-R', sub: '玩命關頭 4 那台 R34 · 3D 試做版',
+    file: 'tune/gtr.glb?h=59f20452', size: SIZES.gtr, spec: GTR_SPEC, btn: ['GT-R R34', '藍 · 玩命關頭 4'], name: 'GT-R 四驅', sub: '玩命關頭 4 那台 R34 · 3D 試做版',
     paints: [['#1d4fc9', '灣岸藍'], ...PAINT_COMMON, ['#ff7414', '橘']],
     opts: {
       wing: [['stock', '原廠'], ['gt', 'GT 大尾翼'], ['none', '不要']],
@@ -44628,11 +44816,11 @@ const CARS = {
     state: { paint: '#1d4fc9', rim: 'gunmetal', caliper: '#c8141e', wing: 'stock', kit: 'bomex', height: '-0.03', livery: 'none', tint: 'light' },
   },
   // 之後加的車：車子的名字、車色、選項、預設值寫在各自的 <KEY>_GARAGE（sp3-spec.js 等）
-  sp3: { file: 'tune/sp3.glb?h=dc0369f5', size: SIZES.sp3, spec: SP3_SPEC, btn: ['SP3', '法拉利 · 紅'], ...SP3_GARAGE },
-  jesko: { file: 'tune/jesko.glb?h=218ad737', size: SIZES.jesko, spec: JESKO_SPEC, btn: ['JESKO', '柯尼賽格 · 白'], ...JESKO_GARAGE },
-  yaris: { file: 'tune/yaris.glb?h=97cc1c84', size: SIZES.yaris, spec: YARIS_SPEC, btn: ['YARIS', '豐田 GR · 白'], ...YARIS_GARAGE },
-  gc8: { file: 'tune/gc8.glb?h=fbea3fa4', size: SIZES.gc8, spec: GC8_SPEC, btn: ['GC8', '速霸陸 · 藍'], ...GC8_GARAGE },
-  p918: { file: 'tune/p918.glb?h=67c1216a', size: SIZES.p918, spec: P918_SPEC, btn: ['918', '保時捷 · 灰'], ...P918_GARAGE },
+  sp3: { file: 'tune/sp3.glb?h=dc0369f5', size: SIZES.sp3, spec: SP3_SPEC, btn: ['SP3', '經典超跑 · 紅'], ...SP3_GARAGE },
+  jesko: { file: 'tune/jesko.glb?h=218ad737', size: SIZES.jesko, spec: JESKO_SPEC, btn: ['JESKO', '火箭超跑 · 白'], ...JESKO_GARAGE },
+  yaris: { file: 'tune/yaris.glb?h=97cc1c84', size: SIZES.yaris, spec: YARIS_SPEC, btn: ['YARIS', '小鋼砲 · 白'], ...YARIS_GARAGE },
+  gc8: { file: 'tune/gc8.glb?h=fbea3fa4', size: SIZES.gc8, spec: GC8_SPEC, btn: ['GC8', '雙門拉力 · 藍'], ...GC8_GARAGE },
+  p918: { file: 'tune/p918.glb?h=67c1216a', size: SIZES.p918, spec: P918_SPEC, btn: ['918', '油電超跑 · 灰'], ...P918_GARAGE },
   // 2026-10-17 新的 10 台車（照 Wikimedia 照片做的；車名是自己編的，不能用真的牌子）
   rx7: { file: 'tune/rx7.glb?h=535a2751', size: SIZES.rx7, spec: RX7_SPEC, btn: ['R7', '轉子跑車 · 紅'], ...RX7_GARAGE },
   chiron: { file: 'tune/chiron.glb?h=0c62b69e', size: SIZES.chiron, spec: CHIRON_SPEC, btn: ['C16', '馬蹄超跑 · 藍'], ...CHIRON_GARAGE },
@@ -45334,7 +45522,7 @@ const DRIVERS = {
 };
 const OPPS = [
   { id: 'classmate', name: '隔壁同學', sub: '剛拿到駕照', key: 'gc8', hp: 280, tyre: 0, drv: 'rookie', prize: 5, look: { paint: '#f2f3f5', rim: 'chrome', wing: 'none', livery: 'none' } },
-  { id: 'uncle', name: '巷口阿伯', sub: '開 Yaris 去買菜', key: 'yaris', hp: 300, tyre: 0, drv: 'ok', prize: 12, look: { paint: '#0e0f11', rim: 'black', wing: 'stock', livery: 'none' } },
+  { id: 'uncle', name: '巷口阿伯', sub: '開小車去買菜', key: 'yaris', hp: 300, tyre: 0, drv: 'ok', prize: 12, look: { paint: '#0e0f11', rim: 'black', wing: 'stock', livery: 'none' } },
   { id: 'courier', name: '送貨小哥', sub: '趕著送貨', key: 'gc8', hp: 400, tyre: 1, drv: 'good', prize: 25, parts: ['exhaust', 'turbo'], look: { paint: '#c3c8ce', rim: 'gunmetal', wing: 'lip', livery: 'none' } },
   { id: 'nightmarket', name: '夜市小霸王', sub: '車子整台都是紫的', key: 'supra', hp: 650, tyre: 1, drv: 'good', prize: 60, parts: ['exhaust', 'intake', 'ecu'], look: { paint: '#5b2d9e', rim: 'chrome', rimStyle: 'fan', glow: '#9b4dff', wing: 'gt', kit: 'bomex', livery: 'flames' } },
   { id: 'shop', name: '修車廠老闆', sub: '自己改的 R34', key: 'gtr', hp: 750, tyre: 1, drv: 'good', prize: 150, parts: ['exhaust', 'turbo', 'ecu'], look: { paint: '#141518', rim: 'gunmetal', rimStyle: 'mesh', wing: 'swan', kit: 'stock', livery: 'none' } },
@@ -46245,7 +46433,7 @@ async function enterDrive() {
     await new Promise((r) => setTimeout(r, 30)); // 讓「出門中」先畫出來（蓋村子要一下子，這時候畫面不會動）
     try {
       if (!TR) TR = buildTrack();
-      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMrt(VIL, { renderer }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
+      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMrt(VIL, { renderer, makeAnimal: buildAnimal }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
       const L = VIL.places.garage.lot;
       GAR = buildRoom(renderer, { quality: 'low', exterior: true }); // 第 21 批：圓塔（tower.js）；村子裡看得到玻璃、名牌；地板不反射（省）
       GAR.group.position.set(L.x, VIL.places.garage.y || 0, L.z); GAR.group.rotation.y = L.heading; TR.scene.add(GAR.group);
@@ -51646,7 +51834,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 43; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 44; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
