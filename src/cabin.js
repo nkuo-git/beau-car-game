@@ -471,7 +471,7 @@ export const CABIN3D = (() => {
     for (let i = 0; i <= max; i++) { const a = lerp(a0, a1, i / max); g.fillStyle = i >= red ? '#ff4a3a' : '#e8eef8'; g.fillText(String(i), cx + Math.sin(a) * R * 0.64, cy - Math.cos(a) * R * 0.64); }
     // 兩邊：左邊檔位＋條、右邊地圖或能量
     g.fillStyle = '#e8eef8'; g.font = `bold ${Math.round(h * 0.28)}px Arial, sans-serif`; g.fillText(K.gear ?? 'D', x + w * 0.16, y + h * 0.42);
-    g.font = `${Math.round(h * 0.09)}px Arial, sans-serif`; g.fillStyle = acc; g.fillText(K.mode ?? (key === 'p918' ? 'HYBRID' : 'RACE'), x + w * 0.16, y + h * 0.72);
+    g.font = `${Math.round(h * 0.09)}px Arial, sans-serif`; g.fillStyle = acc; g.fillText(K.mode ?? (key === 'p918' ? 'E-POWER' : 'RACE'), x + w * 0.16, y + h * 0.72);
     for (let i = 0; i < 6; i++) { g.fillStyle = i < 4 ? acc : '#2a3140'; g.fillRect(x + w * 0.8 - w * 0.07 + i * w * 0.025, y + h * 0.66 - i * h * 0.05, w * 0.018, h * 0.08 + i * h * 0.05); }
     g.strokeStyle = '#4a6a9a'; g.lineWidth = 2; g.beginPath(); g.moveTo(x + w * 0.74, y + h * 0.3); g.bezierCurveTo(x + w * 0.8, y + h * 0.2, x + w * 0.86, y + h * 0.42, x + w * 0.93, y + h * 0.26); g.stroke();
     return { cx, cy, R, a0: -130, a1: 130, max, red };

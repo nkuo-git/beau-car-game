@@ -64,7 +64,7 @@ code = code.replace('{/*__LOD_SIZES__*/}', JSON.stringify(lodSizes));
 
 // tune.js
 let js = cut('<script type="module">', '</script>')
-  .replace('/*__YARIS__*/', "yaris: { file: 'car-yaris.txt', size: SIZES.yaris, spec: YARIS_SPEC, btn: ['YR3', '小鋼砲 · 白'], ...YARIS_GARAGE },");
+  .replace('/*__YARIS__*/', "yaris: { file: 'car-yaris.txt', size: SIZES.yaris, spec: YARIS_SPEC, btn: ['YARIS', '小鋼砲 · 白'], ...YARIS_GARAGE },");
 for (const [key, , txt] of CARS) { if (!js.includes(`'${txt}'`)) throw new Error('找不到 ' + txt); js = js.replace(`'${txt}'`, `'tune/${key}.glb?h=${hashes[key]}'`); }
 js = js.replace('/*__INLINE__*/', () => code).replace('__SIZES__', JSON.stringify(sizes))
   .replace('/*__RACE__*/', () => `// ---- race.src.js ----\n${read('race.src.js')}`)

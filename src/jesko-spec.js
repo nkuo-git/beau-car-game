@@ -207,7 +207,7 @@ export const JESKO_CAMS = {
   photo2: { a: 147.25, d: 8.22, h: 0.25, tx: -0.284, ty: 0.733, fov: 19.24, rl: 0.5 },
 };
 export const JESKO_GARAGE = {
-  name: 'JS8 白色火箭', sub: '白色紅點綴那台 · 3D 試做版',
+  name: 'JESKO 白色火箭', sub: '白色紅點綴那台 · 3D 試做版',
   paints: [['#f1f2f3', '白（照片 1）'], ['#c5c9ce', '月光銀（照片 2）'], ['#ff6a13', '柑橘橘'], ['#16171a', '碳黑'], ['#1c3f9e', '藍'], ['#0e6b4b', '翡翠綠'], ['#c8141e', '紅'], ['#d6b25c', '金']],
   opts: {
     wing: [['stock', '原廠大尾翼'], ['none', '不要']],

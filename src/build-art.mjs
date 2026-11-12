@@ -55,7 +55,7 @@ let html = fs.readFileSync(path.join(dir, 'garage.src.html'), 'utf8').replace('/
   .replace('/*__GARAGE_CSS__*/', () => fs.readFileSync(path.join(dir, 'garage.css'), 'utf8'))
   .replace('/*__RACE__*/', () => `// ---- race.src.js ----\n${fs.readFileSync(path.join(dir, 'race.src.js'), 'utf8')}`) // 賽道
   .replace('/*__TOWN__*/', () => `// ---- town.src.js ----\n${fs.readFileSync(path.join(dir, 'town.src.js'), 'utf8')}\n// ---- circuit.src.js ----\n${fs.readFileSync(path.join(dir, 'circuit.src.js'), 'utf8')}\n// ---- neihu.src.js ----\n${fs.readFileSync(path.join(dir, 'neihu.src.js'), 'utf8')}\n// ---- ghost.src.js ----\n${fs.readFileSync(path.join(dir, 'ghost.src.js'), 'utf8')}\n// ---- net.src.js ----\n${fs.readFileSync(path.join(dir, 'net.src.js'), 'utf8')}\n// ---- seat.src.js ----\n${fs.readFileSync(path.join(dir, 'seat.src.js'), 'utf8')}\n// ---- mart.src.js ----\n${fs.readFileSync(path.join(dir, 'mart.src.js'), 'utf8')}`); // 開車出門（小村莊）
-if (yaris) html = html.replace('/*__YARIS__*/', "yaris: { file: 'car-yaris.txt', size: SIZES.yaris, spec: YARIS_SPEC, btn: ['YR3', '小鋼砲 · 白'], ...YARIS_GARAGE },");
+if (yaris) html = html.replace('/*__YARIS__*/', "yaris: { file: 'car-yaris.txt', size: SIZES.yaris, spec: YARIS_SPEC, btn: ['YARIS', '小鋼砲 · 白'], ...YARIS_GARAGE },");
 fs.writeFileSync(path.join(dir, 'art/garage.html'), html);
 fs.rmSync(path.join(dir, 'art/car.glb'), { force: true });
 console.log('garage.html', html.length, 'bytes;', CARS.map(([k]) => `${k} ${(sizes[k] / 1e6).toFixed(2)}MB (${lodSizes[k] ? `lod ${(lodSizes[k] / 1e3).toFixed(0)}KB` : '沒有輕量車'})`).join(', '));

@@ -177,7 +177,7 @@ export const P918_CAMS = {
 };
 
 export const P918_GARAGE = {
-  name: 'PH9 油電', sub: '照片那台消光灰 · 3D 試做版',
+  name: '918 油電', sub: '照片那台消光灰 · 3D 試做版',
   paints: [['#5a5e63', '消光灰'], ['#1c1d20', '消光黑'], ['#c5c9ce', '液態金屬銀'], ['#a9acb0', 'GT 銀'], ['#f1f1ee', '白'], ['#c30f24', '紅'], ['#a4cc1e', '螢光綠']],
   opts: {
     wing: [['stock', '原廠（升起）'], ['none', '不要']],
