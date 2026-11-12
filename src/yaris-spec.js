@@ -153,7 +153,7 @@ export const YARIS_CAMS = {
 };
 
 export const YARIS_GARAGE = {
-  name: 'YARIS 小鋼砲', sub: '白色三缸小鋼砲 · 3D 試做版',
+  name: 'YR3 小鋼砲', sub: '白色三缸小鋼砲 · 3D 試做版',
   paints: [['#eceeef', '珍珠白'], ['#b30f1f', '情熱紅'], ['#0e0f11', '寶石黑'], ['#5d6166', '金屬灰'], ['#c3c7cc', '銀'], ['#1f4fb8', '藍'], ['#f2c21a', '黃'], ['#1e7f4a', '綠']],
   opts: {
     wing: [['gr', '大尾翼'], ['stock', '原廠'], ['none', '不要']],

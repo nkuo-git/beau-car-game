@@ -863,11 +863,11 @@ const dWant = await p.evaluate(() => { const D = window.__D(), G = window.__G(),
 check(dealer.list.length === dWant.n && dWant.n >= 15 && dealer.list.map((x) => x.split(/[*:]/)[0]).join() === dWant.names.join() && dealer.list.some((x) => x.startsWith(dWant.sel + '*')) && dealer.buy.includes(dWant.sel), `dealer lists the ${dWant.n} unowned cars cheapest first, ${dWant.sel} (cheapest affordable) selected`);
 await p.waitForFunction(() => Object.entries(window.__D().LODS).filter(([k, L]) => L.lod?.car.parent === window.__D().VIL.group).length === 6, null, { timeout: 180000 });
 await p.evaluate(() => window.scrollTo(0, 0)); await drawAndShot('12-dealer');
-await p.evaluate(() => [...document.querySelectorAll('#dealerCars .part')].find((x) => /JESKO/.test(x.textContent)).click());
+await p.evaluate(() => [...document.querySelectorAll('#dealerCars .part')].find((x) => /JS8/.test(x.textContent)).click());
 await p.waitForTimeout(1500);
 const jesko = await p.evaluate(() => ({ buy: document.getElementById('dealerBuyHead').textContent, dis: document.getElementById('dealerBuy').disabled }));
 check(/還差/.test(jesko.buy) && jesko.dis, `too expensive car cannot be bought (${JSON.stringify(jesko)})`);
-await p.evaluate(() => [...document.querySelectorAll('#dealerCars .part')].find((x) => /SUPRA/.test(x.textContent)).click());
+await p.evaluate(() => [...document.querySelectorAll('#dealerCars .part')].find((x) => /SU6/.test(x.textContent)).click());
 await p.waitForTimeout(1200);
 const m0 = await p.evaluate(() => window.__G().money);
 await p.evaluate(() => { const b = document.getElementById('dealerBuy'); b.click(); b.click(); });
@@ -996,7 +996,7 @@ const pk7 = await p.evaluate(() => {
 });
 console.log('  parked in a spot:', JSON.stringify(pk7), '| lods', JSON.stringify(await lodAt()));
 check(pk7.r > 8 && pk7.pressed === '下車' && pk7.mode === 'walk' && !pk7.drv && !pk7.voice && pk7.f === 2 && pk7.on === `towerBay${pk7.i + 1}` && pk7.lodVis && pk7.pose?.tw === pk7.i && pk7.saved === 'supra' && pk7.cars.includes('supra') && Math.abs(pk7.wy - 7.7) < 0.05
-  && new RegExp(`SUPRA 停好了：3 樓 ${pk7.i - 7} 號`).test(pk7.toast), `drove into the spot and pressed 下車: SUPRA straightened itself into 3 樓 ${pk7.i - 7} 號 (${pk7.s} s; 「${pk7.toast}」, saved), you stand on 3F, it can still be boarded`);
+  && new RegExp(`SU6 停好了：3 樓 ${pk7.i - 7} 號`).test(pk7.toast), `drove into the spot and pressed 下車: SUPRA straightened itself into 3 樓 ${pk7.i - 7} 號 (${pk7.s} s; 「${pk7.toast}」, saved), you stand on 3F, it can still be boarded`);
 await drawAndShot('18-parked-3f');
 // 走回電梯（站上圓台：面板出來）→ 按 2F → 人坐電梯下去
 const wb7 = await p.evaluate(() => { const D = window.__D(), H = window.__H, r = H.walkLocal([[4.5, 0], [0.4, 0.4]]); const panel = H.elPanel(), who = window.__D().elWho(); const pressed = H.elClick('2F'), w = H.elWait(), D2 = window.__D();
@@ -1013,7 +1013,7 @@ await p.evaluate(() => document.getElementById('fsBtn').click()); await p.waitFo
 check(elW.who === 3 && !elW.fs && elW.shown && !clash, `on foot on the lift with fullscreen off: the panel shows and covers no other button on any screen (${clash || 'ok'})`);
 // 走去 YARIS（2 樓 1 號：車頭朝外，駕駛座在 −z 那邊）→ 上車：完整的 YARIS；SUPRA 照樣停在 3 樓
 const toY = await p.evaluate(() => { const D = window.__D(), H = window.__H, y = D.TOWER_BAYS[0], r = H.walkLocal([[3.6, -2.2], [y.x, y.z - 2.0]]); return { ok: r.ok, act: H.actText(), at: r }; });
-check(toY.ok && toY.act === '上車 · YARIS', `walked over to YARIS in 2 樓 1 號: 「${toY.act}」 ${toY.ok ? '' : JSON.stringify(toY.at)}`);
+check(toY.ok && toY.act === '上車 · YR3', `walked over to YARIS in 2 樓 1 號: 「${toY.act}」 ${toY.ok ? '' : JSON.stringify(toY.at)}`);
 const sy = await p.evaluate(() => { const D = window.__D(), H = window.__H, pressed = H.press(), b = H.board(); const D2 = window.__D(); return { pressed, modes: b.modes, toast: document.getElementById('gtoast').textContent, boarding: !!D2.boarding, drv: !!D2.drv, tripFull: D2.tripFull }; });
 console.log('  上車 YARIS:', JSON.stringify(sy));
 await p.waitForFunction(() => window.__D().cur === 'yaris' && window.__D().drv && !window.__D().drv.telemetry().paused, null, { timeout: 300000 });
@@ -1024,7 +1024,7 @@ const yl = await p.evaluate(() => {
     supraOn: L.parent?.name, twr0: D.TWR[0], oldHidden: !D.built.supra || !D.built.supra.car.visible || D.built.supra.car.parent !== D.TR.scene, toast: H.toast() };
 });
 console.log('  switched:', JSON.stringify(yl), '| lods', JSON.stringify(await lodAt()));
-check(sy.pressed === '上車 · YARIS' && sy.modes.join('>') === 'in>seat>off' && /YARIS 發動中/.test(sy.toast) && yl.cur === 'yaris' && yl.S && yl.full && yl.atBay < 0.01 && Math.abs(yl.y - 4.5) < 0.02 && !yl.paused && yl.voice && yl.act2 === '下車' && !yl.yarisLod && yl.twr0 === null,
+check(sy.pressed === '上車 · YR3' && sy.modes.join('>') === 'in>seat>off' && /YR3 發動中/.test(sy.toast) && yl.cur === 'yaris' && yl.S && yl.full && yl.atBay < 0.01 && Math.abs(yl.y - 4.5) < 0.02 && !yl.paused && yl.voice && yl.act2 === '下車' && !yl.yarisLod && yl.twr0 === null,
   'switched cars on foot upstairs: YARIS (light-weight in 2 樓 1 號) became the full car on the 2F floor; its spot is free now; engine on; 下車 available');
 check(yl.supraOn?.startsWith('towerBay') && yl.oldHidden && /倒車回到電梯上，按 1F/.test(yl.toast), `SUPRA stays in its 3F spot (light-weight); a hint says how to get down: 「${yl.toast}」`);
 // 倒車回到電梯上 → 1F：電梯下去，自己轉到車頭朝鐵捲門
@@ -1048,7 +1048,7 @@ console.log('  home:', JSON.stringify(home), '| lods', JSON.stringify(await lodA
 const np7 = await p.evaluate(() => { const N = window.__N(); return { vis: N.g.visible, avg: +N.avg.toFixed(3), max: +N.max.toFixed(2), n: N.n, hits: N.hits, carHits: N.carHits, built: N.traffic.stats.built + N.peds.stats.built }; });
 console.log('  npc (whole trip):', JSON.stringify(np7));
 check(!np7.vis && np7.avg < 1.5, `back on the garage page: traffic and residents hidden; over the trip npcStep took ${np7.avg} ms a frame on average (worst ${np7.max} ms, ${np7.n} frames; phones ≈3–5× slower)`);
-check(home.cls === '' && /YARIS/i.test(home.car) && home.parent && home.pos.every((v) => v === 0) && home.rot === 0 && !home.trip && home.drv === null && home.tripPose === null && home.room && home.round && !home.wk && !home.ch, '直接回車庫: back on the garage page (the round tower) with YARIS (the car you were driving) on the turntable; walking HUD + character put away');
+check(home.cls === '' && /YR3/.test(home.car) && home.parent && home.pos.every((v) => v === 0) && home.rot === 0 && !home.trip && home.drv === null && home.tripPose === null && home.room && home.round && !home.wk && !home.ch, '直接回車庫: back on the garage page (the round tower) with YARIS (the car you were driving) on the turntable; walking HUD + character put away');
 const la7 = await lodAt(), si7 = home.park?.tower?.indexOf('supra');
 check(la7.gc8 === 'page' && la7.supra === 'page' && home.gc8 === 'towerBay2' && home.supra === `towerBay${si7 + 1}` && home.park?.mid === 'yaris' && home.park.tower.length === 40 && home.park.tower[1] === 'gc8' && home.park.tower[0] === null && home.park.tower.filter(Boolean).length === 2,
   `the page garage shows GC8 and SUPRA in the tower spots they were left in (2 樓 2 號, 3 樓 ${si7 - 7} 號; 2 樓 1 號 is empty now: YARIS is on the turntable)`);
@@ -1313,7 +1313,7 @@ const pk11 = await p.evaluate(async () => { document.querySelector('#cars button
 await p.waitForFunction(() => !window.__D().liftAnim.on && window.__D().LODS.gc8?.lod?.car.parent?.name === 'towerBay5' && !!window.__D().built.sp3, null, { timeout: 60000 });
 const pk11b = await p.evaluate(() => { const G = window.__G(), D = window.__D(); return { mid: G.park.mid, t4: G.park.tower[4], lf: D.room.lift.floor, y: +D.room.lift.y.toFixed(2), gc8vis: D.built.gc8.car.visible, gc8At: D.built.gc8.car.parent === D.built.sp3.car.parent, sp3vis: D.built.sp3.car.visible, lodAt: D.LODS.sp3?.lod?.car.parent?.name || null }; });
 console.log('  pick SP3 upstairs:', JSON.stringify(pk11), JSON.stringify(pk11b));
-check(pk11.cur === 'sp3' && /SP3 坐電梯從 2 樓下來⋯/.test(pk11.toast) && pk11.anim && pk11.anim.ph === 'up' && pk11.anim.lodAt === 'towerBay5' && pk11.anim.wasAt === 'towerLift' && pk11.busy && pk11.mid === 'gc8' && pk11.t4 === 'sp3' && pk11.gc8vis && !pk11.sp3vis,
+check(pk11.cur === 'sp3' && /DT3 坐電梯從 2 樓下來⋯/.test(pk11.toast) && pk11.anim && pk11.anim.ph === 'up' && pk11.anim.lodAt === 'towerBay5' && pk11.anim.wasAt === 'towerLift' && pk11.busy && pk11.mid === 'gc8' && pk11.t4 === 'sp3' && pk11.gc8vis && !pk11.sp3vis,
   `picking SP3 (parked upstairs) on the garage page: 「${pk11.toast}」, the lift goes up with GC8 on it (SP3 still in its spot, not shown yet)`);
 check(pk11b.mid === 'sp3' && pk11b.t4 === 'gc8' && pk11b.lf === 0 && pk11b.y === 0 && pk11b.sp3vis && !pk11b.gc8vis && pk11b.gc8At && pk11b.lodAt == null, `lift back at 1F: SP3 shown, GC8 hidden at the origin again, GC8 (light car) takes SP3's spot (2 樓 5 號)`);
 await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(1500);

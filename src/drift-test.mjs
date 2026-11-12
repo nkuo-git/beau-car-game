@@ -294,7 +294,7 @@ await p.waitForFunction(() => window.__D().on && window.__D().walker && window._
 await p.evaluate(() => { window.__hold = true; window.__noDraw = true; });
 const bd = await p.evaluate(() => { const D = window.__D(), H = window.__H; D.walker.teleport(H.gw(-4.5, -4, -1.05)); H.step = (n) => window.__wstep(n); window.__wstep(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); const pressed = H.press(), modes = H.board(); window.__wstep(40); const D2 = window.__D(); return { walk: r?.ok, pressed, modes, drv: !!D2.drv, cur: D2.cur }; });
 console.log('  上車:', JSON.stringify(bd), el());
-check(bd.drv && bd.cur === 'supra' && /上車 · SUPRA/.test(bd.pressed), `walked to the SUPRA and got in (${bd.pressed})`);
+check(bd.drv && bd.cur === 'supra' && /上車 · SU6/.test(bd.pressed), `walked to the SUPRA and got in (${bd.pressed})`);
 // 「手煞車」按鈕：在 HUD 裡、跟油門煞車一樣的樣子
 const hbUi = await p.evaluate(() => { const e = document.querySelector('#stage .dv-hb'), cs = e && getComputedStyle(e), r = e && e.getBoundingClientRect(); return e && { text: e.textContent, label: e.getAttribute('aria-label'), bg: cs.backgroundColor, color: cs.color, radius: cs.borderRadius, r: [r.left, r.top, r.width, r.height].map(Math.round), how: [...document.querySelectorAll('.how')].some((h) => /按「手煞車」可以甩尾/.test(h.textContent) && /空白鍵手煞車/.test(h.textContent)) }; });
 console.log('  手煞車 button:', JSON.stringify(hbUi));

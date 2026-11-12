@@ -1,5 +1,5 @@
 <title>3D 車庫試做</title>
-<meta name="description" content="改車遊戲的 3D 車庫：照 Nick 的照片做的 SUPRA、GT-R、SP3、JESKO、YARIS、GC8、918，用手指轉著看，車色、輪框、卡鉗、尾翼、套件、寬體、車身高度、拉花、隔熱紙都能換，白色大理石車庫停你所有的車，走去坐上車、打開鐵捲門自己開出去（停下來可以下車走來走去）：開進改車廠買零件、開去車店買新車再開回家停好、在快速道路開到極速、開去賽道跑 400 公尺直線加速。">
+<meta name="description" content="改車遊戲的 3D 車庫：照 Nick 的照片做的 SU6、R34、DT3、JS8、YR3、GC8、PH9，用手指轉著看，車色、輪框、卡鉗、尾翼、套件、寬體、車身高度、拉花、隔熱紙都能換，白色大理石車庫停你所有的車，走去坐上車、打開鐵捲門自己開出去（停下來可以下車走來走去）：開進改車廠買零件、開去車店買新車再開回家停好、在快速道路開到極速、開去賽道跑 400 公尺直線加速。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
 <style>
@@ -83,7 +83,7 @@ body.fs .wrap > header { display: none; } /* 全螢幕（開車、比賽）：�
     <button type="button" class="cta buy" id="dealerBuy" hidden><b id="dealerBuyHead">買這台</b><span id="dealerBuyNote"></span></button>
     <div class="minirow"><button type="button" class="ghost" id="dealerHome">直接回車庫</button><span>不用開，一下就回到車庫</span></div>
   </section>
-  <div class="name"><b id="carName">SUPRA 直六</b><span id="carSub">玩命關頭那台 · 3D 試做版</span></div>
+  <div class="name"><b id="carName">SU6 直六</b><span id="carSub">橘色直六雙渦輪 · 3D 試做版</span></div>
   <p class="spec" id="carSpec"></p>
   <button type="button" class="cta" id="driveOut"><b>出門</b><span>走去坐上車，開鐵捲門開出去：改車廠、車店、賽車場、快速道路、越野車場</span></button>
   <div class="lookrow" id="lookRow"><div class="lr-top"><b>畫質</b><span>出門的畫面</span></div><div class="lr-seg" role="group" aria-label="畫質"><button type="button" data-l="2" aria-pressed="false">超高</button><button type="button" data-l="1" aria-pressed="false">高</button><button type="button" data-l="0" aria-pressed="false">普通</button></div><p class="lr-tip" id="lookTip"></p></div>
@@ -264,33 +264,33 @@ const PAINT_COMMON = [['#f2f3f5', '白'], ['#141518', '黑'], ['#c3c8ce', '銀']
 const SIZES = __SIZES__;
 const CARS = {
   supra: {
-    file: 'car-glb.txt', size: SIZES.supra, spec: SUPRA_SPEC, btn: ['SUPRA', '橘 · 玩命關頭'], name: 'SUPRA 直六', sub: '玩命關頭那台 · 3D 試做版',
-    paints: [['#ff7414', '玩命關頭橘'], ...PAINT_COMMON, ['#1d4fb8', '藍']],
+    file: 'car-glb.txt', size: SIZES.supra, spec: SUPRA_SPEC, btn: ['SU6', '直六跑車 · 橘'], name: 'SU6 直六', sub: '橘色直六雙渦輪 · 3D 試做版',
+    paints: [['#ff7414', '火焰橘'], ...PAINT_COMMON, ['#1d4fb8', '藍']],
     opts: {
       wing: [['stock', '原廠'], ['gt', 'GT 大尾翼'], ['none', '不要']],
-      kit: [['stock', '原廠'], ['bomex', '玩命關頭'], ['track', '賽道']],
+      kit: [['stock', '原廠'], ['bomex', '街頭'], ['track', '賽道']],
       height: [['0.035', '原廠'], ['0', '降低'], ['-0.022', '貼地']],
-      livery: [['ff', '玩命關頭'], ['none', '不要']],
+      livery: [['ff', '綠色火焰'], ['none', '不要']],
     },
     state: { paint: '#ff7414', rim: 'chrome', caliper: '#9da1a6', wing: 'gt', kit: 'bomex', height: '0', livery: 'ff', tint: 'light' },
   },
   gtr: {
-    file: 'car-gtr.txt', size: SIZES.gtr, spec: GTR_SPEC, btn: ['GT-R R34', '藍 · 玩命關頭 4'], name: 'GT-R 四驅', sub: '玩命關頭 4 那台 R34 · 3D 試做版',
+    file: 'car-gtr.txt', size: SIZES.gtr, spec: GTR_SPEC, btn: ['R34', '四驅跑車 · 藍'], name: 'R34 四驅', sub: '照 Nick 的藍色小車做的 · 3D 試做版',
     paints: [['#1d4fc9', '灣岸藍'], ...PAINT_COMMON, ['#ff7414', '橘']],
     opts: {
       wing: [['stock', '原廠'], ['gt', 'GT 大尾翼'], ['none', '不要']],
-      kit: [['stock', '原廠'], ['bomex', '玩命關頭'], ['track', '賽道']],
+      kit: [['stock', '原廠'], ['bomex', '街頭'], ['track', '賽道']],
       height: [['0', '原廠'], ['-0.03', '降低'], ['-0.052', '貼地']],
       livery: [['ff', '白色條紋'], ['none', '不要']],
     },
     state: { paint: '#1d4fc9', rim: 'gunmetal', caliper: '#c8141e', wing: 'stock', kit: 'bomex', height: '-0.03', livery: 'none', tint: 'light' },
   },
   // 之後加的車：車子的名字、車色、選項、預設值寫在各自的 <KEY>_GARAGE（sp3-spec.js 等）
-  sp3: { file: 'car-sp3.txt', size: SIZES.sp3, spec: SP3_SPEC, btn: ['SP3', '經典超跑 · 紅'], ...SP3_GARAGE },
-  jesko: { file: 'car-jesko.txt', size: SIZES.jesko, spec: JESKO_SPEC, btn: ['JESKO', '火箭超跑 · 白'], ...JESKO_GARAGE },
+  sp3: { file: 'car-sp3.txt', size: SIZES.sp3, spec: SP3_SPEC, btn: ['DT3', '經典超跑 · 紅'], ...SP3_GARAGE },
+  jesko: { file: 'car-jesko.txt', size: SIZES.jesko, spec: JESKO_SPEC, btn: ['JS8', '火箭超跑 · 白'], ...JESKO_GARAGE },
   /*__YARIS__*/
   gc8: { file: 'car-gc8.txt', size: SIZES.gc8, spec: GC8_SPEC, btn: ['GC8', '雙門拉力 · 藍'], ...GC8_GARAGE },
-  p918: { file: 'car-p918.txt', size: SIZES.p918, spec: P918_SPEC, btn: ['918', '油電超跑 · 灰'], ...P918_GARAGE },
+  p918: { file: 'car-p918.txt', size: SIZES.p918, spec: P918_SPEC, btn: ['PH9', '油電超跑 · 灰'], ...P918_GARAGE },
   // 2026-10-17 新的 10 台車（照 Wikimedia 照片做的；車名是自己編的，不能用真的牌子）
   rx7: { file: 'car-rx7.txt', size: SIZES.rx7, spec: RX7_SPEC, btn: ['R7', '轉子跑車 · 紅'], ...RX7_GARAGE },
   chiron: { file: 'car-chiron.txt', size: SIZES.chiron, spec: CHIRON_SPEC, btn: ['C16', '馬蹄超跑 · 藍'], ...CHIRON_GARAGE },
@@ -315,22 +315,22 @@ const CARS = {
 // price＝大概行情價的一半（Nick 2026-10-07「所有車都半價」；怪獸卡車他說 100 萬）（新台幣「萬」，二手車看車況差很多）；tyres＝半熱熔胎、直線加速胎的價錢（萬）
 // parts：引擎零件 [代號, 名字, 做什麼, 加幾匹, 多少錢（萬）]，每台車不一樣，便宜的在前面；買了就一直裝著
 const PERF = {
-  gc8: { price: 75, ng: 5, mt: 1, hp: 280, kg: 1260, awd: 1, red: 8000, vmax: 250, top: 288, cda: 0.62, eng: 'EJ20 水平對臥四缸渦輪', tyres: [3, 6], parts: [
+  gc8: { price: 75, ng: 5, mt: 1, hp: 280, kg: 1260, awd: 1, red: 8000, vmax: 250, top: 288, cda: 0.62, eng: '2.0 水平對臥四缸渦輪', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 30, 4], ['exhaust', '不鏽鋼排氣', '中尾段換大口徑', 15, 4],
     ['ic', '上置大中冷', '進氣溫度降下來', 15, 5], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 5], ['header', '等長排氣頭段', '水平對臥的咕嚕聲會變順', 20, 8],
-    ['turbo', 'TD05 大渦輪', '換更大顆的渦輪', 100, 20], ['forged', '鍛造活塞連桿', '引擎撐得住高增壓', 40, 35]] },
-  yaris: { price: 130, ng: 6, mt: 1, hp: 300, kg: 1280, awd: 1, red: 7000, vmax: 230, top: 250, cda: 0.66, eng: 'G16E 1.6 三缸渦輪', tyres: [3, 6], parts: [
+    ['turbo', '雙滾珠大渦輪', '換更大顆的渦輪', 100, 20], ['forged', '鍛造活塞連桿', '引擎撐得住高增壓', 40, 35]] },
+  yaris: { price: 130, ng: 6, mt: 1, hp: 300, kg: 1280, awd: 1, red: 7000, vmax: 230, top: 250, cda: 0.66, eng: '1.6 三缸渦輪', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成高流量的', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 4], ['exhaust', '中尾段排氣', '排氣更順', 10, 5],
     ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 5], ['ic', '大中冷', '進氣溫度降下來', 15, 6], ['cams', '賽車凸輪軸', '高轉更有力', 25, 15],
     ['turbo', '混合式大渦輪', '渦輪換大一號', 80, 22], ['forged', '鍛造活塞連桿', '三缸也撐得住高增壓', 40, 38]] },
-  supra: { price: 200, ng: 6, mt: 1, hp: 550, kg: 1520, awd: 0, drive: 0.7, red: 7200, vmax: 300, top: 387, cda: 0.62, eng: '2JZ 直六雙渦輪', tyres: [4, 8], parts: [
+  supra: { price: 200, ng: 6, mt: 1, hp: 550, kg: 1520, awd: 0, drive: 0.7, red: 7200, vmax: 300, top: 387, cda: 0.62, eng: '3.0 直六雙渦輪', tyres: [4, 8], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 15, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 5], ['exhaust', '3 吋全段排氣', '整條換大口徑', 25, 6],
     ['ic', '前置大中冷', '進氣溫度降下來', 20, 6], ['fuel', '1000cc 噴油嘴＋雙汽油泵', '大馬力要很多油', 30, 8], ['cams', '高角度凸輪軸', '高轉更有力', 60, 18],
-    ['turbo', '單顆大渦輪', '兩顆渦輪換成一顆大的', 180, 35], ['forged', '鍛造活塞連桿', '2JZ 撐到 1000 匹', 80, 60]] },
-  gtr: { price: 400, ng: 6, mt: 1, hp: 500, kg: 1560, awd: 1, red: 8000, vmax: 290, top: 346, cda: 0.66, eng: 'RB26 直六雙渦輪', tyres: [4, 8], parts: [
+    ['turbo', '單顆大渦輪', '兩顆渦輪換成一顆大的', 180, 35], ['forged', '鍛造活塞連桿', '引擎撐到 1000 匹', 80, 60]] },
+  gtr: { price: 400, ng: 6, mt: 1, hp: 500, kg: 1560, awd: 1, red: 8000, vmax: 290, top: 346, cda: 0.66, eng: '2.6 直六雙渦輪', tyres: [4, 8], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 40, 6], ['ic', '前置大中冷', '進氣溫度降下來', 20, 7],
     ['exhaust', '鈦合金排氣', '又輕又大口徑', 20, 8], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 20, 8], ['cams', '高角度凸輪軸', '高轉更有力', 60, 20],
-    ['turbo', '雙大渦輪', '兩顆渦輪都換大', 150, 45], ['stroker', 'RB28 鍛造曲軸', '排氣量加到 2.8 升', 80, 80]] },
+    ['turbo', '雙大渦輪', '兩顆渦輪都換大', 150, 45], ['stroker', '2.8 鍛造曲軸', '排氣量加到 2.8 升', 80, 80]] },
   p918: { price: 3000, ng: 7, hp: 887, kg: 1675, awd: 1, red: 9150, vmax: 345, top: 351, cda: 0.62, eng: '4.6 V8＋兩顆電動馬達', tyres: [12, 20], parts: [
     ['filter', '賽車空濾', '吸氣更順', 8, 5], ['flywheel', '輕量化飛輪', '轉速拉得更快', 10, 25], ['exhaust', '鈦合金排氣', '頂出式排氣換鈦合金', 20, 30],
     ['ecu', 'ECU 調校', '引擎和馬達一起重調', 30, 40], ['battery', '電池放電升級', '電池一次放更多電', 40, 120], ['motorF', '前馬達升級', '前輪的電動馬達換大', 40, 150],
@@ -344,7 +344,7 @@ const PERF = {
     ['exhaust', '鈦合金排氣', '又輕又大聲', 30, 60], ['ecu', 'ECU 調校', '重寫點火和增壓', 50, 80], ['cams', '賽車凸輪軸', '高轉更有力', 20, 150],
     ['forged', '鍛造內部', '曲軸、活塞都換鍛造', 40, 300], ['turbo', '大渦輪', '兩顆渦輪都換大', 150, 400]] },
   // 2026-10-17 新的 10 台車（價錢一樣是行情價的一半左右）
-  rx7: { price: 100, ng: 5, mt: 1, hp: 280, kg: 1260, awd: 0, drive: 0.7, red: 8000, vmax: 250, top: 389, cda: 0.62, eng: '13B 雙轉子雙渦輪', tyres: [3, 6], parts: [
+  rx7: { price: 100, ng: 5, mt: 1, hp: 280, kg: 1260, awd: 0, drive: 0.7, red: 8000, vmax: 250, top: 389, cda: 0.62, eng: '1.3 雙轉子雙渦輪', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 10, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 30, 4], ['exhaust', '不鏽鋼排氣', '轉子引擎叫得更兇', 15, 4],
     ['ic', '前置大中冷', '進氣溫度降下來', 15, 5], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 5], ['port', '轉子擴孔', '進氣孔磨大，高轉更有力', 40, 15],
     ['turbo', '單顆大渦輪', '兩顆小渦輪換成一顆大的', 150, 30], ['seals', '強化油封', '轉子撐得住高增壓', 30, 35]] },
@@ -352,7 +352,7 @@ const PERF = {
     ['filter', '賽車空濾', '吸氣更順', 10, 8], ['exhaust', '鈦合金排氣', '四根排氣管叫得更大聲', 30, 60], ['ecu', 'ECU 調校', '重寫點火和增壓', 60, 80],
     ['ic', '大水冷中冷', '四顆渦輪的空氣更冷', 40, 90], ['fuel', '大噴油嘴', '大馬力要很多油', 30, 100], ['cams', '賽車凸輪軸', '高轉更有力', 40, 150],
     ['forged', '鍛造內部', 'W16 撐得住更高增壓', 50, 300], ['turbo', '四顆大渦輪', '四顆渦輪都換大', 200, 500]] },
-  ae86: { price: 75, ng: 5, mt: 1, hp: 130, kg: 940, awd: 0, drive: 0.65, red: 7600, vmax: 190, top: 254, cda: 0.7, eng: '4A-GE 1.6 直列四缸自然進氣', tyres: [2, 4], parts: [
+  ae86: { price: 75, ng: 5, mt: 1, hp: 130, kg: 940, awd: 0, drive: 0.65, red: 7600, vmax: 190, top: 254, cda: 0.7, eng: '1.6 直列四缸自然進氣', tyres: [2, 4], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 6, 1], ['exhaust', '不鏽鋼排氣', '叫得更清脆', 8, 2], ['header', '4-2-1 頭段', '高轉更順', 10, 3],
     ['ecu', 'ECU 調校', '重寫點火和噴油', 10, 3], ['itb', '四喉節氣門', '每一缸自己一個節氣門', 25, 8], ['cams', '高角度凸輪軸', '高轉更有力', 20, 10],
     ['bore', '加大缸徑', '排氣量加到 1.8 升', 30, 18], ['sc', '機械增壓', '加一顆機械增壓器', 70, 30]] },
@@ -380,10 +380,10 @@ const PERF = {
     ['intake', '高流量進氣', '空濾換成香菇頭', 8, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 20, 5], ['exhaust', '中置三出排氣', '中間三根叫得更兇', 15, 4],
     ['ic', '前置大中冷', '進氣溫度降下來', 12, 5], ['fuel', '大噴油嘴', '大馬力要更多油', 10, 5], ['lsd', '強化限滑差速器', '前輪不會只有一邊空轉', 15, 10],
     ['cams', '高角度凸輪軸', '高轉更有力', 20, 15], ['turbo', '大渦輪', '渦輪換大一號', 80, 40]] },
-  evo: { price: 100, ng: 6, mt: 1, hp: 280, kg: 1400, awd: 1, red: 7500, vmax: 250, top: 299, cda: 0.68, eng: '4G63 2.0 渦輪直列四缸（四輪驅動）', tyres: [3, 6], parts: [
+  evo: { price: 100, ng: 6, mt: 1, hp: 280, kg: 1400, awd: 1, red: 7500, vmax: 250, top: 299, cda: 0.68, eng: '2.0 渦輪直列四缸（四輪驅動）', tyres: [3, 6], parts: [
     ['intake', '高流量進氣', '空濾換成香菇頭', 8, 2], ['ecu', 'ECU 調校', '重寫點火和增壓', 20, 5], ['exhaust', '不鏽鋼排氣', '叫得更兇', 12, 4],
     ['ic', '前置大中冷', '進氣溫度降下來', 12, 6], ['fuel', '大噴油嘴＋汽油泵', '大馬力要更多油', 10, 6], ['cams', '高角度凸輪軸', '高轉更有力', 20, 12],
-    ['forged', '鍛造活塞連桿', '4G63 撐得住大增壓', 30, 25], ['turbo', '大渦輪', '渦輪換大一號', 80, 60]] },
+    ['forged', '鍛造活塞連桿', '引擎撐得住大增壓', 30, 25], ['turbo', '大渦輪', '渦輪換大一號', 80, 60]] },
   // ==== 第 4 批：越野車：offroad＝越野車行賣的（泥巴、石頭、沙跑得動：terrain.js）；big＝大車（車庫頁鏡頭拉遠、不停車位）；halfW＝碰撞半寬（輪胎比車身寬）；gears＝自己的齒比 ====
   monster: { price: 100, hp: 1500, kg: 5400, awd: 1, red: 6800, vmax: 110, top: 160, cda: 2.2, offroad: 1, big: 1, halfW: 1.905, ng: 2, gears: [2.1, 0.86], eng: '機械增壓 V8（燒甲醇）', tyres: [8, 15], parts: [
     ['intake', '大口徑進氣帽', '增壓器上面的進氣帽換大', 50, 6], ['ecu', '噴射電腦調校', '甲醇噴射重新調', 90, 12], ['exhaust', '直排頭段', '八根短管直排，聲音更兇', 70, 18],

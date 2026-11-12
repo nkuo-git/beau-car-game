@@ -196,7 +196,7 @@ await p.waitForFunction(() => document.getElementById('status')?.hidden && windo
   console.log('5', el(), JSON.stringify(tabs), JSON.stringify(r.slice(0, 3)), JSON.stringify(r.slice(-3)));
   check(tabs.join() === '400 公尺*,賽車場一圈,爬山,大家*,同一台車（GC8）', `tabs 400 公尺／賽車場一圈／爬山 and 大家／同一台車（GC8） (${tabs})`);
   const top = r.filter((x) => !x.gap && !x.me);
-  check(top.length === 20 && top[0].txt === '1|車手1號 · JESKO|8.90' && top[1].txt.startsWith('2|車手2號 · GT-R') && top.every((x, i) => x.txt.startsWith(`${i + 1}|`)), `top 20 in order: 「1 | 車手1號 · JESKO | 8.90」… (${top.length} rows)`);
+  check(top.length === 20 && top[0].txt === '1|車手1號 · JS8|8.90' && top[1].txt.startsWith('2|車手2號 · R34') && top.every((x, i) => x.txt.startsWith(`${i + 1}|`)), `top 20 in order: 「1 | 車手1號 · JS8 | 8.90」… (${top.length} rows)`);
   const mine = r[r.length - 1];
   const vis = await p.evaluate(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(), m = document.querySelector('#nwMine li.me'); return { mine: m ? Math.round(m.getBoundingClientRect().bottom) : null, ghost: Math.round(r('nwGhost').bottom), h: innerHeight }; });
   check(r[r.length - 2].gap && mine.me && mine.txt === '26|大便龍車神 · GC8|13.82' && vis.mine != null && vis.mine < vis.h && vis.ghost <= vis.h, `you're not in the top 20 → ⋮ then your own row, framed: 「${mine.txt}」; your row and the ghost button are on screen without scrolling (${JSON.stringify(vis)})`);

@@ -478,7 +478,7 @@ const SND_BASE = {
 const SND_I6 = [0, 120, 240, 360, 480, 600], SND_V8 = [0, 90, 180, 270, 360, 450, 540, 630];
 const SND_CARS = {
   gc8: {
-    name: 'EJ20 水平對臥四缸渦輪', red: 8000, idle: 0.11, gain: 0.94, idleGain: 2.7,
+    name: '2.0 水平對臥四缸渦輪', red: 8000, idle: 0.11, gain: 0.94, idleGain: 2.7,
     fire: [0, 180, 360, 540], bank: [0, 0, 1, 1], cylAmp: [1, 0.96, 1.02, 0.97], uel: 14, uelHi: 5,
     width: 165, rise: 0.09, decay: 0.75, vari: 0.07, jit: 1.2, wob: 0.016,
     grp: [{ ms: 1.3, fb: -0.45, lp: 4200, gain: 1, pre: 0 }, { ms: 2.5, fb: -0.5, lp: 2800, gain: 0.78, gainHi: 0.94, pre: 0.45 }],
@@ -490,7 +490,7 @@ const SND_CARS = {
     cut: 0.12,
   },
   yaris: {
-    name: 'G16E 1.6 直列三缸渦輪', red: 7000, idle: 0.13, gain: 1.26, idleGain: 3.05,
+    name: '1.6 直列三缸渦輪', red: 7000, idle: 0.13, gain: 1.26, idleGain: 3.05,
     fire: [0, 240, 480], bank: [0, 0, 0], cylAmp: [1, 0.93, 0.97],
     width: 175, rise: 0.08, decay: 0.8, vari: 0.07, jit: 1.2, wob: 0.015,
     grp: [{ ms: 1.1, fb: -0.42, lp: 4000, gain: 1 }],
@@ -502,7 +502,7 @@ const SND_CARS = {
     cut: 0.12,
   },
   supra: {
-    name: '2JZ 直列六缸單顆大渦輪', red: 7200, idle: 0.12, gain: 0.92, idleGain: 1.75,
+    name: '3.0 直列六缸單顆大渦輪', red: 7200, idle: 0.12, gain: 0.92, idleGain: 1.75,
     fire: SND_I6, bank: [0, 1, 0, 1, 0, 1], cylAmp: [1, 0.99, 1, 0.985, 0.995, 1],
     width: 135, rise: 0.1, decay: 0.7, vari: 0.045, jit: 0.7, wob: 0.01,
     grp: [{ ms: 2.0, fb: -0.4, lp: 3500, gain: 1 }, { ms: 2.15, fb: -0.4, lp: 3300, gain: 0.96 }],
@@ -514,7 +514,7 @@ const SND_CARS = {
     cut: 0.14,
   },
   gtr: {
-    name: 'RB26 直列六缸雙渦輪', red: 8000, idle: 0.12, gain: 0.98, idleGain: 2.1,
+    name: '2.6 直列六缸雙渦輪', red: 8000, idle: 0.12, gain: 0.98, idleGain: 2.1,
     fire: SND_I6, bank: [0, 1, 0, 1, 0, 1], cylAmp: [1, 0.985, 1, 0.99, 0.99, 1],
     width: 118, rise: 0.07, decay: 0.85, vari: 0.05, jit: 0.7, wob: 0.01,
     grp: [{ ms: 1.6, fb: -0.42, lp: 4500, gain: 1 }, { ms: 1.75, fb: -0.42, lp: 4300, gain: 0.9 }],
@@ -564,12 +564,12 @@ const SND_CARS = {
 // 2026-10-17 新的 10 台車：從上面七台改出來的（音量沒有用 sound-analyze.mjs 重新對齊，耳朵聽過再調）
 const SND_I4 = [0, 180, 360, 540], SND_V12 = [0, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 660];
 Object.assign(SND_CARS, {
-  rx7: { ...SND_CARS.gc8, name: '13B 雙轉子雙渦輪', red: 8000, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.98, 1, 0.98], uel: 0, uelHi: 0, width: 95, rasp: 0.5, raspHz: 2600, drive: 1.9,
+  rx7: { ...SND_CARS.gc8, name: '1.3 雙轉子雙渦輪', red: 8000, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.98, 1, 0.98], uel: 0, uelHi: 0, width: 95, rasp: 0.5, raspHz: 2600, drive: 1.9,
     turbo: { ...SND_CARS.gc8.turbo, n: 2, bov: 'atmo', bovLvl: 1.0 }, pops: { ...SND_CARS.gc8.pops, lift: 0.8, lvl: 1.0, rate: 14 } },
-  ae86: { ...SND_CARS.yaris, name: '4A-GE 1.6 直列四缸', red: 7600, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.96, 1, 0.97], turbo: null, gain: 1.1,
+  ae86: { ...SND_CARS.yaris, name: '1.6 直列四缸', red: 7600, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.96, 1, 0.97], turbo: null, gain: 1.1,
     intake: { ...SND_CARS.yaris.intake, lvl: 0.3, tone: 0.45, hiss: 0.1 }, pops: { ...SND_CARS.yaris.pops, lift: 0.3, shift: 0.15 } },
-  civic: { ...SND_CARS.yaris, name: 'K20C 2.0 直列四缸渦輪', red: 7000, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.97, 1, 0.98], gain: 1.1 },
-  evo: { ...SND_CARS.gc8, name: '4G63 2.0 直列四缸渦輪', red: 7000, bank: [0, 0, 0, 0], uel: 0, uelHi: 0, width: 140,
+  civic: { ...SND_CARS.yaris, name: '2.0 直列四缸渦輪', red: 7000, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.97, 1, 0.98], gain: 1.1 },
+  evo: { ...SND_CARS.gc8, name: '2.0 直列四缸渦輪', red: 7000, bank: [0, 0, 0, 0], uel: 0, uelHi: 0, width: 140,
     turbo: { ...SND_CARS.gc8.turbo, bov: 'flutter', bovLvl: 1.0, bovDur: 0.3 } },
   altis: { ...SND_CARS.yaris, name: '1.8 直列四缸油電', red: 5200, fire: SND_I4, bank: [0, 0, 0, 0], cylAmp: [1, 0.97, 1, 0.98], turbo: null, gain: 0.9, drive: 1.2, rasp: 0.15,
     pops: { ...SND_CARS.yaris.pops, lift: 0, shift: 0 }, motor: { ...SND_CARS.p918.motor, lvl: 0.06, lvlR: 0 } },
