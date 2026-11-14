@@ -5555,7 +5555,7 @@ function createEngineAudio(opt = {}) {
         } catch (e) { warn(e); }
       },
       dispose() { kill(v); },
-      get alive() { return !v.dead; },
+      get alive() { return !v.dead; }, get gain() { return v.gain; }, // 第 89 批：gain（點火的時候 0，發動了 1；測試看）
     };
     try {
       if (S.gone) { v.dead = true; return api; }
@@ -5625,6 +5625,64 @@ function createEngineAudio(opt = {}) {
           }, Math.max(0, (t1 + 0.8 - ctx.currentTime) * 1000) + 100);
         } catch (e) { warn(e); }
       };
+    } catch (e) { warn(e); }
+    return h;
+  }
+  // ---- 第 89 批（Nick「車子發動要有點火」）：點火：鑰匙「喀」→ 起動馬達的電磁開關「喀噠」→ 起動馬達轉（鋸齒波低通＋齒輪的嘰聲），
+  // 每壓縮一缸就「嗯」一下（馬達被頂住：慢一點、大聲一點、低低的一下）；引擎發動了（stop()）馬達很快停掉，接著是引擎聲（town.src.js 把 voice 的音量打開）。
+  // starter({ key, dur, gain })：dur 秒後自己停（沒叫 stop 的話）；key 照引擎幾缸算壓縮的快慢（單缸的慢慢「嗯—嗯」、V8 很密）
+  function starter(o = {}) {
+    const h = { alive: false, stop() {} };
+    try {
+      if (S.gone) return h;
+      const ctx = ensureCtx(); if (!ctx) return h;
+      wake(); clearTimeout(S.idleT);
+      let ncyl = 4; try { const P = SND_profile(o.key || 'supra', []); ncyl = Array.isArray(P.fire) && P.fire.length ? P.fire.length : 4; } catch { /* 照 4 缸 */ }
+      const dur = Math.max(0.3, Math.min(2, num(o.dur, 0.85))), t0 = ctx.currentTime + 0.01, tm = t0 + 0.09, keep = [];
+      const out = ctx.createGain(); out.gain.value = 0.4 * Math.max(0, num(o.gain, 1)); out.connect(S.inp); keep.push(out); // 0.4：轉的時候比怠速大約 10 dB（量過：1.0 的時候大 18 dB，太吵）
+      // 鑰匙「喀」（短短的高頻）＋電磁開關「喀噠」
+      { const n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); n.buffer = noiseBuf(ctx); f.type = 'bandpass'; f.frequency.value = 3200; f.Q.value = 2;
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.22, t0 + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.03);
+        n.connect(f); f.connect(g); g.connect(out); n.start(t0, 0.3); n.stop(t0 + 0.04); keep.push(n, f, g); }
+      clunk(ctx, out, tm - 0.02, 0.32, keep);
+      // 起動馬達：轉起來（0.1 秒）、每次壓縮慢一下
+      const mot = ctx.createGain(), mod = ctx.createGain(); mot.gain.setValueAtTime(0, tm); mot.gain.linearRampToValueAtTime(1, tm + 0.08); mod.gain.value = 0.6; mod.connect(mot); mot.connect(out); keep.push(mot, mod);
+      const saw = ctx.createOscillator(), lp = ctx.createBiquadFilter(), sg = ctx.createGain(); saw.type = 'sawtooth'; lp.type = 'lowpass'; lp.frequency.value = 1000; lp.Q.value = 0.8; sg.gain.value = 0.26;
+      saw.connect(lp); lp.connect(sg); sg.connect(mod); keep.push(saw, lp, sg);
+      const wh = ctx.createOscillator(), wf = ctx.createBiquadFilter(), wg = ctx.createGain(); wh.type = 'square'; wf.type = 'bandpass'; wf.frequency.value = 1500; wf.Q.value = 3; wg.gain.value = 0.035; // 齒輪的嘰聲
+      wh.connect(wf); wf.connect(wg); wg.connect(mod); keep.push(wh, wf, wg);
+      const ns = ctx.createBufferSource(), nb = ctx.createBiquadFilter(), ng = ctx.createGain(); ns.buffer = noiseBuf(ctx); ns.loop = true; nb.type = 'bandpass'; nb.frequency.value = 700; nb.Q.value = 0.8; ng.gain.value = 0.05;
+      ns.connect(nb); nb.connect(ng); ng.connect(mod); keep.push(ns, nb, ng);
+      const thump = ctx.createOscillator(), tg = ctx.createGain(); thump.type = 'sine'; thump.frequency.value = 52; tg.gain.value = 0; thump.connect(tg); tg.connect(out); keep.push(thump, tg); // 每次壓縮低低的「嗯」
+      saw.frequency.setValueAtTime(70, tm); wh.frequency.setValueAtTime(1100, tm); saw.frequency.linearRampToValueAtTime(118, tm + 0.1); wh.frequency.linearRampToValueAtTime(1650, tm + 0.1);
+      // 曲軸約 200→250 rpm：一秒壓縮 rpm/60 × 缸數/2 次（3.5～16）
+      const fc = (k) => Math.max(3.5, Math.min(16, ((200 + 60 * k) / 60) * (ncyl / 2)));
+      const end = t0 + dur;
+      for (let t = tm + 0.12, k = 0; t < end - 0.02; k++) {
+        const T = 1 / fc((t - tm) / dur), tp = t + T * 0.3;
+        mod.gain.setValueAtTime(0.55, t); mod.gain.linearRampToValueAtTime(1, tp); mod.gain.linearRampToValueAtTime(0.55, t + T);
+        saw.frequency.setValueAtTime(118 + 14 * k / 8, t); saw.frequency.linearRampToValueAtTime(100 + 14 * k / 8, tp); saw.frequency.linearRampToValueAtTime(118 + 14 * k / 8, t + T);
+        tg.gain.setValueAtTime(0, t); tg.gain.linearRampToValueAtTime(0.2, tp); tg.gain.linearRampToValueAtTime(0, t + T * 0.85);
+        t += T;
+      }
+      for (const x of [saw, wh, ns, thump]) x.start(tm);
+      if (S.rec) S.rec.n++;
+      let done = false;
+      h.alive = true;
+      h.stop = () => {
+        try {
+          if (done) return; done = true; h.alive = false; clearTimeout(TT);
+          const t1 = Math.max(ctx.currentTime, tm) + 0.005;
+          for (const p of [mot.gain, saw.frequency, wh.frequency, tg.gain]) { if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t1); else { p.cancelScheduledValues(t1); p.setValueAtTime(p.value, t1); } }
+          mot.gain.linearRampToValueAtTime(0, t1 + 0.07); tg.gain.linearRampToValueAtTime(0, t1 + 0.03); saw.frequency.linearRampToValueAtTime(160, t1 + 0.07); wh.frequency.linearRampToValueAtTime(2100, t1 + 0.07); // 引擎接手：馬達被甩開一下就停
+          for (const x of [saw, wh, ns, thump]) x.stop(t1 + 0.12);
+          setTimeout(() => {
+            for (const x of keep) try { x.disconnect(); } catch { /* 算了 */ }
+            if (S.rec) { S.rec.n = Math.max(0, S.rec.n - 1); idleCheck(); }
+          }, Math.max(0, (t1 + 0.2 - ctx.currentTime) * 1000) + 100);
+        } catch (e) { warn(e); }
+      };
+      const TT = setTimeout(() => h.stop(), (dur + 0.05) * 1000);
     } catch (e) { warn(e); }
     return h;
   }
@@ -5919,7 +5977,7 @@ function createEngineAudio(opt = {}) {
     } catch (e) { warn(e); }
   }
   return {
-    resume, voice, lift, crash, hiss, skid, ambient, music, setMuted, setVolume, dispose, // skid：第 3 批；ambient：第 31 批（環境聲）；music：第 34 批（背景音樂）
+    resume, voice, lift, starter, crash, hiss, skid, ambient, music, setMuted, setVolume, dispose, // skid：第 3 批；ambient：第 31 批（環境聲）；music：第 34 批（背景音樂）；starter：第 89 批（點火）
     get muted() { return S.muted; },
     get volume() { return S.vol; },
     get mode() { return S.mode; }, // 'worklet'｜'script'｜'off'
@@ -13851,6 +13909,8 @@ function createDrive(o) {
   // 第 68 批：手排（setGearbox('mt')）：mg＝排在哪一檔（−1 R、0 N、1–6；st.gear／st.rev 跟著它）、clu＝離合器接上多少（0 踩著～1 接上）、stall＝熄火了、crank＝發動中（秒）、
   //   grind＝「咔咔」沒換進去（秒；grindWhy 1 沒按離合器、2 太快不能倒車）、lim＝撞到紅線斷油中、limT＝計時（紅線噠噠噠、閃）、shq＝按了 ▲ ▼ 還沒處理的
   Object.assign(st, { mt: false, mg: 0, clu: 1, cluPrev: 1, stall: false, crank: 0, grind: 0, grindWhy: 0, lim: false, limT: 0, shq: [] });
+  // 第 89 批（Nick「車子發動要有點火」）：ign＝起動馬達還在轉（秒；轉速表 0.07 抖、沒有引擎聲）、踩油門馬上發動；發動那一下 flare（轉速衝到 0.37 再慢慢回到怠速）
+  const FLARE_T = 1.0; Object.assign(st, { ign: 0, ignT: 0, flare: 0 });
   const dmgP = { power: 1, top: 1, maxKmh: Infinity, steerPull: 0 }; // 撞壞了（setDamage）
   let imp = null; // 這一幀最大的一下（onImpact）
   const human = { thr: 0, brk: 0, steer: 0, hb: 0, clu: 0, kb: {} };
@@ -13992,7 +14052,7 @@ function createDrive(o) {
       st.mg = g; st.rev = g === -1; st.gear = Math.max(0, g - 1); st.hold = 0; st.shifts++;
       if (d > 0 && g > 1) events.push(['shift', g]);
     }
-    if (st.stall) { if (st.crank > 0) { st.crank -= h; if (st.crank <= 0) { st.stall = false; st.crank = 0; events.push(['engine', true]); } } else if (inp.thr > 0.3) st.crank = 0.6; }
+    if (st.stall) { if (st.crank > 0) { st.crank -= h; if (st.crank <= 0) { st.stall = false; st.crank = 0; st.flare = FLARE_T; events.push(['engine', true]); } } else if (inp.thr > 0.3) { st.crank = 0.6; events.push(['crank', 0.6]); } } // 第 89 批：重新發動也有起動馬達的聲音（crank）、發動那一下轉速衝上去（flare）
     st.grind = Math.max(0, st.grind - h); st.limT += h;
   }
   function setGearbox(k) {
@@ -14007,6 +14067,7 @@ function createDrive(o) {
   function physics(h, inp) {
     const R = ride && ride.on && !st.dyno ? ride : null; kGeo = R ? kGeo0 * R.k.ws : kGeo0; // 第 4 批：在地形上（村子裡 null：照舊）；四輪轉向；第 79 批：綁在馬力機上（台子墊高＝地形）照平路算（滾筒不吃地形的抓地力）
     const MT = st.mt; if (MT) mtStep(h, inp); // 第 68 批：手排：離合器、▲ ▼、熄火、發動
+    if (st.ign > 0) { st.ignT += h; st.ign -= h; if (inp.thr > 0.15) st.ign = 0; if (st.ign <= 0) { st.ign = 0; st.flare = FLARE_T; events.push(['ignite']); } } else if (st.flare > 0) st.flare = Math.max(0, st.flare - h); // 第 89 批：點火
     // 停住了還按著煞車＝換倒車；倒車停住了按油門＝換前進（手排：油門永遠是往前／往後走、煞車永遠是煞車；停住按著煞車 R ↔ 1 檔照舊）
     const go0 = st.rev && !MT ? inp.brk : inp.thr, stop0 = st.rev && !MT ? inp.thr : inp.brk, u0 = st.v * (st.rev ? -1 : 1);
     if (stop0 > 0.5 && go0 < 0.05 && u0 < 0.3 && !inp.hb && !MT) { st.hold += h; if (st.hold > 0.25) { st.rev = !st.rev; st.hold = 0; st.gear = 0; st.thr = st.brk = 0; } } else st.hold = 0; // 第 69 批：手排沒有「停住按著煞車＝倒車」，R 在換檔桿上（N 再往下） // 手排：按著煞車一次只換一次（放開再按才又換）
@@ -14061,9 +14122,12 @@ function createDrive(o) {
       const free = 0.13 + 0.87 * go;
       want = st.stall ? (st.crank > 0 ? 0.07 + 0.03 * Math.sin(st.limT * 60) : 0) : st.lim ? (st.limT % 0.1 < 0.05 ? 0.96 : 1.02) : (st.clu >= 0.5 && st.mg !== 0 ? 1 : eng) * Math.min(1.02, xr + slip) + (st.clu >= 0.5 && st.mg !== 0 ? 0 : 1 - eng) * free; // 第 69 批：接上過半轉速就跟著輪子（降檔瞬間衝上去，不被怠速拉回來）
     }
+    if (st.ign > 0) want = 0.075 + 0.02 * Math.sin(st.ignT * 46); // 第 89 批：起動馬達在轉
+    else if (st.flare > 0 && !(MT && st.stall)) want = Math.max(want, 0.13 + 0.24 * Math.pow(st.flare / FLARE_T, 1.3)); // 發動那一下
     const freeRev = MT && !st.stall && (st.mg === 0 || st.clu < 0.5); // 第 74 批（Nick「空檔踩的時候轉速表不要升那麼快」）：引擎沒接到輪子＝空催，轉速慢慢上去（0.3 秒一半、1 秒到 9 成）；空檔放油門掉下來也慢一點
-    st.rpm += (want - st.rpm) * (1 - Math.exp(-h * (MT && st.stall ? 6 : freeRev ? (want > st.rpm ? FREE_UP : st.mg === 0 ? FREE_DOWN : 12) : 12)));
+    st.rpm += (want - st.rpm) * (1 - Math.exp(-h * ((MT && st.stall) || st.ign > 0 ? 6 : freeRev ? (want > st.rpm ? FREE_UP : st.mg === 0 ? FREE_DOWN : 12) : 12)));
     st.load = MT && (st.stall || st.mg === 0 || st.clu < 0.5) ? (st.stall ? 0 : go * (st.mg === 0 ? 1 : 0.6)) : st.cut > 0 ? st.cutLoad : go > 0.02 ? go * (0.65 + 0.35 * lim) : 0;
+    if (st.ign > 0) st.load = 0;
     if (st.blip > 0) { st.blip -= h; if (!st.stall) st.load = Math.max(st.load, 0.6 + 0.4 * clamp(st.blip / BLIP_T, 0, 1)); } // 第 74 批：降檔那一下補一腳油的聲音（0.55 秒慢慢退）
     // 走：後軸沿著車頭方向走、繞後軸轉（腳踏車模型）
     const vab = Math.abs(st.v);
@@ -14615,6 +14679,8 @@ function createDrive(o) {
       else if (e[0] === 'shift' && o.onShift) o.onShift(e[1]);
       else if (e[0] === 'blip' && o.onBlip) o.onBlip(e[1]); // 第 74 批：手排降檔接上那一下（引擎聲放炮）
       else if (e[0] === 'engine' && o.onEngine) o.onEngine(e[1]); // 第 68 批：手排熄火（false）、重新發動（true）
+      else if (e[0] === 'ignite' && o.onIgnite) o.onIgnite(); // 第 89 批：點火：引擎發動了（起動馬達停、引擎聲出來）
+      else if (e[0] === 'crank' && o.onCrank) o.onCrank(e[1]); // 第 89 批：手排熄火以後按油門：起動馬達轉 e[1] 秒
       else if (e[0] === 'grind' && o.onGrind) o.onGrind(e[1]);
       else if (e[0] === 'bump' && o.onBump) o.onBump(e[1]);
       else if (e[0] === 'land') { cam.shake = Math.max(cam.shake, Math.min(0.3, e[1].speed * 0.025)); if (o.onLand) o.onLand(e[1]); } // 第 4 批：落地
@@ -14665,7 +14731,7 @@ function createDrive(o) {
     brake: Math.max(st.rev ? st.thr : st.brk, st.hb), steer: st.steer, surface: st.surf, cap: Math.min(999, Math.round(st.cap * 36) / 10), reversing: st.rev, bumps: st.bumps, shifts: st.shifts, zone: zoneNow, dest, destDist: routeData ? Math.max(0, routeData.len - routeS) : null, auto: !!auto, paused,
     slip: st.slip, travel: wrapA(st.th + st.slip), drift: st.dm, drifting: Math.abs(st.slip) > 0.175, drifts: st.drifts, loose: st.loose, skid: st.skid, handbrake: st.hb > 0 ? 1 : 0, // 第 3 批（甩尾）
     marks: SK ? SK.count() : 0, smoke: SK ? SK.alive() : 0, tilt: tilt.on ? tilt.val : null,
-    ngears: NG, mt: st.mt, mgear: st.mt ? st.mg : null, clutch: st.mt ? +(1 - st.clu).toFixed(3) : 0, stalled: st.stall, cranking: st.crank > 0, grind: st.grind > 0 ? st.grindWhy : 0, limiter: st.lim, // 第 68 批：手排
+    ngears: NG, mt: st.mt, mgear: st.mt ? st.mg : null, clutch: st.mt ? +(1 - st.clu).toFixed(3) : 0, stalled: st.stall, cranking: st.crank > 0, igniting: st.ign > 0, grind: st.grind > 0 ? st.grindWhy : 0, limiter: st.lim, // 第 68 批：手排
     dyno: !!st.dyno, whp: paused ? 0 : st.pw / 745.7, whpX: st.px, redline: P.red, // 第 77 批：馬力機：在滾筒上、輪上馬力（hp）、那時候的轉速（÷紅線）、紅線轉速
     ...(ride ? ride.tele() : null) });
 
@@ -14684,6 +14750,7 @@ function createDrive(o) {
     setTilt, get tilt() { return tilt.on; },
     setPop, get pop() { return popOn; }, // 跳燈
     setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, clu: +i.clutch || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
+    ignite(sec = 0.85) { st.ign = Math.max(0, sec); st.ignT = 0; st.flare = 0; }, get igniting() { return st.ign > 0; }, // 第 89 批：點火（上車、出門）：sec 秒起動馬達，踩油門馬上發動
     setGearbox, shift, get gearbox() { return st.mt ? 'mt' : 'at'; }, // 第 68 批：手排（'mt'）／自排（'at'）；shift(±1)＝按 ▲ ▼
     setDyno, get dyno() { return !!st.dyno; }, // 第 77 批：馬力機：setDyno({ x, z, heading }) 綁上去（車不動、輪子轉、油門換檔照舊）、setDyno(null) 放開
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
@@ -17562,6 +17629,13 @@ function decoAtlas(g, S) {
   { const x = 256, y = 560, w = 128, h = 256; g.fillStyle = '#c9c3b8'; g.fillRect(x, y, w, h); g.fillStyle = '#2e9d57'; g.fillRect(x + 14, y + 8, w - 28, h - 16); g.fillStyle = '#c9c3b8'; g.fillRect(x + 24, y + 18, w - 48, h - 36);
     g.fillStyle = '#2e9d57'; for (const yy of [46, 120]) { g.beginPath(); g.moveTo(x + w / 2, y + yy); g.lineTo(x + w / 2 - 30, y + yy + 34); g.lineTo(x + w / 2 + 30, y + yy + 34); g.closePath(); g.fill(); }
     g.font = `800 30px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('排', x + w / 2, y + 196); g.fillText('隊', x + w / 2, y + 228); R.queue = [x, y, x + w, y + h]; }
+  // 第 89 批：樓梯口旁邊的門（月台只剩 0.58 公尺）用的短的：寬的「下車」、小的「排隊」
+  { const x = 0, y = 832, w = 384, h = 140; g.fillStyle = '#c9c3b8'; g.fillRect(x, y, w, h); hatch(x + 8, y + 8, w - 16, h - 16, '#c9c3b8', '#f2c10f', 26); g.fillStyle = '#c9c3b8'; g.fillRect(x + 40, y + 30, w - 80, h - 60);
+    g.fillStyle = '#f2c10f'; g.beginPath(); g.moveTo(x + w - 64, y + h / 2 + 26); g.lineTo(x + w - 100, y + h / 2 - 8); g.lineTo(x + w - 28, y + h / 2 - 8); g.closePath(); g.fill();
+    g.fillStyle = '#3b3b3b'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 52px ${SANS}`; g.fillText('下車', x + w / 2 - 20, y + h / 2); R.offW = [x, y, x + w, y + h]; }
+  { const x = 400, y = 832, w = 140, h = 140; g.fillStyle = '#c9c3b8'; g.fillRect(x, y, w, h); g.fillStyle = '#2e9d57'; g.fillRect(x + 8, y + 8, w - 16, h - 16); g.fillStyle = '#c9c3b8'; g.fillRect(x + 16, y + 16, w - 32, h - 32);
+    g.fillStyle = '#2e9d57'; g.beginPath(); g.moveTo(x + w / 2, y + 26); g.lineTo(x + w / 2 - 24, y + 54); g.lineTo(x + w / 2 + 24, y + 54); g.closePath(); g.fill();
+    g.font = `800 34px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('排隊', x + w / 2, y + 90); R.queueS = [x, y, x + w, y + h]; }
   { const x = 384, y = 560, w = 256, h = 256; hatch(x, y, w, h, '#f4f4f0', '#d32f2f', 36); g.fillStyle = '#f4f4f0'; g.fillRect(x + 28, y + 92, w - 56, 72); g.fillStyle = '#d32f2f'; g.font = `800 50px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('禁止跨越', x + w / 2, y + h / 2); R.nox = [x, y, x + w, y + h]; }
   { const x = 640, y = 560, w = 384, h = 120; g.fillStyle = '#d32f2f'; g.fillRect(x, y, w, h); g.fillStyle = '#fff'; g.fillRect(x + 8, y + 8, w - 16, h - 16); g.fillStyle = '#d32f2f'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 50px ${SANS}`; g.fillText('禁止跨越', x + w / 2, y + 48); g.font = `600 26px ${SANS}`; g.fillStyle = '#333'; g.fillText('No Entry　危險 請勿進入', x + w / 2, y + 92); R.noxSign = [x, y, x + w, y + h]; }
   { const x = 640, y = 690, w = 384, h = 190; g.fillStyle = '#1f2326'; g.fillRect(x, y, w, h); g.fillStyle = '#8a5a2b'; g.fillRect(x, y, 16, h); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 64px ${SANS}`; g.fillText('電扶梯 ↑', x + w / 2 + 8, y + 70); g.font = `600 34px ${SANS}`; g.fillStyle = '#ffd24a'; g.fillText('請站穩、握好扶手', x + w / 2 + 8, y + 140); R.escSign = [x, y, x + w, y + h]; }
@@ -17702,7 +17776,9 @@ function buildMrt(V, opt = {}) {
       G.vqV(a, u, PL, YP, YP + 3.0, GLS, sd > 0); cols2.push(box(u, PL, a - 0.06, a + 0.06, YP - 0.3, YP + 3.3));
       M.bx(-PL, PL, YP + 3.0, YP + 3.35, a - 0.12, a + 0.12, BROWN); M.bx(-PL, PL, YP + 3.35, CEIL2, a - 0.06, a + 0.06, WALL); // 橫樑＋到天花板的板子
       // 地上的線：每個門口前面黃色斜線的「下車」、兩邊綠色的「排隊」箭頭
-      for (const d of DOOR_U) { decFloor(d, a + sd * 0.6, a + sd * 2.0, 1.5, DEC.off); for (const q of [-1, 1]) decFloor(d + q * 1.35, a + sd * 0.6, a + sd * 3.0, 0.8, DEC.queue); }
+      // 第 89 批：門口在樓梯、電扶梯的洞旁邊（月台只剩玻璃欄杆前面那一條）＝短的線，不畫到洞上面（懸空）
+      for (const d of DOOR_U) { if (d + 1.8 > RAMP.u0 && d - 1.8 < RAMP.u1) { const vf = r0 - sd * 0.12, dv = Math.abs(vf - (a + sd * 0.6)); decFloor(d, a + sd * 0.6, vf, dv * 384 / 140, DEC.offW); for (const q of [-1, 1]) decFloor(d + q * 1.35, a + sd * 0.6, vf, dv, DEC.queueS); continue; }
+        decFloor(d, a + sd * 0.6, a + sd * 2.0, 1.5, DEC.off); for (const q of [-1, 1]) decFloor(d + q * 1.35, a + sd * 0.6, a + sd * 3.0, 0.8, DEC.queue); }
       // 兩頭：禁止跨越（紅白斜線＋黃黑欄杆，走不過去）
       for (const su of [-1, 1]) { const ub = su * (PL - 2.6); decFloor(su * (PL - 1.3), a + sd * 0.1, b - sd * 0.1, 2.5, DEC.nox); // 字朝那一頭的外面
         M.bx(ub - 0.05, ub + 0.05, YP, YP + 1.0, Math.min(a, b) + 0.1, Math.max(a, b) - 0.1, [0.95, 0.8, 0.1]); for (let k = 0; k < 6; k++) { const vv = a + (b - a) * (k + 0.5) / 6; M.bx(ub - 0.06, ub + 0.06, YP + 0.45, YP + 0.62, vv - 0.28, vv + 0.28, [0.1, 0.1, 0.1]); }
@@ -18181,7 +18257,8 @@ function buildMrt(V, opt = {}) {
   }
   // ---- 走路的人 ----
   const P = {
-    group, stations, info: { meshes, tris: Math.round(tris), stations: stations.map((s) => s.nm), esc: ESCS.length, escSteps: nSteps, T: CYCLE, H, dwell: DWELL, maxTrains: maxAct, sA, sB, len: sB - sA, dirs: dirs.map((d) => ({ dir: d.dir, phase: d.phase, total: Math.round(d.total * 10) / 10, stops: d.stops.map((s) => Math.round(s.p)), dwells: d.segs.filter((s) => s.k === 'dwell').map((s) => ({ si: s.si, t0: Math.round(s.t0 * 10) / 10, t1: Math.round(s.t1 * 10) / 10 })) })) },
+    group, stations, info: { meshes, tris: Math.round(tris), stations: stations.map((s) => s.nm), hole: { u0: RAMP.u0, u1: RAMP.u1, v0: RAMP.v0, v1: HOLE1 }, // hole：月台地板樓梯、電扶梯的洞（站的座標 u、|v|）
+      esc: ESCS.length, escSteps: nSteps, T: CYCLE, H, dwell: DWELL, maxTrains: maxAct, sA, sB, len: sB - sA, dirs: dirs.map((d) => ({ dir: d.dir, phase: d.phase, total: Math.round(d.total * 10) / 10, stops: d.stops.map((s) => Math.round(s.p)), dwells: d.segs.filter((s) => s.k === 'dwell').map((s) => ({ si: s.si, t0: Math.round(s.t0 * 10) / 10, t1: Math.round(s.t1 * 10) / 10 })) })) },
     YT, YP, YC, ride: null, lvl: 0, si: -1, py: 0, movers: [],
     get time() { return time; }, setTime(t) { time = ((t % CYCLE) + CYCLE) % CYCLE; prev.clear(); trainsNow(); events.length = 0; },
     animals: () => Z.list.filter((a) => !a.free).map((a) => { const [u, v] = a.si >= 0 ? stations[a.si].loc(a.x, a.z) : [0, 0]; return { k: a.kind, si: a.si, lvl: a.lvl, sd: a.sd, st: a.st, x: +a.x.toFixed(2), z: +a.z.toFixed(2), y: +a.y.toFixed(2), u: +u.toFixed(2), v: +v.toFixed(2), hd: +a.hd.toFixed(2), ride: a.ride ? a.ride.key : null, ci: a.ride ? a.ride.ci : null, spot: !!a.spot, vis: !!(a.C && a.C.group.visible), built: !!a.C }; }), // 第 87 批：捷運站的小動物（測試）
@@ -26822,11 +26899,12 @@ const PINKY = {
     ell(G, [0, 0.43, 0], [0.125, 0.15, 0.135], null, BODY, (x, y) => mix2(B.hips, B.chest, 0.36, 0.48, y), { w: 22, h: 16 });
     ell(G, [-0.005, 0.32, 0], [0.142, 0.118, 0.152], null, FLEECE, B.hips, { w: 24, h: 16, jit: 0.007, fuzz: 0.06 });
     ell(G, [0.02, 0.645, 0], [0.13, 0.12, 0.125], null, BODY, B.head, { w: 22, h: 16 });
-    cap(G, [0.1, 0.63, 0], [0.245, 0.665, 0], 0.075, 0.05, BODY, B.head, { seg: 16, k: 6 });
-    const pa = Math.atan2(0.035, 0.145);
-    ell(G, [0.288, 0.675, 0], [0.016, 0.046, 0.049], [0, 0, pa], NOSE, B.head, { w: 14, h: 10, fuzz: 0.01 });
+    // 第 89 批（Nick「粉紅色豬鼻子太長」）：鼻子短一點（露出頭的那段 15.5 → 9.5 公分）
+    cap(G, [0.1, 0.63, 0], [0.19, 0.654, 0], 0.075, 0.052, BODY, B.head, { seg: 16, k: 6 });
+    const pa = Math.atan2(0.024, 0.09);
+    ell(G, [0.233, 0.664, 0], [0.016, 0.046, 0.049], [0, 0, pa], NOSE, B.head, { w: 14, h: 10, fuzz: 0.01 });
     for (const s of [-1, 1]) {
-      ell(G, [0.302, 0.678, s * 0.02], [0.006, 0.015, 0.008], [0, 0, pa], STITCH, B.head, { w: 8, h: 6, fuzz: 0 });
+      ell(G, [0.247, 0.668, s * 0.02], [0.006, 0.015, 0.008], [0, 0, pa], STITCH, B.head, { w: 8, h: 6, fuzz: 0 });
       ell(G, [0.098, 0.69, s * 0.085], [0.017, 0.017, 0.017], null, EYE, B.head, { w: 12, h: 8, fuzz: 0, rough: 0.22 });
       ell(G, [0.112, 0.697, s * 0.08], [0.005, 0.005, 0.005], null, GLINT, B.head, { w: 6, h: 4, fuzz: 0, rough: 0.3 });
       const th = s * 0.33, ear = s < 0 ? B.earL : B.earR, ex = -0.01, ey = 0.73, ez = s * 0.075, dy = Math.cos(th), dz = Math.sin(th);
@@ -26847,11 +26925,14 @@ const PINKY = {
 const STRIPES = ['#e8393f', '#f28a2b', '#f5d33c', '#58b847', '#2f96d6', '#2b3c96', '#8e4dbf', '#ea589f'].map(col);
 const CHAM_SC = 1.2;
 // 腳：肩膀／髖 u、手肘／膝蓋 l、腳踝 f（還沒放大）；前腳手肘朝後、後腳膝蓋朝前，站著就彎一點（爬的樣子，走路的時候腳才踩得到地）
-const CLEG = { F: { x: 0.22, u: 0.42, lx: -0.1, l: 0.22, f: 0.035 }, H: { x: -0.37, u: 0.42, lx: 0.1, l: 0.22, f: 0.035 } };
+// 第 89 批（Nick「變色龍腳太長」）：身體低 6 公分、肚子往下多 7.5 公分（belly）、腳變短：露出來的腳短約三分之一（放大前 0.35 → 0.23）
+const CLEG = { F: { x: 0.22, u: 0.36, lx: -0.085, l: 0.19, f: 0.035 }, H: { x: -0.37, u: 0.36, lx: 0.085, l: 0.19, f: 0.035 } };
+const CHAM_DY = -0.06; // 中線（身體、頭、尾巴）往下
+const belly = (s) => 0.075 * (s < 0.3 ? 0 : s < 0.5 ? smooth((s - 0.3) / 0.2) : s < 1.05 ? 1 : s < 1.22 ? 1 - smooth((s - 1.05) / 0.17) : 0); // 肚子（下半圈）多多少
 let CL = null; // 中線：{ x, y, s }，s＝從鼻子量的長度（還沒放大）
 function chamLine() {
   if (CL) return CL;
-  const ctrl = [[0.70, 0.575], [0.58, 0.592], [0.44, 0.59], [0.30, 0.566], [0.10, 0.536], [-0.15, 0.515], [-0.40, 0.496], [-0.61, 0.468], [-0.78, 0.425]];
+  const ctrl = [[0.70, 0.575], [0.58, 0.592], [0.44, 0.59], [0.30, 0.566], [0.10, 0.536], [-0.15, 0.515], [-0.40, 0.496], [-0.61, 0.468], [-0.78, 0.425]].map(([x, y], i, A) => [x, y + CHAM_DY * (i < A.length - 2 ? 1 : i < A.length - 1 ? 0.55 : 0.15)]); // 尾巴根那邊慢慢回到原本的高度（不然捲起來的尾巴碰到地）
   const pts = [];
   for (let i = 0; i < ctrl.length - 1; i++) {
     const p0 = ctrl[Math.max(0, i - 1)], p1 = ctrl[i], p2 = ctrl[i + 1], p3 = ctrl[Math.min(ctrl.length - 1, i + 2)];
@@ -26890,7 +26971,7 @@ const CHAM = {
     const o = {}, at = (s) => { clAt(s, o); return [o.x, o.y, 0]; }, P = {};
     for (const [n, s] of CHAM_SP) P[n] = at(s);
     const b = [['root', null, 0, 0, 0], ['pelvis', 'root', ...P.pelvis], ['spine', 'pelvis', ...P.spine], ['chest', 'spine', ...P.chest], ['head', 'chest', ...P.head],
-      ['eyeL', 'head', 0.555, 0.628, -0.112], ['eyeR', 'head', 0.555, 0.628, 0.112],
+      ['eyeL', 'head', 0.555, 0.628 + CHAM_DY, -0.112], ['eyeR', 'head', 0.555, 0.628 + CHAM_DY, 0.112],
       ['tail1', 'pelvis', ...P.tail1], ['tail2', 'tail1', ...P.tail2], ['tail3', 'tail2', ...P.tail3], ['tail4', 'tail3', ...P.tail4]];
     for (const [k, par, z] of [['LF', 'chest', -0.11], ['RF', 'chest', 0.11], ['LH', 'pelvis', -0.11], ['RH', 'pelvis', 0.11]]) {
       const g = CLEG[k[1]]; b.push([k + 'u', par, g.x, g.u, z], [k + 'l', k + 'u', g.x + g.lx, g.l, z], [k + 'f', k + 'l', g.x, g.f, z]);
@@ -26915,12 +26996,12 @@ const CHAM = {
     const base = [];
     for (const q of rings) {
       clAt(q.s, o); chamR(q.s, r);
-      const ry = Math.max(r[0], 1e-4), rz = Math.max(r[1], 1e-4), nx = o.ty, ny = -o.tx; // N＝往上（中線轉 90 度）
+      const ry0 = Math.max(r[0], 1e-4), ryB = ry0 + belly(q.s), rz = Math.max(r[1], 1e-4), nx = o.ty, ny = -o.tx; // N＝往上（中線轉 90 度）；下半圈＝肚子（ryB）
       const r2 = [0, 0]; chamR(Math.min(end, q.s + 0.004), r2); const r1 = [0, 0]; chamR(Math.max(0, q.s - 0.004), r1);
       const slope = clamp((r2[0] + r2[1] - r1[0] - r1[1]) / 2 / (Math.min(end, q.s + 0.004) - Math.max(0, q.s - 0.004)), -40, 40);
       const c = STRIPES[((q.ci % 8) + 8) % 8], sk = skinAt(q.s), i0 = G.n;
       for (let j = 0; j < NR; j++) {
-        const a = (j / NR) * TAU, ca = Math.cos(a), sa = Math.sin(a);
+        const a = (j / NR) * TAU, ca = Math.cos(a), sa = Math.sin(a), ry = ca < 0 ? ryB : ry0;
         let mx = nx * (ca / ry), my = ny * (ca / ry), mz = sa / rz; const ml = Math.hypot(mx, my, mz); mx /= ml; my /= ml; mz /= ml;
         mx -= o.tx * slope; my -= o.ty * slope; const l2 = Math.hypot(mx, my, mz);
         vert(G, o.x + nx * ry * ca, o.y + ny * ry * ca, rz * sa, mx / l2, my / l2, mz / l2, c, 1, 0.025, sk);
@@ -26939,7 +27020,7 @@ const CHAM = {
     }
     // 眼睛：白色凸凸的、黑色的眼珠（會自己轉）
     for (const sd of [-1, 1]) {
-      const e = sd < 0 ? B.eyeL : B.eyeR, c = [0.555, 0.628, sd * 0.112];
+      const e = sd < 0 ? B.eyeL : B.eyeR, c = [0.555, 0.628 + CHAM_DY, sd * 0.112];
       ell(G, c, [0.06, 0.06, 0.058], null, WHITE, e, { w: 18, h: 12, fuzz: 0, rough: 0.35 });
       const d = new THREE.Vector3(0.55, 0.12, sd * 0.83).normalize();
       ell(G, [c[0] + d.x * 0.042, c[1] + d.y * 0.042, c[2] + d.z * 0.042], [0.03, 0.03, 0.03], null, PUPIL, e, { w: 12, h: 8, fuzz: 0, rough: 0.2 });
@@ -46583,7 +46664,9 @@ function makeDrv(pose) {
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
     onZone: arrive, onShift: () => dvoice?.shift(), onBlip: () => dvoice?.shift() /* 第 74 批：降檔補油 */, onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
-    onEngine: (on) => { dvoice?.dispose(); dvoice = on ? engineAudio.voice(cur, { parts: partsOf(cur) }) : null; }, // 第 68 批：手排熄火＝引擎聲停、重新發動＝再來
+    onEngine: (on) => { IGN.st?.stop(); IGN.st = null; dvoice?.dispose(); dvoice = on ? engineAudio.voice(cur, { parts: partsOf(cur) }) : null; }, // 第 68 批：手排熄火＝引擎聲停、重新發動＝再來
+    onCrank: (sec) => { if (PERF[cur]?.bike) return; IGN.st?.stop(); IGN.st = engineAudio.starter?.({ key: cur, dur: sec + 0.05 }) || null; }, // 第 89 批：手排熄火以後重新發動：起動馬達
+    onIgnite: () => { IGN.st?.stop(); IGN.st = null; dvoice?.setGain(1); }, // 第 89 批：點火：引擎發動了（起動馬達停、引擎聲出來）
     crush: crushFx && crushK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
@@ -46598,7 +46681,15 @@ function makeDrv(pose) {
   arrangeCars(); // 停著的車：放碰撞（開車的是新的）、走路的清單
   drv.setDestination(tripDest);
   dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
+  ignStart(); // 第 89 批：點火
   popDrv(); // 跳燈（86、R7）
+}
+// 第 89 批（Nick「車子發動要有點火」）：上車、出門＝點火：鑰匙「喀」、起動馬達轉 0.85 秒（轉速表抖、沒有引擎聲），引擎發動「轟」一下（轉速衝上去再回到怠速）；
+// 踩油門馬上發動（不用等）。腳踏車沒有。drive.js ignite()／onIgnite、sound.js starter()
+const IGN = { st: null, T: 0.85 };
+function ignStart() {
+  if (!drv || !dvoice || PERF[cur]?.bike) return;
+  IGN.st?.stop(); dvoice.setGain(0); drv.ignite(IGN.T); IGN.st = engineAudio.starter?.({ key: cur, dur: IGN.T + 0.1 }) || null;
 }
 // 改車廠有沒有買得起的（還沒裝的引擎零件、還沒買的輪胎）
 function canShop() {
@@ -46866,7 +46957,7 @@ function onGetIn(car, seat = null) {
   const px = seat && seat.i > 0 ? seat.i : 0;
   if (car.drive) { // 剛下來那台：walk.js 已經 drv.resume() 了，引擎再發動
     if (px) { paxStart(cur, px); arrangeCars(); return; } // 別的位子：walk.js 沒有 resume
-    dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
+    dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) }); ignStart(); // 第 89 批：再上車也點火
     arrangeCars(); return;
   }
   if (car.key === tripFull && !drv) {
@@ -51579,10 +51670,12 @@ function trunkProbe(S) { // 量這台車：前後的高度（每 10 公分）、
   let yTop = yB; for (const [y, x] of face) if (y > yB && Math.abs(x - xr) < 0.06) yTop = y; // 尾門最上面（皮卡：車斗的邊）
   const P = { kind, x0, x1, xh, y: h0, W, H, ymin: box.min.y, yB, xr, yTop, hatch: kind === 'hatch', bed: !!TRUNK_BED[curKeyOf(S)] };
   const zl = (k) => W * k;
+  // 蓋子的範圍＝車身座標裡的一個盒子（第 89 批：trunkCut 照這六個面把三角形切開，邊才是直的）
+  const boxR = (xl, xh2, yl, yh, z) => ({ box: [[xl, xh2], [yl, yh], [-z, z]], inR: (x, y, zz) => x >= xl && x <= xh2 && y >= yl && y <= yh && Math.abs(zz) <= z });
   if (kind === 'hatch') { // 樞紐在車頂後緣：車頂（離最高 6 公分以內）最後面那一點
     let xRoof = x0 + 1.2; for (let i = 1; i <= 30; i++) { const x = x0 + i * 0.08, y = top(x); if (y != null && y > H - 0.07) { xRoof = x; break; } }
     const hy = (top(xRoof) ?? H) - 0.015, z = zl(0.35);
-    Object.assign(P, { hinge: [xRoof - 0.02, hy, 0], axis: 'z', ang: -1.25, inR: (x, y, zz) => x <= xRoof - 0.04 && y >= yB && Math.abs(zz) <= z,
+    Object.assign(P, { hinge: [xRoof - 0.02, hy, 0], axis: 'z', ang: -1.25, ...boxR(-Infinity, xRoof - 0.04, yB, Infinity, z),
       cav: [x0 + 0.18, x0 + 0.95, yB + 0.02, hy - 0.12, z - 0.04], rear: true });
     P.bagAt = (i) => [x0 + 0.42 + (i % 2) * 0.28, yB + 0.17, (i < 2 ? -1 : 1) * 0.2];
   } else if (kind === 'frunk') { // 前面：引擎蓋到前擋下面（坡變陡的地方）
@@ -51590,28 +51683,28 @@ function trunkProbe(S) { // 量這台車：前後的高度（每 10 公分）、
     let xw = x1 - 1.5; for (let i = 6; i < fs.length; i++) { const [x, y] = fs[i], py = fs[i - 1][1]; if (y != null && py != null && y - py > 0.055) { xw = fs[i - 1][0]; break; } }
     xw = Math.min(x1 - 0.75, Math.max(x1 - 2.0, xw));
     const hood = fs.filter(([x, y]) => y != null && x > xw && x < x1 - 0.15).map((f) => f[1]), yH = hood.length ? Math.min(...hood) : box.min.y + 0.6, z = zl(0.3), hy = (top(xw) ?? yH) + 0.005;
-    Object.assign(P, { hinge: [xw, hy, 0], axis: 'z', ang: 1.1, inR: (x, y, zz) => x >= xw + 0.01 && x <= x1 - 0.1 && y >= yH - 0.04 && Math.abs(zz) <= z,
+    Object.assign(P, { hinge: [xw, hy, 0], axis: 'z', ang: 1.1, ...boxR(xw + 0.01, x1 - 0.1, yH - 0.04, Infinity, z),
       cav: [xw + 0.08, x1 - 0.22, yH - 0.36, yH - 0.03, z - 0.04], wall: [xw + 0.05, yH - 0.36, hy + 0.03, zl(0.4)], front: true }); // wall＝前車廂後面那一面（擋住車裡面）
     P.bagAt = (i) => [x1 - 0.5 - (i % 2) * 0.3, yH - 0.2, (i < 2 ? -1 : 1) * 0.18];
   } else if (kind === 'swing') { // 側開的尾門：樞紐在右邊（+z），門往右後方打開
     const z = zl(0.46), zt = Math.min(H - 0.06, yTop + 0.05);
-    Object.assign(P, { hinge: [xr, 0, z], axis: 'y', ang: 1.75, inR: (x, y, zz) => x <= xr + 0.1 && y >= yB && y <= zt && Math.abs(zz) <= z,
+    Object.assign(P, { hinge: [xr, 0, z], axis: 'y', ang: 1.75, ...boxR(-Infinity, xr + 0.1, yB, zt, z),
       cav: [xr + 0.08, xr + 0.85, yB + 0.02, Math.min(H - 0.2, zt - 0.1), zl(0.42)], rear: true });
     P.bagAt = (i) => [xr + 0.3 + (i % 2) * 0.3, yB + 0.17, (i < 2 ? -1 : 1) * 0.22];
   } else if (kind === 'drop') { // 皮卡的尾門：樞紐在下面，往後放平
     const z = zl(0.45);
-    Object.assign(P, { hinge: [xr, yB, 0], axis: 'z', ang: 1.5, inR: (x, y, zz) => x <= xr + 0.12 && y >= yB && y <= yTop + 0.04 && Math.abs(zz) <= z, rear: true });
+    Object.assign(P, { hinge: [xr, yB, 0], axis: 'z', ang: 1.5, ...boxR(-Infinity, xr + 0.12, yB, yTop + 0.04, z), rear: true });
     P.bagAt = (i) => [x0 + 0.6 + (i % 2) * 0.4, h0 + 0.15, (i < 2 ? -1 : 1) * 0.3];
   } else { // 房車的行李廂蓋：樞紐在後擋下面；蓋子包到車尾那一面（尾燈上面）
     const yC = Math.max(Math.min(yB, h0 - 0.25) + 0.05, h0 - 0.2), z = zl(0.35); // 車尾直直的（E9）量不到保桿上緣：最多到蓋子下面 25 公分
-    Object.assign(P, { hinge: [xh, h0 + 0.012, 0], axis: 'z', ang: -1.15, inR: (x, y, zz) => x <= xh - 0.03 && y >= yC && y <= h0 + 0.12 && Math.abs(zz) <= z,
+    Object.assign(P, { hinge: [xh, h0 + 0.012, 0], axis: 'z', ang: -1.15, ...boxR(-Infinity, xh - 0.03, yC, h0 + 0.12, z),
       cav: [x0 + 0.14, xh - 0.06, Math.max(box.min.y + 0.25, h0 - 0.45), h0 - 0.02, z - 0.04], wall: [xh - 0.05, Math.max(box.min.y + 0.25, h0 - 0.45), h0 + 0.03, zl(0.4)], rear: true });
     P.bagAt = (i) => [x0 + 0.3 + (i % 2) * Math.min(0.32, xh - x0 - 0.6), Math.max(box.min.y + 0.25, h0 - 0.45) + 0.15, (i < 2 ? -1 : 1) * 0.17 + (i % 2 ? 0.05 : -0.05)];
   }
   return (S._trunk = P);
 }
 function curKeyOf(S) { return S === tripS ? cur : S.spec?.key || ''; }
-// 把車身切成「蓋子」和「剩下的」：每個網格的三角形，三個點都在範圍裡＝蓋子；跟原本的網格共用頂點（只換 index），算一次記在 S._lidCut
+// 把車身切成「蓋子」和「剩下的」：每個網格的三角形，三個點都在範圍裡＝蓋子；跨過邊的照盒子的面切開（第 89 批）；沒切到的網格跟原本共用頂點（只換 index），算一次記在 S._lidCut
 function trunkCut(S, P) {
   if (S._lidCut) return S._lidCut;
   const car = S.car; car.updateMatrixWorld(true);
@@ -51624,17 +51717,42 @@ function trunkCut(S, P) {
       const rel = new THREE.Matrix4().multiplyMatrices(inv, ob.matrixWorld), g = ob.geometry, key = g.uuid + rel.elements.map((e) => e.toFixed(4)).join();
       let sp = cache.get(key);
       if (sp === undefined) {
-        const pos = g.attributes.position, n = pos.count, inside = new Uint8Array(n);
-        for (let i = 0; i < n; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(rel); inside[i] = P.inR(v.x, v.y, v.z) ? 1 : 0; }
+        const pos = g.attributes.position, n = pos.count, inside = new Uint8Array(n), C = [];
+        for (let i = 0; i < n; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(rel); C.push(v.x, v.y, v.z); inside[i] = P.inR(v.x, v.y, v.z) ? 1 : 0; }
         const idx = g.index ? g.index.array : null, cnt = idx ? idx.length : n, I = (k) => (idx ? idx[k] : k);
         const groups = g.groups.length ? g.groups : [{ start: 0, count: g.drawRange.count === Infinity ? cnt : Math.min(cnt, g.drawRange.count), materialIndex: 0 }];
         const lid = [], rest = [], gl = [], gr = []; let any = false;
+        // 第 89 批：跨過邊的三角形照盒子的面切開（新的點放在後面，attributes 照比例內插），蓋子和車身的邊都是直的（以前整個三角形不是蓋子就是車身＝鋸齒）
+        const BX = P.box, PL = [], nv = [], ek = new Map(); // nv：新的點 [i, j, t]（i、j＝原本／新的點，t 從 i 到 j）
+        if (BX) for (let ax = 0; ax < 3; ax++) { if (isFinite(BX[ax][0])) PL.push([ax, -1, BX[ax][0]]); if (isFinite(BX[ax][1])) PL.push([ax, 1, BX[ax][1]]); }
+        const cf = (id, ax) => C[id * 3 + ax], fOf = (id, pl) => pl[1] * (cf(id, pl[0]) - pl[2]); // ≤ 0 ＝ 這一面的裡面
+        const split = (A, B, pi, fa, fb) => { if (fa === 0) return A; if (fb === 0) return B;
+          const lo = A < B ? A : B, hi = A < B ? B : A, key = lo * 64 + pi + '_' + hi; let id = ek.get(key); if (id !== undefined) return id;
+          const t = (lo === A ? fa / (fa - fb) : fb / (fb - fa)); id = n + nv.length; nv.push([lo, hi, t]);
+          for (let ax = 0; ax < 3; ax++) C.push(cf(lo, ax) + (cf(hi, ax) - cf(lo, ax)) * t); ek.set(key, id); return id; };
+        const fan = (poly, out) => { for (let q = 1; q + 1 < poly.length; q++) out.push(poly[0], poly[q], poly[q + 1]); };
+        const clip = (a, b, c) => { let poly = [a, b, c];
+          for (let pi = 0; pi < PL.length && poly.length >= 3; pi++) { const pl = PL[pi], ins = [], outs = [];
+            for (let q = 0; q < poly.length; q++) { const A = poly[q], B = poly[(q + 1) % poly.length], fa = fOf(A, pl), fb = fOf(B, pl);
+              if (fa <= 0) ins.push(A); if (fa >= 0) outs.push(A);
+              if ((fa < 0 && fb > 0) || (fa > 0 && fb < 0)) { const N = split(A, B, pi, fa, fb); ins.push(N); outs.push(N); } }
+            if (outs.length >= 3) fan(outs, rest); poly = ins; }
+          if (poly.length >= 3) { fan(poly, lid); any = true; } };
+        const touch = (a, b, c) => { for (let ax = 0; ax < 3; ax++) { const p0 = cf(a, ax), p1 = cf(b, ax), p2 = cf(c, ax); if (Math.max(p0, p1, p2) < BX[ax][0] || Math.min(p0, p1, p2) > BX[ax][1]) return false; } return true; };
         for (const gp of groups) { const l0 = lid.length, r0 = rest.length;
-          for (let k = gp.start; k + 2 < gp.start + gp.count && k + 2 < cnt; k += 3) { const a = I(k), b = I(k + 1), c = I(k + 2); if (inside[a] && inside[b] && inside[c]) { lid.push(a, b, c); any = true; } else rest.push(a, b, c); }
+          for (let k = gp.start; k + 2 < gp.start + gp.count && k + 2 < cnt; k += 3) { const a = I(k), b = I(k + 1), c = I(k + 2);
+            if (inside[a] && inside[b] && inside[c]) { lid.push(a, b, c); any = true; } else if (BX && touch(a, b, c)) clip(a, b, c); else rest.push(a, b, c); }
           gl.push({ start: l0, count: lid.length - l0, materialIndex: gp.materialIndex }); gr.push({ start: r0, count: rest.length - r0, materialIndex: gp.materialIndex }); }
         sp = null;
-        if (any) { const mk = (arr, gs) => { const q = new THREE.BufferGeometry(); for (const [k, a] of Object.entries(g.attributes)) q.setAttribute(k, a); q.setIndex(new (n > 65535 ? THREE.Uint32BufferAttribute : THREE.Uint16BufferAttribute)(arr, 1)); if (g.groups.length) for (const x of gs) q.addGroup(x.start, x.count, x.materialIndex); q.boundingSphere = g.boundingSphere || (g.computeBoundingSphere(), g.boundingSphere); q.boundingBox = g.boundingBox; return q; };
-          sp = { lid: mk(lid, gl), rest: mk(rest, gr) }; }
+        if (any) { let attrs = g.attributes, N = n;
+          if (nv.length) { attrs = {}; N = n + nv.length; // 切出來的新點：每個 attribute 多 nv.length 個（照 t 內插；法線再變回長度 1）
+            for (const [k, a] of Object.entries(g.attributes)) { const s2 = a.itemSize, arr = new Float32Array(N * s2), get = (i, c) => (c === 0 ? a.getX(i) : c === 1 ? a.getY(i) : c === 2 ? a.getZ(i) : a.getW(i));
+              for (let i = 0; i < n; i++) for (let c = 0; c < s2; c++) arr[i * s2 + c] = get(i, c);
+              for (let j = 0; j < nv.length; j++) { const [i0, i1, t] = nv[j], o = (n + j) * s2; for (let c = 0; c < s2; c++) arr[o + c] = arr[i0 * s2 + c] + (arr[i1 * s2 + c] - arr[i0 * s2 + c]) * t;
+                if ((k === 'normal' || k === 'tangent') && s2 >= 3) { const L = Math.hypot(arr[o], arr[o + 1], arr[o + 2]) || 1; arr[o] /= L; arr[o + 1] /= L; arr[o + 2] /= L; } }
+              attrs[k] = new THREE.BufferAttribute(arr, s2); } }
+          const mk = (arr, gs) => { const q = new THREE.BufferGeometry(); for (const [k, a] of Object.entries(attrs)) q.setAttribute(k, a); q.setIndex(new (N > 65535 ? THREE.Uint32BufferAttribute : THREE.Uint16BufferAttribute)(arr, 1)); if (g.groups.length) for (const x of gs) q.addGroup(x.start, x.count, x.materialIndex); q.boundingSphere = g.boundingSphere || (g.computeBoundingSphere(), g.boundingSphere); q.boundingBox = g.boundingBox; return q; };
+          sp = { lid: mk(lid, gl), rest: mk(rest, gr), added: nv.length }; }
         cache.set(key, sp);
       }
       if (sp) parts.push({ mesh: ob, g0: ob.geometry, sp, rel });
@@ -51834,7 +51952,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 44; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 45; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
