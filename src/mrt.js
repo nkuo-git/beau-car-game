@@ -132,6 +132,13 @@ function decoAtlas(g, S) {
   { const x = 256, y = 560, w = 128, h = 256; g.fillStyle = '#c9c3b8'; g.fillRect(x, y, w, h); g.fillStyle = '#2e9d57'; g.fillRect(x + 14, y + 8, w - 28, h - 16); g.fillStyle = '#c9c3b8'; g.fillRect(x + 24, y + 18, w - 48, h - 36);
     g.fillStyle = '#2e9d57'; for (const yy of [46, 120]) { g.beginPath(); g.moveTo(x + w / 2, y + yy); g.lineTo(x + w / 2 - 30, y + yy + 34); g.lineTo(x + w / 2 + 30, y + yy + 34); g.closePath(); g.fill(); }
     g.font = `800 30px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('排', x + w / 2, y + 196); g.fillText('隊', x + w / 2, y + 228); R.queue = [x, y, x + w, y + h]; }
+  // 第 89 批：樓梯口旁邊的門（月台只剩 0.58 公尺）用的短的：寬的「下車」、小的「排隊」
+  { const x = 0, y = 832, w = 384, h = 140; g.fillStyle = '#c9c3b8'; g.fillRect(x, y, w, h); hatch(x + 8, y + 8, w - 16, h - 16, '#c9c3b8', '#f2c10f', 26); g.fillStyle = '#c9c3b8'; g.fillRect(x + 40, y + 30, w - 80, h - 60);
+    g.fillStyle = '#f2c10f'; g.beginPath(); g.moveTo(x + w - 64, y + h / 2 + 26); g.lineTo(x + w - 100, y + h / 2 - 8); g.lineTo(x + w - 28, y + h / 2 - 8); g.closePath(); g.fill();
+    g.fillStyle = '#3b3b3b'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 52px ${SANS}`; g.fillText('下車', x + w / 2 - 20, y + h / 2); R.offW = [x, y, x + w, y + h]; }
+  { const x = 400, y = 832, w = 140, h = 140; g.fillStyle = '#c9c3b8'; g.fillRect(x, y, w, h); g.fillStyle = '#2e9d57'; g.fillRect(x + 8, y + 8, w - 16, h - 16); g.fillStyle = '#c9c3b8'; g.fillRect(x + 16, y + 16, w - 32, h - 32);
+    g.fillStyle = '#2e9d57'; g.beginPath(); g.moveTo(x + w / 2, y + 26); g.lineTo(x + w / 2 - 24, y + 54); g.lineTo(x + w / 2 + 24, y + 54); g.closePath(); g.fill();
+    g.font = `800 34px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('排隊', x + w / 2, y + 90); R.queueS = [x, y, x + w, y + h]; }
   { const x = 384, y = 560, w = 256, h = 256; hatch(x, y, w, h, '#f4f4f0', '#d32f2f', 36); g.fillStyle = '#f4f4f0'; g.fillRect(x + 28, y + 92, w - 56, 72); g.fillStyle = '#d32f2f'; g.font = `800 50px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('禁止跨越', x + w / 2, y + h / 2); R.nox = [x, y, x + w, y + h]; }
   { const x = 640, y = 560, w = 384, h = 120; g.fillStyle = '#d32f2f'; g.fillRect(x, y, w, h); g.fillStyle = '#fff'; g.fillRect(x + 8, y + 8, w - 16, h - 16); g.fillStyle = '#d32f2f'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 50px ${SANS}`; g.fillText('禁止跨越', x + w / 2, y + 48); g.font = `600 26px ${SANS}`; g.fillStyle = '#333'; g.fillText('No Entry　危險 請勿進入', x + w / 2, y + 92); R.noxSign = [x, y, x + w, y + h]; }
   { const x = 640, y = 690, w = 384, h = 190; g.fillStyle = '#1f2326'; g.fillRect(x, y, w, h); g.fillStyle = '#8a5a2b'; g.fillRect(x, y, 16, h); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `800 64px ${SANS}`; g.fillText('電扶梯 ↑', x + w / 2 + 8, y + 70); g.font = `600 34px ${SANS}`; g.fillStyle = '#ffd24a'; g.fillText('請站穩、握好扶手', x + w / 2 + 8, y + 140); R.escSign = [x, y, x + w, y + h]; }
@@ -272,7 +279,9 @@ function buildMrt(V, opt = {}) {
       G.vqV(a, u, PL, YP, YP + 3.0, GLS, sd > 0); cols2.push(box(u, PL, a - 0.06, a + 0.06, YP - 0.3, YP + 3.3));
       M.bx(-PL, PL, YP + 3.0, YP + 3.35, a - 0.12, a + 0.12, BROWN); M.bx(-PL, PL, YP + 3.35, CEIL2, a - 0.06, a + 0.06, WALL); // 橫樑＋到天花板的板子
       // 地上的線：每個門口前面黃色斜線的「下車」、兩邊綠色的「排隊」箭頭
-      for (const d of DOOR_U) { decFloor(d, a + sd * 0.6, a + sd * 2.0, 1.5, DEC.off); for (const q of [-1, 1]) decFloor(d + q * 1.35, a + sd * 0.6, a + sd * 3.0, 0.8, DEC.queue); }
+      // 第 89 批：門口在樓梯、電扶梯的洞旁邊（月台只剩玻璃欄杆前面那一條）＝短的線，不畫到洞上面（懸空）
+      for (const d of DOOR_U) { if (d + 1.8 > RAMP.u0 && d - 1.8 < RAMP.u1) { const vf = r0 - sd * 0.12, dv = Math.abs(vf - (a + sd * 0.6)); decFloor(d, a + sd * 0.6, vf, dv * 384 / 140, DEC.offW); for (const q of [-1, 1]) decFloor(d + q * 1.35, a + sd * 0.6, vf, dv, DEC.queueS); continue; }
+        decFloor(d, a + sd * 0.6, a + sd * 2.0, 1.5, DEC.off); for (const q of [-1, 1]) decFloor(d + q * 1.35, a + sd * 0.6, a + sd * 3.0, 0.8, DEC.queue); }
       // 兩頭：禁止跨越（紅白斜線＋黃黑欄杆，走不過去）
       for (const su of [-1, 1]) { const ub = su * (PL - 2.6); decFloor(su * (PL - 1.3), a + sd * 0.1, b - sd * 0.1, 2.5, DEC.nox); // 字朝那一頭的外面
         M.bx(ub - 0.05, ub + 0.05, YP, YP + 1.0, Math.min(a, b) + 0.1, Math.max(a, b) - 0.1, [0.95, 0.8, 0.1]); for (let k = 0; k < 6; k++) { const vv = a + (b - a) * (k + 0.5) / 6; M.bx(ub - 0.06, ub + 0.06, YP + 0.45, YP + 0.62, vv - 0.28, vv + 0.28, [0.1, 0.1, 0.1]); }
@@ -751,7 +760,8 @@ function buildMrt(V, opt = {}) {
   }
   // ---- 走路的人 ----
   const P = {
-    group, stations, info: { meshes, tris: Math.round(tris), stations: stations.map((s) => s.nm), esc: ESCS.length, escSteps: nSteps, T: CYCLE, H, dwell: DWELL, maxTrains: maxAct, sA, sB, len: sB - sA, dirs: dirs.map((d) => ({ dir: d.dir, phase: d.phase, total: Math.round(d.total * 10) / 10, stops: d.stops.map((s) => Math.round(s.p)), dwells: d.segs.filter((s) => s.k === 'dwell').map((s) => ({ si: s.si, t0: Math.round(s.t0 * 10) / 10, t1: Math.round(s.t1 * 10) / 10 })) })) },
+    group, stations, info: { meshes, tris: Math.round(tris), stations: stations.map((s) => s.nm), hole: { u0: RAMP.u0, u1: RAMP.u1, v0: RAMP.v0, v1: HOLE1 }, // hole：月台地板樓梯、電扶梯的洞（站的座標 u、|v|）
+      esc: ESCS.length, escSteps: nSteps, T: CYCLE, H, dwell: DWELL, maxTrains: maxAct, sA, sB, len: sB - sA, dirs: dirs.map((d) => ({ dir: d.dir, phase: d.phase, total: Math.round(d.total * 10) / 10, stops: d.stops.map((s) => Math.round(s.p)), dwells: d.segs.filter((s) => s.k === 'dwell').map((s) => ({ si: s.si, t0: Math.round(s.t0 * 10) / 10, t1: Math.round(s.t1 * 10) / 10 })) })) },
     YT, YP, YC, ride: null, lvl: 0, si: -1, py: 0, movers: [],
     get time() { return time; }, setTime(t) { time = ((t % CYCLE) + CYCLE) % CYCLE; prev.clear(); trainsNow(); events.length = 0; },
     animals: () => Z.list.filter((a) => !a.free).map((a) => { const [u, v] = a.si >= 0 ? stations[a.si].loc(a.x, a.z) : [0, 0]; return { k: a.kind, si: a.si, lvl: a.lvl, sd: a.sd, st: a.st, x: +a.x.toFixed(2), z: +a.z.toFixed(2), y: +a.y.toFixed(2), u: +u.toFixed(2), v: +v.toFixed(2), hd: +a.hd.toFixed(2), ride: a.ride ? a.ride.key : null, ci: a.ride ? a.ride.ci : null, spot: !!a.spot, vis: !!(a.C && a.C.group.visible), built: !!a.C }; }), // 第 87 批：捷運站的小動物（測試）

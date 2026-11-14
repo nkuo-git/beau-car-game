@@ -16,11 +16,11 @@ function fakeCar() {
   for (const [x, tr] of [[W.xf, W.trackF], [W.xr, W.trackR]]) for (const s of [-1, 1]) { const hub = new THREE.Group(); hub.position.set(x, W.R, s * tr); const wh = new THREE.Group(); hub.add(wh); car.add(hub); wheels.push(wh); }
   return { car, body, wheels, spec: { wheels: W, interior: { wheelZ: 0.37 } } };
 }
-const dt = 1 / 60, ev = { shifts: [], engine: [], grind: [], blip: [] };
+const dt = 1 / 60, ev = { shifts: [], engine: [], grind: [], blip: [], ignite: 0, crank: [] };
 function rig(perf = PERF) {
   const S = fakeCar(), scene = new THREE.Scene(); scene.add(S.car);
   const d = createDrive({ car: S, scene, camera: null, perf, world: { surfaceAt: () => 0, colliders: [], places: {} }, keyboard: false,
-    onShift: (g) => ev.shifts.push(g), onEngine: (on) => ev.engine.push(on), onGrind: (w) => ev.grind.push(w), onBlip: (g) => ev.blip.push(g) });
+    onShift: (g) => ev.shifts.push(g), onEngine: (on) => ev.engine.push(on), onGrind: (w) => ev.grind.push(w), onBlip: (g) => ev.blip.push(g), onIgnite: () => ev.ignite++, onCrank: (sec) => ev.crank.push(sec) });
   d.teleport({ x: 0, z: 0, heading: 0 });
   return d;
 }
@@ -114,6 +114,16 @@ check(g0 >= 3 && t2.mgear === g0 - 1 && rC < r3 - 0.1 && r1 > r3 + 0.1 && r1 > r
 { const dB = rig(); run(dB, 6, { throttle: 1 }); dB.setGearbox('mt'); run(dB, 0.5, { throttle: 0 }); const l0 = dB.telemetry().load; ev.blip.length = 0;
   run(dB, 0.3, { clutch: 1 }); dB.shift(-1); run(dB, 0.1, { clutch: 1 }); const lA = run(dB, 8 / 60, { throttle: 0 }).load, lB = run(dB, 0.3, { throttle: 0 }).load, lC = run(dB, 0.6, { throttle: 0 }).load, gB = dB.telemetry().mgear;
   check(l0 === 0 && lA > 0.85 && lB > 0.3 && lB < lA && lC === 0 && ev.blip.join() === String(gB), `降檔放開：引擎聲 load 滑行 ${l0} → 接上 ${r2(lA)} → 0.3 秒 ${r2(lB)} → 0.9 秒 ${lC}；onBlip(${ev.blip.join()})`); }
+// ---- 第 89 批（Nick「車子發動要有點火」）：ignite()：起動馬達轉 0.85 秒（轉速表 0.05～0.1 抖、沒有 load）→ onIgnite、轉速衝上去再回到怠速；踩油門馬上發動 ----
+{ const dI = rig(); ev.ignite = 0; dI.ignite(0.85); const a = run(dI, 0.4, {}), rs = []; for (let i = 0; i < 12; i++) rs.push(run(dI, 1 / 60, {}).rpm);
+  const n0 = ev.ignite, b = run(dI, 0.5, {}), peak = Math.max(b.rpm, ...[0, 0, 0].map(() => run(dI, 0.05, {}).rpm)), c = run(dI, 2, {});
+  check(a.igniting && a.load === 0 && Math.min(...rs) > 0.04 && Math.max(...rs) < 0.1 && Math.max(...rs) - Math.min(...rs) > 0.005 && n0 === 0 && !b.igniting && ev.ignite === 1 && peak > 0.25 && Math.abs(c.rpm - 0.13) < 0.03,
+    `點火：起動馬達轉的時候轉速表 ${r2(Math.min(...rs))}～${r2(Math.max(...rs))} 抖、沒有 load；0.85 秒發動（onIgnite ${ev.ignite} 次）、轉速衝到 ${r2(peak)}、再回到怠速 ${r2(c.rpm)}`);
+  const dJ = rig(); ev.ignite = 0; dJ.ignite(0.85); run(dJ, 0.2, {}); const j = run(dJ, 2 / 60, { throttle: 1 });
+  check(!j.igniting && ev.ignite === 1, `點火的時候踩油門：馬上發動（不用等，onIgnite ${ev.ignite}）`);
+  const dK = rig(); dK.setGearbox('mt'); run(dK, 0.2, { clutch: 1 }); dK.shift(1); dK.shift(1); run(dK, 0.2, { clutch: 1 }); ev.crank.length = 0; ev.engine.length = 0;
+  const k1 = run(dK, 0.3, { clutch: 0 }); run(dK, 0.1, { throttle: 0.5 }); const k2 = run(dK, 0.7, {}), kp = Math.max(k2.rpm, run(dK, 0.1, {}).rpm);
+  check(k1.stalled && ev.crank.join() === '0.6' && ev.engine.join() === 'false,true' && kp > 0.25, `手排熄火以後按油門：onCrank(${ev.crank.join()})（起動馬達的聲音）、發動那一下轉速衝到 ${r2(kp)}`); }
 console.log(fails.length ? `FAILED ${fails.length}: ${fails.join(' | ')}` : 'ALL CHECKS OK (Node)');
 if (process.env.NODE_ONLY || fails.length) process.exit(fails.length ? 1 : 0);
 
@@ -193,7 +203,7 @@ async function getIn() {
   await p.evaluate(() => { window.scrollTo(0, 0); document.getElementById('driveOut').click(); });
   await p.waitForFunction(() => window.__D().on && window.__D().walker && window.__D().walker.mode === 'walk', null, { timeout: 300000 });
   await p.evaluate(() => { window.__hold = true; window.__noDraw = true; });
-  return p.evaluate(() => { const D = window.__D(), H = window.__H; D.walker.teleport(H.gw(-4.5, -4, -1.05)); window.__wstep(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); const pressed = H.press(), modes = H.board(); window.__wstep(40); const D2 = window.__D(); return { walk: r?.ok, pressed, modes, drv: !!D2.drv, cur: D2.cur, gearK: D2.gearK, fs: document.body.classList.contains('fs') }; });
+  return p.evaluate(() => { const D = window.__D(), H = window.__H; D.walker.teleport(H.gw(-4.5, -4, -1.05)); window.__wstep(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); const pressed = H.press(), modes = H.board(), ig = []; for (const n of [1, 15, 45]) { window.__wstep(n); const D1 = window.__D(), t1 = D1.drv?.telemetry(); ig.push([!!t1?.igniting, +(t1?.rpm ?? 0).toFixed(2), D1.dvoice ? D1.dvoice.gain : null]); } const D2 = window.__D(); return { walk: r?.ok, pressed, modes, ig, drv: !!D2.drv, cur: D2.cur, gearK: D2.gearK, fs: document.body.classList.contains('fs') }; });
 }
 const ui = () => p.evaluate(() => {
   const q = (s) => document.querySelector(s), vis = (e) => !!e && !e.hidden && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && e.getClientRects().length > 0, D = window.__D(), t = D.drv.telemetry();
@@ -228,6 +238,7 @@ async function swipe(dir, { others = [], px = 40, release = true } = {}) {
 let bd = await getIn();
 console.log('  上車:', JSON.stringify(bd), el());
 check(bd.drv && bd.cur === 'gc8' && /上車 · GC8/.test(bd.pressed) && bd.fs, `walked to the GC8 and got in, full screen (${bd.pressed})`);
+check(bd.ig[0][0] && bd.ig[0][2] === 0 && bd.ig[1][0] && bd.ig[1][1] < 0.1 && !bd.ig[2][0] && bd.ig[2][2] === 1 && bd.ig[2][1] > 0.15, `第 89 批 點火：上車就轉起動馬達（引擎聲 0、轉速表 ${bd.ig[1][1]}），0.85 秒發動（引擎聲 1、轉速衝到 ${bd.ig[2][1]}）`);
 // 測試場：村子西北邊的空地（沒有碰撞物），路面照柏油算；路上的車先停
 await p.evaluate(() => { const D = window.__D(), V = D.VIL, f0 = V.surfaceAt; V.surfaceAt = (x, z) => (Math.abs(x + 660) < 45 && Math.abs(z - 285) < 45 ? 0 : f0(x, z)); D.drv.setInput(null); D.drv.teleport({ x: -698, z: 305, heading: 0 }); window.__dstep(5); });
 let u = await ui(); console.log('  AT:', JSON.stringify(u));

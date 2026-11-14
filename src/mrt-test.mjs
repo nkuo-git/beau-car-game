@@ -127,6 +127,7 @@ check(w.y === 6 && w.lvl === 1 && Math.abs(w.v) < 10, `over the footbridge into 
 const s3 = await shot('3-hall');
 w = await walkTo(-16, 0.825, 0, 6, 0); await toasts(); w = await walk(60 * 8); const tg = await toasts(); // 走過閘門（u −8）
 console.log('  gates', JSON.stringify(w), JSON.stringify(tg));
+if (!(w.u > -8)) console.log('  animals near the gates', JSON.stringify((await p.evaluate(() => window.__D().M.animals())).filter((q) => q.si === 0 && q.lvl === 1 && Math.abs(q.u + 8) < 3))); // 第 89 批：偶爾走不過閘門（大概是小動物站在閘門口）：印出來
 check(w.u > -8 && w.lvl === 1 && tg.some((s) => /嗶/.test(s)), `walked through the gate row at u −8 (now u ${w.u}): toast ${JSON.stringify(tg.find((s) => /嗶/.test(s)))}`);
 w = await walkTo(-3, 5.5, 0, 6, 0); // 斜坡下面（u 0…12 往上到月台）
 const ysr = await p.evaluate(() => { const D = window.__D(); D.walker.setInput({ x: 0, y: 1 }); const ys = []; for (let i = 0; i < 60 * 4; i++) { window.__wstep(1); if (i % 30 === 0) ys.push(+D.walker.character.group.position.y.toFixed(2)); } D.walker.setInput(null); return ys; });
@@ -232,6 +233,15 @@ const b80 = await p.evaluate(() => { const D = window.__D(), M = D.M; let deco =
 console.log('  b80', JSON.stringify(b80));
 check(b80.esc >= 8 && b80.escSteps > 150 && b80.stepN === b80.escSteps, `escalators: ${b80.esc} (platform ↔ concourse, street ↔ exit), ${b80.escSteps} moving steps in one InstancedMesh`);
 check(b80.deco === 2 && b80.texW === 1024, `each station has its own decoration mesh (route map, posters, floor marks 下車／排隊／禁止跨越): ${b80.deco} meshes, atlas ${b80.texW}px`);
+// 第 89 批（Nick「捷運站的等候線不要懸空在樓梯上」）：月台地上的線（下車、排隊）沒有一個點在樓梯、電扶梯的洞上面
+const b89 = await p.evaluate(() => { const M = window.__D().M, Hh = M.info.hole, v = { x: 0, y: 0, z: 0, fromBufferAttribute(a, i) { this.x = a.getX(i); this.y = a.getY(i); this.z = a.getZ(i); return this; } }; let over = 0, floor = 0, yp = null;
+  M.group.traverse((o) => { if (o.name !== 'mrt-deco') return; const pos = o.geometry.attributes.position, ys = new Map();
+    for (let i = 0; i < pos.count; i++) { const y = +pos.getY(i).toFixed(3); ys.set(y, (ys.get(y) || 0) + 1); }
+    yp = [...ys.entries()].sort((a, b) => b[1] - a[1])[0][0]; // 地上的線那一層（點最多的高度）
+    for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i); if (Math.abs(v.y - yp) > 0.02) continue; floor++; const av = Math.abs(v.z); if (v.x > Hh.u0 + 0.01 && v.x < Hh.u1 - 0.01 && av > Hh.v0 + 0.01 && av < Hh.v1 - 0.01) over++; } });
+  return { over, floor, yp, hole: Hh }; });
+console.log('  floor marks', JSON.stringify(b89));
+check(b89.floor > 100 && b89.over === 0, `the platform floor marks (下車／排隊) stay on the floor: none of the ${b89.floor} points is over the stair/escalator hole (u ${b89.hole.u0}…${b89.hole.u1}, |v| ${b89.hole.v0}…${b89.hole.v1})`);
 check(b80.carN >= 4 && b80.noseN === b80.carN / 2, `train noses at both ends of every train: ${b80.noseN} noses for ${b80.carN / 4} trains on the line now`);
 check(b80.gone >= 1 && b80.gone < 30, `${b80.gone} Neihu houses overlapping the stations were removed`);
 const escR = await p.evaluate(() => { const D = window.__D(), M = D.M, S = M.stations[0], e = S.ent[0]; const vE = e.v0 + e.s * 3.7, [x, z] = S.toW(e.u1 + 1.5 * e.dir, vE); M.py = 0; D.walker.teleport({ x, z, heading: S.rot + (e.dir > 0 ? Math.PI : 0) }); window.__wstep(3);

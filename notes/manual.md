@@ -52,3 +52,21 @@ Nick: 「降檔時的聲浪太小」「空檔踩的時候轉速表不要升那�
 - **Free revving** (MT, engine not driving the wheels: neutral, or clutch down): the rpm chase rate was the same 12/s as in gear, so a stab of gas in N hit the limiter in a quarter second. Now `FREE_UP = 2.4` (half-way in 0.3 s, 90 % after 1 s) and in neutral it also falls slower (`FREE_DOWN = 4`). Clutch-down in gear still falls at 12 (the swipe test reads the drop six frames after the finger lands).
 - **Downshift blip**: on the clutch-release edge, when the wheel-speed rpm is more than 0.06 above the engine rpm (a downshift), `st.blip = 0.55 s` and an event `['blip', gear]` → `onBlip` → `dvoice.shift()` (the shift sound: cut, blow-off, pops). While `blip > 0`, `st.load = max(load, 0.6 + 0.4·blip/0.55)`, so the engine voice plays a loud throttle stab instead of the coasting whisper (load 0 → amplitude 18 %).
 - Tests: mt-test Node +2 (free-rev timing 0.25 s / 1 s / fall; blip load 0 → 0.94 → 0.73 → 0 and onBlip).
+
+## Batch 89 (trial v100, 2026-11-14): ignition
+
+Nick: 「車子發動要有點火」.
+- Getting in / going out (town.src.js `makeDrv` → `ignStart()`, and `onGetIn` re-boarding the same car):
+  - The engine voice starts at gain 0, `drv.ignite(0.85)` runs, and `engineAudio.starter({ key, dur })` plays.
+  - Bicycles skip all of this.
+- drive.js: `st.ign` counts down. The tach shakes around 0.075 (`ignT`), load is 0, and pressing the throttle (> 0.15) catches at once.
+  - When it catches, the `ignite` event fires → `onIgnite` stops the starter and sets voice gain 1.
+  - `st.flare` (1 s) pulls the tach up to 0.37 and back to idle. Display/sound only: `st.rpm` does not feed the forces.
+- MT stall restart now also pushes `crank` (→ `onCrank`: starter sound for 0.6 s) and gets the flare when it catches.
+- sound.js `starter()`:
+  - A key click (bandpass noise), then the solenoid `clunk`.
+  - The starter motor: a sawtooth 70→118 Hz through a lowpass, a gear whine, and noise.
+  - Compression pulses at (200+60k)/60 × cylinders/2 per second, each dipping the motor and adding a 52 Hz thump.
+  - `stop()` spins it up and fades it in 0.07 s.
+  - The output gain is 0.4: measured offline, cranking is about −21 dB vs idle about −32 dB; at 1.0 it was 18 dB over idle.
+- telemetry `igniting`.

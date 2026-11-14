@@ -50,3 +50,17 @@ Nick: 「食物可以拿出來吃」 → mock Jz22TfmdCqk5R49G1QkxMC, chose 「�
 - Trunk: open with items → second button 「拿出來」 (`trunkTake`: all items back to the bag, `GAME.trunk[cur] = []`, save).
 - Driving: `martCanEat()` false and the pill hides.
 - mart-test section 6 (GC8 only): take out, list rows, eat chips walking (stop, hand +0.73 m, toast), drink water, sit in passenger seat and eat an egg (first-person clone 0.32 m from camera), get in to drive → pill hidden.
+
+## Batch 89 (trial v100, 2026-11-14): straight cut edges
+
+Nick: 「車子後車廂邊緣要平整不要鋸齒」.
+- Cause: `trunkCut` sent a triangle to the lid only when all 3 vertices were inside `P.inR`. Triangles crossing the boundary stayed whole on the body, so both the lid edge and the hole edge followed the mesh's triangles (saw-tooth).
+- Fix: `trunkProbe` now gives every kind a box (`P.box` = [[x0,x1],[y0,y1],[z0,z1]] in car-local coords, ±Infinity for open sides; `boxR()` builds `box` + `inR` together).
+  - `trunkCut` clips each crossing triangle against the box planes (Sutherland–Hodgman, one plane at a time). Pieces outside a plane go to `rest`; what is left inside all planes goes to `lid`.
+  - New vertices are appended. Edge splits are cached by (edge, plane), so neighbours share them and there are no cracks.
+  - Every attribute is lerped (normal/tangent renormalised), and attributes become Float32.
+  - Meshes with no crossing triangles keep sharing the original attributes (index-only split, as before).
+- GC8 adds 939 vertices; YARIS 3020; 918 5000. It is computed once per car on the first open (`S._lidCut`).
+- mart-test: `edge()` checks that every lid vertex is inside the box and no remaining body triangle has its centre inside it.
+  - `edgeShot()` takes a close-up from above the opening (`-0-trunk-edge.png` for GC8, `<car>-edge.png` for MCAR runs).
+  - Before/after: the old version left saw-tooth edges on both sides of the GC8 boot opening.

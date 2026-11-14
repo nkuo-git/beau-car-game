@@ -234,10 +234,12 @@ function trunkProbe(S) { // 量這台車：前後的高度（每 10 公分）、
   let yTop = yB; for (const [y, x] of face) if (y > yB && Math.abs(x - xr) < 0.06) yTop = y; // 尾門最上面（皮卡：車斗的邊）
   const P = { kind, x0, x1, xh, y: h0, W, H, ymin: box.min.y, yB, xr, yTop, hatch: kind === 'hatch', bed: !!TRUNK_BED[curKeyOf(S)] };
   const zl = (k) => W * k;
+  // 蓋子的範圍＝車身座標裡的一個盒子（第 89 批：trunkCut 照這六個面把三角形切開，邊才是直的）
+  const boxR = (xl, xh2, yl, yh, z) => ({ box: [[xl, xh2], [yl, yh], [-z, z]], inR: (x, y, zz) => x >= xl && x <= xh2 && y >= yl && y <= yh && Math.abs(zz) <= z });
   if (kind === 'hatch') { // 樞紐在車頂後緣：車頂（離最高 6 公分以內）最後面那一點
     let xRoof = x0 + 1.2; for (let i = 1; i <= 30; i++) { const x = x0 + i * 0.08, y = top(x); if (y != null && y > H - 0.07) { xRoof = x; break; } }
     const hy = (top(xRoof) ?? H) - 0.015, z = zl(0.35);
-    Object.assign(P, { hinge: [xRoof - 0.02, hy, 0], axis: 'z', ang: -1.25, inR: (x, y, zz) => x <= xRoof - 0.04 && y >= yB && Math.abs(zz) <= z,
+    Object.assign(P, { hinge: [xRoof - 0.02, hy, 0], axis: 'z', ang: -1.25, ...boxR(-Infinity, xRoof - 0.04, yB, Infinity, z),
       cav: [x0 + 0.18, x0 + 0.95, yB + 0.02, hy - 0.12, z - 0.04], rear: true });
     P.bagAt = (i) => [x0 + 0.42 + (i % 2) * 0.28, yB + 0.17, (i < 2 ? -1 : 1) * 0.2];
   } else if (kind === 'frunk') { // 前面：引擎蓋到前擋下面（坡變陡的地方）
@@ -245,28 +247,28 @@ function trunkProbe(S) { // 量這台車：前後的高度（每 10 公分）、
     let xw = x1 - 1.5; for (let i = 6; i < fs.length; i++) { const [x, y] = fs[i], py = fs[i - 1][1]; if (y != null && py != null && y - py > 0.055) { xw = fs[i - 1][0]; break; } }
     xw = Math.min(x1 - 0.75, Math.max(x1 - 2.0, xw));
     const hood = fs.filter(([x, y]) => y != null && x > xw && x < x1 - 0.15).map((f) => f[1]), yH = hood.length ? Math.min(...hood) : box.min.y + 0.6, z = zl(0.3), hy = (top(xw) ?? yH) + 0.005;
-    Object.assign(P, { hinge: [xw, hy, 0], axis: 'z', ang: 1.1, inR: (x, y, zz) => x >= xw + 0.01 && x <= x1 - 0.1 && y >= yH - 0.04 && Math.abs(zz) <= z,
+    Object.assign(P, { hinge: [xw, hy, 0], axis: 'z', ang: 1.1, ...boxR(xw + 0.01, x1 - 0.1, yH - 0.04, Infinity, z),
       cav: [xw + 0.08, x1 - 0.22, yH - 0.36, yH - 0.03, z - 0.04], wall: [xw + 0.05, yH - 0.36, hy + 0.03, zl(0.4)], front: true }); // wall＝前車廂後面那一面（擋住車裡面）
     P.bagAt = (i) => [x1 - 0.5 - (i % 2) * 0.3, yH - 0.2, (i < 2 ? -1 : 1) * 0.18];
   } else if (kind === 'swing') { // 側開的尾門：樞紐在右邊（+z），門往右後方打開
     const z = zl(0.46), zt = Math.min(H - 0.06, yTop + 0.05);
-    Object.assign(P, { hinge: [xr, 0, z], axis: 'y', ang: 1.75, inR: (x, y, zz) => x <= xr + 0.1 && y >= yB && y <= zt && Math.abs(zz) <= z,
+    Object.assign(P, { hinge: [xr, 0, z], axis: 'y', ang: 1.75, ...boxR(-Infinity, xr + 0.1, yB, zt, z),
       cav: [xr + 0.08, xr + 0.85, yB + 0.02, Math.min(H - 0.2, zt - 0.1), zl(0.42)], rear: true });
     P.bagAt = (i) => [xr + 0.3 + (i % 2) * 0.3, yB + 0.17, (i < 2 ? -1 : 1) * 0.22];
   } else if (kind === 'drop') { // 皮卡的尾門：樞紐在下面，往後放平
     const z = zl(0.45);
-    Object.assign(P, { hinge: [xr, yB, 0], axis: 'z', ang: 1.5, inR: (x, y, zz) => x <= xr + 0.12 && y >= yB && y <= yTop + 0.04 && Math.abs(zz) <= z, rear: true });
+    Object.assign(P, { hinge: [xr, yB, 0], axis: 'z', ang: 1.5, ...boxR(-Infinity, xr + 0.12, yB, yTop + 0.04, z), rear: true });
     P.bagAt = (i) => [x0 + 0.6 + (i % 2) * 0.4, h0 + 0.15, (i < 2 ? -1 : 1) * 0.3];
   } else { // 房車的行李廂蓋：樞紐在後擋下面；蓋子包到車尾那一面（尾燈上面）
     const yC = Math.max(Math.min(yB, h0 - 0.25) + 0.05, h0 - 0.2), z = zl(0.35); // 車尾直直的（E9）量不到保桿上緣：最多到蓋子下面 25 公分
-    Object.assign(P, { hinge: [xh, h0 + 0.012, 0], axis: 'z', ang: -1.15, inR: (x, y, zz) => x <= xh - 0.03 && y >= yC && y <= h0 + 0.12 && Math.abs(zz) <= z,
+    Object.assign(P, { hinge: [xh, h0 + 0.012, 0], axis: 'z', ang: -1.15, ...boxR(-Infinity, xh - 0.03, yC, h0 + 0.12, z),
       cav: [x0 + 0.14, xh - 0.06, Math.max(box.min.y + 0.25, h0 - 0.45), h0 - 0.02, z - 0.04], wall: [xh - 0.05, Math.max(box.min.y + 0.25, h0 - 0.45), h0 + 0.03, zl(0.4)], rear: true });
     P.bagAt = (i) => [x0 + 0.3 + (i % 2) * Math.min(0.32, xh - x0 - 0.6), Math.max(box.min.y + 0.25, h0 - 0.45) + 0.15, (i < 2 ? -1 : 1) * 0.17 + (i % 2 ? 0.05 : -0.05)];
   }
   return (S._trunk = P);
 }
 function curKeyOf(S) { return S === tripS ? cur : S.spec?.key || ''; }
-// 把車身切成「蓋子」和「剩下的」：每個網格的三角形，三個點都在範圍裡＝蓋子；跟原本的網格共用頂點（只換 index），算一次記在 S._lidCut
+// 把車身切成「蓋子」和「剩下的」：每個網格的三角形，三個點都在範圍裡＝蓋子；跨過邊的照盒子的面切開（第 89 批）；沒切到的網格跟原本共用頂點（只換 index），算一次記在 S._lidCut
 function trunkCut(S, P) {
   if (S._lidCut) return S._lidCut;
   const car = S.car; car.updateMatrixWorld(true);
@@ -279,17 +281,42 @@ function trunkCut(S, P) {
       const rel = new THREE.Matrix4().multiplyMatrices(inv, ob.matrixWorld), g = ob.geometry, key = g.uuid + rel.elements.map((e) => e.toFixed(4)).join();
       let sp = cache.get(key);
       if (sp === undefined) {
-        const pos = g.attributes.position, n = pos.count, inside = new Uint8Array(n);
-        for (let i = 0; i < n; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(rel); inside[i] = P.inR(v.x, v.y, v.z) ? 1 : 0; }
+        const pos = g.attributes.position, n = pos.count, inside = new Uint8Array(n), C = [];
+        for (let i = 0; i < n; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(rel); C.push(v.x, v.y, v.z); inside[i] = P.inR(v.x, v.y, v.z) ? 1 : 0; }
         const idx = g.index ? g.index.array : null, cnt = idx ? idx.length : n, I = (k) => (idx ? idx[k] : k);
         const groups = g.groups.length ? g.groups : [{ start: 0, count: g.drawRange.count === Infinity ? cnt : Math.min(cnt, g.drawRange.count), materialIndex: 0 }];
         const lid = [], rest = [], gl = [], gr = []; let any = false;
+        // 第 89 批：跨過邊的三角形照盒子的面切開（新的點放在後面，attributes 照比例內插），蓋子和車身的邊都是直的（以前整個三角形不是蓋子就是車身＝鋸齒）
+        const BX = P.box, PL = [], nv = [], ek = new Map(); // nv：新的點 [i, j, t]（i、j＝原本／新的點，t 從 i 到 j）
+        if (BX) for (let ax = 0; ax < 3; ax++) { if (isFinite(BX[ax][0])) PL.push([ax, -1, BX[ax][0]]); if (isFinite(BX[ax][1])) PL.push([ax, 1, BX[ax][1]]); }
+        const cf = (id, ax) => C[id * 3 + ax], fOf = (id, pl) => pl[1] * (cf(id, pl[0]) - pl[2]); // ≤ 0 ＝ 這一面的裡面
+        const split = (A, B, pi, fa, fb) => { if (fa === 0) return A; if (fb === 0) return B;
+          const lo = A < B ? A : B, hi = A < B ? B : A, key = lo * 64 + pi + '_' + hi; let id = ek.get(key); if (id !== undefined) return id;
+          const t = (lo === A ? fa / (fa - fb) : fb / (fb - fa)); id = n + nv.length; nv.push([lo, hi, t]);
+          for (let ax = 0; ax < 3; ax++) C.push(cf(lo, ax) + (cf(hi, ax) - cf(lo, ax)) * t); ek.set(key, id); return id; };
+        const fan = (poly, out) => { for (let q = 1; q + 1 < poly.length; q++) out.push(poly[0], poly[q], poly[q + 1]); };
+        const clip = (a, b, c) => { let poly = [a, b, c];
+          for (let pi = 0; pi < PL.length && poly.length >= 3; pi++) { const pl = PL[pi], ins = [], outs = [];
+            for (let q = 0; q < poly.length; q++) { const A = poly[q], B = poly[(q + 1) % poly.length], fa = fOf(A, pl), fb = fOf(B, pl);
+              if (fa <= 0) ins.push(A); if (fa >= 0) outs.push(A);
+              if ((fa < 0 && fb > 0) || (fa > 0 && fb < 0)) { const N = split(A, B, pi, fa, fb); ins.push(N); outs.push(N); } }
+            if (outs.length >= 3) fan(outs, rest); poly = ins; }
+          if (poly.length >= 3) { fan(poly, lid); any = true; } };
+        const touch = (a, b, c) => { for (let ax = 0; ax < 3; ax++) { const p0 = cf(a, ax), p1 = cf(b, ax), p2 = cf(c, ax); if (Math.max(p0, p1, p2) < BX[ax][0] || Math.min(p0, p1, p2) > BX[ax][1]) return false; } return true; };
         for (const gp of groups) { const l0 = lid.length, r0 = rest.length;
-          for (let k = gp.start; k + 2 < gp.start + gp.count && k + 2 < cnt; k += 3) { const a = I(k), b = I(k + 1), c = I(k + 2); if (inside[a] && inside[b] && inside[c]) { lid.push(a, b, c); any = true; } else rest.push(a, b, c); }
+          for (let k = gp.start; k + 2 < gp.start + gp.count && k + 2 < cnt; k += 3) { const a = I(k), b = I(k + 1), c = I(k + 2);
+            if (inside[a] && inside[b] && inside[c]) { lid.push(a, b, c); any = true; } else if (BX && touch(a, b, c)) clip(a, b, c); else rest.push(a, b, c); }
           gl.push({ start: l0, count: lid.length - l0, materialIndex: gp.materialIndex }); gr.push({ start: r0, count: rest.length - r0, materialIndex: gp.materialIndex }); }
         sp = null;
-        if (any) { const mk = (arr, gs) => { const q = new THREE.BufferGeometry(); for (const [k, a] of Object.entries(g.attributes)) q.setAttribute(k, a); q.setIndex(new (n > 65535 ? THREE.Uint32BufferAttribute : THREE.Uint16BufferAttribute)(arr, 1)); if (g.groups.length) for (const x of gs) q.addGroup(x.start, x.count, x.materialIndex); q.boundingSphere = g.boundingSphere || (g.computeBoundingSphere(), g.boundingSphere); q.boundingBox = g.boundingBox; return q; };
-          sp = { lid: mk(lid, gl), rest: mk(rest, gr) }; }
+        if (any) { let attrs = g.attributes, N = n;
+          if (nv.length) { attrs = {}; N = n + nv.length; // 切出來的新點：每個 attribute 多 nv.length 個（照 t 內插；法線再變回長度 1）
+            for (const [k, a] of Object.entries(g.attributes)) { const s2 = a.itemSize, arr = new Float32Array(N * s2), get = (i, c) => (c === 0 ? a.getX(i) : c === 1 ? a.getY(i) : c === 2 ? a.getZ(i) : a.getW(i));
+              for (let i = 0; i < n; i++) for (let c = 0; c < s2; c++) arr[i * s2 + c] = get(i, c);
+              for (let j = 0; j < nv.length; j++) { const [i0, i1, t] = nv[j], o = (n + j) * s2; for (let c = 0; c < s2; c++) arr[o + c] = arr[i0 * s2 + c] + (arr[i1 * s2 + c] - arr[i0 * s2 + c]) * t;
+                if ((k === 'normal' || k === 'tangent') && s2 >= 3) { const L = Math.hypot(arr[o], arr[o + 1], arr[o + 2]) || 1; arr[o] /= L; arr[o + 1] /= L; arr[o + 2] /= L; } }
+              attrs[k] = new THREE.BufferAttribute(arr, s2); } }
+          const mk = (arr, gs) => { const q = new THREE.BufferGeometry(); for (const [k, a] of Object.entries(attrs)) q.setAttribute(k, a); q.setIndex(new (N > 65535 ? THREE.Uint32BufferAttribute : THREE.Uint16BufferAttribute)(arr, 1)); if (g.groups.length) for (const x of gs) q.addGroup(x.start, x.count, x.materialIndex); q.boundingSphere = g.boundingSphere || (g.computeBoundingSphere(), g.boundingSphere); q.boundingBox = g.boundingBox; return q; };
+          sp = { lid: mk(lid, gl), rest: mk(rest, gr), added: nv.length }; }
         cache.set(key, sp);
       }
       if (sp) parts.push({ mesh: ob, g0: ob.geometry, sp, rel });

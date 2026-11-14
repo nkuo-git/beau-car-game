@@ -258,6 +258,20 @@ const rear = () => L(() => { const D = window.__D(), M = window.__MT(), H = wind
 const lid = () => L(() => { const V = window.__MT().MART.vis; if (!V) return null; const C = V.S._lidCut;
   return { rot: +(V.hinge ? V.hinge.rotation[V.P.axis] : 0).toFixed(2), axis: V.P.axis, t: +V.t.toFixed(2), bags: V.bags.filter((b) => b.visible).length, cav: !!V.cav?.visible,
     lids: V.lids.length, tris: V.lids.reduce((n, m) => n + m.geometry.index.count / 3, 0), moved: (V.moved || []).length, restored: C ? C.parts.every((p) => p.mesh.geometry === p.g0) : null, parts: C ? C.parts.length : 0 }; });
+// 第 89 批（Nick「車子後車廂邊緣要平整不要鋸齒」）：蓋子的邊照盒子切（直的）：蓋子的點都在盒子裡、車身剩下的三角形沒有一個中心在盒子裡（以前跨過邊的三角形整個留在車身＝鋸齒）
+const edge = () => L(() => { const V = window.__MT().MART.vis, C = V?.S._lidCut, P = V?.P, T = window.__T3; if (!C || !P?.box) return null; const v = new T.Vector3(), B = P.box;
+  const out = (p) => Math.max(0, B[0][0] - p.x, p.x - B[0][1], B[1][0] - p.y, p.y - B[1][1], B[2][0] - p.z, p.z - B[2][1]);
+  let lidOut = 0, restIn = 0, restN = 0, added = 0; const c = new T.Vector3();
+  for (const q of C.parts) { added += q.sp.added || 0; for (const [g, isLid] of [[q.sp.lid, true], [q.sp.rest, false]]) { const pos = g.attributes.position, ix = g.index.array;
+    for (let k = 0; k + 2 < ix.length; k += 3) { c.set(0, 0, 0); for (let j = 0; j < 3; j++) { v.fromBufferAttribute(pos, ix[k + j]).applyMatrix4(q.rel); c.add(v); if (isLid) lidOut = Math.max(lidOut, out(v)); } c.multiplyScalar(1 / 3); if (!isLid) { restN++; if (out(c) === 0 && P.inR(c.x, c.y, c.z)) restIn++; } } } }
+  return { lidOut: +lidOut.toFixed(5), restIn, restN, added }; });
+// 近照：鏡頭停在蓋子的洞上面斜後方（走路的鏡頭先停住）
+async function edgeShot(name) {
+  await L(() => { const V = window.__MT().MART.vis, P = V.P, c = V.S.car, D = window.__D(), T = window.__T3; window.__hold = true; c.updateMatrixWorld(); const f = P.front ? 1 : -1, xe = P.front ? P.x1 : P.x0;
+    const eye = new T.Vector3(xe + f * 1.25, P.H + 0.55, 0.95).applyMatrix4(c.matrixWorld), at = new T.Vector3(xe - f * 0.45, P.y, 0.15).applyMatrix4(c.matrixWorld);
+    D.dcam.position.copy(eye); D.dcam.lookAt(at); D.dcam.updateMatrixWorld(); });
+  await drawAndShot(name); await L(() => { window.__hold = false; });
+}
 const pressAnd = (n = 50) => L((n) => { const H = window.__H, s = H.press(); H.step(n); return { s, act: H.actText(), act2: window.__D().walker.action2, vis2: H.visible('#stage .wk-act2'), toast: H.toast() }; }, n);
 const tr0 = await rear();
 console.log('  rear', JSON.stringify(tr0));
@@ -268,6 +282,9 @@ if (FULL) {
   check(o1.s === '打開後車廂' && /後車廂是空的/.test(o1.toast) && l1 && l1.rot < -1.1 && l1.cav && l1.bags === 0 && o1.act === '關後車廂', `opened it: the lid swung up (${l1?.rot} rad), 「後車廂是空的」, the button says 「關後車廂」`);
   check(l1.lids > 0 && l1.tris > 300 && !l1.restored, `the lid is the GC8's own boot lid cut out of the body (${l1.lids} meshes, ${l1.tris} triangles; the body shows the rest), not an added plate`);
   await drawAndShot('0-trunk-empty');
+  const e1 = await edge(); console.log('  edge', JSON.stringify(e1));
+  check(e1 && e1.lidOut < 1e-3 && e1.restIn === 0 && e1.added > 0, `the cut edge is straight: every lid point inside the lid box (${e1?.lidOut} m out), no body triangle left inside it (${e1?.restIn}/${e1?.restN}); ${e1?.added} points added where triangles crossed the edge`);
+  await edgeShot('0-trunk-edge');
   const o2 = await pressAnd(), l2 = await lid();
   check(o2.s === '關後車廂' && l2.rot === 0 && !l2.cav && o2.act === '打開後車廂' && l2.restored && l2.lids === 0, 'closed it again (lid flat, the body is back to its original mesh)');
 }
@@ -421,6 +438,9 @@ if (FULL) {
   const angOK = { hatch: l1.rot < -1.2 && l1.axis === 'z', frunk: l1.rot > 1.0 && l1.axis === 'z', swing: l1.rot > 1.6 && l1.axis === 'y', drop: l1.rot > 1.4 && l1.axis === 'z', trunk: l1.rot < -1.1 }[KIND];
   check(angOK && l1.lids > 0 && l1.tris > 200 && !l1.restored && (KIND === 'drop' || l1.cav), `the ${KIND === 'frunk' ? 'front lid' : KIND === 'swing' ? 'side-hinged rear door' : KIND === 'trunk' ? 'boot lid' : 'tailgate'} cut out of the body swung open (${l1.axis} ${l1.rot} rad; ${l1.lids} meshes, ${l1.tris} triangles${l1.moved ? `, ${l1.moved} parts riding on it` : ''})`);
   await drawAndShot(`${K}-open`);
+  const e1 = await edge(); console.log('  edge', JSON.stringify(e1));
+  check(e1 && e1.lidOut < 1e-3 && e1.restIn === 0 && e1.added > 0, `the cut edge is straight: every lid point inside the lid box (${e1?.lidOut} m out), no body triangle left inside it (${e1?.restIn}/${e1?.restN}); ${e1?.added} points added where triangles crossed the edge`);
+  await edgeShot(`${K}-edge`);
   await L(() => { window.__MT().MART.bag.push('chips', 'water', 'noodle', 'egg'); window.__H.step(5); });
   const o2 = await pressAnd(20), l2 = await lid(), sv = await L((k) => window.__MT().GAME.trunk[k]?.length, K);
   console.log('  put', JSON.stringify(o2), JSON.stringify(l2), sv);

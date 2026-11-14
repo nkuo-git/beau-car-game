@@ -485,7 +485,9 @@ function makeDrv(pose) {
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
     onZone: arrive, onShift: () => dvoice?.shift(), onBlip: () => dvoice?.shift() /* 第 74 批：降檔補油 */, onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
-    onEngine: (on) => { dvoice?.dispose(); dvoice = on ? engineAudio.voice(cur, { parts: partsOf(cur) }) : null; }, // 第 68 批：手排熄火＝引擎聲停、重新發動＝再來
+    onEngine: (on) => { IGN.st?.stop(); IGN.st = null; dvoice?.dispose(); dvoice = on ? engineAudio.voice(cur, { parts: partsOf(cur) }) : null; }, // 第 68 批：手排熄火＝引擎聲停、重新發動＝再來
+    onCrank: (sec) => { if (PERF[cur]?.bike) return; IGN.st?.stop(); IGN.st = engineAudio.starter?.({ key: cur, dur: sec + 0.05 }) || null; }, // 第 89 批：手排熄火以後重新發動：起動馬達
+    onIgnite: () => { IGN.st?.stop(); IGN.st = null; dvoice?.setGain(1); }, // 第 89 批：點火：引擎發動了（起動馬達停、引擎聲出來）
     crush: crushFx && crushK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
@@ -500,7 +502,15 @@ function makeDrv(pose) {
   arrangeCars(); // 停著的車：放碰撞（開車的是新的）、走路的清單
   drv.setDestination(tripDest);
   dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
+  ignStart(); // 第 89 批：點火
   popDrv(); // 跳燈（86、R7）
+}
+// 第 89 批（Nick「車子發動要有點火」）：上車、出門＝點火：鑰匙「喀」、起動馬達轉 0.85 秒（轉速表抖、沒有引擎聲），引擎發動「轟」一下（轉速衝上去再回到怠速）；
+// 踩油門馬上發動（不用等）。腳踏車沒有。drive.js ignite()／onIgnite、sound.js starter()
+const IGN = { st: null, T: 0.85 };
+function ignStart() {
+  if (!drv || !dvoice || PERF[cur]?.bike) return;
+  IGN.st?.stop(); dvoice.setGain(0); drv.ignite(IGN.T); IGN.st = engineAudio.starter?.({ key: cur, dur: IGN.T + 0.1 }) || null;
 }
 // 改車廠有沒有買得起的（還沒裝的引擎零件、還沒買的輪胎）
 function canShop() {
@@ -768,7 +778,7 @@ function onGetIn(car, seat = null) {
   const px = seat && seat.i > 0 ? seat.i : 0;
   if (car.drive) { // 剛下來那台：walk.js 已經 drv.resume() 了，引擎再發動
     if (px) { paxStart(cur, px); arrangeCars(); return; } // 別的位子：walk.js 沒有 resume
-    dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
+    dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) }); ignStart(); // 第 89 批：再上車也點火
     arrangeCars(); return;
   }
   if (car.key === tripFull && !drv) {

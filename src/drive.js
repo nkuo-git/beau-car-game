@@ -430,6 +430,8 @@ function createDrive(o) {
   // 第 68 批：手排（setGearbox('mt')）：mg＝排在哪一檔（−1 R、0 N、1–6；st.gear／st.rev 跟著它）、clu＝離合器接上多少（0 踩著～1 接上）、stall＝熄火了、crank＝發動中（秒）、
   //   grind＝「咔咔」沒換進去（秒；grindWhy 1 沒按離合器、2 太快不能倒車）、lim＝撞到紅線斷油中、limT＝計時（紅線噠噠噠、閃）、shq＝按了 ▲ ▼ 還沒處理的
   Object.assign(st, { mt: false, mg: 0, clu: 1, cluPrev: 1, stall: false, crank: 0, grind: 0, grindWhy: 0, lim: false, limT: 0, shq: [] });
+  // 第 89 批（Nick「車子發動要有點火」）：ign＝起動馬達還在轉（秒；轉速表 0.07 抖、沒有引擎聲）、踩油門馬上發動；發動那一下 flare（轉速衝到 0.37 再慢慢回到怠速）
+  const FLARE_T = 1.0; Object.assign(st, { ign: 0, ignT: 0, flare: 0 });
   const dmgP = { power: 1, top: 1, maxKmh: Infinity, steerPull: 0 }; // 撞壞了（setDamage）
   let imp = null; // 這一幀最大的一下（onImpact）
   const human = { thr: 0, brk: 0, steer: 0, hb: 0, clu: 0, kb: {} };
@@ -571,7 +573,7 @@ function createDrive(o) {
       st.mg = g; st.rev = g === -1; st.gear = Math.max(0, g - 1); st.hold = 0; st.shifts++;
       if (d > 0 && g > 1) events.push(['shift', g]);
     }
-    if (st.stall) { if (st.crank > 0) { st.crank -= h; if (st.crank <= 0) { st.stall = false; st.crank = 0; events.push(['engine', true]); } } else if (inp.thr > 0.3) st.crank = 0.6; }
+    if (st.stall) { if (st.crank > 0) { st.crank -= h; if (st.crank <= 0) { st.stall = false; st.crank = 0; st.flare = FLARE_T; events.push(['engine', true]); } } else if (inp.thr > 0.3) { st.crank = 0.6; events.push(['crank', 0.6]); } } // 第 89 批：重新發動也有起動馬達的聲音（crank）、發動那一下轉速衝上去（flare）
     st.grind = Math.max(0, st.grind - h); st.limT += h;
   }
   function setGearbox(k) {
@@ -586,6 +588,7 @@ function createDrive(o) {
   function physics(h, inp) {
     const R = ride && ride.on && !st.dyno ? ride : null; kGeo = R ? kGeo0 * R.k.ws : kGeo0; // 第 4 批：在地形上（村子裡 null：照舊）；四輪轉向；第 79 批：綁在馬力機上（台子墊高＝地形）照平路算（滾筒不吃地形的抓地力）
     const MT = st.mt; if (MT) mtStep(h, inp); // 第 68 批：手排：離合器、▲ ▼、熄火、發動
+    if (st.ign > 0) { st.ignT += h; st.ign -= h; if (inp.thr > 0.15) st.ign = 0; if (st.ign <= 0) { st.ign = 0; st.flare = FLARE_T; events.push(['ignite']); } } else if (st.flare > 0) st.flare = Math.max(0, st.flare - h); // 第 89 批：點火
     // 停住了還按著煞車＝換倒車；倒車停住了按油門＝換前進（手排：油門永遠是往前／往後走、煞車永遠是煞車；停住按著煞車 R ↔ 1 檔照舊）
     const go0 = st.rev && !MT ? inp.brk : inp.thr, stop0 = st.rev && !MT ? inp.thr : inp.brk, u0 = st.v * (st.rev ? -1 : 1);
     if (stop0 > 0.5 && go0 < 0.05 && u0 < 0.3 && !inp.hb && !MT) { st.hold += h; if (st.hold > 0.25) { st.rev = !st.rev; st.hold = 0; st.gear = 0; st.thr = st.brk = 0; } } else st.hold = 0; // 第 69 批：手排沒有「停住按著煞車＝倒車」，R 在換檔桿上（N 再往下） // 手排：按著煞車一次只換一次（放開再按才又換）
@@ -640,9 +643,12 @@ function createDrive(o) {
       const free = 0.13 + 0.87 * go;
       want = st.stall ? (st.crank > 0 ? 0.07 + 0.03 * Math.sin(st.limT * 60) : 0) : st.lim ? (st.limT % 0.1 < 0.05 ? 0.96 : 1.02) : (st.clu >= 0.5 && st.mg !== 0 ? 1 : eng) * Math.min(1.02, xr + slip) + (st.clu >= 0.5 && st.mg !== 0 ? 0 : 1 - eng) * free; // 第 69 批：接上過半轉速就跟著輪子（降檔瞬間衝上去，不被怠速拉回來）
     }
+    if (st.ign > 0) want = 0.075 + 0.02 * Math.sin(st.ignT * 46); // 第 89 批：起動馬達在轉
+    else if (st.flare > 0 && !(MT && st.stall)) want = Math.max(want, 0.13 + 0.24 * Math.pow(st.flare / FLARE_T, 1.3)); // 發動那一下
     const freeRev = MT && !st.stall && (st.mg === 0 || st.clu < 0.5); // 第 74 批（Nick「空檔踩的時候轉速表不要升那麼快」）：引擎沒接到輪子＝空催，轉速慢慢上去（0.3 秒一半、1 秒到 9 成）；空檔放油門掉下來也慢一點
-    st.rpm += (want - st.rpm) * (1 - Math.exp(-h * (MT && st.stall ? 6 : freeRev ? (want > st.rpm ? FREE_UP : st.mg === 0 ? FREE_DOWN : 12) : 12)));
+    st.rpm += (want - st.rpm) * (1 - Math.exp(-h * ((MT && st.stall) || st.ign > 0 ? 6 : freeRev ? (want > st.rpm ? FREE_UP : st.mg === 0 ? FREE_DOWN : 12) : 12)));
     st.load = MT && (st.stall || st.mg === 0 || st.clu < 0.5) ? (st.stall ? 0 : go * (st.mg === 0 ? 1 : 0.6)) : st.cut > 0 ? st.cutLoad : go > 0.02 ? go * (0.65 + 0.35 * lim) : 0;
+    if (st.ign > 0) st.load = 0;
     if (st.blip > 0) { st.blip -= h; if (!st.stall) st.load = Math.max(st.load, 0.6 + 0.4 * clamp(st.blip / BLIP_T, 0, 1)); } // 第 74 批：降檔那一下補一腳油的聲音（0.55 秒慢慢退）
     // 走：後軸沿著車頭方向走、繞後軸轉（腳踏車模型）
     const vab = Math.abs(st.v);
@@ -1194,6 +1200,8 @@ function createDrive(o) {
       else if (e[0] === 'shift' && o.onShift) o.onShift(e[1]);
       else if (e[0] === 'blip' && o.onBlip) o.onBlip(e[1]); // 第 74 批：手排降檔接上那一下（引擎聲放炮）
       else if (e[0] === 'engine' && o.onEngine) o.onEngine(e[1]); // 第 68 批：手排熄火（false）、重新發動（true）
+      else if (e[0] === 'ignite' && o.onIgnite) o.onIgnite(); // 第 89 批：點火：引擎發動了（起動馬達停、引擎聲出來）
+      else if (e[0] === 'crank' && o.onCrank) o.onCrank(e[1]); // 第 89 批：手排熄火以後按油門：起動馬達轉 e[1] 秒
       else if (e[0] === 'grind' && o.onGrind) o.onGrind(e[1]);
       else if (e[0] === 'bump' && o.onBump) o.onBump(e[1]);
       else if (e[0] === 'land') { cam.shake = Math.max(cam.shake, Math.min(0.3, e[1].speed * 0.025)); if (o.onLand) o.onLand(e[1]); } // 第 4 批：落地
@@ -1244,7 +1252,7 @@ function createDrive(o) {
     brake: Math.max(st.rev ? st.thr : st.brk, st.hb), steer: st.steer, surface: st.surf, cap: Math.min(999, Math.round(st.cap * 36) / 10), reversing: st.rev, bumps: st.bumps, shifts: st.shifts, zone: zoneNow, dest, destDist: routeData ? Math.max(0, routeData.len - routeS) : null, auto: !!auto, paused,
     slip: st.slip, travel: wrapA(st.th + st.slip), drift: st.dm, drifting: Math.abs(st.slip) > 0.175, drifts: st.drifts, loose: st.loose, skid: st.skid, handbrake: st.hb > 0 ? 1 : 0, // 第 3 批（甩尾）
     marks: SK ? SK.count() : 0, smoke: SK ? SK.alive() : 0, tilt: tilt.on ? tilt.val : null,
-    ngears: NG, mt: st.mt, mgear: st.mt ? st.mg : null, clutch: st.mt ? +(1 - st.clu).toFixed(3) : 0, stalled: st.stall, cranking: st.crank > 0, grind: st.grind > 0 ? st.grindWhy : 0, limiter: st.lim, // 第 68 批：手排
+    ngears: NG, mt: st.mt, mgear: st.mt ? st.mg : null, clutch: st.mt ? +(1 - st.clu).toFixed(3) : 0, stalled: st.stall, cranking: st.crank > 0, igniting: st.ign > 0, grind: st.grind > 0 ? st.grindWhy : 0, limiter: st.lim, // 第 68 批：手排
     dyno: !!st.dyno, whp: paused ? 0 : st.pw / 745.7, whpX: st.px, redline: P.red, // 第 77 批：馬力機：在滾筒上、輪上馬力（hp）、那時候的轉速（÷紅線）、紅線轉速
     ...(ride ? ride.tele() : null) });
 
@@ -1263,6 +1271,7 @@ function createDrive(o) {
     setTilt, get tilt() { return tilt.on; },
     setPop, get pop() { return popOn; }, // 跳燈
     setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, clu: +i.clutch || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
+    ignite(sec = 0.85) { st.ign = Math.max(0, sec); st.ignT = 0; st.flare = 0; }, get igniting() { return st.ign > 0; }, // 第 89 批：點火（上車、出門）：sec 秒起動馬達，踩油門馬上發動
     setGearbox, shift, get gearbox() { return st.mt ? 'mt' : 'at'; }, // 第 68 批：手排（'mt'）／自排（'at'）；shift(±1)＝按 ▲ ▼
     setDyno, get dyno() { return !!st.dyno; }, // 第 77 批：馬力機：setDyno({ x, z, heading }) 綁上去（車不動、輪子轉、油門換檔照舊）、setDyno(null) 放開
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },

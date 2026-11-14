@@ -77,3 +77,14 @@ The videos (Nick's own plush toys) were only looked at; nothing from them is in 
   - it lies down and gets up;
   - screenshot `-2c-animals.png` with the three animals lined up in front of the car.
 - The human hit check now picks a person (`!o.animal`) and also checks the stars (≥ 2).
+
+## Batch 89 (trial v100, 2026-11-14): shorter chameleon legs, shorter pinky snout
+
+Nick: 「便色龍腳太長」「粉紅色豬鼻子太長」.
+- Chameleon: the centre line is 6 cm lower (`CHAM_DY`, unscaled; it fades back to 0 toward the tail root so the curled tail stays above the ground).
+  - The lower half of each body ring is deeper by `belly(s)` (up to 7.5 cm between s 0.5 and 1.05).
+  - Legs are shorter: shoulder/hip 0.42 → 0.36, elbow/knee 0.22 → 0.19, lx 0.1 → 0.085.
+  - Result: the visible leg is about a third shorter (unscaled ~0.35 → ~0.23), and the height is still 0.91 m (still the biggest).
+  - Eyes moved down with the head.
+  - animal-test 24 ok (cham foot slide 1.0 cm at 0.85 m/s, limit 3 cm).
+- Pinky: the snout sticks out 9.5 cm past the head instead of 15.5 (cap to x 0.19, nose at 0.233).

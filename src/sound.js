@@ -911,7 +911,7 @@ export function createEngineAudio(opt = {}) {
         } catch (e) { warn(e); }
       },
       dispose() { kill(v); },
-      get alive() { return !v.dead; },
+      get alive() { return !v.dead; }, get gain() { return v.gain; }, // 第 89 批：gain（點火的時候 0，發動了 1；測試看）
     };
     try {
       if (S.gone) { v.dead = true; return api; }
@@ -981,6 +981,64 @@ export function createEngineAudio(opt = {}) {
           }, Math.max(0, (t1 + 0.8 - ctx.currentTime) * 1000) + 100);
         } catch (e) { warn(e); }
       };
+    } catch (e) { warn(e); }
+    return h;
+  }
+  // ---- 第 89 批（Nick「車子發動要有點火」）：點火：鑰匙「喀」→ 起動馬達的電磁開關「喀噠」→ 起動馬達轉（鋸齒波低通＋齒輪的嘰聲），
+  // 每壓縮一缸就「嗯」一下（馬達被頂住：慢一點、大聲一點、低低的一下）；引擎發動了（stop()）馬達很快停掉，接著是引擎聲（town.src.js 把 voice 的音量打開）。
+  // starter({ key, dur, gain })：dur 秒後自己停（沒叫 stop 的話）；key 照引擎幾缸算壓縮的快慢（單缸的慢慢「嗯—嗯」、V8 很密）
+  function starter(o = {}) {
+    const h = { alive: false, stop() {} };
+    try {
+      if (S.gone) return h;
+      const ctx = ensureCtx(); if (!ctx) return h;
+      wake(); clearTimeout(S.idleT);
+      let ncyl = 4; try { const P = SND_profile(o.key || 'supra', []); ncyl = Array.isArray(P.fire) && P.fire.length ? P.fire.length : 4; } catch { /* 照 4 缸 */ }
+      const dur = Math.max(0.3, Math.min(2, num(o.dur, 0.85))), t0 = ctx.currentTime + 0.01, tm = t0 + 0.09, keep = [];
+      const out = ctx.createGain(); out.gain.value = 0.4 * Math.max(0, num(o.gain, 1)); out.connect(S.inp); keep.push(out); // 0.4：轉的時候比怠速大約 10 dB（量過：1.0 的時候大 18 dB，太吵）
+      // 鑰匙「喀」（短短的高頻）＋電磁開關「喀噠」
+      { const n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); n.buffer = noiseBuf(ctx); f.type = 'bandpass'; f.frequency.value = 3200; f.Q.value = 2;
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.22, t0 + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.03);
+        n.connect(f); f.connect(g); g.connect(out); n.start(t0, 0.3); n.stop(t0 + 0.04); keep.push(n, f, g); }
+      clunk(ctx, out, tm - 0.02, 0.32, keep);
+      // 起動馬達：轉起來（0.1 秒）、每次壓縮慢一下
+      const mot = ctx.createGain(), mod = ctx.createGain(); mot.gain.setValueAtTime(0, tm); mot.gain.linearRampToValueAtTime(1, tm + 0.08); mod.gain.value = 0.6; mod.connect(mot); mot.connect(out); keep.push(mot, mod);
+      const saw = ctx.createOscillator(), lp = ctx.createBiquadFilter(), sg = ctx.createGain(); saw.type = 'sawtooth'; lp.type = 'lowpass'; lp.frequency.value = 1000; lp.Q.value = 0.8; sg.gain.value = 0.26;
+      saw.connect(lp); lp.connect(sg); sg.connect(mod); keep.push(saw, lp, sg);
+      const wh = ctx.createOscillator(), wf = ctx.createBiquadFilter(), wg = ctx.createGain(); wh.type = 'square'; wf.type = 'bandpass'; wf.frequency.value = 1500; wf.Q.value = 3; wg.gain.value = 0.035; // 齒輪的嘰聲
+      wh.connect(wf); wf.connect(wg); wg.connect(mod); keep.push(wh, wf, wg);
+      const ns = ctx.createBufferSource(), nb = ctx.createBiquadFilter(), ng = ctx.createGain(); ns.buffer = noiseBuf(ctx); ns.loop = true; nb.type = 'bandpass'; nb.frequency.value = 700; nb.Q.value = 0.8; ng.gain.value = 0.05;
+      ns.connect(nb); nb.connect(ng); ng.connect(mod); keep.push(ns, nb, ng);
+      const thump = ctx.createOscillator(), tg = ctx.createGain(); thump.type = 'sine'; thump.frequency.value = 52; tg.gain.value = 0; thump.connect(tg); tg.connect(out); keep.push(thump, tg); // 每次壓縮低低的「嗯」
+      saw.frequency.setValueAtTime(70, tm); wh.frequency.setValueAtTime(1100, tm); saw.frequency.linearRampToValueAtTime(118, tm + 0.1); wh.frequency.linearRampToValueAtTime(1650, tm + 0.1);
+      // 曲軸約 200→250 rpm：一秒壓縮 rpm/60 × 缸數/2 次（3.5～16）
+      const fc = (k) => Math.max(3.5, Math.min(16, ((200 + 60 * k) / 60) * (ncyl / 2)));
+      const end = t0 + dur;
+      for (let t = tm + 0.12, k = 0; t < end - 0.02; k++) {
+        const T = 1 / fc((t - tm) / dur), tp = t + T * 0.3;
+        mod.gain.setValueAtTime(0.55, t); mod.gain.linearRampToValueAtTime(1, tp); mod.gain.linearRampToValueAtTime(0.55, t + T);
+        saw.frequency.setValueAtTime(118 + 14 * k / 8, t); saw.frequency.linearRampToValueAtTime(100 + 14 * k / 8, tp); saw.frequency.linearRampToValueAtTime(118 + 14 * k / 8, t + T);
+        tg.gain.setValueAtTime(0, t); tg.gain.linearRampToValueAtTime(0.2, tp); tg.gain.linearRampToValueAtTime(0, t + T * 0.85);
+        t += T;
+      }
+      for (const x of [saw, wh, ns, thump]) x.start(tm);
+      if (S.rec) S.rec.n++;
+      let done = false;
+      h.alive = true;
+      h.stop = () => {
+        try {
+          if (done) return; done = true; h.alive = false; clearTimeout(TT);
+          const t1 = Math.max(ctx.currentTime, tm) + 0.005;
+          for (const p of [mot.gain, saw.frequency, wh.frequency, tg.gain]) { if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t1); else { p.cancelScheduledValues(t1); p.setValueAtTime(p.value, t1); } }
+          mot.gain.linearRampToValueAtTime(0, t1 + 0.07); tg.gain.linearRampToValueAtTime(0, t1 + 0.03); saw.frequency.linearRampToValueAtTime(160, t1 + 0.07); wh.frequency.linearRampToValueAtTime(2100, t1 + 0.07); // 引擎接手：馬達被甩開一下就停
+          for (const x of [saw, wh, ns, thump]) x.stop(t1 + 0.12);
+          setTimeout(() => {
+            for (const x of keep) try { x.disconnect(); } catch { /* 算了 */ }
+            if (S.rec) { S.rec.n = Math.max(0, S.rec.n - 1); idleCheck(); }
+          }, Math.max(0, (t1 + 0.2 - ctx.currentTime) * 1000) + 100);
+        } catch (e) { warn(e); }
+      };
+      const TT = setTimeout(() => h.stop(), (dur + 0.05) * 1000);
     } catch (e) { warn(e); }
     return h;
   }
@@ -1275,7 +1333,7 @@ export function createEngineAudio(opt = {}) {
     } catch (e) { warn(e); }
   }
   return {
-    resume, voice, lift, crash, hiss, skid, ambient, music, setMuted, setVolume, dispose, // skid：第 3 批；ambient：第 31 批（環境聲）；music：第 34 批（背景音樂）
+    resume, voice, lift, starter, crash, hiss, skid, ambient, music, setMuted, setVolume, dispose, // skid：第 3 批；ambient：第 31 批（環境聲）；music：第 34 批（背景音樂）；starter：第 89 批（點火）
     get muted() { return S.muted; },
     get volume() { return S.vol; },
     get mode() { return S.mode; }, // 'worklet'｜'script'｜'off'

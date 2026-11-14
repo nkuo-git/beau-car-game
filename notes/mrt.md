@@ -125,3 +125,14 @@ Nick's original 2026-11-08 ask included 「捷運站也要有生物」; on 2026-
   walk out at 文德; tunnel riders get off at 港墘), visible count = 2 meshes each, draw calls.
 - Numbers (960×576, 高, same views as section 2): concourse 133 calls / 0.43M (v97 131), platform 198 / 0.54M (v97 194) —
   +2 calls per animal in view; animal close-ups 108 / 0.32M and 96 / 0.25M. update+step stays small (≤ 1 path search a frame).
+
+## Batch 89 (trial v100, 2026-11-14): floor marks no longer float over the stairs
+
+Nick: 「捷運站的等候線不要懸空在樓梯上」.
+- Cause: the doors at u 3.6 and 10.8 sit next to the stair/escalator hole in the platform floor (u 0…12, |v| 4.6…8.8). Their 下車 decal reached v 5.3 and the 排隊 decals reached v 6.3, past the glass rail at 4.6, so they hung in the air over the stairs.
+- Fix: a door whose marks (d ± 1.8) overlap the hole uses short marks in the 0.58 m strip between the yellow tactile line and the rail (v a+0.6 … r0−0.12).
+  - A wide 「下車」 (`DEC.offW`, 384×140 in the atlas, 1.6 × 0.58 m).
+  - Two small square 「排隊」 (`DEC.queueS`, 140×140, 0.58 m). Same u as before (d ± 1.35).
+  - The animals' queue spot (ZQV 4.25) is in that strip already.
+- `M.info.hole` = { u0, u1, v0, v1 } (station coords) for tests.
+- mrt-test section 10 adds a check: no floor-level vertex of `mrt-deco` is inside the hole.
