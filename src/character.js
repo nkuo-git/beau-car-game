@@ -2476,7 +2476,10 @@ const eatK = (S) => (S.eatD > 0 ? sstep(0, 0.35, S.eatT) * (1 - sstep(S.eatD - 0
 function eatArm(S, M, w) {
   const A = M.restAbs, hb = B.head * 3, bite = Math.max(0, Math.sin(TAU * 1.6 * S.eatT)), fp = S.fpOn; // 第 90 批：第一人稱（頭藏起來、鏡頭在眼睛）：拿到嘴巴前面一點，畫面裡看得到
   boneWorld(M, S.Q, S.HP, B.head, WQ, WP);
-  V_F.set(M.headX + ((fp ? 0.34 : 0.15) - 0.035 * bite) * M.hs - A[hb], M.eyeY - (fp ? 0.15 : 0.1) * M.hs - A[hb + 1], (fp ? 0.06 : 0.035) * M.hs).applyQuaternion(WQ).add(WP);
+  if (fp) { // 眼睛那一點往前 34、往下 15、往右 6 公分（角色的方向，不跟著頭轉：坐著頭往後靠、往旁邊看，手還是在鏡頭前面）
+    V_F.set(M.headX - A[hb], M.eyeY - A[hb + 1], 0).applyQuaternion(WQ).add(WP);
+    V_F.x += (0.34 - 0.035 * bite) * M.hs; V_F.y -= 0.15 * M.hs; V_F.z += 0.06 * M.hs;
+  } else V_F.set(M.headX + (0.15 - 0.035 * bite) * M.hs - A[hb], M.eyeY - 0.1 * M.hs - A[hb + 1], 0.035 * M.hs).applyQuaternion(WQ).add(WP);
   G1.copy(V_F); PL.set(-0.3, -1, 0.9);
   armSave(S, 1); handIK(S, M, 1, G1, QB_EAT, PL); armMix(S, 1, w);
 }

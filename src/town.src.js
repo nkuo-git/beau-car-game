@@ -480,7 +480,11 @@ function makeDrv(pose) {
   TR.scene.add(Sx.car); Sx.car.visible = true; Sx.body.position.y = +CARS[cur].state.height;
   // 駕駛座視角：車內（cabin.js）的眼睛；手機直拿畫面窄，視角放大一點（跟車庫的「車內」一樣）
   const eye = CABIN_VIEW[cur] ? { ...CABIN_VIEW[cur], fov: cabinFov(cur, dcam.aspect) } : undefined;
-  if (RIDES[cur] && eye && riderMake()) eye.eye = [RIDER.eye[0] + 0.06, RIDER.eye[1], 0]; // 第 56 批：沙灘車：騎的人的眼睛往前 6 公分（人不畫）；第 62 批：街車也是
+  if (RIDES[cur] && eye && riderMake()) { // 第 56 批：沙灘車：騎的人的眼睛往前 6 公分（人不畫）；第 62 批：街車也是
+    // 第 90 批：人照畫（頭藏起來）：鏡頭往後 b、往上 u、往下看 a 度，兩隻手握把手才在畫面裡（直拿的畫面窄：手指在兩邊）
+    const [b, u, a] = RIDES[cur].fp, e = [RIDER.eye[0] + 0.06 - b, RIDER.eye[1] + u, 0], dx = eye.look[0] - e[0], dy = eye.look[1] - e[1], r = Math.atan2(dy, dx) - (a * Math.PI) / 180, l = Math.hypot(dx, dy);
+    eye.eye = e; eye.look = [e[0] + Math.cos(r) * l, e[1] + Math.sin(r) * l, eye.look[2]];
+  }
   dEye = eye;
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
@@ -2937,8 +2941,9 @@ function mirrorStep() {
 //   騎著（walker 收起來、你的人藏起來＝坐在車上）才放上去；第一人稱（鏡頭在眼睛往前 6 公分）第 90 批起也畫人、頭藏起來（看得到手握把手）；下車、回車庫頁就拿下來
 //   400 公尺直線加速（race.src.js enterRace）也騎在上面：riderOn(S)；比完回車庫頁 riderOff()
 //   第 62 批：N4 街車也是騎的（moto-spec.js：MOTO_RIDE、motoRide、motoSteer，n4-spec.js 包成一樣的介面）：RIDES[key]；換車就重新量眼睛
-const RIDES = { z2: { R: Z2_RIDE, ride: Z2_ride, steer: Z2_steer, eye: Z2_eye }, n4: { R: N4_RIDE, ride: N4_ride, steer: N4_steer, eye: N4_eye },
-  mtb: { R: MTB_RIDE, ride: MTB_ride, steer: MTB_steer, eye: MTB_eye }, road: { R: ROAD_RIDE, ride: ROAD_ride, steer: ROAD_steer, eye: ROAD_eye } }; // 第 67 批：腳踏車（bike-spec.js；steer 也讓曲柄跟著後輪轉）
+const RIDES = { z2: { R: Z2_RIDE, ride: Z2_ride, steer: Z2_steer, eye: Z2_eye, fp: [0.15, 0.05, 15] }, n4: { R: N4_RIDE, ride: N4_ride, steer: N4_steer, eye: N4_eye, fp: [0.15, 0.05, 15] },
+  mtb: { R: MTB_RIDE, ride: MTB_ride, steer: MTB_steer, eye: MTB_eye, fp: [0.22, 0.05, 22] }, road: { R: ROAD_RIDE, ride: ROAD_ride, steer: ROAD_steer, eye: ROAD_eye, fp: [0.15, 0.05, 15] } }; // 第 67 批：腳踏車（bike-spec.js；steer 也讓曲柄跟著後輪轉）
+// fp＝第一人稱的鏡頭（第 90 批）：[從眼睛往後幾公尺, 往上幾公尺, 再往下看幾度]：再往後會看到自己的脖子、肩膀
 const RIDER = { C: null, lk: null, k: null, S: null, SK: null, eye: [0, 0, 0] };
 const riderLook = () => { const L = meLook(); return { ...L, ...Z2_helmet(L) }; }; // 騎沙灘車戴安全帽（你自己的帽子就是安全帽：照它的顏色）
 function riderMake(k = cur) { // 第一次騎、換了樣子、換了車：做（換）人、量眼睛（第一人稱的鏡頭）

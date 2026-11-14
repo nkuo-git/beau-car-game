@@ -151,7 +151,8 @@ check(in1.mode === 'off' && in1.cur === K && in1.door === 1, `on the ${CAR.name}
 check(!before.on && in1.rider && in1.walkerHidden && in1.state === 'sit' && in1.hat === 'helmet', `you sit on the ATV (your person, sitting, wearing a helmet); the walking you is hidden; nobody was on it before you got on`);
 const gR = dist(in1.handR, in1.grip), gL = dist(in1.handL, [in1.grip[0], in1.grip[1], -in1.grip[2]]), fR = dist(in1.footR, in1.ft), fL = dist(in1.footL, [in1.ft[0], in1.ft[1], -in1.ft[2]]);
 check(gR < 0.04 && gL < 0.04 && fR < 0.06 && fL < 0.06, `hands on the grips (${gR.toFixed(3)} / ${gL.toFixed(3)} m off), feet on the footrests (${fR.toFixed(3)} / ${fL.toFixed(3)} m off)`);
-check(in1.dEye && Math.abs(in1.dEye[0] - in1.eye[0] - 0.06) < 0.02 && Math.abs(in1.dEye[1] - in1.eye[1]) < 0.02, `the first-person camera is at the rider's eyes, 6 cm forward (eye ${in1.eye}, camera ${in1.dEye})`);
+const FP = [0.15, 0.05]; // 第 90 批：第一人稱的鏡頭從眼睛往後、往上一點（town.src.js RIDES[k].fp），看得到手握把手
+check(in1.dEye && Math.abs(in1.dEye[0] - in1.eye[0] - (0.06 - FP[0])) < 0.02 && Math.abs(in1.dEye[1] - in1.eye[1] - FP[1]) < 0.02, `the first-person camera is at the rider's eyes, ${Math.round((FP[0] - 0.06) * 100)} cm back and ${Math.round(FP[1] * 100)} cm up so the hands on the bars are in view (eye ${in1.eye}, camera ${in1.dEye})`);
 check(in1.rideOn === true && in1.cls === 'offroad' && !in1.air && Math.abs(in1.dy) < 0.02 && in1.wheels === 4, `the ${CAR.name} uses the off-road ride everywhere (class ${in1.cls}: suspension, off-road tyres), sitting on the lobby floor (${in1.dy} m, ${in1.wheels} wheels down)`);
 const riOn = await shot('1-on');
 
@@ -299,8 +300,9 @@ await p.evaluate(() => { const d = window.__D().drv; d.setInput(null); window.__
 const eye = await p.evaluate(() => { const D = window.__D(), C = D.RIDER.C, c = D.dcam.position.clone(), e = c.clone().set(...D.dEye.eye); D.tripS.body.updateWorldMatrix(true, false); D.tripS.body.localToWorld(e);
   // 第 90 批：第一人稱也畫騎的人（頭縮到看不見），兩隻手握把手在畫面裡
   D.dcam.updateMatrixWorld(); const ndc = (o) => { const v = c.clone(); o.updateWorldMatrix(true, false); o.getWorldPosition(v); v.project(D.dcam); return [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(3)]; };
+  const best = (os) => os.map(ndc).sort((a, b) => Math.max(Math.abs(a[0]), Math.abs(a[1])) - Math.max(Math.abs(b[0]), Math.abs(b[1])))[0]; // 手腕、手指、指尖、大拇指：最裡面那一點（直拿的畫面窄：手指在兩邊）
   const hd = C.skeleton.getBoneByName('head'), hv = c.clone(); hd.updateWorldMatrix(true, false); hd.getWorldScale(hv);
-  return { d: +c.distanceTo(e).toFixed(3), riderVis: C.group.visible && !!C.group.parent, fp: !!C.fpOn, head: +hv.x.toExponential(1), R: ndc(C.hand), L: ndc(C.handL), mir: D.MIR.list.length, mirOn: D.MIR.on }; });
+  return { d: +c.distanceTo(e).toFixed(3), riderVis: C.group.visible && !!C.group.parent, fp: !!C.fpOn, head: +hv.x.toExponential(1), R: best([C.hand, ...[17, 18, 19].map((i) => C.bones[i])]), L: best([C.handL, ...[10, 11, 12].map((i) => C.bones[i])]), mir: D.MIR.list.length, mirOn: D.MIR.on }; });
 console.log('  eye:', JSON.stringify(eye));
 const onScr = (v) => Math.abs(v[0]) < 1 && Math.abs(v[1]) < 1 && v[2] > -1 && v[2] < 1;
 const riEye = await shot('5-eye');
