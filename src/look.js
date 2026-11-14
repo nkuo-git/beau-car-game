@@ -615,6 +615,7 @@ function createLook(o) {
     const H = V.highway; if (H && H.center && H.center.length > 1) { const C = H.center; let s = 0, next = 30; for (let i = 1; i < C.length; i++) { const dx = C[i][0] - C[i - 1][0], dz = C[i][1] - C[i - 1][1], L = Math.hypot(dx, dz); if (L < 1e-6) continue;
       while (next <= s + L && next <= H.len - 25) { const t = (next - s) / L, x = C[i - 1][0] + dx * t, z = C[i - 1][1] + dz * t, nx = -dz / L, nz = dx / L; if (!(V.hills && V.hills.inTunnel && V.hills.inTunnel(x, z, 3))) { P.push(x + nx * 2.65, 11.0, z + nz * 2.65, x - nx * 2.65, 11.0, z - nz * 2.65); K.push(NSKY.hwK, NSKY.hwK); } next += 60; } s += L; } }
     const Kp = V.parking; if (Kp) { const X0 = Kp.x - Kp.hx, X1 = Kp.x + Kp.hx, Z0 = Kp.z - Kp.hz, Z1 = Kp.z + Kp.hz, zm = (Z0 + Z1) / 2; for (const [x, z] of [[X0 + 17.1, Z0 + 1.5], [X0 + 17.1, zm], [X0 + 17.1, Z1 - 1.5], [X0 + 2.2, zm], [X1 - 2.2, zm]]) { P.push(x, 6.3, z); K.push(NSKY.parkK); } }
+    if (V.lampsX && V.lampsK) { for (let i = 0; i < V.lampsK.length; i++) { P.push(V.lampsX[i * 3], V.lampsX[i * 3 + 1], V.lampsX[i * 3 + 2]); K.push(V.lampsK[i]); } } // 第 91 批：圓環高架橋、超大停車場的燈（viaduct.js）
     lampKs = new Float32Array(K);
     return new Float32Array(P);
   }
@@ -635,7 +636,8 @@ function createLook(o) {
   function lampPick(cam) {
     cam.getWorldDirection(V3b); const px = cam.position.x + V3b.x * 12, pz = cam.position.z + V3b.z * 12, P = lampPts, n = PL.length, m = n + 1; // 鏡頭前面 12 公尺附近最近的 n＋1 支
     for (let j = 0; j < m; j++) { LB[j] = 1e18; LI[j] = -1; }
-    for (let i = 0; i < P.length; i += 3) { const d = (P[i] - px) * (P[i] - px) + (P[i + 2] - pz) * (P[i + 2] - pz); if (d >= LB[m - 1]) continue; let j = m - 1; while (j > 0 && LB[j - 1] > d) { LB[j] = LB[j - 1]; LI[j] = LI[j - 1]; j--; } LB[j] = d; LI[j] = i; }
+    const cy = cam.position.y; // 第 91 批：高度差很多（高架橋上、橋下）的燈算遠一點
+    for (let i = 0; i < P.length; i += 3) { const ey = Math.max(0, Math.abs(P[i + 1] - cy) - 12), d = (P[i] - px) * (P[i] - px) + (P[i + 2] - pz) * (P[i + 2] - pz) + ey * ey * 4; if (d >= LB[m - 1]) continue; let j = m - 1; while (j > 0 && LB[j - 1] > d) { LB[j] = LB[j - 1]; LI[j] = LI[j - 1]; j--; } LB[j] = d; LI[j] = i; }
     let held = 0; for (let j = 0; j < n; j++) { const w = SW[j]; let keep = false; if (w >= 0) { for (let r = 0; r < n; r++) if (LI[r] === w) keep = true; if (!keep && w === LI[n] && LB[n] < LB[n - 1] * 1.3) keep = true; } if (!keep) SW[j] = -1; else held++; }
     for (let r = 0; r < n && held < n; r++) { const e = LI[r]; if (e < 0) break; let got = false; for (let j = 0; j < n; j++) if (SW[j] === e) got = true; if (got) continue;
       let f = -1; for (let j = 0; j < n; j++) if (SW[j] < 0 && (f < 0 || SL[j] === e || (SL[f] !== e && SA[j] < SA[f]))) f = j; // 空的燈：本來就在這支的最好，不然挑最暗的

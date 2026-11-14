@@ -527,7 +527,7 @@ function createDrive(o) {
     return hit;
   }
   // 鏡頭到車子中間有沒有被房子擋住：回傳 0–1（1＝沒擋到）
-  const tall = (c) => (c.h ?? 9) >= 2.4 && (c.t === 'box' || c.r >= 0.6);
+  const tall = (c) => c.lowCam !== true && (c.h ?? 9) >= 2.4 && (c.t === 'box' || c.r >= 0.6); // 第 91 批：lowCam（高架橋的護欄：h 是絕對高度）不擋鏡頭
   const camBlock = (c) => c.crushed !== true && c.src.crushed !== true && c.src.off !== true && (c.police === true || tall(c)); // 第 9 批：壓扁的房子不擋鏡頭 // 第 3 批（b3-int）：緊跟在後面的警車也擋鏡頭（拉近到它前面，不要從它的警示燈上面看）
   function rayHit(x0, z0, x1, z1) {
     let best = 1; const dx = x1 - x0, dz = z1 - z0;

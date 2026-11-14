@@ -156,7 +156,7 @@ function netStep(dt) {
   const inPol = !!(DRIVE.on && indoor && indoor.kind === 'police' && walker && PSC); // 第 22 批：我在警察局裡面：看得到也在裡面的朋友（關在拘留室的也是）
   const me = show ? (walker && walker.mode !== 'off' ? walker.telemetry() : drv ? drv.telemetry() : HOP.on ? HOP.last : null) : null, mx = me ? me.x : 0, mz = me ? me.z : 0; // 第 57 批：坐朋友的車＝他的車在哪裡
   const cols = !race && !!(drv || walker);
-  const myY = drv && TRAMP.on && me ? PW.heightAt(mx, mz) : null; // 第 24 批：我開在斜坡上：只撞得到跟我差不多高的
+  const myY = drv && (TRAMP.on || (VDV && VDV.st.on)) && me ? PW.heightAt(mx, mz) : null; // 第 91 批：高架橋上也一樣 // 第 24 批：我開在斜坡上：只撞得到跟我差不多高的
   let jin = false; // 有朋友關在拘留室（我看得到的）
   NET.cols.length = 0; NET_POL.n = 0;
   for (const P of NET.P.values()) {
@@ -199,7 +199,7 @@ function netStep(dt) {
       P.chr.group.visible = true; RIDES[P.objK].ride(P.chr, 0, dt);
     } else netUnride(P);
     if (C) {
-      const scn = inside ? PSC : TR.scene, y = inside ? 0 : netH(s.x, s.z); // 第 22 批：警察局裡面＝它自己的場景（地板 0）
+      const scn = inside ? PSC : TR.scene, y = inside ? 0 : s.y != null ? s.y : netH(s.x, s.z); // 第 22 批：警察局裡面＝它自己的場景（地板 0）；第 91 批：走在高架橋上＝他送來的高度
       if (C.group.parent !== scn) scn.add(C.group);
       C.group.position.set(s.x, y, s.z); C.group.rotation.y = s.h;
       C.update(dt, { speed: Math.abs(s.v) });
@@ -1203,9 +1203,10 @@ function netState() {
   if (HOP.on) { seatNetHop(s); return s; } // 第 57 批：坐在朋友的車上 // 在自己車庫裡面：朋友看不到（名單寫「在車庫」）；第 23 批：有朋友來我家、我在一樓＝看得到；我在朋友家樓上＝不送（高度對不起來）
   if (walker && walker.mode !== 'off' && walker.mode !== 'seat') {
     const t = walker.telemetry(); s.o = 2; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed;
+    if (VDV && VDV.st.on) s.y = Math.round(walker.character.group.position.y * 100) / 100; // 第 91 批：走在高架橋上送高度
     const p = borParked(); if (p) { s.pk = [cur, Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100, Math.round(p.heading * 1000) / 1000]; s.pv = null; } // 第 19 批：下車停著的車（朋友看得到、借得到）
   }
-  else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; if (TRAMP.on) s.y = Math.round(PW.heightAt(t.x, t.z) * 100) / 100; if (PAX.on) s.st = PAX.i; } // 第 24 批：開在斜坡上送高度
+  else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; if (TRAMP.on || (VDV && VDV.st.on)) s.y = Math.round(PW.heightAt(t.x, t.z) * 100) / 100; if (PAX.on) s.st = PAX.i; } // 第 24 批：開在斜坡上送高度
   if (s.o) s.pl = popSend(); // 跳燈
   if (R && R.ci && ciRace === R.ci) { s.rp = Math.round(R.ci.me.p * 10) / 10; s.rs = R.seq; }
   if (s.o && police && police.state === 'wanted' && police.enabled) { // 通緝中：幾顆星、200 公尺內追你的警車

@@ -23,6 +23,7 @@ import { TOWER_RAMP } from './tower.js';
 import { NTUN_LINK } from './hills.js'; // 第 85 批：內湖隧道（彎的）的中線
 import { nhStreetPrep, nhStreetBuild, NH_STREET_TEXT } from './nhstreet.js'; // 第 72 批：內湖的街景（江南街、內湖路、環山路）
 import { MRT_TEXT, mrtKeepOut, mrtHits } from './mrt.js'; // 第 78 批：捷運站（mrt.js 蓋；這裡只留軌道、隔音牆）
+import { vdNear, VD_PATH, vdEndDist } from './viaduct.js'; // 第 91 批：高架橋下面的房子不蓋；下來的那條巷子不封起來
 const NH_MRT_V2 = true; // 第 78 批：車站、出入口、站名牌交給 mrt.js（false＝以前畫上去的站房）
 
 // 打包（build-art.mjs、build-app.mjs）：整個包在一個函式裡，只露出下面這些名字
@@ -509,6 +510,7 @@ function buildNeihu(V, opt = {}) {
   const GB = 1e6; // 第 9 批：房子的編號（碰撞物的 g；村子的房子沒有 g）
   const roadAtH = NH_VARIETY ? mkRoadGrid() : null; // 第 28 批：哪一面牆對著路（那一面畫門、窗；其他畫側牆）
   { const KO = typeof mrtKeepOut === 'function' && typeof NH_MRT_V2 !== 'undefined' && NH_MRT_V2 ? mrtKeepOut(N) : []; let nk = 0; if (KO.length) N.bld.forEach((b) => { if (!b.lm && b.P && mrtHits(KO, b.P)) { b.mrt = true; nk++; } }); N.mrtGone = nk; N.mrtIn = KO.length ? (x, z) => mrtHits(KO, [[x, z]]) : null; } // 第 80 批（Nick「可把會與捷運站重疊的房子去除」）：跟捷運站重疊的房子不蓋
+  { let nv = 0; if (typeof vdNear === 'function') N.bld.forEach((b) => { if (b.lm || b.mrt || !b.P) return; const P = b.P; let hit = false; for (let i = 0; i < P.length && !hit; i++) { const a = P[i], c = P[(i + 1) % P.length], L = Math.hypot(c[0] - a[0], c[1] - a[1]), m = Math.max(1, Math.ceil(L / 3)); for (let j = 0; j <= m && !hit; j++) hit = vdNear(a[0] + ((c[0] - a[0]) * j) / m, a[1] + ((c[1] - a[1]) * j) / m, 3); } if (hit) { b.mrt = true; nv++; } }); N.vdGone = nv; } // 第 91 批：被圓環高架橋（往內湖那段）蓋到的房子不蓋
   const NS = nhStreetPrep({ N, nx, nz, names: D.names }); let nFix = 0; N.bld.forEach((b, bi) => { if (NS.arcadeFix(b, bi)) nFix++; }); // 第 72 批：江南街、內湖路、環山路邊的房子照真的樓層、江南街補騎樓、一棟換成工地
   N.bld.forEach((b, bi) => {
     if (b.lm || b.mrt) return; // 地標的房子（西湖圖書館、湖光教會）：下面自己做
@@ -636,6 +638,7 @@ function buildNeihu(V, opt = {}) {
     if (x < BX0) h = Math.max(h, 50 * (0.8 + 0.35 * n) * (1 - Math.exp(-Math.max(0, ox - HM) / 110)) * ss(N.entP[1] + 40, N.entP[1] + 140, z)); // 西：入口南邊才有山（北邊是聯外道路、村子）
     if (x < BX0 + 40 && h > 0) { const L = linkDist(x, z); h *= ss(L.w / 2 + 30, L.w / 2 + 110, L.d); } // 聯外道路的山谷（底是平的：網格 25 公尺，三角形不要戳到路面）
     h *= ss(0, RING_FADE, x - RING[0]) * ss(0, RING_FADE, RING[2] - x) * ss(0, RING_FADE, z - RING[1]) * ss(0, RING_FADE, RING[3] - z); // 第 27 批：格子的邊慢慢低到 0（外面接 hills.js 的草地、沙灘：開得過去，不是一面斷崖）
+    if (h > 0) { const d = vdEndDist(x, z); if (d < 70) h *= ss(24, 70, d); } // 第 91 批：高架橋下來那段（範圍南邊外面）：山削平（格子 25 公尺：平的範圍要大一點）
     if (h > 0) for (const q of HOME_SITES) { const d = Math.hypot(x - q.x, z - q.z); if (d < HOME_K1) h *= ss(HOME_K0, HOME_K1, d); } // 第 27 批：家（5 號在入口旁邊）四周是平的（格子 25 公尺：平的範圍要大一點，三角形才不會蓋到斜坡）
     return h - 0.02;
   };
@@ -1038,6 +1041,7 @@ function buildNeihu(V, opt = {}) {
     if (uv) plate(sx, 3.0, sz - 0.12, -1, 0, 3.6, 0.96, uv, false); // 正面朝北（往南開過來的人看得到）
   }
   for (const bar of N.bars) { // 施工欄杆
+    { const k = VD_PATH.n - 1; if (Math.hypot(bar.p[0] - VD_PATH.X[k], bar.p[1] - VD_PATH.Z[k]) < 30) continue; } // 第 91 批：高架橋從這條巷子的盡頭下來：不封起來
     const ux = Math.cos(bar.ang), uz = Math.sin(bar.ang), vx = -uz, vz = ux, w = bar.w, uv = SA.uv['b' + bIdx((b) => b.t === 'work')], gw = bank('wall', bar.p[0], bar.p[1], TB);
     const n = Math.max(1, Math.round(w / 3.2));
     for (let i = 0; i < n; i++) { const off = -w / 2 + (i + 0.5) * (w / n), x = bar.p[0] + vx * off, z = bar.p[1] + vz * off; if (uv) plate(x, 0.85, z, vx, vz, w / n - 0.15, 0.62, uv, true); for (const s of [-1, 1]) boxG(gw, x + vx * s * (w / n / 2 - 0.2), z + vz * s * (w / n / 2 - 0.2), 0.05, 0.05, 0, 0, 1.2, [235, 235, 235], 20); }

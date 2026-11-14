@@ -62,6 +62,7 @@ import { buildStreet, STREET_TEXT } from './street.js'; // ==== 第 3 批：街�
 import { buildPoliceStation, POLICE_TEXT } from './police.js'; // ==== 第 3 批：警察局 ====
 import { TOWER, towerFoot, TOWER_RAMP, towerRampGround, towerColsAt } from './tower.js'; // 第 21 批：你的家＝圓塔車庫（tower.js）；第 24 批：外面繞圈的斜坡
 import { HILL_LIST, hillH, inTunnel } from './hills.js';
+import { VD_GAP, vdNear } from './viaduct.js'; // 第 91 批：圓環高架橋（快速道路內圈的口、橋下不放樹）
 import { APT, aptLotOf } from './apt.js'; // 第 60 批：每個家旁邊的公寓（外殼、裡面都在別的模組；這裡只登記那一棟、碰撞、門口的水泥地） // 第 27 批：山（開得上去的）、隧道：hills.js 長出來；這裡只讓路邊的東西、樹避開
 
 // 打包（build-art.mjs、build-app.mjs）會拿掉 import、把 export 變成一般宣告、所有檔接在同一個 script 裡：
@@ -1885,6 +1886,8 @@ function buildVillage(opts = {}) {
   const HP = (p, o, y) => [p.x + o * Math.sin(p.th), y, p.z + o * Math.cos(p.th)]; // 中線往右 o 公尺、高 y
   const NJ = [[0.305, 0], [0.29, 0.076], [0.12, 0.33], [0.08, 0.82]], NJC = C('#d2d0c9'), NJS = [0.8, 0.9, 1.0], CU = dotUV(U.conc), WB = subUV(U.wbeam, 0.3, 0, 0.7, 1), WBK = C('#9ba1a8');
   const inGap = (a, b, g) => b.s <= g + 1e-6 || a.s >= HL - g - 1e-6; // 這一段在路口的開口裡面
+  const VG0 = VD_GAP.s - VD_GAP.h, VG1 = VD_GAP.s + VD_GAP.h, inVG = (a, b) => a.s < VG1 && b.s > VG0; // 第 91 批：南邊彎道內圈的口（往超大停車場）
+  const VGR = (() => { let a = Infinity, b = -Infinity; for (let i = 0; i < hp.length - 1; i++) if (inVG(hp[i], hp[i + 1])) { a = Math.min(a, hp[i].s); b = Math.max(b, hp[i + 1].s); } return [a, b]; })(); // 網格真的切掉的那段
   for (let i = 0; i < hp.length - 1; i++) {
     const a = hp[i], b = hp[i + 1], va = a.s / 10, vb = b.s / 10; B.at((a.x + b.x) / 2, (a.z + b.z) / 2); hsegs.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z });
     B.quad('hwy', HP(a, 0.3, 0.03), HP(a, HW.half, 0.03), HP(b, HW.half, 0.03), HP(b, 0.3, 0.03), [0, va, 1, vb], WHITE); // 右邊（往前開那一邊）
@@ -1899,12 +1902,12 @@ function buildVillage(opts = {}) {
       B.quad('main', HP(a, -0.08, 0.82), HP(a, 0.08, 0.82), HP(b, 0.08, 0.82), HP(b, -0.08, 0.82), CU, mul(NJC, 1.06));
     }
     for (const sd of [1, -1]) { // 鋼板護欄：前面（對著路）、後面；東邊路口那段沒有
-      if (inGap(a, b, sd > 0 ? HW.gapE : HW.gapI)) continue; // 第 21 批：內圈那邊也開一個口（6 號家）
+      if (inGap(a, b, sd > 0 ? HW.gapE : HW.gapI) || (sd < 0 && inVG(a, b))) continue; // 第 21 批：內圈那邊也開一個口（6 號家）；第 91 批：往超大停車場的口
       const o = sd * HW.rail, ob = sd * (HW.rail + 0.06);
       if (sd > 0) { B.quad('main', HP(b, o, 0.5), HP(a, o, 0.5), HP(a, o, 0.82), HP(b, o, 0.82), WB, WHITE); B.quad('main', HP(a, ob, 0.5), HP(b, ob, 0.5), HP(b, ob, 0.82), HP(a, ob, 0.82), WD, WBK); }
       else { B.quad('main', HP(a, o, 0.5), HP(b, o, 0.5), HP(b, o, 0.82), HP(a, o, 0.82), WB, WHITE); B.quad('main', HP(b, ob, 0.5), HP(a, ob, 0.5), HP(a, ob, 0.82), HP(b, ob, 0.82), WD, WBK); }
       for (let s = Math.ceil(a.s / 6) * 6; s < b.s; s += 6) { // 柱子（6 公尺一根，只畫對著路那一面）
-        { const g = sd > 0 ? HW.gapE : HW.gapI; if (s < g || s > HL - g) continue; }
+        { const g = sd > 0 ? HW.gapE : HW.gapI; if (s < g || s > HL - g || (sd < 0 && s > VGR[0] - 0.5 && s < VGR[1] + 0.5)) continue; }
         const t = (s - a.s) / (b.s - a.s), p = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, th: a.th + (b.th - a.th) * t }, fo = sd * 12.12, hs = 0.08 * sd;
         const f = [Math.cos(p.th), -Math.sin(p.th)], P0 = HP(p, fo, 0), q = (d, y) => [P0[0] + f[0] * d, y, P0[2] + f[1] * d];
         B.quad('main', q(hs, 0), q(-hs, 0), q(-hs, 0.52), q(hs, 0.52), WD, C('#7d838a'));
@@ -1929,6 +1932,7 @@ function buildVillage(opts = {}) {
     }
     for (const s of [HW.gapE, HL - HW.gapE]) { const p = hwyAt(s), sg = s < HL / 2 ? -1 : 1, T = frame(p.x, 0, p.z, p.th); box('main', T, sg < 0 ? [-0.9, 0.35, 12, 0, 0.95, 12.35] : [0, 0.35, 12, 0.9, 0.95, 12.35], WHITE, { _: U.crash }); } // 護欄頭
     for (const s of [HW.gapI, HL - HW.gapI]) { const p = hwyAt(s), sg = s < HL / 2 ? -1 : 1, T = frame(p.x, 0, p.z, p.th); box('main', T, sg < 0 ? [-0.9, 0.35, -12.35, 0, 0.95, -12] : [0, 0.35, -12.35, 0.9, 0.95, -12], WHITE, { _: U.crash }); } // 第 21 批：內圈的口（6 號家）
+    for (const [s, sg] of [[VGR[0], 1], [VGR[1], -1]]) { const p = hwyAt(s), T = frame(p.x, 0, p.z, p.th); B.at(p.x, p.z); box('main', T, sg < 0 ? [-0.9, 0.35, -12.35, 0, 0.95, -12] : [0, 0.35, -12.35, 0.9, 0.95, -12], WHITE, { _: U.crash }); } // 第 91 批：往超大停車場的口
   }
   // 碰撞：兩邊護欄（內面在 ±12）、中間護欄（±0.3）；直線併成一個長方塊，彎道 3 度（最多 20 公尺）一段
   { const hc3 = hwyPath(20, 3);
@@ -1939,6 +1943,7 @@ function buildVillage(opts = {}) {
       for (let i = 0; i < hc3.length - 1; i++) {
         const a = hc3[i], b = hc3[i + 1];
         if (g && inGap(a, b, g)) { flush(); continue; }
+        if (o < 0 && inVG(a, b)) { flush(); if (a.s < VGR[0] - 0.3) rb(a, hwyAt(VGR[0]), o, hz); if (b.s > VGR[1] + 0.3) rb(hwyAt(VGR[1]), b, o, hz); continue; } // 第 91 批：往超大停車場的口（跟網格切掉的一樣大）
         if (run && run.b === a && a.k === 0 && b.k === 0 && Math.abs(run.a.th - b.th) < 1e-9 && tunOf(a, b) === run.tun) run.b = b; else { flush(); run = { a, b, tun: tunOf(a, b) }; }
       }
       flush();
@@ -1998,7 +2003,7 @@ function buildVillage(opts = {}) {
   { const rnd = rng(4242);
     const paddy = (x0, z0, x1, z1, nx, nz) => { paddyArea(x0, z0, x1, z1, nx, nz, rnd); keepR((x0 + x1) / 2, (z0 + z1) / 2, (x1 - x0) / 2, (z1 - z0) / 2); };
     paddy(-645, -220, -590, -120, 2, 3); paddy(-645, 100, -590, 220, 2, 4); // 快速道路裡面：東邊直線旁邊（中間是路口、兩間鐵皮工廠）
-    paddy(-860, -405, -700, -350, 3, 2); paddy(-860, 355, -700, 400, 3, 2); // 半圓裡面
+    paddy(-860, -405, -700, -350, 3, 2); // 半圓裡面（南邊那塊第 91 批拿掉了：連到超大停車場的路、高架橋）
     paddy(-1190, -330, -1140, -45, 2, 7); paddy(-1135, 45, -1080, 330, 2, 7); // 西邊外面（中間一排透天厝）；北邊那塊第 27 批往西挪（快速道路隧道的山）
     paddy(-900, -600, -680, -535, 4, 2); paddy(-900, 535, -680, 600, 4, 2); // 半圓外面（北、南）
     const shed = (x, z, ry, w, d, h, wc, rc) => { // 鐵皮工廠：浪板牆、斜屋頂
@@ -2011,16 +2016,17 @@ function buildVillage(opts = {}) {
       [-1100, -400, 0.2, 36, 20, 8, '#e8eaec', '#3b78c4'], [-1095, 400, -0.15, 28, 18, 7, '#dfe3e8', '#4c9a6a'], [-560, -560, 0.4, 32, 18, 7, '#e8eaec', '#3b78c4'], [-1000, 560, -0.3, 26, 16, 6, '#dfe3e8', '#e07a3a'], // 外面：西北、西南、北、南
       /* 第 14 批：東北那間拿掉（山） */ [-485, 330, -0.1, 30, 18, 7, '#dfe3e8', '#8fb7e0']]) shed(x, z, ry, w, d, h, C(wc), C(rc)); // 外面：東北、東南（村子北邊、南邊）
     const grove = (x, z, n, cols) => { for (let i = 0; i < n; i++) palm(x + (i % cols) * 4.5 + rnd(), z + ((i / cols) | 0) * 4.5 + rnd(), 7 + rnd() * 3, rnd, false); keepC(x + (cols - 1) * 2.25, z + (Math.ceil(n / cols) - 1) * 2.25, 12); }; // 檳榔園
-    grove(-712, 322, 14, 4); grove(-968, -9, 10, 3); grove(-1112, -10, 10, 3); // 南邊半圓裡面、西邊直線裡面（兩座山中間）、西邊外面（透天厝後面）
+    grove(-948, 352, 14, 4); grove(-968, -9, 10, 3); grove(-1112, -10, 10, 3); // 南邊半圓裡面、西邊直線裡面（兩座山中間）、西邊外面（透天厝後面）
     const houses = (ax, az, bx, bz, nx, nz, seed, o) => { row(ax, az, bx, bz, nx, nz, seed, o); const L = Math.hypot(bx - ax, bz - az); keepR((ax + bx) / 2 - nx * 5.5, (az + bz) / 2 - nz * 5.5, L / 2 + 1, 8, Math.atan2(nx, nz)); }; // 房子深 12.5、前面 1.5 公尺水泥地
     houses(-1072, -30, -1072, 30, 1, 0, 131, { gaps: true }); houses(-500, 356, -500, 386, -1, 0, 132, { gaps: false }); // 快速道路旁邊的透天厝：西邊外面（面向快速道路）、東南（村子南邊）
     // 山（hills.js 的，第 27 批起開得上去）、山（mountain.js）上面也不要種樹
     for (const H of HILL_LIST) keepC(H.x, H.z, H.r * 1.1);
     for (const [x, z, r] of [[-420, -205, 80], [-430, 178, 76], [-250, -430, 230], [-260, 430, 230], [-60, -430, 180], [-90, 390, 190]]) keepC(x, z, r);
+    keepC(-780, 250, 125); keepR(-780, 398, 10, 72); // 第 91 批：超大停車場、圓環高架橋、連到快速道路的路
     for (let s = 40; s < HL - 40; s += 24 + rnd() * 28) for (const sd of [1, -1]) { // 路邊的樹（離中線 17–47 公尺）
       if (rnd() < 0.3) continue;
       const p = hwyAt(s), q = hwyOff(p, sd * (17 + rnd() * 30));
-      if ((q[0] > -560 && Math.abs(q[1]) < 150) || kept(q[0], q[1], 4)) continue; // 路口、村子那邊不要；稻田、房子、山、看板上面不要
+      if ((q[0] > -560 && Math.abs(q[1]) < 150) || kept(q[0], q[1], 4) || vdNear(q[0], q[1], 4)) continue; // 路口、村子那邊不要；稻田、房子、山、看板上面不要；第 91 批：高架橋下面不要
       if (rnd() < 0.55) lowTree(q[0], q[1], 0.9 + rnd() * 0.5, rnd); else cone(q[0], 0, q[1], 1.3 + rnd() * 0.9, rnd);
     }
   }

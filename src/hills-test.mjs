@@ -220,11 +220,11 @@ const w1 = await p.evaluate(() => {
   // 沿著 z 0 往西：草地 → 沙灘 → 淺水 → 深水
   const seq = []; for (let x = -1650; x >= -2000; x -= 1) { const s = V.surfaceAt(x, 0); if (seq[seq.length - 1]?.[0] !== s) seq.push([s, x]); }
   return { info: { hills: I.hills, meshes: I.meshes, tris: I.tris, trees: I.trees, tunCols: I.tunCols, ms: I.ms, tunnels: I.tunnels }, walls, stripEnd, n, maxD: +maxD.toFixed(3), worst, rn, rMax: +rMax.toFixed(3), steep: +steep.toFixed(1), steepAt, homes, hwy, link, seq,
-    run: [V.surfaceAt(770, 0), V.surfaceAt(900, 5), V.surfaceAt(1005, 0), V.terrainAt(900, 0)], hillT: V.terrainAt(-805, 185), hillS: V.surfaceAt(-805, 185) };
+    run: [V.surfaceAt(770, 0), V.surfaceAt(900, 5), V.surfaceAt(1005, 0), V.terrainAt(900, 0)], hillT: V.terrainAt(-800, -165), hillS: V.surfaceAt(-800, -165) }; // 第 91 批：南邊那座 (−805, 185) 拿掉了（圓環高架橋、停車場：viaduct-test）
 });
 console.log('1', el(), JSON.stringify(w1));
-check(w1.info.hills === 24 && w1.info.tunnels.length === 2 && w1.info.tunnels[0].name === '快速道路隧道' && w1.info.tunnels[1].name === '內湖隧道' && w1.info.tunnels.every((t) => t.len > 50) && w1.info.tunnels[1].curved && w1.info.tunnels[1].len > 225 && w1.info.tunnels[1].clr.every((c) => c >= 9.4), // 第 85 批：內湖隧道彎的、約 234 公尺（以前 58）、兩個洞口上面的山都夠高
-  `24 hills, two tunnels (${w1.info.tunnels.map((t) => `${t.name} ${Math.round(t.len)} m`).join(', ')}); built in ${w1.info.ms} ms, ${w1.info.meshes} meshes, ${w1.info.tris} triangles`);
+check(w1.info.hills === 23 && w1.info.tunnels.length === 2 && w1.info.tunnels[0].name === '快速道路隧道' && w1.info.tunnels[1].name === '內湖隧道' && w1.info.tunnels.every((t) => t.len > 50) && w1.info.tunnels[1].curved && w1.info.tunnels[1].len > 225 && w1.info.tunnels[1].clr.every((c) => c >= 9.4), // 第 85 批：內湖隧道彎的、約 234 公尺（以前 58）、兩個洞口上面的山都夠高
+  `23 hills (第 91 批: the one inside the south half of the highway loop is now the big parking lot), two tunnels (${w1.info.tunnels.map((t) => `${t.name} ${Math.round(t.len)} m`).join(', ')}); built in ${w1.info.ms} ms, ${w1.info.meshes} meshes, ${w1.info.tris} triangles`);
 check(w1.walls === 0 && w1.stripEnd === 0, `no invisible walls: village north/south edge ${w1.walls}, end of the 400 m strip ${w1.stripEnd}`);
 check(w1.n > 300 && w1.maxD < 0.05, `the hill meshes match the ground height (${w1.n} points, max ${w1.maxD} m off${w1.maxD >= 0.05 ? ' at ' + JSON.stringify(w1.worst) : ''})`);
 check(w1.rn > 20 && w1.rMax < 0.05, `the hills round Neihu match the ground height too (${w1.rn} points, max ${w1.rMax} m off)`);
@@ -239,7 +239,7 @@ check(w1.hillT === true && w1.hillS === 1, 'a hill is terrain with grass on it')
 
 // ================= 2 GC8 開上山 =================
 const climb = await p.evaluate(() => {
-  const D = window.__D(), V = D.VIL, Hl = V.hills, H = window.__H, h = Hl.list.find((q) => q.x === -805 && q.z === 185), cols = H.cols();
+  const D = window.__D(), V = D.VIL, Hl = V.hills, H = window.__H, h = Hl.list.find((q) => q.x === -800 && q.z === -165), cols = H.cols();
   // 找一條沒有樹、沒有護欄的路線：從山外面平地直直開到山頂
   let best = null;
   for (let a = 0; a < 6.283; a += Math.PI / 18) {
@@ -261,7 +261,7 @@ const perf = {};
 perf.hilltop = await drawAndShot('2-hilltop');
 // 開下山（另外一邊）：下坡 50 多公里也一直貼著地面（terrain.js 第 27 批：落地以後跟著地面往下，不會一直彈起來）
 const down = await p.evaluate(() => {
-  const D = window.__D(), V = D.VIL, Hl = V.hills, H = window.__H, h = Hl.list.find((q) => q.x === -805 && q.z === 185), cols = H.cols(), t = D.drv.telemetry();
+  const D = window.__D(), V = D.VIL, Hl = V.hills, H = window.__H, h = Hl.list.find((q) => q.x === -800 && q.z === -165), cols = H.cols(), t = D.drv.telemetry();
   let best = null; const R = h.r * 1.15;
   for (let a = 0; a < 6.283; a += Math.PI / 18) { const ex = h.x + Math.cos(a) * R, ez = h.z + Math.sin(a) * R; if (V.surfaceAt(ex, ez) >= 7 || Hl.lift(ex, ez) > 0.01) continue; const c = H.clear(t.x, t.z, ex, ez, cols); if (c > 4 && (!best || c > best.c)) best = { a, ex, ez, c }; }
   if (!best) return { err: 'no clear line' };

@@ -55,6 +55,7 @@ let TWR = null; // 第 21 批：這一趟 TWR[i]＝圓塔第 i 格停哪台（40
 const GV = { on: false, uid: '', n: '', slot: -1, want: null, looks: {}, objs: {}, q: [], tr: 0, lift0: null, in: false, job: 0, mine: -1 }; // mine：第 34 批：你停進他哪一格（他也有同一款車的時候才分得出哪台是你的）
 const twrNow = () => (GV.on ? GV.want : TWR); // 塔的格子現在擺誰的車
 const EL = { ride: null, keys: new Set(), panel: null }; // 第 21 批：電梯（ride＝坐電梯中、keys＝掛在圓台上一起坐的車、panel＝按樓層的面板）
+let VDV = null; // 第 91 批：圓環高架橋＋超大停車場（viaduct.js；只有玩家開得上去）
 let PW = null; // 第 21 批：開車、走路用的世界（VIL 包一層：塔裡面的地板高度＝現在那一層）
 let tripNo = 0; // 第幾趟（升降機停好的時候說話：已經是下一趟就不說）
 let sleep = null, fadeEl = null; // 睡覺中 { t, woke }、黑掉的那一層（睡覺、走進門口共用）
@@ -312,10 +313,14 @@ function proxyWorld() {
   // 第 79 批（Nick「馬力機稍微墊高用一個小斜坡開上去」）：改車廠的馬力機台子（DY.h 高）＋南邊的斜坡；不配置記憶體
   const DY = VIL.places?.shop?.dyno, DR = DY && DY.ramp, dyZ0 = DR ? DY.pad.z - DY.pad.hz : 0, dyL = DR ? DR.z1 - DR.z0 : 1, DYN = DR ? (() => { const k = DY.h / dyL, n = Math.hypot(1, k); return [0, 1 / n, k / n]; })() : UP;
   const dyH = (x, z) => (!DR || Math.abs(x - DR.x) > DR.hx || z < dyZ0 || z > DR.z1 ? null : z <= DR.z0 ? DY.h : (DY.h * (DR.z1 - z)) / dyL);
-  W.heightAt = (x, z) => { if (inT(x, z)) return base(); const h = rampH(x, z); if (h != null) return h; const d = dyH(x, z); return d != null ? d : top(x, z) ? HL.topAt(x, z) : VIL.heightAt ? VIL.heightAt(x, z) : 0; };
-  W.terrainAt = (x, z) => (inT(x, z) ? base() !== 0 : rampH(x, z) != null || dyH(x, z) != null || top(x, z) || (VIL.terrainAt ? VIL.terrainAt(x, z) : false));
-  W.normalAt = (x, z) => (inT(x, z) || rampH(x, z) != null ? UP : dyH(x, z) != null ? (z > DR.z0 ? DYN : UP) : top(x, z) ? HL.topN(x, z) : VIL.normalAt ? VIL.normalAt(x, z) : UP);
-  W.surfaceAt = (x, z) => (inT(x, z) || rampH(x, z) != null || dyH(x, z) != null ? 0 : top(x, z) ? 1 : VIL.surfaceAt(x, z));
+  const gH = (x, z) => { if (inT(x, z)) return base(); const h = rampH(x, z); if (h != null) return h; const d = dyH(x, z); return d != null ? d : top(x, z) ? HL.topAt(x, z) : VIL.heightAt ? VIL.heightAt(x, z) : 0; };
+  // 第 91 批：圓環高架橋（VDV.at 挑玩家那一層：VDV.st.py＝上一格玩家多高；問的地方離玩家 30 公尺以上（去這裡、回家）＝照地面那一層找）；不配置記憶體
+  const VN = [0, 1, 0], vdY = (x, z) => { const V = VDV; if (!V) return null; const st = V.st, dx = x - st.px, dz = z - st.pz; return V.at(x, z, dx * dx + dz * dz > 900 ? gH(x, z) : st.py); };
+  W.heightAt = (x, z) => { const v = vdY(x, z); return v != null ? v : gH(x, z); };
+  W.terrainAt = (x, z) => (vdY(x, z) != null || (inT(x, z) ? base() !== 0 : rampH(x, z) != null || dyH(x, z) != null || top(x, z) || (VIL.terrainAt ? VIL.terrainAt(x, z) : false)));
+  W.normalAt = (x, z) => (vdY(x, z) != null ? VDV.normal(x, z, VDV.Q.y, VN) || UP : inT(x, z) || rampH(x, z) != null ? UP : dyH(x, z) != null ? (z > DR.z0 ? DYN : UP) : top(x, z) ? HL.topN(x, z) : VIL.normalAt ? VIL.normalAt(x, z) : UP);
+  W.surfaceAt = (x, z) => (vdY(x, z) != null || inT(x, z) || rampH(x, z) != null || dyH(x, z) != null ? 0 : top(x, z) ? 1 : VIL.surfaceAt(x, z));
+  W.groundAt = gH; // 不管高架橋的地面
   return W;
 }
 
@@ -335,7 +340,7 @@ async function enterDrive() {
     await new Promise((r) => setTimeout(r, 30)); // 讓「出門中」先畫出來（蓋村子要一下子，這時候畫面不會動）
     try {
       if (!TR) TR = buildTrack();
-      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMrt(VIL, { renderer, makeAnimal: buildAnimal }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
+      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMrt(VIL, { renderer, makeAnimal: buildAnimal }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); VDV = buildViaduct(VIL, { renderer, lotCar: vdLotCar, dims: (k) => LOT_DIMS[k] || null }); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
       const L = VIL.places.garage.lot;
       GAR = buildRoom(renderer, { quality: 'low', exterior: true }); // 第 21 批：圓塔（tower.js）；村子裡看得到玻璃、名牌；地板不反射（省）
       GAR.group.position.set(L.x, VIL.places.garage.y || 0, L.z); GAR.group.rotation.y = L.heading; TR.scene.add(GAR.group);
@@ -383,7 +388,7 @@ function townFog(on) {
   [f.near, f.far] = on ? [150, 1500] : FOG0;
 }
 // 開車、走路另外要擋的：賽道的東西（stripColliders）、賽道兩邊的樹（buildTrack）；第 27 批：隧道的牆／洞口上面的欄杆（hills.js：照玩家在哪一層開關，只有玩家有）
-const meCols = () => [...stripColliders(), ...(TR?.trees || []), ...(VIL?.hills ? VIL.hills.layerCols : [])];
+const meCols = () => [...stripColliders(), ...(TR?.trees || []), ...(VIL?.hills ? VIL.hills.layerCols : []), ...(VDV ? VDV.cols : [])]; // 第 91 批：高架橋的護欄、橋墩、停車場的車（只給玩家）
 // 走路的（walk.js）：第一次出門做（村子、你家蓋好以後），之後一直用同一個
 function makeWalker() {
   walker = createWalker({ scene: TR.scene, camera: dcam, world: walkWorld(), colliders: meCols(), bounds: VIL.hills?.walkBounds, character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
@@ -1652,7 +1657,7 @@ function rampCeil(x, z) {
 }
 function rampReset() { TRAMP.on = false; TRAMP.u = 0; TRAMP.lu = 1; TRAMP.cols = -2; TRAMP.cd = null; TRAMP.cg = -1; TRAMP.call = -1; }
 // 開在斜坡上離地多高（警察、警車的碰撞：高過 2.5 公尺就碰不到地上的）
-const rampHigh = () => TRAMP.on && towerRampY(TRAMP.u) > 2.5;
+const rampHigh = () => (TRAMP.on && towerRampY(TRAMP.u) > 2.5) || (!!VDV && VDV.st.high); // 第 91 批：在高架橋上（比地面高 3 公尺以上）也一樣：地上的警車撞不到、抓不到
 function rampStep() {
   if (!GAR || !TWR || !VIL || !trip) return;
   const R = TOWER_RAMP, driving = !!drv && walker?.mode === 'off' && !EL.ride;
@@ -2272,6 +2277,7 @@ function leaveDrive() {
   aptDown(); mrtDown(); // 第 60 批：在公寓的頂樓、陽台；第 78 批：在捷運站裡、車上
   if (indoor) leaveHouse(null); // 在房子裡面按「直接回車庫」：碰撞、門、鏡頭換回村子的，你搬回村子的場景
   ldDrop(true); // 第 65 批：外面開著門的那一棟收掉
+  vdLotOff(); if (VDV) { VDV.st.on = VDV.st.high = false; } // 第 91 批：停車場近的車收回去
   crushFx?.reset(); junkVer = -1; // 第 7 批（輾扁）：墊子清掉、輾扁的車收回車流的池子、表演場的垃圾車擺回來
   oLeave(); // 第 4 批：越野賽、越野車行展示台的車收掉
   ciLeave(); // 賽車場的比賽、選對手收掉
@@ -2357,18 +2363,19 @@ function parkedBox(q) {
 // 每一格：開車（坐在車裡）→ 你的車是障礙物、AI 車的碰撞給 drv；走路（下車、睡覺、上車下車中）→ 你是走路的人、車和人給 walker 擋
 function npcStep(dt) {
   const N = NPC; if (!N || !walker) return;
-  const t0 = performance.now(), me = N.me, f = N.focus;
+  const t0 = performance.now(), me = N.me, f = N.focus, hi = !!VDV && VDV.st.high; // 第 91 批：在高架橋上：地上的車、人不理你、不擋你
   if (drv && walker.mode === 'off' && !sleep) {
     const t = drv.telemetry(), ci = drv.carInfo, CX = (ci.nose + ci.tail) / 2;
     me.x = t.x + Math.cos(t.heading) * CX; me.z = t.z - Math.sin(t.heading) * CX; me.heading = t.heading; me.v = t.v; me.hx = ci.len / 2; me.hz = ci.halfW;
+    if (hi) me.x = 1e6;
     me.crush = !!(crushFx && crushK(cur) && !t.paused); // 第 7 批：怪獸卡車：碰到路上的車就輾過去（npc.js 把那台拿出車流）；第 9 批：越野車（路上的人看到會撲開）
     f.x = t.x; f.z = t.z; f.heading = t.heading;
     N.traffic.update(dt, f, N.OBS, N.peds.people);
     N.peds.update(dt, f, N.PCARS, N.NONE);
-    drv.removeColliders('traffic'); drv.addColliders(N.traffic.colliders(t.x, t.z, 30), 'traffic');
+    drv.removeColliders('traffic'); if (!hi) drv.addColliders(N.traffic.colliders(t.x, t.z, 30), 'traffic');
     N.MOV.length = 0;
   } else {
-    const w = walker.telemetry(), out = !indoor; // 在房子裡面：外面的車、人照樣走（出來的時候村子是活的），你不擋他們、他們不擋你
+    const w = walker.telemetry(), out = !indoor && !hi; // 第 91 批：高架橋上也一樣；在房子裡面：外面的車、人照樣走（出來的時候村子是活的），你不擋他們、他們不擋你
     me.x = out ? w.x : 1e6; me.z = w.z; me.heading = w.heading; me.v = 0; me.hx = 0.3; me.hz = 0.3;
     f.x = w.x; f.z = w.z; f.heading = w.heading; N.wme.x = me.x; N.wme.z = w.z;
     parkedBox(N.pk);
@@ -2451,7 +2458,7 @@ function makeCrush() {
   return createCrush({
     world: VIL,
     getCar: (q) => { // 現在開的車（車身中心）；走路、睡覺、停住的時候不算
-      if (!drv || !DRIVE.on || !walker || walker.mode !== 'off' || sleep) return false;
+      if (!drv || !DRIVE.on || !walker || walker.mode !== 'off' || sleep || (VDV && VDV.st.high)) return false; // 第 91 批：在高架橋上輾不到地上的東西
       const t = drv.telemetry(); if (t.paused) return false;
       const ci = drv.carInfo, CX = (ci.nose + ci.tail) / 2;
       q.x = t.x + Math.cos(t.heading) * CX; q.z = t.z - Math.sin(t.heading) * CX;
@@ -2481,10 +2488,11 @@ function makeCrush() {
 function crushStep(dt) {
   if (!crushFx) return;
   crushFx.update(dt);
-  if (crushFx.colVer !== junkVer || junkDrv !== drv) { // 第 74 批：換了車（新的 drv）也要重放；走路的人也擋（colliders(true)：不管開的是什麼車）
-    junkVer = crushFx.colVer; junkDrv = drv;
-    if (drv) { drv.removeColliders('junk'); drv.addColliders(crushFx.colliders(), 'junk'); }
-    if (walker) { walker.removeColliders('junk'); walker.addColliders(crushFx.colliders(true), 'junk'); }
+  const hi = !!VDV && VDV.st.high; // 第 91 批：在高架橋上：地上的（路邊停的車）不擋
+  if (crushFx.colVer !== junkVer || junkDrv !== drv || hi !== crushStep.hi) { // 第 74 批：換了車（新的 drv）也要重放；走路的人也擋（colliders(true)：不管開的是什麼車）
+    junkVer = crushFx.colVer; junkDrv = drv; crushStep.hi = hi;
+    if (drv) { drv.removeColliders('junk'); if (!hi) drv.addColliders(crushFx.colliders(), 'junk'); }
+    if (walker) { walker.removeColliders('junk'); if (!hi) walker.addColliders(crushFx.colliders(true), 'junk'); }
   }
 }
 
@@ -2528,7 +2536,7 @@ function polPlayer(o) {
   o.mode = !DRIVE.on || sleep || gsDesk || boarding || document.body.classList.contains('shopping') || (!driving && walker.mode === 'off') ? 'off' : driving ? 'drive' : 'walk';
   if (driving) { const ci = drv.carInfo; PL_CAR.hx = ci.len / 2; PL_CAR.hz = ci.halfW; PL_CAR.cx = (ci.nose + ci.tail) / 2; o.car = PL_CAR; }
   if (GAR && !indoor) { const q = garLocal(t.x, t.z); o.safe = !GV.on && GAR.isInside(q.x, q.z) && GAR.door.t === 0 && !GAR.door.moving; } // 第 23 批：朋友家不能躲
-  if (driving && rampHigh()) o.hidden = true; // 第 24 批：開在斜坡上面（高過 2.5 公尺）：地上的警車抓不到（在下面等你）
+  if ((driving && rampHigh()) || (VDV && VDV.st.high)) o.hidden = true; // 第 24 批：開在斜坡上面（高過 2.5 公尺）：地上的警車抓不到（在下面等你）；第 91 批：高架橋上（開車、走路）
   return o;
 }
 function onCaught() {
@@ -2717,6 +2725,7 @@ function driveStep(dt) {
   OB?.update(dt); // 第 6 批：越野車車庫的鐵捲門
   homeTick(); doorStep(); rampStep(); orbayStep(); elPanelStep(); aptPanelStep(); // 第 17 批：換號碼就把你家搬過去；別人那幾間的外殼、碰撞；第 21 批：電梯的面板
   hillsStep(dt); // 第 27 批：隧道的哪一層、海的波浪、隧道裡面暗一點、開進深水
+  vdStep(dt); // 第 91 批：高架橋：玩家在哪一層、停車場近的車
   if (drv) {
     drv.update(dt); // 開進賽道、快速道路的事（arrive）在這裡面叫
     if (drv && DRIVE.on) orRace?.update(dt); // 第 4 批：越野賽（drive.update 之後）
@@ -2810,6 +2819,47 @@ function ambStep() {
 // 玩家多高 → 在隧道的哪一層（開在山上＝上面：山的地面、洞口上面的欄杆擋；隧道裡＝下面：路、隧道的牆擋）；鏡頭在隧道裡面：太陽、天空光暗一點
 // 開進深水（往前開不動）：「前面是海，倒車回去」（出來再進去會再說一次）
 const HLS = { sea: false };
+// ==== 第 91 批（Nick 2026-11-14「在原本的快速道路上搭建一個像這樣的圓環高架橋…高架橋中間下面要有一個超大停車場有很多車車一樣從車店挑」，草稿 https://claude.ai/artifact/FAaQSJMuCUmvLgnfMcFRC2 ，「好 做完直接上線」）====
+// 圓環高架橋（viaduct.js）：只有玩家開得上去；每一格記玩家多高（VDV.st.py：PW 挑那一層）、在不在橋上（on）、比地面高 3 公尺以上（high：地上的車、人、警察、輾扁的東西不理你、不擋你）
+// 超大停車場：遠的車是 viaduct.js 的 InstancedMesh；你（開車、走路）在停車場裡：26 公尺內最近的 8 台換成真的輕量車（照種類重複用；顏色、哪一台跟遠的一樣）
+const LOT_DIMS = { supra: [4.606, 1.971, 1.426], gtr: [4.7, 1.951, 1.33], gc8: [4.356, 1.905, 1.441], yaris: [4.027, 2.042, 1.456], p918: [4.632, 2.079, 1.167], sp3: [4.64, 2.092, 1.142], jesko: [4.7, 2.113, 1.213], rx7: [4.248, 1.878, 1.237],
+  evo: [4.517, 1.899, 1.694], civic: [4.557, 2.191, 1.436], laferrari: [4.679, 2.03, 1.118], huayra: [4.549, 2.12, 1.17], senna: [4.737, 2.1, 1.238], altis: [4.571, 2.084, 1.512], aventador: [4.842, 2.154, 1.137], ae86: [4.235, 1.693, 1.34],
+  chiron: [4.559, 2.02, 1.233], jp4: [4.521, 2.19, 1.854], k2: [3.822, 2.066, 2.137], p8: [5.457, 2.165, 1.847] }; // 輕量車量的長、寬、高（公尺；車身中心在原點）
+const VDL_SEED = 7000; // 停車場的車用自己的亂數（不要跟環山路的一樣）
+function vdLotCar(n) { if (lotHash(n + VDL_SEED, 3) >= 0.66) return null; const k = lotKind(n + VDL_SEED); return k && LOT_DIMS[k] ? { k, paint: lotLook(k, n + VDL_SEED).paint } : null; } // 三分之二的格子有車
+const VDL = { t: 0, q: { x: 0, z: 0 }, live: new Map(), pool: new Map(), want: [], busy: false, N: 8, R: 26, built: 0 };
+function vdStep(dt) {
+  const V = VDV; if (!V || !DRIVE.on) return; const st = V.st;
+  const wk = walker && walker.mode !== 'off' && walker.character, p = wk ? walker.character.group.position : tripS?.car?.position;
+  if (!p) { st.on = st.high = false; return; }
+  if (indoor || RACE.on) { st.on = st.high = false; st.py = p.y; st.px = 1e9; st.pz = 1e9; }
+  else {
+    const y = V.at(p.x, p.z, p.y);
+    st.on = y != null && Math.abs(y - p.y) < 1.2; st.high = st.on && y - PW.groundAt(p.x, p.z) > 3;
+    st.py = p.y; st.px = p.x; st.pz = p.z;
+  }
+  vdLotStep(dt);
+}
+function vdLotPut(l, c) { l.setLook(lotLook(c.k, c.j + VDL_SEED)); l.car.position.set(c.x, 0.03, c.z); l.car.rotation.set(0, c.h, 0); l.car.visible = true; VDV.lot.hide(c.inst); VDL.live.set(c, { l, k: c.k }); }
+function vdLotStep(dt) {
+  const L = VDV.lot; VDL.t -= dt; if (VDL.t > 0 || VDL.busy) return; VDL.t = 0.25;
+  const q = VDL.q, W = VDL.want; W.length = 0;
+  if (LOT_ME(q) && !VDV.st.high && !indoor) {
+    const dx = q.x - VD_LOT.x, dz = q.z - VD_LOT.z;
+    if (dx * dx + dz * dz < (VD_LOT.r + VDL.R) ** 2) { const R2 = VDL.R * VDL.R; for (const c of L.cars) { if (c.bad) continue; const ex = c.x - q.x, ez = c.z - q.z, d = ex * ex + ez * ez; if (d < R2) { c.d2 = d; W.push(c); } } if (W.length > VDL.N) { W.sort((a, b) => a.d2 - b.d2); W.length = VDL.N; } }
+  }
+  for (const [c, e] of VDL.live) if (!W.includes(c)) { e.l.car.visible = false; L.show(c.inst); VDL.live.delete(c); let a = VDL.pool.get(e.k); if (!a) VDL.pool.set(e.k, (a = [])); a.push(e.l); }
+  for (const c of W) {
+    if (VDL.live.has(c)) continue;
+    const a = VDL.pool.get(c.k), l = a && a.pop(); if (l) { vdLotPut(l, c); continue; }
+    if (!LOD_CARS[c.k] || !TR) { c.bad = true; continue; }
+    VDL.busy = true; // 一次做一台（下一次 0.25 秒以後再看）
+    LOD_CARS[c.k].load().then((d) => { VDL.busy = false; if (!TR || !VDV) return; const l2 = buildLodCar(c.k, d, lotLook(c.k, c.j + VDL_SEED)); l2.car.name = 'vdlot-' + c.k; l2.car.visible = false; TR.scene.add(l2.car); VDL.built++; let a2 = VDL.pool.get(c.k); if (!a2) VDL.pool.set(c.k, (a2 = [])); a2.push(l2); VDL.t = 0; })
+      .catch((e) => { VDL.busy = false; c.bad = true; console.warn('停車場的車做不出來', e); });
+    return;
+  }
+}
+function vdLotOff() { if (!VDV) return; for (const [c, e] of VDL.live) { e.l.car.visible = false; VDV.lot.show(c.inst); let a = VDL.pool.get(e.k); if (!a) VDL.pool.set(e.k, (a = [])); a.push(e.l); } VDL.live.clear(); }
 function hillsStep(dt) {
   const H = VIL?.hills; if (!H || !DRIVE.on) return;
   const wk = walker && walker.mode !== 'off' && walker.character, p = wk ? walker.character.group.position : tripS?.car?.position;
