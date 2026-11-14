@@ -348,7 +348,7 @@ await p.addInitScript(() => {
   };
   X.fire = () => { const g = P3().gunner, s0 = g.telemetry().shots; g.setTrigger(true); for (let i = 0; i < 30 && g.telemetry().shots === s0; i++) X.step(1); g.setTrigger(false); X.step(2); return g.telemetry().shots - s0; };
   // 圓按鈕（揍）：walk.js 用 pointerdown
-  X.punchBtn = () => { const b = document.querySelector('#stage .wk-btns b'); if (!b || b.closest('[hidden]')) return null; const s = b.textContent; b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })); b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); return s; };
+  X.punchBtn = () => { const b = [...document.querySelectorAll('#stage .wk-btns b')].find((e) => e.textContent === '揍'); /* 第 90 批：上面多一顆「跳」 */ if (!b || b.closest('[hidden]')) return null; const s = b.textContent; b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })); b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); return s; };
   // 站到那個人前面 0.75 公尺、面對他（周圍找站得到的地方）；人先停住（不要走掉）
   X.faceTo = (q, d = 0.75, ok = null) => { // ok(x, z)：站在那裡另外的條件（例如後面沒有別人）
     const w = W();
@@ -423,7 +423,7 @@ const s1b = await ev(() => {
 });
 console.log('  out:', JSON.stringify(s1b), '| loading:', JSON.stringify([...new Set(msgs)]));
 check(s1b.police && s1b.state === 'free' && s1b.wanted === 0 && s1b.PI && s1b.PSC && !s1b.GS && s1b.gunner && msgs.includes('警察局、槍店準備中⋯'), 'loading screen made the police (cars + officers preloaded), the police-station interior; the gun shop waits until you walk in');
-check(s1b.btn === '揍' && s1b.btnVis && !s1b.want && !s1b.pill && !s1b.fire, 'walking: the round 揍 button is there; no stars, no gun HUD (no guns yet)');
+check(s1b.btn === '跳,揍' && s1b.btnVis && !s1b.want && !s1b.pill && !s1b.fire, 'walking: the round 揍 button is there (跳 above it); no stars, no gun HUD (no guns yet)');
 check(s1b.cell === true && s1b.mov === 4 && s1b.pcars === 3, 'cell door open when visiting; police cars are obstacles for traffic and pedestrians (npc.js)');
 if (UNTIL <= 1) await finish();
 
@@ -875,7 +875,7 @@ const s6g = await ev(() => {
   return { out, mode: D.walker.mode, hud: g.telemetry().hud, pill: X.vis('#stage .gn-pill'), btns: [...document.querySelectorAll('#stage .wk-btns b')].map((b) => b.textContent).join(), btnVis: X.vis('#stage .wk-btns'), drawn: g.telemetry().drawn };
 });
 console.log('  out of car:', JSON.stringify(s6g));
-check(s6g.out === '下車' && s6g.mode === 'walk' && s6g.pill && s6g.btns === '揍' && s6g.btnVis && !s6g.drawn, 'got out: walking, 揍 back, ammo pill back (gun stays put away until you pick it)');
+check(s6g.out === '下車' && s6g.mode === 'walk' && s6g.pill && s6g.btns === '跳,揍' && s6g.btnVis && !s6g.drawn, 'got out: walking, 跳 and 揍 back, ammo pill back (gun stays put away until you pick it)');
 // 自首：通緝中自己走進警察局 → 直接關進拘留室（「自首：警察帶你去拘留室」）→ 繳罰款出來
 const s6s = await ev(() => {
   const X = window.__X, D = window.__D(), w = D.walker, Q = window.__P3(), t = w.telemetry(); Q.police.crime('punch', { x: t.x, z: t.z }); X.step(5);

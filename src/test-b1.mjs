@@ -526,7 +526,7 @@ await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(250
 console.log('  on foot fold (landscape):', JSON.stringify({ wl0, wl1, wl2 }), '| clash', wlc0 || '-', '|', wlc1 || '-', '|', wlc2 || '-');
 check(wl0.tog && wl0.more && !wl0.dests && !wl0.cam && !wlc0 && wl1.open && wl1.dests && wl1.home && !wlc1 && wl2.mopen && wl2.snd && wl2.fs && wl2.cam && !wlc2, `landscape 800×360 on foot: folded, then 去哪裡 open (two rows beside the joystick) and ⋯ open, none overlapping (${[wlc0, wlc1, wlc2].filter(Boolean).join(' / ') || 'ok'})`);
 await drawAndShot('2-foot-fold');
-// 第 90 批（Nick「可以跳」「第一人稱手要看的到」）：空白鍵跳（按鈕要等 Nick 看 mock 才打開：現在右下角只有「揍」）；第一人稱走路看得到自己的兩隻手
+// 第 90 批（Nick「可以跳」「第一人稱手要看的到」）：空白鍵跳、「跳」的按鈕（在「揍」上面）；第一人稱走路看得到自己的兩隻手
 const jb = await p.evaluate(() => [...document.querySelectorAll('#stage .wk-btns b')].map((e) => e.textContent).join(','));
 const j0 = await p.evaluate(() => { document.activeElement?.blur?.(); const D = window.__D(), w = D.walker, C = w.character; w.setInput(null); window.__H.step(20);
   const g = C.group, ft = () => { g.updateWorldMatrix(true, true); const v = D.dcam.position.clone(); return Math.min(C.bones[22].getWorldPosition(v).y, C.bones[25].getWorldPosition(v).y) - g.position.y; };
@@ -537,9 +537,17 @@ const j1 = await p.evaluate(() => { const D = window.__D(), w = D.walker, C = w.
   for (let i = 1; i <= 90; i++) { window.__H.step(1); const t = w.telemetry(); if (t.jy > top) { top = t.jy; gyTop = g.position.y; foot = ft(); } if (land < 0 && top > 0 && t.jy === 0) land = i; }
   const t = w.telemetry(); return { jumps: t.jumps, top: +top.toFixed(3), gyTop: +gyTop.toFixed(3), foot: +foot.toFixed(3), landF: land, jy: t.jy }; });
 console.log('  jump:', jb, JSON.stringify({ j0, j1 }));
-check(jb === '揍' && j1.jumps === j0.jumps + 1 && j1.top > 0.4 && j1.top < 0.65 && Math.abs(j1.gyTop - j0.gy - j1.top) < 0.01 && j1.landF > 30 && j1.landF < 60 && j1.jy === 0,
-  `Space: the walker jumps ${j1.top} m (the body goes up with it) and lands again after ${j1.landF} frames; the 跳 button stays off until Nick okays the mock (buttons: ${jb})`);
+check(jb === '跳,揍' && j1.jumps === j0.jumps + 1 && j1.top > 0.4 && j1.top < 0.65 && Math.abs(j1.gyTop - j0.gy - j1.top) < 0.01 && j1.landF > 30 && j1.landF < 60 && j1.jy === 0,
+  `Space: the walker jumps ${j1.top} m (the body goes up with it) and lands again after ${j1.landF} frames (buttons: ${jb})`);
 check(j1.foot - j0.foot > 0.1, `in the air the legs tuck up (lowest foot ${j0.foot} → ${j1.foot} m above the body origin)`);
+// Nick 2026-11-14 卡片「照這樣做」：「跳」的圓按鈕在「揍」上面；按下去（pointerdown）就跳，跟空白鍵一樣
+const jbt = await p.evaluate(() => { const el = [...document.querySelectorAll('#stage .wk-btns b')].find((e) => e.textContent === '跳'), hit = [...document.querySelectorAll('#stage .wk-btns b')].find((e) => e.textContent === '揍');
+  if (!el || !hit) return null; const a = el.getBoundingClientRect(), h = hit.getBoundingClientRect(), w = window.__D().walker, n0 = w.telemetry().jumps;
+  el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })); el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+  let top = 0; for (let i = 0; i < 70; i++) { window.__H.step(1); top = Math.max(top, w.telemetry().jy); }
+  return { above: a.bottom <= h.top + 1 && Math.abs((a.left + a.right) / 2 - (h.left + h.right) / 2) < 4, size: [Math.round(a.width), Math.round(h.width)], n: w.telemetry().jumps - n0, top: +top.toFixed(3), jy: w.telemetry().jy }; });
+console.log('  jump button:', JSON.stringify(jbt));
+check(jbt && jbt.above && jbt.n === 1 && jbt.top > 0.4 && jbt.jy === 0, `the 跳 button sits right above 揍 and pressing it jumps once (${JSON.stringify(jbt)})`);
 const fpw = await p.evaluate(() => { const D = window.__D(), w = D.walker, C = w.character; w.setCamera({ mode: 'eye', pitch: 0.2 }); window.__H.step(30);
   const hd = C.bones[5]; hd.updateWorldMatrix(true, false); const sc = new D.dcam.position.constructor(); hd.getWorldScale(sc); D.dcam.updateMatrixWorld();
   const on = (b) => { const v = C.bones[b].getWorldPosition(D.dcam.position.clone()).project(D.dcam); return Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && v.z < 1; };

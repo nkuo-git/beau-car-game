@@ -2497,7 +2497,7 @@ function crushStep(dt) {
 //   → 10 分鐘或繳罰款（onRelease）：人站在警察局門口，車在停車場
 // 槍：做走路的時候一起做（makeGuns），走路才用得到（開車、上車下車中自己收起來）；房子裡、警察局裡、拘留室、槍店櫃台不能用（setEnabled(false)）
 const PUNCH_BTN = [{ id: 'punch', label: '揍', key: 'KeyF', onClick: () => doPunch() }]; // 走路右下角的圓按鈕（電腦 F）；拿槍的時候收起來（開槍鈕在同一個地方，F 也是開槍）
-const JUMP_BTN_ON = false; // 第 90 批：「跳」的圓按鈕（在「揍」上面；電腦空白鍵一直都可以跳）。是畫面：先給 Nick 看 mock，他說好才打開
+const JUMP_BTN_ON = true; // 第 90 批：「跳」的圓按鈕（在「揍」上面；電腦空白鍵一直都可以跳）。mock https://claude.ai/artifact/CsMA2Xzt68fuUgGsxscXfT ，Nick 2026-11-14 卡片選「照這樣做」
 const JUMP_B = { id: 'jump', label: '跳', onClick: () => walker.jump() };
 const walkBtns = (punch) => (JUMP_BTN_ON ? (punch ? [JUMP_B, ...PUNCH_BTN] : null) : (punch ? PUNCH_BTN : null)); // 拿槍、關著：都收起來（開槍那一排在同一個地方）
 const PUNCH_ME = { x: 0, z: 0, heading: 0 }, PL_CAR = { hx: 2.2, hz: 0.9, cx: 0 }; // 每一格重複用的
