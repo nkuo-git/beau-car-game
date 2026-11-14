@@ -77,6 +77,7 @@ export const { createWalker } = (() => {
 const TAU = Math.PI * 2;
 const WALK = 1.4, RUN = 4.5, BRISK = 2.1; // 走、跑、自己走去車門（公尺/秒）
 const ACC = 9, DEC = 12; // 起步、停下來（m/s²）
+const JUMP_V = 3.5, JUMP_G = 11, LAND_T = 0.22; // 第 90 批（Nick「可以跳」）：跳起來的速度（約 0.55 公尺高、0.64 秒落地）、重力、落地蹲一下幾秒
 const REACH = 1.6; // 離車身幾公尺以內給「上車」
 const CAM_M = 0.22; // 鏡頭離牆、離東西至少幾公尺（near 0.1 的畫面四個角也碰不到）
 const AY_MAX = 1.78; // 鏡頭繞著轉的那一點（頭上面一點）最高幾公尺：高的人在車庫升降機升起來的平台（只擋鏡頭的盒子底 2.02）底下，離平台還有 CAM_M
@@ -305,8 +306,8 @@ function createWalker(o) {
 
   // ---- 狀態 ----
   let ch = null, R = 0.28, BH = 1.72, alive = true, active = false, now = 0, lockT = 0;
-  const st = { x: 0, z: 0, th: 0, vx: 0, vz: 0, speed: 0, anim: 'idle', play: null, mode: 'off', running: false, close: false, ix: 0, iz: 0, im: 0, near: null };
-  const pose0 = { speed: 0, state: 'idle' }; // character.update 的參數（重複用）
+  const st = { x: 0, z: 0, th: 0, vx: 0, vz: 0, speed: 0, anim: 'idle', play: null, mode: 'off', running: false, close: false, ix: 0, iz: 0, im: 0, near: null, jy: 0, vy: 0, land: 0, jumps: 0 }; // jy：跳起來離地多高（第 90 批）
+  const pose0 = { speed: 0, state: 'idle', tuck: 0, crouch: 0 }; // character.update 的參數（重複用）
   let scr = null; // 下車、坐進去的小動畫 { kind, t, T, x0, z0, x1, z1, h0, h1, ax, az, rec }
   let tgt = null; // 走去車門 { rec, pts, n, i, t, cancel, side }
   const events = []; // 這一格最後才叫的（門、上車）
@@ -319,14 +320,24 @@ function createWalker(o) {
   const V1 = new THREE.Vector3(), Q1 = new THREE.Quaternion();
 
   function setCharacter(c) {
-    if (ch && ch !== c) ch.group.removeFromParent();
+    if (ch && ch !== c) { ch.group.removeFromParent(); if (ch.fpHead) ch.fpHead(false); }
     ch = c || null; R = ch?.radius || 0.28; BH = ch?.height || 1.72;
     if (ch && scene && ch.group.parent !== scene) scene.add(ch.group);
     if (ch) { ch.group.visible = active && st.mode !== 'off'; place(); }
   }
   // 地面高度：村子是平的（0）；越野車場（第 4 批 offroad.js 的 buildOffroad）有 world.heightAt：人站在地形上、鏡頭跟著高低
   const groundY = (x, z) => (typeof world.heightAt === 'function' ? world.heightAt(x, z) || 0 : 0);
-  function place() { if (ch) { ch.group.position.set(st.x, groundY(st.x, st.z), st.z); ch.group.rotation.set(0, st.th, 0); } }
+  function place() { if (ch) { ch.group.position.set(st.x, groundY(st.x, st.z) + st.jy, st.z); ch.group.rotation.set(0, st.th, 0); } }
+  // ---- 第 90 批（Nick「可以跳」）：跳（只有走路的時候；在空中照樣可以往前走、轉；落地蹲一下）----
+  function jump() {
+    if (!active || !alive || st.mode !== 'walk' || st.jy > 0 || st.vy > 0 || st.land > LAND_T * 0.5) return false;
+    st.vy = JUMP_V; st.jumps++; return true;
+  }
+  function jumpStep(dt) {
+    if (st.mode !== 'walk') { st.jy = 0; st.vy = 0; st.land = 0; return; } // 上車、坐下、停住：直接回到地上
+    if (st.jy > 0 || st.vy > 0) { st.vy -= JUMP_G * dt; st.jy += st.vy * dt; if (st.jy <= 0) { st.jy = 0; st.vy = 0; st.land = LAND_T; } }
+    else if (st.land > 0) st.land = Math.max(0, st.land - dt);
+  }
 
   // ---- 碰撞 ----
   function syncMovers() {
@@ -660,6 +671,16 @@ function createWalker(o) {
   }
 
   // ---- 鏡頭 ----
+  // 第 90 批（Nick「第一人稱手要看的到」）：第一人稱的時候兩隻手放哪裡（角色座標：往前、高、左右各幾公尺）
+  //   照這一格鏡頭的上下角度、畫面寬高算：離鏡頭 0.34 公尺、畫面下面 6 成、左右 6 成（直拿的手機畫面窄：手最少分開 0.1）；抬頭看就跟著看不到
+  const FPH = [0, 0, 0];
+  function fpHands() {
+    const tv = Math.tan((camera.fov * Math.PI) / 360), th = tv * (camera.aspect || 1), zc = 0.34, yc = -0.6 * tv * zc, cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    FPH[0] = clamp(0.12 + zc * cp + yc * sp, 0.24, 0.5);
+    FPH[1] = clamp(BH * 0.93 - zc * sp + yc * cp, BH * 0.6, BH * 0.84);
+    FPH[2] = clamp(0.6 * th * zc, 0.1, 0.17);
+    return FPH;
+  }
   const baseFov = () => clamp((2 * Math.atan(Math.tan((56 * Math.PI) / 360) / (camera.aspect || 1)) * 180) / Math.PI, 50, 70);
   function recenter(dt) {
     if (cam.hold > 0) { cam.hold -= dt; return; }
@@ -670,11 +691,11 @@ function createWalker(o) {
   }
   function camTick(dt) {
     if (!camera) return;
-    const ax = scr ? scr.ax : st.x, az = scr ? scr.az : st.z, g0 = groundY(st.x, st.z), ay = g0 + Math.min(BH * 0.9 + 0.2, AY_MAX); // 看著頭上面一點（下車、坐進去的時候看站的地方）；高的人最高 AY_MAX；g0＝腳下的地面（越野車場）
+    const ax = scr ? scr.ax : st.x, az = scr ? scr.az : st.z, g0 = groundY(st.x, st.z), ay = g0 + Math.min(BH * 0.9 + 0.2, AY_MAX) + st.jy * 0.6; // 第 90 批：跳的時候鏡頭跟一點 // 看著頭上面一點（下車、坐進去的時候看站的地方）；高的人最高 AY_MAX；g0＝腳下的地面（越野車場）
     const fx = Math.cos(cam.yaw), fz = -Math.sin(cam.yaw);
     let sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch), px, py, pz;
     if (cam.mode === 'eye') { // 第一人稱：眼睛
-      px = st.x + fx * 0.12; py = g0 + BH * 0.93; pz = st.z + fz * 0.12; st.close = true;
+      px = st.x + fx * 0.12; py = g0 + BH * 0.93 + st.jy; pz = st.z + fz * 0.12; st.close = true;
     } else {
       const D = cam.dist;
       if (ay + D * sp > cam.maxY - 0.15) { sp = clamp((cam.maxY - 0.15 - ay) / D, -0.4, sp); cp = Math.sqrt(1 - sp * sp); } // 天花板：鏡頭放低
@@ -920,6 +941,7 @@ function createWalker(o) {
     if (!down || e.repeat || !active) return;
     if (e.code === 'KeyE') { if (eff) { e.preventDefault(); doAction(); } }
     else if (e.code === 'KeyC') setCamera({ mode: cam.mode === 'eye' ? 'follow' : 'eye' });
+    else if (e.code === 'Space') { e.preventDefault(); jump(); } // 第 90 批：空白鍵＝跳
     else for (const b of btns) if (b.key === e.code) { e.preventDefault(); pressBtn(b); }
   };
   const onBlur = () => { for (const k in kb) kb[k] = false; };
@@ -946,6 +968,7 @@ function createWalker(o) {
     active = false; st.mode = 'off'; releasePad(); if (hud && hud.lk) hud.lk.id = null;
     if (hud) hud.root.hidden = true;
     if (hide && ch) ch.group.visible = false;
+    if (ch && ch.fpHead) ch.fpHead(false); pose0.fp = false; // 第 90 批：不走路了，頭放回來（舉著的手下一次 update 放下）
     if (camera && cam.near0 != null) { camera.near = cam.near0; camera.updateProjectionMatrix(); cam.near0 = null; }
     if (fx) fx.beacon.visible = false;
     eff = null; eff2 = null;
@@ -977,11 +1000,14 @@ function createWalker(o) {
     const gAct = garageTick();
     readInput();
     if (st.mode === 'walk') walkStep(dt); else if (st.mode === 'in') autoStep(dt); else if (scr) scriptStep(dt);
+    jumpStep(dt);
     st.anim = st.speed < 0.15 ? 'idle' : st.speed > 2.6 ? 'run' : 'walk';
     if (!active) { flush(); return; } // 坐進車裡了（finishIn）
     place();
     if (ch) {
-      pose0.speed = st.speed; pose0.state = st.play || st.anim; st.play = null;
+      const air = st.jy > 0 || st.vy > 0; // 第 90 批：在空中：腳收起來（不走路）、落地蹲一下
+      pose0.speed = air ? 0 : st.speed; pose0.state = air && !st.play ? 'idle' : st.play || st.anim; st.play = null;
+      pose0.tuck = air ? Math.min(1, st.jy / 0.25) : 0; pose0.crouch = st.land > 0 ? Math.sin(Math.PI * (1 - st.land / LAND_T)) : 0; pose0.fp = cam.mode === 'eye'; pose0.fpAt = pose0.fp && camera ? fpHands() : null; // 第 90 批：第一人稱兩隻手舉起來、放在畫面下面兩邊
       ch.update(dt, pose0);
     }
     if (st.mode === 'walk') doorTick(dt);
@@ -989,7 +1015,7 @@ function createWalker(o) {
     setEff(st.mode === 'walk' ? leadAct || gAct || (st.near && st.near.act) : null);
     setEff2(st.mode === 'walk' ? lead2 : null);
     recenter(dt); camTick(dt);
-    if (ch) ch.group.visible = !st.close; // 第一人稱、鏡頭貼著頭：看不到自己
+    if (ch) { const fp = cam.mode === 'eye'; if (ch.fpHead) ch.fpHead(fp); ch.group.visible = fp || !st.close; } // 第 90 批：第一人稱看得到手和身體（頭藏起來）；跟車鏡頭貼著頭照舊整個藏起來
     zoneTick(); routeTick(dt); beaconTick(); hudTick(dt);
     flush();
   }
@@ -1011,13 +1037,13 @@ function createWalker(o) {
     if (fx) { fx.beacon.removeFromParent(); for (const m of [fx.pillar, fx.ring]) { m.geometry.dispose(); m.material.dispose(); } fx.tex.dispose(); fx = null; }
     if (ch) ch.group.removeFromParent();
   }
-  const telemetry = () => ({ x: st.x, z: st.z, heading: st.th, speed: st.speed, vx: st.vx, vz: st.vz, state: st.anim, mode: st.mode, running: st.running, paused: !active,
+  const telemetry = () => ({ x: st.x, z: st.z, heading: st.th, speed: st.speed, vx: st.vx, vz: st.vz, state: st.anim, mode: st.mode, running: st.running, paused: !active, jy: st.jy, jumps: st.jumps,
     near: st.near ? st.near.car.key ?? true : null, action: eff ? eff.label : null, camMode: cam.mode, camYaw: cam.yaw, camPitch: cam.pitch, camDist: cam.cd, camWant: cam.want,
     hidden: !ch || !ch.group.visible, zone: zoneNow, dest, destDist: routeData ? Math.max(0, routeData.len - routeS) : null });
 
   const api = {
     update, telemetry, teleport, setAction, setAction2, setCars: (list, op = {}) => { leadCars = Array.isArray(list) ? list.slice() : []; if (op.keepParked === false && st.mode !== 'in' && st.mode !== 'seat') parked = null; rebuildCars(); },
-    getOut, getIn, exitAt, follow, setGarage, setDestination, setCamera, setCharacter, setButtons, pause, resume, dispose, toast,
+    getOut, getIn, exitAt, follow, setGarage, setDestination, setCamera, setCharacter, setButtons, pause, resume, dispose, toast, jump, // jump()：第 90 批：跳（走路的時候；回傳有沒有跳）
     shift: (dx, dz, dth) => { st.x += +dx || 0; st.z += +dz || 0; if (dth) { st.th = wrapA(st.th + dth); cam.yaw = wrapA(cam.yaw + dth); } }, // 第 78 批：坐在捷運上跟著車走（腳下的地板動了：人、鏡頭一起搬，沒有別的副作用）
     setDoors: (src) => { doorSrc = src; doorList = buildDoors(src); armDoors(); },
     setInput: (i) => { forced = i ? { x: clamp(+i.x || 0, -1, 1), y: clamp(+i.y || 0, -1, 1), run: i.run } : null; },

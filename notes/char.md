@@ -14,3 +14,11 @@ Character editor UI (自訂角色 screen) not built yet → integration builds i
 
 ## Batch 34 — more natural walk (trial v50, 2026-10-24)
 Nick: 「人走路腳的姿勢可以再自然一點嗎?」. The swing foot barely lifted (ankle peak ≈ 11 cm at 1.3 m/s) so the knee hardly bent and the walk read as a stiff shuffle. `gaitStep`: walk lift (0.03 + 0.05·vh)·Lg → (0.07 + 0.09·vh)·Lg; `footTarget`: walk swing curve sin(π·s^0.8) → sin(π·s^0.6) (peaks at s ≈ 0.3, right after toe-off, like a real heel kick-up, then the foot reaches forward and lands). `gaitBody`: arm swing (0.12 + 0.3·vh) → (0.15 + 0.35·vh), elbows bend a little more (+0.1 base, 0.6·forward swing). Run untouched. Strips: out/walk/walk-before.png vs walk-after.png (scratch probe, not in the repo).
+
+## Batch 90 — first-person hands + jump pose (trial v101, 2026-11-14)
+Nick: 「第一人稱手要看的到」「可以跳」.
+- First person no longer hides the body. `C.fpHead(on)` → `fpApply`: the head bone scales to 1e-3 (hair, face, hat, helmet collapse into the neck) and `C.eyes` is scaled/positioned by 1/k so the eye objects stay put; `C.fpOn`, `C.anim.fpOn`. Everything else (torso, arms, hands, food in hand) is drawn.
+- Walking (walk.js eye camera): `animate(…, { fp: true, fpAt: [fwd, y, halfSep] })` → `fpArmsIK` puts both hands in front of the camera (walk.js `fpHands()` computes the point from the camera pitch so the hands sit in the bottom corners in portrait and landscape; clamped, small gait sway). Off in the follow view.
+- Driving / riding / sitting as a passenger: the existing sit poses (hands on the wheel or bars) are simply drawn with the head folded (seat.src.js `mySitOn(…, fp)`, town.src.js `riderOn(…, fp)`); race.src.js still passes no fp (chase view only there).
+- Eating in first person: the right hand target moves forward/down (0.34 / 0.15 / 0.06 × hs) so the food is in view; mart.src.js only adds its camera-space clone when the body is not drawn.
+- Jump pose: `animate` takes `tuck` (0–1, airborne) and `crouch` (0–1, landing). `jumpBody` lowers the hips, leans, raises the arms and sets `S.tuckY` (0.24 m × tuck) which `legsIK` adds to the ankle targets → knees fold in the air. Reset every frame in the STAND branch.

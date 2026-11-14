@@ -44,3 +44,8 @@ HUD (390×844, stage 390×560): top-left dest chip + big action; top-right 124 p
 7. Toasts use setTimeout.
 8. Only charstub tested.
 9. walk.js depends on room.js members: size, door.{t, moving, open, close}, colliders(open, true) with door box LAST, toWorld — lift/bedroom rework must keep them (walk-test collide/walkout phases catch it).
+
+## Batch 90 — jump (trial v101, 2026-11-14)
+Nick: 「可以跳」. `walker.jump()` (Space on a keyboard; on-screen 「跳」 button in town.src.js behind `JUMP_BTN_ON`, off until Nick okays the mock https://claude.ai/artifact/CsMA2Xzt68fuUgGsxscXfT). Only while walking on the ground: `JUMP_V` 3.5 m/s, `JUMP_G` 11 → ≈0.53 m high, ≈0.63 s in the air; you can still steer and walk in the air; `LAND_T` 0.22 s landing crouch. `st.jy` lifts the body (`place()`), the eye camera (+jy) and the follow camera (+0.6 jy). No collision change (you can't jump onto things). Leaving walk mode (getting in, sitting, pause) drops you to the ground. Telemetry `jy`, `jumps`.
+First person on foot now draws your own body with the head folded (character.js batch 90) and raises both hands into view (`fpHands()`).
+test-b1 2 (after the fold checks): Space jump height / landing / tuck, no 跳 button yet, first-person hands on screen.

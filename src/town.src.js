@@ -2493,6 +2493,9 @@ function crushStep(dt) {
 //   → 10 分鐘或繳罰款（onRelease）：人站在警察局門口，車在停車場
 // 槍：做走路的時候一起做（makeGuns），走路才用得到（開車、上車下車中自己收起來）；房子裡、警察局裡、拘留室、槍店櫃台不能用（setEnabled(false)）
 const PUNCH_BTN = [{ id: 'punch', label: '揍', key: 'KeyF', onClick: () => doPunch() }]; // 走路右下角的圓按鈕（電腦 F）；拿槍的時候收起來（開槍鈕在同一個地方，F 也是開槍）
+const JUMP_BTN_ON = false; // 第 90 批：「跳」的圓按鈕（在「揍」上面；電腦空白鍵一直都可以跳）。是畫面：先給 Nick 看 mock，他說好才打開
+const JUMP_B = { id: 'jump', label: '跳', onClick: () => walker.jump() };
+const walkBtns = (punch) => (JUMP_BTN_ON ? (punch ? [JUMP_B, ...PUNCH_BTN] : null) : (punch ? PUNCH_BTN : null)); // 拿槍、關著：都收起來（開槍那一排在同一個地方）
 const PUNCH_ME = { x: 0, z: 0, heading: 0 }, PL_CAR = { hx: 2.2, hz: 0.9, cx: 0 }; // 每一格重複用的
 const GS_DESK = { label: '買槍、子彈', icon: 'hand', onClick: () => openDesk() }, GS_RANGE = { label: '開始練習', icon: 'hand', onClick: () => startRange() };
 const jailed = () => !!police && (police.state === 'caught' || police.state === 'jail' || police.state === 'release'); // 被抓到、關著、放出來那一下：不能上車下車、開門、用槍
@@ -2590,10 +2593,10 @@ function makeGuns() {
     townTargets = [NPC && gunTargets.pedestrians(NPC.peds), NPC && gunTargets.traffic(NPC.traffic), police && gunTargets.police(police), gunTargets.boxes(gunParked, { kind: 'parked' })].filter(Boolean);
     gunner = createGunner({ scene: TR.scene, camera: dcam, renderer, walker, character: walker.character, GAME, hudParent: stage, keyboard: true, world: townWorld, targets: townTargets,
       audio: { muted: () => engineAudio.muted },
-      onChange: () => save(), onEquip: (id) => walker.setButtons(id ? null : PUNCH_BTN), // 拿槍：開槍鈕放在「揍」的地方（F 也變開槍）
+      onChange: () => save(), onEquip: (id) => walker.setButtons(walkBtns(!id)), // 拿槍：開槍鈕放在「揍」的地方（F 也變開槍）
       onCrime: (kind, info) => police?.crime(kind, info) });
   } catch (e) { console.error(e); gunner = null; }
-  walker.setButtons(PUNCH_BTN);
+  walker.setButtons(walkBtns(true));
 }
 // 子彈打得到的停著的車（你的車：停在哪就在哪；剛下車停著的那台也算）：一格算一次（有開槍才問）
 const GP = []; let gpN = 0, gpAt = -1;
@@ -2693,7 +2696,7 @@ function polStep(dt) {
     if (drv && walker.mode === 'off' && !sleep && !rampHigh()) { const t = drv.telemetry(); drv.addColliders(police.colliders(t.x, t.z, 60), 'police'); if (!t.paused) police.carHit(null, null); } // 第 24 批：開在斜坡上面：地上的警車撞不到
     police.update(dt);
     bodyFlag('wanted', !polRace.on && stage.classList.contains('pw-on')); bodyFlag('jailed', jailed()); // garage.css：通緝中全螢幕鈕、聲音往下推；被抓到、關著去哪裡那一排藏起來
-    if (bodyFlags.jailed !== polStep.jl) { polStep.jl = bodyFlags.jailed; walker.setButtons(polStep.jl || gunner?.arms.cur ? null : PUNCH_BTN); } // 關著的時候「揍」收起來
+    if (bodyFlags.jailed !== polStep.jl) { polStep.jl = bodyFlags.jailed; walker.setButtons(walkBtns(!(polStep.jl || gunner?.arms.cur))); } // 關著的時候「揍」收起來
   }
   if (gunner) { gunSync(); gunner.update(dt); }
 }
@@ -2931,7 +2934,7 @@ function mirrorStep() {
   MIR.calls = renderer.info.render.calls; MIR.tris = renderer.info.render.triangles;
 }
 // ==== 第 56 批：沙灘車（Z2）騎的人：你自己的樣子＋安全帽，坐在座椅上、手握把手（跟著轉）、腳踩腳踏板（z2-spec.js：Z2_RIDE、Z2_ride、Z2_steer）====
-//   騎著（walker 收起來、你的人藏起來＝坐在車上）才放上去；第一人稱不畫人（鏡頭在眼睛往前 6 公分）；下車、回車庫頁就拿下來
+//   騎著（walker 收起來、你的人藏起來＝坐在車上）才放上去；第一人稱（鏡頭在眼睛往前 6 公分）第 90 批起也畫人、頭藏起來（看得到手握把手）；下車、回車庫頁就拿下來
 //   400 公尺直線加速（race.src.js enterRace）也騎在上面：riderOn(S)；比完回車庫頁 riderOff()
 //   第 62 批：N4 街車也是騎的（moto-spec.js：MOTO_RIDE、motoRide、motoSteer，n4-spec.js 包成一樣的介面）：RIDES[key]；換車就重新量眼睛
 const RIDES = { z2: { R: Z2_RIDE, ride: Z2_ride, steer: Z2_steer, eye: Z2_eye }, n4: { R: N4_RIDE, ride: N4_ride, steer: N4_steer, eye: N4_eye },
@@ -2948,17 +2951,17 @@ function riderMake(k = cur) { // 第一次騎、換了樣子、換了車：做�
   } catch (e) { console.error(e); RIDER.C = null; }
   return RIDER.C;
 }
-function riderOn(Sx, vis = true, k = cur) { // 人放到這台車上（車身底下，跟著懸吊晃；街車跟著車身往彎裡面倒）
+function riderOn(Sx, vis = true, k = cur, fp = false) { // fp：第一人稱（第 90 批：人照樣畫、頭藏起來，看得到手握把手） // 人放到這台車上（車身底下，跟著懸吊晃；街車跟著車身往彎裡面倒）
   const RD = RIDES[k] || RIDES.z2, C = riderMake(k); if (!C || !Sx?.body) return null;
   if (C.group.parent !== Sx.body) { if (RIDER.S && RIDER.S !== Sx) riderOff(); Sx.body.add(C.group); C.group.position.fromArray(RD.R.at); C.group.rotation.set(0, 0, 0); RD.ride(C, 0, 1); }
-  C.group.visible = vis; RIDER.S = Sx; RIDER.SK = k;
+  C.group.visible = vis; if (C.fpHead) C.fpHead(!!fp); RIDER.S = Sx; RIDER.SK = k;
   return C;
 }
-function riderOff() { if (RIDER.C) { RIDER.C.group.removeFromParent(); RIDER.C.group.visible = false; } if (RIDER.S?.body) (RIDES[RIDER.SK] || RIDES.z2).steer(RIDER.S.body, 0); RIDER.S = null; }
+function riderOff() { if (RIDER.C) { RIDER.C.group.removeFromParent(); RIDER.C.group.visible = false; if (RIDER.C.fpHead) RIDER.C.fpHead(false); } if (RIDER.S?.body) (RIDES[RIDER.SK] || RIDES.z2).steer(RIDER.S.body, 0); RIDER.S = null; }
 function riderStep(dt) {
   const ride = !!RIDES[cur] && DRIVE.on && !!drv && !!tripS?.body && tripS.car.visible && walker?.mode === 'off' && walker.character && !walker.character.group.visible;
   if (!ride) { if (RIDER.S) riderOff(); return; }
-  const C = riderOn(tripS, drv.cameraMode !== 'eye'); if (!C) return;
+  const C = riderOn(tripS, true, cur, drv.cameraMode === 'eye'); if (!C) return; // 第 90 批：第一人稱也畫人（頭藏起來）
   const RD = RIDES[cur], s = drv.telemetry().steer; RD.steer(tripS.body, s);
   if (C.group.visible) RD.ride(C, s, dt);
 }

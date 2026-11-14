@@ -27,14 +27,14 @@ function mySitMake() {
   } catch (e) { console.error(e); MYSIT.C = null; }
   return MYSIT.C;
 }
-function mySitOn(Sx, k, i, vis) {
+function mySitOn(Sx, k, i, vis, fp) { // fp：第一人稱（第 90 批：看得到自己的手、身體，頭藏起來）
   const s = seatsOf(k)[i], C = s && Sx?.body ? mySitMake() : null;
   if (!C) { mySitOff(); return null; }
   if (MYSIT.S !== Sx || MYSIT.k !== k || MYSIT.i !== i || C.group.parent !== Sx.body) { Sx.body.add(C.group); seatPlace(C, s, MYSIT.P); MYSIT.S = Sx; MYSIT.k = k; MYSIT.i = i; MYSIT.st = 0; }
-  C.group.visible = !!vis;
+  C.group.visible = !!vis; if (C.fpHead) C.fpHead(!!fp);
   return C;
 }
-function mySitOff() { const C = MYSIT.C; if (C) { C.group.removeFromParent(); C.group.visible = false; } MYSIT.S = null; MYSIT.k = ''; MYSIT.i = -1; }
+function mySitOff() { const C = MYSIT.C; if (C) { C.group.removeFromParent(); C.group.visible = false; if (C.fpHead) C.fpHead(false); } MYSIT.S = null; MYSIT.k = ''; MYSIT.i = -1; }
 function mySitSteer(steer) { // 開車：手跟著方向盤（變了才算）
   const C = MYSIT.C; if (!C || !C.group.visible || !MYSIT.P.s?.wheel || Math.abs(steer - MYSIT.st) < 0.01) return;
   MYSIT.st = steer; seatSteer(C, MYSIT.P, steer); C.update(1 / 30, MYSIT.P);
@@ -526,10 +526,10 @@ function seatsStep(dt) {
   if (HOP.on) hopStep(dt);
   if (HOP.want && walker && walker.mode === 'walk' && performance.now() - HOP.want.t > 600) hopWantOff();
   if (PAX.on && (!drv || !tripS || !walker || walker.mode !== 'off')) paxEnd(); // 被換掉了（回車庫頁、被抓⋯）
-  if (PAX.on) { mySitOn(tripS, PAX.k, PAX.i, SCAM.mode !== 'eye'); seatCamTick(dt, tripS.body, PAX.k, PAX.i, tripS.car.rotation.y); }
-  else if (HOP.on) { const Sx = HOP.car || HOP.lodS; mySitOn(Sx, HOP.k, HOP.i, SCAM.mode !== 'eye' || !HOP.car); seatCamTick(dt, Sx?.body, HOP.k, HOP.i, HOP.last.heading); }
+  if (PAX.on) { mySitOn(tripS, PAX.k, PAX.i, true, SCAM.mode === 'eye'); seatCamTick(dt, tripS.body, PAX.k, PAX.i, tripS.car.rotation.y); }
+  else if (HOP.on) { const Sx = HOP.car || HOP.lodS; mySitOn(Sx, HOP.k, HOP.i, true, SCAM.mode === 'eye' && !!HOP.car); seatCamTick(dt, Sx?.body, HOP.k, HOP.i, HOP.last.heading); }
   else if (drv && walker && walker.mode === 'off' && !RIDES[cur] && tripS?.car?.visible && tripS.car.parent === TR.scene && !(walker.character && walker.character.group.visible) && seatsOf(cur).length) { // 開車：你坐在駕駛座（從外面看得到）
-    mySitOn(tripS, cur, 0, drv.cameraMode !== 'eye'); mySitSteer(drv.telemetry().steer);
+    mySitOn(tripS, cur, 0, true, drv.cameraMode === 'eye'); mySitSteer(drv.telemetry().steer);
   } else if (MYSIT.S) mySitOff();
   if (NET.on) seatPeers();
   seatWalk();

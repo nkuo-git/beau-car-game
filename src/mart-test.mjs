@@ -389,7 +389,9 @@ if (FULL) {
   const eatAt = (k, seat) => L(([k, seat]) => { const H = window.__H, M = window.__MT(), D = window.__D(), C = seat ? M.MYSIT.C : D.walker.character, T = window.__T3, hp = () => C.hand.getWorldPosition(new T.Vector3());
     const n0 = M.MART.bag.filter((q) => q === k).length, h0 = hp(); if (!seat) D.walker.setInput({ x: 0, y: 1 }); H.step(seat ? 2 : 30); const v0 = seat ? 0 : D.walker.telemetry().speed;
     document.querySelector(`.mt-list button[data-e="${k}"]`).click(); H.step(60);
-    const fpo = M.MART.eat?.fp, fpIn = !!fpo?.parent, fpD = fpIn ? +fpo.position.distanceTo(D.dcam.getWorldPosition(new T.Vector3())).toFixed(2) : null;
+    // 第 90 批：第一人稱也畫自己（頭藏起來）：看真的手上的東西在不在畫面裡、離鏡頭多遠
+    const fm = C.hand.children.find((o) => o.name === 'mart-food'), eyeM = (seat ? M.SCAM.mode : D.walker.cameraMode) === 'eye'; let fpIn = false, fpD = null;
+    if (fm && eyeM && C.group.visible && C.fpOn) { const cw = D.dcam.getWorldPosition(new T.Vector3()), v = fm.getWorldPosition(new T.Vector3()); fpD = +v.distanceTo(cw).toFixed(2); D.dcam.updateMatrixWorld(); v.project(D.dcam); fpIn = Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && Math.abs(v.z) < 1 && !M.MART.eat?.fp?.parent; }
     const h1 = hp(), mid = { eating: C.eating, k: M.MART.eat?.k, food: C.hand.children.some((o) => o.name === 'mart-food'), up: +(h1.y - h0.y).toFixed(2), sp: seat ? 0 : +D.walker.telemetry().speed.toFixed(2), n: M.MART.bag.filter((q) => q === k).length, fp: fpIn, fpD, eye: seat ? M.SCAM.mode : D.walker.cameraMode };
     return { v0: +v0.toFixed(2), mid, n0 }; }, [k, seat]);
   const eatEnd = (seat) => L((seat) => { const H = window.__H, M = window.__MT(), D = window.__D(), C = seat ? M.MYSIT.C : D.walker.character; H.step(75);
@@ -420,7 +422,7 @@ if (FULL) {
   const e3b = await eatEnd(true);
   console.log('  eat seated', JSON.stringify(e3), JSON.stringify(e3b));
   check(e3.mid.eating && e3.mid.food && e3.mid.up > 0.2 && e3.mid.n === e3.n0 - 1 && e3b.toast === '😋 好吃！茶葉蛋' && !e3b.food, `ate a tea egg sitting in the car (hand up ${e3.mid.up} m): 「${e3b.toast}」`);
-  check(e3.mid.eye === 'eye' && e3.mid.fp && e3.mid.fpD > 0.15 && e3.mid.fpD < 0.5 && e1.mid.eye === 'follow' && !e1.mid.fp, `first person in the seat: the egg is held up in front of the camera (${e3.mid.fpD} m away); the walking camera from behind shows the hand instead`);
+  check(e3.mid.eye === 'eye' && e3.mid.fp && e3.mid.fpD > 0.15 && e3.mid.fpD < 0.5 && e1.mid.eye === 'follow' && !e1.mid.fp, `first person in the seat: your own hand holds the egg up in front of the camera, on screen (${e3.mid.fpD} m away); the walking camera from behind shows the hand instead`);
   // 開車的時候不能吃（袋子收起來）
   const d6 = await L(() => { const H = window.__H, M = window.__MT(), D = window.__D(), W = D.walker; document.querySelector('#stage .ps-out').click();
     let n = 0; for (; n < 600 && W.mode !== 'walk'; n++) H.step(1); H.step(30);

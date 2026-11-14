@@ -372,6 +372,7 @@ body.fs #stage .gn, body.fs #stage .pw { inset: var(--fs-t) var(--fs-r) var(--fs
   #stage .gn-rel { right: 186px; bottom: 8px; }
   body.fs #stage .gn-pill { top: 142px; right: 166px; }
   body:not(.fs) #stage .gn-fire, body:not(.fs) #stage .wk-btns { right: 142px; bottom: 10px; }
+  body:not(.fs) #stage .wk-btns { flex-direction: row; } /* 第 90 批：「跳」「揍」排一排（畫面矮，疊起來會碰到全螢幕鈕） */
   body:not(.fs) #stage .gn-aim { right: 240px; bottom: 10px; }
   body:not(.fs) #stage .gn-rel { right: 314px; bottom: 10px; }
   body:not(.fs) #stage .gn-pill { top: auto; right: 374px; bottom: 10px; margin-top: 0; }

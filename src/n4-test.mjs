@@ -1,7 +1,7 @@
 // 第 62 批（Nick 2026-11-02 卡片「只做街車」）：N4 街車＝騎的直四街車（一般的路車：阿財車行賣、不輾東西；兩個輪子；轉彎往裡面倒）
 //   車庫頁：N4 是你的車、沒有車內（騎的）、兩個輪子（motoBuild 的，前輪在手把那組）、「車內」＝騎的人的眼睛 → 阿財車行有賣（還沒買的時候）
 //   → 出門騎上 N4：你的人坐在上面（戴安全帽、手握把手、腳踩腳踏板）→ 開鐵捲門、右轉開上斜坡到 3 樓（轉彎往裡面倒）→ 坐電梯去 B1、往前開進格子、下車 → 上車、回 1 樓、開出鐵捲門
-//   → 快速道路油門踩到底（極速 240）→ 轉彎往彎裡面倒（停下來就正的）→ 手把跟著轉、手跟著把手 → 第一人稱（騎的人不畫、沒有後照鏡）→ 輕量車只有兩個輪子 → draw calls
+//   → 快速道路油門踩到底（極速 240）→ 轉彎往彎裡面倒（停下來就正的）→ 手把跟著轉、手跟著把手 → 第一人稱（沒有後照鏡；第 90 批起騎的人照畫、頭藏起來，看得到手握把手）→ 輕量車只有兩個輪子 → draw calls
 // 開車、走路都不是真的即時：頁面自己的開車先停住（__hold）、不畫（__noDraw），測試在頁面裡一步一步開，要截圖才畫
 // node n4-test.mjs [prefix]（截圖：<prefix>-*.png；沒給＝../out/n4/n4）
 import http from 'node:http';
@@ -302,10 +302,18 @@ check(bars.s1.R[0] < bars.s0.R[0] - 0.08 && bars.s1.L[0] > bars.s0.L[0] + 0.08 &
 await p.evaluate(() => { const d = window.__D().drv; d.setInput({ throttle: 0, brake: 0, steer: 1, handbrake: 1 }); window.__dstep(40); });
 const riTurn = await shot('5-turn');
 await p.evaluate(() => { const d = window.__D().drv; d.setInput(null); window.__dstep(40); d.setCameraMode('eye'); window.__dstep(2); });
-const eye = await p.evaluate(() => { const D = window.__D(), c = D.dcam.position.clone(), e = c.clone().set(...D.dEye.eye); D.tripS.body.updateWorldMatrix(true, false); D.tripS.body.localToWorld(e); return { d: +c.distanceTo(e).toFixed(3), riderVis: D.RIDER.C.group.visible, mir: D.MIR.list.length, mirOn: D.MIR.on }; });
+const eye = await p.evaluate(() => { const D = window.__D(), C = D.RIDER.C, c = D.dcam.position.clone(), e = c.clone().set(...D.dEye.eye); D.tripS.body.updateWorldMatrix(true, false); D.tripS.body.localToWorld(e);
+  // 第 90 批：第一人稱也畫騎的人（頭縮到看不見），兩隻手握把手在畫面裡
+  D.dcam.updateMatrixWorld(); const ndc = (o) => { const v = c.clone(); o.updateWorldMatrix(true, false); o.getWorldPosition(v); v.project(D.dcam); return [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(3)]; };
+  const hd = C.skeleton.getBoneByName('head'), hv = c.clone(); hd.updateWorldMatrix(true, false); hd.getWorldScale(hv);
+  return { d: +c.distanceTo(e).toFixed(3), riderVis: C.group.visible && !!C.group.parent, fp: !!C.fpOn, head: +hv.x.toExponential(1), R: ndc(C.hand), L: ndc(C.handL), mir: D.MIR.list.length, mirOn: D.MIR.on }; });
+console.log('  eye:', JSON.stringify(eye));
+const onScr = (v) => Math.abs(v[0]) < 1 && Math.abs(v[1]) < 1 && v[2] > -1 && v[2] < 1;
 const riEye = await shot('5-eye');
-check(eye.d < 0.05 && !eye.riderVis && eye.mir === 0, `first person: the camera sits at the rider's eyes (${eye.d} m), the rider is not drawn (no head in the way), no mirrors to draw (${eye.mir})`);
-await p.evaluate(() => { window.__D().drv.setCameraMode('chase'); window.__dstep(2); });
+check(eye.d < 0.05 && eye.mir === 0, `first person: the camera sits at the rider's eyes (${eye.d} m), no mirrors to draw (${eye.mir})`);
+check(eye.riderVis && eye.fp && eye.head < 0.01 && onScr(eye.R) && onScr(eye.L), `first person shows your own hands on the grips (right ${eye.R.slice(0, 2)}, left ${eye.L.slice(0, 2)} on screen); the head is shrunk away (scale ${eye.head}) so it is not in the way`);
+const back = await p.evaluate(() => { window.__D().drv.setCameraMode('chase'); window.__dstep(2); const C = window.__D().RIDER.C, v = C.group.position.clone(); const hd = C.skeleton.getBoneByName('head'); hd.updateWorldMatrix(true, false); hd.getWorldScale(v); return { fp: !!C.fpOn, head: +v.x.toFixed(3), vis: C.group.visible }; });
+check(!back.fp && back.head > 0.99 && back.vis, `back to the chase camera: the rider has a head again (scale ${back.head})`);
 const chase = await p.evaluate(() => window.__D().RIDER.C.group.visible);
 check(chase, 'back to the chase camera: you are on the bike again');
 await p.evaluate(() => window.__stop(120));

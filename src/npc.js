@@ -1449,6 +1449,52 @@ function createPedestrians(o = {}) {
     if (!PROP_MAT) PROP_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 });
     if (W.props.geo) { propMesh = new THREE.Mesh(W.props.geo, PROP_MAT); propMesh.name = 'npc-props'; propMesh.matrixAutoUpdate = false; scene.add(propMesh); }
   }
+  // ---- 第 90 批（Nick「房子裡的人會進出」）：路上的人走進（走出）別人家：門打開、走進去（走出來）、門再關 ----
+  //   村子的透天厝（V.buildings 的 dw：大門 1.6 公尺兩片、鐵捲門旁邊的小門 1.3 公尺一片）：門口一片暗暗的（門洞）＋門片往外打開；店面（dw −1）整面開著：直接走進去
+  //   你附近（DF_R 公尺內）才開門（池子 DF_N 扇；滿了、太遠＝照以前：走到門口就不見）；蓋好的那一棟（HOME：folks.js 自己開門）不用
+  //   兩個 InstancedMesh（門洞、門片）＝有門開著才多 2 個 draw call
+  const DF_N = 6, DF_R = 70, DF_T = 0.55, DF_H = 2.5;
+  const DF = []; for (let i = 0; i < DF_N; i++) DF.push({ d: null, g: null, t: 0, hold: 0 });
+  let dfQ = null, dfL = null;
+  const DFM = new THREE.Matrix4(), DFP = new THREE.Vector3(), DFS = new THREE.Vector3(), DFQ = new THREE.Quaternion(), DFY = new THREE.Vector3(0, 1, 0);
+  if (scene) {
+    const qg = new THREE.PlaneGeometry(1, 1); qg.translate(0, 0.5, 0);
+    dfQ = new THREE.InstancedMesh(qg, new THREE.MeshBasicMaterial({ color: 0x1b1713, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), DF_N);
+    const lg = new THREE.BoxGeometry(1, 1, 1); lg.translate(0.5, 0.5, -0.5);
+    dfL = new THREE.InstancedMesh(lg, new THREE.MeshStandardMaterial({ color: 0x6b5847, roughness: 0.55, metalness: 0.25 }), DF_N * 2);
+    for (const m of [dfQ, dfL]) { m.name = m === dfQ ? 'npc-doorway' : 'npc-door'; m.count = 0; m.visible = false; m.frustumCulled = false; scene.add(m); }
+  }
+  function dfGeo(d) { // 這扇門（牆上門的中間、朝外、寬）；沒有門可以開的＝null
+    if (d.dg !== undefined) return d.dg;
+    const b = d.b, w = b.dw || 0; let g = null;
+    if ((b.kind === 'house' || b.kind === 'shop') && w !== 0) { const [fx, fz] = facingOf(b); g = { cx: b.door.x - fx * 0.6, cz: b.door.z - fz * 0.6, y: b.y || 0, fx, fz, w, open: w < 0 }; }
+    d.dg = g; return g;
+  }
+  function dfOpen(d, hold) { // 門打開（hold 秒內不關）→ 開了幾成（0～1）；−1＝這扇門不做（太遠、池子滿了）
+    const g = dfGeo(d); if (!g) return -1; if (g.open) return 1;
+    let f = null; for (const q of DF) if (q.d === d) { f = q; break; }
+    if (!f) { if (!dfQ || hyp(g.cx - LFX, g.cz - LFZ) > DF_R) return -1; for (const q of DF) if (!q.d) { f = q; break; } if (!f) return -1; f.d = d; f.g = g; f.t = 0; st.doorOpens = (st.doorOpens || 0) + 1; }
+    f.hold = Math.max(f.hold, hold); return f.t;
+  }
+  function dfStep(dt) {
+    if (!dfQ) return;
+    let nq = 0, nl = 0;
+    for (const f of DF) {
+      if (!f.d) continue;
+      f.hold -= dt; f.t = clamp(f.t + (f.hold > 0 ? dt : -dt) / DF_T, 0, 1);
+      if (f.t <= 0 && f.hold <= 0) { f.d = null; f.g = null; continue; }
+      const g = f.g, ex = g.fz, ez = -g.fx, e = f.t * f.t * (3 - 2 * f.t), a = 1.35 * e, two = g.w > 1.45, lw = two ? g.w / 2 : g.w;
+      DFQ.setFromAxisAngle(DFY, Math.atan2(g.fx, g.fz)); DFP.set(g.cx + g.fx * 0.035, g.y + 0.1, g.cz + g.fz * 0.035); DFS.set(g.w - 0.04, DF_H - 0.05, 1);
+      dfQ.setMatrixAt(nq++, DFM.compose(DFP, DFQ, DFS));
+      for (let k = two ? 0 : 1; k < 2; k++) { // k 0：左邊的門片（鉸鏈在左邊）、1：右邊
+        const sd = k ? -1 : 1, dx = Math.cos(a) * ex * sd + Math.sin(a) * g.fx, dz = Math.cos(a) * ez * sd + Math.sin(a) * g.fz;
+        DFQ.setFromAxisAngle(DFY, Math.atan2(-dz, dx)); DFP.set(g.cx - ex * sd * g.w / 2 + g.fx * 0.04, g.y + 0.1, g.cz - ez * sd * g.w / 2 + g.fz * 0.04); DFS.set(lw - 0.02, DF_H - 0.05, 0.045);
+        dfL.setMatrixAt(nl++, DFM.compose(DFP, DFQ, DFS));
+      }
+    }
+    dfQ.count = nq; dfL.count = nl; dfQ.visible = nq > 0; dfL.visible = nl > 0;
+    if (nq) { dfQ.instanceMatrix.needsUpdate = true; dfL.instanceMatrix.needsUpdate = true; }
+  }
   const st = { spawned: 0, despawned: 0, entered: 0, knocks: 0, shoves: 0, aiShoves: 0, dodges: 0, dives: 0, crossings: 0, waitMax: 0, sits: 0, talks: 0, stuckGone: 0, noRoute: 0, ms: 0, maxMs: 0, frames: 0, active: 0, built: 0 };
 
   // ---- 一個人（池子裡重複用）----
@@ -1456,7 +1502,7 @@ function createPedestrians(o = {}) {
   for (let i = 0; i < max; i++) P.push({ id: i, active: false, gone: false, ch: null, age: 'adult', x: -0, z: -0, y: -0, r: 0.3, heading: -0, hd: -0, v: -0, baseV: 1.3, run: false,
     mode: 'idle', state: 'idle', sent: '', timer: -0, t2: -0, route: new Int32Array(RMAX), rdir: new Int8Array(RMAX), cum: new Float64Array(RMAX + 1), rn: 0, ri: 0, s: -0, lim: 0, goal: -1, gk: '',
     animal: '', lat: -0, latT: -0, latHold: -0, vx: -0, vz: -0, vy: -0, mx: -0, mz: -0, seat: null, door: null, partner: null, talkCool: -0, hitCool: -0, react: 0.35, freeze: -0, from: null, tx: -0, tz: -0, te: -1, ts: -0,
-    fx: -0, fz: -0, lookT: -0, waitT: -0, clearT: -0, stuck: -0, lastD: -0, prog: -0, far: -0, animAcc: -0, animT: -0, knockBy: null, dive: 0 }); // dive：第 9 批（撲開越野車） // 小數欄位用 -0 開始（見 createTraffic）
+    fx: -0, fz: -0, lookT: -0, waitT: -0, clearT: -0, stuck: -0, lastD: -0, prog: -0, far: -0, animAcc: -0, animT: -0, knockBy: null, dive: 0, xd: null, dAsk: false, waitDoor: false }); // dive：第 9 批（撲開越野車） // 小數欄位用 -0 開始（見 createTraffic）
   const T = pt(), T2 = pt();
   const CARS = [], NONE2 = [], ARG = { speed: 0, state: 'idle' };
 
@@ -1584,7 +1630,7 @@ function createPedestrians(o = {}) {
   function activate(p, ch, x, z, heading) {
     const look = ch.look || {}, an = ch.animal || '';
     Object.assign(p, { active: true, gone: false, ch, age: look.age || 'adult', animal: an, x, z, y: 0, heading, hd: heading, v: 0, r: Math.max(0.24, Math.min(an ? 0.45 : 0.34, ch.radius || 0.3)), lat: 0, latT: 0, latHold: 0,
-      seat: null, door: null, partner: null, talkCool: 5 + R() * 20, hitCool: 0, react: 0.25 + R() * 0.3, freeze: 0, knockBy: null, dive: 0, sent: '', timer: 0, rn: 0, ri: 0, s: 0, lim: 0, stuck: 0, lookT: 0, waitT: 0, clearT: 0, vy: 0, vx: 0, vz: 0, mx: 0, mz: 0, animAcc: 0 });
+      seat: null, door: null, xd: null, dAsk: false, waitDoor: false, partner: null, talkCool: 5 + R() * 20, hitCool: 0, react: 0.25 + R() * 0.3, freeze: 0, knockBy: null, dive: 0, sent: '', timer: 0, rn: 0, ri: 0, s: 0, lim: 0, stuck: 0, lookT: 0, waitT: 0, clearT: 0, vy: 0, vx: 0, vz: 0, mx: 0, mz: 0, animAcc: 0 });
     p.baseV = an ? (an === 'cham' ? 0.78 : an === 'pig' ? 0.72 : 0.68) + R() * 0.16 : p.age === 'kid' ? 1.45 + R() * 0.25 : p.age === 'elder' ? 0.82 + R() * 0.2 : 1.2 + R() * 0.3; // 第 86 批：動物小小的，走慢一點
     if (p.age === 'elder') p.react += 0.25;
     ch.group.visible = true; ch.group.position.set(x, 0, z); ch.group.rotation.set(0, heading, 0);
@@ -1594,7 +1640,7 @@ function createPedestrians(o = {}) {
     if (!p.active) return;
     if (p.seat && p.seat.by === p.id) p.seat.by = -1;
     if (p.partner && p.partner.partner === p) { p.partner.partner = null; if (p.partner.mode === 'talk') p.partner.timer = Math.min(p.partner.timer, 0.5); }
-    p.active = false; p.gone = true; p.seat = null; p.partner = null;
+    p.active = false; p.gone = true; p.seat = null; p.partner = null; p.xd = null;
     const i = people.indexOf(p); if (i >= 0) people.splice(i, 1);
     if (p.ch) { p.ch.group.visible = false; p.ch.update(0.01, { speed: 0, state: 'idle' }); chFree.push(p.ch); p.ch = null; }
     st.despawned++;
@@ -1638,9 +1684,12 @@ function createPedestrians(o = {}) {
       if (dd > radius * 0.85 || dd < 8) continue;
       let busy = false; for (const q of people) if (Math.abs(q.x - d.x) + Math.abs(q.z - d.z) < 2.5) { busy = true; break; } if (busy) continue;
       const ch = takeChar(); if (!ch) return false;
-      activate(p, ch, d.hx, d.hz, headOf(d.fx, d.fz));
+      const g = d === HOME ? null : dfGeo(d), inside = g && (g.open || hyp(g.cx - fx, g.cz - fz) < DF_R); // 第 90 批：門打開、從屋子裡走出來
+      if (inside) activate(p, ch, g.cx - g.fx * 0.55, g.cz - g.fz * 0.55, headOf(d.fx, d.fz)); else activate(p, ch, d.hx, d.hz, headOf(d.fx, d.fz));
       const e = EDGES[NODES[d.node].e[0]];
       if (!newGoal(p, e.id, e.a === d.node ? 0 : e.len) || p.goal === d.node) { release(p); continue; }
+      if (inside && dfOpen(d, 1.5) >= 0) { p.mode = 'exit'; p.xd = d; p.timer = 0; p.waitDoor = true; p.run = false; st.walkedOut = (st.walkedOut || 0) + 1; return true; }
+      if (inside) { p.x = d.hx; p.z = d.hz; }
       setWalk(p); p.run = false; return true;
     }
     return false;
@@ -1658,18 +1707,31 @@ function createPedestrians(o = {}) {
   }
   function setHome(b) { HOME = b ? W.doors.find((d) => d.b === b) || null : null; return !!HOME; }
   function spawnHome(look, back = 6) { // 第 70 批（測試用）：在你開了門的那一家門口的路上 back 公尺生一個人，走去敲門（跟 newGoal 挑到 HOME 一樣）
-    if (!HOME) return false; const p = freeOrFar(HOME.x, HOME.z, 'spawnHome'); if (!p) return false;
-    // 從附近（back～back+25 公尺）別家的門口出發，走到你開了門的這一家（跟 newGoal 挑到 HOME 一樣）
-    const cp = W.comp[HOME.node], ds = W.doors.filter((d) => d !== HOME && W.comp[d.node] === cp && hyp(d.x - HOME.x, d.z - HOME.z) > back && hyp(d.x - HOME.x, d.z - HOME.z) < back + 25).sort((a, c) => hyp(a.x - HOME.x, a.z - HOME.z) - hyp(c.x - HOME.x, c.z - HOME.z));
-    const b0 = budget; budget = Math.max(budget, 1); const ch = takeChar('h'); budget = b0; if (!ch) { st.lastFail = 'spawnHome:no character'; return false; }
+    return HOME ? spawnTo(HOME, look, back, 'spawnHome') : false;
+  }
+  function spawnTo(T0, look, back = 6, why = 'spawnTo') { // 第 90 批：通用（測試用）：在 T0 這扇門附近的路上生一個人，走去那一家
+    const p = freeOrFar(T0.x, T0.z, why); if (!p) return false;
+    // 從附近（back～back+25 公尺）別家的門口出發，走到這一家（跟 newGoal 挑到它一樣）
+    const cp = W.comp[T0.node], ds = W.doors.filter((d) => d !== T0 && W.comp[d.node] === cp && hyp(d.x - T0.x, d.z - T0.z) > back && hyp(d.x - T0.x, d.z - T0.z) < back + 25).sort((a, c) => hyp(a.x - T0.x, a.z - T0.z) - hyp(c.x - T0.x, c.z - T0.z));
+    const b0 = budget; budget = Math.max(budget, 1); const ch = takeChar('h'); budget = b0; if (!ch) { st.lastFail = why + ':no character'; return false; }
     if (look) { try { ch.setLook(look); } catch (err) { console.error(err); } }
     for (const d of ds) {
       const e = EDGES[NODES[d.node].e[0]];
       activate(p, ch, d.hx, d.hz, headOf(d.fx, d.fz));
-      if (!plan(p, e.id, e.a === d.node ? 0 : e.len, HOME.node)) continue;
-      p.gk = 'door'; p.door = HOME; setWalk(p); p.run = false; return p;
+      if (!plan(p, e.id, e.a === d.node ? 0 : e.len, T0.node)) continue;
+      p.gk = 'door'; p.door = T0; setWalk(p); p.run = false; return p;
     }
-    release(p); st.lastFail = 'spawnHome:no plan (' + ds.length + ' doors)'; return false;
+    release(p); st.lastFail = why + ':no plan (' + ds.length + ' doors)'; return false;
+  }
+  const doorOf = (b) => W.doors.find((d) => d.b === b) || null;
+  function spawnOut(b) { // 第 90 批（測試用）：b 這一家有人開門走出來
+    const d = doorOf(b), g = d && dfGeo(d); if (!g) return false;
+    const p = freeOrFar(d.x, d.z, 'spawnOut'); if (!p) return false;
+    const b0 = budget; budget = Math.max(budget, 1); const ch = takeChar('h'); budget = b0; if (!ch) { st.lastFail = 'spawnOut:no character'; return false; }
+    activate(p, ch, g.cx - g.fx * 0.55, g.cz - g.fz * 0.55, headOf(d.fx, d.fz));
+    const e = EDGES[NODES[d.node].e[0]];
+    for (let k = 0; k < 3; k++) if (newGoal(p, e.id, e.a === d.node ? 0 : e.len) && p.goal !== d.node) { dfOpen(d, 1.5); p.mode = 'exit'; p.xd = d; p.timer = 0; p.waitDoor = true; p.run = false; return p; }
+    release(p); st.lastFail = 'spawnOut:no goal'; return false;
   }
   function spawnSeat(fx, fz, fh, initial) {
     const p = free(); if (!p) return false;
@@ -1886,7 +1948,16 @@ function createPedestrians(o = {}) {
   function stepPerson(p, h) {
     p.talkCool -= h; p.hitCool -= h; p.mx = 0; p.mz = 0; // mx、mz：這一步的速度（車子用來預測）
     switch (p.mode) {
-      case 'walk': walkStep(p, h); if (HOME && p.door === HOME && p.gk === 'door' && onEnter && !p.animal && hyp(p.x - HOME.hx, p.z - HOME.hz) < 4) onEnter(p, HOME, true); break; // 第 70 批：快到你開了門的這一家：門先開（onEnter near）
+      case 'walk': walkStep(p, h); if (HOME && p.door === HOME && p.gk === 'door' && onEnter && !p.animal && hyp(p.x - HOME.hx, p.z - HOME.hz) < 4) onEnter(p, HOME, true); // 第 70 批：快到你開了門的這一家：門先開（onEnter near）
+        else if (p.gk === 'door' && p.door && p.door !== HOME && p.active && hyp(p.x - p.door.x, p.z - p.door.z) < 3.2) dfOpen(p.door, 2.5); // 第 90 批：快到門口：門先開
+        break;
+      case 'exit': { // 第 90 批：門開了才從屋子裡走出來，走到門口外面接上路
+        const d = p.xd, o = d ? dfOpen(d, 1.2) : 1;
+        if (o >= 0 && o < 0.7 && (p.timer += h) < 3) { p.v = 0; p.waitDoor = true; break; }
+        p.waitDoor = false;
+        if (!d || moveToward(p, d.x, d.z, p.baseV * 0.8, h) < 0.05 || (p.timer += h) > 6) { p.xd = null; setWalk(p); p.run = false; }
+        break;
+      }
       case 'wait': { // 路邊：左右看、等空檔
         p.waitT += h; p.lookT += h; st.waitMax = Math.max(st.waitMax, p.waitT);
         { const dx = p.tx - p.x, dz = p.tz - p.z; if (dx * dx + dz * dz > 0.0025) { moveToward(p, p.tx, p.tz, p.baseV * 0.7, h); pushOut(p, false); } } // 走到排隊的位置
@@ -1903,6 +1974,14 @@ function createPedestrians(o = {}) {
         if (r === true) { st.entered++; st.handed = (st.handed || 0) + 1; release(p); break; }
         if (r === 'wait') { p.v = 0; p.waitDoor = true; if ((p.timer += h * 0.25) > 4) { st.entered++; release(p); } break; }
         p.waitDoor = false;
+        { // 第 90 批：別人家的門打開、走進去（門洞後面就看不到了）
+          const g = d !== HOME ? dfGeo(d) : null, o = g ? dfOpen(d, 1.4) : -1;
+          if (o >= 0) {
+            if (o < 0.7) { p.v = 0; p.waitDoor = true; if ((p.timer += h) > 3) { st.entered++; release(p); } break; }
+            if (moveToward(p, g.cx - g.fx * 0.75, g.cz - g.fz * 0.75, p.baseV * 0.8, h) < 0.05 || (p.timer += h) > 7) { st.entered++; st.walkedIn = (st.walkedIn || 0) + 1; release(p); }
+            break;
+          }
+        }
         if (moveToward(p, d.hx, d.hz, p.baseV * 0.8, h) < 0.05 || (p.timer += h) > 4) { st.entered++; release(p); } else pushOut(p, false); break;
       }
       case 'sitdown': { // 轉身、往後坐下
@@ -1938,7 +2017,7 @@ function createPedestrians(o = {}) {
       }
       case 'lie': p.v = 0; if ((p.timer -= h) <= 0) { p.mode = 'getup'; p.timer = 1.25; } break;
       case 'getup': p.v = 0; if ((p.timer -= h) <= 0) { if (p.dive) fleeFrom(p, p.from); else angry(p, p.knockBy); } break; // 第 9 批：撲開的爬起來跑掉
-      case 'angry': { // 對車子揮手（生氣）
+      case 'angry': { // 轉過去看著車子（生氣；第 90 批起人不揮手、動物跺腳）
         p.v = 0; const c = p.from; if (c) p.hd = Math.atan2(-(c.z - p.z), c.x - p.x);
         if ((p.timer -= h) <= 0) { p.from = null; if (!reattach(p)) p.stuck += 5; }
         break;
@@ -2137,12 +2216,13 @@ function createPedestrians(o = {}) {
         case 'standup': s = p.timer < 0.35 ? 'sit' : 'idle'; break;
         case 'fall': case 'lie': s = 'fall'; break;
         case 'getup': s = 'getup'; break;
-        case 'angry': s = 'wave'; break;
-        case 'enter': s = 'walk'; break;
+        case 'angry': s = p.animal ? 'wave' : 'idle'; break; // 第 90 批（Nick「路人不要招手」）：人只轉過去看著車子，不揮手；動物照舊跺腳
+        case 'enter': case 'exit': s = p.waitDoor ? 'idle' : 'walk'; break; // 第 90 批：門還沒開：站著等
       }
-      send(p, s, p.mode === 'enter' ? (p.waitDoor ? 0 : p.baseV * 0.8) : p.mode === 'wait' ? hyp(p.mx, p.mz) : p.v, adt);
+      send(p, s, p.mode === 'enter' || p.mode === 'exit' ? (p.waitDoor ? 0 : p.baseV * 0.8) : p.mode === 'wait' ? hyp(p.mx, p.mz) : p.v, adt);
     }
     if (SH.length) shoutTick(dt); // 第 9 批：「哇！」
+    dfStep(dt); // 第 90 批：別人家的門
     const ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     st.ms += ms; st.maxMs = Math.max(st.maxMs, ms); st.frames++; st.active = people.length;
   }
@@ -2165,9 +2245,12 @@ function createPedestrians(o = {}) {
     for (const ch of chFree) ch.dispose();
     chFree.length = 0;
     if (propMesh) { propMesh.removeFromParent(); propMesh = null; }
+    for (const m of [dfQ, dfL]) if (m) { m.removeFromParent(); m.geometry.dispose(); m.material.dispose(); m.dispose(); } dfQ = dfL = null; // 第 90 批
     for (const q of SH) { q.m.removeFromParent(); q.m.material.dispose(); } SH.length = 0; if (shTex) { shTex.dispose(); shTex = null; }
   }
-  return { update, people, colliders, scare, knock, bail, nearest, prewarm, dispose, spawnAt, setHome, spawnHome, get home() { return HOME; }, graph: W, props: { colliders: W.props.colliders, seats: W.props.seats }, stats: st, get time() { return TM[0]; } };
+  return { update, people, colliders, scare, knock, bail, nearest, prewarm, dispose, spawnAt, setHome, spawnHome, spawnOut, spawnIn: (b, look, back) => { const d = doorOf(b); return d ? spawnTo(d, look, back, 'spawnIn') : false; }, // 第 90 批：spawnOut／spawnIn（測試用）：b 這一家有人開門走出來／有人走過去開門進去
+    doorFx: { get open() { return DF.filter((f) => f.d).map((f) => ({ x: +f.g.cx.toFixed(2), z: +f.g.cz.toFixed(2), w: f.g.w, t: +f.t.toFixed(2) })); }, get draws() { return (dfQ?.visible ? 1 : 0) + (dfL?.visible ? 1 : 0); } },
+    get home() { return HOME; }, graph: W, props: { colliders: W.props.colliders, seats: W.props.seats }, stats: st, get time() { return TM[0]; } };
 }
 
 return { createTraffic, createPedestrians, npcGraphs };

@@ -141,7 +141,8 @@ function martEatStep(dt) {
   if (!DRIVE.on || (E.sit ? !martSeated() || E.C !== MYSIT.C : walker.mode !== 'walk' || walker.character !== E.C)) { martEatEnd(false); return; } // 上車開走、回車庫⋯：吃完了算了
   if (E.sit && MYSIT.S) E.C.update(dt, MYSIT.P); // 坐著的人平常不動：吃的時候每一格動
   // 第一人稱（自己看不到自己）：吃的東西從畫面下面拿上來到嘴巴前面（鏡頭這一格已經放好：seatsStep、walker 都在前面）
-  const fp = E.sit ? SCAM.on && SCAM.mode === 'eye' : walker.cameraMode === 'eye';
+  //   第 90 批起第一人稱也畫自己（頭藏起來、C.fpOn）：真的手拿著東西舉到嘴巴前面（character.js eatArm），不用另外放一份
+  const fp = (E.sit ? SCAM.on && SCAM.mode === 'eye' : walker.cameraMode === 'eye') && !(E.C.fpOn && E.C.group.visible);
   if (fp && dcam) {
     if (!E.fp) { E.fp = E.m.clone(); E.fp.name = 'mart-food-fp'; }
     if (E.fp.parent !== TR.scene) TR.scene.add(E.fp);

@@ -1,4 +1,5 @@
 // 第 70 批：房子裡的人會動、會進出（folks.js、town.src.js LD.folks、npc.js spawnAt／onEnter）
+// 第 90 批：第 9 段：別的透天厝（沒蓋裡面的）路上的人走出來、走進去，門真的打開（npc.js dfOpen）
 // node folks-test.mjs [prefix]（前面的小工具跟 door-test.mjs 一樣）
 import http from 'node:http';
 import fs from 'node:fs';
@@ -376,6 +377,55 @@ const a8 = await L(() => { const D = window.__D(), X = window.__IN(), W = D.walk
   const X2 = window.__IN(); return { ...r, act, folks: X2.LD.folks, indoorFolks: X2.indoor?.folks.length, mov: H.inInfo().mov, home: !!window.__N().peds.home }; });
 console.log('8', el(), JSON.stringify(a8));
 check(!a8.none && a8.indoor && a8.kind === 'apt' && a8.folks === null && a8.indoorFolks === 0 && a8.mov === 0 && a8.home === false, `apartment: nobody inside (no folks object, no movers) and pedestrians are not sent to its door`);
+// ---- 9 第 90 批（Nick「房子裡的人會進出」）：別的透天厝（沒有蓋裡面的那幾棟）：路上的人走出來、走進去的時候門真的打開 ----
+//   你站在一間（門 1.6 公尺兩片）前面 9 公尺看著：有人開門走出來（門洞暗暗的、兩片門往外開）→ 走到門口外面接上路 → 門自己關；
+//   路上一個人走過來 → 快到門口門先開 → 走進去（過了牆就看不到）→ 門再關；開著的時候多 2 個 draw call、關了 0
+const d9 = await L(() => { const D = window.__D(), X = window.__IN(), W = D.walker, H = window.__H, N = window.__N();
+  { const L0 = X.LD; if (L0.b) { const e = X.interiorFor(L0.b).enter, nx = Math.sin(L0.b.rot), nz = Math.cos(L0.b.rot); W.teleport({ x: e.x + nx * 1.5, z: e.z + nz * 1.5, heading: 0 }); H.step(5); window.__L.walkOut(L0.b, 2.5); } }
+  const t = W.telemetry(), all = D.VIL.buildings.filter((q) => q.kind === 'house' && q.dw > 0);
+  const bs = all.filter((q) => q.dw > 1.45 && q !== X.LD.b && Math.hypot(q.door.x - t.x, q.door.z - t.z) > 12).sort((a, c) => Math.hypot(a.door.x - t.x, a.door.z - t.z) - Math.hypot(c.door.x - t.x, c.door.z - t.z));
+  const b = bs[0]; if (!b) return { none: true };
+  const fx = Math.sin(b.door.ry), fz = Math.cos(b.door.ry), sx = b.door.x + fx * 8.4, sz = b.door.z + fz * 8.4;
+  W.teleport({ x: sx, z: sz, heading: Math.atan2(fz, -fx) }); W.setCamera({ mode: 'follow', yaw: Math.atan2(fz, -fx), pitch: 0.12 }); H.step(30);
+  window.__b9 = b; window.__f9 = [fx, fz];
+  return { n: all.length, two: all.filter((q) => q.dw > 1.45).length, one: all.filter((q) => q.dw > 1 && q.dw < 1.45).length, shops: D.VIL.buildings.filter((q) => q.dw === -1).length, dw: b.dw, d: +Math.hypot(b.door.x - t.x, b.door.z - t.z).toFixed(1), fx0: N.peds.doorFx.open.length, draws0: N.peds.doorFx.draws }; });
+console.log('9', el(), JSON.stringify(d9));
+check(!d9.none && d9.n > 20 && d9.two > 5 && d9.one > 5 && d9.shops > 3 && d9.fx0 === 0 && d9.draws0 === 0, `village houses know their front door: ${d9.two} big doors (1.6 m, two leaves), ${d9.one} small doors next to a shutter (1.3 m), ${d9.shops} open shop fronts; nothing open yet (0 draw calls)`);
+const o9 = await L(() => { const D = window.__D(), H = window.__H, N = window.__N(), b = window.__b9, [fx, fz] = window.__f9;
+  const out = (p) => (p.x - (b.door.x - fx * 0.6)) * fx + (p.z - (b.door.z - fz * 0.6)) * fz; // 離牆多遠（外面＋）
+  const p = N.peds.spawnOut(b); if (!p) return { spawned: false, fail: N.peds.stats.lastFail }; window.__po9 = p;
+  const o0 = out(p), m0 = p.mode; let n = 0, tAtGo = -1, tMax = 0, draws = 0, modes = new Set(), shot = null;
+  for (; n < 60 * 8; n++) { H.step(1); modes.add(p.mode); const f = N.peds.doorFx.open[0]; const tt = f ? f.t : 0; tMax = Math.max(tMax, tt); draws = Math.max(draws, N.peds.doorFx.draws);
+    if (tAtGo < 0 && p.mode === 'exit' && !p.waitDoor) tAtGo = tt;
+    if (!shot && p.mode === 'exit' && !p.waitDoor && out(p) > -0.15) { shot = { o: +out(p).toFixed(2), t: tt }; break; } }
+  return { spawned: true, o0: +o0.toFixed(2), m0, tAtGo, shot, draws, s: +(n / 60).toFixed(2) }; });
+console.log('  out', JSON.stringify(o9));
+await drawAndShot('9-out');
+const o9b = await L(() => { const H = window.__H, N = window.__N(), b = window.__b9, [fx, fz] = window.__f9, p = window.__po9;
+  const out = (q) => (q.x - (b.door.x - fx * 0.6)) * fx + (q.z - (b.door.z - fz * 0.6)) * fz; let n = 0, walkAt = -1;
+  for (; n < 60 * 10; n++) { H.step(1); if (walkAt < 0 && p.mode === 'walk') walkAt = +out(p).toFixed(2); if (walkAt >= 0 && !N.peds.doorFx.open.length) break; }
+  return { mode: p.mode, gone: p.gone, walkAt, closedIn: +(n / 60).toFixed(1), open: N.peds.doorFx.open.length, draws: N.peds.doorFx.draws, outs: N.peds.stats.walkedOut || 0, opens: N.peds.stats.doorOpens || 0 }; });
+console.log('  out2', JSON.stringify(o9b));
+check(o9.spawned && o9.o0 < 0 && o9.m0 === 'exit' && o9.tAtGo >= 0.7 && o9.draws === 2 && o9.shot, `someone opens the door from inside (starts ${o9.o0} m behind the wall, waits until the door is ${Math.round(o9.tAtGo * 100)}% open) and walks out through the doorway; +2 draw calls while it is open`);
+check(o9b.walkAt > 0.4 && !o9b.gone && o9b.mode === 'walk' && o9b.open === 0 && o9b.draws === 0 && o9b.closedIn < 6, `outside (${o9b.walkAt} m from the wall) they walk on down the street; the door shuts by itself ${o9b.closedIn} s later (0 draw calls again)`);
+const i9 = await L(() => { const H = window.__H, N = window.__N(), K = window.__FK(), b = window.__b9, [fx, fz] = window.__f9;
+  const out = (q) => (q.x - (b.door.x - fx * 0.6)) * fx + (q.z - (b.door.z - fz * 0.6)) * fz;
+  const p = N.peds.spawnIn(b, K.randomLook(Math.random), 6); if (!p) return { spawned: false, fail: N.peds.stats.lastFail };
+  const in0 = N.peds.stats.walkedIn || 0; let n = 0, dOpen = -1, tAtWall = -1, minOut = 9, modes = new Set(), shot = false;
+  for (; n < 60 * 40; n++) { H.step(1); if (p.gone) break; modes.add(p.mode); const f = N.peds.doorFx.open[0], o = out(p);
+    if (dOpen < 0 && f) dOpen = +Math.hypot(p.x - (b.door.x - fx * 0.6), p.z - (b.door.z - fz * 0.6)).toFixed(2);
+    if (tAtWall < 0 && o < 0.05) tAtWall = f ? f.t : 0; minOut = Math.min(minOut, o);
+    if (!shot && p.mode === 'enter' && !p.waitDoor && o < 0.35) { shot = true; window.__shot9 = true; break; } }
+  window.__p9 = p; return { spawned: true, dOpen, s: +(n / 60).toFixed(1), modes: [...modes], in0 }; });
+console.log('  in', JSON.stringify(i9));
+await drawAndShot('9-in');
+const i9b = await L(() => { const H = window.__H, N = window.__N(), b = window.__b9, [fx, fz] = window.__f9, p = window.__p9;
+  const out = (q) => (q.x - (b.door.x - fx * 0.6)) * fx + (q.z - (b.door.z - fz * 0.6)) * fz; let n = 0, minOut = 9, tAtWall = -1, gone = false;
+  for (; n < 60 * 10; n++) { if (!p.gone) { const o = out(p), f = N.peds.doorFx.open[0]; if (tAtWall < 0 && o < 0.05) tAtWall = f ? f.t : 0; minOut = Math.min(minOut, o); } H.step(1); if (p.gone) gone = true; if (gone && !N.peds.doorFx.open.length) break; }
+  return { gone, minOut: +minOut.toFixed(2), tAtWall, walkedIn: N.peds.stats.walkedIn || 0, open: N.peds.doorFx.open.length, s: +(n / 60).toFixed(1) }; });
+console.log('  in2', JSON.stringify(i9b));
+check(i9.spawned && i9.dOpen > 1.2 && i9.dOpen < 4.2 && i9.modes.includes('walk') && i9.modes.includes('enter'), `someone walks up from down the street; the door opens before they reach it (${i9.dOpen} m away)`);
+check(i9b.gone && i9b.tAtWall >= 0.7 && i9b.minOut < -0.2 && i9b.walkedIn === i9.in0 + 1 && i9b.open === 0, `they walk in through the open doorway (past the wall: ${i9b.minOut} m) and are gone inside; the door shuts behind them (${i9b.s} s)`);
 // ---- 結果 ----
 console.log(`\n${fails.length ? 'FAILED ' + fails.length : 'ALL CHECKS OK'}; page errors: ${errs.length}`, el());
 for (const f of fails) console.log('  FAIL', f);

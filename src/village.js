@@ -37,7 +37,8 @@
 //   V.surfaceAt(x, z) → 0 大路（賽道、往賽道的路、往快速道路的路）、3 村子的小路、水泥地、4 快速道路、1 草地、2 稻田
 //   V.areas：{ paddy: [長方形], pave: [長方形] }（小地圖畫稻田用）
 //   V.parking：第 18 批的大停車場 { name, x, z, hx, hz, stalls（幾格）, lamps }（長方形、rot 0；整塊算路面）
-//   V.buildings：[{ kind: house | shop | temple | store | farmhouse | dealer | garage, name?, sign?, front?, up?, x, z, hx, hz, rot, h, floors?, door: { x, z, ry } }]
+//   V.buildings：[{ kind: house | shop | temple | store | farmhouse | dealer | garage, name?, sign?, front?, up?, x, z, hx, hz, rot, h, floors?, door: { x, z, ry }, dw? }]
+//     dw（第 90 批，透天厝、店面）：大門有多寬（1.6 大門、1.3 鐵捲門旁邊的小門、−1 店面整面開著、0 只有鐵捲門）：路上的人走進走出的時候開門（npc.js）
 //       透天厝一排的店：name＝橫招牌（阿嬤雜貨店、好吃牛肉麵、阿國機車行）；sign＝直立招牌的字（理髮、冰店、早餐、藥局、檳榔⋯：一樓做生意）；front＝一樓正面 shop | shutter | door；up＝二樓以上每層正面（'b' 陽台 | 'w' 鐵窗）
 //       房子的外框（長方形，跟碰撞一樣）；door＝大門外面一點、ry＝房子正面朝的方向（以後走進去、放居民用）
 //   V.highway：{ len, center: [[x, z], ...]（中線，一圈，從路口往北）, out / in: [[x, z], ...]（外圈往北、內圈往南那一邊的中間（離中線 5.05），照開的方向）,
@@ -1343,7 +1344,7 @@ function buildVillage(opts = {}) {
     if (o.scooter || rnd() < 0.22) scooter(...(() => { const p = T.p((rnd() - 0.5) * (w - 2), 0, 0.8); return [p[0], p[2], ry + (rnd() < 0.5 ? 0 : Math.PI), rnd]; })());
     const c = T.p(0, 0, -D / 2), dp = T.p(door, 0, 0.6); addBox(c[0], c[2], w / 2, D / 2, ry, H);
     const biz = kind === 'shop' ? { name: SHOP_NAMES[o.shop % 3] } : kind === 'shutter' && o.vsign != null && fl >= 3 ? { sign: VSIGN_TEXT[o.vsign] } : {}; // 店名（橫招牌）、直立招牌的字（一樓做生意）：走進去的時候照這個擺
-    buildings.push({ kind: kind === 'shop' ? 'shop' : 'house', ...biz, front: kind, x: c[0], z: c[2], hx: w / 2, hz: D / 2, rot: ry, h: H, floors: fl, up: ups, door: { x: dp[0], z: dp[2], ry }, ss: hutSS, roof: true, hut: hutR }); // door：大門外面一點（ry＝房子正面朝的方向）；front：一樓正面 shop 店面 | shutter 鐵捲門＋小門 | door 大門＋窗；up：二樓以上每層正面 b 陽台 | w 鐵窗
+    buildings.push({ kind: kind === 'shop' ? 'shop' : 'house', ...biz, front: kind, x: c[0], z: c[2], hx: w / 2, hz: D / 2, rot: ry, h: H, floors: fl, up: ups, door: { x: dp[0], z: dp[2], ry }, dw: kind === 'door' ? 1.6 : kind === 'shutter' && w >= 5 ? 1.3 : kind === 'shop' ? -1 : 0, ss: hutSS, roof: true, hut: hutR }); // door：大門外面一點（ry＝房子正面朝的方向）；front：一樓正面 shop 店面 | shutter 鐵捲門＋小門 | door 大門＋窗；up：二樓以上每層正面 b 陽台 | w 鐵窗
     if (hl) { hl.b = buildings[buildings.length - 1]; stHouses.push(hl); } // 第 3 批（hl.b：street.js 掛了招牌的，把店名寫進 V.buildings 那一筆的 name、streetSign）
     return H;
   };

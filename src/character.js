@@ -2261,10 +2261,18 @@ function toesIK(S, M) {
     putQ(S.Q, b.toe, 0, 0, clamp(Math.asin(clamp(-hb / Lt, -1, 1)) - p, 0, 1.1), 'ZXY');
   }
 }
+// 第 90 批（Nick「可以跳」）：在空中（tuck）兩隻腳收上來、手往前上舉；落地（crouch）骨盆往下蹲、身體往前彎一點（腳還踩著：膝蓋自己彎）
+function jumpBody(S, M, P) {
+  const t = S.tuck || 0, c = S.crouch || 0, s = M.s;
+  P[CI.hy] -= (0.13 * c + 0.03 * t) * s; P[CI.hp] += -0.12 * c - 0.05 * t; P[CI.sp] += -0.08 * c;
+  for (const o of SO) { P[o + X_SF] += 0.55 * t + 0.25 * c; P[o + X_EL] += 0.45 * t + 0.2 * c; P[o + X_SA] += 0.15 * t; }
+  S.tuckY = 0.24 * s * t;
+}
 function legsIK(S, M, run) {
   for (let k = 0; k < 2; k++) {
     const ft = S.feet[k], b = SIDE_B[k], sd = k ? 1 : -1;
     const yaw = footTarget(M, ft, run, V_A, Q_F);
+    if (S.tuckY) { V_A.y += S.tuckY; V_A.x += S.tuckY * 0.25; } // 第 90 批：跳起來：腳收上來（膝蓋彎、往前一點）
     // 膝蓋朝哪裡：跟著腳轉，但站好時腳尖往外的角度大部分在小腿、腳踝（大腿不要扭太多，屁股、褲子才不會穿過衣服）
     const ky = yaw + sd * (M.fem ? 0.1 : 0.14) * 0.7;
     V_POLE.set(Math.cos(ky), 0.08, -Math.sin(ky) + sd * 0.04);
@@ -2466,9 +2474,9 @@ function sitLegs(S, M) {
 // 第 84 批：吃東西（C.eat(sec)）：右手舉到嘴巴前面，中間一口一口（手往嘴巴靠一點）
 const eatK = (S) => (S.eatD > 0 ? sstep(0, 0.35, S.eatT) * (1 - sstep(S.eatD - 0.35, S.eatD, S.eatT)) : 0);
 function eatArm(S, M, w) {
-  const A = M.restAbs, hb = B.head * 3, bite = Math.max(0, Math.sin(TAU * 1.6 * S.eatT));
+  const A = M.restAbs, hb = B.head * 3, bite = Math.max(0, Math.sin(TAU * 1.6 * S.eatT)), fp = S.fpOn; // 第 90 批：第一人稱（頭藏起來、鏡頭在眼睛）：拿到嘴巴前面一點，畫面裡看得到
   boneWorld(M, S.Q, S.HP, B.head, WQ, WP);
-  V_F.set(M.headX + (0.15 - 0.035 * bite) * M.hs - A[hb], M.eyeY - 0.1 * M.hs - A[hb + 1], 0.035 * M.hs).applyQuaternion(WQ).add(WP);
+  V_F.set(M.headX + ((fp ? 0.34 : 0.15) - 0.035 * bite) * M.hs - A[hb], M.eyeY - (fp ? 0.15 : 0.1) * M.hs - A[hb + 1], (fp ? 0.06 : 0.035) * M.hs).applyQuaternion(WQ).add(WP);
   G1.copy(V_F); PL.set(-0.3, -1, 0.9);
   armSave(S, 1); handIK(S, M, 1, G1, QB_EAT, PL); armMix(S, 1, w);
 }
@@ -2478,6 +2486,19 @@ function backHands(S, M) { // 老人背著手走路
     const sd = k ? 1 : -1;
     G1.set(TT[0] - TT[3] - 0.048 * M.s, M.waistY + (k ? 0.012 : -0.012) * M.s, sd * 0.02 * M.s); PL.set(-0.3, -0.3, sd);
     handIK(S, M, k, G1, QB_BACK[k], PL);
+  }
+}
+// 第 90 批（Nick「第一人稱手要看的到」）：第一人稱走路的時候兩隻手舉在胸前（拳頭鬆鬆的、大拇指朝上），走路跟著步伐前後上下晃、跑步晃大一點
+const QB_FP = [basisQ([0.2, 0.96, 0.18], [-0.96, 0.2, 0], [-0.04, -0.18, 0.98]), basisQ([0.2, 0.96, -0.18], [-0.96, 0.2, 0], [0.04, 0.18, 0.98])];
+//   S.fpAt＝[往前, 高, 左右各]（角色座標、公尺）：走路的鏡頭照畫面算好的（walk.js fpHands：放在畫面下面兩邊）；沒給＝胸前
+function fpArmsIK(S, M, speed, run) {
+  const s = M.s, mv = sstep(0.1, 1.2, speed), amp = run ? 1.8 : 1, A = S.fpAt;
+  for (let k = 0; k < 2; k++) {
+    const sd = k ? 1 : -1, ph = TAU * (S.phase + (k ? 0 : 0.5)), dx = 0.035 * amp * mv * Math.cos(ph) * s, dy = 0.022 * amp * mv * Math.sin(ph) * s;
+    if (A) G1.set(A[0] + dx, A[1] + dy, sd * A[2]);
+    else G1.set(M.headX + 0.3 * s + dx, M.eyeY - 0.25 * s + dy, sd * 0.165 * s);
+    PL.set(-0.4, -1, sd * 0.5);
+    handIK(S, M, k, G1, QB_FP[k], PL);
   }
 }
 // ---- 看某個點（頭、脖子轉過去；轉不過去就不看）----
@@ -2560,6 +2581,8 @@ function animate(C, S, dt, o) {
   if (o.feet !== undefined) S.seatFeet = o.feet; // （S.feet 是走路的兩隻腳）
   if (o.leanMax !== undefined) S.leanMax = o.leanMax; // 'sit' 手搆不到最多往前傾幾弧度（預設 0.9）
   if (o.leanAdd !== undefined) S.leanAdd = o.leanAdd; // 'sit' 再多往前傾幾弧度（腳踏車：手才握得到低低的把手）
+  if (o.tuck !== undefined) S.tuck = +o.tuck || 0; if (o.crouch !== undefined) S.crouch = +o.crouch || 0; // 第 90 批：跳：在空中腳收起來（0～1）、落地蹲一下（0～1）
+  if (o.fp !== undefined) { S.fpArms = !!o.fp; S.fpAt = o.fpAt || null; } // 第 90 批：第一人稱走路：兩隻手舉起來（看得到）；fpAt＝放哪裡
   const want = o.state;
   if (want && want !== S.state && STATES[want]) request(C, S, want, o);
   S.t += dt; S.time += dt; S.rec += dt; if (S.eatD) { S.eatT += dt; if (S.eatT >= S.eatD) S.eatD = 0; }
@@ -2584,7 +2607,10 @@ function animate(C, S, dt, o) {
     else if (st === 'wave') waveBody(S, M, P, S.t);
     else if (st === 'punch') { punchBody(S, M, P, S.t); const w = punchW(S.t).on; for (const k of SO) { P[k + X_FI] = lerp(P[k + X_FI], 1.5, w); P[k + X_TH] = lerp(P[k + X_TH], 0.9, w); } }
     else if (st === 'aim' || st === 'shoot') { aimBody(S, M, P); P[SO[1] + X_FI] = 1.25; P[SO[1] + X_TH] = 0.5; if (S.weapon === 'long') { P[SO[0] + X_FI] = 0.7; P[SO[0] + X_TH] = 0.3; } }
-    const back = M.eld && S.handsBack && (st === 'idle' || (st === 'walk' && speed < 1.6));
+    S.tuckY = 0; if ((S.tuck || S.crouch) && (st === 'idle' || st === 'walk' || st === 'run')) jumpBody(S, M, P);
+    const fpA = S.fpArms && (st === 'idle' || st === 'walk' || st === 'run');
+    if (fpA) for (const k of SO) { if (k === SO[1] && eatW) continue; P[k + X_FI] = 1.0; P[k + X_TH] = 0.5; }
+    const back = !fpA && M.eld && S.handsBack && (st === 'idle' || (st === 'walk' && speed < 1.6));
     if (back) for (const k of SO) { P[k + X_FI] = 0.6; P[k + X_TH] = 0.4; }
     if (st !== 'punch') lookBody(C, S, M, P, dt, false);
     fk(P, S.Q); S.HP[0] = P[CI.hx]; S.HP[1] = P[CI.hy]; S.HP[2] = P[CI.hz];
@@ -2592,6 +2618,7 @@ function animate(C, S, dt, o) {
     if (st === 'aim' || st === 'shoot') aimArms(S, M);
     else if (st === 'punch') punchArms(S, M, S.t);
     else if (back) backHands(S, M);
+    else if (fpA) fpArmsIK(S, M, speed, st === 'run');
     if (eatW) eatArm(S, M, eatW);
   } else if (st === 'sit') {
     S.home = false;
@@ -2650,6 +2677,12 @@ function normLook(look, prev) {
   return L;
 }
 
+// 第 90 批：第一人稱看得到自己的手：頭（臉、頭髮、帽子、眼鏡）縮到看不見；C.eyes 照舊在眼睛的位置（鏡頭、騎車的眼睛照舊）
+function fpApply(C) {
+  const k = C.fpOn ? 1e-3 : 1, M = C.M, A = M.restAbs; C.anim.fpOn = !!C.fpOn;
+  C.bones[B.head].scale.setScalar(k);
+  C.eyes.position.set((M.headX + 0.07 * M.hs - A[B.head * 3]) / k, (M.eyeY - A[B.head * 3 + 1]) / k, 0); C.eyes.scale.setScalar(1 / k);
+}
 // ---- 做一個角色 ----
 const IDENT = new THREE.Matrix4(), RC = new Float32Array(18);
 function shapeUp(C) { // 量身體、骨頭 rest 位置
@@ -2701,7 +2734,7 @@ function rig(C) { // 骨頭放回 rest、重算反矩陣、掛點
   const M = C.M, R = M.rest, A = M.restAbs;
   for (let b = 0; b < NB; b++) { C.bones[b].position.set(R[b * 3], R[b * 3 + 1], R[b * 3 + 2]); C.skeleton.boneInverses[b].makeTranslation(-A[b * 3], -A[b * 3 + 1], -A[b * 3 + 2]); }
   handOff(M, 1, C.hand.position); handOff(M, -1, C.handL.position);
-  C.eyes.position.set(M.headX + 0.07 * M.hs - A[B.head * 3], M.eyeY - A[B.head * 3 + 1], 0);
+  fpApply(C);
   C.height = C.look.height; C.radius = clamp(M.shZ + 0.085 * M.s * M.bw, 0.16, 0.42);
   if (C.shadow) C.shadow.scale.set(0.62 * M.s * M.bw, 1, 0.5 * M.s * M.bw);
   C.anim.home = false;
@@ -2730,6 +2763,7 @@ function buildCharacter(look = {}, opts = {}) {
     recoil() { C.anim.rec = 0; },
     eat(sec = 2) { C.anim.eatT = 0; C.anim.eatD = Math.max(0.8, sec); }, // 第 84 批：右手拿東西到嘴巴（站著、走路、坐著都可以；sec 秒，前後 0.35 秒舉起來、放下）
     get eating() { return C.anim.eatD > 0; },
+    fpHead(on) { on = !!on; if (!on) C.anim.fpArms = false; if (C.fpOn === on) return; C.fpOn = on; fpApply(C); }, // 第 90 批：第一人稱（看得到手、身體，看不到自己的頭）
     dispose() { group.removeFromParent(); mesh.geometry.dispose(); skeleton.dispose(); },
   };
   if (opts.shadow !== false) { const sh = shadowMat(); C.shadow = new THREE.Mesh(sh.geo, sh.mat); C.shadow.name = 'character-shadow'; C.shadow.position.y = 0.012; C.shadow.renderOrder = -1; group.add(C.shadow); C.info.draws = 2; }
