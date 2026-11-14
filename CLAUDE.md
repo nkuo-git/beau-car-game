@@ -571,7 +571,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
   - **點火**（drive.js `ignite()`、`st.ign`／`flare`、事件 `ignite`／`crank`；sound.js `starter()`；town.src.js `IGN`／`ignStart`）：上車、出門：鑰匙「喀」＋起動馬達轉 0.85 秒（轉速表 0.07～0.08 抖、沒有引擎聲、照汽缸數一下一下壓縮），引擎發動「轟」（轉速衝到約 0.3 再回到怠速）；踩油門馬上發動；手排熄火重新發動也有起動馬達的聲音。腳踏車沒有。起動馬達比怠速大約大 10 dB（離線量的）。
   - **後車廂的邊**（mart.src.js）：以前三角形三個點都在範圍裡才算蓋子（跨過邊的整個留在車身＝鋸齒）；現在每一種開法的範圍是一個盒子（`P.box`，`boxR`），`trunkCut` 把跨過邊的三角形照盒子的面切開（新的點放在後面、attributes 內插、旁邊的三角形共用切出來的點），蓋子和洞的邊都是直的（GC8 多 939 個點、YARIS 3020、918 5000、J4 2402、P8 2182；第一次打開算一次）。
   - **動物**（animals.js）：變色龍身體低 6 公分（`CHAM_DY`，尾巴根慢慢回到原本的高度）、肚子往下多 7.5 公分（`belly`）、腳變短（`CLEG`）：露出來的腳短約三分之一，高還是 0.91 公尺（還是最大）；粉紅的鼻子露出頭的那段 15.5 → 9.5 公分。
-  - 測試：mrt-test 47（第一次在第 2 段走不過第一排閘門，重跑過）、mart-test GC8 32＋YARIS／918／J4／P8 各 7、mt-test 31＋30、animal-test 24、sound-test、free-test、test-b1 ⋯。說明在 `notes/mrt.md`、`notes/mart.md`、`notes/manual.md`、`notes/animals.md` 第 89 批。
+  - 測試：mrt-test 47（第一次在第 2 段走不過第一排閘門，重跑過）、mart-test GC8 32＋YARIS／918／J4／P8 各 7、mt-test 31＋30、animal-test 24、test-b1 160、drift-test 66、dyno-test 19、sound-test、free-test 都過。2026-11-14 放上試做頁（只換頁面；artifact 第 103 版）。說明在 `notes/mrt.md`、`notes/mart.md`、`notes/manual.md`、`notes/animals.md` 第 89 批。
 - **還沒做（爸爸 2026-10-24 問，已回；前三項 v50 做了、路和房子內容 22 做了一部分）**：泥巴賽一起比；更多越野車（吉普車內容 28、小越野車 K2 內容 30、皮卡 P8 內容 31、沙灘車 Z2 內容 32 好了，其他一台一台做）；車子／建築再往目標圖靠近（新的 GC8 內容 29、A 柱和 B 柱內容 30、細節＋門縫＋車燈內容 31、GT-R 照影片重做內容 38 上線了）；iPhone 沒測；音量沒真的聽過。
 - **已知問題**
   - 內湖的路是平的（真的港墘一帶本來就很平）。
