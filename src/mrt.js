@@ -13,6 +13,7 @@
 //   M.leave()                                  下車、被搬走（直接回車庫、被抓）：坐車的狀態清掉
 //   M.setTime(t) / M.time                      測試用：時間跳到 t（秒；一個循環 180 秒）
 //   M.trains() → [{ dir, k, p, s, x, z, stop, open }]  現在在跑的列車（測試）
+//   M.rideRef(x, z, h) → [key, 第幾節, lu, lv, lh] | null；M.placeOn(key, ci, lu, lv, lh) → { x, z, y, h } | null   第 94 批：朋友坐同一班車（每支手機的列車照伺服器時間跑，key 一樣）
 //   M.animals() → [{ k, si, lvl, sd, st, x, y, z, u, v, ride, … }]  第 87 批：捷運站裡的小動物（opt.makeAnimal＝animals.js buildAnimal；走近內湖才做）
 //   M.info                                     { meshes, tris, stations: [...], T, H }
 import * as THREE from 'three';
@@ -37,11 +38,12 @@ const GATE_U = -8; // 閘門那一排
 const TRK_V = 1.95; // 兩條軌道離中線多遠（往東的在 +v＝行進方向的右手邊；車廂的外側離月台門 3.3 − 1.95 − 1.28 ＝ 7 公分）
 const CAR_L = 13.8, CAR_P = 14.4, CAR_W = 1.28, DOOR_X = 3.6, DOOR_W = 1.3, CAR_H = 3.3; // 車廂：長、間距、半寬、車門在 ±3.6（寬 1.3）、車身高
 const PSD_W = 1.9; // 月台門一個口的寬
+const GW_W = 0.5; // 第 94 批：車廂中間的通道（半寬）
 const H = 90, DWELL = 15, VM = 36, ACC = 2.0, CYCLE = 180; // 每 90 秒一班、停 15 秒；第 79 批：最快 36 m/s（130 公里）、平均 2.0 m/s²（S 形：起步、進站慢慢來），港墘→文德約 46 秒（以前 65 秒）
 const DOOR_U = []; for (let i = 0; i < 4; i++) for (const d of [-DOOR_X, DOOR_X]) DOOR_U.push((i - 1.5) * CAR_P + d);
-// 顏色（0–1）
-const WHITE = [0.93, 0.93, 0.91], WALL = [0.86, 0.86, 0.84], CONC = [0.70, 0.70, 0.68], TILE = [0.80, 0.78, 0.72], TILE2 = [0.62, 0.63, 0.66], ORA = [0.89, 0.40, 0.12], DARK = [0.22, 0.23, 0.25], STEEL = [0.60, 0.63, 0.66], ALU = [0.76, 0.78, 0.80], GLS = [0.74, 0.86, 0.90], GLSD = [0.30, 0.42, 0.50], BROWN = [0.47, 0.30, 0.17], SEAT = [0.17, 0.33, 0.66], YEL = [0.96, 0.80, 0.15], RED = [0.85, 0.15, 0.12], GREEN = [0.25, 0.70, 0.35];
-const LGRY = [0.84, 0.86, 0.87], TGRN = [0.12, 0.58, 0.40], WBAND = [0.10, 0.11, 0.13], ROOFC = [0.46, 0.52, 0.58], TEAL = [0.20, 0.62, 0.66], PEACH = [0.96, 0.66, 0.42], LEMON = [0.98, 0.86, 0.36], SKY = [0.45, 0.70, 0.92], NAVY = [0.13, 0.25, 0.56], RUBBER = [0.08, 0.08, 0.09]; // 第 80 批：列車（淺灰、綠色帶子、黑色窗帶）、屋頂、月台的顏色
+// 顏色（0–1）；第 94 批（Nick「捷運站顏色鮮豔一點太淡了」）：牆（WALL）杏色、月台地板（TILE）暖的沙色、大廳和樓梯的地板（TILE2）水藍、屋頂（ROOFC）文湖線的咖啡色、月台後面的牆的顏色更鮮豔（以前幾乎都是白、灰）
+const WHITE = [0.93, 0.93, 0.91], WALL = [0.95, 0.56, 0.24], CONC = [0.66, 0.64, 0.60], TILE = [0.80, 0.48, 0.26], TILE2 = [0.24, 0.52, 0.68], ORA = [0.89, 0.40, 0.12], DARK = [0.22, 0.23, 0.25], STEEL = [0.60, 0.63, 0.66], ALU = [0.76, 0.78, 0.80], GLS = [0.74, 0.86, 0.90], GLSD = [0.30, 0.42, 0.50], BROWN = [0.47, 0.30, 0.17], SEAT = [0.17, 0.33, 0.66], YEL = [0.96, 0.80, 0.15], RED = [0.85, 0.15, 0.12], GREEN = [0.25, 0.70, 0.35];
+const LGRY = [0.84, 0.86, 0.87], TGRN = [0.12, 0.58, 0.40], WBAND = [0.10, 0.11, 0.13], ROOFC = [0.64, 0.38, 0.17], TEAL = [0.0, 0.68, 0.72], PEACH = [1.0, 0.52, 0.24], LEMON = [1.0, 0.84, 0.12], SKY = [0.22, 0.58, 0.98], NAVY = [0.13, 0.25, 0.56], RUBBER = [0.08, 0.08, 0.09]; // 第 80 批：列車（淺灰、綠色帶子、黑色窗帶）、屋頂、月台的顏色
 // 文湖線真的站名（路線圖用；站名不是商標）
 const WENHU = ['動物園', '木柵', '萬芳社區', '萬芳醫院', '辛亥', '麟光', '六張犁', '科技大樓', '大安', '忠孝復興', '南京復興', '中山國中', '松山機場', '大直', '劍南路', '西湖', '港墘', '文德', '內湖', '大湖公園', '葫洲', '東湖', '南港軟體園區', '南港展覽館'];
 
@@ -222,7 +224,8 @@ function buildMrt(V, opt = {}) {
     leaf: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.2 }),
   };
   // 第 82 批（Nick「捷運站內光線太暗 車廂裡也太暗」）：站裡、車廂裡有日光燈：牆、地板、車廂自己亮一點（頂點色 × SELF），燈（三個顏色都 ≥ 0.945 的）亮很多；白天晚上、普通也一樣
-  const SELF = { wall: [0.24, 1.6], train: [0.34, 1.8] };
+  const SELF = { wall: [0.17, 1.6], train: [0.34, 1.8] }; // 第 94 批：牆自己亮 0.24 → 0.17（顏色才不會被沖淡）
+  mats.wall.color.setScalar(0.62); // 第 94 批（Nick「捷運站顏色鮮豔一點太淡了」）：日光燈＋補光＋太陽一起照，顏色被沖成白的 → 反光少一點（自己亮的那一份照舊是原本的顏色）
   for (const k of Object.keys(SELF)) { const m = mats[k], [self, lamp] = SELF[k];
     m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 #ifdef USE_COLOR
@@ -479,7 +482,7 @@ function buildMrt(V, opt = {}) {
     C.hq(-CX, CX, -hw, hw, f0 + 0.01, [0.30, 0.32, 0.36], true); C.hq(-CX, CX, -0.35, 0.35, f0 + 0.012, [0.38, 0.40, 0.44], true); C.hq(-CX, CX, -hw, hw, f0 + 2.3, WHITE, false); // 地板（中間淺一點）、天花板
     for (const q of [-1, 1]) C.hq(-6.6, 6.6, q * 0.45 - 0.1, q * 0.45 + 0.1, f0 + 2.29, [1, 1, 0.95], false); // 車裡的燈
     for (const q of [-1, 1]) { const x = q * CX, neg = q < 0; // 兩頭（車廂中間的走道門：深色）
-      C.vqU(x, -hw, -0.5, f0, YTT, LGRY, neg); C.vqU(x, 0.5, hw, f0, YTT, LGRY, neg); C.vqU(x, -0.5, 0.5, f0 + 2.0, YTT, LGRY, neg); C.vqU(x, -0.5, 0.5, f0, f0 + 2.0, [0.2, 0.22, 0.25], neg);
+      C.vqU(x, -hw, -GW_W, f0, YTT, LGRY, neg); C.vqU(x, GW_W, hw, f0, YTT, LGRY, neg); C.vqU(x, -GW_W, GW_W, f0 + 2.05, YTT, LGRY, neg); // 第 94 批：中間是通道的口（走得過去；最前面、最後面那一節被車頭蓋住）
       C.vqU(x, -hw, hw, YTT, hb, ROOFL, neg); }
     return C.geometry();
   })();
@@ -492,6 +495,12 @@ function buildMrt(V, opt = {}) {
     C.vqU(CX, -CAR_W, CAR_W, f0, YTT, LGRY, false); // 接到車身的那一面
     const disc = (z, y, r, col) => { const x = CX + 0.795, n = 10; for (let i = 0; i < n; i++) { const a0 = (i / n) * TAU, a1 = ((i + 1) / n) * TAU; C.tri([x, y, z], [x, y + r * Math.sin(a0), z + r * Math.cos(a0)], [x, y + r * Math.sin(a1), z + r * Math.cos(a1)], col); } };
     for (const q of [-1, 1]) { disc(q * 0.66, f0 + 0.42, 0.13, [1, 0.97, 0.84]); disc(q * 0.66, f0 + 0.42, 0.17, [0.2, 0.2, 0.22]); disc(q * 0.36, f0 + 0.42, 0.06, [0.9, 0.12, 0.1]); } // 圓的車燈（外面一圈黑）、小的紅燈
+    return C.geometry();
+  })();
+  const gwGeo = (() => { // 第 94 批：兩節中間的通道（本地 x −0.3…0.3，畫的時候照兩節的距離拉長）：地板、兩邊的蛇腹、頂
+    const C = mesher(), f0 = F0, w = GW_W + 0.06, RB = [0.16, 0.17, 0.19], RB2 = [0.26, 0.27, 0.30];
+    C.hq(-0.36, 0.36, -w, w, f0 + 0.005, [0.34, 0.35, 0.38], true); C.hq(-0.36, 0.36, -w, w, f0 + 2.07, RB, false);
+    for (let i = 0; i < 6; i++) { const x0 = -0.36 + (i * 0.72) / 6, x1 = x0 + 0.72 / 6, col = i % 2 ? RB : RB2; for (const q of [-1, 1]) { C.vqV(q * w, x0, x1, f0, f0 + 2.07, col, q < 0); C.vqV(q * (w + 0.04), x0, x1, f0, f0 + 2.07, col, q > 0); } C.hq(x0, x1, -w - 0.04, w + 0.04, f0 + 2.11, col, true); }
     return C.geometry();
   })();
   const carGlass = (() => { const Gm = mesher(), hw = CAR_W; for (const q of [-1, 1]) for (const [x0, x1] of WIN) Gm.vqV(q * hw, x0, x1, YW0, YW1, [1, 1, 1], q > 0); return Gm.geometry(); })();
@@ -512,7 +521,8 @@ function buildMrt(V, opt = {}) {
   const dorIM = new THREE.InstancedMesh(carLeaf, mats.leaf, maxAct * 4 * 8); dorIM.name = 'mrt-car-doors'; dorIM.frustumCulled = false; group.add(dorIM);
   const noseIM = new THREE.InstancedMesh(noseGeo, mats.train, maxAct * 2); noseIM.name = 'mrt-noses'; noseIM.frustumCulled = false; group.add(noseIM); // 第 80 批：車頭
   const csIM = new THREE.InstancedMesh(carSignGeo, carSignMat, maxAct * 4); csIM.name = 'mrt-car-signs'; csIM.frustumCulled = false; group.add(csIM); // 車門上面的路線圖
-  meshes += 5; tris += (carGeo.index.count / 3 + carGlass.index.count / 3 + (carLeaf.index.count / 3) * 8 + 8) * maxAct * 4 + (noseGeo.index.count / 3) * maxAct * 2;
+  const gwIM = new THREE.InstancedMesh(gwGeo, mats.train, maxAct * 3); gwIM.name = 'mrt-gangways'; gwIM.frustumCulled = false; group.add(gwIM); // 第 94 批：車廂中間的通道
+  meshes += 6; tris += (gwGeo.index.count / 3) * maxAct * 3 + (carGeo.index.count / 3 + carGlass.index.count / 3 + (carLeaf.index.count / 3) * 8 + 8) * maxAct * 4 + (noseGeo.index.count / 3) * maxAct * 2;
   const posAt = (d, tau) => { // → { p, v, open, si（停著的站，沒有＝−1）, seg }
     for (const s of d.segs) if (tau < s.t1 || s === d.segs[d.segs.length - 1]) {
       if (s.k === 'dwell') return { p: s.p, v: 0, open: clamp(Math.min(tau - s.t0 - 0.8, s.t1 - tau - 0.8) / 1.2, 0, 1), si: s.si, seg: s };
@@ -521,7 +531,11 @@ function buildMrt(V, opt = {}) {
     return null;
   };
   // ---- 狀態 ----
-  let time = (Date.now() / 1000) % CYCLE, lap = 0; // 第 87 批：lap＝時間繞了幾圈（列車的 key 才不會在 180 秒那一下換掉：以前坐車剛好碰到就被當成「開進隧道了」、人留在半空中掉到街上）
+  // 第 87 批：lap＝時間繞了幾圈（列車的 key 才不會在 180 秒那一下換掉：以前坐車剛好碰到就被當成「開進隧道了」、人留在半空中掉到街上）
+  // 第 94 批（Nick「別人同時跟你搭也要看的到對方」）：時間照時鐘（opt.clock＝伺服器時間，毫秒）：每支手機同一班車在同一個地方、key 一樣（k＋lap×2＝從 1970 年算第幾班）；
+  //   每一格照 dt 走，跟時鐘差一點就慢慢追（最多快慢 25%：坐在車上不會跳）；差很多又不在月台、車上＝直接跳過去；setTime（測試）以後不追時鐘
+  const clock = typeof opt.clock === 'function' ? opt.clock : () => Date.now();
+  let abs = clock() / 1000, lap = Math.floor(abs / CYCLE), time = abs - lap * CYCLE, sync = true;
   const LAPK = Math.round(CYCLE / H);
   const active = []; // 現在在跑的列車：{ dir, k, d, tau, p, s, open, si, cars: [{ x, z, th }], key }
   const prev = new Map(); // key → 上一格的 open（叮咚）
@@ -553,6 +567,9 @@ function buildMrt(V, opt = {}) {
       if (ci === 3) noseIM.setMatrixAt(nn++, M4); else if (ci === 0) { Q4.setFromAxisAngle(YAX, c.th + Math.PI); M4.compose(V3, Q4, S3); noseIM.setMatrixAt(nn++, M4); Q4.setFromAxisAngle(YAX, c.th); }
       for (const q of [-1, 1]) for (const dx of [-DOOR_X, DOOR_X]) for (const lf of [-1, 1]) { const off = lf * (DOOR_W / 4 + (q > 0 ? tr.open : 0) * (DOOR_W / 2)), lu = dx + off, lv = q * (CAR_W - 0.06), [x, z] = carW(c, lu, lv); V3.set(x, YT, z); M4.compose(V3, Q4, S3); dorIM.setMatrixAt(nd++, M4); } // 只開月台那一邊（右手邊）的門
     }
+    let ng = 0; for (const tr of active) for (let ci = 0; ci + 1 < tr.cars.length; ci++) { const a = tr.cars[ci], b = tr.cars[ci + 1], [ax, az] = carW(a, CX, 0), [bx, bz] = carW(b, -CX, 0), dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+      Q4.setFromAxisAngle(YAX, Math.atan2(-dz, dx)); V3.set((ax + bx) / 2, YT, (az + bz) / 2); S3.set(Math.max(0.5, L / 0.6), 1, 1); M4.compose(V3, Q4, S3); gwIM.setMatrixAt(ng++, M4); }
+    S3.set(1, 1, 1); gwIM.count = ng; gwIM.instanceMatrix.needsUpdate = true;
     carIM.count = n; glsIM.count = n; csIM.count = n; dorIM.count = nd; noseIM.count = nn; for (const im of [carIM, glsIM, csIM, dorIM, noseIM]) im.instanceMatrix.needsUpdate = true;
   }
   function drawPsd() {
@@ -763,7 +780,8 @@ function buildMrt(V, opt = {}) {
     group, stations, info: { meshes, tris: Math.round(tris), stations: stations.map((s) => s.nm), hole: { u0: RAMP.u0, u1: RAMP.u1, v0: RAMP.v0, v1: HOLE1 }, // hole：月台地板樓梯、電扶梯的洞（站的座標 u、|v|）
       esc: ESCS.length, escSteps: nSteps, T: CYCLE, H, dwell: DWELL, maxTrains: maxAct, sA, sB, len: sB - sA, dirs: dirs.map((d) => ({ dir: d.dir, phase: d.phase, total: Math.round(d.total * 10) / 10, stops: d.stops.map((s) => Math.round(s.p)), dwells: d.segs.filter((s) => s.k === 'dwell').map((s) => ({ si: s.si, t0: Math.round(s.t0 * 10) / 10, t1: Math.round(s.t1 * 10) / 10 })) })) },
     YT, YP, YC, ride: null, lvl: 0, si: -1, py: 0, movers: [],
-    get time() { return time; }, setTime(t) { time = ((t % CYCLE) + CYCLE) % CYCLE; prev.clear(); trainsNow(); events.length = 0; },
+    get time() { return time; }, get abs() { return abs; }, get sync() { return sync; }, setTime(t) { time = ((t % CYCLE) + CYCLE) % CYCLE; abs = lap * CYCLE + time; sync = false; prev.clear(); trainsNow(); events.length = 0; }, // setTime：測試用（以後不追時鐘）
+    syncNow() { abs = clock() / 1000; lap = Math.floor(abs / CYCLE); time = abs - lap * CYCLE; sync = true; prev.clear(); trainsNow(); events.length = 0; }, // 測試用：回到照時鐘
     animals: () => Z.list.filter((a) => !a.free).map((a) => { const [u, v] = a.si >= 0 ? stations[a.si].loc(a.x, a.z) : [0, 0]; return { k: a.kind, si: a.si, lvl: a.lvl, sd: a.sd, st: a.st, x: +a.x.toFixed(2), z: +a.z.toFixed(2), y: +a.y.toFixed(2), u: +u.toFixed(2), v: +v.toFixed(2), hd: +a.hd.toFixed(2), ride: a.ride ? a.ride.key : null, ci: a.ride ? a.ride.ci : null, spot: !!a.spot, vis: !!(a.C && a.C.group.visible), built: !!a.C }; }), // 第 87 批：捷運站的小動物（測試）
     zoo: Z,
     trains: () => active.map((t) => ({ key: t.key, dir: t.dir, k: t.k, p: Math.round(t.p * 10) / 10, s: Math.round(t.s * 10) / 10, x: t.cars[0].x, z: t.cars[0].z, stop: t.si, si: t.si, open: t.open, v: t.v, tau: Math.round(t.tau * 10) / 10, cars: t.cars.map((c) => ({ x: c.x, z: c.z, th: c.th, ux: c.ux, uz: c.uz })) })),
@@ -773,16 +791,20 @@ function buildMrt(V, opt = {}) {
     dirLabel,
     heightAt(x, z) { // 候選的高度裡挑最接近上一格的（大廳在月台下面、街在天橋下面：夾層）
       if (P.ride) { const c = P.ride.tr.cars[P.ride.car]; if (inCar(c, x, z, 3.0)) return YP; } // 第 82 批：坐車的時候車廂附近都是車廂的地板（不會掉到街上）
-      const si = P.at(x, z); if (si < 0) return null; const S = stations[si], [u, v] = S.loc(x, z), av = Math.abs(v), cand = [];
-      if (Math.abs(u) <= PL + 0.2 && av >= PV0 - 0.4 && av <= PV1 + 0.3) { if (u >= RAMP.u0 && u <= RAMP.u1 && av >= RAMP.v0 && av <= HOLE1) return YC + ((YP - YC) * (u - RAMP.u0)) / (RAMP.u1 - RAMP.u0); cand.push(YP); }
+      const si = P.at(x, z); if (si < 0) return null; const S = stations[si], [u, v] = S.loc(x, z), av = Math.abs(v), cand = []; let stair = false;
+      if (Math.abs(u) <= PL + 0.2 && av >= PV0 - 0.4 && av <= PV1 + 0.3) { if (u >= RAMP.u0 && u <= RAMP.u1 && av >= RAMP.v0 && av <= HOLE1 && Math.abs(P.py - YC) < Math.abs(P.py)) return YC + ((YP - YC) * (u - RAMP.u0)) / (RAMP.u1 - RAMP.u0); cand.push(YP); }
       if (Math.abs(u) <= PL + 0.2 && av < PV0 - 0.4) { let on = false; for (const tr of active) if (tr.si === si) for (const c of tr.cars) if (inCar(c, x, z, 0.35)) on = true; cand.push(on ? YP : YT); }
       if (Math.abs(u) <= CU + 0.3 && av <= CV + 0.3) cand.push(YC);
       for (const e of S.ent) { const vlo = Math.min(e.v0, e.v1) - 0.3, vhi = Math.max(e.v0, e.v1) + 0.3, bl = Math.min(e.s * CV, e.v0) - 0.3, bh = Math.max(e.s * CV, e.v0) + 0.3, inB = u >= e.bu0 - 0.3 && u <= e.bu1 + 0.3;
         if (inB && v >= bl && v <= bh) cand.push(YC); // 天橋
-        if (v >= vlo && v <= vhi) { if (inB) cand.push(YC); const f = (u - e.uS) / (e.u1 - e.uS); if (f > 0 && f <= 1.03) cand.push(Math.max(0, YC * (1 - f))); } } // 平台、樓梯（往 dir 下去）
-      if (!cand.length) return null; let best = cand[0]; for (const c of cand) if (Math.abs(c - P.py) < Math.abs(best - P.py)) best = c; return best;
+        if (v >= vlo && v <= vhi) { if (inB) cand.push(YC); const f = (u - e.uS) / (e.u1 - e.uS); if (f > 0 && f <= 1.03) { cand.push(Math.max(0, YC * (1 - f))); stair = true; } } } // 平台、樓梯（往 dir 下去）
+      if (!cand.length) return null; let best = cand[0]; for (const c of cand) if (Math.abs(c - P.py) < Math.abs(best - P.py)) best = c;
+      if (!stair && Math.abs(P.py) < Math.abs(best - P.py)) return null; // 第 94 批（Nick「走到捷運站下方時會突然被傳送到捷運站上裡出不去」）：站的下面也是街（以前只有樓上的高度可以選）
+      return best;
     },
     levelOf: (y) => (y == null ? 0 : y > 10 ? 2 : y > 3 ? 1 : 0),
+    rideRef(x, z, h) { const R = P.ride; if (!R || !R.tr || !R.tr.cars[R.car]) return null; const c = R.tr.cars[R.car], [lu, lv] = carLoc(c, x, z); return [R.key, R.car, Math.round(lu * 100) / 100, Math.round(lv * 100) / 100, Math.round(wrapA(h - c.th) * 1000) / 1000]; }, // 第 94 批：朋友看得到你坐在哪一節（列車的 key、第幾節、車廂裡的位置、方向）
+    placeOn(key, ci, lu, lv, lh) { const tr = active.find((t) => t.key === key), c = tr && tr.cars[ci]; if (!c) return null; const [x, z] = carW(c, lu, lv); return { x, z, y: YP, h: wrapA(c.th + lh) }; }, // 朋友坐的那一班在我這邊的哪裡（沒有＝null）
     leave() { P.ride = null; P.movers.length = 0; },
     getOff(px, pz) { // 按「下車」：車停著、門開著 → 從最近的車門走到月台上（回傳要站的地方）；不行＝null
       const R = P.ride; if (!R) return null; const tr = active.find((t) => t.key === R.key); if (!tr || tr.si < 0 || tr.open < 0.5) return null;
@@ -790,10 +812,12 @@ function buildMrt(V, opt = {}) {
       P.ride = null; P.movers.length = 0; return { x, z, heading: Math.atan2(-(z - pz), x - px), nm: S.nm };
     },
     update(camera, dt) {
-      const t2 = time + Math.max(0, Math.min(0.2, +dt || 0)); if (t2 >= CYCLE) lap++; time = t2 % CYCLE; trainsNow();
+      const dd = Math.max(0, Math.min(0.2, +dt || 0)); abs += dd;
+      if (sync) { const e = clock() / 1000 - abs; if (!Number.isFinite(e)) { /* 時鐘壞了：照 dt 走 */ } else if (Math.abs(e) > 2.5 && !P.ride && P.lvl < 2) abs += e; else abs += clamp(e * Math.min(1, dd), -0.25 * dd, 0.25 * dd); }
+      lap = Math.floor(abs / CYCLE); time = abs - lap * CYCLE; trainsNow();
       if (camera) { camP[0] = camera.position.x; camP[1] = camera.position.z; }
       let near = false; for (const S of stations) { const d = Math.hypot(S.x - camP[0], S.z - camP[1]); S.group.visible = d < 1500; if (d < 2600) near = true; }
-      carIM.visible = glsIM.visible = dorIM.visible = psdIM.visible = noseIM.visible = csIM.visible = stepIM.visible = near;
+      carIM.visible = glsIM.visible = dorIM.visible = psdIM.visible = noseIM.visible = csIM.visible = stepIM.visible = gwIM.visible = near;
       if (near) { drawTrains(); drawPsd(); drawSteps(); if (time - boardT > 1 || time < boardT) { boardT = time; drawBoards(); } zStep(dt); }
       else if (Z.on) for (const a of Z.list) if (a.C) a.C.group.visible = false;
     },
@@ -813,13 +837,23 @@ function buildMrt(V, opt = {}) {
           const c = tr.cars[R.car], c0 = R.pose, [lu, lv] = carLoc(c0, px, pz); // 上一格車廂的本地座標 → 這一格的世界座標
           const [nx, nz] = carW(c, lu, lv); out.shift = [nx - px, nz - pz, wrapA(c.th - c0.th)]; R.pose = { x: c.x, z: c.z, th: c.th, ux: c.ux, uz: c.uz };
           R.tr = tr; px = nx; pz = nz;
-          carWalls(c, tr.open, mv); zMovers(mv, -1, 0, R.key, R.car);
-          const [u2, v2] = carLoc(c, px, pz);
+          let [u2, v2] = carLoc(c, px, pz), cc = c;
+          const sw = Math.abs(v2) < 0.6 && Math.abs(u2) > CAR_P / 2 && Math.abs(u2) < 9 ? Math.sign(u2) : 0; // 第 94 批（Nick「搭捷運時要可以走到別的車廂」）：走過兩節中間的通道＝換到那一節
+          if (sw && R.car + sw >= 0 && R.car + sw < tr.cars.length) { R.car += sw; cc = tr.cars[R.car]; R.pose = { x: cc.x, z: cc.z, th: cc.th, ux: cc.ux, uz: cc.uz }; [u2, v2] = carLoc(cc, px, pz); }
+          for (let i = 0; i < tr.cars.length; i++) carWalls(tr.cars[i], tr.open, mv, i); zMovers(mv, -1, 0, R.key, R.car);
+          const gw = (u) => Math.abs(v2) < 0.5 && Math.abs(u) < 7.45 && (u > 0 ? R.car < tr.cars.length - 1 : R.car > 0); // 在通道裡（往那一頭有下一節）
+          const last = tr.si >= 0 && tr.d.stops[tr.d.stops.length - 1].si === tr.si;
           if (Math.abs(u2) > 12 || Math.abs(v2) > 5) { P.ride = null; P.movers.length = 0; } // 第 82 批：被搬走了（去這裡⋯）：不是坐車了
-          else if (tr.open > 0.5 && (Math.abs(v2) > CAR_W + 0.05 || Math.abs(u2) > 6.95)) { P.ride = null; out.toast = `${stations[tr.si].nm}　下車了`; } // 走出車門＝下車
+          else if (tr.open > 0.5 && (Math.abs(v2) > (R.walkOut ? CAR_W + 1.2 : CAR_W + 0.05) || (Math.abs(u2) > 6.95 && !gw(u2)))) { P.ride = null; if (!R.walkOut) out.toast = `${stations[tr.si].nm}　下車了`; } // 走出車門＝下車（終點站自己走出去的：走到月台上才算）
           else {
-            if (tr.open < 0.5 && (Math.abs(u2) > 6.9 - 0.3 || Math.abs(v2) > CAR_W - 0.3)) { // 第 82 批：車門關著跑到車廂的牆外面（手機一格很久、轉彎）：拉回車廂裡面
-              const cu = clamp(u2, -6.6, 6.6), cv = clamp(v2, -(CAR_W - 0.3), CAR_W - 0.3), [qx, qz] = carW(c, cu, cv); out.shift[0] += qx - px; out.shift[1] += qz - pz; px = qx; pz = qz; }
+            if (tr.open < 0.5 && ((Math.abs(u2) > 6.9 - 0.3 && !gw(u2)) || Math.abs(v2) > CAR_W - 0.3)) { // 第 82 批：車門關著跑到車廂的牆外面（手機一格很久、轉彎）：拉回車廂裡面
+              const cu = gw(u2) ? u2 : clamp(u2, -6.6, 6.6), cv = clamp(v2, -(CAR_W - 0.3), CAR_W - 0.3), [qx, qz] = carW(cc, cu, cv); out.shift[0] += qx - px; out.shift[1] += qz - pz; px = qx; pz = qz; }
+            if (last && tr.open > 0.9 && tr.tau > tr.seg.t1 - 4.6 && !R.walkOut) { // 第 94 批（Nick「偶爾搭一搭會突然被傳送到下一站」）：終點站，車門要關了：自己走到最近的車門、走出去（以前車門關了一下子搬到月台上）
+              const lu0 = clamp(carLoc(cc, px, pz)[0], -6.6, 6.6), dx = Math.abs(lu0 - DOOR_X) < Math.abs(lu0 + DOOR_X) ? DOOR_X : -DOOR_X; R.walkOut = { ci: R.car, dx }; out.toast = '終點站，大家都要下車喔'; }
+            if (R.walkOut && tr.open > 0) { // 先走到車門前面（沿著車廂），再往月台走（每秒 3 公尺）
+              const W = R.walkOut, wc = tr.cars[W.ci], [wu, wv] = carLoc(wc, px, pz), st = 3 * Math.min(0.2, dt), du = W.dx - wu;
+              let tu = wu, tv = wv; if (Math.abs(du) > 0.08) { tu = wu + clamp(du, -st, st); tv = wv + clamp(clamp(wv, -0.6, 0.6) - wv, -st, st); } else tv = wv + st;
+              const [qx, qz] = carW(wc, tu, tv); out.shift[0] += qx - px; out.shift[1] += qz - pz; px = qx; pz = qz; }
             if (tr.si >= 0 && tr.si !== R.lastSi && tr.open > 0) { R.lastSi = tr.si; const last = tr.d.stops[tr.d.stops.length - 1].si === tr.si; out.toast = last ? `叮咚！${stations[tr.si].nm}　到了（終點站，請下車）` : `叮咚！${stations[tr.si].nm}　到了`; out.chime = true; }
             if (tr.si >= 0 && tr.open > 0.5) out.action = 'off';
             if (tr.si >= 0 && tr.open === 0 && tr.tau > tr.seg.t0 + 2 && tr.d.stops[tr.d.stops.length - 1].si === tr.si) { // 終點站車門關了還在車上：請他下車（搬到月台上）
@@ -840,12 +874,14 @@ function buildMrt(V, opt = {}) {
         if (u >= lo - 0.1 && u <= hi + 0.1 && Math.abs(v - e.vc) < e.w / 2) { const f = clamp((u - e.ua) / (e.ub - e.ua), 0, 1), y = e.ya + (e.yb - e.ya) * f; if (Math.abs(py - y) < 0.7 && f < 1) { const d = ESC_V * Math.min(0.2, dt) * Math.sign(e.ub - e.ua); out.shift = [e.S.ux * d, e.S.uz * d, 0]; out.esc = true; } } }
       if (si >= 0 && lvl === 2) {
         const S = stations[si], [u, v] = S.loc(px, pz);
-        for (const tr of active) if (tr.si === si) for (const c of tr.cars) carWalls(c, tr.open, mv);
+        for (const tr of active) if (tr.si === si) for (let i = 0; i < tr.cars.length; i++) carWalls(tr.cars[i], tr.open, mv, i);
         for (const d of S.psd) { const tr = active.find((t) => t.si === si && t.dir === d.sd), open = tr ? tr.open : 0; if (open < 0.95) { const w = PSD_W / 2 - open * 0.95; if (w > 0.02) for (const q of [-1, 1]) { const [x, z] = S.toW(d.u + q * (PSD_W / 2 - w / 2), d.v); mv.push({ t: 'box', x, z, hx: w / 2, hz: 0.06, rot: S.rot, h: YP + 3.3, y0: YP - 0.3 }); } } }
         for (const tr of active) if (Math.abs(tr.s - S.s) < 80 && tr.open === 0 && (tr.si < 0 || tr.tau > tr.seg.t0 + 2)) for (let i = 0; i < 4; i++) { const c = tr.cars[i], [lu, lv] = carLoc(c, px, pz); // 車門關了（或剛開走）人還在車裡＝上車了
-          if (Math.abs(lu) <= 6.9 && Math.abs(lv) <= CAR_W) { P.ride = { key: tr.key, tr, car: i, pose: { x: c.x, z: c.z, th: c.th, ux: c.ux, uz: c.uz }, lastSi: si, saidNext: false }; out.ride = true; out.lvl = 3; out.toast = `上車了！${dirLabel(si, tr.dir)}`; P.lvl = 3; return out; }
+          if ((Math.abs(lu) <= 6.9 && Math.abs(lv) <= CAR_W) || (Math.abs(lu) <= 7.25 && Math.abs(lv) <= GW_W + 0.05)) { P.ride = { key: tr.key, tr, car: i, pose: { x: c.x, z: c.z, th: c.th, ux: c.ux, uz: c.uz }, lastSi: si, saidNext: false }; out.ride = true; out.lvl = 3; out.toast = `上車了！${dirLabel(si, tr.dir)}`; P.lvl = 3; return out; }
           if (Math.abs(lu) <= 6.9 && Math.abs(lv) > CAR_W && Math.abs(lv) < PV0 + 0.2) { const sd = Math.sign(lv) || 1, [ex, ez] = S.toW(u, Math.sign(v || sd) * (PV0 + 0.8)); out.eject = { x: ex, z: ez }; } } // 夾在門口：推回月台
         for (const ev of evs) if (ev.k === 'arrive' && ev.si === si) { out.toast = `叮咚！${dirLabel(si, ev.tr.dir)}的列車進站了`; out.chime = true; }
+        for (const tr of active) if (tr.si === si && tr.open > 0.9 && tr.tau > tr.seg.t1 - 4.6 && tr.d.stops[tr.d.stops.length - 1].si === si) for (let i = 0; i < 4; i++) { const c = tr.cars[i], [lu, lv] = carLoc(c, px, pz); // 第 94 批：站在開出內湖的車裡、車門要關了：自己走出來（以前車門關了一下子搬到月台上）
+          if (Math.abs(lu) <= 7.25 && Math.abs(lv) <= CAR_W) { P.ride = { key: tr.key, tr, car: i, pose: { x: c.x, z: c.z, th: c.th, ux: c.ux, uz: c.uz }, lastSi: si, saidNext: true, walkOut: { ci: i, dx: Math.abs(lu - DOOR_X) < Math.abs(lu + DOOR_X) ? DOOR_X : -DOOR_X } }; out.ride = true; out.lvl = 3; P.lvl = 3; out.toast = `這班車開往${BEYOND[tr.dir]}，出了內湖就看不到了，請下車`; return out; } }
       }
       if (si >= 0 && lvl === 1) { const S = stations[si], [u] = S.loc(px, pz); if (P.lastU != null) for (const GU of S.gates) if ((P.lastU - GU) * (u - GU) < 0) { out.toast = '嗶！（免費）'; out.beep = true; } P.lastU = u; } else P.lastU = null; // 走過閘門
       if (si >= 0 && (lvl === 1 || lvl === 2)) zMovers(mv, si, lvl === 2 ? YP : YC); // 第 87 批：小動物擋人
@@ -857,14 +893,16 @@ function buildMrt(V, opt = {}) {
     for (const e of S.ent) { const vlo = Math.min(e.v0, e.v1) - 0.3, vhi = Math.max(e.v0, e.v1) + 0.3; if (v >= vlo && v <= vhi && u >= Math.min(e.u0, e.u1) - 0.3 && u <= Math.max(e.u0, e.u1) + 0.3) return e.roofAt(u) - 0.35; }
     return YC + 3.05;
   }
-  function carWalls(c, open, mv) { // 一節車廂的牆（走路擋人）：兩邊（車門開著就留口）、兩頭、椅子
+  function carWalls(c, open, mv, ci = -1) { // 一節車廂的牆（走路擋人）：兩邊（車門開著就留口）、兩頭、椅子；第 94 批：中間的兩頭有通道（ci＝第幾節）
     const push = (lu0, lu1, lv, hz) => { const [x, z] = carW(c, (lu0 + lu1) / 2, lv); mv.push({ t: 'box', x, z, hx: (lu1 - lu0) / 2, hz, rot: c.th, h: YP + 2.4, y0: YP - 0.3 }); };
     for (const q of [-1, 1]) { const lv = q * CAR_W, op = q > 0 ? open : 0; // 門只開月台那一邊（行進方向的右手邊）
       push(-6.9, -DOOR_X - DOOR_W / 2, lv, 0.06); push(-DOOR_X + DOOR_W / 2, DOOR_X - DOOR_W / 2, lv, 0.06); push(DOOR_X + DOOR_W / 2, 6.9, lv, 0.06);
       if (op < 0.95) for (const dx of [-DOOR_X, DOOR_X]) { const w = (DOOR_W / 2) * (1 - op); for (const lf of [-1, 1]) push(dx + lf * (DOOR_W / 2) - (lf > 0 ? w : 0), dx + lf * (DOOR_W / 2) + (lf < 0 ? w : 0), lv, 0.05); }
       for (const [x0, x1] of [[-6.6, -4.45], [-2.75, 2.75], [4.45, 6.6]]) push(x0, x1, q * 1.0, 0.2);
     }
-    for (const q of [-1, 1]) { const [x, z] = carW(c, q * 6.9, 0); mv.push({ t: 'box', x, z, hx: 0.06, hz: CAR_W, rot: c.th, h: YP + 2.4, y0: YP - 0.3 }); }
+    for (const q of [-1, 1]) { const gw = ci >= 0 && (q > 0 ? ci < 3 : ci > 0);
+      if (!gw) { const [x, z] = carW(c, q * 6.9, 0); mv.push({ t: 'box', x, z, hx: 0.06, hz: CAR_W, rot: c.th, h: YP + 2.4, y0: YP - 0.3 }); continue; }
+      for (const s2 of [-1, 1]) { push(q * 6.9 - 0.06, q * 6.9 + 0.06, s2 * (GW_W + CAR_W) / 2, (CAR_W - GW_W) / 2); push(Math.min(q * 6.8, q * 7.3), Math.max(q * 6.8, q * 7.3), s2 * (GW_W + 0.06), 0.05); } } // 通道（寬 2×GW_W）兩邊的牆
   }
   trainsNow(); drawTrains(); drawPsd(); drawSteps(); drawBoards();
   V.group.add(group);

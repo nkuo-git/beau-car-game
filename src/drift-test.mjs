@@ -100,7 +100,7 @@ for (const key of ALL) {
 }
 check(ALL.every((k) => slow[k].mx === 0 && slow[k].drifts === 0 && slow[k].frames > 1000), `below 22 km/h no car ever slides: full lock, handbrake, throttle, reversing (${ALL.map((k) => `${k} ${slow[k].frames} frames`).join(', ')})`);
 
-// 4) 沒在甩的時候跟主幹的 drive.js 一模一樣（同樣的輸入，最後的位置、方向、速度、轉速一點都不差）
+// 4) 沒在甩的時候跟主幹的 drive.js 一模一樣（同樣的輸入，最後的位置、方向、速度、轉速一點都不差；第 94 批的新加速關掉：accel0）
 const trunk = process.env.TRUNK || path.join(dir, 'test-fixtures/trunk-0.8.35'); // 0.8.35 的 drive.js＋terrain.js（甩尾以前的主幹）
 if (fs.existsSync(path.join(trunk, 'drive.js'))) {
   const { createDrive: oldDrive } = await import(path.join(trunk, 'drive.js'));
@@ -109,7 +109,7 @@ if (fs.existsSync(path.join(trunk, 'drive.js'))) {
     [(t, te) => ({ throttle: te.kmh < 15 ? 0.4 : 0, brake: 0, steer: 1 }), 5], [() => ({ throttle: 0, brake: 0.5, steer: 0 }), 4]];
   const same = [];
   for (const key of ALL) {
-    const a = rig(key), b = rig(key, 0, {}, oldDrive);
+    const a = rig(key, 0, { opt: { accel0: true } }), b = rig(key, 0, {}, oldDrive); // 第 94 批：加速改了（慢一點、越快加越慢），比對的時候用以前的加速
     for (const [f, s] of script) { run(a.d, s, f); run(b.d, s, f); }
     const A = a.d.telemetry(), B = b.d.telemetry();
     same.push(['x', 'z', 'heading', 'v', 'rpm', 'gear'].every((k) => A[k] === B[k]) && A.drifts === 0 ? key : `${key}≠ (${A.x} vs ${B.x})`);

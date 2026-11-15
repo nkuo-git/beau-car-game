@@ -199,11 +199,12 @@ function netStep(dt) {
       P.chr.group.visible = true; RIDES[P.objK].ride(P.chr, 0, dt);
     } else netUnride(P);
     if (C) {
-      const scn = inside ? PSC : TR.scene, y = inside ? 0 : s.y != null ? s.y : netH(s.x, s.z); // 第 22 批：警察局裡面＝它自己的場景（地板 0）；第 91 批：走在高架橋上＝他送來的高度
+      const on = !inside && c.mr && VIL?.mrt ? VIL.mrt.placeOn(c.mr[0], c.mr[1], c.mr[2], c.mr[3], c.mr[4]) : null; // 第 94 批：他坐在捷運上：放在我這邊同一班車的同一節裡（不然會落在車後面）
+      const scn = inside ? PSC : TR.scene, y = inside ? 0 : on ? on.y : s.y != null ? s.y : netH(s.x, s.z); // 第 22 批：警察局裡面＝它自己的場景（地板 0）；第 91 批：走在高架橋上＝他送來的高度
       if (C.group.parent !== scn) scn.add(C.group);
-      C.group.position.set(s.x, y, s.z); C.group.rotation.y = s.h;
+      C.group.position.set(on ? on.x : s.x, y, on ? on.z : s.z); C.group.rotation.y = on ? on.h : s.h;
       C.update(dt, { speed: Math.abs(s.v) });
-      if (P.tag) P.tag.position.set(s.x, y + C.height + 0.45, s.z);
+      if (P.tag) P.tag.position.set(on ? on.x : s.x, y + C.height + 0.45, on ? on.z : s.z);
       if (inside && c.jl) jin = true;
     }
     netPolOffStep(P, dt);
@@ -1195,7 +1196,7 @@ NET_ME.pl = 0; // 跳燈：開的（停著的）這台燈蓋立起來＝1（town
 function netState() {
   const s = NET_ME, R = NET.race;
   s.k = cur; s.rp = null; s.rs = 0; s.o = 0; s.x = s.z = s.h = s.v = 0; s.w = 0; s.pn = 0; s.pk = null; s.pv = null; s.ph = NET_PH.out; s.jl = jailed() ? 1 : 0;
-  s.pl = 0; s.y = null; s.st = 0; s.rd = null; s.nr = (ciRace || orRace) ? 1 : 0; // 第 57 批：st＝我坐自己的車第幾個位子、rd＝坐朋友的車 [車主, 位子, 車]、nr＝我在賽車場／泥巴賽（坐我車的人要下車）
+  s.pl = 0; s.y = null; s.mr = null; s.st = 0; s.rd = null; s.nr = (ciRace || orRace) ? 1 : 0; // 第 57 批：st＝我坐自己的車第幾個位子、rd＝坐朋友的車 [車主, 位子, 車]、nr＝我在賽車場／泥巴賽（坐我車的人要下車）
   if (RACE.on && race) { s.o = 3; s.x = race.me.x; s.v = race.me.v; if (race.net) { s.rp = Math.round(race.me.x * 10) / 10; s.rs = race.net.seq; } return s; }
   const pv = netParked(); if (pv) s.pv = [cur, Math.round(pv.x * 100) / 100, Math.round(pv.z * 100) / 100, Math.round(pv.heading * 1000) / 1000]; // 第 22 批：停著的車（我在哪裡都送）
   if (DRIVE.on && trip && indoor && indoor.kind === 'police' && walker && walker.mode !== 'off') { const t = walker.telemetry(); s.o = 4; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed; return s; } // 第 22 批：在警察局裡面（關在拘留室也是）
@@ -1203,7 +1204,8 @@ function netState() {
   if (HOP.on) { seatNetHop(s); return s; } // 第 57 批：坐在朋友的車上 // 在自己車庫裡面：朋友看不到（名單寫「在車庫」）；第 23 批：有朋友來我家、我在一樓＝看得到；我在朋友家樓上＝不送（高度對不起來）
   if (walker && walker.mode !== 'off' && walker.mode !== 'seat') {
     const t = walker.telemetry(); s.o = 2; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.speed;
-    if (VDV && VDV.st.on) s.y = Math.round(walker.character.group.position.y * 100) / 100; // 第 91 批：走在高架橋上送高度
+    if ((VDV && VDV.st.on) || MRTS.lvl > 0) s.y = Math.round(walker.character.group.position.y * 100) / 100; // 第 91 批：走在高架橋上送高度；第 94 批：在捷運站裡、車上也送
+    if (MRTS.lvl === 3 && VIL?.mrt) s.mr = VIL.mrt.rideRef(t.x, t.z, t.heading); // 第 94 批：坐捷運：哪一班、第幾節、車廂裡的位置（朋友那邊照他的列車放）
     const p = borParked(); if (p) { s.pk = [cur, Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100, Math.round(p.heading * 1000) / 1000]; s.pv = null; } // 第 19 批：下車停著的車（朋友看得到、借得到）
   }
   else if (drv) { const t = drv.telemetry(); s.o = 1; s.x = t.x; s.z = t.z; s.h = t.heading; s.v = t.v; if (TRAMP.on || (VDV && VDV.st.on)) s.y = Math.round(PW.heightAt(t.x, t.z) * 100) / 100; if (PAX.on) s.st = PAX.i; } // 第 24 批：開在斜坡上送高度
@@ -1355,6 +1357,7 @@ Object.assign(window.beauGame, {
       b.push(e); if (b.length > 16) b.shift();
       const c = P.cur; c.t = s.t; c.x = e.x; c.z = e.z; c.h = e.h; c.v = e.v; c.o = s.o | 0; c.k = typeof s.k === 'string' ? s.k : ''; c.rp = e.rp; c.rs = s.rs | 0; c.w = Math.max(0, Math.min(3, s.w | 0)); c.jl = s.jl ? 1 : 0;
       c.pl = s.pl === 1 ? 1 : 0; // 跳燈
+      const mr = s.mr; c.mr = Array.isArray(mr) && mr.length === 5 && typeof mr[0] === 'string' && mr[0].length < 24 && Number.isInteger(mr[1]) && mr[1] >= 0 && mr[1] < 4 && [mr[2], mr[3], mr[4]].every(Number.isFinite) && Math.abs(mr[2]) < 9 && Math.abs(mr[3]) < 4 ? mr : null; // 第 94 批：他坐在捷運上
       c.st = Number.isInteger(s.st) && s.st > 0 && s.st < 5 ? s.st : 0; c.nr = s.nr ? 1 : 0; // 第 57 批：他坐自己的車第幾個位子（0＝駕駛座）；他在賽車場／泥巴賽
       const rd = s.rd; c.rd = Array.isArray(rd) && rd.length === 3 && typeof rd[0] === 'string' && rd[0] !== uid && Number.isInteger(rd[1]) && rd[1] > 0 && rd[1] < 5 && typeof rd[2] === 'string' && CARS[rd[2]] ? rd : null; // 第 57 批：他坐在朋友的車上 [車主, 位子, 車]
       const pk = s.pk; c.pk = Array.isArray(pk) && pk.length === 4 && typeof pk[0] === 'string' && CARS[pk[0]] && [pk[1], pk[2], pk[3]].every(Number.isFinite) ? pk : null; // 第 19 批：他停著的車

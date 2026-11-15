@@ -340,7 +340,7 @@ async function enterDrive() {
     await new Promise((r) => setTimeout(r, 30)); // 讓「出門中」先畫出來（蓋村子要一下子，這時候畫面不會動）
     try {
       if (!TR) TR = buildTrack();
-      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMrt(VIL, { renderer, makeAnimal: buildAnimal }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); VDV = buildViaduct(VIL, { renderer, lotCar: vdLotCar, dims: (k) => LOT_DIMS[k] || null, far: FAR_CARS }); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
+      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMrt(VIL, { renderer, makeAnimal: buildAnimal, clock: () => Date.now() + (NET.off || 0) /* 第 94 批：列車照伺服器時間跑（朋友同一班車） */ }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); VDV = buildViaduct(VIL, { renderer, lotCar: vdLotCar, dims: (k) => LOT_DIMS[k] || null, far: FAR_CARS }); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
       const L = VIL.places.garage.lot;
       GAR = buildRoom(renderer, { quality: 'low', exterior: true }); // 第 21 批：圓塔（tower.js）；村子裡看得到玻璃、名牌；地板不反射（省）
       GAR.group.position.set(L.x, VIL.places.garage.y || 0, L.z); GAR.group.rotation.y = L.heading; TR.scene.add(GAR.group);
@@ -371,7 +371,7 @@ async function enterDrive() {
     try { await warmPolice(); } catch (e) { console.error(e); }
     // 第 29 批（Nick 2026-10-23「就用5號的真實度」）：畫質；第一次「漂亮／最真實」要先找樹冠、畫材質貼圖、編 shader（在這裡做，開出去不會頓）
     try {
-      LOOK = createLook({ renderer, scene: TR.scene, world: VIL, getCar: lookCar, plain: () => GAR?.group || null, indoor: (c) => (!!GAR && !!TWR && inTower(c.position.x, c.position.z) ? 1 : MRTS.lvl > 0 ? 0.7 : 0), // 第 82 批：捷運站裡、車上也補光（0.7）
+      LOOK = createLook({ renderer, scene: TR.scene, world: VIL, getCar: lookCar, plain: () => GAR?.group || null, indoor: (c) => (!!GAR && !!TWR && inTower(c.position.x, c.position.z) ? 1 : MRTS.lvl > 0 ? 0.5 : 0), // 第 82 批：捷運站裡、車上也補光（0.7；第 94 批 0.5：顏色才不會被沖淡）
         night: lookNight, carDims: (car) => (tripS && car === tripS.car ? fullBox(tripS) : null), police: () => police?.npcCars || null, traffic: () => NPC?.traffic?.cars || null, trialRain: TRIAL_FREE }); // 第 30 批：晚上（車燈）、自己的車的大燈放哪裡；第 32 批：警車（紅藍燈）、路上的車（大燈照路）；第 47 批：試做頁出門 15 秒就下雨
       const lv = lookPref(); lookBtns(lv);
       if (lv > 0) { msg.textContent = '畫面準備中⋯'; await new Promise((r) => setTimeout(r, 30)); await lookSet(lv, false); renderer.compile(TR.scene, dcam); }

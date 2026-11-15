@@ -555,6 +555,10 @@ function createDrive(o) {
   //   ▲ ▼（shift(±1)）要踩著離合器（inp.clu）才換得進去，沒踩＝「咔咔」沒換（grind）；R 只有快停住（1.5 m/s 以下）才排得進去
   //   檔位 R – N – 1 – 2 – 3 – 4 – 5 – 6；放開離合器那一下（接上過半）：轉速比怠速低（檔太高、太慢）又沒給油 → 熄火（stall）；按油門 0.6 秒重新發動
   //   撞紅線不會自己升檔：斷油噠噠噠（physics 的 st.lim）；檔太高只是沒力（不熄火）；停住按著煞車 R ↔ 1 檔照舊（不用離合器）
+  // 第 94 批（Nick 2026-11-15「車子加速稍微加慢一點／車子越快加越慢不要到極速以後突然上不去」）：往前的出力 ×ACC_K；比 TAPER0×極速快以後，
+  //   多出來的加速度（出力 − 阻力）乘 (1 − s)^0.4（s：0.55 → 1 倍極速 ＝ 0 → 1），最多 TAPER_E·√(離極速幾 m/s)：越接近極速加越慢，到極速剛好 0
+  //   （以前 98% 極速還有 1.2～5.8 m/s²，然後突然停住）
+  const ACC_K = o.accel0 ? 1 : 0.87, TAPER0 = o.accel0 ? 2 : 0.55, TAPER_P = 0.4, TAPER_E = 1; // o.accel0＝第 94 批以前的加速（drift-test 跟主幹比一模一樣用）
   const BLIP_T = 0.55, FREE_UP = 2.4, FREE_DOWN = 4; // 第 74 批：降檔補油聲幾秒；空催轉速上去、空檔下來的快慢（以前跟接著輪子一樣 12；踩著離合器放油門照舊 12）
   function mtStep(h, inp) {
     const want = inp.clu > 0.5 ? 0 : 1;
@@ -617,12 +621,14 @@ function createDrive(o) {
     let a = 0; st.lim = false; st.pw = 0;
     if (st.rev) a = 2.8 * st.thrEff * Math.max(0.6, dmgP.power) * eng;
     else if (st.cut <= 0 && eng > 0) { const x = xOf(u, st.gear); if (x < 1) { const fE = (st.thrEff * Tpk * torqueAt(clamp(x, st.gear === 0 ? 0.6 : 0.2, 1)) * GR[st.gear] * fd * 0.88) / RR; a = (Math.min(R ? tract * R.k.trac : tract, fE) / m) * dmgP.power * eng; st.pw = fE * dmgP.power * eng * u; st.px = x; } else if (MT && go > 0.3) st.lim = true; } // 第 77 批：pw＝引擎送到輪子的功率（抓地力吃不掉；馬力機的螢幕畫這個） // 撞到紅線斷油；撞壞了出力變小；手排撞紅線＝噠噠噠（不自己升檔）
+    if (!st.rev) a *= ACC_K; // 第 94 批：加速慢一點
     const D = slide(h, inp, R, u, go, gov, a, aG, ac); if (st.dm > 0) { a *= 1 + (D.fwd - 1) * st.dm; a += (Math.min(a, D.cap) - a) * st.dm; } // 第 3 批：甩尾（後輪空轉：往前推的少一點；抓地大部分拿去側滑了）
     const ov = u - capS - 0.5, over = ov > 0 ? (soft ? Math.min(sf.over[1], ov * sf.over[0]) : Math.min(8, ov * 2.5)) : 0; // 比限速快（開進草地、限速變低）：慢下來
     const res = stop * (9.5 + 2.5 * Math.min(1, (u * u) / 4900)) + (go < 0.05 ? (st.rev ? 1.2 : 1.4) : 0) + sf.drag + 0.147 + (AERO * 0.6 * P.cda * u * u) / m + over + (st.rev ? 0 : Math.min(9, st.scrub)) + D.bleed
       + (MT && !st.rev && eng > 0.5 && st.mg > 0 ? Math.min(8, Math.max(0, xOf(u, st.gear) - 1.02) * 60) * eng : 0); // 第 68 批：手排太早降檔（轉速衝過紅線）：引擎煞車很重
-    let un;
-    if (u > 1e-4) { un = u + (a - res) * h; if (un < 0) un = 0; }
+    let un, ex = a - res;
+    if (!st.rev && ex > 0 && u > 0 && capS > 1 && TAPER0 < 1) { const s = clamp((u / capS - TAPER0) / (1 - TAPER0), 0, 1); if (s > 0) ex = Math.min(ex * Math.pow(1 - s, TAPER_P), TAPER_E * Math.sqrt(Math.max(0, capS + (capS >= vmx ? 0.3 : 0) - u))); } // 第 94 批：越快加越慢；最後幾公里慢慢靠上去（不會撞到限速那一下）
+    if (u > 1e-4) { un = u + ex * h; if (un < 0) un = 0; }
     else if (u < -1e-4) { un = u + (a + res) * h; if (un > 0) un = a > 0 ? Math.min(un, a * h) : 0; }
     else un = Math.max(0, (a - res) * h);
     if (R) un = R.speed(un, u, h, sg, stop, go, (AERO * 0.6 * P.cda) / m); // 第 4 批：飛在空中只有風阻、上下坡、底盤磨地
