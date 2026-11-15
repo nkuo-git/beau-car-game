@@ -127,3 +127,27 @@ toilets, in/out ramps, cars from the dealer coming and going, people and the thr
   (last frame's camera). Ramp concrete used to flush one chunk per ramp (6 chunks); now ramps whose starts are within
   700 m share a chunk (`rampEnd`): [A], [B], [WX, WE, EX, EE]. Probe (390×844, 普通, same pose): content 46 227, now 233.
 
+
+## Batch 93 — median, two-way main road, highway police (trial v105, 2026-11-15)
+Nick 2026-11-15: 「高速公路做成雙向來回的中間用分隔島隔開上網查高速公路分隔島圖片」「高速公路有額外的警用追逐車用GC8去查國道警車塗裝並採用」.
+- **Median** (viaduct.js `MED`): main road s `S_OPEN+4` … `L−4` (40 … 5034 m), New-Jersey concrete barrier
+  0.6 m wide at the foot, 0.18 m at the top, 0.82 m tall (profile `MPR`), plus green anti-glare slats every 1 m, 0.62 m
+  tall, turned 35° to the road (the usual Taiwan freeway median). Built per 4 m segment into the deck chunks
+  (`medSeg`, end caps `medCap` in yellow), so no extra draw calls beyond the chunk (perf below).
+  Colliders: one box per 4 m (`vd:'med'`, 1248 of them, `lowCam`, `noCrush`), only on the deck level
+  (`off` getter like the side barriers). Deck paint: double yellow moved to ±0.55, lane dashes at ±3.9.
+- **Lanes** (vdtraffic.js `LANE`): inner 1.85 → 2.2, outer 5.55. Traffic always keeps right (+u when going +S).
+- **Highway police** (vdtraffic.js `c.cop`, town.src.js `VCOP`/`copGet`/`copSiren`): one GC8 patrols the main road
+  (spawned like normal cars, 420–820 m away, only while `nMain < max`); when you are wanted and on the main road it
+  chases you on your side of the median (its own s/u: `copPose`/`copStep`, max 50 m/s, changes lane around cars, other
+  cars pull over); 1★ → 1 car, 3★+ → 2 (`spawnChaser` 300 m behind). Within `COP_SEE` 90 m it tells police-ai you are
+  seen (`seenBy`, stars don't drop); you stopped (or on foot) with it within 10 m for 1.2 s → `catchBy('hwy')`
+  「被國道警察抓到了！」; hitting it → `crime('cop')` +1★. Leaving the main road / no stars / too far → gives up
+  (lights off, back to patrol or parks on the shoulder). Siren = police-ai `makeSiren` on the same output bus.
+- Hitting people/animals in the rest area now counts as a crime too (`crowdHit`; animals still don't).
+- Tests: viaduct-test section 10 (85 ok): median everywhere, driving at it from the outer lane stops you
+  (closest 1.26–1.30 m from the middle, 1 bump), traffic never on it, police car looks (10b), patrol (10c), chase (10d),
+  give up (10e), ramming (10f), caught (10g). Section 3's robot now drives the middle of its carriageway (u 3.9 instead
+  of 2: with u 2 its pure-pursuit corner cutting hit the median in the two 65 m corners).
+- Perf (390×844, 普通): lot 195 (191 before), crossing 308 (303), under 362 (356), roundabout/neihu-end/ramps same;
+  +25–55k triangles. Highway police chase shot 356 calls / 0.90M.

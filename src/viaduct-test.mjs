@@ -7,6 +7,7 @@
 //   6 停車場走路：附近的車換成真的輕量車（最多 8 台）、遠的那台藏起來；走遠了換回去
 //   7 晚上：橋上、停車場的路燈加進 look.js 的燈
 //   8 截圖＋draw calls（停車場、圓環上面、跨過快速道路、內湖那頭、橋下）；VDV.at 多快
+//   10 第 93 批：雙向中間有分隔島（每一段都擋、開不過去、車子不會開到上面、方向對）；街上的警車＝小黃的車身＋警車塗裝＋警示燈；高架上的國道警察（GC8 白底紅條）：巡邏、你被通緝就來追（亮燈、警笛）、看到你星星不掉、沒星星就不追、撞到牠 1★、停下來被抓（最後一段，關進拘留室）
 // node viaduct-test.mjs [prefix]（截圖 <prefix>-… .png）
 import http from 'node:http';
 import fs from 'node:fs';
@@ -240,7 +241,7 @@ const s3 = await p.evaluate(() => {
   for (let th = 0.3; th > 0.02; th -= 0.01) pts.push([-780 + 243.1 * Math.sin(th), 225 + 243.1 * Math.cos(th)]); // 快速道路內圈的車道（往西）
   for (let z = 452; z >= 172; z -= 4) pts.push([-777.6, z]); // 往北：連到停車場的路、停車場中間的走道
   for (let k = 1; k <= 12; k++) { const a = (k / 12) * (Math.PI / 2); pts.push([-777.6 - 16 + 16 * Math.cos(a), 168 - 16 * Math.sin(a) - 4 * (k / 12)]); } // 左轉上圓環的起點
-  for (const q of H.deck(20, P.L - 2, 2)) pts.push(q);
+  for (const q of H.deck(20, P.L - 2, 3.9)) pts.push(q); // 第 93 批：中間有分隔島了＝開在這個方向那兩線的中間（以前沒分隔島，開 2）
   { const i = P.n - 1; for (let k = 4; k <= 60; k += 4) pts.push([P.X[i] + P.TX[i] * k - P.TZ[i] * 2, P.Z[i] + P.TZ[i] * k + P.TX[i] * 2]); } // 下來以後在內湖的路上再開一段
   const t0 = Math.atan2(-(pts[1][1] - pts[0][1]), pts[1][0] - pts[0][0]);
   H.put(pts[0][0], pts[0][1], t0, 60);
@@ -422,7 +423,7 @@ for (let k = 0; k < 60; k++) { await step9(1); await p.waitForTimeout(40); }
 const s9a = await p.evaluate(() => {
   const D = window.__D(), T = D.VDT, S = window.__s9, L = [...S.seen.values()], main = L.filter((e) => !e.rest && e.from !== 'lot');
   const vm = (f) => { const a = main.filter((e) => e.fast === f && e.vmax > 20).map((e) => e.vmax); return a.length ? Math.max(...a) : 0; };
-  const live = T.cars.filter((c) => c.obj && c.obj.car.visible); const t = D.drv.telemetry();
+  const live = T.cars.filter((c) => c.obj && !c.cop && c.obj.car.visible); /* 國道警察（第 93 批）是另外的物件，第 10 段測 */ const t = D.drv.telemetry();
   const kinds = [...new Set(L.map((e) => e.k))];
   return { n: L.length, main: main.length, d0: main.map((e) => Math.round(e.d0)).sort((a, b) => a - b), v0: Math.round(vm(0)), v1: Math.round(vm(1)), v2: Math.round(vm(2)), kinds, maxMain: S.maxMain, bumps: t.bumps - S.b0, minGap: +S.minGap.toFixed(2), info: T.info(), live: live.length, noObj: S.noObj, hold: +(S.hold || 0).toFixed(2), at: live.every((c) => Math.hypot(c.obj.car.position.x - c.x, c.obj.car.position.z - c.z) < 0.01), ms: +D.VDTR.avg.toFixed(3) };
 });
@@ -523,6 +524,160 @@ const s7 = await p.evaluate(() => {
 console.log('7', el(), JSON.stringify(s7));
 check(s7.night > 0.9 && s7.lit.some((l) => l.y > s7.cy + 3 && l.d < 60), `22:00 高 up on the deck: the deck lamps are lit (${s7.lit.map((l) => `${l.I}@${l.d}m/${l.y}m`).join(', ')}; ${s7.lamps} lamp heads)`);
 perf.night = await drawAndShot('night');
+
+
+// ================= 10 第 93 批：雙向（分隔島）、警車、國道警察 =================
+// Nick 2026-11-15「高速公路做成雙向來回的中間用分隔島隔開」「一般街上的警車用小黃 但塗裝是警車塗裝加警燈」「高速公路有額外的警用追逐車用GC8去查國道警車塗裝並採用」
+await p.evaluate(() => {
+  const H = window.__H, wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  // 照著主線開（往 +s，右手邊 u 公尺）：每一格看自己在哪個 s（VDV.st.s），往前看一點點
+  H.drive = (secs, vmax, u = 2.2, each) => {
+    const D = window.__D(), d = D.drv, V = D.VDV;
+    for (let n = 0; n < secs * 60; n++) {
+      const t = d.telemetry(), q = H.at(V.st.s + 6 + 0.5 * Math.abs(t.v), u), a = wrap(Math.atan2(-(q.z - t.z), q.x - t.x) - t.heading);
+      d.setInput({ throttle: t.v > vmax + 1 ? 0 : t.v > vmax - 1 ? 0.35 : 1, brake: t.v > vmax + 1 ? 1 : 0, steer: Math.max(-1, Math.min(1, -2.6 * a)) }); H.step(1);
+      if (each) each(d.telemetry());
+    }
+    d.setInput(null);
+  };
+  // 主線上的車（不算休息站、交流道上的）：離中線多遠、方向對不對（右手邊往 +s）
+  H.medWatch = (S) => {
+    const D = window.__D(), T = D.VDT, V = D.VDV, P = V.path, M = V.median;
+    for (const c of T.cars) {
+      if (c.rest || c.needObj || (c.line && c.line.ramp)) continue;
+      if (V.at(c.x, c.z, c.y) == null || V.Q.r !== 0) continue;
+      const s = V.Q.s, u = V.Q.u; if (s < M.s0 + 5 || s > M.s1 - 5) continue;
+      S.n++; if (Math.abs(u) < S.minU) { S.minU = Math.abs(u); S.minAt = [c.k, c.cop ? 'cop' : c.state, Math.round(s), +u.toFixed(2)]; }
+      const i = Math.min(P.n - 1, Math.round(s / 2)), fwd = Math.cos(c.h) * P.TX[i] - Math.sin(c.h) * P.TZ[i];
+      if (!c.cop && c.v > 2 && fwd * Math.sign(u) < 0) { S.wrong++; S.wrongAt = S.wrongAt || [c.k, Math.round(s), +u.toFixed(2)]; }
+    }
+  };
+  H.cam = (obj, lx, ly, lz, ty = 0.7) => { const D = window.__D(), Tm = window.__THREE, v = obj.localToWorld(new Tm.Vector3(lx, ly, lz)), w = obj.localToWorld(new Tm.Vector3(0, ty, 0)); D.dcam.position.copy(v); D.dcam.lookAt(w); D.dcam.updateMatrixWorld(true); };
+});
+await p.evaluate(() => { const L = window.__D().LOOK; L.set(0); L.setHour(13); window.__pol()?.clear(); });
+// 10a 分隔島：主線上每一段都有、擋得住
+const s10a = await p.evaluate(() => {
+  const D = window.__D(), V = D.VDV, M = V.median, P = V.path, H = window.__H, d = D.drv;
+  const cols = V.cols.filter((c) => c.vd === 'med');
+  const inBox = (c, x, z) => { const r = c.rot || 0, dx = x - c.x, dz = z - c.z, u = dx * Math.cos(r) - dz * Math.sin(r), w = dx * Math.sin(r) + dz * Math.cos(r); return Math.abs(u) <= c.hx && Math.abs(w) <= c.hz; };
+  let miss = 0, n = 0, missAt = null;
+  for (let s = M.s0 + 2; s < M.s1 - 2; s += 6) { n++; const i = Math.round(s / 2); if (!cols.some((c) => inBox(c, P.X[i], P.Z[i]))) { miss++; missAt = missAt || Math.round(s); } }
+  const tall = cols.every((c) => c.h - c.y0 > 1.3 && c.hz >= 0.25), mesh = []; V.group.traverse((o) => { if (o.isMesh) mesh.push(o.name); });
+  // 往中間開（右邊那一線、往左斜）：被分隔島擋住，不會開到對面
+  window.__vdt(false);
+  const out = [];
+  for (const [ds, ang] of [[300, 0.35], [1500, 0.45]]) { // 從外線斜斜開過去（衝一段，撞得到）
+    const q = H.at(P.sH + ds, 5.55); V.st.py = q.y; V.st.px = q.x; V.st.pz = q.z; H.put(q.x, q.z, q.h + ang, 40);
+    const b0 = d.telemetry().bumps; let minU = 99, onMain = 0;
+    for (let k = 0; k < 240; k++) { d.setInput({ throttle: 0.55, brake: 0, steer: 0 }); H.step(1); const t = d.telemetry(), y = D.tripS.car.position.y; if (V.at(t.x, t.z, y) != null && V.Q.r === 0) { onMain++; minU = Math.min(minU, V.Q.u); } }
+    d.setInput(null); H.stop();
+    out.push({ s: Math.round(P.sH + ds), minU: +minU.toFixed(2), onMain, bumps: d.telemetry().bumps - b0 });
+  }
+  return { s0: M.s0, s1: Math.round(M.s1), L: Math.round(P.L), med: V.info.med, cols: cols.length, n, miss, missAt, tall, meshes: mesh.length, out };
+});
+console.log('10a', el(), JSON.stringify(s10a));
+check(s10a.s0 <= 45 && s10a.s1 >= s10a.L - 10 && s10a.cols >= (s10a.s1 - s10a.s0) / 4 - 3 && s10a.miss === 0 && s10a.tall, `a median down the middle of the whole main road (s ${s10a.s0}–${s10a.s1} of ${s10a.L}; ${s10a.cols} blocks, ${s10a.miss}/${s10a.n} gaps; 0.82 m wall + anti-glare panels)`);
+check(s10a.out.every((q) => q.bumps >= 1 && q.minU > 0.5 && q.onMain > 200), `driving at the median: it stops you, you never get to the other side (${s10a.out.map((q) => `s ${q.s}: closest ${q.minU} m from the middle, ${q.bumps} bumps`).join('; ')})`);
+
+// 10b 街上的警車（小黃）、國道警察（GC8）的樣子：都是輕量車＋塗裝＋警示燈（沒有方塊車）
+const s10b = await p.evaluate(() => {
+  const D = window.__D(), out = { city: 0, box: 0, hwy: 0, other: [], draws: [], bar: 0, taxi: 0 };
+  D.TR.scene.traverse((o) => {
+    if (o.name !== 'police-car' && o.name !== 'hwy-police') return;
+    const k = o.children.map((c) => c.name);
+    if (k.includes('police-altis')) out.city++; else if (k.includes('police-gc8')) out.hwy++; else if (k.includes('police-car-box')) out.box++; else out.other.push(k.join('+'));
+    let bar = 0; o.traverse((q) => { if (q.name === 'police-bar') bar++; }); if (bar === 1) out.bar++;
+  });
+  return out;
+});
+console.log('10b', el(), JSON.stringify(s10b));
+check(s10b.city >= 3 && s10b.box === 0 && !s10b.other.length && s10b.bar === s10b.city + s10b.hwy, `street police cars are the 小黃 body in police colours with a light bar (${s10b.city} cars, ${s10b.box} old box cars)`);
+
+// 10c 國道警察巡邏：主線上 1 台 GC8（白底紅條），沒有亮燈
+await p.evaluate(() => { window.__vdt(true); window.__pol()?.clear(); const H = window.__H, P = window.__D().VDV.path; H.putDeck(P.sH + 900, 2.2, 30); H.stop(); window.__s10 = { minU: 99, wrong: 0, n: 0 }; });
+let s10c = null;
+for (let k = 0; k < 90; k++) {
+  s10c = await p.evaluate(() => { const D = window.__D(), T = D.VDT, H = window.__H; for (let i = 0; i < 20; i++) { window.__dstep(1, 1 / 20); if (i % 4 === 0) H.medWatch(window.__s10); }
+    const c = T.cars.find((q) => q.cop); if (!c) return { n: 0 };
+    const o = c.obj, kid = o ? o.group.children.map((q) => q.name) : []; return { n: T.cars.filter((q) => q.cop).length, k: c.k, state: c.state, chase: c.chase, lights: !!c.lights, obj: !!o, kid, vis: !!o && o.group.visible && !!o.group.parent, kmh: Math.round(c.v * 3.6), info: T.info().cops };
+  });
+  await p.waitForTimeout(40);
+  if (s10c.vis) break; // 生在 420～820 公尺外：700 公尺內才畫
+}
+console.log('10c', el(), JSON.stringify(s10c));
+check(s10c.n === 1 && s10c.k === 'gc8' && s10c.state === 'drive' && !s10c.chase && !s10c.lights && s10c.kid.includes('police-gc8') && s10c.vis, `a highway police GC8 patrols the viaduct (${s10c.state}, ${s10c.kmh} km/h, lights off; ${s10c.kid.join('+')})`);
+// 照一張巡邏車（旁邊、斜前面）
+await p.evaluate(() => { const D = window.__D(), c = D.VDT.cars.find((q) => q.cop); window.__H.cam(c.obj.group, 4.6, 1.5, 3.4); });
+perf.hwyPatrol = await drawAndShot('hwy-patrol');
+await p.evaluate(() => { const D = window.__D(), c = D.VDT.cars.find((q) => q.cop); window.__H.cam(c.obj.group, -3.2, 3.6, -3.6); });
+perf.hwyTop = await drawAndShot('hwy-patrol-top');
+
+// 10d 被通緝（1★）→ 國道警察來追：亮燈、越來越近、看到你星星不會掉
+await p.evaluate(() => { const D = window.__D(), t = D.drv.telemetry(); window.__pol().crime('cop', { x: t.x, z: t.z }); window.__s10d = { chase0: null, dMin: 1e9, dAt: [], lights: 0, wantedMin: 9, states: new Set() }; });
+let s10d = null;
+for (let k = 0; k < 24; k++) {
+  s10d = await p.evaluate(() => {
+    const D = window.__D(), T = D.VDT, V = D.VDV, pol = window.__pol(), H = window.__H, S = window.__s10d;
+    H.drive(1, 20, 2.2, () => { const t = D.drv.telemetry(); for (const c of T.cars) { if (!c.cop || !c.chase) continue; const d = Math.hypot(c.x - t.x, c.z - t.z); if (d < S.dMin) S.dMin = d; if (c.lights) S.lights++; } S.wantedMin = Math.min(S.wantedMin, pol.state === 'wanted' ? pol.wanted : 0); S.states.add(pol.state); });
+    H.medWatch(window.__s10);
+    const ch = T.cars.filter((c) => c.cop && c.chase), t = D.drv.telemetry(), near = ch.length ? Math.min(...ch.map((c) => Math.hypot(c.x - t.x, c.z - t.z))) : null;
+    if (S.chase0 == null && ch.length) S.chase0 = Math.round(near);
+    S.dAt.push(near == null ? null : Math.round(near));
+    return { n: ch.length, near: near == null ? null : Math.round(near), chase0: S.chase0, dMin: Math.round(S.dMin), lights: S.lights, wantedMin: S.wantedMin, wanted: pol.wanted, state: pol.state, states: [...S.states], info: T.info().cops, dAt: S.dAt, kmh: Math.round(t.kmh), s: Math.round(V.st.s)};
+  });
+  await p.waitForTimeout(40);
+  if (s10d.near != null && s10d.near < 30 && k >= 6) break;
+}
+console.log('10d', el(), JSON.stringify(s10d));
+check(s10d.info.chasing >= 1 && s10d.chase0 >= 150 && s10d.lights > 0, `wanted on the viaduct: a highway police GC8 comes after you with its lights on (first ${s10d.chase0} m away; ${s10d.info.chasers} new, ${s10d.info.chase} chases started)`);
+check(s10d.near != null && s10d.near < 40 && s10d.dMin < 40, `it catches up with you while you drive at ${s10d.kmh} km/h (distance ${s10d.dAt.join(', ')} m)`);
+check(s10d.info.seen > 0 && s10d.wantedMin >= 1 && s10d.states.length === 1 && s10d.state === 'wanted', `it can see you, so the stars stay (${s10d.wanted}★, lowest ${s10d.wantedMin}★; seen ${s10d.info.seen} frames)`);
+// 照一張追你的警車（從你的車後面往後看）
+await p.evaluate(() => { const D = window.__D(), T = D.VDT, t = D.drv.telemetry(), c = T.cars.filter((q) => q.cop && q.chase).sort((a, b) => Math.hypot(a.x - t.x, a.z - t.z) - Math.hypot(b.x - t.x, b.z - t.z))[0]; window.__H.cam(c.obj.group, 7.5, 2.2, 2.8); });
+perf.hwyChase = await drawAndShot('hwy-chase');
+
+// 10e 星星沒了：不追了（燈關掉、回到線上或停在旁邊）
+const s10e = await p.evaluate(() => {
+  const D = window.__D(), T = D.VDT, pol = window.__pol(), H = window.__H, g0 = T.copSt.gaveUp; pol.clear();
+  H.drive(2, 20, 2.2);
+  const cops = T.cars.filter((c) => c.cop);
+  return { gave: T.copSt.gaveUp - g0, chasing: cops.filter((c) => c.chase).length, lit: cops.filter((c) => c.lights).length, states: cops.map((c) => c.state), joined: T.copSt.joined };
+});
+console.log('10e', el(), JSON.stringify(s10e));
+check(s10e.gave >= 1 && s10e.chasing === 0 && s10e.lit === 0, `stars cleared: it stops chasing, lights off (${s10e.gave} gave up; now ${s10e.states.join(', ')})`);
+
+// 10f 撞到國道警察的車：1★
+const s10f = await p.evaluate(() => {
+  const D = window.__D(), T = D.VDT, V = D.VDV, pol = window.__pol(), H = window.__H, d = D.drv; pol.clear();
+  H.stop(); const s = V.st.s, me = { x: d.telemetry().x, z: d.telemetry().z };
+  let c = T.cars.find((q) => q.cop); if (!c) return { err: 'no cop' };
+  const q = H.at(s + 30, 2.2); c.state = 'end'; c.chase = false; c.lights = false; c.line = null; c.v = 0; c.x = q.x; c.z = q.z; c.y = q.y + 0.02; c.h = q.h; c.pitch = 0;
+  const h0 = T.copSt.hits; let k = 0, kmh = 0;
+  for (; k < 300 && T.copSt.hits === h0; k++) { d.setInput({ throttle: 1, brake: 0, steer: 0 }); H.step(1); kmh = d.telemetry().kmh; }
+  d.setInput(null); H.stop();
+  return { hits: T.copSt.hits - h0, wanted: pol.wanted, state: pol.state, kmh: Math.round(kmh), crimes: pol.telemetry().crimes?.slice(-1), k, me };
+});
+console.log('10f', el(), JSON.stringify(s10f));
+check(s10f.hits === 1 && s10f.wanted >= 1 && s10f.state === 'wanted', `crashing into a highway police car = ${s10f.wanted}★ (hit at ${s10f.kmh} km/h)`);
+
+// 10g 你停下來、國道警察停在旁邊：被抓（「被國道警察抓到了！」），去拘留室
+let s10g = null;
+for (let k = 0; k < 30; k++) {
+  s10g = await p.evaluate(() => {
+    const D = window.__D(), T = D.VDT, pol = window.__pol(), H = window.__H;
+    for (let i = 0; i < 20; i++) H.step(3, 1 / 60);
+    const t = D.drv ? D.drv.telemetry() : null, ch = T.cars.filter((c) => c.cop && c.chase), near = t && ch.length ? Math.round(Math.min(...ch.map((c) => Math.hypot(c.x - t.x, c.z - t.z)))) : null;
+    const txt = document.getElementById('stage')?.innerText || '';
+    return { state: pol.state, wanted: pol.wanted, near, caught: T.copSt.caught, msg: /被國道警察抓到了/.test(txt) || /被國道警察抓到了/.test(document.body.innerText) };
+  });
+  await p.waitForTimeout(40);
+  if (s10g.state !== 'wanted') break;
+}
+console.log('10g', el(), JSON.stringify(s10g));
+check(s10g.caught >= 1 && s10g.state !== 'wanted' && s10g.msg, `stopped with the highway police next to you: caught (「被國道警察抓到了！」, police state ${s10g.state})`);
+const s10 = await p.evaluate(() => window.__s10);
+check(s10.minU >= 1.15 && s10.wrong === 0 && s10.n > 50, `cars on the main road never drive on the median (closest ${s10.minU} m from the middle${s10.minAt ? ' ' + JSON.stringify(s10.minAt) : ''}; ${s10.n} samples) and drive on the right side (${s10.wrong} going the wrong way${s10.wrongAt ? ' ' + JSON.stringify(s10.wrongAt) : ''})`);
+console.log('10 perf', JSON.stringify({ hwyPatrol: perf.hwyPatrol, hwyTop: perf.hwyTop, hwyChase: perf.hwyChase }));
 
 await b.close(); srv.close();
 console.log(errs.length ? `page errors: ${errs.length}` : 'no page errors');

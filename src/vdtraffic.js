@@ -11,9 +11,16 @@
 //   T.cars：[{ id, x, y, z, h（npc 的方向：前面＝(cos h, −sin h)）, pitch, v, k, look, roll, rev, obj }]（town 放輕量車）；T.gone：這一格不見的（town 收回輕量車）
 //   T.colliders(x, z, r, y) → 同一層（±2.5 公尺）的車（npc.js 的格式；drive.js addColliders、走路的 movers）
 //   T.depart()、T.spawnAt(lineId, d, k)：測試用；T.info
+// 第 93 批（Nick 2026-11-15「高速公路有額外的警用追逐車用GC8去查國道警車塗裝並採用」）：國道警察（c.cop；town 用 police.js makePoliceCar('hwy')＝GC8 白底紅條）
+//   平常主線上有 1 台巡邏（跟一般的車一樣開在線上、不下交流道）；你被通緝（o.wanted() > 0）又在主線上（me.r＝0、分隔島兩邊的路）：追你
+//   追的時候自己照主線的 s、u 開（c.cs、c.cu；只在你那一邊，分隔島擋住），前面有車就換一線、閃不過就跟著；路上的車看到後面有閃燈的警車會讓（換到旁邊那一線）
+//   COP_SEE 公尺內＝o.copSeen()（警察知道你在哪：星星不會掉）；你停下來（或走路）、牠在 10 公尺內 1.2 秒＝o.caught()（被國道警察抓到）；你撞牠＝o.copHit()（+1★）
+//   你離開主線（交流道、休息站、下橋）、沒有星星了、太遠：不追了（關燈；方向對就回到線上巡邏，不對就停在路邊，看不到就收掉）
+//   me 多 r、s、u（主線上的位置；不在主線 r＝−1）、v（車速）、walk（走路）
 //   c.needObj＝town 把輕量車放好以前不動、不擋（新生的車：生在 420 公尺外，做好才開；休息站開走的那台：c.lot＝停著的那台（lot.cars），放好了 town 藏起停著的那台、清掉 needObj）；o.onGive(lc)：放回去
 export const { createVdTraffic } = (() => {
-const LANE = [1.85, 5.55]; // 內線、外線離中線多遠
+const LANE = [2.2, 5.55]; // 內線、外線離中線多遠（第 93 批：中間有分隔島，內線往外移；以前 1.85）
+const COP_TOP = 50, COP_SEE = 90; // 第 93 批：國道警察追你最快 50 m/s（180 公里）；90 公尺內（同一層）看得到你
 const KMH = 1 / 3.6;
 function createVdTraffic(V, o = {}) {
   const P = V.path, MAIN = V.roads[0], RL = V.restL, LOT = V.lot, rnd = o.rnd || Math.random, hAt = o.heightAt || (() => 0);
@@ -201,6 +208,101 @@ function createVdTraffic(V, o = {}) {
     const c = newCar(p); c.lot = lc; c.needObj = true; c.bay = b; b.res = c.id; c.side = side ?? (rnd() < 0.5 ? 1 : -1); c.rest = true; c.state = 'park'; c.t = 0.8 + rnd() * 1.5; c.x = b.x; c.z = b.z; c.y = yR; c.h = b.h; c.v = 0; c.line = null;
     cars.push(c); st.spawned++; return c;
   }
+  // ---- 第 93 批：國道警察 ----
+  const MED = V.median || { s0: 40, s1: L - 4 }, PX = P.X, PZ = P.Z, PTX = P.TX, PTZ = P.TZ;
+  const VBm = new Float32Array(n); for (let i = 0; i < n; i++) { const a = Math.max(0, i - 3), b = Math.min(n - 1, i + 3); let da = Math.atan2(PTZ[b], PTX[b]) - Math.atan2(PTZ[a], PTX[a]); while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI; const k = Math.abs(da) / Math.max(0.5, mS[b] - mS[a]); VBm[i] = k > 1e-4 ? Math.sqrt(1 / k) : 100; }
+  const copSt = { patrol: 0, chase: 0, chasers: 0, seen: 0, caught: 0, hits: 0, gaveUp: 0, joined: 0 };
+  let copT = 3, chaseT = 0, meS = NaN, meVs = 0;
+  const copDims = () => (o.copDims ? o.copDims() : [4.35, 1.69, 1.41]);
+  const newCop = () => { const c = newCar({ k: 'gc8', look: null, fast: 1, d: copDims() }); c.cop = true; c.lights = false; c.chase = false; c.hold = 0; c.hitCool = 0; c.noExit = true; c.top = 24 + rnd() * 2; c.mul = 1.05; return c; };
+  function copPose(c, du) { // c.cs、c.cu → 位置、方向（往 c.cdir 開；du＝這一格往旁邊移多少）、坡度
+    const f = Math.max(0, Math.min(n - 1.001, c.cs / 2)), i = Math.floor(f), t = f - i;
+    const tx = PTX[i] + (PTX[i + 1] - PTX[i]) * t, tz = PTZ[i] + (PTZ[i + 1] - PTZ[i]) * t;
+    c.x = PX[i] + (PX[i + 1] - PX[i]) * t - tz * c.cu; c.z = PZ[i] + (PZ[i + 1] - PZ[i]) * t + tx * c.cu; c.y = Yd[i] + (Yd[i + 1] - Yd[i]) * t + 0.02;
+    const vs = Math.max(0.5, c.v) * c.cdir, vx = tx * vs - tz * du, vz = tz * vs + tx * du;
+    c.h = Math.atan2(-vz, vx); c.pitch = Math.atan((Yd[i + 1] - Yd[i]) / 2) * c.cdir; c.vb = VBm[i];
+  }
+  function spawnPatrol(me) { // 巡邏的：跟一般的車一樣（420 公尺外、在線上）
+    const ls = Object.values(ML);
+    for (let k = 0; k < 14; k++) {
+      const l = ls[Math.floor(rnd() * ls.length)], d = 60 + rnd() * (l.L - 260), i = Math.min(l.m - 1, Math.max(0, Math.round((d / l.L) * (l.m - 1))));
+      if (!(l.ms[i] > MED.s0)) continue;
+      const dd = Math.hypot(l.X[i] - me.x, l.Z[i] - me.z); if (dd < 420 || dd > 820) continue;
+      if (cars.some((q) => q.line === l && Math.abs(q.d - d) < 40)) continue;
+      const c = newCop(); planMain(c, l, d); c.v = Math.min(c.top, c.ls) * 0.9; c.needObj = true; cars.push(c); st.spawned++; copSt.patrol++; return c;
+    }
+    return null;
+  }
+  function chaseStart(c) { // 巡邏的那台 → 追你（在主線上、你那一邊）
+    const l = c.line; if (!l || !l.ms || c.lk > 0) return false; const s = l.ms[c.hint]; if (!(s > MED.s0 && s < MED.s1)) return false;
+    c.cs = s; c.cu = l.dir * LANE[l.k]; c.cdir = l.dir; c.line = null; c.route = []; c.state = 'cop'; c.chase = true; c.lights = true; c.hold = 0; c.laneT = 0; copSt.chase++; return true;
+  }
+  function spawnChaser(me, side, dm) { // 新的一台：你後面 300 公尺（你開的方向的後面；那邊沒路了就前面）
+    for (const back of [300, 340, 380, -300, -340]) {
+      const s = me.s - dm * back; if (s < MED.s0 + 10 || s > MED.s1 - 10) continue;
+      const u = side * LANE[back > 0 ? 0 : 1];
+      if (cars.some((q) => q.cop && q.chase && Math.abs(q.cs - s) < 25)) continue;
+      const c = newCop(); c.state = 'cop'; c.chase = true; c.lights = true; c.cs = s; c.cu = u; c.cdir = back > 0 ? dm : -dm; c.v = Math.min(COP_TOP, Math.abs(meVs) + 6); c.hold = 0; c.laneT = 0; c.line = null;
+      copPose(c, 0); c.needObj = true; cars.push(c); st.spawned++; copSt.chasers++; copSt.chase++; return c;
+    }
+    return null;
+  }
+  function copGiveUp(c) { // 不追了：方向對（往那一邊的車道的方向）就回到線上；不然停在路邊（看不到就收掉）
+    c.chase = false; c.lights = false; c.hold = 0; copSt.gaveUp++;
+    const side = c.cu >= 0 ? 1 : -1;
+    if (c.cdir === side && c.cs > MED.s0 && c.cs < MED.s1 - 30) { const k = Math.abs(c.cu) < 3.9 ? 0 : 1, l = ML[`${side},${k}`]; c.state = 'drive'; planMain(c, l, dOfMs(l, c.cs)); c.v = Math.min(c.v, c.ls); copSt.joined++; return; }
+    c.state = 'end'; c.v = 0;
+  }
+  const meOnMain = (me) => me.on && me.r === 0 && me.s > MED.s0 && me.s < MED.s1 && Math.abs(me.u) > 0.45 && Math.abs(me.u) < 7.6;
+  function copStep(c, dt, me) {
+    c.hitCool -= dt;
+    const want = o.wanted ? o.wanted() : 0, ds = me.s - c.cs, adist = Math.abs(ds);
+    if (!want || !meOnMain(me) || (me.u >= 0) !== (c.cu >= 0) || adist > 1100) { copGiveUp(c); return; }
+    const dirTo = ds >= 0 ? 1 : -1, side = c.cu >= 0 ? 1 : -1;
+    if (dirTo !== c.cdir && c.v > 3) { c.v = Math.max(0, c.v - 10 * dt); } else c.cdir = dirTo; // 跑過頭：先煞車再掉頭
+    const away = meVs * c.cdir, back = me.walk ? 5 : 7 + Math.max(0, away) * 0.3; // 你在跑（往前離開牠多快）、停在你後面幾公尺
+    let vw = adist > 60 ? COP_TOP : Math.min(COP_TOP, Math.max(0, away + (adist - back) * 0.8));
+    vw = Math.min(vw, c.vb * Math.sqrt(7));
+    // 前面的車（同一邊、往前、左右 1.9 公尺內）；離你遠的時候挑前面比較空的那一線
+    const fx = Math.cos(c.h), fz = -Math.sin(c.h); let gap = 1e9, gv = 0; const ahead2 = [1e9, 1e9];
+    for (const q of cars) {
+      if (q === c || q.needObj || q.state === 'gone' || Math.abs(q.y - c.y) > 2.5) continue;
+      const dx = q.x - c.x, dz = q.z - c.z; if (Math.abs(dx) > 90 || Math.abs(dz) > 90) continue;
+      const ah = dx * fx + dz * fz; if (ah < 0.5 || ah > 90) continue;
+      const lat = -dx * fz + dz * fx; // 右手邊＝＋
+      const qu = c.cu + lat * c.cdir; for (let k = 0; k < 2; k++) if (Math.abs(qu - side * LANE[k]) < 1.9) ahead2[k] = Math.min(ahead2[k], ah);
+      if (Math.abs(lat) < 1.9) { const g = ah - (c.len + q.len) / 2; if (g < gap) { gap = g; gv = Math.max(0, q.v * (Math.cos(q.h) * fx - Math.sin(q.h) * fz)); } }
+    }
+    let tu;
+    if (adist < 30 && !me.walk) tu = me.u; // 近了：咬在你後面（同一線）
+    else if (adist < 30) tu = side * Math.max(1.4, Math.min(6.4, Math.abs(me.u) + (Math.abs(me.u) < 3.9 ? 2 : -2))); // 你在走路：停在你旁邊那一線
+    else { if ((c.laneT -= dt) <= 0) { c.laneT = 0.6; c.lane = ahead2[0] >= ahead2[1] ? 0 : 1; if (ahead2[0] > 70 && ahead2[1] > 70) c.lane = Math.abs(me.u) < 3.9 ? 0 : 1; } tu = side * LANE[c.lane ?? 0]; }
+    tu = side * Math.max(1.2, Math.min(6.55, Math.abs(tu))); // 不會壓到分隔島（中間 ±0.3）、外面的護欄
+    if (gap < 1e8) vw = Math.min(vw, Math.max(0, gv + (gap - 4) * 0.5), Math.max(0, (gap - 3) / 1.4));
+    const acc = vw > c.v ? Math.min(7, (vw - c.v) / dt) : Math.max(-10, (vw - c.v) / dt);
+    c.v = Math.max(0, c.v + acc * dt);
+    const du = Math.max(-2.4, Math.min(2.4, (tu - c.cu) / Math.max(dt, 0.4))) * Math.min(1, c.v / 4 + 0.2);
+    c.cu += du * dt; c.cs += c.v * dt * c.cdir; c.cs = Math.max(MED.s0, Math.min(MED.s1, c.cs)); c.roll += c.v * dt;
+    copPose(c, du);
+    // 看得到你、抓到你
+    const d3 = Math.hypot(me.x - c.x, me.z - c.z, me.y - c.y);
+    if (d3 < COP_SEE && Math.abs(me.y - c.y) < 3) { copSt.seen++; o.copSeen?.(c); }
+    const slow = me.walk || me.v < 2.5;
+    if (slow && d3 < (me.walk ? 7 : 11)) { c.hold += dt; if (c.hold > 1.2) { c.hold = 0; if (o.caught?.(c)) copSt.caught++; } } else c.hold = Math.max(0, c.hold - dt);
+  }
+  // 每一格：你被通緝、在主線上 → 要幾台追（1★ 1 台，3★ 以上 2 台）；先叫巡邏的那台（同一邊、700 公尺內），不夠就生
+  function copsThink(dt, me) {
+    if (me.on && me.r === 0 && isFinite(meS)) { const v = (me.s - meS) / Math.max(dt, 1e-3); if (Math.abs(v) < 120) meVs += (v - meVs) * Math.min(1, dt * 6); } else meVs = 0;
+    meS = me.on && me.r === 0 ? me.s : NaN;
+    const want = o.wanted ? o.wanted() : 0;
+    if (!want || !meOnMain(me)) return;
+    if ((chaseT -= dt) > 0) return; chaseT = 0.5;
+    const side = me.u >= 0 ? 1 : -1, need = want >= 3 ? 2 : 1;
+    let have = 0; for (const c of cars) if (c.cop && c.chase) have++;
+    if (have >= need) return;
+    for (const c of cars) { if (!c.cop || c.chase || c.state !== 'drive' || c.needObj || !c.line || !c.line.ms || c.line.dir !== side) continue; const s = c.line.ms[c.hint]; if (Math.abs(s - me.s) < 700 && chaseStart(c)) return; }
+    const dm = Math.abs(meVs) > 2 ? Math.sign(meVs) : side; spawnChaser(me, side, dm);
+  }
   let spawnT = 0, departT = 6, tick = 0;
   const near = (me) => { // 玩家離主線（每 10 點看一點）、休息站多遠
     let m = 1e9; for (let i = 0; i < n; i += 10) { const d = Math.hypot(P.X[i] - me.x, P.Z[i] - me.z); if (d < m) m = d; }
@@ -223,19 +325,25 @@ function createVdTraffic(V, o = {}) {
     const nMain = cars.filter((c) => !c.rest).length;
     if ((spawnT -= dt) <= 0) { spawnT = 0.6; if (nMain < (o.max || 6)) spawnMain(me, st.spawned - (st.spawned0 || 0) < 3 && nearM < 900 ? 250 : 420); }
     if (nearR < 600 && (departT -= dt) <= 0) { departT = 15 + rnd() * 20; if (cars.filter((c) => c.rest).length < 6) depart(); }
+    if (o.copDims && (copT -= dt) <= 0) { copT = 3; if (nearM < 900 && nMain < (o.max || 6) && !cars.some((c) => c.cop)) spawnPatrol(me); } // 第 93 批：主線上有 1 台國道警察巡邏
+    copsThink(dt, me);
+    let nChase = 0; for (const c of cars) if (c.cop && c.chase) nChase++;
+    copSt.chasing = nChase;
     // 開：目標速度（自己最快、彎道、速限）→ 前面的車、玩家（同一層、在前面、左右 1.8 公尺內）→ 加速／煞車
     for (const c of cars) {
       if (c.state === 'park') { if (!c.needObj && (c.t -= dt) <= 0) { c.state = 'drive'; st.departed++; begin(c, leave(c.side, c.bay)); c.v = 0; } continue; }
       if (c.needObj) { if ((c.ht = (c.ht || 0) + dt) > 6) { c.state = 'gone'; st.lost++; } continue; } // 剛生出來：town 把輕量車放好以前停在原地（看不到、不擋）；做不出來就收掉
+      if (c.cop && c.chase) { copStep(c, dt, me); continue; } // 第 93 批：國道警察在追你（自己照 s、u 開）
       if (c.state === 'end') { if (dist(c, me) > 170 || (o.seen && !o.seen(c))) c.state = 'gone'; c.v = 0; continue; } // 盡頭：你看得到就停著等，看不到就收掉
       const s = c.route[c.si], end = s.end ?? c.line.L, left = end - c.d;
       let want = c.rev ? c.line.LS[c.hint] : Math.min(c.top, c.vb * Math.sqrt(c.alat), c.ls * c.mul);
       const fin = c.stop || (c.si === c.route.length - 1 && !s.line.merge && !(s.exit && s.exit.rest) && !c.bay); // 要停在這段的盡頭
       if (fin) want = Math.min(want, Math.sqrt(Math.max(0, 2 * 2.5 * (left - 0.3))));
       const ch = c.line ? c.lh : c.h, fx = Math.cos(ch) * (c.rev ? -1 : 1), fz = -Math.sin(ch) * (c.rev ? -1 : 1), cX = c.line ? c.lx : c.x, cZ = c.line ? c.lz : c.z; // 往前走的方向（倒車＝車尾）
+      if (nChase && !c.cop && c.line.ms && c.lk <= 0 && c.lcT <= 0) for (const q of cars) { if (!q.cop || !q.chase) continue; const dx = q.x - cX, dz = q.z - cZ, ah = dx * fx + dz * fz; if (ah < -2 && ah > -70 && Math.abs(-dx * fz + dz * fx) < 1.9 && Math.abs(q.y - c.y) < 2.5) { laneChange(c, me); break; } } // 後面有閃燈的警車：讓到旁邊那一線
       let gap = 1e9, gv = 0;
       for (const q of cars) { if (q === c) continue; const dx = (q.line ? q.lx : q.x) - cX, dz = (q.line ? q.lz : q.z) - cZ, dy = q.y - c.y; if (Math.abs(dy) > 2 || Math.abs(dx) > 70 || Math.abs(dz) > 70) continue;
-        const ahead = dx * fx + dz * fz, side = Math.abs(dx * -fz + dz * fx); if (ahead > 0.5 && ahead < 70 && side < 1.9) { const g = ahead - (c.len + q.len) / 2; if (g < gap) { gap = g; gv = q.state === 'drive' && !q.needObj ? q.v : 0; } } }
+        const ahead = dx * fx + dz * fz, side = Math.abs(dx * -fz + dz * fx); if (ahead > 0.5 && ahead < 70 && side < 1.9) { const g = ahead - (c.len + q.len) / 2; if (g < gap) { gap = g; gv = q.needObj ? 0 : q.state === 'drive' ? q.v : q.state === 'cop' ? Math.max(0, q.v * (Math.cos(q.h) * fx - Math.sin(q.h) * fz)) : 0; } } }
       { const dx = me.x - cX, dz = me.z - cZ, dy = me.y - c.y; if (Math.abs(dy) < 2.5) { const ahead = dx * fx + dz * fz, side = Math.abs(dx * -fz + dz * fx); if (ahead > 0 && ahead < 70 && side < 2.2) { const g = ahead - c.len / 2 - 2.3; if (g < gap) { gap = g; gv = 0; c.wait += dt; } } } }
       if (gap < 45 && gv < want - 3 && (c.lcT -= dt) <= 0 && laneChange(c, me)) { gap = 1e9; } // 前面比較慢（或停著的你）：換到旁邊那一線超過去
       if (gap < 1e8) want = Math.min(want, Math.max(0, gv + (gap - 4) * 0.5), Math.max(0, (gap - 3) / 1.4));
@@ -254,7 +362,7 @@ function createVdTraffic(V, o = {}) {
       }
     }
     // 撞到（drive.js 推了一下）：照推的方向改速度
-    for (const b of colOut) { const c = b.car; if (!c || (!b.dvx && !b.dvz)) continue; if (c.state === 'drive') c.v = Math.min(36, Math.max(0, c.v + b.dvx * Math.cos(c.h) - b.dvz * Math.sin(c.h))); b.dvx = b.dvz = 0; }
+    for (const b of colOut) { const c = b.car; if (!c || (!b.dvx && !b.dvz)) continue; if (c.cop && Math.hypot(b.dvx, b.dvz) > 1.2 && c.hitCool <= 0) { c.hitCool = 3; copSt.hits++; o.copHit?.(c); } if (c.cop && c.chase) { b.dvx = b.dvz = 0; continue; } if (c.state === 'drive') c.v = Math.min(36, Math.max(0, c.v + b.dvx * Math.cos(c.h) - b.dvz * Math.sin(c.h))); b.dvx = b.dvz = 0; }
   }
   const colPool = [], colOut = [];
   function colliders(x, z, r, y) {
@@ -267,14 +375,14 @@ function createVdTraffic(V, o = {}) {
     }
     return colOut;
   }
-  const info = () => ({ lines: [...lines.keys()], junc: [...junc.entries()].map(([k, a]) => [k, a.map((j) => [j.id, Math.round(j.d)])]), merges: Object.values(ramps).filter((r) => r.merge).map((r) => [r.id, r.merge.line.id, Math.round(r.merge.d)]), cars: cars.length, rest: cars.filter((c) => c.rest).length, nearM: Math.round(nearM), nearR: Math.round(nearR), ...st });
+  const info = () => ({ cops: { ...copSt, n: cars.filter((c) => c.cop).length, chasing: cars.filter((c) => c.cop && c.chase).length }, lines: [...lines.keys()], junc: [...junc.entries()].map(([k, a]) => [k, a.map((j) => [j.id, Math.round(j.d)])]), merges: Object.values(ramps).filter((r) => r.merge).map((r) => [r.id, r.merge.line.id, Math.round(r.merge.d)]), cars: cars.length, rest: cars.filter((c) => c.rest).length, nearM: Math.round(nearM), nearR: Math.round(nearR), ...st });
   const spawnAt = (id, d, k) => { const l = lines.get(id); if (!l) return null; const p = o.pick(++seed * 7919 + 13, k); if (!p) return null; const c = newCar(p); if (ML[`${l.dir},${l.k}`] === l) planMain(c, l, d); else { begin(c, [{ line: l, ...(l.ramp && l.ramp.exit ? { exit: { id: l.ramp.id, rest: !!l.ramp.rest } } : {}) }]); c.d = d; place(c); } c.needObj = true; cars.push(c); st.spawned++; return c; };
   function clear() { // 回家、換場景：全部收掉（town 收回 gone 的輕量車）、開走的那幾台放回去
     gone.length = 0; for (const c of cars) { if (c.bay && c.bay.res === c.id) c.bay.res = 0; gone.push(c); } cars.length = 0;
     for (const lc of lotOf.values()) if (lc.taken) { lc.taken = false; o.onGive?.(lc); st.gave++; }
-    spawnT = 0; departT = 6; tick = 0; st.spawned0 = st.spawned;
+    spawnT = 0; departT = 6; tick = 0; st.spawned0 = st.spawned; copT = 3; chaseT = 0; meS = NaN; meVs = 0;
   }
-  return { cars, gone, update, colliders, info, depart, spawnAt, clear, lines, ramps, ML, bays, st };
+  return { cars, gone, update, colliders, info, depart, spawnAt, clear, lines, ramps, ML, bays, st, spawnPatrol, spawnChaser: (me, side, dm) => spawnChaser(me, side, dm), copSt };
 }
 return { createVdTraffic };
 })();

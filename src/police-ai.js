@@ -781,6 +781,7 @@ function createPolice(o = {}) {
 
   // ---- 狀態 ----
   let everSeen = false, huntT = 0; // 第 3 批（b3-int）：這次通緝警察看到過你沒有、還沒看到過的秒數（甩開的計時從被看到才開始）
+  let extSeen = false;
   let enabled = true, alive = true, state = 'free', wanted = 0, heat = 0, seenNow = false, lastX = 0, lastZ = 0, catchP = 0, T0 = 0, spawnT = 0, safeT = 0;
   let phaseT = 0, jailLeft = 0, jailFine = 0, jailStars = 0, paid = false, hudFaded = false, relDone = false, slotT = 0, sndT = 0, yardT = 0, dropped = false;
   const lastCrime = {}, crimes = []; let arrests = 0, escapes = 0;
@@ -1476,7 +1477,7 @@ function createPolice(o = {}) {
     if (state !== 'wanted') return;
     state = 'caught'; phaseT = 0; arrests++; catchP = 1;
     jailStars = wanted; jailFine = T.fine * Math.max(1, wanted); jailLeft = T.jailS; paid = false;
-    toast(how === 'surrender' ? '自首：警察帶你去拘留室' : '被警察抓到了！', 2400, true); // 第 3 批（b3-int）：自己走進警察局＝自首
+    toast(how === 'surrender' ? '自首：警察帶你去拘留室' : how === 'hwy' ? '被國道警察抓到了！' : '被警察抓到了！', 2400, true); // 第 3 批（b3-int）：自己走進警察局＝自首
     if (o.onCaught) try { o.onCaught({ stars: jailStars, fine: jailFine, seconds: T.jailS, mode: P.mode, how }); } catch (e) { console.warn(e); }
   }
   function toJail() {
@@ -1598,6 +1599,7 @@ function createPolice(o = {}) {
     }
     const n = Math.max(1, Math.ceil((dt * vtop) / 0.6)), h = dt / n; // 物理每步最多走 0.6 公尺
     seenNow = false;
+    if (extSeen) { if (state === 'wanted') seenNow = true; extSeen = false; } // 第 93 批：國道警察（高架橋上的 GC8，vdtraffic.js）看到你
     if (state === 'wanted' || state === 'free') {
       // 角色：最近的那台咬著（0），第二近繞到前面（1），第三近從旁邊夾（2）
       for (const c of cars) { c.role = -1; if (!c.on || c.mode === 'home' || c.wreckT > 0) continue; let r = 0; for (const k of cars) if (k !== c && k.on && k.mode !== 'home' && !(k.wreckT > 0) && (k.d < c.d || (k.d === c.d && k.id < c.id))) r++; c.role = r; }
@@ -1878,6 +1880,10 @@ function createPolice(o = {}) {
   return {
     update, crime, punch, carHit, shot, carObject, shotCar, colliders, wreck, bump, movers, npcCars, markers: markerList, clear, setEnabled, dispose, telemetry, payFine, preload,
     surrender: () => { if (state !== 'wanted') return false; caught('surrender'); return true; }, // 第 3 批（b3-int）：通緝中自己走進警察局＝自首（一樣關、一樣罰）
+    // 第 93 批：國道警察（高架橋上的追逐車，vdtraffic.js＋town.src.js）：看到你（這一格不會甩開）、抓到你、警笛（同一個聲音、同一條總輸出）
+    seenBy: () => { extSeen = true; }, catchBy: (how = 'hwy') => { if (state !== 'wanted') return false; caught(how); return true; },
+    siren: (id) => { const ctx = audioCtx(); return ctx ? makeSiren(ctx, SND.out || ctx.destination, id) : null; },
+    sirenGain: () => { const muted = SND && typeof SND.muted === 'function' ? !!SND.muted() : false; return SND && !muted && enabled ? (SND.gain ?? 0.22) * SIREN_VOL : 0; },
     get wanted() { return wanted; }, get state() { return state; }, get enabled() { return enabled; },
     get jailLeft() { return state === 'jail' ? Math.max(0, jailLeft) : 0; }, // 連線：朋友的名單寫「在拘留室 9:30」
     resetPerf() { perf.n = 0; perf.sum = 0; perf.max = 0; },

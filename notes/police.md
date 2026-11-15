@@ -16,3 +16,16 @@ Open: chase camera can clip into police car light bar (camera avoids only object
 
 ## Batch 34 — gentler siren (trial v50, 2026-10-24)
 Nick: 「警車警鈴改成溫和一點沒這麼吵的」. `makeSiren`: triangle + sine (octave) instead of sawtooth + square, octave mix 0.18 → 0.10, bandpass 1150 Hz Q 0.9 → 950 Hz Q 0.6, sweep depth 170/340 → 120/240 cents-ish Hz, LFO 0.78 → 0.6 Hz through a 2.5 Hz lowpass (was 5: glides slower). `sirens()`: overall gain × `SIREN_VOL = 0.5`, distance lowpass 900 + 6500·near → 800 + 2400·near (less treble up close). Tests only check that a siren object exists (test-b3), so no test change.
+
+## Batch 93 — 小黃 police cars, highway police GC8 (trial v105, 2026-11-15)
+Nick 2026-11-15: 「一般街上的警車用小黃 但塗裝是警車塗裝加警燈」「高速公路有額外的警用追逐車用GC8去查國道警車塗裝並採用」.
+- `makePoliceCar(kind)` (police.js) returns a wrapper group `police-car` (`hwy-police` for the viaduct ones). Inside:
+  the LOD car body built by town `copCar` (registered with `setPoliceLod({ build })` after `polLodWarm` loads the altis
+  and gc8 LOD data, max 8 s); until then the old box car (`police-car-box`), swapped automatically.
+- Livery = carlod.js decal (`look.decal = { R, L, T }`, canvas textures from `policeDecal(kind, key)`): sides projected
+  from the side (x, y over the body box), top projected from above. Fits per body in `DEC_FIT` (door edges, belt, band).
+  City (`altis` body, taxi sign hidden): Taiwan's blue-and-white — white body, blue nose and tail, blue band,
+  「警察」/POLICE on the doors, 110 on the rear. Highway (`gc8`): white with red waist band and red diagonal stripes front
+  and rear (the 「紅斑馬」 look), 「國道警察」/HIGHWAY POLICE on the doors. No real badges or crests, own lettering only.
+- Roof light bar `makeLightBar` (red/blue halves, 1 draw call, flashes 0.8 s pattern), on the LOD roof (`roof()`).
+- police-ai: `seenBy()`, `catchBy('hwy')`, `siren(id)`, `sirenGain()` for the highway police (vdtraffic.js).

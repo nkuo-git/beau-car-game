@@ -261,6 +261,25 @@ function buildViaduct(V, opts = {}) {
   const chunks = [];
   let tris = 0;
   const rb = qb(true), cb = qb(false);
+  // 第 93 批（Nick 2026-11-15「高速公路做成雙向來回的中間用分隔島隔開」）：主線中間的分隔島＝紐澤西護欄（下寬上窄的水泥，0.82 公尺）＋上面綠色的防眩板（每 1 公尺一片、斜斜的）
+  //   起點那段（停車場上來的開口、可以迴轉）和最後 4 公尺沒有；車道：中線往外 0.55 黃線、3.9 白虛線、7.05 白線（vdtraffic.js LANE 2.2、5.55）
+  const MED = { s0: S_OPEN + 4, s1: L - 4, hw: 0.3, h: 0.82, slat: 1.0 };
+  const medOn = (i) => S[i] >= MED.s0 - 1e-6 && S[i] <= MED.s1 + 1e-6;
+  const MPR = [[0.3, 0], [0.26, 0.08], [0.11, 0.33], [0.09, MED.h]];
+  const medSeg = (i0, i1) => { // 一段（4 公尺）的分隔島：兩邊的斜面、頂、防眩板
+    const ya = Y[i0], yb = Y[i1];
+    for (const sd of [-1, 1]) { const hint = [-TZ[i0] * sd, 0.3, TX[i0] * sd]; for (let k = 0; k < 3; k++) cb.quad(P3(i0, sd * MPR[k][0], ya + MPR[k][1]), P3(i1, sd * MPR[k][0], yb + MPR[k][1]), P3(i1, sd * MPR[k + 1][0], yb + MPR[k + 1][1]), P3(i0, sd * MPR[k + 1][0], ya + MPR[k + 1][1]), k === 2 ? COL.barTop : COL.bar, null, hint); }
+    cb.quad(P3(i0, -0.09, ya + MED.h), P3(i1, -0.09, yb + MED.h), P3(i1, 0.09, yb + MED.h), P3(i0, 0.09, ya + MED.h), COL.barTop, null, [0, 1, 0]);
+    const s0 = S[i0], s1 = S[i1];
+    for (let sv = Math.ceil(s0 / MED.slat - 1e-6) * MED.slat + 0.5 * MED.slat; sv < s1 - 1e-6; sv += MED.slat) {
+      if (sv < MED.s0 + 0.5 || sv > MED.s1 - 0.5) continue;
+      const t = (sv - s0) / (s1 - s0 || 1), x = X[i0] + (X[i1] - X[i0]) * t, z = Z[i0] + (Z[i1] - Z[i0]) * t, y = ya + (yb - ya) * t + MED.h, tx = TX[i0], tz = TZ[i0];
+      const dx = tx * 0.82 - tz * 0.57, dz = tz * 0.82 + tx * 0.57, w = 0.11; // 板子跟路斜 35 度（擋對面的車燈）
+      const a0 = [x - dx * w, y - 0.02, z - dz * w], a1 = [x + dx * w, y - 0.02, z + dz * w], b1 = [x + dx * w, y + 0.62, z + dz * w], b0 = [x - dx * w, y + 0.62, z - dz * w], nx = -dz, nz = dx;
+      cb.quad(a0, a1, b1, b0, COL.green, null, [nx, 0, nz]); cb.quad(a0, a1, b1, b0, COL.green, null, [-nx, 0, -nz]);
+    }
+  };
+  const medCap = (i, dir) => { const y = Y[i], f = [TX[i] * dir, 0, TZ[i] * dir]; cb.quad(P3(i, -0.3, y), P3(i, 0.3, y), P3(i, 0.09, y + MED.h), P3(i, -0.09, y + MED.h), COL.yel, null, f); };
   const flushChunk = () => {
     for (const [b, m, nm] of [[rb, roadMat, 'vd-road'], [cb, concMat, 'vd-conc']]) { if (!b.n) continue; const me = new THREE.Mesh(b.geo(), m); me.name = nm; me.matrixAutoUpdate = false; me.updateMatrix(); me.receiveShadow = true; me.castShadow = nm === 'vd-conc'; group.add(me); tris += b.nt; chunks.push(me); b.reset(); }
   };
@@ -305,6 +324,7 @@ function buildViaduct(V, opts = {}) {
       if (main && S[i0] < S_OPEN - 0.1) cb.quad(Pr(i0, -HW, ya - 0.02), Pr(i1, -HW, yb - 0.02), Pr(i1, -ROAD, yb - 0.02), Pr(i0, -ROAD, ya - 0.02), COL.under, null, [0, 1, 0]); // 開口那邊護欄的位子：鋪平
       if (el(i0)) { const a0 = main ? -W : innerU(i0), a1 = main ? -W : innerU(i1); if (a0 < W - 0.01 || a1 < W - 0.01) cb.quad(Pr(i0, a0, ya - 1.1), Pr(i1, a1, yb - 1.1), Pr(i1, W, yb - 1.1), Pr(i0, W, ya - 1.1), COL.under, null, [0, -1, 0]); } // 橋面底下
       if (i0 >= 2 && el(i0) !== el(i0 - STEP) && !att(r, i0)) { const j = i0, yj = RY[j], g = r.Gmin[j] - 0.4, t = [RTX[j], 0, RTZ[j]], f = el(j) ? t : [-t[0], 0, -t[2]]; cb.quad(Pr(j, -W, yj - 1.1), Pr(j, W, yj - 1.1), Pr(j, W, g), Pr(j, -W, g), COL.wall, null, f); } // 引道的牆到橋的地方：一面牆封起來
+      if (main && medOn(i0) && medOn(i1)) { if (!medOn(i0 - 1)) medCap(i0, -1); medSeg(i0, i1); if (!medOn(i1 + 1) || i1 >= m - 1) medCap(i1, 1); } // 第 93 批：分隔島
       if (main ? (i0 + STEP) % CH < STEP || i1 >= m - 1 : i1 >= m - 1 && rampEnd(rk)) flushChunk();
     }
     if (main) cap(0, 1, -1); // 起點外側（內側開口的頭上面那行自己封）
@@ -432,6 +452,15 @@ function buildViaduct(V, opts = {}) {
       }
     }
   }
+  // 8b) 第 93 批：分隔島（4 公尺一塊，中間）：在同一層才擋；開車的鏡頭不被擋
+  let nMed = 0;
+  for (let i = 0; i < n - 1; i += 2) {
+    const j = Math.min(n - 1, i + 2); if (!medOn(i) || !medOn(j)) continue;
+    const x = (X[i] + X[j]) / 2, z = (Z[i] + Z[j]) / 2, y = Math.min(Y[i], Y[j]), yHi = Math.max(Y[i], Y[j]), len = Math.hypot(X[j] - X[i], Z[j] - Z[i]); if (len < 0.1) continue;
+    const c = { t: 'box', x, z, hx: len / 2 + 0.2, hz: 0.3, rot: Math.atan2(-(Z[j] - Z[i]) / len, (X[j] - X[i]) / len), h: yHi + MED.h + 0.62, y0: y, noCrush: true, lowCam: true, vd: 'med' };
+    Object.defineProperty(c, 'off', { get: () => !(st.py > y - 2.5 && st.py < yHi + 3), set: () => {}, enumerable: false, configurable: true });
+    cols.push(c); nMed++;
+  }
   // 9) 停車場的車：遠的 InstancedMesh、碰撞（只給玩家）
   const lotCars = lotFar();
   // 太遠就不畫：停車場、休息站遠的車（每一區）、整個休息站（從內湖、山上看過去）
@@ -503,12 +532,12 @@ function buildViaduct(V, opts = {}) {
   V.group.add(group);
 
   const API = {
-    group, st, at, normal, Q, cols, Y, G: Gc, lot: lotCars, cull: cullFar, path: VD_PATH, HW, sD, roads: ROADS, rest, restL: RL, signs: sg2, etc: sg2.etc, // roads[0]＝主線；交流道：{ X, Z, S, TX, TZ, n, L, Y, MS（接在主線旁邊那段的主線 s）, UC, def }
+    group, st, at, normal, Q, cols, Y, G: Gc, lot: lotCars, cull: cullFar, path: VD_PATH, HW, sD, roads: ROADS, median: MED, rest, restL: RL, signs: sg2, etc: sg2.etc, // roads[0]＝主線；交流道：{ X, Z, S, TX, TZ, n, L, Y, MS（接在主線旁邊那段的主線 s）, UC, def }
     near: vdNear, inLot: vdInLot, clearAt: (i) => clearAt(i),
     info: null,
   };
   const ramps = ROADS.slice(1).map((r) => ({ id: r.def.id, len: +r.L.toFixed(1), grade: +(r.maxGrade * 100).toFixed(1), yTop: +Math.max(...r.Y).toFixed(1), yEnd: +r.Y[r.n - 1].toFixed(2) }));
-  API.info = { len: +L.toFixed(1), helix: +sH.toFixed(1), sD: +sD.toFixed(1), pts: n, tris, chunks: chunks.length, piers: nPier, pierSkip: nSkip, cols: nCol, bars: nBar, ground: nGround, lamps: lampsX.length / 3, lotSpots: VD_LOT.spots.length, lotCars: lotCars.cars.length, signs: sg2.list.length, signSkip: sg2.list.filter((q) => q.skip).length, curves: sg2.curves, etc: sg2.etc.map((e) => e.s), restBays: RL.bays.length, restCars: lotCars.cars.filter((c) => c.area === 'r').length, restTris: rest.tris, ramps, yMax: +Math.max(...Y).toFixed(2),
+  API.info = { len: +L.toFixed(1), helix: +sH.toFixed(1), sD: +sD.toFixed(1), pts: n, tris, chunks: chunks.length, piers: nPier, pierSkip: nSkip, cols: nCol, bars: nBar, med: nMed, medS: [MED.s0, +MED.s1.toFixed(1)], ground: nGround, lamps: lampsX.length / 3, lotSpots: VD_LOT.spots.length, lotCars: lotCars.cars.length, signs: sg2.list.length, signSkip: sg2.list.filter((q) => q.skip).length, curves: sg2.curves, etc: sg2.etc.map((e) => e.s), restBays: RL.bays.length, restCars: lotCars.cars.filter((c) => c.area === 'r').length, restTris: rest.tris, ramps, yMax: +Math.max(...Y).toFixed(2),
     minClear: (() => { let m = 1e9, at2 = 0; for (let i = 0; i < n; i++) if (S[i] > sH && S[i] < sD && !restSide(i)) { const c = clearAt(i); if (c < m) { m = c; at2 = S[i]; } } return [+m.toFixed(2), +at2.toFixed(0)]; })(),
     restMain: (() => { let a = 1e9, b = -1e9, s0 = 1e9, s1 = -1e9; for (let i = 0; i < n; i++) if (restSide(i)) { a = Math.min(a, Y[i]); b = Math.max(b, Y[i]); s0 = Math.min(s0, S[i]); s1 = Math.max(s1, S[i]); } return { yLo: +a.toFixed(2), yHi: +b.toFixed(2), s0: Math.round(s0), s1: Math.round(s1) }; })(),
     ms: 0 };
@@ -687,8 +716,8 @@ function deckTex(renderer) {
   let s = 91; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
   for (let k = 0; k < 2600; k++) { const v = 52 + rnd() * 34; g.fillStyle = `rgba(${v},${v},${v + 2},${0.25 + rnd() * 0.35})`; g.fillRect(rnd() * W, rnd() * H, 1 + rnd() * 2, 1 + rnd() * 2); }
   const px = (m) => ((m + 8) / 16) * W, lw = (m) => (m / 16) * W;
-  g.fillStyle = '#e2b437'; for (const o of [-0.2, 0.2]) g.fillRect(px(o) - lw(0.06), 0, lw(0.12), H); // 雙黃線
-  g.fillStyle = '#ecece6'; for (const o of [-3.6, 3.6]) g.fillRect(px(o) - lw(0.075), 0, lw(0.15), H / 2); // 白虛線（6 公尺）
+  g.fillStyle = '#e2b437'; for (const o of [-0.55, 0.55]) g.fillRect(px(o) - lw(0.06), 0, lw(0.12), H); // 第 93 批：分隔島兩邊的黃線（以前中間是雙黃線）
+  g.fillStyle = '#ecece6'; for (const o of [-3.9, 3.9]) g.fillRect(px(o) - lw(0.075), 0, lw(0.15), H / 2); // 白虛線（6 公尺）
   for (const o of [-7.05, 7.05]) g.fillRect(px(o) - lw(0.075), 0, lw(0.15), H); // 路邊白線
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.ClampToEdgeWrapping; t.wrapT = THREE.RepeatWrapping;
   t.anisotropy = renderer && renderer.capabilities ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;

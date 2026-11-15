@@ -448,8 +448,21 @@ export const { buildLodCar, LOD_CARS } = (() => {
     diffuseColor.rgb = mix(diffuseColor.rgb, LV.rgb, LV.a * smoothstep(0.2, 0.45, abs(vLivP.w)));
   }`);
       }
+      if (tab.dec) { // 第 93 批：警車的塗裝（look.decal＝{ R, L, T }）：左右兩張從側面投影（uv＝車子的 x、y 照車身外框 0–1），T 從上面投影（x、z）＝引擎蓋、車頂、行李箱，車頭車尾也照它；只上在車漆類
+        sh.vertexShader = 'varying vec3 vDecP; varying vec3 vDecN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vDecP = position; vDecN = normal;');
+        sh.fragmentShader = 'uniform sampler2D tDecR, tDecL, tDecT; uniform vec4 uDecA; uniform vec2 uDecZ; varying vec3 vDecP; varying vec3 vDecN;\n' + sh.fragmentShader.replace('diffuseColor.rgb = gl_FrontFacing ? vLodC : uLodIn;', `diffuseColor.rgb = gl_FrontFacing ? vLodC : uLodIn;
+  if (gl_FrontFacing && vLodM.w > 0.5) {
+    float ws = smoothstep(0.3, 0.62, abs(normalize(vDecN).z));
+    float ux = vDecP.x * uDecA.x + uDecA.y;
+    vec4 DT = texture2D(tDecT, vec2(ux, vDecP.z * uDecZ.x + uDecZ.y));
+    vec2 us = vec2(ux, vDecP.y * uDecA.z + uDecA.w);
+    vec4 DS = vDecP.z > 0.0 ? texture2D(tDecR, us) : texture2D(tDecL, us);
+    vec3 dTop = mix(diffuseColor.rgb, DT.rgb, DT.a), dSide = mix(diffuseColor.rgb, DS.rgb, DS.a);
+    diffuseColor.rgb = mix(dTop, dSide, ws);
+  }`);
+      }
     };
-    m.customProgramCacheKey = () => (tab.liv ? 'lodcar+liv' : 'lodcar');
+    m.customProgramCacheKey = () => (tab.liv ? 'lodcar+liv' : tab.dec ? 'lodcar+dec' : 'lodcar');
     return m;
   }
   function glassMaterial() { // 跟 masks.js patchGlass 一樣：反光越亮越不透明；只畫正面（雙面透明要畫兩次；對面的窗從裡面看不到也沒關係，看過去是車殼裡面或外面的景）
@@ -503,6 +516,10 @@ export const { buildLodCar, LOD_CARS } = (() => {
     const tab = { C: new Float32Array(NC * 4), M: new Float32Array(NC * 4), E: new Float32Array(NC * 3) };
     tab.U = { uLodC: { value: tab.C }, uLodM: { value: tab.M }, uLodE: { value: tab.E }, uLodIn: { value: INSIDE } };
     if (spec.lod?.livery) { tab.liv = true; Object.assign(tab.U, { tLivR: { value: null }, tLivL: { value: null }, uLivA: { value: new THREE.Vector4(...spec.lod.liv) }, uLivY: { value: new THREE.Vector2(spec.lod.livY0 ?? -1e9, 0) } }); } // 怪獸卡車的拉花
+    if (look.decal && !tab.liv) { // 第 93 批：警車的塗裝（看上面 bodyMaterial 的 tab.dec）
+      const bb = d.bb, lx = bb.max.x - bb.min.x, ly = bb.max.y - bb.min.y, lz = bb.max.z - bb.min.z; tab.dec = true;
+      Object.assign(tab.U, { tDecR: { value: look.decal.R }, tDecL: { value: look.decal.L }, tDecT: { value: look.decal.T }, uDecA: { value: new THREE.Vector4(1 / lx, -bb.min.x / lx, 1 / ly, -bb.min.y / ly) }, uDecZ: { value: new THREE.Vector2(1 / lz, -bb.min.z / lz) } });
+    }
     const setCls = (i, col, rough, metal, cc, paintW = 0) => { tab.C.set([col.r, col.g, col.b, paintW], i * 4); tab.M.set([rough, metal, cc, 0], i * 4); };
     for (const [r, v] of Object.entries(FIXED)) setCls(R[r], ...v);
     setCls(R.lens, ...LENS(d.mix.lens)); setCls(R.wire, ...WIRE(d.mix.wire));
@@ -576,6 +593,7 @@ export const { buildLodCar, LOD_CARS } = (() => {
       setCls(R.caliper, new THREE.Color(cur.caliper || '#9da1a6'), 0.3, 0.3, 0.8);
       const acc = key === 'jesko' && cur.livery !== 'none' ? ACCENT[cur.livery] || ACCENT.red : '#17181b';
       setCls(R.accent, new THREE.Color(acc), 0.3, 0.1, 1);
+      if (tab.dec && cur.decal) { tab.U.tDecR.value = cur.decal.R; tab.U.tDecL.value = cur.decal.L; tab.U.tDecT.value = cur.decal.T; }
       if (tab.liv) { const L = spec.lod.livery(cur.livery); tab.U.uLivY.value.y = L ? 1 : 0; if (L) { tab.U.tLivR.value = L.R; tab.U.tLivL.value = L.L; } } // 怪獸卡車的拉花（'none' → 關掉）
       rimLook();
       shape();
@@ -593,6 +611,13 @@ export const { buildLodCar, LOD_CARS } = (() => {
     let pop = null; // 跳燈：setLook() 做好車身網格以後才做（燈座的軸、洞照車身量）
     const api = {
       car, body, key, tris: 0, look: cur, meshes: { body: bodyMesh, glass: glassMesh, wheels: wheelMesh, rims: rimMesh }, get pop() { return pop; },
+      roof() { // 第 93 批：車頂最高的地方（警示燈放這裡）：{ x（中心）, y, x0, x1（車頂平的那段） }
+        const rk = 'roof|' + applied.kit; if (d[rk]) return d[rk];
+        const use = d.pieces.filter((p) => p.lod !== 'part' && p.wing === null && (p.kits.includes('*') || p.kits.includes(applied.kit))); // 車身（這個套件看得到的；尾翼、零件不算）
+        let my = -1e9; for (const p of use) for (let i = 1; i < p.P.length; i += 3) if (p.P[i] > my && Math.abs(p.P[i + 1]) < 0.5) my = p.P[i];
+        let a = 1e9, b = -1e9; for (const p of use) for (let i = 0; i < p.P.length; i += 3) if (p.P[i + 1] > my - 0.03 && Math.abs(p.P[i + 2]) < 0.35) { a = Math.min(a, p.P[i]); b = Math.max(b, p.P[i]); }
+        return (d[rk] = { x: (a + b) / 2, y: my, x0: a, x1: b });
+      },
       setLook,
       setRoll(dist) { rm.userData.u.uRoll.value = dist; }, // 開了多遠（公尺）：輪框轉 dist／半徑
       setSquash(t) { // 第 7 批（怪獸卡車輾過去）：車頂壓扁（車身整個往下壓、稍微往外擠、玻璃破掉）；0＝原狀

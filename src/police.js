@@ -32,7 +32,7 @@
 import * as THREE from 'three';
 
 // 打包（build-art.mjs、build-app.mjs）會拿掉 import、把 export 變成一般宣告：這個檔全部包在一個函式裡，只露出下面這些名字
-export const { buildPoliceStation, buildPoliceInterior, makePoliceCar, POLICE_LOOK, POLICE_TEXT } = (() => {
+export const { buildPoliceStation, buildPoliceInterior, makePoliceCar, setPoliceLod, policeDecal, makeLightBar, POLICE_LOOK, POLICE_TEXT } = (() => {
 const TAU = Math.PI * 2, R2 = Math.PI / 2;
 const SANS = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", "WenQuanYi Zen Hei", sans-serif';
 const COND = '"Barlow Condensed", "Arial Narrow", sans-serif';
@@ -301,8 +301,8 @@ function carKit() { // 警車的車身貼圖（所有警車共用）：側面、
   CAR_KIT = { tex, body, bodyGeo, barGeo, nBar, tris: bodyGeo.attributes.position.count / 3 + nBar / 3 };
   return CAR_KIT;
 }
-function makePoliceCar() {
-  const K = carKit(), group = new THREE.Group(); group.name = 'police-car';
+function boxPoliceCar() { // 第 3 批的方塊警車（第 93 批起：小黃的輕量車還沒載好以前先用它，載好了 makePoliceCar 換掉）
+  const K = carKit(), group = new THREE.Group(); group.name = 'police-car-box';
   const bodyM = new THREE.Mesh(K.bodyGeo, K.body); bodyM.name = 'police-body'; group.add(bodyM);
   const geo = K.barGeo.clone(), col = geo.attributes.color, half = K.nBar / 2;
   const mat = new THREE.MeshBasicMaterial({ map: K.tex, vertexColors: true, toneMapped: false });
@@ -325,6 +325,106 @@ function makePoliceCar() {
     dispose() { geo.dispose(); mat.dispose(); group.removeFromParent(); },
   };
   return car;
+}
+
+
+// ======== 第 93 批：街上的警車＝小黃的車身（altis）＋警車塗裝＋車頂警示燈；國道警察＝GC8（白底紅條「紅斑馬」）========
+// Nick 2026-11-15「一般街上的警車用小黃 但塗裝是警車塗裝加警燈」「高速公路有額外的警用追逐車用GC8去查國道警車塗裝並採用」
+// 台灣的警車：白色車身、車頭和車尾藍色（1993 年起的藍白）、車門寫「警察」；國道公路警察：白底紅條（大家叫「紅斑馬」）。沒有真的警徽，字是自己寫的（「警察」「POLICE」「國道警察」）。
+// setPoliceLod({ build(kind) → { group, setLights, update, info, dispose } | null })：town 載好輕量車以後叫；已經做好的方塊警車全部換掉
+let POLICE_LOD = null; const POLICE_PROXIES = new Set();
+function setPoliceLod(b) { POLICE_LOD = b; for (const p of [...POLICE_PROXIES]) p.upgrade(); }
+function makePoliceCar(kind = 'city') {
+  const group = new THREE.Group(); group.name = 'police-car';
+  let inner = null, lit = false;
+  const W = {
+    group, kind, lights: false, info: null, get inner() { return inner; },
+    setLights(v) { lit = !!v; W.lights = lit; if (inner) inner.setLights(lit); },
+    update(dt) { if (inner) inner.update(dt); },
+    dispose() { POLICE_PROXIES.delete(W); if (inner && inner.dispose) inner.dispose(); group.removeFromParent(); },
+    upgrade() {
+      let n = null; try { n = POLICE_LOD ? POLICE_LOD.build(kind) : null; } catch (e) { console.warn('警車做不出來', e); n = null; }
+      if (!n) return false;
+      if (inner && inner.dispose) inner.dispose();
+      inner = n; group.add(n.group); n.setLights(lit); W.info = n.info; POLICE_PROXIES.delete(W); return true;
+    },
+  };
+  if (!W.upgrade()) { inner = boxPoliceCar(); group.add(inner.group); W.info = inner.info; POLICE_PROXIES.add(W); }
+  return W;
+}
+// 車頂的警示燈（一長條，左紅右藍；1 個 draw call）：len＝橫跨車頂多寬、x 方向 0.26 公尺
+function makeLightBar(len = 1.1) {
+  const P = [], C = [], I = [];
+  const box = (x0, y0, z0, x1, y1, z1, col) => { const o = P.length / 3, v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+    for (const p of v) { P.push(...p); C.push(...col); }
+    for (const f of [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [3, 7, 6, 2], [1, 2, 6, 5], [0, 4, 7, 3]]) I.push(o + f[0], o + f[1], o + f[2], o + f[0], o + f[2], o + f[3]); };
+  const h = len / 2, dk = [0.03, 0.03, 0.035];
+  box(-0.15, 0, -h * 0.92, 0.15, 0.035, h * 0.92, dk); // 底座
+  const n0 = P.length / 3; box(-0.13, 0.035, -h, 0.13, 0.12, -0.03, [1, 0, 0]); const n1 = P.length / 3; box(-0.13, 0.035, 0.03, 0.13, 0.12, h, [0, 0, 1]); const n2 = P.length / 3;
+  box(-0.13, 0.035, -0.03, 0.13, 0.11, 0.03, [0.6, 0.6, 0.62]); // 中間白色的
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); geo.setIndex(I); geo.computeBoundingSphere();
+  const mat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+  const mesh = new THREE.Mesh(geo, mat); mesh.name = 'police-bar';
+  const col = geo.attributes.color;
+  const paint = (r, b) => { // 紅、藍兩半多亮（0…1）；沒亮的時候是暗暗的紅、藍燈罩
+    const R = [0.22 + 2.4 * r, 0.02 + 0.25 * r, 0.02 + 0.2 * r], Bc = [0.02 + 0.15 * b, 0.06 + 0.6 * b, 0.25 + 2.8 * b];
+    for (let i = n0; i < n1; i++) col.setXYZ(i, R[0], R[1], R[2]); for (let i = n1; i < n2; i++) col.setXYZ(i, Bc[0], Bc[1], Bc[2]); col.needsUpdate = true;
+  };
+  let on = false, t = 0, last = -1; paint(0, 0);
+  return {
+    mesh, tris: I.length / 3,
+    setOn(v) { on = !!v; if (!on) { paint(0, 0); last = -1; } },
+    update(dt) { if (!on) return; t = (t + dt) % 0.8; const k = Math.floor(t / 0.1); if (k === last) return; last = k; paint(k === 0 || k === 2 ? 1 : 0, k === 4 || k === 6 ? 1 : 0); },
+    dispose() { geo.dispose(); mat.dispose(); mesh.removeFromParent(); },
+  };
+}
+// 塗裝的貼圖（carlod.js look.decal＝{ R, L, T }）：u＝車尾 0 → 車頭 1（車身外框）；側面 v＝車底 0 → 車頂 1；上面那張 v＝z（flipY 關掉：上面那排＝−z）
+// 每台車的位置（照輕量車的外框量的）：f＝前門的前緣、r＝後門（雙門的：門）的後緣、belt＝窗下緣、band＝腰線的高度
+const DEC_FIT = { altis: { f: 0.69, r: 0.27, belt: 0.6, band: 0.43, arch: [0.18, 0.79] }, gc8: { f: 0.665, r: 0.36, belt: 0.6, band: 0.42, arch: [0.19, 0.8] } };
+const DECALS = new Map();
+function policeDecal(kind, key) {
+  const id = kind + ':' + key; if (DECALS.has(id)) return DECALS.get(id);
+  const F = DEC_FIT[key] || DEC_FIT.altis, W = 1024, H = 256;
+  const mk = (draw, flipY = true) => { const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); draw(g, W, H); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = flipY; t.anisotropy = 4; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t; };
+  const txt = (g, s, x, y, px, col, mirror, font = SANS, wgt = 900) => { g.save(); g.translate(x, y); if (mirror) g.scale(-1, 1); g.fillStyle = col; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `${wgt} ${px}px ${font}`; g.fillText(s, 0, 0); g.restore(); };
+  const BLUE = '#1d4fb0', RED = '#c8171d';
+  let R, L, T;
+  if (kind === 'hwy') { // 國道警察：白底、紅色的腰帶＋前後斜的紅條（斑馬）；車門「國道警察」、小字 HIGHWAY POLICE
+    const side = (mirror) => (g, w, h) => {
+      const y = (v) => h * (1 - v);
+      g.fillStyle = RED; g.fillRect(0, y(F.band + 0.075), w, y(F.band - 0.075) - y(F.band + 0.075)); // 紅色腰帶
+      g.fillStyle = '#f4f5f6'; g.fillRect(0, y(F.band + 0.012), w, 3);
+      g.save(); g.beginPath(); g.rect(0, y(F.belt), w * F.r, y(0.05) - y(F.belt)); g.rect(w * F.f, y(F.belt), w * (1 - F.f), y(0.05) - y(F.belt)); g.clip(); // 前後的斜條（往車尾斜）
+      g.fillStyle = RED; for (let k = -6; k < 30; k++) { const x0 = k * 70; g.beginPath(); g.moveTo(x0, y(0.05)); g.lineTo(x0 + 34, y(0.05)); g.lineTo(x0 + 34 + 150, y(F.belt)); g.lineTo(x0 + 150, y(F.belt)); g.closePath(); g.fill(); }
+      g.restore();
+      const cx = w * (F.f + F.r) / 2;
+      txt(g, '國道警察', cx, y(F.band + 0.17), Math.round(h * 0.16), RED, mirror);
+      txt(g, 'HIGHWAY POLICE', cx, y(F.band - 0.14), Math.round(h * 0.085), RED, mirror, COND, 700);
+    };
+    R = mk(side(false)); L = mk(side(true));
+    T = mk((g, w, h) => { // 上面：引擎蓋、行李箱紅色的 V 形條，車頂一條紅
+      g.fillStyle = RED;
+      for (const [a, b, dir] of [[F.f + 0.02, 1, 1], [0, F.r - 0.02, -1]]) for (let k = 0; k < 4; k++) { const xc = w * (dir > 0 ? a + 0.03 + k * 0.07 : b - 0.03 - k * 0.07); g.beginPath(); g.moveTo(xc + dir * 30, h / 2); g.lineTo(xc + dir * 30 - dir * 70, 0); g.lineTo(xc - dir * 70 - dir * 10, 0); g.lineTo(xc - dir * 10, h / 2); g.lineTo(xc - dir * 70 - dir * 10, h); g.lineTo(xc + dir * 30 - dir * 70, h); g.closePath(); g.fill(); }
+      g.fillRect(w * (F.r + 0.04), h * 0.44, w * (F.f - F.r - 0.08), h * 0.12);
+    }, false);
+  } else { // 街上：白底、車頭車尾藍色，車門「警察」POLICE、細的藍腰線、後面 110
+    const side = (mirror) => (g, w, h) => {
+      const y = (v) => h * (1 - v);
+      g.fillStyle = BLUE; g.fillRect(w * F.f, 0, w * (1 - F.f), h); g.fillRect(0, 0, w * F.r, h); // 車頭、車尾藍
+      g.fillStyle = '#f4f5f6'; g.fillRect(w * F.f - 6, 0, 6, h); g.fillRect(w * F.r, 0, 6, h); // 白色細線隔開
+      g.fillStyle = BLUE; g.fillRect(w * F.r, y(F.band - 0.16), w * (F.f - F.r), h * 0.035); // 下面的藍細線
+      const cx = w * (F.f + F.r) / 2;
+      txt(g, '警 察', cx, y(F.band + 0.05), Math.round(h * 0.2), BLUE, mirror);
+      txt(g, 'POLICE', cx, y(F.band - 0.1), Math.round(h * 0.1), BLUE, mirror, COND, 700);
+      txt(g, '110', w * F.r * 0.5, y(F.belt - 0.12), Math.round(h * 0.11), '#ffffff', mirror, COND, 700);
+    };
+    R = mk(side(false)); L = mk(side(true));
+    T = mk((g, w, h) => { // 上面：引擎蓋、行李箱藍色；引擎蓋白字「警察」（站在車頭前面看是正的）；車頂白
+      g.fillStyle = BLUE; g.fillRect(w * F.f, 0, w * (1 - F.f), h); g.fillRect(0, 0, w * F.r, h);
+      g.save(); g.translate(w * (F.f + 1) / 2 + 10, h / 2); g.rotate(-Math.PI / 2); g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `900 ${Math.round(h * 0.3)}px ${SANS}`; g.fillText('警察', 0, 0); g.restore();
+    }, false);
+  }
+  const D = { R, L, T }; DECALS.set(id, D); return D;
 }
 
 // ======== 警察局（外面）========
@@ -547,5 +647,5 @@ function buildPoliceInterior(opts = {}) {
   return I;
 }
 
-return { buildPoliceStation, buildPoliceInterior, makePoliceCar, POLICE_LOOK, POLICE_TEXT };
+return { buildPoliceStation, buildPoliceInterior, makePoliceCar, setPoliceLod, policeDecal, makeLightBar, POLICE_LOOK, POLICE_TEXT };
 })();

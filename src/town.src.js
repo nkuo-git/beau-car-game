@@ -2512,7 +2512,37 @@ const walkBtns = (punch) => (JUMP_BTN_ON ? (punch ? [JUMP_B, ...PUNCH_BTN] : nul
 const PUNCH_ME = { x: 0, z: 0, heading: 0 }, PL_CAR = { hx: 2.2, hz: 0.9, cx: 0 }; // 每一格重複用的
 const GS_DESK = { label: '買槍、子彈', icon: 'hand', onClick: () => openDesk() }, GS_RANGE = { label: '開始練習', icon: 'hand', onClick: () => startRange() };
 const jailed = () => !!police && (police.state === 'caught' || police.state === 'jail' || police.state === 'release'); // 被抓到、關著、放出來那一下：不能上車下車、開門、用槍
+// ==== 第 93 批（Nick 2026-11-15「一般街上的警車用小黃 但塗裝是警車塗裝加警燈」「高速公路有額外的警用追逐車用GC8去查國道警車塗裝並採用」）====
+//   警車＝輕量車（街上：小黃的車身 altis；國道警察：GC8）＋警車塗裝（police.js policeDecal：白底、車頭車尾藍、車門「警察」；國道＝白底紅條）＋車頂警示燈（makeLightBar）
+//   出門的時候先載好兩台的輕量車資料（最多等 8 秒；載不到＝照舊用方塊警車）→ setPoliceLod：已經做好的方塊警車（警察局停著的、朋友的）全部換掉
+const POL_KEY = { city: 'altis', hwy: 'gc8' }, POL_DATA = { ok: false };
+async function polLodWarm() {
+  if (POL_DATA.ok) return;
+  try { await Promise.race([Promise.all(Object.values(POL_KEY).map((k) => LOD_CARS[k]?.load().then((d) => { POL_DATA[k] = d; }))), new Promise((r) => setTimeout(r, 8000))]); } catch (e) { console.warn('警車的輕量車載不到', e); }
+  if (!POL_DATA.altis) return;
+  POL_DATA.ok = true; setPoliceLod({ build: copCar });
+}
+function copCar(kind) { // → { group, setLights(on), update(dt), info, dispose }（police.js makePoliceCar 包在外面）
+  const key = POL_KEY[kind] || 'altis', data = POL_DATA[key] || POL_DATA.altis; if (!data) return null;
+  const lod = buildLodCar(data === POL_DATA[key] ? key : 'altis', data, { paint: '#f2f3f5', kit: 'stock', livery: 'none', tint: 'light', glow: 'none', height: '0', decal: policeDecal(kind, key) });
+  lod.car.name = 'police-' + key;
+  const r = lod.roof(), bar = makeLightBar(key === 'gc8' ? 1.0 : 1.1);
+  bar.mesh.position.set(r.x, r.y - 0.01, 0); lod.body.add(bar.mesh);
+  const wp = new THREE.Vector3(); let lx = NaN, lz = 0, roll = 0;
+  return {
+    group: lod.car, lod, bar, info: { tris: lod.tris + bar.tris, draws: lod.draws + 1 },
+    setLights(on) { bar.setOn(on); },
+    update(dt) { // 警示燈閃；輪子照開了多遠轉（看世界的位置）
+      bar.update(dt);
+      lod.car.getWorldPosition(wp);
+      if (lx === lx) { const dx = wp.x - lx, dz = wp.z - lz, d = Math.hypot(dx, dz); if (d < 6 && d > 1e-4) { const q = lod.car.rotation.y + (lod.car.parent ? lod.car.parent.rotation.y : 0); roll += dx * Math.cos(q) - dz * Math.sin(q) > 0 ? d : -d; lod.setRoll(roll); } }
+      lx = wp.x; lz = wp.z;
+    },
+    dispose() { bar.dispose(); lod.dispose(); },
+  };
+}
 async function warmPolice() {
+  await polLodWarm(); // 第 93 批：小黃、GC8 的輕量車先載好（警車一開始就是新的樣子）
   try { await Promise.race([gunShopFonts(VIL.places.gunshop?.name), new Promise((r) => setTimeout(r, 1600))]); } catch (e) { console.error(e); } // 槍店招牌、貼圖上的字
   police = createPolice({ scene: TR.scene, world: VIL, colliders: [...stripColliders(), ...(TR.trees || [])], hudParent: stage,
     obstacles: NPC ? (x, z, r) => NPC.traffic.colliders(x, z, r) : null, // 路上的車：警車會閃、會撞到
@@ -2834,12 +2864,13 @@ const VDL = { t: 0, q: { x: 0, z: 0 }, live: new Map(), pool: new Map(), want: [
 function vdStep(dt) {
   const V = VDV; if (!V || !DRIVE.on) return; const st = V.st;
   const wk = walker && walker.mode !== 'off' && walker.character, p = wk ? walker.character.group.position : tripS?.car?.position;
-  if (!p) { st.on = st.high = false; return; }
-  if (indoor || RACE.on) { st.on = st.high = false; st.py = p.y; st.px = 1e9; st.pz = 1e9; }
+  if (!p) { st.on = st.high = false; st.r = -1; return; }
+  if (indoor || RACE.on) { st.on = st.high = false; st.r = -1; st.py = p.y; st.px = 1e9; st.pz = 1e9; }
   else {
     const y = V.at(p.x, p.z, p.y);
     st.on = y != null && Math.abs(y - p.y) < 1.2; st.high = st.on && y - PW.groundAt(p.x, p.z) > 3;
     st.py = p.y; st.px = p.x; st.pz = p.z;
+    st.r = st.on ? V.Q.r : -1; st.s = V.Q.s; st.u = V.Q.u; // 第 93 批：在哪一條路（0＝主線）、s、u（國道警察照這個追你）
   }
   if (dcam && V.cull) V.cull(dcam.position.x, dcam.position.y, dcam.position.z); // 遠的停車場、休息站的車、整個休息站：太遠不畫
   // 第 92 批：ETC 門架（交流道下去前；Nick「要過一個ETC站」）：開過去嗶一聲（免費，不扣錢）
@@ -2881,6 +2912,18 @@ function vdtKind(n) { // 跑車、超跑多一點（高速公路上比較看得�
   return lotKind(n);
 }
 function vdtPick(k, n) { if (!k || !LOT_DIMS[k] || !LOD_CARS[k]) return null; return { k, look: lotLook(k, n), fast: npcFast(k), d: LOT_DIMS[k] }; }
+// 第 93 批：國道警察（GC8 白底紅條、車頂警示燈；police.js makePoliceCar('hwy')）：自己一個池子；警笛用 police-ai 的（同一個聲音、同一條總輸出）
+const VCOP = { pool: [], sir: new Map(), made: 0 };
+function copFree(c) { const m = c.obj; c.obj = null; if (m) { m.group.visible = false; m.setLights(false); VCOP.pool.push(m); } const sr = VCOP.sir.get(c.id); if (sr) { sr.stop(); VCOP.sir.delete(c.id); } }
+function copGet(c) { let m = VCOP.pool.pop(); if (!m) { m = makePoliceCar('hwy'); m.group.name = 'hwy-police'; VCOP.made++; } if (!m.group.parent) TR.scene.add(m.group); c.obj = m; return m; }
+function copSiren(c, me) { // 追你的那台：警笛（越近越大聲、左右）
+  let sr = VCOP.sir.get(c.id); const g0 = c.chase && c.lights && police && dcam ? police.sirenGain() : 0;
+  if (!g0) { if (sr) { sr.stop(); VCOP.sir.delete(c.id); } return; }
+  if (!sr) { sr = police.siren(c.id % 7 + 3); if (!sr) return; VCOP.sir.set(c.id, sr); }
+  const dx = c.x - me.x, dz = c.z - me.z, d = Math.hypot(dx, dz), near = Math.max(0, 1 - d / 320);
+  dcam.getWorldDirection(VDTR.v); const a = Math.atan2(-dz, dx) - Math.atan2(-VDTR.v.z, VDTR.v.x), pan = Math.max(-0.8, Math.min(0.8, -Math.sin(a) * 0.75));
+  sr.set(g0 * near * near, 800 + 2400 * near, pan, 0);
+}
 function vdtFree(c) { const l = c.obj; if (!l) return; l.car.visible = false; c.obj = null; let a = VDL.pool.get(c.k); if (!a) VDL.pool.set(c.k, (a = [])); a.push(l); }
 function vdtGet(c) { // 池子裡有就拿；沒有就做一台（停車場那邊在做就等）
   const a = VDL.pool.get(c.k), l = a && a.pop();
@@ -2899,16 +2942,25 @@ function vdTrafficStep(dt) {
     pick: (n, k) => vdtPick(k || vdtKind(n), n), lotPick: (c) => vdtPick(c.k, c.j + VDL_SEED), heightAt: (x, z) => VIL.heightAt(x, z), seen: vdtSeen,
     onTake: (c) => { const e = VDL.live.get(c); if (e) { VDL.live.delete(c); e.l.car.visible = false; let a = VDL.pool.get(e.k); if (!a) VDL.pool.set(e.k, (a = [])); a.push(e.l); } }, // 近的那台輕量車放回池子（開走的那台馬上拿去用）
     onGive: (c) => { V.lot.show(c.inst); V.lot.cols[c.inst].off = false; },
+    copDims: () => LOT_DIMS.gc8, wanted: () => (police && police.state === 'wanted' ? police.wanted : 0), // 第 93 批：國道警察
+    copSeen: () => police?.seenBy(), caught: () => !!police?.catchBy('hwy'), copHit: (c) => police?.crime('cop', { x: c.x, z: c.z }),
   });
   const me = VDTR.me, wk = walker && walker.mode !== 'off' && walker.character, p = wk ? walker.character.group.position : tripS?.car?.position;
   me.on = !!p && !indoor && !RACE.on && !APTU.on && !MRTS.lvl && !sleep;
   if (p) { me.x = p.x; me.y = p.y; me.z = p.z; }
+  me.r = me.on && V.st.on ? V.st.r : -1; me.s = V.st.s; me.u = V.st.u; me.walk = !!wk; me.v = wk ? 0 : Math.abs(drv?.telemetry().v || 0); // 第 93 批：國道警察要知道你在主線上哪裡
   if (dcam) { dcam.updateMatrixWorld(); VDTR.M.multiplyMatrices(dcam.projectionMatrix, dcam.matrixWorldInverse); VDTR.F.setFromProjectionMatrix(VDTR.M); }
   VDT.update(dt, me);
-  for (const c of VDT.gone) vdtFree(c);
+  for (const c of VDT.gone) (c.cop ? copFree : vdtFree)(c);
   const R2 = VDTR.R * VDTR.R;
   for (const c of VDT.cars) {
     const far = (c.x - me.x) ** 2 + (c.z - me.z) ** 2 > R2;
+    if (c.cop) { // 第 93 批：國道警察
+      const m = c.obj || copGet(c); if (c.needObj) c.needObj = false;
+      m.group.visible = !far; if (far) { copSiren(c, me); continue; }
+      m.group.position.set(c.x, c.y + 0.03, c.z); m.group.rotation.set(0, c.h, c.pitch); m.setLights(!!c.lights); m.update(dt); copSiren(c, me);
+      continue;
+    }
     if (!c.obj && (!far || c.needObj)) vdtGet(c);
     const l = c.obj; if (!l) continue;
     if (c.needObj) { c.needObj = false; if (c.lot) { V.lot.hide(c.lot.inst); V.lot.cols[c.lot.inst].off = true; } } // 輕量車放好了：停著的那台藏起來（換成這台）
@@ -2925,11 +2977,11 @@ function vdTrafficStep(dt) {
 }
 // ==== 第 92 批：停車場、休息站走來走去的人和三隻動物（vdcrowd.js）====
 const RCR = { me: { x: 0, y: 0, z: 0, on: false, walk: false, car: null }, car: { x: 0, z: 0, h: 0, v: 0, hx: 2.2, hz: 0.9 }, ms: 0, n: 0, avg: 0 };
-function crowdHit(a, speed) { // 開太快閃不掉：倒下去再爬起來（卡通的，沒有血）；動物不算犯罪；在高架上（休息站）警察看不到
+function crowdHit(a, speed) { // 開太快閃不掉：倒下去再爬起來（卡通的，沒有血）；動物不算犯罪；第 93 批起在高架上（休息站）也算（國道警察會來）
   engineAudio.crash({ strength: Math.min(0.3, 0.06 + speed / 40), glass: 0 });
   if (a.animal) { drv?.toast(speed > 6 ? '撞到小動物了！牠會自己爬起來' : '小心，有小動物！', 1800); return; }
   drv?.toast(speed > 6 ? '撞到人了！開慢一點' : '小心，有人！', 1800);
-  if (!VDV?.st.high) police?.crime('hit', { x: a.x, z: a.z, age: 'adult', animal: '' });
+  police?.crime('hit', { x: a.x, z: a.z, age: 'adult', animal: '' });
 }
 function crowdStep(dt) {
   const V = VDV; if (!V || !DRIVE.on || typeof createVdCrowd !== 'function') return;
@@ -2945,7 +2997,7 @@ function crowdStep(dt) {
   if (wk && me.on && NPC) { const tc = RCROWD.colliders(p.x, p.z, 10, p.y); for (let i = 0; i < tc.length; i++) NPC.MOV.push(tc[i]); }
   const ms = performance.now() - t0; RCR.ms = ms; RCR.n++; RCR.avg += (ms - RCR.avg) / Math.min(RCR.n, 300);
 }
-function vdTrafficOff() { if (!VDT) return; VDT.clear(); for (const c of VDT.gone) vdtFree(c); VDT.gone.length = 0; drv?.removeColliders('vdtraffic'); }
+function vdTrafficOff() { if (!VDT) return; VDT.clear(); for (const c of VDT.gone) (c.cop ? copFree : vdtFree)(c); VDT.gone.length = 0; drv?.removeColliders('vdtraffic'); }
 function hillsStep(dt) {
   const H = VIL?.hills; if (!H || !DRIVE.on) return;
   const wk = walker && walker.mode !== 'off' && walker.character, p = wk ? walker.character.group.position : tripS?.car?.position;
