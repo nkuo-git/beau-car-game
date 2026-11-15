@@ -1050,13 +1050,13 @@ export function seatPlace(C, s, P = {}) {
   for (let k = 0; k < 30; k++) C.update(1 / 30, P);
   return P;
 }
-// 駕駛的手握方向盤 9 點、3 點的地方（steer −1～1：方向盤打到底轉 90 度，手跟著轉）
+// 駕駛的手握方向盤 9 點、3 點的地方（steer −1～1：方向盤打到底轉 90 度，手跟著轉；跟 setSteer 同一個方向：右轉＝從駕駛看順時針）
 export function seatSteer(C, P, steer = 0) {
   const w = P.s?.wheel; if (!w) return P;
   const a = -steer * (Math.PI / 2), col = w.col * (Math.PI / 180), r = w.r * 0.96, sv = Math.sin(col), cv = Math.cos(col);
   if (!P.hands) P.hands = [[0, 0, 0], [0, 0, 0]];
   for (let k = 0; k < 2; k++) {
-    const sd = k ? 1 : -1, u = sd * r * Math.cos(a), v = -sd * r * Math.sin(a); // 方向盤面上：u 往右（z）、v 往上（沿著轉向柱斜）
+    const sd = k ? 1 : -1, u = sd * r * Math.cos(a), v = sd * r * Math.sin(a); // 方向盤面上：u 往右（z）、v 往上（沿著轉向柱斜）；右轉（a < 0）＝從駕駛看順時針：左手往上、右手往下（第 92 批以前 v 的正負號反了：手跟方向盤轉相反）
     SP_V.set(w.c[0] + v * sv, w.c[1] + v * cv, w.c[2] + u).applyMatrix4(P._inv);
     P.hands[k][0] = SP_V.x; P.hands[k][1] = SP_V.y; P.hands[k][2] = SP_V.z;
   }

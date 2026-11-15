@@ -185,7 +185,8 @@ const drv6 = await p.evaluate(() => {
   const d = D.drv, t = d.telemetry();
   const eye = { pax: S.PAX.on, paused: t.paused, cam: d.cameraMode, voice: !!window.__D().dvoice, hud: window.__vis('#stage .ps'), me: window.__me(), toast: window.__toast(), dEyeD: (() => { const e = D.dcam.position.clone().set(...D.dEye.eye); D.tripS.body.updateWorldMatrix(true, false); D.tripS.body.localToWorld(e); return +D.dcam.position.distanceTo(e).toFixed(3); })() };
   d.setCameraMode('chase'); window.__dstep(30);
-  const C = S.MYSIT.C, at = () => ({ s: +d.telemetry().steer.toFixed(2), R: window.__bodyAt(C.hand), L: window.__bodyAt(C.handL) });
+  const C = S.MYSIT.C, wg = D.tripS.cabin?.getObjectByName('cabin-wheel'), wl = (o) => { const v = D.dcam.position.clone(); o.updateWorldMatrix(true, false); o.getWorldPosition(v); wg.updateWorldMatrix(true, false); wg.worldToLocal(v); return [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)]; };
+  const at = () => ({ s: +d.telemetry().steer.toFixed(2), R: window.__bodyAt(C.hand), L: window.__bodyAt(C.handL), wR: wg ? wl(C.hand) : null, wL: wg ? wl(C.handL) : null }); // wR/wL：手在方向盤自己的座標（跟著方向盤轉的話不會變）
   d.setInput({ throttle: 0, brake: 0, steer: 0, handbrake: 1 }); window.__dstep(40); const s0 = at();
   d.setInput({ throttle: 0, brake: 0, steer: 1, handbrake: 1 }); window.__dstep(40); const s1 = at();
   d.setInput(null); window.__dstep(5);
@@ -196,6 +197,11 @@ check(!drv6.eye.pax && !drv6.eye.paused && drv6.eye.cam === 'eye' && drv6.eye.vo
 check(drv6.eye.me.vis && drv6.eye.me.fp && drv6.eye.me.hands?.[0] && drv6.eye.me.hands?.[1] && drv6.chase.vis && !drv6.chase.fp && drv6.chase.i === 0 && drv6.chase.state === 'sit', `driving: first person shows both your hands on the wheel (on screen: ${JSON.stringify(drv6.eye.me.hands)}, head hidden); the chase camera shows all of you in the driver's seat (head back)`);
 const dR = Math.hypot(drv6.s1.R[1] - drv6.s0.R[1], drv6.s1.R[2] - drv6.s0.R[2]), dL = Math.hypot(drv6.s1.L[1] - drv6.s0.L[1], drv6.s1.L[2] - drv6.s0.L[2]);
 check(drv6.wheel && drv6.s1.s > 0.9 && dR > 0.04 && dL > 0.04, `hands on the wheel and they turn with it (right hand moved ${dR.toFixed(3)} m, left ${dL.toFixed(3)} m at full lock)`);
+// 第 92 批（Nick 2026-11-15「方向盤轉反了」）：手要跟方向盤往同一邊轉（以前手往反方向：右轉方向盤順時針、手逆時針）
+//   手在方向盤自己的座標裡不動（差不到 4 公分）；右轉：左手往上、右手往下（車身的 y）
+const wd = (a, b) => (a && b ? Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) : 9), wdR = wd(drv6.s0.wR, drv6.s1.wR), wdL = wd(drv6.s0.wL, drv6.s1.wL);
+check(wdR < 0.04 && wdL < 0.04 && drv6.s1.L[1] > drv6.s0.L[1] + 0.04 && drv6.s1.R[1] < drv6.s0.R[1] - 0.04,
+  `turning right, the hands go round the same way as the wheel (clockwise: left hand up ${(drv6.s1.L[1] - drv6.s0.L[1]).toFixed(3)} m, right hand down ${(drv6.s1.R[1] - drv6.s0.R[1]).toFixed(3)} m; in the wheel's own frame they move ${wdL.toFixed(3)} / ${wdR.toFixed(3)} m)`);
 await p.evaluate(() => { const d = window.__D().drv; d.setInput({ throttle: 0, brake: 0, steer: 1, handbrake: 1 }); window.__dstep(30); });
 const riDrv = await shot('6-driver');
 await p.evaluate(() => { const d = window.__D().drv; d.setInput(null); window.__dstep(30); });
