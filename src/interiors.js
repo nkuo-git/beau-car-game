@@ -53,7 +53,7 @@ const TAU = Math.PI * 2, HP = Math.PI / 2, FH = 3.3, CH = 3.0; // 透天厝一�
 const SANS = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", "WenQuanYi Zen Hei", sans-serif';
 const COND = '"Barlow Condensed", "Arial Narrow", sans-serif';
 // 貼圖上所有的中文字（interiorFonts 先把這些字的字型載好）
-const TEXT = '一二三四五六七八九十百元日月年星期農曆宜祭祀出行福春德正神千家敬則為萬古尊流芳祖歷代先之位菜單紅燒清燉牛肉麵湯陽春餛飩燙青滷味小早餐蛋餅蘿蔔糕鐵板火腿吐司鮪魚奶茶豆漿剉冰芒果豆八寶雪花粉圓咖啡熱狗關東煮第件折新品上市涼夏霜淇淋買送杯半價食提款機時藥局健保特約成保養量血壓理髮剪洗刮鬍輪胎起換油檳榔菁仔包葉香錢靈籤光明燈浴室員工專用洗手間歡迎臨週末大放送今聞天氣晴雜貨店機車行阿嬤國好吃超商村口營業中請勿吸菸謝惠顧冷飲料零嘴開會議通知衛生紙米醬而有染檸檬愛玉宮廳房灶腳';
+const TEXT = '市集便當冷藏伴手禮結帳吧御飯糰茶葉蛋泡麵冰淇淋土產鳳梨酥一二三四五六七八九十百元日月年星期農曆宜祭祀出行福春德正神千家敬則為萬古尊流芳祖歷代先之位菜單紅燒清燉牛肉麵湯陽春餛飩燙青滷味小早餐蛋餅蘿蔔糕鐵板火腿吐司鮪魚奶茶豆漿剉冰芒果豆八寶雪花粉圓咖啡熱狗關東煮第件折新品上市涼夏霜淇淋買送杯半價食提款機時藥局健保特約成保養量血壓理髮剪洗刮鬍輪胎起換油檳榔菁仔包葉香錢靈籤光明燈浴室員工專用洗手間歡迎臨週末大放送今聞天氣晴雜貨店機車行阿嬤國好吃超商村口營業中請勿吸菸謝惠顧冷飲料零嘴開會議通知衛生紙米醬而有染檸檬愛玉宮廳房灶腳';
 
 // ---- 小工具 ----
 function rng(seed) { // 固定種子的亂數（跟 village.js 一樣）：同一棟每次蓋出來都一樣
@@ -450,6 +450,19 @@ function glowAtlas(R) {
     txt(g, '冷飲', w * 0.25, h / 2 - 5, 30, '#fff'); txt(g, '冰品', w * 0.75, h / 2 - 5, 30, '#fff'); g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(w / 2 - 1, 8, 2, h - 30);
   });
   P('storeBand', 256, 256, 256, 64, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#12a39a'; g.fillRect(0, h - 22, w, 8); g.fillStyle = '#ffcf33'; g.fillRect(0, h - 14, w, 5); g.fillStyle = '#ff5a4a'; g.fillRect(0, h - 9, w, 9); txt(g, '村口超商', w * 0.36, h / 2 - 9, 28, '#12a39a'); txt(g, '24H', w * 0.8, h / 2 - 9, 26, '#ff5a4a', 'center', 0, 700, COND); });
+  // 第 94 批：休息站的大超商（大便龍市集）的招牌、熱食櫃、冰箱上面的燈箱（跟村口超商的顏色完全不一樣：深木頭、紅、金）
+  const mkBand = (g, w, h, bg, fg, t, sub) => { g.fillStyle = bg; g.fillRect(0, 0, w, h); g.fillStyle = '#d9a43a'; g.fillRect(0, 0, w, 3); g.fillRect(0, h - 3, w, 3); txt(g, t, w / 2, sub ? h / 2 - 7 : h / 2 + 1, sub ? 24 : 28, fg, 'center', w - 12); if (sub) txt(g, sub, w / 2, h - 14, 12, '#f3dca0', 'center', w - 12); };
+  P('mkWel', 0, 320, 256, 64, (g, w, h) => mkBand(g, w, h, '#3b2416', '#fff1c7', '大便龍市集', '歡迎光臨 · 24H'));
+  P('mkHot', 256, 320, 256, 64, (g, w, h) => mkBand(g, w, h, '#8e1f1a', '#ffffff', '熱食 · 便當', '茶葉蛋 · 關東煮 · 御飯糰'));
+  P('mkDeli', 0, 384, 256, 64, (g, w, h) => { // 熱食櫃的玻璃裡面：一格一格的便當
+    g.fillStyle = '#fff3d6'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 2; j++) { const x = 6 + i * 31, y = 6 + j * 28; g.fillStyle = '#2a1a12'; g.fillRect(x, y, 27, 22); g.fillStyle = '#f4f0e6'; g.fillRect(x + 2, y + 2, 12, 18); g.fillStyle = pick(R, ['#b5562a', '#d98b3a', '#7a3a1e', '#c44a2a']); g.fillRect(x + 15, y + 2, 10, 9); g.fillStyle = pick(R, ['#4f8a3c', '#e8c040', '#d94a3a']); g.fillRect(x + 15, y + 12, 10, 8); }
+    g.fillStyle = 'rgba(255,255,255,0.3)'; g.beginPath(); g.moveTo(w * 0.6, 0); g.lineTo(w * 0.72, 0); g.lineTo(w * 0.5, h); g.lineTo(w * 0.38, h); g.fill();
+  });
+  P('mkPromo', 256, 384, 256, 64, (g, w, h) => { g.fillStyle = lg(g, 0, 0, w, 0, [[0, '#5a2a6e'], [1, '#8a3a7a']]); g.fillRect(0, 0, w, h); g.fillStyle = '#f3a32a'; g.fillRect(0, h - 9, w, 9); txt(g, '冷藏 · 飲料', w / 2, h / 2 - 4, 28, '#fff'); });
+  P('mkCafe', 0, 448, 128, 64, (g, w, h) => { g.fillStyle = '#1f2a22'; g.fillRect(0, 0, w, h); g.strokeStyle = '#d9a43a'; g.lineWidth = 3; g.strokeRect(3, 3, w - 6, h - 6); txt(g, '咖啡吧', w / 2, h / 2 - 6, 24, '#f3dca0'); txt(g, 'COFFEE', w / 2, h - 13, 11, '#d9a43a', 'center', 0, 700, COND); });
+  P('mkGift', 128, 448, 128, 64, (g, w, h) => mkBand(g, w, h, '#6b4226', '#fff1c7', '伴手禮', '鳳梨酥 · 土產'));
+  P('mkPay', 256, 448, 128, 64, (g, w, h) => mkBand(g, w, h, '#8e1f1a', '#ffffff', '結帳'));
   return S;
 }
 
@@ -2066,6 +2079,7 @@ function shopFront(c) {
 
 // ---- 村口超商 ----
 function storeFloor(b) {
+  if (b.big) return bigStoreFloor(b); // 第 94 批：休息站的超商（大、樣子完全不一樣）
   const F = newFloor({ ch: 3.2 }); F.paths = []; F.occ = [];
   const X0 = -8.8, X1 = 8.8, Z0 = -6.3, Z1 = 6.3, rm = b.name || '村口超商';
   const wallS = sf('plaster', '#f6f6f3', 'wall', { skirt: C('#9aa0a6'), wain: { h: 1.0, s: sf('ktile', '#f2f4f5', 'wall', { noSkirt: true }) } });
@@ -2114,6 +2128,81 @@ function storeFloor(b) {
   lamp(F, -3.0, 0.5, 9, '#f6fbff', 2.8); lamp(F, 3.5, 1.0, 9, '#f6fbff', 2.8);
   F.sun = { from: [0.2, 0.7, 1], I: 0.7 }; F.hemi = { sky: '#ffffff', ground: '#d8dcd8', I: 2.2 };
   F.cam = { maxDist: 4.5, ceiling: 3.0, near: 0.1 };
+  return F;
+}
+
+// ---- 第 94 批：休息站的大超商（大便龍市集）：Nick「南休便利商店要長得跟改車廠旁的完全不一樣裡面大一點」----
+//   26 × 16 公尺（村口超商 18 × 13）、天花板 4 公尺；深色木頭的牆裙、米色的牆、木頭地板、木頭天花板、暖暖的圓燈、紅燈籠
+//   貨架是直的（從門口往裡面看一條一條走道；村口超商是橫的）、櫃台在西邊（面朝東）、後面一排熱食櫃（便當）、東邊整面冰箱、咖啡吧、伴手禮桌、兩邊靠窗的吧台
+//   mart.src.js 一樣用 F.spots.shop（9 樣東西）、F.spots.till
+function bigStoreFloor(b) {
+  const F = newFloor({ ch: 4.0 }); F.paths = []; F.occ = [];
+  const X0 = -12.8, X1 = 12.8, Z0 = -7.8, Z1 = 7.8, rm = b.name || '大便龍市集';
+  const wallS = sf('plaster', '#efe2cb', 'wall', { skirt: C('#3b2416'), wain: { h: 1.2, s: sf('wood', '#9a6a44', 'wall', { noSkirt: true }) } });
+  room(F, rm, X0, X1, Z0, Z1, { floor: sf('wood', '#e2c29a', 'floor'), ceil: sf('timber', '#c79a6a'), probe: [0, 4.0] });
+  for (const s of [-1, 1]) wall(F, 'z', s * 12.9, Z0, Z1, { t: 0.2, p: s < 0 ? wallS : null, n: s > 0 ? wallS : null });
+  wall(F, 'x', -7.9, X0, X1, { t: 0.2, p: wallS, ops: [{ a: 9.6, b: 10.5, y0: 0, y1: 2.1, k: 'closed', leafCol: '#6b4a2e', tex: 'door', sign: 'exit', signM: 'glow' }] });
+  const door = { a: -1.05, b: 1.05, y0: 0, y1: 2.4, k: 'open' };
+  wall(F, 'x', 7.9, X0, X1, { t: 0.2, n: wallS, out: 1, view: 'street', voff: 0.3, ops: [{ a: X0 + 0.15, b: -1.2, y0: 0.05, y1: 3.2, k: 'glass' }, door, { a: 1.2, b: X1 - 0.15, y0: 0.05, y1: 3.2, k: 'glass' }] });
+  ready(F);
+  // 自動門
+  if (LIVE) for (const s of [-1, 1]) F.moving.push({ k: 'slide', c: [s * 0.53, 7.75], o: [s * 1.6, 7.75], len: 1.04, y1: 2.4, col: C('#6b4a2e'), glass: true });
+  else for (const s of [-1, 1]) { const T = frame(s * 1.6, 0, 7.75); bx(F, 'metal', T, [-0.52, 0, -0.03, 0.52, 2.4, 0.03], '#6b4a2e', { pz: false, nz: false }); vq(F.B, 'glow', T, [-0.48, 0], [0.48, 0], 0.1, 2.3, dotUV(GU('s_ice')), [0.45, 0.5, 0.52], true); }
+  bx(F, 'glow', F0, [-1.4, 2.5, 7.5, 1.4, 3.2, 7.8], [1, 1, 1], { nz: GU('mkWel'), _: dotUV(GU('s_black')) });
+  exitZone(F, -0.95, Z1 - 0.55, 0.95, 8.35, 'outside', null); colBox(F, -1.4, 8.3, 1.4, 8.8, 2.6, true);
+  F.spawnIn = { x: 0, z: Z1 - 1.2, lh: HP };
+  path(F, 0, Z1 - 0.5, 0, 2.2, 0.55); path(F, -9.0, 2.4, 11.0, 2.4, 0.5); path(F, -9.0, -6.0, 11.0, -6.0, 0.5);
+  // 櫃台（西邊、面朝東）＋店員後面的菸櫃、關東煮、保溫櫃
+  const cT = frame(-10.4, 0, 2.0, HP);
+  counter(F, cT, 5.0, { stripe: '#d9a43a', top: '#6b4a2e', front: '#8a5a36', regX: -0.9, clerkX: -0.9, room: rm });
+  oden(F, cT, 1.3, 1.0, -0.33); bx(F, 'glow', cT, [0.2, 1.0, -0.5, 0.75, 1.42, -0.15], [0.95, 0.85, 0.65], { _: dotUV(GU('s_amber')) });
+  wallPic(F, frame(X0, 0, 2.0, HP), 'cig', 3.0, 1.5, 1.25); bx(F, 'prop', frame(X0, 0, 2.0, HP), [-1.6, 0, 0.02, 1.6, 1.0, 0.5], '#5a3a24');
+  colBox(F, X0, 0.4, X0 + 0.5, 3.6, 1.0);
+  hangSign(F, -10.0, 2.7, 2.0, HP, 'mkPay', 1.4, 0.7);
+  // 後面：熱食櫃（便當、茶葉蛋）＋上面的菜單、旁邊的開放冷藏架
+  { const L = 6.0, T = frame(-7.0, 0, Z0, 0);
+    bx(F, 'prop', T, [-L / 2, 0, 0.02, L / 2, 0.9, 0.82], '#4a2f1e'); bx(F, 'shiny', T, [-L / 2, 0.9, 0.02, L / 2, 0.94, 0.85], '#d9c6a5');
+    vq(F.B, 'glow', T, [-L / 2 + 0.05, 0.86], [L / 2 - 0.05, 0.86], 0.95, 1.38, GU('mkDeli'), WHITE);
+    bx(F, 'prop', T, [-L / 2, 0.9, 0.02, L / 2, 1.44, 0.12], '#4a2f1e'); bx(F, 'shiny', T, [-L / 2, 1.4, 0.02, L / 2, 1.44, 0.86], '#3b2416');
+    colT(F, T, -L / 2, 0, L / 2, 0.86, 1.44); blob(F, -L / 2, 0, L / 2, 0.85, 0.7, T);
+    wallPic(F, T.sub(-1.6, 0, 0), 'menuB', 1.6, 1.2, 1.9, 'glow'); wallPic(F, T.sub(1.6, 0, 0), 'menuN', 1.6, 1.2, 1.9, 'glow');
+    hangSign(F, -7.0, 2.6, -6.4, 0, 'mkHot', 2.0, 0.5); }
+  wallShelf(F, frame(-1.5, 0, Z0, 0), 3.6, { tex: ['goods2', 'goods1'], h: 1.7, col: '#8a5a36' });
+  // 中間：六排直的貨架（深色木頭邊）
+  const gs = [['goods1', 'goods2', 'goods3'], ['goods3', 'goods1', 'goods2'], ['goods2', 'goods3', 'goods1']];
+  [-6.5, -3.5, -0.5, 2.5, 5.5, 8.5].forEach((x, i) => gondola(F, frame(x, 0, -1.8, HP), 6.4, { tex: gs[i % 3], seed: i, h: 1.6 }));
+  for (const x of [-5.0, -2.0, 1.0, 4.0, 7.0]) spot(F, 'stand', F0, x, -1.8 + ((x * 7) % 3), x < 0 ? HP : -HP, null, rm);
+  // 東邊整面冰箱（燈箱是紫色的）、前面兩台冰淇淋冰櫃
+  drinkFridge(F, frame(X1, 0, -1.8, -HP), 12, { room: rm, promo: 'mkPromo' });
+  freezer(F, frame(9.4, 0, 3.2, 0), 1.6); freezer(F, frame(11.1, 0, 3.2, 0), 1.6);
+  // 咖啡吧（島）
+  { const T = frame(5.5, 0, 3.7, 0);
+    bx(F, 'prop', T, [-2.0, 0, -0.5, 2.0, 0.98, 0.5], '#3b2416'); bx(F, 'shiny', T, [-2.06, 0.98, -0.56, 2.06, 1.03, 0.56], '#d9c6a5');
+    coffee(F, T, -1.2, 1.03, -0.1, Math.PI); coffee(F, T, 0, 1.03, -0.1, Math.PI); coffee(F, T, 1.2, 1.03, -0.1, Math.PI);
+    for (let i = 0; i < 6; i++) cyl(F.B, 'shiny', T, -1.6 + i * 0.25, 0.3, 1.03, 1.15, 0.04, 0.035, 8, C(i % 2 ? '#f4f1ea' : '#8e1f1a'));
+    colT(F, T, -2.06, -0.56, 2.06, 0.56, 1.03); blob(F, -2.0, -0.5, 2.0, 0.5, 0.7, T);
+    hangSign(F, 5.5, 2.6, 3.7, 0, 'mkCafe', 1.2, 0.6); }
+  // 伴手禮桌（木頭桌子＋一盒一盒）
+  { const T = frame(-4.5, 0, 4.3, 0);
+    bx(F, 'shiny', T, [-2.0, 0.74, -0.6, 2.0, 0.8, 0.6], '#8a5a36'); for (const [u, w] of [[-1.9, -0.5], [1.86, -0.5], [-1.9, 0.46], [1.86, 0.46]]) bx(F, 'prop', T, [u, 0, w, u + 0.04, 0.74, w + 0.04], '#4a2f1e');
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 2; j++) { const u = -1.75 + i * 0.47, w = -0.42 + j * 0.5, hh = 0.12 + ((i * 3 + j) % 3) * 0.06; bx(F, 'prop', T, [u, 0.8, w, u + 0.38, 0.8 + hh, w + 0.34], WHITE, PU(['goods1', 'goods2', 'goods3'][(i + j) % 3])); }
+    colT(F, T, -2.0, -0.6, 2.0, 0.6, 0.8); blob(F, -2.0, -0.6, 2.0, 0.6, 0.6, T);
+    hangSign(F, -4.5, 2.6, 4.3, 0, 'mkGift', 1.2, 0.6); }
+  // 靠窗的吧台（門的兩邊）、提款機、盆栽
+  barCounter(F, frame(8.0, 0, Z1, Math.PI), 7.6, 7, { top: '#8a5a36', seat: '#8e1f1a', room: rm });
+  barCounter(F, frame(-5.0, 0, Z1, Math.PI), 5.6, 5, { top: '#8a5a36', seat: '#8e1f1a', room: rm });
+  atm(F, frame(X0, 0, 6.6, HP));
+  plant(F, frame(-1.9, 0, 6.9), 1.1); plant(F, frame(1.9, 0, 6.9), 1.1); plant(F, frame(X1 - 0.6, 0, 7.1), 1.2);
+  // 燈：暖暖的圓燈一格一格、紅燈籠（咖啡吧、伴手禮上面）
+  for (const x of [-10, -6, -2, 2, 6, 10]) for (const z of [-5.6, -2.0, 1.6, 5.4]) fixture(F, x, z, 'round');
+  for (const [x, z] of [[-6.2, 5.6], [-2.8, 5.6], [3.8, 5.4], [7.2, 5.4]]) { const T = frame(x, 0, z); tube(F.B, 'metal', [x, F.ch, z], [x, 3.0, z], 0.006, 0.006, 3, C('#555')); for (let k = 0; k < 2; k++) vq(F.B, 'glow', T.sub(0, 0, 0, (k * Math.PI) / 2), [-0.24, 0], [0.24, 0], 2.45, 3.0, GU('lantern'), WHITE, true); }
+  lamp(F, -6.0, -1.0, 10, '#ffe2b8', 3.6); lamp(F, 5.0, -1.0, 10, '#ffe2b8', 3.6); lamp(F, 0, 4.8, 7, '#ffe2b8', 3.6);
+  // mart.src.js：每樣東西站哪裡拿、櫃台結帳站哪裡
+  F.spots.shop = []; F.spots.till = [];
+  for (const [item, x, z, h] of [['chips', -5.0, -2.6, HP], ['bread', -2.0, -2.6, HP], ['noodle', 1.0, -2.6, HP], ['onigiri', -7.0, -6.2, Math.PI], ['egg', -4.6, -6.2, Math.PI], ['drink', 11.2, -3.6, HP], ['water', 11.2, 0.8, HP], ['icecream', 10.2, 4.6, Math.PI], ['toycar', -4.5, 5.6, Math.PI]]) spot(F, 'shop', F0, x, z, h).item = item;
+  spot(F, 'till', F0, -9.6, 2.9, -HP);
+  F.sun = { from: [0.2, 0.7, 1], I: 0.6 }; F.hemi = { sky: '#fff2dc', ground: '#d8c6aa', I: 2.1 };
+  F.cam = { maxDist: 5.5, ceiling: 3.8, near: 0.1 };
   return F;
 }
 
@@ -2421,6 +2510,7 @@ function planOf(b, kind) {
       enter: wide ? { x: 0, z: H.hz + 0.28, hx: H.hx - 0.4, hz: 0.27 } : { x: dx, z: H.hz + 0.28, hx: 0.65, hz: 0.27 }, outside: { x: dx, z: H.hz + 1.35, lh: -HP } };
   }
   if (kind === 'apt') return { kind, biz: null, name: b.name || '公寓', floors: 5, size: { w: 12, d: 15 }, rooms: [['大廳'], ...[1, 2, 3, 4].map(() => ['玄關', '客廳', '房間', '廚房', '廁所'])], enter: { x: 0, z: 7.5 + 0.28, hx: 0.9, hz: 0.27 }, outside: { x: 0, z: 7.5 + 1.35, lh: -HP } };
+  if (kind === 'store' && b.big) return { kind, biz: 'store', name: b.name || '大便龍市集', floors: 1, size: { w: 26, d: 16 }, rooms: [[b.name || '大便龍市集']], enter: { x: 0, z: 8.28, hx: 1.1, hz: 0.27 }, outside: { x: 0, z: 9.45, lh: -HP } }; // 第 94 批：休息站的大超商（bigStoreFloor）
   if (kind === 'store') return { kind, biz: 'store', name: b.name || '村口超商', floors: 1, size: { w: 18, d: 13 }, rooms: [[b.name || '村口超商']], enter: { x: 0, z: 6.78, hx: 1.1, hz: 0.27 }, outside: { x: 0, z: 7.95, lh: -HP } };
   if (kind === 'temple') return { kind, biz: 'temple', name: b.name || '福德宮', floors: 1, size: { w: 12.4, d: 7.4 }, rooms: [[b.name || '福德宮']], enter: { x: 0, z: 7.4, hx: 2.4, hz: 0.45 }, outside: { x: 0, z: 8.55, lh: -HP } };
   return { kind, biz: 'farm', name: b.name || '三合院', floors: 1, size: { w: 18, d: 6 }, rooms: [['正廳', '房間', '灶腳']], enter: { x: 0, z: 3.28, hx: 0.9, hz: 0.27 }, outside: { x: 0, z: 4.15, lh: -HP } };

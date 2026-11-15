@@ -200,7 +200,7 @@ const s1 = await p.evaluate(() => {
 });
 console.log('1', el(), JSON.stringify(s1));
 check(!s1.err, 'the viaduct is built (VDV)');
-check(s1.I.len > 4500 && s1.I.len < 5600 && Math.abs(s1.I.helix - 990) < 15, `the route is ${s1.I.len} m long, the roundabout ${s1.I.helix} m (1.5 turns)`);
+check(s1.I.len > 4500 && s1.I.len < 5600 && Math.abs(s1.I.helix - 3 * Math.PI * 112) < 15, `the route is ${s1.I.len} m long, the roundabout ${s1.I.helix} m (1.5 turns of radius 112; batch 94, was 105)`);
 check(s1.I.yMax >= 24 && s1.I.yMax < 40 && s1.I.minClear[0] >= 6.45, `24 m high (highest ${s1.I.yMax} m); at least ${s1.I.minClear[0]} m under the deck (s ${s1.I.minClear[1]})`);
 { const R = s1.I.restMain; check(R && R.s1 - R.s0 > 400 && R.yLo >= 23.9 && R.yHi <= 24.5, `next to the rest area the road is level with the rest-area ground (within 0.5 m) (s ${R && R.s0}–${R && R.s1}, y ${R && R.yLo}–${R && R.yHi})`); }
 check(s1.maxG < 0.06, `never steeper than 6% (steepest ${(s1.maxG * 100).toFixed(1)}% at s ${s1.gAt})`);
@@ -340,7 +340,7 @@ check(s5a.pol === true, 'walking up on the deck: the police on the ground can\'t
 // 走到右邊的護欄：一直往外推 3 秒
 const s5b = await p.evaluate(() => {
   const D = window.__D(), V = D.VDV, H = window.__H, W = D.walker, P = V.path;
-  const q = H.at(P.sH + 280, 3), i = q.i, hOut = Math.atan2(-P.TX[i], -P.TZ[i]);
+  const q = H.at(P.sH + 280, V.HW - 5), i = q.i, hOut = Math.atan2(-P.TX[i], -P.TZ[i]); // 第 94 批：路寬了，從外線走過去
   W.teleport({ x: q.x, z: q.z, heading: hOut }); H.step(60);
   const g = W.character.group.position; let uMax = -9, yMin = 99;
   W.setInput({ x: 0, y: 1 });
@@ -349,10 +349,10 @@ const s5b = await p.evaluate(() => {
   V.at(g.x, g.z, g.y); const u = V.Q.u;
   // 跳一下（還在橋上）
   const y0 = g.y, j = W.jump(); let top = y0; for (let k = 0; k < 80; k++) { H.step(1); top = Math.max(top, g.y); } H.step(30);
-  return { uMax: +uMax.toFixed(2), u: +u.toFixed(2), yMin: +yMin.toFixed(2), deckY: +q.y.toFixed(2), jumped: j, top: +(top - y0).toFixed(2), y1: +g.y.toFixed(2), on: V.st.on, mode: W.mode };
+  return { HW: V.HW, uMax: +uMax.toFixed(2), u: +u.toFixed(2), yMin: +yMin.toFixed(2), deckY: +q.y.toFixed(2), jumped: j, top: +(top - y0).toFixed(2), y1: +g.y.toFixed(2), on: V.st.on, mode: W.mode };
 });
 console.log('5b', el(), JSON.stringify(s5b));
-check(s5b.uMax < 7.6 && s5b.yMin > s5b.deckY - 0.2, `walking into the side barrier: it stops you (got to ${s5b.uMax} m from the middle; the barrier is at 7.5–8), never fell off (lowest ${s5b.yMin} m)`);
+check(s5b.uMax > s5b.HW - 1.6 && s5b.uMax < s5b.HW - 0.4 && s5b.yMin > s5b.deckY - 0.2, `walking into the side barrier: it stops you (got to ${s5b.uMax} m from the middle; the barrier is at ${s5b.HW - 0.6}–${s5b.HW}), never fell off (lowest ${s5b.yMin} m)`);
 check(s5b.jumped && s5b.top > 0.4 && Math.abs(s5b.y1 - s5b.deckY) < 0.15 && s5b.on, `jumped next to the barrier (up ${s5b.top} m) and landed back on the deck (${s5b.y1} m)`);
 const bd5 = await p.evaluate(() => window.__H.boardCar());
 const s5c = await p.evaluate(() => {
@@ -400,7 +400,7 @@ check(s6d.live === 0 && s6d.hid === 0 && s6d.vis === 0, `walked away: the real c
 // Nick 2026-11-15「高速公路要有少許的車」「比較厲害的跑車開快一點」「車子不要靠近才變出來」「休息站…要有人車 車一樣從車店挑有車進來有車離開有那三隻動物跟人」「圓環中間要有人走來走去」
 const bd9 = await p.evaluate(() => window.__H.boardCar());
 check(bd9.mode === 'off' && bd9.drv, 'back in the car (traffic on)');
-await p.evaluate(() => { window.__vdt(true); window.__H.putDeck(2200, 5.55, 30); window.__H.stop(); window.__s9 = { seen: new Map(), b0: window.__D().drv.telemetry().bumps, maxMain: 0, minGap: 1e9, noObj: 0 }; });
+await p.evaluate(() => { window.__vdt(true); window.__H.putDeck(2200, 12.25, 30); window.__H.stop(); window.__s9 = /* 第 94 批：最外面那線 12.25（以前外線 5.55） */ { seen: new Map(), b0: window.__D().drv.telemetry().bumps, maxMain: 0, minGap: 1e9, noObj: 0 }; });
 const step9 = (secs) => p.evaluate((secs) => { // 一秒 20 格（每秒一次讓輕量車做好）
   const D = window.__D(), T = D.VDT, S = window.__s9, t = D.drv.telemetry(), cy = D.tripS.car.position.y;
   for (let k = 0; k < secs * 20; k++) {

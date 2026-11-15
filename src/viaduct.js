@@ -3,9 +3,9 @@
 //   草稿 https://claude.ai/artifact/FAaQSJMuCUmvLgnfMcFRC2 ，Nick「好 做完直接上線」
 // 座標跟 village.js 一樣：x 往東、y 往上、z 往南
 // 路線（VD_PATH，每 2 公尺一點）：
-//   圓環＝快速道路一圈裡面南邊那座山（hills.js 拿掉了）的地方：圓心 (−780, 250)、中線半徑 105；從北邊 (−780, 145) 地面往西出發，繞 1.5 圈（990 公尺，坡度約 2.5%）到南邊 (−780, 355) 24 公尺高
-//   → 往東跨過快速道路、內湖入口上面 → 沿著內湖北邊的山腳 (z 312) 往東 → 東北角轉往南 → 東邊的山腳 (x 1755) 往南、跨過捷運 → 慢慢下來（4%）→ 東南角轉往西 → 接到內湖最東南那條路的盡頭
-//   一個方向兩線（3.5 公尺）、中間雙黃線、兩邊水泥護欄（1 公尺）、路燈（晚上亮，look.js 的 V.lampsX）、橋墩（30 公尺一支，不放在路上、房子上）；圓環兩圈疊在一起的地方：兩邊的柱子＋橫樑
+//   圓環＝快速道路一圈裡面南邊那座山（hills.js 拿掉了）的地方：圓心 (−780, 250)、中線半徑 112（第 94 批；以前 105）；從北邊 (−780, 138) 地面往西出發，繞 1.5 圈（1056 公尺，坡度約 2.3%）到南邊 (−780, 362) 24 公尺高
+//   → 往東跨過快速道路、內湖入口上面 → 沿著內湖北邊的山腳 (z 319；第 94 批以前 312) 往東 → 東北角轉往南 → 東邊的山腳 (x 1755) 往南、跨過捷運 → 慢慢下來（4%）→ 東南角轉往西 → 接到內湖最東南那條路的盡頭
+//   一個方向四線（第 94 批；以前兩線）、中間分隔島、兩邊水泥護欄（1 公尺）、路燈（晚上亮，look.js 的 V.lampsX）、橋墩（30 公尺一支，不放在路上、房子上）；圓環兩圈疊在一起的地方：兩邊的柱子＋橫樑
 //   離地不到 6 公尺的地方兩邊是實心的牆（引道）；高度照地面自己抬高（山腳、捷運上面至少留 6.5 公尺）
 // 停車場：圓環中間（半徑 96.5 的柏油）：東西向 9 排、每排兩邊、中間一條南北向的走道；約 900 格、三分之二停了車（車店的車：便宜的多、超跑很少，跟內湖環山路一樣）
 //   快速道路南邊彎道內圈的護欄開一個口（village.js VD_GAP），一條 10 公尺寬的路往北接到停車場；停車場北邊接圓環的起點（內側的護欄前 36 公尺沒有）
@@ -25,9 +25,11 @@ import { buildVdSigns } from './vdsign.js'; // 第 92 批：限速、前有大�
 export const { VD_PATH, VD_LOT, VD_GAP, VD_TEXT, VD_REST, vdNear, vdInLot, vdEndDist, inRest, buildViaduct } = (() => {
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const HW = 8, ROAD = 7.4, PLAT = 24, S_OPEN = 36, CLEAR = 6.5, DESC = 0.04, WALL = 6;
+// 第 94 批（Nick 2026-11-15「高速公路兩邊各加寬成4道」）：一個方向 4 線（以前 2 線）：柏油半寬 7.4 → 14.3、護欄外 8 → 14.9；車道線（離中線）：黃線 0.55、白虛線 3.9／7.25／10.6、路邊白線 13.95
+//   車道中心 2.2、5.55、8.9、12.25（vdtraffic.js LANE）；圓環半徑 105 → 112（停車場還是 96.5，裡面那一圈的護欄才不會壓到停車場）；北邊那段 z 312 → 319（休息站那邊的交流道照舊在 z 299）
+const HW = 14.9, ROAD = 14.3, PLAT = 24, S_OPEN = 36, CLEAR = 6.5, DESC = 0.04, WALL = 6;
 const FAR_CULL = 650, REST_CULL = 900; // 第 92 批：停車場、休息站遠的車，那一區的邊離鏡頭超過這麼遠就不畫
-const C0 = { x: -780, z: 250 }, R = 105, TURNS = 1.5;
+const C0 = { x: -780, z: 250 }, R = 112, TURNS = 1.5; // 第 94 批：105 → 112
 const VD_GAP = { s: 1853.1, h: 7.5 }; // 快速道路 s（從路口往北算）：南邊半圓的中間（−780, 475），內圈的口
 const CONN = { x: -780, hw: 5, z0: 330, z1: 466 }; // 快速道路內圈 → 停車場的路
 const VD_TEXT = '超大停車場往內湖高架快速道路圓環';
@@ -42,9 +44,9 @@ const VD_PATH = (() => {
   for (let i = 0; i <= nh; i++) { const th = -Math.PI / 2 - (i / nh) * TURNS * TAU; F.push([C0.x + R * Math.cos(th), C0.z + R * Math.sin(th)]); }
   const nH = F.length - 1;
   const cr = (Q) => { for (let i = 1; i < Q.length - 2; i++) for (let k = 1; k <= 60; k++) F.push(crPt(Q[i - 1], Q[i], Q[i + 1], Q[i + 2], k / 60)); };
-  cr([[-860, 347], [-780, 355], [-700, 347], [-600, 338], [-420, 338], [-260, 345], [-150, 362], [-60, 360], [0, 345], [60, 320], [150, 312], [300, 312], [450, 312]]); // 圓環出來往東（頭尾多一點讓方向對）
-  F.push([1690, 312]);
-  for (let k = 1; k <= 40; k++) { const a = (-90 + (90 * k) / 40) * (Math.PI / 180); F.push([1690 + 65 * Math.cos(a), 377 + 65 * Math.sin(a)]); } // 東北角
+  cr([[-860, 354], [-780, 362], [-700, 354], [-600, 345], [-420, 343], [-260, 348], [-150, 364], [-60, 364], [0, 350], [60, 328], [150, 319], [300, 319], [450, 319]]); // 圓環出來往東（頭尾多一點讓方向對）（第 94 批：圓環大一點、北邊那段 z 312 → 319）
+  F.push([1690, 319]);
+  for (let k = 1; k <= 40; k++) { const a = (-90 + (90 * k) / 40) * (Math.PI / 180); F.push([1690 + 65 * Math.cos(a), 384 + 65 * Math.sin(a)]); } // 東北角
   F.push([1755, 1640]);
   for (let k = 1; k <= 40; k++) { const a = ((90 * k) / 40) * (Math.PI / 180); F.push([1690 + 65 * Math.cos(a), 1640 + 65 * Math.sin(a)]); } // 東南角
   cr([[1730, 1705], [1690, 1705], [1645, 1705], [1612, 1702], [1593.4, 1688.8], [1572.7, 1667.1]]); // 接到內湖最東南那條路的盡頭（方向照那條路）
@@ -64,13 +66,13 @@ const VD_PATH = (() => {
 // Nick 2026-11-15「高速公路可以分岔到不同地方比如捷運站附近或市中心」
 // 出口：從主線外側那一線（離中線 U0）慢慢往外（cos，T 公尺）到 U1，再照控制點（Catmull–Rom）開下去，接到內湖的路（T 字，從旁邊接上去）；入口反過來
 // 台灣靠右開：往 +S 開的右手邊＝主線的 +u（n＝(−TZ, TX)）；往 −S 開的右手邊＝−u。出口、入口都在右手邊 → 交流道的左手邊（−u）永遠是主線
-const RHW = 4.6, RROAD = 3.9, U0 = 3.5, U1 = 13, U_SEP = 12.6; // U_SEP：兩邊的護欄分得開（中間的柏油接起來的那段到這裡為止）
+const RHW = 4.6, RROAD = 3.9, U0 = ROAD - RROAD, U1 = HW + 5, U_SEP = HW + RHW; // 第 94 批：主線變寬（以前 3.5、13、12.6） // U_SEP：兩邊的護欄分得開（中間的柏油接起來的那段到這裡為止）
 function mainAt(s) { const P = VD_PATH, f = clamp(s / 2, 0, P.n - 1.0001), i = Math.floor(f), t = f - i; return { x: P.X[i] + (P.X[i + 1] - P.X[i]) * t, z: P.Z[i] + (P.Z[i + 1] - P.Z[i]) * t, tx: P.TX[i], tz: P.TZ[i], i, t }; }
 const VD_RAMPS = [
   // A：往東開的出口（主線北邊那段 z 312）→ 往南彎下來，接到環山路二段（從北邊接上去）；往南走 737 巷到港墘、市中心
-  { id: 'A', exit: true, s0: 2150, side: 1, dir: 1, T: 90, pts: [[520, 330], [580, 352], [630, 395], [662, 450], [680, 520], [688, 580]], end: [690, 614], endDir: [0, 1], to: ['環山路', '港墘站'] },
+  { id: 'A', exit: true, s0: 2150, side: 1, dir: 1, T: 90, pts: [[520, 344], [580, 364], [630, 403], [662, 454], [680, 521], [688, 580]], end: [690, 614], endDir: [0, 1], to: ['環山路', '港墘站'] },
   // B：往南開的出口（東邊那段 x 1755）→ 西邊並排往南下來，接到內湖路二段（從北邊接上去）
-  { id: 'B', exit: true, s0: 3578, side: 1, dir: 1, T: 90, pts: [], end: [1742, 873], endDir: [0, 1], to: ['內湖路二段', '市中心'] },
+  { id: 'B', exit: true, s0: 3578, side: 1, dir: 1, T: 90, pts: [], end: [1735, 873], endDir: [0, 1], to: ['內湖路二段', '市中心'] }, // 第 94 批：x 1742 → 1735（主線變寬）
 ];
 // ---- 第 92 批：休息站（大便龍服務區）：主線北邊的山脊上鋪一塊平台（跟主線一樣高 24 公尺；neihu.js 的山照 VD_REST 削平／填平）----
 // Nick 2026-11-15「在高速公路中段做一個休息站 請上網查南休的停車場樣式並照做 要有便利商店廁所…要有出口入口 要有人車…有那三隻動物跟人」
@@ -81,8 +83,8 @@ const RL = restLayout(VD_REST); // 休息站裡面的路、停車格、房子（
 VD_RAMPS.push(
   { id: 'WX', exit: true, s0: 3110, side: -1, dir: -1, T: 80, pts: [[1232, 294]], end: [1214, 287], endDir: [-1, 0], to: ['大便龍服務區'], rest: true },
   { id: 'WE', exit: false, start: [800, 286], startDir: [-1, 0], pts: [[778, 291]], s0: 2460, side: -1, dir: -1, T: 80, rest: true },
-  { id: 'EX', exit: true, s0: 2330, side: 1, dir: 1, T: 80, pts: [[690, 326], [745, 326], [770, 318], [783, 300], [786, 270], [786, 230], [790, 205], [806, 189]], end: [830, 186], endDir: [1, 0], keys: [[781, 312, null]], to: ['大便龍服務區'], rest: true },
-  { id: 'EE', exit: false, start: [1196, 186], startDir: [1, 0], pts: [[1222, 192], [1238, 212], [1241, 250], [1241, 300], [1242, 335], [1252, 362], [1278, 378], [1312, 372], [1340, 350]], s0: 3220, side: 1, dir: 1, T: 80, keys: [[1241, 312, null]], rest: true },
+  { id: 'EX', exit: true, s0: 2330, side: 1, dir: 1, T: 80, pts: [[690, 340], [745, 340], [770, 332], [783, 300], [786, 270], [786, 230], [790, 205], [806, 189]], end: [830, 186], endDir: [1, 0], keys: [[781, 319, null]], to: ['大便龍服務區'], rest: true },
+  { id: 'EE', exit: false, start: [1196, 186], startDir: [1, 0], pts: [[1222, 192], [1238, 212], [1241, 250], [1241, 300], [1242, 349], [1252, 376], [1278, 392], [1312, 386], [1340, 364]], s0: 3220, side: 1, dir: 1, T: 80, keys: [[1241, 319, null]], rest: true },
 );
 function rampPath(D) {
   const F = [], A = []; // A：這一點在不在主線旁邊（主線的 s），不在＝−1
@@ -262,7 +264,7 @@ function buildViaduct(V, opts = {}) {
   let tris = 0;
   const rb = qb(true), cb = qb(false);
   // 第 93 批（Nick 2026-11-15「高速公路做成雙向來回的中間用分隔島隔開」）：主線中間的分隔島＝紐澤西護欄（下寬上窄的水泥，0.82 公尺）＋上面綠色的防眩板（每 1 公尺一片、斜斜的）
-  //   起點那段（停車場上來的開口、可以迴轉）和最後 4 公尺沒有；車道：中線往外 0.55 黃線、3.9 白虛線、7.05 白線（vdtraffic.js LANE 2.2、5.55）
+  //   起點那段（停車場上來的開口、可以迴轉）和最後 4 公尺沒有；車道：中線往外 0.55 黃線、3.9／7.25／10.6 白虛線、13.95 白線（vdtraffic.js LANE 2.2、5.55、8.9、12.25；第 94 批一邊 4 線）
   const MED = { s0: S_OPEN + 4, s1: L - 4, hw: 0.3, h: 0.82, slat: 1.0 };
   const medOn = (i) => S[i] >= MED.s0 - 1e-6 && S[i] <= MED.s1 + 1e-6;
   const MPR = [[0.3, 0], [0.26, 0.08], [0.11, 0.33], [0.09, MED.h]];
@@ -298,7 +300,7 @@ function buildViaduct(V, opts = {}) {
     const RX = r.X, RZ = r.Z, RS = r.S, RTX = r.TX, RTZ = r.TZ, RY = r.Y, m = r.n, RD = r.road, W = r.hw, main = r === VD_PATH;
     const Pr = (i, u, y) => [RX[i] - RTZ[i] * u, y, RZ[i] + RTX[i] * u];
     const el = (i) => RY[i] - r.Gmax[i] >= WALL;
-    const inner = (i) => (att(r, i) && r.UC[i] < U_SEP ? Math.min(RD, 7.4 - r.UC[i]) : -RD); // 交流道的柏油從主線的柏油邊開始（主線旁邊那段）
+    const inner = (i) => (att(r, i) && r.UC[i] < U_SEP ? Math.min(RD, ROAD - r.UC[i]) : -RD); // 交流道的柏油從主線的柏油邊開始（主線旁邊那段）
     const innerU = (i) => (att(r, i) && r.UC[i] < U_SEP ? Math.min(W, HW - r.UC[i]) : -W);
     const pr = [[RD, 0], [RD + 0.1, 0.1], [RD + 0.32, 0.36], [RD + 0.38, 1.0]];
     const on = { '-1': null, '1': null }; // 上一段護欄有沒有（頭尾封起來）
@@ -307,7 +309,7 @@ function buildViaduct(V, opts = {}) {
       const i1 = Math.min(m - 1, i0 + STEP);
       const v0 = RS[i0] / 12, v1 = RS[i1] / 12, ya = RY[i0], yb = RY[i1];
       // 路面
-      if (main) rb.quad(Pr(i0, -RD, ya), Pr(i0, RD, ya), Pr(i1, RD, yb), Pr(i1, -RD, yb), null, [[0.0375, v0], [0.9625, v0], [0.9625, v1], [0.0375, v1]], [0, 1, 0]);
+      if (main) { const ua = (W - RD) / (2 * W), ub = (W + RD) / (2 * W); rb.quad(Pr(i0, -RD, ya), Pr(i0, RD, ya), Pr(i1, RD, yb), Pr(i1, -RD, yb), null, [[ua, v0], [ub, v0], [ub, v1], [ua, v1]], [0, 1, 0]); }
       else { const e0 = inner(i0), e1 = inner(i1); if (e0 < RD - 0.01 || e1 < RD - 0.01) { const U = (u) => (u + W) / (2 * W); ramB.quad(Pr(i0, e0, ya), Pr(i0, RD, ya), Pr(i1, RD, yb), Pr(i1, e1, yb), null, [[U(e0), v0], [U(RD), v0], [U(RD), v1], [U(e1), v1]], [0, 1, 0]); } }
       // 護欄：內面（下面斜一點、上面陡）、頂、外面一直到橋面下面（引道：到地面）
       for (const sd of [-1, 1]) {
@@ -355,14 +357,14 @@ function buildViaduct(V, opts = {}) {
       const i = Math.round((s0 + ds) / 2); if (i < 1 || i >= n - 1) continue;
       if (clearAt(i) < WALL) { done = true; break; } // 引道（牆）
       const x = X[i], z = Z[i], g = Gmin[i] - 0.3, y = Y[i];
-      if (below(x, z, y, HW + 2, i) || badSpot(x, z, 1.6)) continue;
+      if (below(x, z, y, HW + 2, i) || badSpot(x, z, 2.6)) continue;
       const ry = yawOf(i);
-      box(x, z, ry, 1.0, 1.4, g, y - 2.2, COL.pier); box(x, z, ry, 1.1, 6.6, y - 2.2, y - 1.1, COL.cap); // 柱子、上面的帽子
-      const c = offWhenOn({ t: 'box', x, z, hx: 1.0, hz: 1.4, rot: -ry, h: y - 1.1, y0: g, noCrush: true, vd: 'pier' }); cols.push(c); piers.push([x, z]); nPier++; done = true; break;
+      box(x, z, ry, 1.0, 2.2, g, y - 2.2, COL.pier); box(x, z, ry, 1.1, HW - 1.6, y - 2.2, y - 1.1, COL.cap); // 柱子、上面的帽子（第 94 批：路變寬，柱子寬一點、帽子長一點）
+      const c = offWhenOn({ t: 'box', x, z, hx: 1.0, hz: 2.2, rot: -ry, h: y - 1.1, y0: g, noCrush: true, vd: 'pier' }); cols.push(c); piers.push([x, z]); nPier++; done = true; break;
     }
     if (!done) nSkip++;
   }
-  // 圓環：每 20 度兩支柱子（半徑 105 ± 9.4），到那個角度最上面那層；每一層下面一根橫樑；開口、連到快速道路的路、停車場不放
+  // 圓環：每 20 度兩支柱子（半徑 R ± (HW + 1.4)），到那個角度最上面那層；每一層下面一根橫樑；開口、連到快速道路的路、停車場不放
   let nCol = 0;
   const LC = TAU * R;
   for (let a = 0; a < 360; a += 20) {
@@ -372,13 +374,13 @@ function buildViaduct(V, opts = {}) {
     const ok = (rr) => { const x = C0.x + cx * rr, z = C0.z + cz * rr; return !(Math.abs(x - CONN.x) < CONN.hw + 2.5 && z > C0.z) && !(laps[0] < S_OPEN + 14 && rr < R) && !hitCol(x, z, 0.5) && !onRoad(x, z); };
     const g = Gmin[Math.min(n - 1, Math.round(laps[0] / 2))] - 0.3;
     if (top - g < WALL) continue;
-    for (const rr of [R - 9.4, R + 9.4]) {
+    for (const rr of [R - HW - 1.4, R + HW + 1.4]) {
       if (!ok(rr)) continue;
       const x = C0.x + cx * rr, z = C0.z + cz * rr;
       box(x, z, th, 0.7, 0.7, g, top - 1.1, COL.pier);
       cols.push(offWhenOn({ t: 'circle', x, z, r: 0.75, h: top - 1.1, y0: g, noCrush: true, vd: 'col' })); nCol++;
     }
-    for (let k = 0; k < laps.length; k++) if (ys[k] - g >= WALL) box(C0.x + cx * R, C0.z + cz * R, th, 10.1, 0.6, ys[k] - 1.9, ys[k] - 1.1, COL.cap); // 橫樑（本地 x＝往外）
+    for (let k = 0; k < laps.length; k++) if (ys[k] - g >= WALL) box(C0.x + cx * R, C0.z + cz * R, th, HW + 2.1, 0.6, ys[k] - 1.9, ys[k] - 1.1, COL.cap); // 橫樑（本地 x＝往外）
   }
 
   // 4b) 交流道的橋墩：26 公尺一支（中間一支、帽子窄一點）；接在主線旁邊那段、引道（牆）、下面還有別的橋面、路上、房子不放
@@ -402,12 +404,12 @@ function buildViaduct(V, opts = {}) {
   // 5) 路燈：48 公尺一支，左右輪流；燈頭晚上亮（look.js V.lampsX）
   const lb = qb(false), lampsX = [], lampK = [], GLOW = qb(false);
   { let side = 1;
-    for (let s = 20; s < L - 10; s += 48, side = -side) {
-      const i = Math.round(s / 2), y = Y[i], base = P3(i, side * 7.9, y + 1), top = y + 9, arm = P3(i, side * 6.0, top), nr = nrmAt(i);
+    for (let s = 20; s < L - 10; s += 40, side = -side) { // 第 94 批：48 → 40 公尺（路寬了）
+      const i = Math.round(s / 2), y = Y[i], base = P3(i, side * (HW - 0.1), y + 1), top = y + 10, arm = P3(i, side * (HW - 2), top), nr = nrmAt(i); // 第 94 批：路變寬：燈高一點、手臂長一點
       if (inOther(VD_PATH, base[0], base[2], y, 1.2) || !barOn(VD_PATH, i, side)) continue; // 第 92 批：交流道接在旁邊那段沒有護欄：不放
       boxAt(lb, base[0], base[2], 0.11, base[1], top, COL.pole);
-      const tip = P3(i, side * 5.6, top - 0.05); lbar(lb, base[0], base[2], tip[0], tip[2], top - 0.25, top, 0.09, COL.pole);
-      const head = P3(i, side * 5.2, top - 0.3); glowBox(head[0], head[2], top - 0.38, top - 0.18, nr);
+      const tip = P3(i, side * (HW - 3.6), top - 0.05); lbar(lb, base[0], base[2], tip[0], tip[2], top - 0.25, top, 0.09, COL.pole);
+      const head = P3(i, side * (HW - 4.0), top - 0.3); glowBox(head[0], head[2], top - 0.38, top - 0.18, nr);
       lampsX.push(head[0], top - 0.4, head[2]); lampK.push(1.4); void arm;
     }
   }
@@ -709,16 +711,16 @@ function lbar(b, x0, z0, x1, z1, y0, y1, w, col) { // 橫的細條（燈的手�
   b.quad([x0 + ox, y0, z0 + oz], [x1 + ox, y0, z1 + oz], [x1 + ox, y1, z1 + oz], [x0 + ox, y1, z0 + oz], col, null, [ox, 0, oz]);
   b.quad([x0 - ox, y0, z0 - oz], [x1 - ox, y0, z1 - oz], [x1 + ox, y0, z1 + oz], [x0 + ox, y0, z0 + oz], col, null, [0, -1, 0]);
 }
-// ---- 橋面的柏油：中間雙黃線、兩邊白虛線（6 公尺線、6 公尺空）、路邊白線；u 0–1＝−8…8 公尺、v 一圈＝12 公尺 ----
+// ---- 橋面的柏油：中間雙黃線、兩邊白虛線（6 公尺線、6 公尺空）、路邊白線；u 0–1＝−HW…HW 公尺、v 一圈＝12 公尺 ----
 function deckTex(renderer) {
-  const W = 256, H = 512, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const W = 512, H = 512, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); // 第 94 批：路寬了：256 → 512
   g.fillStyle = '#45474a'; g.fillRect(0, 0, W, H);
   let s = 91; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
-  for (let k = 0; k < 2600; k++) { const v = 52 + rnd() * 34; g.fillStyle = `rgba(${v},${v},${v + 2},${0.25 + rnd() * 0.35})`; g.fillRect(rnd() * W, rnd() * H, 1 + rnd() * 2, 1 + rnd() * 2); }
-  const px = (m) => ((m + 8) / 16) * W, lw = (m) => (m / 16) * W;
+  for (let k = 0; k < 5200; k++) { const v = 52 + rnd() * 34; g.fillStyle = `rgba(${v},${v},${v + 2},${0.25 + rnd() * 0.35})`; g.fillRect(rnd() * W, rnd() * H, 1 + rnd() * 2, 1 + rnd() * 2); }
+  const px = (m) => ((m + HW) / (2 * HW)) * W, lw = (m) => (m / (2 * HW)) * W;
   g.fillStyle = '#e2b437'; for (const o of [-0.55, 0.55]) g.fillRect(px(o) - lw(0.06), 0, lw(0.12), H); // 第 93 批：分隔島兩邊的黃線（以前中間是雙黃線）
-  g.fillStyle = '#ecece6'; for (const o of [-3.9, 3.9]) g.fillRect(px(o) - lw(0.075), 0, lw(0.15), H / 2); // 白虛線（6 公尺）
-  for (const o of [-7.05, 7.05]) g.fillRect(px(o) - lw(0.075), 0, lw(0.15), H); // 路邊白線
+  g.fillStyle = '#ecece6'; for (const o of [-10.6, -7.25, -3.9, 3.9, 7.25, 10.6]) g.fillRect(px(o) - lw(0.075), 0, lw(0.15), H / 2); // 白虛線（6 公尺）（第 94 批：一邊 4 線）
+  for (const o of [-13.95, 13.95]) g.fillRect(px(o) - lw(0.075), 0, lw(0.15), H); // 路邊白線
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.ClampToEdgeWrapping; t.wrapT = THREE.RepeatWrapping;
   t.anisotropy = renderer && renderer.capabilities ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;
   return t;

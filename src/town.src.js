@@ -2875,7 +2875,7 @@ function vdStep(dt) {
   if (dcam && V.cull) V.cull(dcam.position.x, dcam.position.y, dcam.position.z); // 遠的停車場、休息站的車、整個休息站：太遠不畫
   // 第 92 批：ETC 門架（交流道下去前；Nick「要過一個ETC站」）：開過去嗶一聲（免費，不扣錢）
   const Q = V.Q;
-  if (st.on && Q.r === 0 && Math.abs(Q.u) < 8 && V.etc?.length) {
+  if (st.on && Q.r === 0 && Math.abs(Q.u) < V.HW && /* 第 94 批：路變寬 */ V.etc?.length) {
     const s = Q.s, s0 = st.es;
     if (s0 != null && Math.abs(s - s0) < 30) for (const e of V.etc) if ((s0 - e.s) * (s - e.s) < 0) { mrtSnd('beep'); (wk ? walker : drv)?.toast('ETC 嗶！（免費）', 2200); st.etcN = (st.etcN || 0) + 1; }
     st.es = s;

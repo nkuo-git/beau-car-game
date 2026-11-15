@@ -1,7 +1,7 @@
 // vdtraffic.js — 第 92 批（Nick 2026-11-15「高速公路要有少許的車」「比較厲害的跑車開快一點這樣比較真」
 //   「休息站…要有人車 車一樣從車店挑 有車進來有車離開」）
 // 高架橋（viaduct.js）自己的車流：只有幾台、從車店挑（town.src.js 的 lotKind／lotLook）；跑車、超跑開快一點、走內線。
-//   主線一個方向兩線（中線往外 1.85＝內線、5.55＝外線；往 +S 的在 +u 那邊）；外線的車有的從交流道下去：
+//   主線一個方向四線（第 94 批；中線往外 2.2、5.55、8.9、12.25；往 +S 的在 +u 那邊）；最外面那線的車有的從交流道下去：
 //     A（環山路）、B（內湖路二段）：開到地上再一段；EX、WX：進休息站找空的格子停，停一陣子倒車出來，從 EE、WE 回主線。
 //   休息站本來就停著的車（viaduct.js lot.cars area 'r'）有時候也倒車出來開走（那一格就空了，進來的車可以停）。
 //   兩頭：往 +S 的開到內湖的大馬路上一段、往 −S 的開進超大停車場中間的走道往南到快速道路的口；超大停車場也有車從快速道路進來上橋。
@@ -19,7 +19,10 @@
 //   me 多 r、s、u（主線上的位置；不在主線 r＝−1）、v（車速）、walk（走路）
 //   c.needObj＝town 把輕量車放好以前不動、不擋（新生的車：生在 420 公尺外，做好才開；休息站開走的那台：c.lot＝停著的那台（lot.cars），放好了 town 藏起停著的那台、清掉 needObj）；o.onGive(lc)：放回去
 export const { createVdTraffic } = (() => {
-const LANE = [2.2, 5.55]; // 內線、外線離中線多遠（第 93 批：中間有分隔島，內線往外移；以前 1.85）
+const LANE = [2.2, 5.55, 8.9, 12.25]; // 每一線離中線多遠（第 93 批：中間有分隔島，內線往外移；以前 1.85）（第 94 批：一邊 4 線，以前 [2.2, 5.55]）
+const NL = LANE.length, OUT = NL - 1; // 最外面那一線：下交流道、從交流道上來
+// 第 94 批：最後那段（成功路二段456巷的大馬路一邊只有 2 線）：外面兩線（k 2、3）在 DROP0…DROP1（離終點幾公尺）慢慢併到裡面兩線（k 0、1）的位置；車子在那以前就換到裡面
+const DROP0 = 330, DROP1 = 170, DROP_GO = 520;
 const COP_TOP = 50, COP_SEE = 90; // 第 93 批：國道警察追你最快 50 m/s（180 公里）；90 公尺內（同一層）看得到你
 const KMH = 1 / 3.6;
 function createVdTraffic(V, o = {}) {
@@ -41,17 +44,18 @@ function createVdTraffic(V, o = {}) {
   // 主線的速限：圓環（60）、下來那段（50）、中間（80）
   const mainLim = (s) => (s < sH + 40 ? 60 : s > sD - 20 ? 50 : 80) * KMH;
   const lines = new Map(), LN = (l) => (lines.set(l.id, l), l);
-  // 主線四條：dir ±1（+1＝往 +S）、lane 0／1；點跟主線的點對齊（反方向的倒過來）；兩頭各接一段（內湖的大馬路；超大停車場的走道）
+  // 主線八條：dir ±1（+1＝往 +S）、lane 0…3；點跟主線的點對齊（反方向的倒過來）；兩頭各接一段（內湖的大馬路；超大停車場的走道）
+  const uAt = (k, s) => { if (k < 2) return LANE[k]; const t = Math.max(0, Math.min(1, (s - (L - DROP0)) / (DROP0 - DROP1))); return LANE[k] + (LANE[k - 2] - LANE[k]) * t * t * (3 - 2 * t); }; // 第 94 批：外面兩線最後併進來
   const mainLine = (dir, k) => {
     const u = dir * LANE[k], X = [], Y = [], Z = [], lim = [], ms = [];
     const push = (x, y, z, l, s) => { X.push(x); Y.push(y); Z.push(z); lim.push(l); ms.push(s); };
-    const at = (i) => push(P.X[i] - P.TZ[i] * u, Yd[i], P.Z[i] + P.TX[i] * u, mainLim(mS[i]), mS[i]);
+    const at = (i) => { const uu = dir * uAt(k, mS[i]); push(P.X[i] - P.TZ[i] * uu, Yd[i], P.Z[i] + P.TX[i] * uu, mainLim(mS[i]), mS[i]); };
     if (dir > 0) {
       for (const q of lotIn(k)) push(q[0], hAt(q[0], q[1]) + 0.02, q[1], 25 * KMH, -1);
       for (let i = 7; i < n; i++) at(i); // 前面 7 點（14 公尺）給停車場那段轉彎
-      const e = n - 1; for (let d = 4; d <= 120; d += 4) { const x = P.X[e] - P.TZ[e] * u + P.TX[e] * d, z = P.Z[e] + P.TX[e] * u + P.TZ[e] * d; push(x, hAt(x, z) + 0.02, z, 50 * KMH, -1); } // 內湖的大馬路
+      const e = n - 1, ue = dir * uAt(k, L); for (let d = 4; d <= 120; d += 4) { const x = P.X[e] - P.TZ[e] * ue + P.TX[e] * d, z = P.Z[e] + P.TX[e] * ue + P.TZ[e] * d; push(x, hAt(x, z) + 0.02, z, 50 * KMH, -1); } // 內湖的大馬路
     } else {
-      const e = n - 1; for (let d = 120; d >= 4; d -= 4) { const x = P.X[e] - P.TZ[e] * u + P.TX[e] * d, z = P.Z[e] + P.TX[e] * u + P.TZ[e] * d; push(x, hAt(x, z) + 0.02, z, 50 * KMH, -1); }
+      const e = n - 1, ue = dir * uAt(k, L); for (let d = 120; d >= 4; d -= 4) { const x = P.X[e] - P.TZ[e] * ue + P.TX[e] * d, z = P.Z[e] + P.TX[e] * ue + P.TZ[e] * d; push(x, hAt(x, z) + 0.02, z, 50 * KMH, -1); }
       for (let i = n - 1; i >= 7; i--) at(i);
       for (const q of lotOut(k)) push(q[0], hAt(q[0], q[1]) + 0.02, q[1], 25 * KMH, -1);
     }
@@ -66,27 +70,27 @@ function createVdTraffic(V, o = {}) {
     const u = -LANE[k], i7 = 7, ex = P.X[i7] - P.TZ[i7] * u, ez = P.Z[i7] + P.TX[i7] * u;
     return rounded([[ex, ez], [-781.8, ez], [-781.8, 452]], 7, 2).slice(1);
   }
-  const ML = { '1,0': mainLine(1, 0), '1,1': mainLine(1, 1), '-1,0': mainLine(-1, 0), '-1,1': mainLine(-1, 1) };
+  const ML = {}; for (const dir of [1, -1]) for (let k = 0; k < NL; k++) ML[`${dir},${k}`] = mainLine(dir, k);
   // 主線的 s → 某條主線上的距離（找最接近的那一點：ms 是單調的）
   const dOfMs = (l, s) => { const M = l.ms; let lo = 0, hi = l.m - 1; const up = l.dir > 0; // ms＝−1 的（兩頭接的）不算
     let a = -1; for (let i = 0; i < l.m; i++) if (M[i] >= 0) { a = i; break; } let b = -1; for (let i = l.m - 1; i >= 0; i--) if (M[i] >= 0) { b = i; break; }
     lo = a; hi = b; while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (up ? M[mid] <= s : M[mid] >= s) lo = mid; else hi = mid; }
     const t = (s - M[lo]) / (M[hi] - M[lo] || 1); return l.S[lo] + (l.S[hi] - l.S[lo]) * Math.max(0, Math.min(1, t)); };
-  // ---- 交流道：出口從主線外線離開（離中線 5.55 以外那段才走交流道）、入口在外線接回主線 ----
+  // ---- 交流道：出口從主線最外面那線離開（離中線 12.25 以外那段才走交流道）、入口在最外面那線接回主線 ----
   const junc = new Map(); for (const l of Object.values(ML)) junc.set(l.id, []);
   const ramps = {};
   for (const r of V.roads.slice(1)) {
     const D = r.def, m = r.n; if (!r.Y) continue;
     const lim = D.rest ? (D.exit ? 40 : 60) : 50, out = [];
     let i0 = 0, i1 = m - 1;
-    if (D.exit) { for (i0 = 0; i0 < m - 1 && r.MS[i0] >= 0 && r.UC[i0] < LANE[1]; i0++); }
-    else { for (i1 = m - 1; i1 > 0 && r.MS[i1] >= 0 && r.UC[i1] < LANE[1]; i1--); }
+    if (D.exit) { for (i0 = 0; i0 < m - 1 && r.MS[i0] >= 0 && r.UC[i0] < LANE[OUT]; i0++); }
+    else { for (i1 = m - 1; i1 > 0 && r.MS[i1] >= 0 && r.UC[i1] < LANE[OUT]; i1--); }
     const X = [], Y = [], Z = [], LM = [];
     for (let i = i0; i <= i1; i++) { X.push(r.X[i]); Y.push(r.Y[i]); Z.push(r.Z[i]); LM.push(lim * KMH); }
     if (D.exit && !D.rest) { const e = m - 1, ed = D.endDir || [r.TX[e], r.TZ[e]]; for (let d = 4; d <= 80; d += 4) { const x = r.X[e] + ed[0] * d, z = r.Z[e] + ed[1] * d; X.push(x); Y.push(hAt(x, z) + 0.02); Z.push(z); LM.push(40 * KMH); } } // 下去以後在地上的路再開一段
     const rl = LN(mkLine('R' + D.id, Float32Array.from(X), Float32Array.from(Y), Float32Array.from(Z), Float32Array.from(LM), { ramp: D }));
     ramps[D.id] = rl;
-    const ml = ML[`${D.dir},1`];
+    const ml = ML[`${D.dir},${OUT}`];
     if (D.exit) junc.get(ml.id).push({ d: dOfMs(ml, r.MS[i0]), ramp: rl, id: D.id, rest: !!D.rest });
     else rl.merge = { line: ml, d: dOfMs(ml, r.MS[i1]) };
   }
@@ -152,18 +156,26 @@ function createVdTraffic(V, o = {}) {
     c.h = Math.atan2(-tz, tx) + (c.rev ? Math.PI : 0); c.pitch = Math.atan(g) * (c.rev ? -1 : 1);
     c.vb = l.VB[i]; c.ls = l.LS[i]; c.lx = c.x; c.lz = c.z; c.lh = c.h; // 線上的位置（換線的時候畫的位置會偏，前後車照這個算）
   }
-  // 主線上：要不要下交流道（外線的車、前面的出口：休息站 30%、A／B 各 22%）
+  // 主線上：要不要下交流道（最外面那線的車、前面的出口：休息站 30%、A／B 各 22%）
   function planMain(c, line, d) {
     const steps = [{ line }]; c.rest = false;
-    if (line.k === 1 && !c.noExit) for (const j of junc.get(line.id)) { if (j.d < d + 60) continue; if (rnd() < (j.rest ? 0.3 : 0.22)) { steps[0].end = j.d; steps.push({ line: j.ramp, exit: j }); break; } }
+    if (line.k === OUT && !c.noExit) for (const j of junc.get(line.id)) { if (j.d < d + 60) continue; if (rnd() < (j.rest ? 0.3 : 0.22)) { steps[0].end = j.d; steps.push({ line: j.ramp, exit: j }); break; } }
     c.route = steps; c.si = 0; c.line = line; c.d = d; c.hint = 0; c.rev = false; c.stop = false; place(c);
   }
-  // 換線（主線上，同一個方向的另一線）：那一線前後沒有車、沒有你；有要下交流道的不換
+  // 換線（主線上，同一個方向旁邊那一線）：那一線前後沒有車、沒有你；有要下交流道的不換
+  //   第 94 批：一邊 4 線：先試裡面那線（超車），不行再試外面那線；inward＝只往裡面（最後那段外面兩線要併進來）
   const LC_T = 2.4;
-  function laneChange(c, me) {
+  function laneChange(c, me, inward = false) {
     c.lcT = 1.5; const l = c.line; if (!l.ms || c.rev || c.lk > 0 || c.route.length > 1 || c.route[c.si].end != null) return false;
     const s = l.ms[c.hint]; if (!(s > 0)) return false;
-    const ol = ML[`${l.dir},${1 - l.k}`], d2 = dOfMs(ol, s); if (d2 < 10 || d2 > ol.L - 60) return false;
+    for (const k2 of inward ? [l.k - 1] : [l.k - 1, l.k + 1]) {
+      if (k2 < 0 || k2 >= NL || (k2 >= 2 && s > L - DROP_GO)) continue; // 快到終點：不換到外面兩線
+      if (tryLane(c, me, ML[`${l.dir},${k2}`], s)) return true;
+    }
+    return false;
+  }
+  function tryLane(c, me, ol, s) {
+    const d2 = dOfMs(ol, s); if (d2 < 10 || d2 > ol.L - 60) return false;
     for (const q of cars) if (q !== c && q.line === ol && q.d > d2 - 22 && q.d < d2 + 40) return false;
     const i = Math.min(ol.m - 1, Math.max(0, Math.round((d2 / ol.L) * (ol.m - 1)))); // 大約的點（換到那一線的位置）
     if (Math.abs(me.y - ol.Y[i]) < 2.5 && Math.hypot(me.x - ol.X[i], me.z - ol.Z[i]) < 30) { // 你在那一線：不換
@@ -186,7 +198,7 @@ function createVdTraffic(V, o = {}) {
   }
   const dist = (c, me) => Math.hypot(c.x - me.x, c.z - me.z);
   // 生一台：在主線（四條）或停車場的口、離玩家 420～800 公尺
-  function spawnMain(me, minD = 420) {
+  function spawnMain(me, minD = 420) { // 第 94 批：外面兩線最後那段（快要併進來）不生
     const ls = Object.values(ML);
     for (let k = 0; k < 14; k++) {
       const l = ls[Math.floor(rnd() * ls.length)], d = 20 + rnd() * (l.L - 160);
@@ -194,7 +206,8 @@ function createVdTraffic(V, o = {}) {
       if (dd < minD || dd > 820) continue;
       if (cars.some((q) => q.line === l && Math.abs(q.d - d) < 40)) continue;
       const p = o.pick(++seed * 7919 + 13); if (!p) continue;
-      if ((p.fast > 0) !== (l.k === 0) && rnd() < 0.8) continue; // 跑車、超跑大多走內線；普通的車大多走外線
+      if (l.k >= 2 && (l.ms[i] < 0 || l.ms[i] > L - DROP_GO)) continue;
+      if ((p.fast > 0 ? l.k > 1 : l.k === 0) && rnd() < 0.8) continue; // 跑車、超跑大多走裡面兩線；普通的車大多不走最裡面那線
       const c = newCar(p); planMain(c, l, d); c.v = Math.min(c.top, c.vb * Math.sqrt(c.alat), c.ls * c.mul) * 0.9; c.needObj = true; cars.push(c); st.spawned++; return c; // 輕量車做好才開始動（不會開到近的地方才變出來）
     }
     return null;
@@ -250,10 +263,12 @@ function createVdTraffic(V, o = {}) {
   function copGiveUp(c) { // 不追了：方向對（往那一邊的車道的方向）就回到線上；不然停在路邊（看不到就收掉）
     c.chase = false; c.lights = false; c.hold = 0; copSt.gaveUp++;
     const side = c.cu >= 0 ? 1 : -1;
-    if (c.cdir === side && c.cs > MED.s0 && c.cs < MED.s1 - 30) { const k = Math.abs(c.cu) < 3.9 ? 0 : 1, l = ML[`${side},${k}`]; c.state = 'drive'; planMain(c, l, dOfMs(l, c.cs)); c.v = Math.min(c.v, c.ls); copSt.joined++; return; }
+    if (c.cdir === side && c.cs > MED.s0 && c.cs < MED.s1 - 30) { const k = nearLane(c.cu), l = ML[`${side},${k}`]; c.state = 'drive'; planMain(c, l, dOfMs(l, c.cs)); c.v = Math.min(c.v, c.ls); copSt.joined++; return; }
     c.state = 'end'; c.v = 0;
   }
-  const meOnMain = (me) => me.on && me.r === 0 && me.s > MED.s0 && me.s < MED.s1 && Math.abs(me.u) > 0.45 && Math.abs(me.u) < 7.6;
+  const nearLane = (u) => { let b = 0; for (let k = 1; k < NL; k++) if (Math.abs(Math.abs(u) - LANE[k]) < Math.abs(Math.abs(u) - LANE[b])) b = k; return b; }; // 第 94 批：離 u 最近的那一線
+  const U_MAX = V.path && V.path.road ? V.path.road + 0.3 : LANE[OUT] + 2.2; // 主線柏油的邊（第 94 批：以前寫死 7.6）
+  const meOnMain = (me) => me.on && me.r === 0 && me.s > MED.s0 && me.s < MED.s1 && Math.abs(me.u) > 0.45 && Math.abs(me.u) < U_MAX;
   function copStep(c, dt, me) {
     c.hitCool -= dt;
     const want = o.wanted ? o.wanted() : 0, ds = me.s - c.cs, adist = Math.abs(ds);
@@ -264,20 +279,20 @@ function createVdTraffic(V, o = {}) {
     let vw = adist > 60 ? COP_TOP : Math.min(COP_TOP, Math.max(0, away + (adist - back) * 0.8));
     vw = Math.min(vw, c.vb * Math.sqrt(7));
     // 前面的車（同一邊、往前、左右 1.9 公尺內）；離你遠的時候挑前面比較空的那一線
-    const fx = Math.cos(c.h), fz = -Math.sin(c.h); let gap = 1e9, gv = 0; const ahead2 = [1e9, 1e9];
+    const fx = Math.cos(c.h), fz = -Math.sin(c.h); let gap = 1e9, gv = 0; const ahead2 = LANE.map(() => 1e9);
     for (const q of cars) {
       if (q === c || q.needObj || q.state === 'gone' || Math.abs(q.y - c.y) > 2.5) continue;
       const dx = q.x - c.x, dz = q.z - c.z; if (Math.abs(dx) > 90 || Math.abs(dz) > 90) continue;
       const ah = dx * fx + dz * fz; if (ah < 0.5 || ah > 90) continue;
       const lat = -dx * fz + dz * fx; // 右手邊＝＋
-      const qu = c.cu + lat * c.cdir; for (let k = 0; k < 2; k++) if (Math.abs(qu - side * LANE[k]) < 1.9) ahead2[k] = Math.min(ahead2[k], ah);
+      const qu = c.cu + lat * c.cdir; for (let k = 0; k < NL; k++) if (Math.abs(qu - side * LANE[k]) < 1.9) ahead2[k] = Math.min(ahead2[k], ah);
       if (Math.abs(lat) < 1.9) { const g = ah - (c.len + q.len) / 2; if (g < gap) { gap = g; gv = Math.max(0, q.v * (Math.cos(q.h) * fx - Math.sin(q.h) * fz)); } }
     }
     let tu;
     if (adist < 30 && !me.walk) tu = me.u; // 近了：咬在你後面（同一線）
-    else if (adist < 30) tu = side * Math.max(1.4, Math.min(6.4, Math.abs(me.u) + (Math.abs(me.u) < 3.9 ? 2 : -2))); // 你在走路：停在你旁邊那一線
-    else { if ((c.laneT -= dt) <= 0) { c.laneT = 0.6; c.lane = ahead2[0] >= ahead2[1] ? 0 : 1; if (ahead2[0] > 70 && ahead2[1] > 70) c.lane = Math.abs(me.u) < 3.9 ? 0 : 1; } tu = side * LANE[c.lane ?? 0]; }
-    tu = side * Math.max(1.2, Math.min(6.55, Math.abs(tu))); // 不會壓到分隔島（中間 ±0.3）、外面的護欄
+    else if (adist < 30) tu = side * Math.max(1.4, Math.min(LANE[OUT] + 0.15, Math.abs(me.u) + (Math.abs(me.u) < LANE[OUT] - 1 ? 3.35 : -3.35))); // 你在走路：停在你旁邊那一線
+    else { if ((c.laneT -= dt) <= 0) { c.laneT = 0.6; const cur = c.lane ?? nearLane(c.cu); let b = cur; for (let k = Math.max(0, cur - 1); k <= Math.min(OUT, cur + 1); k++) if (ahead2[k] > ahead2[b] + 5) b = k; c.lane = b; if (ahead2.every((a) => a > 70)) c.lane = nearLane(me.u); /* 第 94 批：旁邊比較空的那一線（一次換一線） */ } tu = side * LANE[c.lane ?? 0]; }
+    tu = side * Math.max(1.2, Math.min(LANE[OUT] + 0.3, Math.abs(tu))); // 不會壓到分隔島（中間 ±0.3）、外面的護欄
     if (gap < 1e8) vw = Math.min(vw, Math.max(0, gv + (gap - 4) * 0.5), Math.max(0, (gap - 3) / 1.4));
     const acc = vw > c.v ? Math.min(7, (vw - c.v) / dt) : Math.max(-10, (vw - c.v) / dt);
     c.v = Math.max(0, c.v + acc * dt);
@@ -345,6 +360,7 @@ function createVdTraffic(V, o = {}) {
       for (const q of cars) { if (q === c) continue; const dx = (q.line ? q.lx : q.x) - cX, dz = (q.line ? q.lz : q.z) - cZ, dy = q.y - c.y; if (Math.abs(dy) > 2 || Math.abs(dx) > 70 || Math.abs(dz) > 70) continue;
         const ahead = dx * fx + dz * fz, side = Math.abs(dx * -fz + dz * fx); if (ahead > 0.5 && ahead < 70 && side < 1.9) { const g = ahead - (c.len + q.len) / 2; if (g < gap) { gap = g; gv = q.needObj ? 0 : q.state === 'drive' ? q.v : q.state === 'cop' ? Math.max(0, q.v * (Math.cos(q.h) * fx - Math.sin(q.h) * fz)) : 0; } } }
       { const dx = me.x - cX, dz = me.z - cZ, dy = me.y - c.y; if (Math.abs(dy) < 2.5) { const ahead = dx * fx + dz * fz, side = Math.abs(dx * -fz + dz * fx); if (ahead > 0 && ahead < 70 && side < 2.2) { const g = ahead - c.len / 2 - 2.3; if (g < gap) { gap = g; gv = 0; c.wait += dt; } } } }
+      if (c.line.ms && c.line.k >= 2 && c.line.dir > 0 && c.lk <= 0 && (c.mgT = (c.mgT || 0) - dt) <= 0) { const s = c.line.ms[c.hint]; if (s > L - DROP_GO) { c.mgT = 0.8; if (laneChange(c, me, true)) gap = 1e9; } } // 第 94 批：快到終點（一邊只剩 2 線）：外面兩線的車換到裡面
       if (gap < 45 && gv < want - 3 && (c.lcT -= dt) <= 0 && laneChange(c, me)) { gap = 1e9; } // 前面比較慢（或停著的你）：換到旁邊那一線超過去
       if (gap < 1e8) want = Math.min(want, Math.max(0, gv + (gap - 4) * 0.5), Math.max(0, (gap - 3) / 1.4));
       const acc = want > c.v ? Math.min(2.6, (want - c.v) / dt) : Math.max(-7, (want - c.v) / dt);

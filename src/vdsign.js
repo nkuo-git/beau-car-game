@@ -122,11 +122,13 @@ function buildVdSigns(o) {
     for (const P of [A, B]) boxAt(back, P[0], P[2], 0.2, yb, yt + 0.3, POLE); // 柱子在護欄上（護欄已經擋了）
     for (const [y0, y1] of [[y + 6.9, y + 7.25], [y + 7.6, y + 7.95]]) lbar(back, A[0], A[2], B[0], B[2], y0, y1, 0.12, POLE);
     for (let u = -(HW - 0.8); u <= HW - 0.8 + 1e-6; u += 1.2) { const p = at(M, i, u, 0); boxAt(back, p[0], p[2], 0.04, y + 6.9, y + 7.95, POLE); } // 桁架的直條
-    const put = (k, u, dir) => { if (!k) return; const c = at(M, i, u, 0), d = [t[0] * dir, t[1] * dir]; plate(c[0] - d[0] * 0.18, c[2] - d[1] * 0.18, d, 3.4, 1.7, y + 5.35, k); };
-    if (pos) { put(pos[0], 1.85, 1); put(pos[1], 5.55, 1); }
-    if (neg) { put(neg[0], -1.85, -1); put(neg[1], -5.55, -1); }
+    const put = (k, u, dir) => { if (!k) return; const c = at(M, i, u, 0), d = [t[0] * dir, t[1] * dir]; plate(c[0] - d[0] * 0.18, c[2] - d[1] * 0.18, d, 3.1, 1.6, y + 5.4, k); };
+    // 第 94 批（一邊 4 線）：pos／neg＝[裡面兩線, 外面兩線] 的牌子 → 每一線上面一塊（裡面三線用 [0]、最外面那線用 [1]：下交流道的在外線）
+    const LN = [2.2, 5.55, 8.9, 12.25];
+    if (pos) LN.forEach((u, k) => put(pos[k === 3 ? 1 : 0], u, 1));
+    if (neg) LN.forEach((u, k) => put(neg[k === 3 ? 1 : 0], -u, -1));
     if (etcOn) { // 感應器：每一線上面一個（灰色的盒子＋黑色的鏡頭）
-      for (const u of [-5.55, -1.85, 1.85, 5.55]) { const c = at(M, i, u, 0); boxAt(back, c[0], c[2], 0.28, y + 6.25, y + 6.9, GREY); boxAt(back, c[0], c[2], 0.12, y + 6.0, y + 6.25, DARK); }
+      for (const u of [...LN, ...LN.map((q) => -q)]) { const c = at(M, i, u, 0); boxAt(back, c[0], c[2], 0.28, y + 6.25, y + 6.9, GREY); boxAt(back, c[0], c[2], 0.12, y + 6.0, y + 6.25, DARK); }
       etc.push({ s: +M.S[i].toFixed(1), i, y: +y.toFixed(2) });
     }
     list.push({ why, s: Math.round(M.S[i]), x: +A[0].toFixed(1), z: +A[2].toFixed(1), y: +y.toFixed(1) });
