@@ -189,12 +189,12 @@ const s1 = await p.evaluate(() => {
   const lotH = []; for (const [dx, dz] of [[0, 0], [60, 0], [-60, 0], [0, 60], [0, -60], [45, 70], [-45, -70], [0, 120], [0, 200]]) lotH.push(+VIL.heightAt(-780 + dx, 250 + dz).toFixed(3));
   const lotS = VIL.surfaceAt(-760, 250), connS = VIL.surfaceAt(-780, 420);
   const hill = D.HILL_LIST.some((h) => h.x === -805 && h.z === 185), nHill = D.HILL_LIST.length;
-  const cars = V.lot.cars, kinds = {}; for (const c of cars) kinds[c.k] = (kinds[c.k] || 0) + 1;
+  const cars = V.lot.cars.filter((c) => c.area !== 'r'), kinds = {}; // 第 92 批：休息站的車（area 'r'）另外算 for (const c of cars) kinds[c.k] = (kinds[c.k] || 0) + 1;
   const PERF = window.__P(); let cheap = 0, sup = 0; for (const c of cars) { const pr = PERF[c.k].price; if (pr <= 100) cheap++; if (pr >= 1000) sup++; }
   // 橋下的房子：橋面邊上 2 公尺內、比橋面下面高的（村子、內湖）
   let under = 0, ex = null; for (const b of VIL.buildings || []) { if (!isFinite(b.x)) continue; for (const [dx, dz] of [[0, 0], [b.hx || 0, 0], [-(b.hx || 0), 0], [0, b.hz || 0], [0, -(b.hz || 0)]]) { const x = b.x + dx, z = b.z + dz; if (!V.near(x, z, 0)) continue; let lo = 1e9; for (let i = 0; i < P.n; i += 1) { const d = Math.hypot(P.X[i] - x, P.Z[i] - z); if (d < 8.5) lo = Math.min(lo, Y[i] - 1.1); } if ((b.h || 3) + VIL.heightAt(x, z) > lo - 0.5) { under++; ex = ex || [b.kind, Math.round(x), Math.round(z), b.h]; } break; } }
   const meshes = []; V.group.traverse((o) => { if (o.isMesh) meshes.push(o.name); });
-  return { I, maxG: +maxG.toFixed(3), gAt, lotH, lotS, connS, hill, nHill, cheap, sup, nCars: cars.length, kinds, under, ex, meshes: meshes.length, lampsX: (VIL.lampsX || []).length / 3, vdGone: VIL.neihu?.info?.vdGone ?? null };
+  return { I, maxG: +maxG.toFixed(3), gAt, lotH, lotS, connS, hill, nHill, cheap, sup, nCars: cars.length, kinds, under, ex, meshes: meshes.length, lampsX: (VIL.lampsX || []).length / 3, vdGone: VIL.neihu?.info?.vdGone ?? null, sg: V.signs.list.map((q) => q.why + (q.skip ? '（沒放）' : '')), sgTris: V.signs.tris, sgMesh: V.signs.group.children.length, etcS: V.etc.map((e) => e.s), curves: I.curves };
 });
 console.log('1', el(), JSON.stringify(s1));
 check(!s1.err, 'the viaduct is built (VDV)');
@@ -208,8 +208,14 @@ check(s1.lotH.every((h) => Math.abs(h) < 0.06), `the parking lot ground is flat 
 check(s1.lotS === 0 && s1.connS === 0, 'parking lot and the road to it are asphalt');
 check(s1.I.lotSpots >= 800 && s1.nCars / s1.I.lotSpots > 0.55 && s1.nCars / s1.I.lotSpots < 0.77, `${s1.nCars} cars in ${s1.I.lotSpots} bays`);
 check(s1.sup < s1.nCars * 0.04 && s1.cheap > s1.nCars * 0.5, `dealer cars, cheap ones common (${s1.cheap} up to 100 萬), supercars rare (${s1.sup}); ${JSON.stringify(s1.kinds)}`);
+check(s1.I.restBays >= 400 && s1.I.restCars > s1.I.restBays * 0.3 && s1.I.restCars < s1.I.restBays * 0.95, `rest-area parking: ${s1.I.restCars} dealer cars in ${s1.I.restBays} bays`);
 check(s1.under === 0, `no house under the deck (${s1.under}${s1.ex ? ' ' + JSON.stringify(s1.ex) : ''})`);
 check(s1.lampsX >= s1.I.lamps, `the deck and lot lamps are in the world's lamp list (${s1.lampsX})`);
+// 第 92 批：牌子（Nick「要交通號誌比如前有大灣或限速 / 有牌子橫過路中間寫到哪裡」）
+{ const n = (re) => s1.sg.filter((w) => re.test(w)).length, last = s1.curves[s1.curves.length - 2];
+  check(n(/沒放/) === 0 && n(/^限速/) >= 10 && n(/^前有大彎/) >= 3, `speed-limit and curve-warning signs on the barriers (${n(/^限速/)} limits, ${n(/^前有大彎/)} curve warnings, ${n(/沒放/)} skipped)`);
+  check(n(/門架/) === 5 && s1.sgMesh === 2 && s1.sgTris < 4000, `5 gantries across the road with destinations (${s1.sg.filter((w) => /門架/.test(w)).join('、')}); all signs = ${s1.sgMesh} meshes, ${s1.sgTris} triangles`);
+  check(s1.etcS.length === 1 && last && s1.etcS[0] > last.s1 && s1.etcS[0] < s1.I.len - 40, `an ETC gantry on the way down, on the straight after the last big curve (s ${s1.etcS[0]}; curve ends ${last && last.s1})`); }
 
 // ================= 2 快速道路內圈的口 =================
 const s2 = await p.evaluate(() => {
@@ -237,7 +243,7 @@ const s3 = await p.evaluate(() => {
   { const i = P.n - 1; for (let k = 4; k <= 60; k += 4) pts.push([P.X[i] + P.TX[i] * k - P.TZ[i] * 2, P.Z[i] + P.TZ[i] * k + P.TX[i] * 2]); } // 下來以後在內湖的路上再開一段
   const t0 = Math.atan2(-(pts[1][1] - pts[0][1]), pts[1][0] - pts[0][0]);
   H.put(pts[0][0], pts[0][1], t0, 60);
-  const r = { off: 0, maxDY: 0, hi: 0, hiPol: 0, maxY: 0, dyAt: null, sMax: 0, bumpAt: [], offAt: [] }; let nb = d.telemetry().bumps;
+  const etc0 = V.st.etcN || 0, r = { off: 0, maxDY: 0, hi: 0, hiPol: 0, maxY: 0, dyAt: null, sMax: 0, bumpAt: [], offAt: [] }; let nb = d.telemetry().bumps;
   const res = H.follow(pts, 520, { vmax: 22, each: (q) => {
     const y = D.tripS.car.position.y, st = V.st, Q = V.Q, yd = V.at(q.x, q.z, y);
     if (yd != null) { const dy = Math.abs(y - yd); if (dy > r.maxDY && !q.air) { r.maxDY = dy; r.dyAt = [Math.round(q.x), Math.round(q.z), +y.toFixed(2), +yd.toFixed(2), Math.round(Q.s)]; } r.sMax = Math.max(r.sMax, Q.s); }
@@ -247,7 +253,7 @@ const s3 = await p.evaluate(() => {
     if (st.high) { r.hi++; if (window.__polP().hidden) r.hiPol++; }
   } });
   const t = d.telemetry(), y = D.tripS.car.position.y, g = D.VIL.heightAt(t.x, t.z);
-  return { ...res, ...r, maxDY: +r.maxDY.toFixed(3), maxY: +r.maxY.toFixed(2), sMax: Math.round(r.sMax), L: Math.round(P.L), endY: +y.toFixed(2), endG: +g.toFixed(2), on: V.st.on, n: pts.length };
+  return { ...res, ...r, etcN: (V.st.etcN || 0) - etc0, maxDY: +r.maxDY.toFixed(3), maxY: +r.maxY.toFixed(2), sMax: Math.round(r.sMax), L: Math.round(P.L), endY: +y.toFixed(2), endG: +g.toFixed(2), on: V.st.on, n: pts.length };
 });
 console.log('3', el(), JSON.stringify(s3));
 if (process.env.VD_STOP === '3') { await b.close(); srv.close(); console.log(fails.length ? `FAILED ${fails.length}` : 'ok so far'); process.exit(0); }
@@ -257,6 +263,7 @@ check(s3.maxDY < 0.25, `the car sits on the deck surface all the way (max ${s3.m
 check(s3.maxY > 23.5, `went up to ${s3.maxY} m`);
 check(s3.bumps <= 1, `hit nothing on the way (${s3.bumps} bumps)`);
 check(s3.hi > 600 && s3.hiPol === s3.hi, `up on the deck the police on the ground can't see you (${s3.hiPol}/${s3.hi} frames hidden)`);
+check(s3.etcN === 1, `drove through the ETC gantry: one beep (${s3.etcN})`);
 check(!s3.on && Math.abs(s3.endY - s3.endG) < 0.2, `back on the Neihu road at the end (y ${s3.endY}, ground ${s3.endG})`);
 
 // ================= 3b 第 92 批：交流道（分岔到別的地方）：從主線外側那一線開下去、到內湖的路上 =================

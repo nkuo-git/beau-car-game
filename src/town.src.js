@@ -2840,6 +2840,13 @@ function vdStep(dt) {
     st.on = y != null && Math.abs(y - p.y) < 1.2; st.high = st.on && y - PW.groundAt(p.x, p.z) > 3;
     st.py = p.y; st.px = p.x; st.pz = p.z;
   }
+  // 第 92 批：ETC 門架（交流道下去前；Nick「要過一個ETC站」）：開過去嗶一聲（免費，不扣錢）
+  const Q = V.Q;
+  if (st.on && Q.r === 0 && Math.abs(Q.u) < 8 && V.etc?.length) {
+    const s = Q.s, s0 = st.es;
+    if (s0 != null && Math.abs(s - s0) < 30) for (const e of V.etc) if ((s0 - e.s) * (s - e.s) < 0) { mrtSnd('beep'); (wk ? walker : drv)?.toast('ETC 嗶！（免費）', 2200); st.etcN = (st.etcN || 0) + 1; }
+    st.es = s;
+  } else st.es = null;
   vdLotStep(dt);
 }
 function vdLotPut(l, c) { l.setLook(lotLook(c.k, c.j + VDL_SEED)); l.car.position.set(c.x, (c.y || 0) + 0.03, c.z); l.car.rotation.set(0, c.h, 0); l.car.visible = true; VDV.lot.hide(c.inst); VDL.live.set(c, { l, k: c.k }); }

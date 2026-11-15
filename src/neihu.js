@@ -24,7 +24,7 @@ import { NTUN_LINK } from './hills.js'; // 第 85 批：內湖隧道（彎的）
 import { nhStreetPrep, nhStreetBuild, NH_STREET_TEXT } from './nhstreet.js'; // 第 72 批：內湖的街景（江南街、內湖路、環山路）
 import { MRT_TEXT, mrtKeepOut, mrtHits } from './mrt.js'; // 第 78 批：捷運站（mrt.js 蓋；這裡只留軌道、隔音牆）
 import { vdNear, VD_PATH, vdEndDist, VD_REST, inRest, VD_TEXT } from './viaduct.js';
-import { REST_TEXT } from './vdrest.js'; // 第 92 批：休息站的字 // 第 91 批：高架橋下面的房子不蓋；下來的那條巷子不封起來
+import { REST_TEXT } from './vdrest.js'; import { VDS_TEXT } from './vdsign.js'; // 第 92 批：休息站的字 // 第 91 批：高架橋下面的房子不蓋；下來的那條巷子不封起來
 const NH_MRT_V2 = true; // 第 78 批：車站、出入口、站名牌交給 mrt.js（false＝以前畫上去的站房）
 
 // 打包（build-art.mjs、build-app.mjs）：整個包在一個函式裡，只露出下面這些名字
@@ -58,7 +58,7 @@ const NEIHU_KEEP = []; // race.src.js：賽道旁邊的樹不要種在聯外道�
 const RIDGE_Z = 232; // 越野車場（圍籬 z 196、外面一圈地形到 z 229）南邊：內湖北邊那道矮山脊從這裡起
 // 世界本來的草地（village.js 的 ground、race.src.js 的賽道草地）在哪裡：內湖的山在這上面平的地方壓低一點（草地蓋過去），範圍裡面挖掉（carveWorld）
 const worldGround = (x, z) => (x >= -1450 && x <= -62 && Math.abs(z) <= 880) || (x > -62 && x <= 1300 && Math.abs(z) <= 1150);
-const NEIHU_TEXT = [...new Set([...D.names.map((n) => n[0]).join(''), ...D.stations.map((s) => s[0]).join(''), ...D.nsigns.map((s) => s[3]).join(''), ...SHOPS.join(''), ...SHOP_PRE.join(''), ...SHOP_KIND.join(''), ...SHOP_SUB.join(''), ...BOARD.join(''), ...'地圖資料©OpenStreetMap貢獻者到了', ...NH_STREET_TEXT, ...MRT_TEXT, ...VD_TEXT, ...REST_TEXT].filter((ch) => ch.charCodeAt(0) > 0x2e80))].join('');
+const NEIHU_TEXT = [...new Set([...D.names.map((n) => n[0]).join(''), ...D.stations.map((s) => s[0]).join(''), ...D.nsigns.map((s) => s[3]).join(''), ...SHOPS.join(''), ...SHOP_PRE.join(''), ...SHOP_KIND.join(''), ...SHOP_SUB.join(''), ...BOARD.join(''), ...'地圖資料©OpenStreetMap貢獻者到了', ...NH_STREET_TEXT, ...MRT_TEXT, ...VD_TEXT, ...REST_TEXT, ...VDS_TEXT].filter((ch) => ch.charCodeAt(0) > 0x2e80))].join('');
 function neihuFonts(ms = 1500) {
   const f = typeof document !== 'undefined' && document.fonts;
   if (!f || !f.load) return Promise.resolve();

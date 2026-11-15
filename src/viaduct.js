@@ -20,6 +20,7 @@
 //     VDV.cols：只給玩家的碰撞（護欄、橋墩、柱子、停車場的車；off 自己看玩家在哪一層）；VDV.lot：{ cars, hide(j), show(j) }；VDV.info
 import * as THREE from 'three';
 import { restLayout, buildRestArea } from './vdrest.js'; // 第 92 批：休息站（大便龍服務區）
+import { buildVdSigns } from './vdsign.js'; // 第 92 批：限速、前有大彎、門架、ETC
 
 export const { VD_PATH, VD_LOT, VD_GAP, VD_TEXT, VD_REST, vdNear, vdInLot, vdEndDist, inRest, buildViaduct } = (() => {
 const TAU = Math.PI * 2;
@@ -435,6 +436,12 @@ function buildViaduct(V, opts = {}) {
   const rest = buildRestArea(RL, { V, qb, boxAt, lbar, renderer: opts.renderer });
   group.add(rest.group); tris += rest.tris; for (const c of rest.cols) cols.push(c);
   for (let k = 0; k < rest.lamps.length; k += 3) { lampsX.push(rest.lamps[k], rest.lamps[k + 1], rest.lamps[k + 2]); lampK.push(1.3); }
+  // 9c) 第 92 批：牌子（vdsign.js）：限速、前有大彎、門架（橫過路中間）、ETC 門架、休息站的出口
+  const sg2 = buildVdSigns({ roads: ROADS, main: VD_PATH, sH, sD, HW, qb, boxAt, lbar, inOther, barOn, concMat, COL, renderer: opts.renderer });
+  group.add(sg2.group); tris += sg2.tris;
+  for (const c of sg2.cols) { // 休息站出口的牌子柱子（在休息站的地上）：玩家在上面的交流道（高高的）就不擋
+    Object.defineProperty(c, 'off', { get: () => st.high, set: () => {}, enumerable: false, configurable: true }); cols.push(c);
+  }
 
   // 10) 被橋蓋到的地面碰撞（離橋面邊 6 公尺內、橋比地面高 3 公尺以上）：玩家在橋上的時候關掉（不然開在橋上撞到下面的房子、樹、隧道洞口的欄杆）
   const K0 = Symbol('vdOff'); let nGround = 0;
@@ -489,12 +496,12 @@ function buildViaduct(V, opts = {}) {
   V.group.add(group);
 
   const API = {
-    group, st, at, normal, Q, cols, Y, G: Gc, lot: lotCars, path: VD_PATH, HW, sD, roads: ROADS, rest, restL: RL, // roads[0]＝主線；交流道：{ X, Z, S, TX, TZ, n, L, Y, MS（接在主線旁邊那段的主線 s）, UC, def }
+    group, st, at, normal, Q, cols, Y, G: Gc, lot: lotCars, path: VD_PATH, HW, sD, roads: ROADS, rest, restL: RL, signs: sg2, etc: sg2.etc, // roads[0]＝主線；交流道：{ X, Z, S, TX, TZ, n, L, Y, MS（接在主線旁邊那段的主線 s）, UC, def }
     near: vdNear, inLot: vdInLot, clearAt: (i) => clearAt(i),
     info: null,
   };
   const ramps = ROADS.slice(1).map((r) => ({ id: r.def.id, len: +r.L.toFixed(1), grade: +(r.maxGrade * 100).toFixed(1), yTop: +Math.max(...r.Y).toFixed(1), yEnd: +r.Y[r.n - 1].toFixed(2) }));
-  API.info = { len: +L.toFixed(1), helix: +sH.toFixed(1), sD: +sD.toFixed(1), pts: n, tris, chunks: chunks.length, piers: nPier, pierSkip: nSkip, cols: nCol, bars: nBar, ground: nGround, lamps: lampsX.length / 3, lotSpots: VD_LOT.spots.length, lotCars: lotCars.cars.length, restBays: RL.bays.length, restCars: lotCars.cars.filter((c) => c.area === 'r').length, restTris: rest.tris, ramps, yMax: +Math.max(...Y).toFixed(2),
+  API.info = { len: +L.toFixed(1), helix: +sH.toFixed(1), sD: +sD.toFixed(1), pts: n, tris, chunks: chunks.length, piers: nPier, pierSkip: nSkip, cols: nCol, bars: nBar, ground: nGround, lamps: lampsX.length / 3, lotSpots: VD_LOT.spots.length, lotCars: lotCars.cars.length, signs: sg2.list.length, signSkip: sg2.list.filter((q) => q.skip).length, curves: sg2.curves, etc: sg2.etc.map((e) => e.s), restBays: RL.bays.length, restCars: lotCars.cars.filter((c) => c.area === 'r').length, restTris: rest.tris, ramps, yMax: +Math.max(...Y).toFixed(2),
     minClear: (() => { let m = 1e9, at2 = 0; for (let i = 0; i < n; i++) if (S[i] > sH && S[i] < sD && !restSide(i)) { const c = clearAt(i); if (c < m) { m = c; at2 = S[i]; } } return [+m.toFixed(2), +at2.toFixed(0)]; })(),
     restMain: (() => { let a = 1e9, b = -1e9, s0 = 1e9, s1 = -1e9; for (let i = 0; i < n; i++) if (restSide(i)) { a = Math.min(a, Y[i]); b = Math.max(b, Y[i]); s0 = Math.min(s0, S[i]); s1 = Math.max(s1, S[i]); } return { yLo: +a.toFixed(2), yHi: +b.toFixed(2), s0: Math.round(s0), s1: Math.round(s1) }; })(),
     ms: 0 };
