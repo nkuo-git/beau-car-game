@@ -19,7 +19,7 @@ if (path.dirname(prefix) !== '.') fs.mkdirSync(path.dirname(prefix), { recursive
 const types = { '.js': 'text/javascript', '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const hook = 'window.__THREE = THREE; window.__G = () => GAME; window.__S = () => S;'
   + ' window.__rinfo = () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles });'
-  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, trip, tripS, tripPose, cur, walker, TR, indoor, TOWER_RAMP, VDV, VDL, PW, LOOK, NPC: NPC || window.__npcKeep, HILL_LIST }); window.__polP = () => polPlayer({}); window.__P = () => PERF;'
+  + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, trip, tripS, tripPose, cur, walker, TR, indoor, TOWER_RAMP, VDV, VDL, PW, LOOK, NPC: NPC || window.__npcKeep, HILL_LIST, VDT, VDTR, RCROWD, RCR }); window.__vdt = (on) => { VDT_ON = on; }; window.__polP = () => polPlayer({}); window.__P = () => PERF;'
   + ' window.__strip = () => stripColliders(); window.__leave = () => leaveCar(); window.__pol = () => (typeof police !== "undefined" ? police : null);'
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };';
@@ -182,6 +182,7 @@ await p.evaluate(() => { window.__hold = true; window.__noDraw = true; });
 await p.waitForFunction(() => window.__D().tripPose && window.__D().tripPose[window.__D().cur], null, { timeout: 120000 });
 const bd1 = await p.evaluate(() => window.__H.boardCar());
 check(bd1.mode === 'off' && bd1.drv && bd1.cur === 'gc8', `got into the GC8 (${bd1.act})`);
+await p.evaluate(() => window.__vdt(false)); // 第 92 批：高架上的車先關掉（第 3～6 段只看路；第 9 段再開）
 const s1 = await p.evaluate(() => {
   const D = window.__D(), V = D.VDV, VIL = D.VIL; if (!V) return { err: 'no VDV' };
   const I = V.info, P = V.path, Y = V.Y;
@@ -393,6 +394,93 @@ let s6d = null;
 for (let k = 0; k < 20; k++) { s6d = await p.evaluate(() => { window.__H.step(20); const D = window.__D(), V = D.VDV; let hid = 0; for (const c of V.lot.cars) if (V.lot.hidden(c.inst)) hid++; let vis = 0; D.TR.scene.traverse((o) => { if (o.name && o.name.startsWith('vdlot-') && o.visible) vis++; }); return { live: D.VDL.live.size, hid, vis }; }); if (s6d.live === 0 && s6d.hid === 0) break; await p.waitForTimeout(250); }
 console.log('6d', el(), JSON.stringify(s6d));
 check(s6d.live === 0 && s6d.hid === 0 && s6d.vis === 0, `walked away: the real cars are put away and every far copy is back (${s6d.live} live, ${s6d.hid} hidden, ${s6d.vis} shown)`);
+
+// ================= 9 第 92 批：高架上的車、休息站的車進出、停車場和休息站的人和動物 =================
+// Nick 2026-11-15「高速公路要有少許的車」「比較厲害的跑車開快一點」「車子不要靠近才變出來」「休息站…要有人車 車一樣從車店挑有車進來有車離開有那三隻動物跟人」「圓環中間要有人走來走去」
+const bd9 = await p.evaluate(() => window.__H.boardCar());
+check(bd9.mode === 'off' && bd9.drv, 'back in the car (traffic on)');
+await p.evaluate(() => { window.__vdt(true); window.__H.putDeck(2200, 5.55, 30); window.__H.stop(); window.__s9 = { seen: new Map(), b0: window.__D().drv.telemetry().bumps, maxMain: 0, minGap: 1e9, noObj: 0 }; });
+const step9 = (secs) => p.evaluate((secs) => { // 一秒 20 格（每秒一次讓輕量車做好）
+  const D = window.__D(), T = D.VDT, S = window.__s9, t = D.drv.telemetry(), cy = D.tripS.car.position.y;
+  for (let k = 0; k < secs * 20; k++) {
+    window.__dstep(1, 1 / 20);
+    let nm = 0;
+    for (const c of T.cars) {
+      const d = Math.hypot(c.x - t.x, c.z - t.z); let e = S.seen.get(c.id);
+      if (!e) { e = { k: c.k, fast: c.fast, d0: d, rest: c.rest, from: c.lot ? 'lot' : c.line?.id, vmax: 0, st: new Set() }; S.seen.set(c.id, e); }
+      e.vmax = Math.max(e.vmax, c.v * 3.6); e.st.add(c.state + ':' + (c.line?.ramp ? c.line.id : c.line?.ms ? 'M' : c.line ? 'r' : ''));
+      if (!c.rest) nm++;
+      if (Math.abs(c.y - cy) < 2.5) { const ex = c.x - t.x, ez = c.z - t.z, fx = Math.cos(c.h), fz = -Math.sin(c.h), a = Math.abs(ex * fx + ez * fz) - c.len / 2 - 2.2, b = Math.abs(-ex * fz + ez * fx) - c.wid / 2 - 0.95; S.minGap = Math.min(S.minGap, Math.max(a, b)); }
+      if (d < 600 && !c.obj && !c.needObj && k === secs * 20 - 1) S.noObj++; // 還在等輕量車的（停在原地、看不到、不擋）不算
+      if (c.needObj) S.hold = Math.max(S.hold || 0, c.ht || 0);
+    }
+    S.maxMain = Math.max(S.maxMain, nm);
+  }
+  return T.cars.length;
+}, secs);
+for (let k = 0; k < 60; k++) { await step9(1); await p.waitForTimeout(40); }
+const s9a = await p.evaluate(() => {
+  const D = window.__D(), T = D.VDT, S = window.__s9, L = [...S.seen.values()], main = L.filter((e) => !e.rest && e.from !== 'lot');
+  const vm = (f) => { const a = main.filter((e) => e.fast === f && e.vmax > 20).map((e) => e.vmax); return a.length ? Math.max(...a) : 0; };
+  const live = T.cars.filter((c) => c.obj && c.obj.car.visible); const t = D.drv.telemetry();
+  const kinds = [...new Set(L.map((e) => e.k))];
+  return { n: L.length, main: main.length, d0: main.map((e) => Math.round(e.d0)).sort((a, b) => a - b), v0: Math.round(vm(0)), v1: Math.round(vm(1)), v2: Math.round(vm(2)), kinds, maxMain: S.maxMain, bumps: t.bumps - S.b0, minGap: +S.minGap.toFixed(2), info: T.info(), live: live.length, noObj: S.noObj, hold: +(S.hold || 0).toFixed(2), at: live.every((c) => Math.hypot(c.obj.car.position.x - c.x, c.obj.car.position.z - c.z) < 0.01), ms: +D.VDTR.avg.toFixed(3) };
+});
+console.log('9a', el(), JSON.stringify(s9a).slice(0, 1500));
+check(s9a.main >= 4 && s9a.maxMain <= 6, `a few cars on the viaduct: ${s9a.main} came by in a minute, at most ${s9a.maxMain} on the main road at once (${s9a.kinds.join(', ')})`);
+check(s9a.d0.slice(3).every((d) => d >= 400) && s9a.d0.every((d) => d >= 240), `cars appear far away, not next to you: nearest spawns ${s9a.d0.slice(0, 5).join(', ')} m`);
+check(s9a.v0 >= 70 && s9a.v0 <= 86 && s9a.v1 > s9a.v0 + 8 && (!s9a.v2 || s9a.v2 > s9a.v1 + 8), `sports cars go faster: ordinary ${s9a.v0} km/h, sports ${s9a.v1}, supercars ${s9a.v2 || '-'}`);
+check(s9a.bumps === 0 && s9a.minGap > 0, `nobody hits your stopped car in the outer lane: ${s9a.bumps} bumps, closest ${s9a.minGap} m (${s9a.info.lanes} lane changes to pass you, ${s9a.info.waits} waited)`);
+check(s9a.live >= 1 && s9a.at && s9a.noObj === 0 && s9a.info.lost === 0, `the cars near you are real cars (${s9a.live} drawn, every one within 600 m that moves has its car; longest wait for a car ${s9a.hold} s, ${s9a.info.lost} given up)`);
+// 休息站：停在東邊那條路上；車從 EX、WX 下來停進空的格子；停著的車倒車出來、從 EE、WE 開回主線
+const s9b0 = await p.evaluate(() => {
+  const D = window.__D(), V = D.VDV, T = D.VDT, H = window.__H; V.st.py = 24; H.put(900, 196, 0, 30); H.stop(); // 遊覽車那一區（車進出不會經過）
+  const a = T.spawnAt('REX', 5), b = T.spawnAt('RWX', 5), c = T.depart(1), d = T.depart(-1);
+  window.__s9b = { ids: [a, b, c, d].filter(Boolean).map((q) => q.id), lot: [c, d].filter(Boolean).map((q) => q.lot.inst), st0: { ...T.st } };
+  return { ok: !!(a && b && c && d), y: +D.tripS.car.position.y.toFixed(2) };
+});
+check(s9b0.ok && Math.abs(s9b0.y - 24) < 0.2, `parked in the rest area's bus lot (y ${s9b0.y}); two cars took the rest-area exits, two parked cars start to leave`);
+let s9b = null, lotHid = null;
+for (let k = 0; k < 150; k++) {
+  await step9(1); await p.waitForTimeout(40);
+  if (k === 12) lotHid = await p.evaluate(() => { const V = window.__D().VDV; return window.__s9b.lot.map((i) => [V.lot.hidden(i), V.lot.cols[i].off === true]); });
+  s9b = await p.evaluate(() => { const T = window.__D().VDT, S = window.__s9b, st = T.st; return { states: S.ids.map((id) => { const c = T.cars.find((q) => q.id === id); return c ? c.state + ':' + (c.line?.ramp ? c.line.id : c.line?.ms ? 'M' : c.line ? 'r' : '') : 'gone'; }), parked: st.parked - S.st0.parked, departed: st.departed - S.st0.departed, merged: st.merged - S.st0.merged, exits: st.exits - S.st0.exits }; });
+  if (s9b.parked >= 2 && s9b.merged >= 2) break;
+}
+console.log('9b', el(), JSON.stringify(s9b), JSON.stringify(lotHid));
+check(lotHid && lotHid.every((q) => q[0] && q[1]), `a parked car that drives off: the parked copy is hidden and stops blocking (${JSON.stringify(lotHid)})`);
+check(s9b.exits >= 2 && s9b.parked >= 2, `cars come in: ${s9b.exits} came down the rest-area exits, ${s9b.parked} parked in empty bays`);
+check(s9b.departed >= 2 && s9b.merged >= 2, `cars leave: ${s9b.departed} backed out of their bays, ${s9b.merged} drove back up onto the viaduct`);
+// 人和動物：休息站的廣場、停車場的走道
+const s9c = await p.evaluate(() => {
+  const D = window.__D(), K = D.RCROWD, H = window.__H; if (!K) return { err: 'no crowd' };
+  for (let k = 0; k < 30; k++) H.step(20, 1 / 20);
+  const Z = K.zones.find((q) => q.id === 'rest'), A = Z.agents, p0 = A.map((a) => [a.x, a.z]); let bad = 0;
+  for (let k = 0; k < 40; k++) { H.step(20, 1 / 20); for (const a of A) if (!K.ok(Z, a.x, a.z)) bad++; }
+  const moved = A.filter((a, i) => Math.hypot(a.x - p0[i][0], a.z - p0[i][1]) > 2).length;
+  const kinds = [...new Set(A.filter((a) => a.animal).map((a) => a.kind))];
+  return { info: K.info(), n: A.length, people: A.filter((a) => !a.animal).length, animals: A.filter((a) => a.animal).length, kinds, moved, bad, y: A.map((a) => +a.C.group.position.y.toFixed(2)).filter((y) => Math.abs(y - 24) > 0.05).length, vis: A.every((a) => a.C.group.visible && !!a.C.group.parent) };
+});
+console.log('9c', el(), JSON.stringify(s9c).slice(0, 900));
+check(s9c.n >= 10 && s9c.people >= 5 && s9c.animals >= 5 && s9c.kinds.length >= 2 && s9c.vis, `rest area: ${s9c.people} people and ${s9c.animals} animals (${s9c.kinds.join(', ')}) walking around`);
+check(s9c.moved >= Math.ceil(s9c.n / 2) && s9c.bad === 0 && s9c.y === 0, `they walk on the plaza (${s9c.moved}/${s9c.n} moved in 40 s), never into walls, benches or the pond (${s9c.bad}), feet on the deck (${s9c.y} off)`);
+// 停車場：開車往一個人（動物）開過去：跳開，不會被壓到
+const s9d = await p.evaluate(() => {
+  const D = window.__D(), K = D.RCROWD, H = window.__H, V = D.VDV; V.st.py = 0; H.put(-777.6, 330, Math.PI / 2, 30); H.stop();
+  for (let k = 0; k < 40; k++) H.step(20, 1 / 20); // 走近才做（一格做一個）
+  const Z = K.zones.find((q) => q.id === 'lot'), A = Z.agents; if (!A.length) return { err: 'no lot agents', info: K.info() };
+  const a = A.find((q) => !q.kid) || A[0], x0 = a.x, z0 = a.z, d0 = K.info().dives, h0 = K.info().hits;
+  // 車放在他東邊 14 公尺（同一條走道）、朝他開（4 m/s）
+  a.path = null; a.wait = 99; const ex = x0 + (x0 < -780 ? 14 : -14), hd = x0 < -780 ? Math.PI : 0; // 車在他和中間的大走道之間，朝他開
+  H.put(ex, z0, hd, 20); let minC = 1e9;
+  const dr = D.drv; dr.setInput({ throttle: 0.25, brake: 0, steer: 0 });
+  for (let k = 0; k < 240; k++) { H.step(1, 1 / 30); const t = dr.telemetry(); dr.setInput({ throttle: t.v < 3.6 ? 0.3 : 0, brake: 0, steer: 0 }); /* 定速約 4 m/s（放開油門會被引擎煞車停下來） */ const ci = dr.carInfo, CX = (ci.nose + ci.tail) / 2, cx = t.x + Math.cos(t.heading) * CX, cz = t.z - Math.sin(t.heading) * CX, fx = Math.cos(t.heading), fz = -Math.sin(t.heading), dx = a.x - cx, dz = a.z - cz; const ga = Math.abs(dx * fx + dz * fz) - ci.len / 2, gb = Math.abs(-dx * fz + dz * fx) - ci.halfW; minC = Math.min(minC, Math.max(ga, gb)); if (Math.hypot(t.x - x0, t.z - z0) > 20) break; }
+  dr.setInput(null); H.stop();
+  return { info: K.info(), people: A.filter((q) => !q.animal).length, animals: A.filter((q) => q.animal).length, dove: K.info().dives - d0, hits: K.info().hits - h0, minC: +minC.toFixed(2), kid: !!a.kid };
+});
+console.log('9d', el(), JSON.stringify(s9d).slice(0, 900));
+check(s9d.people >= 5 && s9d.animals >= 5, `the big lot under the roundabout: ${s9d.people} people and ${s9d.animals} animals walking between the rows`);
+check(s9d.dove >= 1 && s9d.hits === 0 && s9d.minC > -0.05, `drive slowly at one of them: it jumps aside (${s9d.dove} dives, ${s9d.hits} knocked down, never under the car: closest ${s9d.minC} m)`);
 
 // ================= 8 截圖＋draw calls =================
 const bd8 = await p.evaluate(() => window.__H.boardCar());

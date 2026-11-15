@@ -439,8 +439,8 @@ function buildViaduct(V, opts = {}) {
   // 9c) 第 92 批：牌子（vdsign.js）：限速、前有大彎、門架（橫過路中間）、ETC 門架、休息站的出口
   const sg2 = buildVdSigns({ roads: ROADS, main: VD_PATH, sH, sD, HW, qb, boxAt, lbar, inOther, barOn, concMat, COL, renderer: opts.renderer });
   group.add(sg2.group); tris += sg2.tris;
-  for (const c of sg2.cols) { // 休息站出口的牌子柱子（在休息站的地上）：玩家在上面的交流道（高高的）就不擋
-    Object.defineProperty(c, 'off', { get: () => st.high, set: () => {}, enumerable: false, configurable: true }); cols.push(c);
+  for (const c of sg2.cols) { // 牌子的柱子：玩家在柱子那個高度（y0…h）才擋（上面的交流道、下面的地上都不擋）
+    const lo = c.y0 - 0.5, hi = c.h - 1; Object.defineProperty(c, 'off', { get: () => !(st.py > lo && st.py < hi), set: () => {}, enumerable: false, configurable: true }); cols.push(c);
   }
 
   // 10) 被橋蓋到的地面碰撞（離橋面邊 6 公尺內、橋比地面高 3 公尺以上）：玩家在橋上的時候關掉（不然開在橋上撞到下面的房子、樹、隧道洞口的欄杆）

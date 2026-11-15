@@ -65,3 +65,58 @@ Draft: https://claude.ai/artifact/FAaQSJMuCUmvLgnfMcFRC2 — Nick 「好 做完�
   police hidden while high); driving under it (connector, freeway outer lane); get out on the deck, walk into the barrier,
   jump, get back in; lot near cars swap in/out; screenshots + draw calls; night lamps at 高.
 - hills-test: 23 hills; the climb uses the north hill inside the freeway loop (−800, −165).
+
+## Batch 92 (2026-11-15, trial v104) — Nick's ten asks for the viaduct
+Nick 2026-11-15: steering wheel reversed; curve / speed-limit signs; gantry signs saying where each lane goes; a few cars on the
+viaduct, sports cars faster; people walking in the roundabout's middle; no pop-in; branches to the MRT and the city centre;
+an ETC gantry before the last exit and a big road in Neihu after it; a rest area modelled on 南投服務區 (convenience store,
+toilets, in/out ramps, cars from the dealer coming and going, people and the three animals).
+
+- Hands on the wheel turn the same way as the wheel (`seats-test` checks the direction).
+- Far parked cars (`farcars.js` from `make-far.mjs`): each kind's own ~300-triangle shape in one InstancedMesh per kind.
+- Ramps (`viaduct.js` ROADS[1..]): A (環山路 / 港墘站) and B (內湖路二段 / city centre) exits; EX/WX into the rest area,
+  EE/WE back up. Exits leave from the outer lane (`UC` = distance from the main centre line).
+- Rest area (`vdrest.js`): platform at y 24 between x 800–1214; `restLayout` (roads N/S/CW/CE/A1/A2, 460 bays in 4 rows,
+  hall + walk-in store (interiors.js store), two toilet blocks, gas station, bus lot, plaza with pond and benches);
+  `buildRestArea` meshes + colliders (`y0` = 24). ~58% of bays have a parked dealer car (lot cars with `area: 'r'`).
+- Signs (`vdsign.js`): speed limits, curve warnings (before each sharp bend, both directions), 5 gantries across the road
+  (`門架`; lanes → destinations) and the ETC gantry before the last curve (`etc`). Sign post colliders block only a player at
+  the post's own height (`off` = `!(py > y0 − 0.5 && py < h − 1)`): the WE start runs under the EX ramp, whose posts
+  used to block it (an early `st.high` getter also switched them off for the whole rest area, which is up at 24 m).
+- ETC (`town.src.js vdStep`): crossing an ETC `s` on the main road beeps once and toasts 「ETC 嗶！（免費）」 (`st.etcN`).
+- Neihu big road (`neihu.js NH_BIG`): 成功路二段456巷, 陽光街, 文德路208巷 widened to 21 m + 3.6 m sidewalks; buildings
+  in the way are not built (`b.mrt`), street-name signs pushed out, edge barrier widened; npc lanes use `r.lo` (outer lane).
+- Traffic (`vdtraffic.js`, new): its own few cars (main road ≤ 6) picked from the dealer (`vdtKind`: 28% sports/supercars).
+  - Lines: four main lanes (`M±0/1`; ±1.85 / ±5.55 m from the centre, +S traffic on +u = right-hand traffic) with the big
+    lot's central aisle at the start (from z 452 on the connector road) and 120 m of the Neihu big road at the end; ramps
+    (A/B have 80 m of ground road after them). Speed: curvature (a_lat ≤ 1 m/s² × √car's alat) and limits (60 roundabout,
+    80 middle, 50 down to Neihu) with braking look-ahead; ordinary 22.5 m/s (~80), sports ×1.25 (~100), supercars ×1.5
+    (~120).
+  - Car following + stop for the player (same level, ahead, within 2.2 m sideways); lane change to pass a slower car or
+    you (`laneChange`: other lane clear −22…+40 m, not if an exit is planned; drawn sliding over 2.4 s).
+  - Exits: outer-lane cars take A/B (22%) or the rest area (30%). Rest area: pick a free bay → `arrive` route → park 40–120 s
+    → back out (`leave`, reversing Bézier) → EE/WE → merge. Parked lot cars also leave (`depart`, every 15–35 s while you
+    are within 600 m): the LOD car is placed first (`needObj`), then the instanced copy is hidden and its collider turned
+    off (`onTake`); far away (> 760 m from the rest area, no rest traffic) they are put back (`onGive`).
+  - Spawn 420–820 m away (first three after a clear: 250 m) so nothing appears next to you; a new car waits where it
+    spawned (`needObj`: not drawn, not a collider, followers treat it as stopped) until town has put its LOD car on it,
+    so it never pops in closer (gives up after 6 s: `st.lost`); at a route's end a car waits
+    only while within 170 m **and** inside the camera frustum (`o.seen`), otherwise it is removed.
+  - town: `vdTrafficStep` after `npcStep` (LODs share the `VDL` pool; one build at a time; hidden beyond 700 m);
+    colliders: drive gets `VDT.colliders(x, z, 30, y)` ('vdtraffic', same level only), walking → `NPC.MOV`;
+    `vdTrafficOff()` on going home; `VDT_ON` (tests turn it off while checking the road).
+  - Gotcha: "stop at the end of the segment" braking (`√(2·2.5·(left − 0.3))`) reaches 0 before `end − 0.05` → treat
+    `left < 0.4 && v < 0.3` as arrived (cars used to freeze before parking / at the end of a ramp).
+  - Gotcha: probes that step many frames inside one `page.evaluate` never let the async LOD loads finish (`needObj` cars
+    wait forever) — step in chunks with awaits.
+- Crowd (`vdcrowd.js`, new): people + the three animals (half each) in two zones, each a 0.5 m walk grid with colliders
+  (± 0.4 m) carved out: the big lot's E–W aisles (west and east halves; the central aisle has traffic) and the rest
+  area's plaza / store front (`RL.walk[0..1]`). BFS inside the connected piece → pick a spot 6–40 m away → string-pulled
+  path; idle 1.5–7 s; give way to each other and to you. Your car coming: jump aside (`dive`); too fast to dodge: fall and
+  get up (`onHit` → `crowdHit`: toast, crime only for people and only on the ground); kids always jump aside; anyone under
+  the car is pushed out. Built one per frame when you are within 250 m, hidden beyond 200 m. People walking out of the
+  rest-area store become crowd agents (`spawnAt` via `LDF_HOOKS.leave`).
+  - Dodge only when in front of the car (`ahead > 0.4·hx`); jump to the far side only when the near side is blocked
+    **and** the car is still > hx + 2.5 m away (otherwise go as far as the near side allows; the push-out does the rest).
+    Walking agents do not step into the area in front of / beside a moving car (they wait, re-plan after 2.5 s).
+  - Gotcha (test 9d): letting off the throttle at 4 m/s stops the car (engine braking) ~5 m short — hold ~4 m/s.

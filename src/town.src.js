@@ -2277,7 +2277,7 @@ function leaveDrive() {
   aptDown(); mrtDown(); // 第 60 批：在公寓的頂樓、陽台；第 78 批：在捷運站裡、車上
   if (indoor) leaveHouse(null); // 在房子裡面按「直接回車庫」：碰撞、門、鏡頭換回村子的，你搬回村子的場景
   ldDrop(true); // 第 65 批：外面開著門的那一棟收掉
-  vdLotOff(); if (VDV) { VDV.st.on = VDV.st.high = false; } // 第 91 批：停車場近的車收回去
+  vdTrafficOff(); vdLotOff(); if (VDV) { VDV.st.on = VDV.st.high = false; } // 第 91 批：停車場近的車收回去；第 92 批：高架上的車收掉
   crushFx?.reset(); junkVer = -1; // 第 7 批（輾扁）：墊子清掉、輾扁的車收回車流的池子、表演場的垃圾車擺回來
   oLeave(); // 第 4 批：越野賽、越野車行展示台的車收掉
   ciLeave(); // 賽車場的比賽、選對手收掉
@@ -2762,6 +2762,7 @@ function driveStep(dt) {
   else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.kind === 'apt') aptWalk();
   else if (walker && walker.mode === 'walk' && DRIVE.on && indoor?.live) walker.setAction(martAct(walker.telemetry()) || ldAct(walker.telemetry())); // 第 81 批：超商的貨架「拿」、櫃台「結帳」 // 第 65 批：裡面走到大門：「開門」 // 第 60 批：公寓 4 樓的床、衣櫃 // 升降機、睡覺的按鈕；鏡頭頭上多高；越野車行展示台的車（走路也看得到、擋人）
   if (DRIVE.on) npcStep(dt); // 路上的車、居民（走路的碰撞要在 walker.update 前面放好）
+  if (DRIVE.on) { vdTrafficStep(dt); crowdStep(dt); } // 第 92 批：高架橋上的車、休息站的車進出（npcStep 後面：走路的 movers 這一格才放得進去）
   if (DRIVE.on) crushStep(dt); // 第 7 批（輾扁）：怪獸卡車壓扁的東西（墊子、壓扁、表演場的垃圾車）
   if (DRIVE.on) mrtStep(dt); // 第 78 批：捷運（列車的位置、車門；走路的人在哪一層、搭車跟著車走：walker.update 前面）
   walker?.update(dt); // 走路（開車的時候只有上車那一下鏡頭接過去）
@@ -2855,9 +2856,9 @@ function vdLotStep(dt) {
   const q = VDL.q, W = VDL.want; W.length = 0;
   if (LOT_ME(q) && !VDV.st.high && !indoor) {
     const dx = q.x - VD_LOT.x, dz = q.z - VD_LOT.z;
-    if (dx * dx + dz * dz < (VD_LOT.r + VDL.R) ** 2 || inRest(q.x, q.z, VDL.R)) { const R2 = VDL.R * VDL.R; for (const c of L.cars) { if (c.bad) continue; const ex = c.x - q.x, ez = c.z - q.z, d = ex * ex + ez * ez; if (d < R2) { c.d2 = d; W.push(c); } } if (W.length > VDL.N) { W.sort((a, b) => a.d2 - b.d2); W.length = VDL.N; } }
+    if (dx * dx + dz * dz < (VD_LOT.r + VDL.R) ** 2 || inRest(q.x, q.z, VDL.R)) { const R2 = VDL.R * VDL.R; for (const c of L.cars) { if (c.bad || c.taken) continue; /* 第 92 批：開走的那台（vdtraffic）不算 */ const ex = c.x - q.x, ez = c.z - q.z, d = ex * ex + ez * ez; if (d < R2) { c.d2 = d; W.push(c); } } if (W.length > VDL.N) { W.sort((a, b) => a.d2 - b.d2); W.length = VDL.N; } }
   }
-  for (const [c, e] of VDL.live) if (!W.includes(c)) { e.l.car.visible = false; L.show(c.inst); VDL.live.delete(c); let a = VDL.pool.get(e.k); if (!a) VDL.pool.set(e.k, (a = [])); a.push(e.l); }
+  for (const [c, e] of VDL.live) if (!W.includes(c)) { e.l.car.visible = false; if (!c.taken) L.show(c.inst); VDL.live.delete(c); let a = VDL.pool.get(e.k); if (!a) VDL.pool.set(e.k, (a = [])); a.push(e.l); }
   for (const c of W) {
     if (VDL.live.has(c)) continue;
     const a = VDL.pool.get(c.k), l = a && a.pop(); if (l) { vdLotPut(l, c); continue; }
@@ -2868,7 +2869,82 @@ function vdLotStep(dt) {
     return;
   }
 }
-function vdLotOff() { if (!VDV) return; for (const [c, e] of VDL.live) { e.l.car.visible = false; VDV.lot.show(c.inst); let a = VDL.pool.get(e.k); if (!a) VDL.pool.set(e.k, (a = [])); a.push(e.l); } VDL.live.clear(); }
+function vdLotOff() { if (!VDV) return; for (const [c, e] of VDL.live) { e.l.car.visible = false; if (!c.taken) VDV.lot.show(c.inst); let a = VDL.pool.get(e.k); if (!a) VDL.pool.set(e.k, (a = [])); a.push(e.l); } VDL.live.clear(); }
+// ==== 第 92 批：高架橋上的車（vdtraffic.js）：少許的車（主線最多 6 台）、從車店挑、跑車開快一點；休息站有車進來、停著的倒車開走 ====
+//   輕量車跟停車場近的車（VDL）用同一個池子（同一種車的輕量車拿來就用：停著的那台開走的時候不用再做一台）；一次做一台
+let VDT = null, VDT_ON = true; // VDT_ON：測試開路的時候先關掉（viaduct-test 第 3、4、5 段只看路）
+const VDTR = { me: { x: 0, y: 0, z: 0, on: false }, R: 700, ms: 0, n: 0, avg: 0, F: new THREE.Frustum(), M: new THREE.Matrix4(), v: new THREE.Vector3() };
+const vdtSeen = (c) => VDTR.F.containsPoint(VDTR.v.set(c.x, c.y + 0.7, c.z)); // 鏡頭看得到（開到盡頭的車：看得到才停著等）
+function vdtKind(n) { // 跑車、超跑多一點（高速公路上比較看得到）：28% 從跑車（SUPRA、GT-R⋯ 1 份；超跑 0.4 份）挑
+  if (lotHash(n, 5) < 0.28) { const F = lotKinds().filter((e) => npcFast(e[0]) > 0); let tot = 0; for (const e of F) tot += npcFast(e[0]) === 2 ? 0.4 : 1; let r = lotHash(n, 6) * tot; for (const e of F) { r -= npcFast(e[0]) === 2 ? 0.4 : 1; if (r <= 0) return e[0]; } }
+  return lotKind(n);
+}
+function vdtPick(k, n) { if (!k || !LOT_DIMS[k] || !LOD_CARS[k]) return null; return { k, look: lotLook(k, n), fast: npcFast(k), d: LOT_DIMS[k] }; }
+function vdtFree(c) { const l = c.obj; if (!l) return; l.car.visible = false; c.obj = null; let a = VDL.pool.get(c.k); if (!a) VDL.pool.set(c.k, (a = [])); a.push(l); }
+function vdtGet(c) { // 池子裡有就拿；沒有就做一台（停車場那邊在做就等）
+  const a = VDL.pool.get(c.k), l = a && a.pop();
+  if (l) { l.setLook(c.look); c.obj = l; return l; }
+  if (VDL.busy || !LOD_CARS[c.k] || !TR) return null;
+  VDL.busy = true;
+  LOD_CARS[c.k].load().then((d) => { VDL.busy = false; if (!TR || !VDV) return; const l2 = buildLodCar(c.k, d, c.look); l2.car.name = 'vdlot-' + c.k; l2.car.visible = false; TR.scene.add(l2.car); VDL.built++; let a2 = VDL.pool.get(c.k); if (!a2) VDL.pool.set(c.k, (a2 = [])); a2.push(l2); })
+    .catch((e) => { VDL.busy = false; c.needObj = false; console.warn('高架上的車做不出來', e); });
+  return null;
+}
+function vdTrafficStep(dt) {
+  const V = VDV; if (!V || !DRIVE.on || typeof createVdTraffic !== 'function') return;
+  if (!VDT_ON) { if (VDT && VDT.cars.length) vdTrafficOff(); return; }
+  const t0 = performance.now();
+  if (!VDT) VDT = createVdTraffic(V, {
+    pick: (n, k) => vdtPick(k || vdtKind(n), n), lotPick: (c) => vdtPick(c.k, c.j + VDL_SEED), heightAt: (x, z) => VIL.heightAt(x, z), seen: vdtSeen,
+    onTake: (c) => { const e = VDL.live.get(c); if (e) { VDL.live.delete(c); e.l.car.visible = false; let a = VDL.pool.get(e.k); if (!a) VDL.pool.set(e.k, (a = [])); a.push(e.l); } }, // 近的那台輕量車放回池子（開走的那台馬上拿去用）
+    onGive: (c) => { V.lot.show(c.inst); V.lot.cols[c.inst].off = false; },
+  });
+  const me = VDTR.me, wk = walker && walker.mode !== 'off' && walker.character, p = wk ? walker.character.group.position : tripS?.car?.position;
+  me.on = !!p && !indoor && !RACE.on && !APTU.on && !MRTS.lvl && !sleep;
+  if (p) { me.x = p.x; me.y = p.y; me.z = p.z; }
+  if (dcam) { dcam.updateMatrixWorld(); VDTR.M.multiplyMatrices(dcam.projectionMatrix, dcam.matrixWorldInverse); VDTR.F.setFromProjectionMatrix(VDTR.M); }
+  VDT.update(dt, me);
+  for (const c of VDT.gone) vdtFree(c);
+  const R2 = VDTR.R * VDTR.R;
+  for (const c of VDT.cars) {
+    const far = (c.x - me.x) ** 2 + (c.z - me.z) ** 2 > R2;
+    if (!c.obj && (!far || c.needObj)) vdtGet(c);
+    const l = c.obj; if (!l) continue;
+    if (c.needObj) { c.needObj = false; if (c.lot) { V.lot.hide(c.lot.inst); V.lot.cols[c.lot.inst].off = true; } } // 輕量車放好了：停著的那台藏起來（換成這台）
+    l.car.visible = !far; if (far) continue;
+    l.car.position.set(c.x, c.y + 0.03, c.z); l.car.rotation.set(0, c.h, c.pitch); l.setRoll(c.roll);
+  }
+  // 碰撞：開車＝給 drv（同一層的）；走路＝放進 walker 的 movers（npcStep 這一格已經放好別的）
+  if (drv) drv.removeColliders('vdtraffic');
+  if (me.on && VDT.cars.length) {
+    if (drv && walker?.mode === 'off') drv.addColliders(VDT.colliders(p.x, p.z, 30, p.y), 'vdtraffic');
+    else if (wk && NPC) { const tc = VDT.colliders(p.x, p.z, 12, p.y); for (let i = 0; i < tc.length; i++) NPC.MOV.push(tc[i]); }
+  }
+  const ms = performance.now() - t0; VDTR.ms = ms; VDTR.n++; VDTR.avg += (ms - VDTR.avg) / Math.min(VDTR.n, 300);
+}
+// ==== 第 92 批：停車場、休息站走來走去的人和三隻動物（vdcrowd.js）====
+const RCR = { me: { x: 0, y: 0, z: 0, on: false, walk: false, car: null }, car: { x: 0, z: 0, h: 0, v: 0, hx: 2.2, hz: 0.9 }, ms: 0, n: 0, avg: 0 };
+function crowdHit(a, speed) { // 開太快閃不掉：倒下去再爬起來（卡通的，沒有血）；動物不算犯罪；在高架上（休息站）警察看不到
+  engineAudio.crash({ strength: Math.min(0.3, 0.06 + speed / 40), glass: 0 });
+  if (a.animal) { drv?.toast(speed > 6 ? '撞到小動物了！牠會自己爬起來' : '小心，有小動物！', 1800); return; }
+  drv?.toast(speed > 6 ? '撞到人了！開慢一點' : '小心，有人！', 1800);
+  if (!VDV?.st.high) police?.crime('hit', { x: a.x, z: a.z, age: 'adult', animal: '' });
+}
+function crowdStep(dt) {
+  const V = VDV; if (!V || !DRIVE.on || typeof createVdCrowd !== 'function') return;
+  const t0 = performance.now();
+  if (!RCROWD) RCROWD = createVdCrowd(V, { lot: VD_LOT, cols: [V.cols, VIL.colliders], heightAt: (x, z) => VIL.heightAt(x, z), scene: TR.scene,
+    makePerson: (look) => buildCharacter(look || randomLook(Math.random)), makeAnimal: (look) => buildAnimal(look), onHit: crowdHit });
+  const me = RCR.me, wk = walker && walker.mode !== 'off' && walker.character, p = wk ? walker.character.group.position : tripS?.car?.position;
+  me.on = !!p && !indoor && !RACE.on && !APTU.on && !MRTS.lvl && !sleep;
+  if (p) { me.x = p.x; me.y = p.y; me.z = p.z; }
+  me.walk = !!wk; me.car = null;
+  if (!wk && drv) { const t = drv.telemetry(), ci = drv.carInfo, CX = (ci.nose + ci.tail) / 2, c = RCR.car; c.x = t.x + Math.cos(t.heading) * CX; c.z = t.z - Math.sin(t.heading) * CX; c.h = t.heading; c.v = t.v; c.hx = ci.len / 2; c.hz = ci.halfW; me.car = c; }
+  RCROWD.update(dt, me);
+  if (wk && me.on && NPC) { const tc = RCROWD.colliders(p.x, p.z, 10, p.y); for (let i = 0; i < tc.length; i++) NPC.MOV.push(tc[i]); }
+  const ms = performance.now() - t0; RCR.ms = ms; RCR.n++; RCR.avg += (ms - RCR.avg) / Math.min(RCR.n, 300);
+}
+function vdTrafficOff() { if (!VDT) return; VDT.clear(); for (const c of VDT.gone) vdtFree(c); VDT.gone.length = 0; drv?.removeColliders('vdtraffic'); }
 function hillsStep(dt) {
   const H = VIL?.hills; if (!H || !DRIVE.on) return;
   const wk = walker && walker.mode !== 'off' && walker.character, p = wk ? walker.character.group.position : tripS?.car?.position;
