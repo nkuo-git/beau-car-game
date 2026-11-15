@@ -19,6 +19,7 @@
 //     VDV.st：{ py, px, pz, on, high }（town.src.js 每一格寫）；VDV.at(x, z, py) → 橋面高 | null；VDV.normal(x, z, py, out)；VDV.Q（上一次 at 的 s、u、坡度）
 //     VDV.cols：只給玩家的碰撞（護欄、橋墩、柱子、停車場的車；off 自己看玩家在哪一層）；VDV.lot：{ cars, hide(j), show(j) }；VDV.info
 import * as THREE from 'three';
+import { restLayout, buildRestArea } from './vdrest.js'; // 第 92 批：休息站（大便龍服務區）
 
 export const { VD_PATH, VD_LOT, VD_GAP, VD_TEXT, VD_REST, vdNear, vdInLot, vdEndDist, inRest, buildViaduct } = (() => {
 const TAU = Math.PI * 2;
@@ -74,6 +75,7 @@ const VD_RAMPS = [
 // 兩個方向共用（像南投服務區）：往西開的從右手邊直接進出（WX 出、WE 進）；往東開的從右手邊出去、爬高繞過主線上面進來（EX），出去也從上面繞回南邊（EE）
 const VD_REST = { x0: 760, x1: 1240, z0: 165, z1: 302, y: 24, blend: 45, pave: [770, 168, 1230, 297] }; // 平的（山的格子在邊上多一條線）、鋪柏油的範圍
 const inRest = (x, z, pad = 0) => x > VD_REST.pave[0] - pad && x < VD_REST.pave[2] + pad && z > VD_REST.pave[1] - pad && z < VD_REST.pave[3] + pad;
+const RL = restLayout(VD_REST); // 休息站裡面的路、停車格、房子（vdrest.js）
 VD_RAMPS.push(
   { id: 'WX', exit: true, s0: 3110, side: -1, dir: -1, T: 80, pts: [[1232, 294]], end: [1214, 287], endDir: [-1, 0], to: ['大便龍服務區'], rest: true },
   { id: 'WE', exit: false, start: [800, 286], startDir: [-1, 0], pts: [[778, 291]], s0: 2460, side: -1, dir: -1, T: 80, rest: true },
@@ -310,7 +312,7 @@ function buildViaduct(V, opts = {}) {
   const offWhenOn = (c) => { Object.defineProperty(c, 'off', { get: () => st.on, set: () => {}, enumerable: false, configurable: true }); return c; };
   const VCG = new Map(); for (const c of V.colliders) { if (!c || !isFinite(c.x)) continue; const r = c.t === 'box' ? Math.hypot(c.hx, c.hz) : c.r || 0; for (let a = Math.floor((c.x - r) / 16); a <= Math.floor((c.x + r) / 16); a++) for (let b = Math.floor((c.z - r) / 16); b <= Math.floor((c.z + r) / 16); b++) { const k = gkey(a, b); let Lc = VCG.get(k); if (!Lc) VCG.set(k, (Lc = [])); Lc.push(c); } }
   const hitCol = (x, z, m) => { const Lc = VCG.get(gkey(Math.floor(x / 16), Math.floor(z / 16))); if (!Lc) return false; for (const c of Lc) { if (c.t === 'box') { const dx = x - c.x, dz = z - c.z, co = Math.cos(c.rot || 0), si = Math.sin(c.rot || 0), lu = dx * co - dz * si, lw = dx * si + dz * co; if (Math.abs(lu) < c.hx + m && Math.abs(lw) < c.hz + m) return true; } else if (Math.hypot(x - c.x, z - c.z) < (c.r || 0) + m) return true; } return false; };
-  const onRoad = (x, z) => { if (inRest(x, z) && !(V.restRoadAt && V.restRoadAt(x, z))) return false; const s = V.surfaceAt ? V.surfaceAt(x, z) : 1; if (s === 0 || s === 4) return true; if (V.npcOnRoad && V.npcOnRoad(x, z)) return true; return s === 3 && x < 100; };
+  const onRoad = (x, z) => { if (inRest(x, z)) return RL.roadAt(x, z); const s = V.surfaceAt ? V.surfaceAt(x, z) : 1; if (s === 0 || s === 4) return true; if (V.npcOnRoad && V.npcOnRoad(x, z)) return true; return s === 3 && x < 100; };
   const badSpot = (x, z, r) => { for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) { const qx = x + dx, qz = z + dz; if (onRoad(qx, qz) || hitCol(qx, qz, 0.6) || vdInLot(qx, qz, 1.5) || (HL && HL.tunAt && HL.tunAt(qx, qz) >= 0)) return true; } return false; };
   const below = (x, z, y, rad, skipI) => { const Lc = GRID.get(gkey(Math.floor(x / CELL), Math.floor(z / CELL))); if (!Lc) return false; for (let k = 0; k < Lc.length; k++) { const i = Lc[k]; if (GR[i] === GR[skipI] && Math.abs(i - skipI) < 25) continue; segQ(i, x, z); if (SQ.d2 < (rad + ROADS[GR[i]].hw - HW) ** 2 && GY[i] < y - 2) return true; } return false; }; // 這裡下面還有別的橋面（skipI：全部接成一串的號碼）
   const box = (cx, cz, ry, hx, hz, y0, y1, col) => { // 立著的長方塊（本地 x 沿著 ry 的方向）
@@ -429,6 +431,10 @@ function buildViaduct(V, opts = {}) {
   const lotCars = lotFar();
   group.add(...lotCars.meshes);
   for (const c of lotCars.cols) cols.push(c);
+  // 9b) 第 92 批：休息站（vdrest.js）：地面、線、主建築（便利商店走得進去：V.buildings 一棟 store）、廁所、加油站、廣場、大車、山上的字、樹、路燈
+  const rest = buildRestArea(RL, { V, qb, boxAt, lbar, renderer: opts.renderer });
+  group.add(rest.group); tris += rest.tris; for (const c of rest.cols) cols.push(c);
+  for (let k = 0; k < rest.lamps.length; k += 3) { lampsX.push(rest.lamps[k], rest.lamps[k + 1], rest.lamps[k + 2]); lampK.push(1.3); }
 
   // 10) 被橋蓋到的地面碰撞（離橋面邊 6 公尺內、橋比地面高 3 公尺以上）：玩家在橋上的時候關掉（不然開在橋上撞到下面的房子、樹、隧道洞口的欄杆）
   const K0 = Symbol('vdOff'); let nGround = 0;
@@ -474,6 +480,8 @@ function buildViaduct(V, opts = {}) {
     g.save();
     g.fillStyle = 'rgba(70,74,80,0.9)'; g.beginPath(); g.arc(C0.x, C0.z, VD_LOT.r, 0, TAU); g.fill(); g.fillRect(CONN.x - CONN.hw, CONN.z0, CONN.hw * 2, CONN.z1 - CONN.z0);
     g.strokeStyle = 'rgba(150,178,200,0.95)'; g.lineJoin = 'round'; g.lineCap = 'butt';
+    g.fillStyle = 'rgba(70,74,80,0.9)'; for (const q of RL.roads) g.fillRect(q.x0, q.z0, q.x1 - q.x0, q.z1 - q.z0); g.fillRect(RL.lot.x0, RL.lot.z0, RL.lot.x1 - RL.lot.x0, RL.lot.z1 - RL.lot.z0); // 休息站
+    g.fillStyle = 'rgba(150,120,100,0.95)'; for (const q of [RL.hall, ...RL.wcs]) g.fillRect(q.x0, q.z0, q.x1 - q.x0, q.z1 - q.z0);
     for (const r of ROADS) { g.lineWidth = 2 * r.hw; g.beginPath(); for (let i = 0; i < r.n; i += 4) (i ? g.lineTo(r.X[i], r.Z[i]) : g.moveTo(r.X[i], r.Z[i])); g.lineTo(r.X[r.n - 1], r.Z[r.n - 1]); g.stroke(); }
     g.restore();
   };
@@ -481,12 +489,12 @@ function buildViaduct(V, opts = {}) {
   V.group.add(group);
 
   const API = {
-    group, st, at, normal, Q, cols, Y, G: Gc, lot: lotCars, path: VD_PATH, HW, sD, roads: ROADS, // roads[0]＝主線；交流道：{ X, Z, S, TX, TZ, n, L, Y, MS（接在主線旁邊那段的主線 s）, UC, def }
+    group, st, at, normal, Q, cols, Y, G: Gc, lot: lotCars, path: VD_PATH, HW, sD, roads: ROADS, rest, restL: RL, // roads[0]＝主線；交流道：{ X, Z, S, TX, TZ, n, L, Y, MS（接在主線旁邊那段的主線 s）, UC, def }
     near: vdNear, inLot: vdInLot, clearAt: (i) => clearAt(i),
     info: null,
   };
   const ramps = ROADS.slice(1).map((r) => ({ id: r.def.id, len: +r.L.toFixed(1), grade: +(r.maxGrade * 100).toFixed(1), yTop: +Math.max(...r.Y).toFixed(1), yEnd: +r.Y[r.n - 1].toFixed(2) }));
-  API.info = { len: +L.toFixed(1), helix: +sH.toFixed(1), sD: +sD.toFixed(1), pts: n, tris, chunks: chunks.length, piers: nPier, pierSkip: nSkip, cols: nCol, bars: nBar, ground: nGround, lamps: lampsX.length / 3, lotSpots: VD_LOT.spots.length, lotCars: lotCars.cars.length, ramps, yMax: +Math.max(...Y).toFixed(2),
+  API.info = { len: +L.toFixed(1), helix: +sH.toFixed(1), sD: +sD.toFixed(1), pts: n, tris, chunks: chunks.length, piers: nPier, pierSkip: nSkip, cols: nCol, bars: nBar, ground: nGround, lamps: lampsX.length / 3, lotSpots: VD_LOT.spots.length, lotCars: lotCars.cars.length, restBays: RL.bays.length, restCars: lotCars.cars.filter((c) => c.area === 'r').length, restTris: rest.tris, ramps, yMax: +Math.max(...Y).toFixed(2),
     minClear: (() => { let m = 1e9, at2 = 0; for (let i = 0; i < n; i++) if (S[i] > sH && S[i] < sD && !restSide(i)) { const c = clearAt(i); if (c < m) { m = c; at2 = S[i]; } } return [+m.toFixed(2), +at2.toFixed(0)]; })(),
     restMain: (() => { let a = 1e9, b = -1e9, s0 = 1e9, s1 = -1e9; for (let i = 0; i < n; i++) if (restSide(i)) { a = Math.min(a, Y[i]); b = Math.max(b, Y[i]); s0 = Math.min(s0, S[i]); s1 = Math.max(s1, S[i]); } return { yLo: +a.toFixed(2), yHi: +b.toFixed(2), s0: Math.round(s0), s1: Math.round(s1) }; })(),
     ms: 0 };
@@ -543,13 +551,14 @@ function buildViaduct(V, opts = {}) {
   // ---- 停車場的車（遠的）：第 92 批起每一種車一個 InstancedMesh（opts.far＝farcars.js：那台車自己的樣子，約 300 個三角形）；沒有資料的才用方塊（車身＋玻璃、輪子兩個 InstancedMesh，照長寬高放大）----
   function lotFar() {
     const cars = [], colsL = [];
-    for (const p of VD_LOT.spots) { const o = opts.lotCar ? opts.lotCar(p[3]) : null; if (!o) continue; const d = (opts.dims && opts.dims(o.k)) || [4.5, 1.9, 1.4]; cars.push({ j: p[3], x: p[0], z: p[1], h: p[2], k: o.k, paint: o.paint, d }); }
+    for (const p of VD_LOT.spots) { const o = opts.lotCar ? opts.lotCar(p[3]) : null; if (!o) continue; const d = (opts.dims && opts.dims(o.k)) || [4.5, 1.9, 1.4]; cars.push({ j: p[3], x: p[0], z: p[1], h: p[2], k: o.k, paint: o.paint, d, y: 0, area: '' }); }
+    for (const b of RL.bays) { const j = 20000 + b.n, o = opts.lotCar ? opts.lotCar(j, b.kind ? 0.3 : 0.58) : null; if (!o) continue; const d = (opts.dims && opts.dims(o.k)) || [4.5, 1.9, 1.4]; cars.push({ j, x: b.x, z: b.z, h: b.h, k: o.k, paint: o.paint, d, y: RL.y, area: 'r' }); } // 第 92 批：休息站的停車格（約 58% 有車；婦幼、無障礙格 30%）
     const FAR = opts.far || {}, meshes = [], groups = new Map(); // k → { list, meshes[] }（'' ＝方塊）
-    for (const c of cars) { const g = FAR[c.k] ? c.k : ''; let G = groups.get(g); if (!G) groups.set(g, (G = { list: [], meshes: [] })); c.slot = G.list.length; c.grp = G; G.list.push(c); }
+    for (const c of cars) { const g = c.area + '|' + (FAR[c.k] ? c.k : ''); let G = groups.get(g); if (!G) groups.set(g, (G = { list: [], meshes: [], k: FAR[c.k] ? c.k : '' })); c.slot = G.list.length; c.grp = G; G.list.push(c); } // 停車場、休息站分開（各自的包圍球：看不到的那邊不畫）
     const M4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color(), ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
     let ftris = 0;
-    for (const [k, G] of groups) {
-      const N = G.list.length;
+    for (const [, G] of groups) {
+      const N = G.list.length, k = G.k;
       const parts = k ? [[farGeo(FAR[k]), farMaterial()]] : [[farCarGeo(false), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.38, metalness: 0.25 })], [farCarGeo(true), new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.3, metalness: 0.1 })]];
       for (const [geo, mat] of parts) {
         const I = new THREE.InstancedMesh(geo, mat, N); I.name = k ? 'vd-far-' + k : 'vd-lotcars'; mat.name = k ? 'vd-far' : 'vd-lotcar';
@@ -557,12 +566,12 @@ function buildViaduct(V, opts = {}) {
       }
       G.mats = [];
       G.list.forEach((c, i) => {
-        q.setFromAxisAngle(up, c.h); pos.set(c.x, 0.03, c.z); if (k) sc.set(1, 1, 1); else sc.set(c.d[0], c.d[2], c.d[1] * 0.92); M4.compose(pos, q, sc); G.mats.push(M4.clone());
+        q.setFromAxisAngle(up, c.h); pos.set(c.x, c.y + 0.03, c.z); if (k) sc.set(1, 1, 1); else sc.set(c.d[0], c.d[2], c.d[1] * 0.92); M4.compose(pos, q, sc); G.mats.push(M4.clone());
         col.set(c.paint); for (const I of G.meshes) { I.setMatrixAt(i, M4); if (I.material.name !== 'vd-lotcar' || I === G.meshes[0]) I.setColorAt(i, col); }
       });
       for (const I of G.meshes) { I.instanceMatrix.needsUpdate = true; if (I.instanceColor) I.instanceColor.needsUpdate = true; I.computeBoundingSphere(); }
     }
-    for (const c of cars) colsL.push({ t: 'box', x: c.x, z: c.z, hx: c.d[0] / 2, hz: (c.d[1] * 0.92) / 2, rot: c.h, h: c.d[2], noCrush: true, vd: 'lotcar' });
+    for (const c of cars) colsL.push({ t: 'box', x: c.x, z: c.z, hx: c.d[0] / 2, hz: (c.d[1] * 0.92) / 2, rot: c.h, h: c.y + c.d[2], ...(c.y ? { y0: c.y } : {}), noCrush: true, vd: 'lotcar' });
     cars.forEach((c, i) => { c.inst = i; });
     const set = (i, on) => { const c = cars[i], G = c.grp, m = on ? G.mats[c.slot] : ZERO; for (const I of G.meshes) { I.setMatrixAt(c.slot, m); I.instanceMatrix.needsUpdate = true; } };
     const M5 = new THREE.Matrix4(), hidden = (i) => { const c = cars[i]; c.grp.meshes[0].getMatrixAt(c.slot, M5); return M5.elements[0] === 0; };

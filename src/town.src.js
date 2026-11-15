@@ -958,7 +958,7 @@ const LDF_HOOKS = {
   door: () => (LD.style === 'open' ? 1 : LD.t), // 門開了多少
   openDoor: () => { if (!LD.I) return; LD.hold = 0.6; if (LD.style === 'hinge') { LD.want = 1; LD.far = 0; } }, // 請門開著（每格叫）
   player: () => (walker && walker.mode === 'walk' ? walker.telemetry() : null), // 人會讓你
-  leave: (look, x, z, heading) => !!(NPC && NPC.peds.spawnAt(x, z, heading, look)), // 走出大門＝變成路上的人（樣子一樣）
+  leave: (look, x, z, heading) => (LD.b?.rest ? !!(RCROWD && RCROWD.spawnAt(x, z, heading, look)) : !!(NPC && NPC.peds.spawnAt(x, z, heading, look))), // 走出大門＝變成路上的人（樣子一樣）；第 92 批：休息站的超商＝變成休息站走來走去的人
 };
 function npcEnter(p, d, near) { // 路上的人走到門口（npc.js 的 enter；near＝還在路上快到了）：蓋好的那一棟 → 門自己開（'wait'＝還沒開先等）、走進去變成裡面的人（true）
   if (!LD.b || d.b !== LD.b || !LD.folks || LDR.on) return 0;
@@ -2827,7 +2827,8 @@ const LOT_DIMS = { supra: [4.606, 1.971, 1.426], gtr: [4.7, 1.951, 1.33], gc8: [
   evo: [4.517, 1.899, 1.694], civic: [4.557, 2.191, 1.436], laferrari: [4.679, 2.03, 1.118], huayra: [4.549, 2.12, 1.17], senna: [4.737, 2.1, 1.238], altis: [4.571, 2.084, 1.512], aventador: [4.842, 2.154, 1.137], ae86: [4.235, 1.693, 1.34],
   chiron: [4.559, 2.02, 1.233], jp4: [4.521, 2.19, 1.854], k2: [3.822, 2.066, 2.137], p8: [5.457, 2.165, 1.847] }; // 輕量車量的長、寬、高（公尺；車身中心在原點）
 const VDL_SEED = 7000; // 停車場的車用自己的亂數（不要跟環山路的一樣）
-function vdLotCar(n) { if (lotHash(n + VDL_SEED, 3) >= 0.66) return null; const k = lotKind(n + VDL_SEED); return k && LOT_DIMS[k] ? { k, paint: lotLook(k, n + VDL_SEED).paint } : null; } // 三分之二的格子有車
+function vdLotCar(n, fill = 0.66) { if (lotHash(n + VDL_SEED, 3) >= fill) return null; const k = lotKind(n + VDL_SEED); return k && LOT_DIMS[k] ? { k, paint: lotLook(k, n + VDL_SEED).paint } : null; } // 三分之二的格子有車
+let RCROWD = null; // 第 92 批：休息站、停車場走來走去的人和動物（vdcrowd）
 const VDL = { t: 0, q: { x: 0, z: 0 }, live: new Map(), pool: new Map(), want: [], busy: false, N: 8, R: 26, built: 0 };
 function vdStep(dt) {
   const V = VDV; if (!V || !DRIVE.on) return; const st = V.st;
@@ -2841,13 +2842,13 @@ function vdStep(dt) {
   }
   vdLotStep(dt);
 }
-function vdLotPut(l, c) { l.setLook(lotLook(c.k, c.j + VDL_SEED)); l.car.position.set(c.x, 0.03, c.z); l.car.rotation.set(0, c.h, 0); l.car.visible = true; VDV.lot.hide(c.inst); VDL.live.set(c, { l, k: c.k }); }
+function vdLotPut(l, c) { l.setLook(lotLook(c.k, c.j + VDL_SEED)); l.car.position.set(c.x, (c.y || 0) + 0.03, c.z); l.car.rotation.set(0, c.h, 0); l.car.visible = true; VDV.lot.hide(c.inst); VDL.live.set(c, { l, k: c.k }); }
 function vdLotStep(dt) {
   const L = VDV.lot; VDL.t -= dt; if (VDL.t > 0 || VDL.busy) return; VDL.t = 0.25;
   const q = VDL.q, W = VDL.want; W.length = 0;
   if (LOT_ME(q) && !VDV.st.high && !indoor) {
     const dx = q.x - VD_LOT.x, dz = q.z - VD_LOT.z;
-    if (dx * dx + dz * dz < (VD_LOT.r + VDL.R) ** 2) { const R2 = VDL.R * VDL.R; for (const c of L.cars) { if (c.bad) continue; const ex = c.x - q.x, ez = c.z - q.z, d = ex * ex + ez * ez; if (d < R2) { c.d2 = d; W.push(c); } } if (W.length > VDL.N) { W.sort((a, b) => a.d2 - b.d2); W.length = VDL.N; } }
+    if (dx * dx + dz * dz < (VD_LOT.r + VDL.R) ** 2 || inRest(q.x, q.z, VDL.R)) { const R2 = VDL.R * VDL.R; for (const c of L.cars) { if (c.bad) continue; const ex = c.x - q.x, ez = c.z - q.z, d = ex * ex + ez * ez; if (d < R2) { c.d2 = d; W.push(c); } } if (W.length > VDL.N) { W.sort((a, b) => a.d2 - b.d2); W.length = VDL.N; } }
   }
   for (const [c, e] of VDL.live) if (!W.includes(c)) { e.l.car.visible = false; L.show(c.inst); VDL.live.delete(c); let a = VDL.pool.get(e.k); if (!a) VDL.pool.set(e.k, (a = [])); a.push(e.l); }
   for (const c of W) {
