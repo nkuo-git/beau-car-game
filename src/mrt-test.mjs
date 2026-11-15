@@ -352,8 +352,8 @@ const gw = await p.evaluate(([ph, t0]) => { const D = window.__D(), M = D.M, W =
   const car0 = M.ride.car; for (let i = 0; i < 60 * 4; i++) window.__wstep(1); // 車開起來
   tr = M.trains().find((t) => t.key === M.ride.key); c = tr.cars[M.ride.car];
   const sx = c.x + c.ux * 3, sz = c.z + c.uz * 3; W.teleport({ x: sx, z: sz, heading: Math.atan2(-c.uz, c.ux) }); window.__wstep(2);
-  const cars = [], ys = []; let lost = 0; W.setInput({ x: 0, y: 1 });
-  for (let i = 0; i < 60 * 6; i++) { window.__wstep(1); if (!M.ride) lost++; else if (cars[cars.length - 1] !== M.ride.car) cars.push(M.ride.car); ys.push(W.character.group.position.y); if (M.ride && M.ride.car >= 2) { for (let k = 0; k < 40; k++) window.__wstep(1); break; } }
+  const cars = [], ys = []; let lost = 0; const go = (to) => { const t = W.telemetry(), T3 = M.trains().find((x) => x.key === M.ride?.key); if (!T3) return; const c3 = T3.cars[Math.min(3, to)], dx = c3.x - t.x, dz = c3.z - t.z, l = Math.hypot(dx, dz) || 1, wx = dx / l, wz = dz / l, ps = t.camYaw; W.setInput({ x: wx * Math.sin(ps) + wz * Math.cos(ps), y: wx * Math.cos(ps) - wz * Math.sin(ps) }); }; // 一直朝下一節的中間走（列車轉彎的時候車廂會轉）
+  for (let i = 0; i < 60 * 6; i++) { go(2); window.__wstep(1); if (!M.ride) lost++; else if (cars[cars.length - 1] !== M.ride.car) cars.push(M.ride.car); ys.push(W.character.group.position.y); if (M.ride && M.ride.car >= 2) { for (let k = 0; k < 40; k++) { go(2); window.__wstep(1); } break; } }
   W.setInput(null); window.__wstep(2);
   const t = W.telemetry(), R = M.ride; if (!R) return { fail: 'lost', cars, lost };
   const T2 = M.trains().find((x) => x.key === R.key), c2 = T2.cars[R.car], dx = t.x - c2.x, dz = t.z - c2.z, lu = dx * c2.ux + dz * c2.uz, lv = -dx * c2.uz + dz * c2.ux;

@@ -187,7 +187,7 @@ const hw = await p.evaluate(() => window.__hwRun());
 // 一樣的路、一樣的開法，輪子換回正的（車身照舊）：速度、撞到幾次要一樣（只是外觀）
 const hw0 = await p.evaluate(() => { const S = window.__D().tripS; S.setStance(false); const r = window.__hwRun(); S.setStance(true); return r; });
 console.log('  highway:', JSON.stringify(hw), 'straight wheels:', JSON.stringify(hw0));
-check(hw.vmax > 180 && hw.air === 0 && hw.lands === 0 && hw.vmax === hw0.vmax && hw.bumps === hw0.bumps, `flat out on the expressway for 15 s: ${hw.vmax} km/h, never in the air; the same run with straight wheels: ${hw0.vmax} km/h, bumps ${hw.bumps} / ${hw0.bumps} (looks only, no speed change)`);
+check(hw.vmax > 165 /* 第 94 批：加速慢一點（15 秒 177 km/h），門檻 180 → 165 */ && hw.air === 0 && hw.lands === 0 && hw.vmax === hw0.vmax && hw.bumps === hw0.bumps, `flat out on the expressway for 15 s: ${hw.vmax} km/h, never in the air; the same run with straight wheels: ${hw0.vmax} km/h, bumps ${hw.bumps} / ${hw0.bumps} (looks only, no speed change)`);
 check(hw.hubs.every((h) => Math.abs(h[0] - 9) < 0.01) && hw.yaw.every((y, i) => Math.abs(y - (i === 0 ? Math.PI : 0)) > 0.05), `steering: the front wheels turn (${hw.yaw}) and keep their camber`);
 const riHw = await shot('5-highway');
 

@@ -38,7 +38,7 @@ const GATE_U = -8; // 閘門那一排
 const TRK_V = 1.95; // 兩條軌道離中線多遠（往東的在 +v＝行進方向的右手邊；車廂的外側離月台門 3.3 − 1.95 − 1.28 ＝ 7 公分）
 const CAR_L = 13.8, CAR_P = 14.4, CAR_W = 1.28, DOOR_X = 3.6, DOOR_W = 1.3, CAR_H = 3.3; // 車廂：長、間距、半寬、車門在 ±3.6（寬 1.3）、車身高
 const PSD_W = 1.9; // 月台門一個口的寬
-const GW_W = 0.5; // 第 94 批：車廂中間的通道（半寬）
+const GW_W = 0.5, GW_SEE = 260; // 第 94 批：車廂中間的通道（半寬）；列車離鏡頭超過 GW_SEE 公尺就不畫通道
 const H = 90, DWELL = 15, VM = 36, ACC = 2.0, CYCLE = 180; // 每 90 秒一班、停 15 秒；第 79 批：最快 36 m/s（130 公里）、平均 2.0 m/s²（S 形：起步、進站慢慢來），港墘→文德約 46 秒（以前 65 秒）
 const DOOR_U = []; for (let i = 0; i < 4; i++) for (const d of [-DOOR_X, DOOR_X]) DOOR_U.push((i - 1.5) * CAR_P + d);
 // 顏色（0–1）；第 94 批（Nick「捷運站顏色鮮豔一點太淡了」）：牆（WALL）杏色、月台地板（TILE）暖的沙色、大廳和樓梯的地板（TILE2）水藍、屋頂（ROOFC）文湖線的咖啡色、月台後面的牆的顏色更鮮豔（以前幾乎都是白、灰）
@@ -567,9 +567,9 @@ function buildMrt(V, opt = {}) {
       if (ci === 3) noseIM.setMatrixAt(nn++, M4); else if (ci === 0) { Q4.setFromAxisAngle(YAX, c.th + Math.PI); M4.compose(V3, Q4, S3); noseIM.setMatrixAt(nn++, M4); Q4.setFromAxisAngle(YAX, c.th); }
       for (const q of [-1, 1]) for (const dx of [-DOOR_X, DOOR_X]) for (const lf of [-1, 1]) { const off = lf * (DOOR_W / 4 + (q > 0 ? tr.open : 0) * (DOOR_W / 2)), lu = dx + off, lv = q * (CAR_W - 0.06), [x, z] = carW(c, lu, lv); V3.set(x, YT, z); M4.compose(V3, Q4, S3); dorIM.setMatrixAt(nd++, M4); } // 只開月台那一邊（右手邊）的門
     }
-    let ng = 0; for (const tr of active) for (let ci = 0; ci + 1 < tr.cars.length; ci++) { const a = tr.cars[ci], b = tr.cars[ci + 1], [ax, az] = carW(a, CX, 0), [bx, bz] = carW(b, -CX, 0), dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
-      Q4.setFromAxisAngle(YAX, Math.atan2(-dz, dx)); V3.set((ax + bx) / 2, YT, (az + bz) / 2); S3.set(Math.max(0.5, L / 0.6), 1, 1); M4.compose(V3, Q4, S3); gwIM.setMatrixAt(ng++, M4); }
-    S3.set(1, 1, 1); gwIM.count = ng; gwIM.instanceMatrix.needsUpdate = true;
+    let ng = 0; for (const tr of active) { const m = tr.cars[1]; if (Math.hypot(m.x - camP[0], m.z - camP[1]) > GW_SEE) continue; for (let ci = 0; ci + 1 < tr.cars.length; ci++) { const a = tr.cars[ci], b = tr.cars[ci + 1], [ax, az] = carW(a, CX, 0), [bx, bz] = carW(b, -CX, 0), dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+      Q4.setFromAxisAngle(YAX, Math.atan2(-dz, dx)); V3.set((ax + bx) / 2, YT, (az + bz) / 2); S3.set(Math.max(0.5, L / 0.6), 1, 1); M4.compose(V3, Q4, S3); gwIM.setMatrixAt(ng++, M4); } }
+    S3.set(1, 1, 1); gwIM.count = ng; gwIM.instanceMatrix.needsUpdate = true; if (!ng) gwIM.visible = false; // 遠的車不畫通道（車廂中間那一小段，遠了看不到；省一個 draw call）
     carIM.count = n; glsIM.count = n; csIM.count = n; dorIM.count = nd; noseIM.count = nn; for (const im of [carIM, glsIM, csIM, dorIM, noseIM]) im.instanceMatrix.needsUpdate = true;
   }
   function drawPsd() {

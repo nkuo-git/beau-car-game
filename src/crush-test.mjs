@@ -512,19 +512,19 @@ const dive = await p.evaluate(() => {
     if (q.seat && q.seat.by === q.id) q.seat.by = -1; q.seat = null; q.partner = null;
     q.x = x0 + 22; q.z = z0 + (kid ? -0.3 : 0.4); q.y = 0; q.mode = 'idle'; q.timer = 30; q.v = 0; q.rn = 0;
     const d0 = N.peds.stats.dives, k0 = N.peds.stats.knocks, ci = D.drv.carInfo, hz = ci.halfW;
-    let under = 0, minLat = 9, saw = new Set(); const t0 = D.drv.telemetry(); D.drv.setInput({ throttle: 0.6, brake: 0, steer: 0 });
+    let under = 0, minLat = 9, saw = new Set(), tl = [], tlM = null; const id0 = q.id, an0 = q.animal || '', age0 = q.age, same = () => q.id === id0 && (q.animal || '') === an0 && q.age === age0; const t0 = D.drv.telemetry(); D.drv.setInput({ throttle: 0.6, brake: 0, steer: 0 });
     for (let i = 0; i < 60 * 4; i++) {
       H.step(1); const t = D.drv.telemetry(), CX = (ci.nose + ci.tail) / 2, cx = t.x + Math.cos(t.heading) * CX, cz = t.z - Math.sin(t.heading) * CX;
       const dx = q.x - cx, dz = q.z - cz, lon = dx * Math.cos(t.heading) - dz * Math.sin(t.heading), lat = dx * Math.sin(t.heading) + dz * Math.cos(t.heading);
       if (Math.abs(lon) < ci.len / 2 - 0.3 && Math.abs(lat) < hz - 0.3) under++;
       if (Math.abs(lon) < ci.len / 2) minLat = Math.min(minLat, Math.abs(lat));
-      saw.add(q.mode);
+      saw.add(q.mode); if (q.mode !== tlM) { tlM = q.mode; tl.push([+(i / 60).toFixed(2), q.mode, Math.round(t.kmh), +lon.toFixed(1), +lat.toFixed(1)]); } // 每一次換動作：時間、動作、車多快、在車子前後幾公尺、旁邊幾公尺
     }
     D.drv.setInput({ throttle: 0, brake: 1, steer: 0 });
     const tA = D.drv.telemetry();
-    let stood = -1; for (let i = 0; i < 60 * 6; i++) { H.step(1); saw.add(q.mode); if (stood < 0 && q.mode !== 'fall' && q.mode !== 'lie' && q.mode !== 'getup' && saw.has('getup')) stood = +(i / 60).toFixed(1); }
+    let stood = -1, stopped = false, recycled = false; for (let i = 0; i < 60 * 6; i++) { H.step(1); if (!same()) { recycled = true; break; } /* 跑遠了：這個人被收回去換成別人（同一個物件）：後面量的不是他 */ saw.add(q.mode); if (!stopped && Math.abs(D.drv.telemetry().kmh) < 0.5) { stopped = true; D.drv.setInput({ throttle: 0, brake: 0, steer: 0 }); } /* 停住了就放開煞車（自排停住還按著煞車＝倒車：第 94 批加速慢一點以後，倒車倒回去又嚇到剛爬起來的人） */ if (q.mode !== tlM) { tlM = q.mode; const t = D.drv.telemetry(); tl.push([+(4 + i / 60).toFixed(2), q.mode, Math.round(t.kmh), +(q.x - t.x).toFixed(1), +(q.z - t.z).toFixed(1)]); } if (stood < 0 && q.mode !== 'fall' && q.mode !== 'lie' && q.mode !== 'getup' && saw.has('getup')) stood = +(i / 60).toFixed(1); }
     D.drv.setInput(null);
-    out.push({ kid, age: q.age, animal: q.animal, dives: N.peds.stats.dives - d0, knocks: N.peds.stats.knocks - k0, under, minLat: +minLat.toFixed(2), hz, modes: [...saw], mode: q.mode, stood, passed: +(tA.x - (x0 + 22)).toFixed(1), crimes: P.telemetry().crimes.map((c) => c.type), gone: q.gone });
+    out.push({ kid, age: age0, animal: an0, recycled, dives: N.peds.stats.dives - d0, knocks: N.peds.stats.knocks - k0, under, minLat: +minLat.toFixed(2), hz, modes: [...saw], mode: recycled ? tlM : q.mode, stood, passed: +(tA.x - (x0 + 22)).toFixed(1), crimes: P.telemetry().crimes.map((c) => c.type), gone: q.gone, tl });
   }
   return out;
 });

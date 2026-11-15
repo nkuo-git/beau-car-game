@@ -67,7 +67,7 @@ t = run(d, 4, { throttle: 1 });
 check(t.mgear === 2 && ev.shifts.join() === '2' && t.kmh > lim.kmhMax + 10, `按住離合器 ▲ → 2 檔（onShift 2）、放開催到 ${Math.round(t.kmh)} km/h`);
 run(d, 0.2, { clutch: 1, throttle: 0 }); d.shift(1); run(d, 0.2, { clutch: 1 }); run(d, 0.2, { clutch: 1 }); d.shift(1); run(d, 0.2, { clutch: 1 });
 t = run(d, 6, { throttle: 1 }); const k4 = t.kmh;
-check(t.mgear === 4 && ev.shifts.join() === '2,3,4' && k4 > 150, `再升到 4 檔（onShift 3、4）：${Math.round(k4)} km/h`);
+check(t.mgear === 4 && ev.shifts.join() === '2,3,4' && k4 > 140, /* 第 94 批：加速慢一點（Nick「車子加速稍微加慢一點」）：6 秒 156 → 147 km/h，門檻 150 → 140 */ `再升到 4 檔（onShift 3、4）：${Math.round(k4)} km/h`);
 // ---- 太早降檔：轉速衝過紅線、引擎煞車很重 ----
 const dC = rig(); dC.setGearbox('mt'); // 對照：同樣速度 4 檔放油門滑行
 run(dC, 0.2, { clutch: 1 }); for (let g = 0; g < 4; g++) { dC.shift(1); run(dC, 0.1, { clutch: 1 }); } run(dC, 0.1, { clutch: 0 });
@@ -103,7 +103,7 @@ check(t.mt && t.mgear === t.gear && t.mgear >= 3, `開著換成手排：排在�
 d = rig({ ...PERF, ng: 5 }); d.setGearbox('mt'); run(d, 0.2, { clutch: 1 }); for (let i = 0; i < 8; i++) d.shift(1); t = run(d, 0.2, { clutch: 1 });
 check(t.ngears === 5 && t.mgear === 5, `5 檔的車（ng: 5）：按 8 次 ▲ 最多到 5 檔（${t.mgear}）、telemetry.ngears ${t.ngears}`);
 d = rig({ ...PERF, ng: 5 }); t = run(d, 15, { throttle: 1 });
-check(!t.mt && t.gear === 5 && t.shifts === 4 && t.kmh > 180, `5 檔的車自排：油門到底 15 秒升到 5 檔（${t.gear}、換了 ${t.shifts} 次、${Math.round(t.kmh)} km/h）`);
+check(!t.mt && t.gear === 5 && t.shifts === 4 && t.kmh > 165, /* 第 94 批：加速慢一點：15 秒 191 → 177 km/h，門檻 180 → 165 */ `5 檔的車自排：油門到底 15 秒升到 5 檔（${t.gear}、換了 ${t.shifts} 次、${Math.round(t.kmh)} km/h）`);
 d = rig({ ...PERF, ng: 2, gears: [2.1, 0.86] }); t = run(d, 8, { throttle: 1 });
 check(t.ngears === 2 && t.gear === 2 && t.shifts === 1, `2 速（怪獸卡車那種 gears: [2.1, 0.86]）：自排只換一次檔（${t.gear} 檔、換了 ${t.shifts} 次）`);
 // ---- 第 69 批：開著突然降一檔，轉速瞬間衝上去（放開離合器那一下就到，不是慢慢爬）----

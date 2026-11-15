@@ -376,7 +376,7 @@ const run = await p.evaluate(() => {
   H.put(560, -3.5, 0, 40);
   const t0 = d.telemetry(); let kAt = 0, kSand = 999, xPass = null;
   d.setInput({ throttle: 1, brake: 0, steer: 0 });
-  for (let i = 0; i < 25 * 60; i++) { H.step(1); const t = d.telemetry(); if (t.x < 761) kAt = t.kmh; if (t.x > 900 && t.x < 960) kSand = Math.min(kSand, t.kmh); if (t.x > 980) { xPass = t.x; break; } }
+  for (let i = 0; i < 40 * 60; i++) { H.step(1); const t = d.telemetry(); if (t.x < 761) kAt = t.kmh; /* 第 94 批：加速慢一點，開進沙地的時候慢一點：25 → 40 秒 */ if (t.x > 900 && t.x < 960) kSand = Math.min(kSand, t.kmh); if (t.x > 980) { xPass = t.x; break; } }
   const t1 = d.telemetry(); d.setInput(null); H.stop();
   return { bumps: t1.bumps - t0.bumps, kAt: Math.round(kAt), kSand: Math.round(kSand), xPass: xPass && +xPass.toFixed(1), surf: V.surfaceAt(t1.x, t1.z) };
 });
