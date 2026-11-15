@@ -200,6 +200,7 @@ console.log('1', el(), JSON.stringify(s1));
 check(!s1.err, 'the viaduct is built (VDV)');
 check(s1.I.len > 4500 && s1.I.len < 5600 && Math.abs(s1.I.helix - 990) < 15, `the route is ${s1.I.len} m long, the roundabout ${s1.I.helix} m (1.5 turns)`);
 check(s1.I.yMax >= 24 && s1.I.yMax < 40 && s1.I.minClear[0] >= 6.45, `24 m high (highest ${s1.I.yMax} m); at least ${s1.I.minClear[0]} m under the deck (s ${s1.I.minClear[1]})`);
+{ const R = s1.I.restMain; check(R && R.s1 - R.s0 > 400 && R.yLo >= 23.9 && R.yHi <= 24.5, `next to the rest area the road is level with the rest-area ground (within 0.5 m) (s ${R && R.s0}–${R && R.s1}, y ${R && R.yLo}–${R && R.yHi})`); }
 check(s1.maxG < 0.06, `never steeper than 6% (steepest ${(s1.maxG * 100).toFixed(1)}% at s ${s1.gAt})`);
 check(s1.I.piers >= 80 && s1.I.cols >= 20 && s1.I.lamps >= 100, `${s1.I.piers} piers (${s1.I.pierSkip} spots skipped: road, house, tunnel), ${s1.I.cols} roundabout columns, ${s1.I.lamps} lamps`);
 check(s1.hill === false && s1.nHill === 23, `the hill inside the south half of the freeway loop is gone (${s1.nHill} hills)`);
@@ -275,16 +276,16 @@ const s3b = await p.evaluate(() => {
       else if (seen && o.rampMax < r.L - 8) o.off++;
       if (q.bumps > nb) { nb = q.bumps; if (o.bumpAt.length < 6) o.bumpAt.push([Math.round(q.x), Math.round(q.z), +y.toFixed(1), V.Q.r, Math.round(V.Q.s), (D.drv.colsNear ? D.drv.colsNear(q.x, q.z, 4).map((c) => `${c.vd || c.tag || ''}:${c.t}`).slice(0, 4) : [])]); }
     } });
-    const t = d.telemetry(), y = D.tripS.car.position.y, g = D.VIL.heightAt(t.x, t.z);
-    out.push({ ...o, end: res.end, stuck: res.stuck, bumps: res.bumps, s: res.s, maxKmh: res.maxKmh, L: Math.round(r.L), rampMax: Math.round(o.rampMax), maxDY: +o.maxDY.toFixed(3), endY: +y.toFixed(2), endG: +g.toFixed(2), onDeck: V.st.on, grade: +(r.maxGrade * 100).toFixed(1), x: Math.round(t.x), z: Math.round(t.z) });
+    const t = d.telemetry(), y = D.tripS.car.position.y, g = Df.exit ? D.VIL.heightAt(t.x, t.z) : V.at(t.x, t.z, y) ?? -99; // 出口：下到地面（內湖的路、休息站的平台）；入口：開上主線
+    out.push({ ...o, exit: !!Df.exit, end: res.end, stuck: res.stuck, bumps: res.bumps, s: res.s, maxKmh: res.maxKmh, L: Math.round(r.L), rampMax: Math.round(o.rampMax), maxDY: +o.maxDY.toFixed(3), endY: +y.toFixed(2), endG: +g.toFixed(2), onDeck: V.st.on, grade: +(r.maxGrade * 100).toFixed(1), x: Math.round(t.x), z: Math.round(t.z) });
   }
   return out;
 });
 console.log('3b', el(), JSON.stringify(s3b));
 for (const r of s3b) {
-  check(r.end && r.stuck === 0 && r.rampMax > r.L - 10 && r.off === 0, `ramp ${r.id}: drove off the main road down the ${r.L} m ramp to its end (reached ${r.rampMax}; ${r.off} frames off the deck, ${r.s} s)`);
+  check(r.end && r.stuck === 0 && r.rampMax > r.L - 10 && r.off === 0, `ramp ${r.id}: drove the whole ${r.L} m ramp to its end (reached ${r.rampMax}; ${r.off} frames off the deck, ${r.s} s)`);
   check(r.maxDY < 0.25 && r.bumps <= 1, `ramp ${r.id}: sat on the deck (max ${r.maxDY} m${r.dyAt ? ' at ' + JSON.stringify(r.dyAt) : ''}), ${r.bumps} bumps${r.bumpAt.length ? ' ' + JSON.stringify(r.bumpAt) : ''}`);
-  check(!r.onDeck && Math.abs(r.endY - r.endG) < 0.2 && r.grade <= 7, `ramp ${r.id}: ends on the Neihu road (y ${r.endY}, ground ${r.endG}; steepest ${r.grade}%)`);
+  check((r.exit ? !r.onDeck : r.onDeck) && Math.abs(r.endY - r.endG) < 0.2 && r.grade <= 7, `ramp ${r.id}: ${r.exit ? 'ends on the ground (Neihu road / rest area)' : 'merges onto the main road'} (y ${r.endY}, ${r.exit ? 'ground' : 'deck'} ${r.endG}; steepest ${r.grade}%)`);
 }
 if (process.env.VD_STOP === '3b') { await b.close(); srv.close(); console.log(fails.length ? `FAILED ${fails.length}` : 'ok so far'); process.exit(0); }
 

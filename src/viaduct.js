@@ -20,7 +20,7 @@
 //     VDV.cols：只給玩家的碰撞（護欄、橋墩、柱子、停車場的車；off 自己看玩家在哪一層）；VDV.lot：{ cars, hide(j), show(j) }；VDV.info
 import * as THREE from 'three';
 
-export const { VD_PATH, VD_LOT, VD_GAP, VD_TEXT, vdNear, vdInLot, vdEndDist, buildViaduct } = (() => {
+export const { VD_PATH, VD_LOT, VD_GAP, VD_TEXT, VD_REST, vdNear, vdInLot, vdEndDist, inRest, buildViaduct } = (() => {
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const HW = 8, ROAD = 7.4, PLAT = 24, S_OPEN = 36, CLEAR = 6.5, DESC = 0.04, WALL = 6;
@@ -69,6 +69,17 @@ const VD_RAMPS = [
   // B：往南開的出口（東邊那段 x 1755）→ 西邊並排往南下來，接到內湖路二段（從北邊接上去）
   { id: 'B', exit: true, s0: 3578, side: 1, dir: 1, T: 90, pts: [], end: [1742, 873], endDir: [0, 1], to: ['內湖路二段', '市中心'] },
 ];
+// ---- 第 92 批：休息站（大便龍服務區）：主線北邊的山脊上鋪一塊平台（跟主線一樣高 24 公尺；neihu.js 的山照 VD_REST 削平／填平）----
+// Nick 2026-11-15「在高速公路中段做一個休息站 請上網查南休的停車場樣式並照做 要有便利商店廁所…要有出口入口 要有人車…有那三隻動物跟人」
+// 兩個方向共用（像南投服務區）：往西開的從右手邊直接進出（WX 出、WE 進）；往東開的從右手邊出去、爬高繞過主線上面進來（EX），出去也從上面繞回南邊（EE）
+const VD_REST = { x0: 760, x1: 1240, z0: 165, z1: 302, y: 24, blend: 45, pave: [770, 168, 1230, 297] }; // 平的（山的格子在邊上多一條線）、鋪柏油的範圍
+const inRest = (x, z, pad = 0) => x > VD_REST.pave[0] - pad && x < VD_REST.pave[2] + pad && z > VD_REST.pave[1] - pad && z < VD_REST.pave[3] + pad;
+VD_RAMPS.push(
+  { id: 'WX', exit: true, s0: 3110, side: -1, dir: -1, T: 80, pts: [[1232, 294]], end: [1214, 287], endDir: [-1, 0], to: ['大便龍服務區'], rest: true },
+  { id: 'WE', exit: false, start: [800, 286], startDir: [-1, 0], pts: [[778, 291]], s0: 2460, side: -1, dir: -1, T: 80, rest: true },
+  { id: 'EX', exit: true, s0: 2330, side: 1, dir: 1, T: 80, pts: [[690, 326], [745, 326], [770, 318], [783, 300], [786, 270], [786, 230], [790, 205], [806, 189]], end: [830, 186], endDir: [1, 0], keys: [[781, 312, null]], to: ['大便龍服務區'], rest: true },
+  { id: 'EE', exit: false, start: [1196, 186], startDir: [1, 0], pts: [[1222, 192], [1238, 212], [1241, 250], [1241, 300], [1242, 335], [1252, 362], [1278, 378], [1312, 372], [1340, 350]], s0: 3220, side: 1, dir: 1, T: 80, keys: [[1241, 312, null]], rest: true },
+);
 function rampPath(D) {
   const F = [], A = []; // A：這一點在不在主線旁邊（主線的 s），不在＝−1
   const tap = (ds) => { for (const d of ds) { const ms = D.exit ? D.s0 + D.dir * d : D.s0 - D.dir * d, m = mainAt(ms), u = D.side * (U0 + ((U1 - U0) * (1 - Math.cos((Math.PI * d) / D.T))) / 2); F.push([m.x - m.tz * u, m.z + m.tx * u]); A.push(ms); } };
@@ -177,10 +188,11 @@ function buildViaduct(V, opts = {}) {
   // 2) 高度：起點（停車場地面）→ 圓環爬到 24 → 平的（地面高的地方抬高）→ 最後 4% 下來到路的盡頭
   const g0 = Gc[0], gE = Gc[n - 1], sD = L - (PLAT - gE) / DESC;
   const Y = new Float32Array(n), lo = new Float32Array(n);
+  const restSide = (i) => X[i] > VD_REST.x0 - 50 && X[i] < VD_REST.x1 + 50 && Z[i] < VD_REST.z1 + 30; // 第 92 批：休息站旁邊那段貼著平台（像路堤），不用離地 6.5
   for (let i = 0; i < n; i++) {
     const s = S[i];
     Y[i] = s <= S_OPEN ? g0 : s < sH ? g0 + ((PLAT - g0) * (s - S_OPEN)) / (sH - S_OPEN) : s < sD ? PLAT : PLAT + ((gE - PLAT) * (s - sD)) / (L - sD);
-    lo[i] = s >= sH - 4 && s <= sD + 4 ? Gmax[i] + CLEAR : Gmax[i] + 0.05; // 平的那段：底下至少 6.5 公尺
+    lo[i] = s >= sH - 4 && s <= sD + 4 && !restSide(i) ? Gmax[i] + CLEAR : Gmax[i] + 0.05; // 平的那段：底下至少 6.5 公尺（第 92 批：休息站旁邊那段貼著平台、一樣高）
     if (Y[i] < lo[i]) Y[i] = lo[i];
   }
   for (let i = 1; i < n; i++) Y[i] = Math.max(Y[i], Y[i - 1] - DESC * 2); // 抬高的地方前後最陡 4%（往前、往後各掃一次）
@@ -201,7 +213,7 @@ function buildViaduct(V, opts = {}) {
     for (let i = 0; i < m; i++) if (r.MS[i] >= 0) { Yr[i] = mainY(r.MS[i]); fix[i] = 1; }
     if (r.MS[0] < 0) { Yr[0] = r.Gc[0] + 0.04; fix[0] = 2; }
     if (r.MS[m - 1] < 0) { Yr[m - 1] = r.Gc[m - 1] + 0.04; fix[m - 1] = 2; }
-    for (const [kx, kz, ky] of D.keys || []) { let b = 0, bd = 1e18; for (let i = 0; i < m; i++) { const d = (r.X[i] - kx) ** 2 + (r.Z[i] - kz) ** 2; if (d < bd) { bd = d; b = i; } } if (!fix[b]) { Yr[b] = ky; fix[b] = 3; } }
+    for (const [kx, kz, ky] of D.keys || []) { let b = 0, bd = 1e18; for (let i = 0; i < m; i++) { const d = (r.X[i] - kx) ** 2 + (r.Z[i] - kz) ** 2; if (d < bd) { bd = d; b = i; } } if (fix[b]) continue; let y = ky; if (y == null) { let mb = 0, md = 1e18; for (let i = 0; i < n; i++) { const d = (X[i] - kx) ** 2 + (Z[i] - kz) ** 2; if (d < md) { md = d; mb = i; } } y = Y[mb] + 7.6; } Yr[b] = y; fix[b] = 3; } // y null＝從主線上面跨過去（主線＋7.6）
     // 兩個定點中間：坡度從旁邊的坡度慢慢變到 g（前後各 D 公尺的豎曲線），中間直直的（不會一下子折下去，車子不會飛起來）
     const slopeAt = (i, d) => (i + d >= 0 && i + d < m && fix[i + d] ? (Yr[i] - Yr[i + d]) / (r.S[i] - r.S[i + d]) : 0);
     let a = -1;
@@ -298,7 +310,7 @@ function buildViaduct(V, opts = {}) {
   const offWhenOn = (c) => { Object.defineProperty(c, 'off', { get: () => st.on, set: () => {}, enumerable: false, configurable: true }); return c; };
   const VCG = new Map(); for (const c of V.colliders) { if (!c || !isFinite(c.x)) continue; const r = c.t === 'box' ? Math.hypot(c.hx, c.hz) : c.r || 0; for (let a = Math.floor((c.x - r) / 16); a <= Math.floor((c.x + r) / 16); a++) for (let b = Math.floor((c.z - r) / 16); b <= Math.floor((c.z + r) / 16); b++) { const k = gkey(a, b); let Lc = VCG.get(k); if (!Lc) VCG.set(k, (Lc = [])); Lc.push(c); } }
   const hitCol = (x, z, m) => { const Lc = VCG.get(gkey(Math.floor(x / 16), Math.floor(z / 16))); if (!Lc) return false; for (const c of Lc) { if (c.t === 'box') { const dx = x - c.x, dz = z - c.z, co = Math.cos(c.rot || 0), si = Math.sin(c.rot || 0), lu = dx * co - dz * si, lw = dx * si + dz * co; if (Math.abs(lu) < c.hx + m && Math.abs(lw) < c.hz + m) return true; } else if (Math.hypot(x - c.x, z - c.z) < (c.r || 0) + m) return true; } return false; };
-  const onRoad = (x, z) => { const s = V.surfaceAt ? V.surfaceAt(x, z) : 1; if (s === 0 || s === 4) return true; if (V.npcOnRoad && V.npcOnRoad(x, z)) return true; return s === 3 && x < 100; };
+  const onRoad = (x, z) => { if (inRest(x, z) && !(V.restRoadAt && V.restRoadAt(x, z))) return false; const s = V.surfaceAt ? V.surfaceAt(x, z) : 1; if (s === 0 || s === 4) return true; if (V.npcOnRoad && V.npcOnRoad(x, z)) return true; return s === 3 && x < 100; };
   const badSpot = (x, z, r) => { for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) { const qx = x + dx, qz = z + dz; if (onRoad(qx, qz) || hitCol(qx, qz, 0.6) || vdInLot(qx, qz, 1.5) || (HL && HL.tunAt && HL.tunAt(qx, qz) >= 0)) return true; } return false; };
   const below = (x, z, y, rad, skipI) => { const Lc = GRID.get(gkey(Math.floor(x / CELL), Math.floor(z / CELL))); if (!Lc) return false; for (let k = 0; k < Lc.length; k++) { const i = Lc[k]; if (GR[i] === GR[skipI] && Math.abs(i - skipI) < 25) continue; segQ(i, x, z); if (SQ.d2 < (rad + ROADS[GR[i]].hw - HW) ** 2 && GY[i] < y - 2) return true; } return false; }; // 這裡下面還有別的橋面（skipI：全部接成一串的號碼）
   const box = (cx, cz, ry, hx, hz, y0, y1, col) => { // 立著的長方塊（本地 x 沿著 ry 的方向）
@@ -454,7 +466,7 @@ function buildViaduct(V, opts = {}) {
   function normal(x, z, py, out) { if (at(x, z, py) == null) return null; const k = 1 / Math.sqrt(1 + Q.g * Q.g); out[0] = -Q.tx * Q.g * k; out[1] = k; out[2] = -Q.tz * Q.g * k; return out; }
 
   // 12) 地面種類：停車場、連到快速道路的路＝柏油（不限速、不長草）
-  const s0 = V.surfaceAt; V.surfaceAt = (x, z) => (vdInLot(x, z) ? 0 : s0 ? s0(x, z) : 1);
+  const s0 = V.surfaceAt; V.surfaceAt = (x, z) => (vdInLot(x, z) || inRest(x, z) ? 0 : s0 ? s0(x, z) : 1);
   // 13) 小地圖：停車場（灰）、高架（淺藍灰的粗線）
   const prevDraw = V.mapDraw;
   V.mapDraw = (g) => {
@@ -475,7 +487,8 @@ function buildViaduct(V, opts = {}) {
   };
   const ramps = ROADS.slice(1).map((r) => ({ id: r.def.id, len: +r.L.toFixed(1), grade: +(r.maxGrade * 100).toFixed(1), yTop: +Math.max(...r.Y).toFixed(1), yEnd: +r.Y[r.n - 1].toFixed(2) }));
   API.info = { len: +L.toFixed(1), helix: +sH.toFixed(1), sD: +sD.toFixed(1), pts: n, tris, chunks: chunks.length, piers: nPier, pierSkip: nSkip, cols: nCol, bars: nBar, ground: nGround, lamps: lampsX.length / 3, lotSpots: VD_LOT.spots.length, lotCars: lotCars.cars.length, ramps, yMax: +Math.max(...Y).toFixed(2),
-    minClear: (() => { let m = 1e9, at2 = 0; for (let i = 0; i < n; i++) if (S[i] > sH && S[i] < sD) { const c = clearAt(i); if (c < m) { m = c; at2 = S[i]; } } return [+m.toFixed(2), +at2.toFixed(0)]; })(),
+    minClear: (() => { let m = 1e9, at2 = 0; for (let i = 0; i < n; i++) if (S[i] > sH && S[i] < sD && !restSide(i)) { const c = clearAt(i); if (c < m) { m = c; at2 = S[i]; } } return [+m.toFixed(2), +at2.toFixed(0)]; })(),
+    restMain: (() => { let a = 1e9, b = -1e9, s0 = 1e9, s1 = -1e9; for (let i = 0; i < n; i++) if (restSide(i)) { a = Math.min(a, Y[i]); b = Math.max(b, Y[i]); s0 = Math.min(s0, S[i]); s1 = Math.max(s1, S[i]); } return { yLo: +a.toFixed(2), yHi: +b.toFixed(2), s0: Math.round(s0), s1: Math.round(s1) }; })(),
     ms: 0 };
   API.info.ms = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - T0);
   if (V.info) V.info.viaduct = API.info;
@@ -669,5 +682,5 @@ function rampTex(renderer) {
   return t;
 }
 
-return { VD_PATH, VD_LOT, VD_GAP, VD_TEXT, vdNear, vdInLot, vdEndDist, buildViaduct };
+return { VD_PATH, VD_LOT, VD_GAP, VD_TEXT, VD_REST, vdNear, vdInLot, vdEndDist, inRest, buildViaduct };
 })();

@@ -23,7 +23,7 @@ import { TOWER_RAMP } from './tower.js';
 import { NTUN_LINK } from './hills.js'; // 第 85 批：內湖隧道（彎的）的中線
 import { nhStreetPrep, nhStreetBuild, NH_STREET_TEXT } from './nhstreet.js'; // 第 72 批：內湖的街景（江南街、內湖路、環山路）
 import { MRT_TEXT, mrtKeepOut, mrtHits } from './mrt.js'; // 第 78 批：捷運站（mrt.js 蓋；這裡只留軌道、隔音牆）
-import { vdNear, VD_PATH, vdEndDist } from './viaduct.js'; // 第 91 批：高架橋下面的房子不蓋；下來的那條巷子不封起來
+import { vdNear, VD_PATH, vdEndDist, VD_REST, inRest } from './viaduct.js'; // 第 91 批：高架橋下面的房子不蓋；下來的那條巷子不封起來
 const NH_MRT_V2 = true; // 第 78 批：車站、出入口、站名牌交給 mrt.js（false＝以前畫上去的站房）
 
 // 打包（build-art.mjs、build-app.mjs）：整個包在一個函式裡，只露出下面這些名字
@@ -640,6 +640,7 @@ function buildNeihu(V, opt = {}) {
     h *= ss(0, RING_FADE, x - RING[0]) * ss(0, RING_FADE, RING[2] - x) * ss(0, RING_FADE, z - RING[1]) * ss(0, RING_FADE, RING[3] - z); // 第 27 批：格子的邊慢慢低到 0（外面接 hills.js 的草地、沙灘：開得過去，不是一面斷崖）
     if (h > 0) { const d = vdEndDist(x, z); if (d < 70) h *= ss(24, 70, d); } // 第 91 批：高架橋下來那段（範圍南邊外面）：山削平（格子 25 公尺：平的範圍要大一點）
     if (h > 0) for (const q of HOME_SITES) { const d = Math.hypot(x - q.x, z - q.z); if (d < HOME_K1) h *= ss(HOME_K0, HOME_K1, d); } // 第 27 批：家（5 號在入口旁邊）四周是平的（格子 25 公尺：平的範圍要大一點，三角形才不會蓋到斜坡）
+    if (typeof VD_REST !== 'undefined') { const R = VD_REST, d = Math.hypot(Math.max(R.x0 - x, 0, x - R.x1), Math.max(R.z0 - z, 0, z - R.z1)); if (d < R.blend) h = R.y + 0.02 + (h - R.y - 0.02) * ss(0, R.blend, d); } // 第 92 批：休息站的平台（山脊削平、北邊填起來；邊上 45 公尺慢慢接回原本的山）
     return h - 0.02;
   };
 
@@ -880,7 +881,9 @@ function buildNeihu(V, opt = {}) {
   const RG = { xs: null, zs: null, Y: null }; // 第 27 批：山的格子（高度跟畫出來的三角形一樣：hills.js 拿去當開得上去的地形）
   {
     const S = 25, axis = (a, b, c, d) => { const o = []; const n1 = Math.max(1, Math.round((b - a) / S)); for (let i = 0; i < n1; i++) o.push(a + ((b - a) * i) / n1); const n2 = Math.max(1, Math.round((c - b) / S)); for (let i = 0; i < n2; i++) o.push(b + ((c - b) * i) / n2); const n3 = Math.max(1, Math.round((d - c) / S)); for (let i = 0; i <= n3; i++) o.push(c + ((d - c) * i) / n3); return o; };
-    const xs = axis(RING[0], BX0 - HM, BX1 + HM, RING[2]), zs = axis(RING[1], BZ0 - HM, BZ1 + HM, RING[3]), nI = xs.length, nJ = zs.length;
+    let xs = axis(RING[0], BX0 - HM, BX1 + HM, RING[2]), zs = axis(RING[1], BZ0 - HM, BZ1 + HM, RING[3]);
+    if (typeof VD_REST !== 'undefined') { const R = VD_REST, add = (a, v) => { a = a.filter((q) => Math.abs(q - v) > 6); a.push(v); return a.sort((p, q) => p - q); }; for (const v of [R.x0, R.x1, R.x0 - 20, R.x1 + 20]) xs = add(xs, v); for (const v of [R.z0, R.z1, R.z0 - 20]) zs = add(zs, v); } // 第 92 批：休息站平台的邊剛好是格子線（裡面整片是平的）
+    const nI = xs.length, nJ = zs.length;
     RG.xs = Float64Array.from(xs); RG.zs = Float64Array.from(zs); RG.Y = new Float32Array(nI * nJ);
     const g = new Geo(false), R2 = rng(5), G1 = col255('#55703f'), G2 = col255('#6f8a4a'), G3 = col255('#7d8f62'), GF = col255('#8d9a6b');
     const idx = new Int32Array(nI * nJ);
@@ -1287,7 +1290,7 @@ function buildNeihu(V, opt = {}) {
     const R3 = rng(8); let n = 0;
     for (let tries = 0; n < 2600 && tries < 40000; tries++) {
       const x = BX0 - 550 + R3() * (BX1 + 650 - BX0 + 550), z = BZ0 - 800 + R3() * (BZ1 - BZ0 + 1350), d = boxD(x, z); if (d < 16 || R3() > 1.25 - d / 600) continue;
-      const h = hillH(x, z); if (h < 4) continue; const s = 1.8 + R3() * 1.6; addTree(x, ringAt(x, z) - 0.3, z, s, true); n++;
+      const h = hillH(x, z); if (h < 4) continue; if (typeof inRest === 'function' && (inRest(x, z, 12) || vdNear(x, z, 3))) continue; const s = 1.8 + R3() * 1.6; addTree(x, ringAt(x, z) - 0.3, z, s, true); n++; // 第 92 批：休息站、高架橋、交流道上面不種
       const c = { t: 'circle', x, z, r: 0.55, h: 4.9 * s, tk: 'hill', ti: treeTiles.get('hill').length / 4 - 1 }; colliders.push(c); treeCols.push(c); // 第 27 批：山開得上去了，樹要擋（怪獸卡車輾得扁）
     }
   }
