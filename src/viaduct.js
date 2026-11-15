@@ -387,29 +387,55 @@ function buildViaduct(V, opts = {}) {
     const pm = new THREE.Mesh(post.geo(), concMat); pm.name = 'vd-sign-post'; me.add(pm);
     return { mesh: me, tris: b.nt + post.nt };
   }
-  // ---- 停車場的車（遠的）：一台＝車身（照顏色）＋玻璃、輪子（黑）兩個 InstancedMesh；照那台車的長寬高放大 ----
+  // ---- 停車場的車（遠的）：第 92 批起每一種車一個 InstancedMesh（opts.far＝farcars.js：那台車自己的樣子，約 300 個三角形）；沒有資料的才用方塊（車身＋玻璃、輪子兩個 InstancedMesh，照長寬高放大）----
   function lotFar() {
     const cars = [], colsL = [];
     for (const p of VD_LOT.spots) { const o = opts.lotCar ? opts.lotCar(p[3]) : null; if (!o) continue; const d = (opts.dims && opts.dims(o.k)) || [4.5, 1.9, 1.4]; cars.push({ j: p[3], x: p[0], z: p[1], h: p[2], k: o.k, paint: o.paint, d }); }
-    const N = cars.length, gB = farCarGeo(false), gD = farCarGeo(true);
-    const mB = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.38, metalness: 0.25 }); mB.name = 'vd-lotcar';
-    const mD = new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.3, metalness: 0.1 }); mD.name = 'vd-lotcar-dark';
-    const IB = new THREE.InstancedMesh(gB, mB, Math.max(1, N)), ID = new THREE.InstancedMesh(gD, mD, Math.max(1, N));
-    IB.name = 'vd-lotcars'; ID.name = 'vd-lotcars-dark'; IB.count = ID.count = N;
+    const FAR = opts.far || {}, meshes = [], groups = new Map(); // k → { list, meshes[] }（'' ＝方塊）
+    for (const c of cars) { const g = FAR[c.k] ? c.k : ''; let G = groups.get(g); if (!G) groups.set(g, (G = { list: [], meshes: [] })); c.slot = G.list.length; c.grp = G; G.list.push(c); }
     const M4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color(), ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
-    const mats = [];
-    cars.forEach((c, k) => {
-      const gy = 0.03; q.setFromAxisAngle(up, c.h); pos.set(c.x, gy, c.z); sc.set(c.d[0], c.d[2], c.d[1] * 0.92); M4.compose(pos, q, sc); mats.push(M4.clone());
-      IB.setMatrixAt(k, M4); ID.setMatrixAt(k, M4); col.set(c.paint); IB.setColorAt(k, col);
-      colsL.push({ t: 'box', x: c.x, z: c.z, hx: c.d[0] / 2, hz: (c.d[1] * 0.92) / 2, rot: c.h, h: c.d[2], noCrush: true, vd: 'lotcar' });
-      c.inst = k;
-    });
-    IB.instanceMatrix.needsUpdate = ID.instanceMatrix.needsUpdate = true; if (IB.instanceColor) IB.instanceColor.needsUpdate = true;
-    IB.computeBoundingSphere(); ID.computeBoundingSphere();
-    IB.castShadow = ID.castShadow = false; IB.receiveShadow = true;
-    const set = (k, on) => { const m = on ? mats[k] : ZERO; IB.setMatrixAt(k, m); ID.setMatrixAt(k, m); IB.instanceMatrix.needsUpdate = ID.instanceMatrix.needsUpdate = true; };
-    return { cars, cols: colsL, meshes: [IB, ID], hide: (k) => set(k, false), show: (k) => set(k, true), tris: (gB.index.count + gD.index.count) / 3 };
+    let ftris = 0;
+    for (const [k, G] of groups) {
+      const N = G.list.length;
+      const parts = k ? [[farGeo(FAR[k]), farMaterial()]] : [[farCarGeo(false), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.38, metalness: 0.25 })], [farCarGeo(true), new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.3, metalness: 0.1 })]];
+      for (const [geo, mat] of parts) {
+        const I = new THREE.InstancedMesh(geo, mat, N); I.name = k ? 'vd-far-' + k : 'vd-lotcars'; mat.name = k ? 'vd-far' : 'vd-lotcar';
+        I.castShadow = false; I.receiveShadow = true; G.meshes.push(I); meshes.push(I); ftris += (geo.index ? geo.index.count : geo.attributes.position.count) / 3 * N;
+      }
+      G.mats = [];
+      G.list.forEach((c, i) => {
+        q.setFromAxisAngle(up, c.h); pos.set(c.x, 0.03, c.z); if (k) sc.set(1, 1, 1); else sc.set(c.d[0], c.d[2], c.d[1] * 0.92); M4.compose(pos, q, sc); G.mats.push(M4.clone());
+        col.set(c.paint); for (const I of G.meshes) { I.setMatrixAt(i, M4); if (I.material.name !== 'vd-lotcar' || I === G.meshes[0]) I.setColorAt(i, col); }
+      });
+      for (const I of G.meshes) { I.instanceMatrix.needsUpdate = true; if (I.instanceColor) I.instanceColor.needsUpdate = true; I.computeBoundingSphere(); }
+    }
+    for (const c of cars) colsL.push({ t: 'box', x: c.x, z: c.z, hx: c.d[0] / 2, hz: (c.d[1] * 0.92) / 2, rot: c.h, h: c.d[2], noCrush: true, vd: 'lotcar' });
+    cars.forEach((c, i) => { c.inst = i; });
+    const set = (i, on) => { const c = cars[i], G = c.grp, m = on ? G.mats[c.slot] : ZERO; for (const I of G.meshes) { I.setMatrixAt(c.slot, m); I.instanceMatrix.needsUpdate = true; } };
+    const M5 = new THREE.Matrix4(), hidden = (i) => { const c = cars[i]; c.grp.meshes[0].getMatrixAt(c.slot, M5); return M5.elements[0] === 0; };
+    return { cars, cols: colsL, meshes, hide: (i) => set(i, false), show: (i) => set(i, true), hidden, tris: ftris, kinds: groups.size };
   }
+}
+
+// ---- 第 92 批：遠的車的網格（farcars.js 的一台：位置是公釐 Int16、每個點的分類、三角形）----
+const FAR_COL = [[1, 1, 1, 1], [0.07, 0.08, 0.09, 0], [0.09, 0.09, 0.1, 0], [0.82, 0.82, 0.8, 0], [0.6, 0.06, 0.05, 0], [0.05, 0.05, 0.055, 0], [0.55, 0.56, 0.58, 0]]; // 車漆（乘上那台車的顏色）、玻璃、黑飾條、燈、尾燈、輪胎、輪框
+const FAR_GEO = new WeakMap();
+function farGeo(F) {
+  let g = FAR_GEO.get(F); if (g) return g;
+  const dec = (s, T) => { const b = typeof atob === 'function' ? Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0)) : Uint8Array.from(Buffer.from(s, 'base64')); return new T(b.buffer, b.byteOffset, b.byteLength / T.BYTES_PER_ELEMENT); };
+  const Pq = dec(F.p, Int16Array), Cc = dec(F.c, Uint8Array), I = dec(F.i, Uint16Array), n = Cc.length;
+  const P = new Float32Array(n * 3), C = new Float32Array(n * 3), W = new Float32Array(n);
+  for (let i = 0; i < n; i++) { P[i * 3] = Pq[i * 3] / 1000; P[i * 3 + 1] = Pq[i * 3 + 1] / 1000; P[i * 3 + 2] = Pq[i * 3 + 2] / 1000; const c = FAR_COL[Cc[i]] || FAR_COL[2]; C[i * 3] = c[0]; C[i * 3 + 1] = c[1]; C[i * 3 + 2] = c[2]; W[i] = c[3]; }
+  g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.setAttribute('farPw', new THREE.BufferAttribute(W, 1)); g.setIndex(new THREE.BufferAttribute(Uint16Array.from(I), 1));
+  g.computeVertexNormals(); g.computeBoundingSphere(); FAR_GEO.set(F, g); return g;
+}
+let FAR_MAT = null;
+function farMaterial() { // 一種材質大家共用：車漆的點（farPw＝1）乘上那台車的顏色，玻璃、輪子不乘
+  if (FAR_MAT) return FAR_MAT;
+  FAR_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.2 });
+  FAR_MAT.onBeforeCompile = (sh) => { sh.vertexShader = 'attribute float farPw;\n' + sh.vertexShader.replace('vColor.xyz *= instanceColor.xyz;', 'vColor.xyz *= mix(vec3(1.0), instanceColor.xyz, farPw);'); };
+  FAR_MAT.customProgramCacheKey = () => 'vdfar';
+  return FAR_MAT;
 }
 
 // ---- 一台車的簡單樣子（長寬高都是 1：x −0.5…0.5 往前、y 0…1、z −0.5…0.5）----

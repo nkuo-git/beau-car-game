@@ -17,6 +17,7 @@
 //     max = 10, radius = 350, seed,         同時最多幾台；離 focus 多遠以外收掉
 //     sound: { ctx, out, gain, muted() },   喇叭（可以不給；ctx 可以是函式）
 //     onHonk(car), onCarHit(car, speed),    按喇叭、被玩家撞到的時候叫
+//     fast(key) → 0／1／2,                  第 92 批：跑車（1）、超跑（2）開快一點
 //   })
 //   await traffic.prewarm()                 載入畫面：等車的模型載好、先做好 max 台車＋幾台機車放在池子裡（沒做的話之後一幀最多做一台，第一次補滿會慢慢來）
 //   traffic.update(dt, focus = { x, z, heading }, obstacles = [玩家的車], people = peds.people)     每幀叫
@@ -1238,7 +1239,9 @@ function createTraffic(o = {}) {
         l.setLook({ paint: p.c, finish: p.f, tint: R() < 0.25 ? 'dark' : 'light', brake: false });
         l.car.visible = true;
       }
+      const fk = c.kind === 'car' && o.fast ? o.fast(c.key) || 0 : 0; // 第 92 批（Nick「比較厲害的跑車開快一點這樣比較真」）：跑車 1、超跑 2
       c.hv = (hw && e.lane === 0 ? 112 + R() * 20 : 98 + R() * 22) / 3.6; // 快速道路的速度（時速 100～130）：內線快、外線慢（村子開上去的也是外線那種）
+      if (fk) { c.hv += (fk > 1 ? 28 + R() * 22 : 12 + R() * 12) / 3.6; c.vf *= fk > 1 ? 1.22 : 1.1; } // 快速道路：跑車多 12～24、超跑多 28～50 公里（內線 140～180）；村子、內湖的路：快一點（彎道照樣慢下來）
       c.exitHwy = hw ? R() < 0.35 : R() < 0.5;
       ensurePlan(c);
       c.v = Math.min(hw ? c.hv : e.vmax * c.vf, capAt(e, s)) * 0.85;

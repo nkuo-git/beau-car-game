@@ -340,7 +340,7 @@ async function enterDrive() {
     await new Promise((r) => setTimeout(r, 30)); // 讓「出門中」先畫出來（蓋村子要一下子，這時候畫面不會動）
     try {
       if (!TR) TR = buildTrack();
-      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMrt(VIL, { renderer, makeAnimal: buildAnimal }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); VDV = buildViaduct(VIL, { renderer, lotCar: vdLotCar, dims: (k) => LOT_DIMS[k] || null }); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
+      VIL = buildVillage({ renderer }); buildOffroad(VIL, { renderer }); buildCircuit(VIL, { renderer }); buildNeihu(VIL, { renderer }); buildMrt(VIL, { renderer, makeAnimal: buildAnimal }); buildMountain(VIL, { renderer }); buildHills(VIL, { renderer }); VIL.wrapHome(); VDV = buildViaduct(VIL, { renderer, lotCar: vdLotCar, dims: (k) => LOT_DIMS[k] || null, far: FAR_CARS }); TR.scene.add(VIL.group); // 第 4 批：越野車場（加進 VIL：地形高度、路、地方、碰撞、小地圖）
       const L = VIL.places.garage.lot;
       GAR = buildRoom(renderer, { quality: 'low', exterior: true }); // 第 21 批：圓塔（tower.js）；村子裡看得到玻璃、名牌；地板不反射（省）
       GAR.group.position.set(L.x, VIL.places.garage.y || 0, L.z); GAR.group.rotation.y = L.heading; TR.scene.add(GAR.group);
@@ -2341,7 +2341,7 @@ async function makeNpc() {
   npcGraphs(VIL);
   const T1 = performance.now();
   const lod = { keys: Object.keys(LOD_CARS), load: (k) => LOD_CARS[k].load(), build: (k, sc, look) => withDriver(k, buildLodCar(k, sc, look)) };
-  const traffic = createTraffic({ world: VIL, scene: g, lod, camera: dcam, max: NPC_MAX.cars, makeCharacter: buildCharacter, randomLook, sound: NPC_SND, onCarHit: npcCarHit, onCrush: npcCrush });
+  const traffic = createTraffic({ world: VIL, scene: g, lod, camera: dcam, max: NPC_MAX.cars, makeCharacter: buildCharacter, randomLook, sound: NPC_SND, onCarHit: npcCarHit, onCrush: npcCrush, fast: npcFast });
   const peds = createPedestrians({ world: VIL, scene: g, camera: dcam, max: NPC_MAX.people, visible: NPC_MAX.visible, animNear: NPC_MAX.animNear, animMid: NPC_MAX.animMid,
     makeCharacter: buildCharacter, randomLook, makeAnimal: buildAnimal, randomAnimal, animalShare: NPC_ANIMALS, onHit: npcHit, onEnter: npcEnter });
   const warm = await Promise.race([traffic.prewarm(NPC_MAX.cars + 3), new Promise((r) => setTimeout(() => r(-1), 12000))]); // 多做 3 台（npc.js 最多做 max＋3 台）：之後開車不用再做車（一台 10～25 毫秒，手機會頓一下）
@@ -2403,6 +2403,7 @@ function npcHit(p, speed, car) {
   police?.crime('hit', p); // 第 3 批（b3-int）：開車撞人 +2★（小孩 npc.js 不會撞到）
 }
 // 撞到路上的車（凹、撞車聲是 drive.js 的碰撞 → damage.js）：旁邊的人嚇跑
+function npcFast(k) { const P = PERF[k]; if (!P || P.big) return 0; return P.price >= 1000 ? 2 : P.price >= 150 ? 1 : 0; } // 第 92 批：路上的跑車（SUPRA、GT-R）、超跑（1000 萬以上）開快一點（npc.js fast）
 function npcCarHit(car) { if (!NPC) return; NPC.carHits++; NPC.peds.scare(car.x, car.z, 12); }
 
 // ==== 第 7 批（輾扁，crush.js）：怪獸卡車開上別人的車、路邊的東西（垃圾桶、燈箱、機車、板凳⋯）把它壓扁 ====

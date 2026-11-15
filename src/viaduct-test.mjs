@@ -337,8 +337,8 @@ for (let k = 0; k < 120; k++) {
   await p.waitForTimeout(250);
 }
 const s6b = await p.evaluate(() => {
-  const D = window.__D(), V = D.VDV, IB = V.lot.meshes[0], M = new (window.__THREE.Matrix4)(), g = D.walker.character.group.position;
-  const L = [...D.VDL.live].map(([c, e]) => { IB.getMatrixAt(c.inst, M); return { k: c.k, d: +Math.hypot(c.x - g.x, c.z - g.z).toFixed(1), hid: M.elements[0] === 0, vis: e.l.car.visible && !!e.l.car.parent, at: Math.hypot(e.l.car.position.x - c.x, e.l.car.position.z - c.z) < 0.01 }; });
+  const D = window.__D(), V = D.VDV, g = D.walker.character.group.position;
+  const L = [...D.VDL.live].map(([c, e]) => { return { k: c.k, d: +Math.hypot(c.x - g.x, c.z - g.z).toFixed(1), hid: V.lot.hidden(c.inst), vis: e.l.car.visible && !!e.l.car.parent, at: Math.hypot(e.l.car.position.x - c.x, e.l.car.position.z - c.z) < 0.01 }; });
   // 停著的車擋人：往最近那台走
   const c0 = V.lot.cars.reduce((a, c) => (Math.hypot(c.x - g.x, c.z - g.z) < Math.hypot(a.x - g.x, a.z - g.z) ? c : a));
   return { L, wy: +g.y.toFixed(2), cols: V.lot.cols.length, cars: V.lot.cars.length, c0: { x: c0.x, z: c0.z, k: c0.k } };
@@ -351,7 +351,7 @@ const s6c = await p.evaluate(() => {
   return { mode: D.walker.mode };
 });
 let s6d = null;
-for (let k = 0; k < 20; k++) { s6d = await p.evaluate(() => { window.__H.step(20); const D = window.__D(), V = D.VDV, IB = V.lot.meshes[0], M = new (window.__THREE.Matrix4)(); let hid = 0; for (const c of V.lot.cars) { IB.getMatrixAt(c.inst, M); if (M.elements[0] === 0) hid++; } let vis = 0; D.TR.scene.traverse((o) => { if (o.name && o.name.startsWith('vdlot-') && o.visible) vis++; }); return { live: D.VDL.live.size, hid, vis }; }); if (s6d.live === 0 && s6d.hid === 0) break; await p.waitForTimeout(250); }
+for (let k = 0; k < 20; k++) { s6d = await p.evaluate(() => { window.__H.step(20); const D = window.__D(), V = D.VDV; let hid = 0; for (const c of V.lot.cars) if (V.lot.hidden(c.inst)) hid++; let vis = 0; D.TR.scene.traverse((o) => { if (o.name && o.name.startsWith('vdlot-') && o.visible) vis++; }); return { live: D.VDL.live.size, hid, vis }; }); if (s6d.live === 0 && s6d.hid === 0) break; await p.waitForTimeout(250); }
 console.log('6d', el(), JSON.stringify(s6d));
 check(s6d.live === 0 && s6d.hid === 0 && s6d.vis === 0, `walked away: the real cars are put away and every far copy is back (${s6d.live} live, ${s6d.hid} hidden, ${s6d.vis} shown)`);
 
