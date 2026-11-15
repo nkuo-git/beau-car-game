@@ -120,3 +120,10 @@ toilets, in/out ramps, cars from the dealer coming and going, people and the thr
     **and** the car is still > hx + 2.5 m away (otherwise go as far as the near side allows; the push-out does the rest).
     Walking agents do not step into the area in front of / beside a moving car (they wait, re-plan after 2.5 s).
   - Gotcha (test 9d): letting off the throttle at 4 m/s stops the car (engine braking) ~5 m short — hold ~4 m/s.
+- Draw calls seen from far away (neihu-test's drone over 港墘 went 227 → 274): the far parked cars are one InstancedMesh per
+  kind **per area** (lot / rest area), and each area's whole bounding sphere is in view from Neihu → `lotFar().cull`
+  hides an area's meshes when the camera is > `FAR_CULL` (650 m) from the area's edge; `cullFar` also hides the whole
+  rest-area group beyond `REST_CULL` (900 m from its centre). town `vdStep` calls `VDV.cull(dcam.position)` each frame
+  (last frame's camera). Ramp concrete used to flush one chunk per ramp (6 chunks); now ramps whose starts are within
+  700 m share a chunk (`rampEnd`): [A], [B], [WX, WE, EX, EE]. Probe (390×844, 普通, same pose): content 46 227, now 233.
+
