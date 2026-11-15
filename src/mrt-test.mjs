@@ -331,6 +331,60 @@ console.log('  visible', JSON.stringify(vis));
 check(vis.groups >= 4 && vis.meshes === vis.groups * 2 && vis.near === vis.groups, `${vis.groups} animals drawn near you (2 meshes each = ${vis.meshes}), the far ones hidden`);
 check(sz1.calls > 40 && sz1.calls < 400 && sz2.calls > 40 && sz2.calls < 400, `with animals: concourse ${sz1.calls} calls / ${sz1.tris} tris, platform ${sz2.calls} / ${sz2.tris}`);
 
+// ---- 12 第 94 批（Nick「走到捷運站下方時會突然被傳送到捷運站上」「要可以走到別的車廂」「別人同時跟你搭也要看的到對方」「偶爾搭一搭會突然被傳送到下一站」）----
+console.log('== 12 站的下面、車廂通道、朋友同一班車、終點站自己走出去 ==');
+// 12a 站的下面是街：在大廳正下面的街上走來走去，一直在地上（以前一走進大廳的範圍就被搬到 6 公尺的大廳、出不去）
+const under = await p.evaluate(() => { const D = window.__D(), M = D.M, S = M.stations[0], W = D.walker, pts = [], ys = [];
+  for (const [u, v] of [[-18, -8], [-8, -4], [0, 8], [8, 4], [18, -8], [12, 9.5]]) { const [x, z] = S.toW(u, v); M.py = 0; W.teleport({ x, z, heading: S.rot + Math.PI / 2 }); window.__wstep(6); pts.push([u, v, +W.character.group.position.y.toFixed(2), D.MRTS.lvl]); }
+  { const [x, z] = S.toW(-20, 9.5); M.py = 0; W.teleport({ x, z, heading: Math.atan2(-S.uz, S.ux) }); window.__wstep(3); } // 往 +u 走（沿著大廳下面；走路的 heading：0 朝 +x、π/2 朝 −z）
+  W.setInput({ x: 0, y: 1 }); for (let i = 0; i < 60 * 8; i++) { window.__wstep(1); if (i % 20 === 0) ys.push(+W.character.group.position.y.toFixed(2)); } W.setInput(null);
+  const t = W.telemetry(), [u, v] = S.loc(t.x, t.z); return { pts, ys, lvl: D.MRTS.lvl, end: [+u.toFixed(1), +v.toFixed(1)] }; });
+console.log('  under', JSON.stringify(under));
+check(under.pts.every((q) => q[2] < 0.5 && q[3] === 0) && under.ys.every((y) => y < 0.5) && under.lvl === 0 && Math.abs(under.end[0] - -20) > 3,
+  `under the concourse is the street: standing at 6 spots under it you stay on the ground (${under.pts.map((q) => q[2]).join(' ')}), walking 8 s under it (u −20 → ${under.end[0]}) never lifts you up (highest ${Math.max(...under.ys)} m)`);
+// 12b 坐車的時候走過兩節中間的通道＝到別的車廂；12c 朋友那邊照列車的 key 放得到你（同一節、同一個位置）
+const gw = await p.evaluate(([ph, t0]) => { const D = window.__D(), M = D.M, W = D.walker;
+  M.setTime(ph + t0 + 3); window.__wstep(2);
+  let tr = M.trains().find((t) => t.dir === 1 && t.si === 0 && t.open > 0.9); if (!tr) return { fail: 'no train' };
+  let c = tr.cars[1]; M.py = M.YP; W.teleport({ x: c.x, z: c.z, heading: Math.atan2(-c.uz, c.ux) }); window.__wstep(3);
+  for (let i = 0; i < 60 * 25 && !M.ride; i++) window.__wstep(1);
+  if (!M.ride) return { fail: 'not riding' };
+  const car0 = M.ride.car; for (let i = 0; i < 60 * 4; i++) window.__wstep(1); // 車開起來
+  tr = M.trains().find((t) => t.key === M.ride.key); c = tr.cars[M.ride.car];
+  const sx = c.x + c.ux * 3, sz = c.z + c.uz * 3; W.teleport({ x: sx, z: sz, heading: Math.atan2(-c.uz, c.ux) }); window.__wstep(2);
+  const cars = [], ys = []; let lost = 0; W.setInput({ x: 0, y: 1 });
+  for (let i = 0; i < 60 * 6; i++) { window.__wstep(1); if (!M.ride) lost++; else if (cars[cars.length - 1] !== M.ride.car) cars.push(M.ride.car); ys.push(W.character.group.position.y); if (M.ride && M.ride.car >= 2) { for (let k = 0; k < 40; k++) window.__wstep(1); break; } }
+  W.setInput(null); window.__wstep(2);
+  const t = W.telemetry(), R = M.ride; if (!R) return { fail: 'lost', cars, lost };
+  const T2 = M.trains().find((x) => x.key === R.key), c2 = T2.cars[R.car], dx = t.x - c2.x, dz = t.z - c2.z, lu = dx * c2.ux + dz * c2.uz, lv = -dx * c2.uz + dz * c2.ux;
+  const ref = M.rideRef(t.x, t.z, t.heading), pl = ref && M.placeOn(...ref), err = pl ? Math.hypot(pl.x - t.x, pl.z - t.z) : null, hErr = pl ? Math.abs(Math.atan2(Math.sin(pl.h - t.heading), Math.cos(pl.h - t.heading))) : null;
+  const gwN = D.VIL.mrt.group.getObjectByName('mrt-gangways');
+  return { car0, cars, lost, now: R.car, lu: +lu.toFixed(2), lv: +lv.toFixed(2), yMin: +Math.min(...ys).toFixed(2), yMax: +Math.max(...ys).toFixed(2), ref, err: err == null ? null : +err.toFixed(3), hErr: hErr == null ? null : +hErr.toFixed(3), plY: pl && pl.y, moving: T2.si < 0 && T2.v > 1, gw: gwN ? { n: gwN.count, vis: gwN.visible } : null }; }, [dwell.phase, dw0.t0]);
+console.log('  gangway', JSON.stringify(gw));
+check(!gw.fail && gw.car0 === 1 && gw.cars[0] === 1 && gw.cars.includes(2) && gw.lost === 0 && gw.now === 2 && Math.abs(gw.lu) < 6.9 && Math.abs(gw.lv) < 1.28 && gw.yMin === 12.6 && gw.yMax === 12.6 && gw.moving && gw.gw && gw.gw.vis,
+  `riding the moving train: walked from car ${gw.car0 + 1} through the gangway into car ${gw.now + 1} (cars ${JSON.stringify(gw.cars)}, standing at car-local ${gw.lu}, ${gw.lv}), still riding the whole way, floor 12.6 (gangway mesh: ${JSON.stringify(gw.gw)})`);
+check(gw.ref && gw.ref[1] === gw.now && gw.err != null && gw.err < 0.05 && gw.hErr < 0.01 && gw.plY === 12.6, `what a friend gets (train ${gw.ref && gw.ref[0]}, car ${gw.ref && gw.ref[1] + 1}, ${gw.ref && gw.ref.slice(2).join(', ')}) puts you back in the same spot of the same car (${gw.err} m, ${gw.hErr} rad off)`);
+// 12d 終點站沒按「下車」：車門要關了自己從最近的車門走出去（以前車門關了一下子被搬到月台上），每一格都不會跳
+await toasts();
+const tw2 = await p.evaluate(() => { const D = window.__D(), M = D.M, W = D.walker; let prev = null, maxStep = 0, at = null, outAt = null, walkOut = false, n = 0;
+  for (let i = 0; i < 60 * 90; i++) { window.__wstep(1); const t = W.telemetry(); const R = M.ride, tr = R ? M.trains().find((x) => x.key === R.key) : null;
+    if (tr && tr.si === 1 && tr.open > 0.5 && at == null) at = +M.time.toFixed(1);
+    if (R && R.walkOut) walkOut = true;
+    if (at != null && prev && (!tr || tr.v < 0.01)) { const d = Math.hypot(t.x - prev[0], t.z - prev[1]); if (d > maxStep) maxStep = d; n++; }
+    prev = [t.x, t.z]; if (at != null && !R) { outAt = +M.time.toFixed(1); for (let k = 0; k < 60 * 3; k++) window.__wstep(1); break; } }
+  const t = W.telemetry(), S = M.stations[1], [u, v] = S.loc(t.x, t.z), tr = M.trains().find((x) => x.dir === 1 && x.si === 1);
+  return { at, outAt, walkOut, maxStep: +maxStep.toFixed(3), n, ride: !!M.ride, lvl: D.MRTS.lvl, si: D.MRTS.si, y: +W.character.group.position.y.toFixed(2), u: +u.toFixed(1), v: +v.toFixed(1), trOpen: tr ? +tr.open.toFixed(2) : null }; });
+const t12 = await toasts();
+console.log('  terminal', JSON.stringify(tw2), JSON.stringify(t12));
+check(tw2.at != null && tw2.walkOut && tw2.outAt != null && !tw2.ride && tw2.lvl === 2 && tw2.si === 1 && tw2.y === 12.6 && Math.abs(tw2.v) > 3.3 && Math.abs(tw2.v) < 10.4 && tw2.maxStep < 0.3 && t12.some((s) => /終點站，大家都要下車/.test(s)) && !t12.some((s) => /^終點站，請下車$/.test(s)),
+  `stayed on at 文德 (the end of the line, arrived t ${tw2.at}): when the doors were about to close you walked out of the nearest door yourself (out at t ${tw2.outAt}; biggest step ${tw2.maxStep} m in ${tw2.n} frames, no jump) and stand on the platform (u ${tw2.u}, v ${tw2.v}, y ${tw2.y}); toasts ${JSON.stringify(t12)}`);
+// 12e 列車照時鐘跑：每支手機同一班車的 key 一樣（從 1970 年算第幾班）、在同一個地方
+const clk = await p.evaluate(() => { const M = window.__D().M, I = M.info; M.syncNow(); window.__wstep(1); const now = Date.now() / 1000;
+  const tr = M.trains().map((t) => { const d = I.dirs.find((q) => q.dir === t.dir), n = +t.key.split(':')[1]; return { key: t.key, off: +(n * I.H + d.phase + t.tau - now).toFixed(2) }; });
+  return { sync: M.sync, tr, abs: +(M.abs - now).toFixed(2) }; });
+console.log('  clock', JSON.stringify(clk));
+check(clk.sync && clk.tr.length >= 2 && clk.tr.every((t) => Math.abs(t.off) < 1.5) && Math.abs(clk.abs) < 1.5, `trains run on the clock: every train's key is its run number since 1970 (${clk.tr.map((t) => t.key).join(', ')}; key × ${I.H} s + phase + time on the line = now ± ${Math.max(...clk.tr.map((t) => Math.abs(t.off)))} s), so friends see the same train in the same place`);
+
 check(errs.length === 0, `no page errors${errs.length ? ': ' + errs.join(' | ') : ''}`);
 await b.close(); srv.close();
 console.log(fails.length ? `\n${fails.length} FAIL:\n  ${fails.join('\n  ')}` : '\nALL CHECKS OK', el());

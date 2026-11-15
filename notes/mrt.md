@@ -136,3 +136,25 @@ Nick: 「捷運站的等候線不要懸空在樓梯上」.
   - The animals' queue spot (ZQV 4.25) is in that strip already.
 - `M.info.hole` = { u0, u1, v0, v1 } (station coords) for tests.
 - mrt-test section 10 adds a check: no floor-level vertex of `mrt-deco` is inside the hole.
+
+## Batch 94 (trial v106, 2026-11-15): street under the station, brighter colours, gangways, friends on the train, no more jumps
+
+Nick 2026-11-15: 「走到捷運站下方時會突然被傳送到節運站上裡出不去」「捷運站顏色鮮豔一點太淡了」「搭捷運時要可以走到別的車廂別人同時跟你搭也要看的到對方」「偶爾搭一搭會突然被傳送到下一站」.
+- **Street under the station**: `heightAt` used to pick only the station's own levels, so walking under the concourse
+  snapped you up to 6 / 12.6 m and you couldn't get out. Now, away from a stair, if your height is nearer the street
+  than the nearest level it returns null (the street).
+- **Colours**: WALL apricot [0.95, 0.56, 0.24], platform TILE warm sand [0.80, 0.48, 0.26], concourse/stair TILE2
+  aqua [0.24, 0.52, 0.68], ROOFC 文湖線 brown [0.64, 0.38, 0.17], stronger colours on the platform back wall panels.
+  Wall self-light 0.24 → 0.17, wall material colour 0.62, indoor fill (town `indoor`) 0.7 → 0.5: before, the lights
+  washed everything out to white.
+- **Gangways** (`GW_W` 0.5, InstancedMesh `mrt-gangways`, `maxAct × 3`): the inner car ends have an opening; walking
+  through (|v| < 0.6 past the car end) switches `R.car` to the next car. `carWalls(c, open, mv, ci)` leaves the openings.
+- **Same train on every phone**: the timetable runs on `opt.clock` (town passes `Date.now() + NET.off`, server time).
+  Each frame advances by dt and eases toward the clock (at most ±25% speed, so riding never jumps); far off (> 2.5 s)
+  and not riding/on a platform = jump. Train keys = `dir:k + lap×LAPK` (trains since 1970), the same on every phone.
+  `M.rideRef(x, z, h)` → [key, car, lu, lv, lh]; net.src.js sends it as `s.mr` (world.js `o.mr`; RTDB rules only
+  check x z h t, so no rule change); the friend's side `M.placeOn(...)` puts him in the same car of its own copy of
+  that train. Height `y` is sent in the station / on the train too.
+- **Jump to the next station**: at the terminal, when the doors were about to close, you used to be moved to the
+  platform in one step. Now you walk out of the nearest door yourself (`R.walkOut`, last 4.6 s of the stop); same for
+  standing in a train leaving Neihu.

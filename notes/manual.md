@@ -70,3 +70,11 @@ Nick: 「車子發動要有點火」.
   - `stop()` spins it up and fades it in 0.07 s.
   - The output gain is 0.4: measured offline, cranking is about −21 dB vs idle about −32 dB; at 1.0 it was 18 dB over idle.
 - telemetry `igniting`.
+
+## Batch 94 (trial v106, 2026-11-15): slower acceleration, tapering near top speed
+Nick: 「車子加速稍微加慢一點」「車子越快加越慢不要到極速以後突然上不去」.
+- drive.js: forward drive force × `ACC_K` 0.87 (not reverse). Above `TAPER0` 0.55 × top speed, the surplus
+  (drive − resistance) is multiplied by (1 − s)^`TAPER_P` 0.4 (s = 0 → 1 between 0.55 and 1 × top), and capped at
+  `TAPER_E`·√(m/s left to the cap): it eases into top speed instead of hitting it (before: 1.2–5.8 m/s² at 98% then a
+  wall). Same for AT and MT.
+- `o.accel0` keeps the old behaviour (drift-test compares with the old drive.js using it).

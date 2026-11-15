@@ -64,3 +64,8 @@ Nick: 「車子後車廂邊緣要平整不要鋸齒」.
 - mart-test: `edge()` checks that every lid vertex is inside the box and no remaining body triangle has its centre inside it.
   - `edgeShot()` takes a close-up from above the opening (`-0-trunk-edge.png` for GC8, `<car>-edge.png` for MCAR runs).
   - Before/after: the old version left saw-tooth edges on both sides of the GC8 boot opening.
+
+## Batch 94 (trial v106, 2026-11-15): the rest-area store
+The rest area's store is now its own big store 「大便龍市集」 (interiors.js `bigStoreFloor`, 26 × 16, dark wood, red
+and gold; notes/viaduct.md batch 94). It has the same `F.spots.shop` (9 items) and `till`, so taking, the basket,
+checkout and the unpaid-exit alarm work as in the village store. viaduct-test 9f walks it.

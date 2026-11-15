@@ -483,6 +483,68 @@ console.log('9d', el(), JSON.stringify(s9d).slice(0, 900));
 check(s9d.people >= 5 && s9d.animals >= 5, `the big lot under the roundabout: ${s9d.people} people and ${s9d.animals} animals walking between the rows`);
 check(s9d.dove >= 1 && s9d.hits === 0 && s9d.minC > -0.05, `drive slowly at one of them: it jumps aside (${s9d.dove} dives, ${s9d.hits} knocked down, never under the car: closest ${s9d.minC} m)`);
 
+// ================= 9e 第 94 批：南休的廁所、大市集、路面 =================
+// Nick「南休廁所沒有入口進去裡面沒有馬桶」「南休便利商店要長得跟改車廠旁的完全不一樣裡面大一點南休路面真一點」
+await p.evaluate(() => {
+  const H = window.__H, vis = (e) => !!e && !e.hidden && !e.closest('[hidden]') && e.getClientRects().length > 0;
+  H.press = () => { const e = [...document.querySelectorAll('#stage .wk-act, #stage .dv-act')].find(vis); if (!e) return null; const s = e.querySelector('span').textContent; e.click(); return s; };
+  H.walkTo = (pts, maxN = 900, sp = 0.7) => { // 照著一串點走（推搖桿：鏡頭的前面 (cos yaw, −sin yaw)、右邊 (sin yaw, cos yaw)）；回傳最後離終點多遠
+    const W = window.__D().walker, g = W.character.group.position; let k = 0, n = 0;
+    while (k < pts.length && n < maxN) {
+      const [x, z] = pts[k], dx = x - g.x, dz = z - g.z, d = Math.hypot(dx, dz);
+      if (d < 0.3) { k++; continue; }
+      const ps = W.telemetry().camYaw, wx = dx / d, wz = dz / d; W.setInput({ x: (wx * Math.sin(ps) + wz * Math.cos(ps)) * sp, y: (wx * Math.cos(ps) - wz * Math.sin(ps)) * sp }); H.step(1); n++;
+    }
+    W.setInput(null); H.step(10);
+    const [lx, lz] = pts[pts.length - 1];
+    return { reached: k, of: pts.length, n, d: +Math.hypot(lx - g.x, lz - g.z).toFixed(2), at: [+g.x.toFixed(2), +g.y.toFixed(2), +g.z.toFixed(2)] };
+  };
+});
+const s9e = await p.evaluate(() => {
+  const D = window.__D(), V = D.VDV, H = window.__H, R = V.rest; if (!R) return { err: 'no VDV.rest' };
+  V.st.py = 24; H.put(985, 246.5, 0, 40); H.stop();
+  window.__leave(); for (let i = 0; i < 600 && !(D.walker && D.walker.mode === 'walk'); i++) H.step(1); H.step(30);
+  const W = D.walker, W0 = R.wcs[0], xm = (W0.x0 + W0.x1) / 2, zm = (W0.z0 + W0.z1) / 2, out = { mode: W.mode, rooms: [] };
+  // 三個門口走進去、繞過擋視線的牆（男：西邊、女：東邊、親子：南邊）
+  const rooms = { men: [[W0.x0 - 4, zm], [W0.x0 + 1.4, zm], [W0.x0 + 1.4, zm - 4.6], [W0.x0 + 6, zm - 4.6]], fam: [[xm, W0.z1 + 4], [xm, W0.z1 - 1.6], [xm + 3.2, W0.z1 - 1.6], [xm + 3.2, W0.z1 - 6]], wom: [[W0.x1 + 4, zm], [W0.x1 - 1.4, zm], [W0.x1 - 1.4, zm - 4.6], [W0.x1 - 6, zm - 4.6]] };
+  for (const [k, pts] of Object.entries(rooms)) {
+    W.teleport({ x: pts[0][0], z: pts[0][1], heading: 0 }); H.step(30);
+    const r = H.walkTo(pts.slice(1), 900); H.step(40);
+    const c = D.dcam.position;
+    out.rooms.push({ k, d: r.d, y: r.at[1], cam: [+c.x.toFixed(1), +c.y.toFixed(2), +c.z.toFixed(1)], camIn: c.x > W0.x0 && c.x < W0.x1 && c.z > W0.z0 && c.z < W0.z1 && c.y < 24 + 3.9 });
+  }
+  const pA = xm - 4, pB = xm + 4, inW = (f) => f[1] > W0.x0 && f[1] < W0.x1 && f[2] > W0.z0 && f[2] < W0.z1;
+  const cnt = (lo, hi) => { const o = { toilet: 0, urinal: 0, sink: 0 }; for (const f of R.fixtures) if (inW(f) && f[1] > lo && f[1] < hi) o[f[0]]++; return o; };
+  out.fix = { men: cnt(W0.x0, pA), fam: cnt(pA, pB), wom: cnt(pB, W0.x1) }; out.both = R.fixtures.filter((f) => f[0] === 'toilet').length;
+  return out;
+});
+console.log('9e', el(), JSON.stringify(s9e));
+for (const r of s9e.rooms || []) check(r.d < 0.5 && Math.abs(r.y - 24) < 0.1 && r.camIn, `rest-area toilet (${r.k}): walked in through the open doorway and around the screen wall (${r.d} m from the end, feet at ${r.y}); the camera stays inside, under the ceiling (${r.cam.join(', ')})`);
+check(s9e.fix && s9e.fix.men.toilet >= 6 && s9e.fix.men.urinal >= 4 && s9e.fix.men.sink >= 2 && s9e.fix.wom.toilet >= 10 && s9e.fix.wom.sink >= 2 && s9e.fix.fam.toilet >= 2 && s9e.fix.fam.sink >= 1 && s9e.both >= 2 * (s9e.fix.men.toilet + s9e.fix.wom.toilet + s9e.fix.fam.toilet), `toilets inside: men ${JSON.stringify(s9e.fix?.men)}, family ${JSON.stringify(s9e.fix?.fam)}, women ${JSON.stringify(s9e.fix?.wom)} (both buildings: ${s9e.both} toilets)`);
+const s9f = await p.evaluate(() => {
+  const D = window.__D(), V = D.VDV, H = window.__H, W = D.walker, S = V.rest.store, out = {};
+  const vs = D.VIL.buildings.find((b) => b.kind === 'store' && !b.rest); out.village = vs ? [vs.name, vs.hx * 2, vs.hz * 2] : null;
+  W.teleport({ x: S.x, z: S.z + S.hz + 6, heading: Math.PI }); H.step(30);
+  const r = H.walkTo([[S.x, S.z + S.hz - 4]], 600); H.step(20);
+  const In = window.__D().indoor; out.walk = r.d; out.in = !!In?.live; out.name = In?.I?.name; out.size = [S.hx * 2, S.hz * 2];
+  if (!In) return out;
+  const I = In.I, N = I.floors[0].nav; out.nav = N ? [+(N.nx * N.gs).toFixed(1), +(N.nz * N.gs).toFixed(1)] : null;
+  out.spots = [];
+  for (const q of I.spots.shop) { W.teleport({ x: q.x, z: q.z, heading: q.heading || 0 }); H.step(20); out.spots.push([q.item, H.actText()]); }
+  const ch = I.spots.shop.find((q) => q.item === 'chips'); W.teleport({ x: ch.x, z: ch.z, heading: ch.heading || 0 }); H.step(20); out.took = H.press(); H.step(10);
+  const tl = I.spots.till[0]; W.teleport({ x: tl.x, z: tl.z, heading: tl.heading || 0 }); H.step(20); out.till = H.actText(); out.paid = H.press(); H.step(30);
+  out.bag = document.querySelector('.mt-pill')?.textContent || null;
+  W.teleport({ x: S.x, z: S.z + S.hz - 2, heading: 0 }); H.step(20); out.out = H.walkTo([[S.x, S.z + S.hz + 5]], 600).d; out.outside = !window.__D().indoor;
+  let road = null; V.group?.traverse?.((o) => { if (o.name === 'rest-road') road = o; }); if (!road) D.TR.scene.traverse((o) => { if (o.name === 'rest-road') road = o; });
+  out.road = road ? { map: !!road.material.map, role: road.material.userData.role, w: road.material.map?.image?.width } : null;
+  return out;
+});
+console.log('9f', el(), JSON.stringify(s9f));
+check(s9f.in && s9f.name === '大便龍市集' && s9f.size[0] === 26 && s9f.size[1] === 16 && s9f.nav && s9f.nav[0] >= 25 && s9f.nav[1] >= 15 && s9f.village && s9f.village[0] !== s9f.name && s9f.size[0] * s9f.size[1] > 1.5 * s9f.village[1] * s9f.village[2], `walked into 「${s9f.name}」: ${s9f.size?.join(' × ')} m (the village store 「${s9f.village?.[0]}」 is ${s9f.village?.[1]} × ${s9f.village?.[2]})`);
+check(s9f.spots?.length === 9 && s9f.spots.every((q) => /^拿 · /.test(q[1] || '')) && /^拿 · 洋芋片/.test(s9f.took || '') && /^結帳/.test(s9f.till || '') && /袋子 1 樣/.test(s9f.bag || ''), `every shelf in the big store works (${s9f.spots?.map((q) => q[0]).join(', ')}), took chips, paid at the till (${s9f.till}) → ${s9f.bag}`);
+check(s9f.outside && s9f.out < 0.5, 'walked back out of the door');
+check(s9f.road && s9f.road.map && s9f.road.role === 'road' && s9f.road.w >= 512, `the rest area's asphalt has a texture (${JSON.stringify(s9f.road)})`);
+
 // ================= 8 截圖＋draw calls =================
 const bd8 = await p.evaluate(() => window.__H.boardCar());
 check(bd8.mode === 'off' && bd8.drv, 'back in the car in the lot');
@@ -638,10 +700,10 @@ perf.hwyChase = await drawAndShot('hwy-chase');
 
 // 10e 星星沒了：不追了（燈關掉、回到線上或停在旁邊）
 const s10e = await p.evaluate(() => {
-  const D = window.__D(), T = D.VDT, pol = window.__pol(), H = window.__H, g0 = T.copSt.gaveUp; pol.clear();
+  const D = window.__D(), T = D.VDT, V = D.VDV, pol = window.__pol(), H = window.__H, g0 = T.copSt.gaveUp; pol.clear();
   H.drive(2, 20, 2.2);
-  const cops = T.cars.filter((c) => c.cop);
-  return { gave: T.copSt.gaveUp - g0, chasing: cops.filter((c) => c.chase).length, lit: cops.filter((c) => c.lights).length, states: cops.map((c) => c.state), joined: T.copSt.joined };
+  const cops = T.cars.filter((c) => c.cop), t = D.drv.telemetry();
+  return { gave: T.copSt.gaveUp - g0, chasing: cops.filter((c) => c.chase).length, lit: cops.filter((c) => c.lights).length, states: cops.map((c) => c.state), joined: T.copSt.joined, cops: cops.map((c) => [c.state, c.chase, Math.round(c.cs ?? -1), +(c.cu ?? 0).toFixed(1), c.cdir, Math.round(Math.hypot(c.x - t.x, c.z - t.z))]), me: [Math.round(V.st.s), +V.st.u.toFixed(1)], crimes: pol.telemetry().crimes?.slice(-2), hits: T.copSt.hits };
 });
 console.log('10e', el(), JSON.stringify(s10e));
 check(s10e.gave >= 1 && s10e.chasing === 0 && s10e.lit === 0, `stars cleared: it stops chasing, lights off (${s10e.gave} gave up; now ${s10e.states.join(', ')})`);

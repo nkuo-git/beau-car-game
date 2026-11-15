@@ -151,3 +151,35 @@ Nick 2026-11-15: 「高速公路做成雙向來回的中間用分隔島隔開上
   of 2: with u 2 its pure-pursuit corner cutting hit the median in the two 65 m corners).
 - Perf (390×844, 普通): lot 195 (191 before), crossing 308 (303), under 362 (356), roundabout/neihu-end/ramps same;
   +25–55k triangles. Highway police chase shot 356 calls / 0.90M.
+
+
+## Batch 94 — four lanes each way, rest-area toilets, big store, asphalt (trial v106, 2026-11-15)
+Nick 2026-11-15: 「高速公路兩邊各加寬成4道」「南休廁所沒有入口進去裡面沒有馬桶」「南休便利商店要長得跟改車廠旁的完全不一樣裡面大一點南休路面真一點」.
+- **Four lanes each way** (viaduct.js): asphalt half-width `ROAD` 7.4 → 14.3, barrier `HW` 8 → 14.9. Paint (from the
+  centre line): double yellow ±0.55, lane dashes 3.9 / 7.25 / 10.6, edge line 13.95. Helix radius `R` 105 → 112 (the
+  lot stays 96.5 so the inner barrier doesn't sit on the parking bays); north stretch z 312 → 319. The main road got
+  64 m longer (L 5038 → 5096, helix 990 → 1056), so **every ramp `s0` moved +64 (B +58, end x 1742 → 1735)** to keep
+  the ramps where they were; `vdsign.js` fallbacks too. Ramp constants follow the road: `U0 = ROAD − RROAD`,
+  `U1 = HW + 5`, `U_SEP = HW + RHW`. Piers wider (hz 2.2), caps `HW − 1.6`; helix columns at `R ± (HW + 1.4)`;
+  lamps every 40 m (was 48), 10 m tall with longer arms.
+  - Lesson: when the main road's length changes, ramps keyed by `s0` slide along it. With stale s0 the WX/WE/EE ramps
+    turned back on themselves (57% grade, U-turns) — viaduct-test 3b/9a caught it.
+- **Traffic** (vdtraffic.js): `LANE` [2.2, 5.55, 8.9, 12.25]; `laneChange`/`tryLane` try the inner lane first
+  (overtaking), then outer; `nearLane(u)`; `U_MAX` from `V.path.road`. Last stretch (成功路二段456巷 is 2 lanes):
+  outer lanes k 2, 3 merge into k 0, 1 between `DROP0` and `DROP1` from the end (`uAt`), cars move in before
+  `DROP_GO`, no spawns there. Highway cop picks the emptier neighbouring lane. Spawn fix: `nMain` counts up when a car
+  is spawned in the same frame (the patrol cop used to make it 7).
+- **Toilets** (vdrest.js `buildWc`): each building = men | family/accessible | women, open doorways with a screen wall
+  inside (like real rest areas, no door leaves), stalls with toilets, urinals in the men's, sinks; ceilings in the
+  unlit glow buffer (they were dark). Layout `L.wcs` (wcs[0] x 925–957, z 199–219): men door west, family south,
+  women east. `fixtures` list (toilet / urinal / sink) is exported as `VDV.rest` with `wcs`, `store` (tests).
+- **Big store** (interiors.js `bigStoreFloor`, `planOf` `big`; vdrest.js store x 989, z 216, 26 × 16, door z 224.15):
+  「大便龍市集」: dark wood, red sign, a row of red lanterns outside, warm windows, automatic door in the middle; inside
+  wood floor/shelves (gondolas), deli case with two hanging cylinder lanterns over it (first try hung them by the door:
+  they filled the camera and showed 福 mirrored), fridges with light boxes, the same 9 shop spots + till as the village
+  store (mart.src.js works unchanged). Looks nothing like the village store (white, green/yellow/red stripes).
+- **Asphalt** (vdrest.js `asphTex`): rest-area roads and lots use a 12 m tiling asphalt texture in world coordinates
+  (gravel, patches, cracks, oil) on mesh `rest-road` with `userData.role = 'road'` (look.js road shader at 高/超高).
+- **Tests**: viaduct-test 9e (walk into the three toilets: inside, camera under the ceiling, fixture counts) and 9f
+  (walk into the store: name, 26 × 16, bigger than the village store, 9 spots 拿, checkout, bag, walk out; asphalt map
+  ≥ 512 px, role 'road'). 10e also prints cop states / crimes for diagnosis.

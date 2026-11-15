@@ -337,8 +337,8 @@ function createVdTraffic(V, o = {}) {
     }
     if (!st.active) return;
     // 生車：主線上（含停車場的口、內湖那頭）最多 8 台；休息站每 15～35 秒一台倒車出來
-    const nMain = cars.filter((c) => !c.rest).length;
-    if ((spawnT -= dt) <= 0) { spawnT = 0.6; if (nMain < (o.max || 6)) spawnMain(me, st.spawned - (st.spawned0 || 0) < 3 && nearM < 900 ? 250 : 420); }
+    let nMain = cars.filter((c) => !c.rest).length; // 第 94 批：生了一台就 +1（同一格又生巡邏的警車，不會變 7 台）
+    if ((spawnT -= dt) <= 0) { spawnT = 0.6; if (nMain < (o.max || 6) && spawnMain(me, st.spawned - (st.spawned0 || 0) < 3 && nearM < 900 ? 250 : 420)) nMain++; }
     if (nearR < 600 && (departT -= dt) <= 0) { departT = 15 + rnd() * 20; if (cars.filter((c) => c.rest).length < 6) depart(); }
     if (o.copDims && (copT -= dt) <= 0) { copT = 3; if (nearM < 900 && nMain < (o.max || 6) && !cars.some((c) => c.cop)) spawnPatrol(me); } // 第 93 批：主線上有 1 台國道警察巡邏
     copsThink(dt, me);

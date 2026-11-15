@@ -68,11 +68,11 @@ const VD_PATH = (() => {
 // 台灣靠右開：往 +S 開的右手邊＝主線的 +u（n＝(−TZ, TX)）；往 −S 開的右手邊＝−u。出口、入口都在右手邊 → 交流道的左手邊（−u）永遠是主線
 const RHW = 4.6, RROAD = 3.9, U0 = ROAD - RROAD, U1 = HW + 5, U_SEP = HW + RHW; // 第 94 批：主線變寬（以前 3.5、13、12.6） // U_SEP：兩邊的護欄分得開（中間的柏油接起來的那段到這裡為止）
 function mainAt(s) { const P = VD_PATH, f = clamp(s / 2, 0, P.n - 1.0001), i = Math.floor(f), t = f - i; return { x: P.X[i] + (P.X[i + 1] - P.X[i]) * t, z: P.Z[i] + (P.Z[i + 1] - P.Z[i]) * t, tx: P.TX[i], tz: P.TZ[i], i, t }; }
-const VD_RAMPS = [
+const VD_RAMPS = [ // 第 94 批：圓環半徑 105 → 112，主線變長 64 公尺：每個口的 s 都 +64（B +58），位置跟以前一樣
   // A：往東開的出口（主線北邊那段 z 312）→ 往南彎下來，接到環山路二段（從北邊接上去）；往南走 737 巷到港墘、市中心
-  { id: 'A', exit: true, s0: 2150, side: 1, dir: 1, T: 90, pts: [[520, 344], [580, 364], [630, 403], [662, 454], [680, 521], [688, 580]], end: [690, 614], endDir: [0, 1], to: ['環山路', '港墘站'] },
+  { id: 'A', exit: true, s0: 2214, side: 1, dir: 1, T: 90, pts: [[520, 344], [580, 364], [630, 403], [662, 454], [680, 521], [688, 580]], end: [690, 614], endDir: [0, 1], to: ['環山路', '港墘站'] },
   // B：往南開的出口（東邊那段 x 1755）→ 西邊並排往南下來，接到內湖路二段（從北邊接上去）
-  { id: 'B', exit: true, s0: 3578, side: 1, dir: 1, T: 90, pts: [], end: [1735, 873], endDir: [0, 1], to: ['內湖路二段', '市中心'] }, // 第 94 批：x 1742 → 1735（主線變寬）
+  { id: 'B', exit: true, s0: 3636, side: 1, dir: 1, T: 90, pts: [], end: [1735, 873], endDir: [0, 1], to: ['內湖路二段', '市中心'] }, // 第 94 批：x 1742 → 1735（主線變寬）
 ];
 // ---- 第 92 批：休息站（大便龍服務區）：主線北邊的山脊上鋪一塊平台（跟主線一樣高 24 公尺；neihu.js 的山照 VD_REST 削平／填平）----
 // Nick 2026-11-15「在高速公路中段做一個休息站 請上網查南休的停車場樣式並照做 要有便利商店廁所…要有出口入口 要有人車…有那三隻動物跟人」
@@ -81,10 +81,10 @@ const VD_REST = { x0: 760, x1: 1240, z0: 165, z1: 302, y: 24, blend: 45, pave: [
 const inRest = (x, z, pad = 0) => x > VD_REST.pave[0] - pad && x < VD_REST.pave[2] + pad && z > VD_REST.pave[1] - pad && z < VD_REST.pave[3] + pad;
 const RL = restLayout(VD_REST); // 休息站裡面的路、停車格、房子（vdrest.js）
 VD_RAMPS.push(
-  { id: 'WX', exit: true, s0: 3110, side: -1, dir: -1, T: 80, pts: [[1232, 294]], end: [1214, 287], endDir: [-1, 0], to: ['大便龍服務區'], rest: true },
-  { id: 'WE', exit: false, start: [800, 286], startDir: [-1, 0], pts: [[778, 291]], s0: 2460, side: -1, dir: -1, T: 80, rest: true },
-  { id: 'EX', exit: true, s0: 2330, side: 1, dir: 1, T: 80, pts: [[690, 340], [745, 340], [770, 332], [783, 300], [786, 270], [786, 230], [790, 205], [806, 189]], end: [830, 186], endDir: [1, 0], keys: [[781, 319, null]], to: ['大便龍服務區'], rest: true },
-  { id: 'EE', exit: false, start: [1196, 186], startDir: [1, 0], pts: [[1222, 192], [1238, 212], [1241, 250], [1241, 300], [1242, 349], [1252, 376], [1278, 392], [1312, 386], [1340, 364]], s0: 3220, side: 1, dir: 1, T: 80, keys: [[1241, 319, null]], rest: true },
+  { id: 'WX', exit: true, s0: 3174, side: -1, dir: -1, T: 80, pts: [[1232, 294]], end: [1214, 287], endDir: [-1, 0], to: ['大便龍服務區'], rest: true },
+  { id: 'WE', exit: false, start: [800, 286], startDir: [-1, 0], pts: [[778, 291]], s0: 2524, side: -1, dir: -1, T: 80, rest: true },
+  { id: 'EX', exit: true, s0: 2394, side: 1, dir: 1, T: 80, pts: [[690, 340], [745, 340], [770, 332], [783, 300], [786, 270], [786, 230], [790, 205], [806, 189]], end: [830, 186], endDir: [1, 0], keys: [[781, 319, null]], to: ['大便龍服務區'], rest: true },
+  { id: 'EE', exit: false, start: [1196, 186], startDir: [1, 0], pts: [[1222, 192], [1238, 212], [1241, 250], [1241, 300], [1242, 349], [1252, 376], [1278, 392], [1312, 386], [1340, 364]], s0: 3284, side: 1, dir: 1, T: 80, keys: [[1241, 319, null]], rest: true },
 );
 function rampPath(D) {
   const F = [], A = []; // A：這一點在不在主線旁邊（主線的 s），不在＝−1
@@ -539,6 +539,7 @@ function buildViaduct(V, opts = {}) {
     info: null,
   };
   const ramps = ROADS.slice(1).map((r) => ({ id: r.def.id, len: +r.L.toFixed(1), grade: +(r.maxGrade * 100).toFixed(1), yTop: +Math.max(...r.Y).toFixed(1), yEnd: +r.Y[r.n - 1].toFixed(2) }));
+  API.rest = { wcs: rest.wcs, store: rest.store, fixtures: rest.fixtures }; // 第 94 批：廁所、大市集（測試用）
   API.info = { len: +L.toFixed(1), helix: +sH.toFixed(1), sD: +sD.toFixed(1), pts: n, tris, chunks: chunks.length, piers: nPier, pierSkip: nSkip, cols: nCol, bars: nBar, med: nMed, medS: [MED.s0, +MED.s1.toFixed(1)], ground: nGround, lamps: lampsX.length / 3, lotSpots: VD_LOT.spots.length, lotCars: lotCars.cars.length, signs: sg2.list.length, signSkip: sg2.list.filter((q) => q.skip).length, curves: sg2.curves, etc: sg2.etc.map((e) => e.s), restBays: RL.bays.length, restCars: lotCars.cars.filter((c) => c.area === 'r').length, restTris: rest.tris, ramps, yMax: +Math.max(...Y).toFixed(2),
     minClear: (() => { let m = 1e9, at2 = 0; for (let i = 0; i < n; i++) if (S[i] > sH && S[i] < sD && !restSide(i)) { const c = clearAt(i); if (c < m) { m = c; at2 = S[i]; } } return [+m.toFixed(2), +at2.toFixed(0)]; })(),
     restMain: (() => { let a = 1e9, b = -1e9, s0 = 1e9, s1 = -1e9; for (let i = 0; i < n; i++) if (restSide(i)) { a = Math.min(a, Y[i]); b = Math.max(b, Y[i]); s0 = Math.min(s0, S[i]); s1 = Math.max(s1, S[i]); } return { yLo: +a.toFixed(2), yHi: +b.toFixed(2), s0: Math.round(s0), s1: Math.round(s1) }; })(),

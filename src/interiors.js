@@ -2193,9 +2193,9 @@ function bigStoreFloor(b) {
   barCounter(F, frame(-5.0, 0, Z1, Math.PI), 5.6, 5, { top: '#8a5a36', seat: '#8e1f1a', room: rm });
   atm(F, frame(X0, 0, 6.6, HP));
   plant(F, frame(-1.9, 0, 6.9), 1.1); plant(F, frame(1.9, 0, 6.9), 1.1); plant(F, frame(X1 - 0.6, 0, 7.1), 1.2);
-  // 燈：暖暖的圓燈一格一格、紅燈籠（咖啡吧、伴手禮上面）
+  // 燈：暖暖的圓燈一格一格、紅燈籠（熱食櫃上面：靠後面的牆，鏡頭不會撞到）
   for (const x of [-10, -6, -2, 2, 6, 10]) for (const z of [-5.6, -2.0, 1.6, 5.4]) fixture(F, x, z, 'round');
-  for (const [x, z] of [[-6.2, 5.6], [-2.8, 5.6], [3.8, 5.4], [7.2, 5.4]]) { const T = frame(x, 0, z); tube(F.B, 'metal', [x, F.ch, z], [x, 3.0, z], 0.006, 0.006, 3, C('#555')); for (let k = 0; k < 2; k++) vq(F.B, 'glow', T.sub(0, 0, 0, (k * Math.PI) / 2), [-0.24, 0], [0.24, 0], 2.45, 3.0, GU('lantern'), WHITE, true); }
+  { const gold = C('#d9a62e'); for (const x of [-10.5, -3.5]) { const T = frame(x, 0, -7.25); tube(F.B, 'metal', T.p(0, F.ch, 0), T.p(0, 3.25, 0), 0.006, 0.006, 3, C('#555')); cyl(F.B, 'glow', T, 0, 0, 2.75, 3.25, 0.2, 0.2, 10, [1.15, 1.1, 1.05], GU('lantern'), false); cyl(F.B, 'prop', T, 0, 0, 3.25, 3.3, 0.14, 0.09, 8, gold); cyl(F.B, 'prop', T, 0, 0, 2.7, 2.75, 0.09, 0.14, 8, gold); } }
   lamp(F, -6.0, -1.0, 10, '#ffe2b8', 3.6); lamp(F, 5.0, -1.0, 10, '#ffe2b8', 3.6); lamp(F, 0, 4.8, 7, '#ffe2b8', 3.6);
   // mart.src.js：每樣東西站哪裡拿、櫃台結帳站哪裡
   F.spots.shop = []; F.spots.till = [];

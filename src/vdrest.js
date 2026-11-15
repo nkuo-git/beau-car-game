@@ -64,7 +64,7 @@ function buildRestArea(L, ctx) {
   const { V, qb, boxAt, renderer } = ctx, y = L.y, G = L.G, TAU = Math.PI * 2;
   const group = new THREE.Group(); group.name = 'vd-rest';
   const cb = qb(false), tb = qb(true), ab = qb(true), lineB = qb(false), glow = qb(false), rb = qb(true);
-  const cols = [], lamps = [], trees = [];
+  const cols = [], lamps = [], trees = [], fixtures = []; // fixtures：廁所裡的東西（種類、x、z；測試數用）
   let tris = 0;
   const C = {
     asph: [0.17, 0.175, 0.18], asph2: [0.2, 0.2, 0.205], line: [0.86, 0.86, 0.83], yel: [0.86, 0.67, 0.13], curb: [0.62, 0.61, 0.58], grass: [0.2, 0.36, 0.14],
@@ -208,7 +208,7 @@ function buildRestArea(L, ctx) {
   const S = L.store, store = { kind: 'store', name: '大便龍市集', big: true, x: S.x, z: S.z, hx: S.hx, hz: S.hz, rot: 0, h: 4.6, y, rest: true, door: { x: S.x, z: S.z + S.hz + 0.15, ry: 0 } }; // big：interiors.js bigStoreFloor
   if (V.buildings) V.buildings.push(store);
   if (V.colliders) V.colliders.push({ t: 'box', x: S.x, z: S.z, hx: S.hx, hz: S.hz, rot: 0, y0: y, h: y + 4.6, noCrush: true, rest: 'store' });
-  return { group, tris, cols, lamps, store, walk: L.walk, buses: buses.list };
+  return { group, tris, cols, lamps, store, walk: L.walk, buses: buses.list, fixtures, wcs: L.wcs };
 
   function lampPole(x, z, h, side = 0) { // 路燈：柱子＋燈頭（晚上亮：look.js V.lampsX）
     boxAt(cb, x, z, 0.13, y, y + h, C.pole); colCirc(x, z, 0.22, h);
@@ -283,7 +283,7 @@ function buildRestArea(L, ctx) {
       if (R === K.men) inner(x0, za, x0, zb, [1, 0, 0], R, [[zm - OW - za, zm + OW - za]]); else inner(x0, za, x0, zb, [1, 0, 0], R);
       if (R === K.wom) inner(x1, za, x1, zb, [-1, 0, 0], R, [[zm - OW - za, zm + OW - za]]); else inner(x1, za, x1, zb, [-1, 0, 0], R);
       for (let x = x0; x < x1 - 0.01; x += 1) for (let z = za; z < zb - 0.01; z += 1) flat(cb, x, z, Math.min(x + 1, x1), Math.min(z + 1, zb), yF, R.f[(Math.round(x - x0) + Math.round(z - za)) & 1]);
-      cb.quad([x0, yC, za], [x1, yC, za], [x1, yC, zb], [x0, yC, zb], K.ceil, null, [0, -1, 0]);
+      glow.quad([x0, yC, za], [x1, yC, za], [x1, yC, zb], [x0, yC, zb], [0.7, 0.71, 0.7], null, [0, -1, 0]); // 天花板：自己亮一點（下面朝下的面照不到太陽，本來黑黑的）
       const nc = x1 - x0 > 9 ? 2 : 1;
       for (let i = 0; i < nc; i++) { const lx = x0 + ((i + 0.5) * (x1 - x0)) / nc; for (let z = za + 1.8; z < zb - 1; z += 3.2) glow.quad([lx - 0.6, yC - 0.02, z - 0.2], [lx + 0.6, yC - 0.02, z - 0.2], [lx + 0.6, yC - 0.02, z + 0.2], [lx - 0.6, yC - 0.02, z + 0.2], [0.96, 0.97, 1], null, [0, -1, 0]); }
     }
@@ -319,7 +319,7 @@ function buildRestArea(L, ctx) {
       O.top(-0.13 * k, 0.13 * k, 0.29 * k, 0.6 * k, y + 0.36 * k, K.water);
       for (const [u0, u1, w0, w1] of [[-0.2, 0.2, 0.17, 0.29], [-0.2, 0.2, 0.6, 0.72], [-0.2, -0.13, 0.29, 0.6], [0.13, 0.2, 0.29, 0.6]]) O.box(u0 * k, u1 * k, y + 0.39 * k, y + 0.42 * k, w0 * k, w1 * k, [0.97, 0.97, 0.96]);
       O.box(-0.04, 0.04, y + 0.84 * k, y + 0.86 * k, 0.07 * k, 0.14 * k, K.chr);
-      const p = O.P(0, 0.42 * k); colCirc(p[0], p[1], 0.26 * k, 0.45 * k);
+      const p = O.P(0, 0.42 * k); colCirc(p[0], p[1], 0.26 * k, 0.45 * k); fixtures.push(['toilet', p[0], p[1]]);
     };
     const stallRow = (px, pz, a, n, S, D, col) => { // 一排隔間（u 0…n·S 沿牆）：每間一個馬桶、左右隔板、前面的柱子、開著的門（往裡面開）、衛生紙
       const O = OB(px, pz, a), dark = col.map((q) => q * 0.82);
@@ -336,13 +336,13 @@ function buildRestArea(L, ctx) {
     };
     const urinals = (px, pz, a, n, gap) => { // 一排小便斗（中間有隔板）
       const O = OB(px, pz, a);
-      for (let k = 0; k < n; k++) { const u = k * gap; O.box(u - 0.2, u + 0.2, y + 0.45, y + 1.15, 0.02, 0.36, K.por); O.front(u - 0.13, u + 0.13, 0.362, y + 0.55, y + 1.02, [0.74, 0.78, 0.8]); O.box(u - 0.025, u + 0.025, y + 1.15, y + 1.55, 0.03, 0.08, K.chr); O.col(u - 0.2, u + 0.2, 0, 0.36, 1.15);
+      for (let k = 0; k < n; k++) { const u = k * gap; fixtures.push(['urinal', ...O.P(u, 0.2)]); O.box(u - 0.2, u + 0.2, y + 0.45, y + 1.15, 0.02, 0.36, K.por); O.front(u - 0.13, u + 0.13, 0.362, y + 0.55, y + 1.02, [0.74, 0.78, 0.8]); O.box(u - 0.025, u + 0.025, y + 1.15, y + 1.55, 0.03, 0.08, K.chr); O.col(u - 0.2, u + 0.2, 0, 0.36, 1.15);
         if (k < n - 1) { O.box(u + gap / 2 - 0.02, u + gap / 2 + 0.02, y + 0.6, y + 1.6, 0.02, 0.48, K.part, true, true); } }
     };
     const sinks = (px, pz, a, L, n) => { // 洗手台（石頭的台子、白色的洗手盆、水龍頭）＋上面的鏡子＋烘手機
       const O = OB(px, pz, a);
       O.box(-L / 2, L / 2, y + 0.8, y + 0.86, 0.02, 0.6, K.stone, true, true); O.box(-L / 2, L / 2, y + 0.6, y + 0.8, 0.52, 0.6, K.stone, false, true);
-      for (let i = 0; i < n; i++) { const u = -L / 2 + (L / n) * (i + 0.5); O.top(u - 0.22, u + 0.22, 0.12, 0.5, y + 0.862, K.por); O.top(u - 0.15, u + 0.15, 0.18, 0.44, y + 0.864, [0.78, 0.82, 0.84]); O.box(u - 0.02, u + 0.02, y + 0.86, y + 1.08, 0.06, 0.1, K.chr); O.box(u - 0.02, u + 0.02, y + 1.04, y + 1.08, 0.1, 0.22, K.chr); }
+      for (let i = 0; i < n; i++) { const u = -L / 2 + (L / n) * (i + 0.5); fixtures.push(['sink', ...O.P(u, 0.3)]); O.top(u - 0.22, u + 0.22, 0.12, 0.5, y + 0.862, K.por); O.top(u - 0.15, u + 0.15, 0.18, 0.44, y + 0.864, [0.78, 0.82, 0.84]); O.box(u - 0.02, u + 0.02, y + 0.86, y + 1.08, 0.06, 0.1, K.chr); O.box(u - 0.02, u + 0.02, y + 1.04, y + 1.08, 0.1, 0.22, K.chr); }
       O.front(-L / 2 + 0.1, L / 2 - 0.1, 0.012, y + 1.15, y + 2.05, K.mir, glow); O.box(-L / 2 + 0.05, L / 2 - 0.05, y + 1.12, y + 2.08, 0.0, 0.01, K.chr);
       O.box(L / 2 + 0.25, L / 2 + 0.55, y + 1.1, y + 1.45, 0.02, 0.22, [0.85, 0.86, 0.87]); // 烘手機
       O.col(-L / 2, L / 2, 0, 0.6, 0.9);

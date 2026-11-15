@@ -134,7 +134,7 @@ function buildVdSigns(o) {
     list.push({ why, s: Math.round(M.S[i]), x: +A[0].toFixed(1), z: +A[2].toFixed(1), y: +y.toFixed(1) });
   };
   const sOf = (id) => roads.find((r) => r.def.id === id)?.def.s0;
-  const sA = sOf('A') ?? 2150, sEX = sOf('EX') ?? 2330, sB = sOf('B') ?? 3578;
+  const sA = sOf('A') ?? 2214, sEX = sOf('EX') ?? 2394, sB = sOf('B') ?? 3636;
   gantry(sA - 300, ['gNeihu', 'gA'], ['gLot', 'gLot'], '門架：環山路 港墘站');
   gantry(sEX - 75, ['gNeihu', 'gRest'], null, '門架：大便龍服務區（往東）');
   gantry(sB - 280, ['gEnd', 'gB'], ['gLot', 'gRest'], '門架：內湖路二段 市中心／服務區（往西）');
