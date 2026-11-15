@@ -26,6 +26,7 @@ export const { VD_PATH, VD_LOT, VD_GAP, VD_TEXT, VD_REST, vdNear, vdInLot, vdEnd
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const HW = 8, ROAD = 7.4, PLAT = 24, S_OPEN = 36, CLEAR = 6.5, DESC = 0.04, WALL = 6;
+const FAR_CULL = 650, REST_CULL = 900; // 第 92 批：停車場、休息站遠的車，那一區的邊離鏡頭超過這麼遠就不畫
 const C0 = { x: -780, z: 250 }, R = 105, TURNS = 1.5;
 const VD_GAP = { s: 1853.1, h: 7.5 }; // 快速道路 s（從路口往北算）：南邊半圓的中間（−780, 475），內圈的口
 const CONN = { x: -780, hw: 5, z0: 330, z1: 466 }; // 快速道路內圈 → 停車場的路
@@ -271,7 +272,10 @@ function buildViaduct(V, opts = {}) {
     if (r === VD_PATH && sd < 0 && S[i] < S_OPEN - 0.1 && i < n / 2) return false;
     const u = sd * (r.road + 0.3); return !inOther(r, r.X[i] - r.TZ[i] * u, r.Z[i] + r.TX[i] * u, r.Y[i]);
   };
-  for (const r of ROADS) {
+  // 交流道：離得近的幾條（內湖那兩條、休息站那四條）放在同一塊網格（一條一塊的話從內湖看過去多好幾個 draw call）
+  const rampEnd = (k) => { const r = ROADS[k], q = ROADS[k + 1]; return !q || Math.hypot(q.X[0] - r.X[0], q.Z[0] - r.Z[0]) > 700; };
+  for (let rk = 0; rk < ROADS.length; rk++) {
+    const r = ROADS[rk];
     const RX = r.X, RZ = r.Z, RS = r.S, RTX = r.TX, RTZ = r.TZ, RY = r.Y, m = r.n, RD = r.road, W = r.hw, main = r === VD_PATH;
     const Pr = (i, u, y) => [RX[i] - RTZ[i] * u, y, RZ[i] + RTX[i] * u];
     const el = (i) => RY[i] - r.Gmax[i] >= WALL;
@@ -301,7 +305,7 @@ function buildViaduct(V, opts = {}) {
       if (main && S[i0] < S_OPEN - 0.1) cb.quad(Pr(i0, -HW, ya - 0.02), Pr(i1, -HW, yb - 0.02), Pr(i1, -ROAD, yb - 0.02), Pr(i0, -ROAD, ya - 0.02), COL.under, null, [0, 1, 0]); // 開口那邊護欄的位子：鋪平
       if (el(i0)) { const a0 = main ? -W : innerU(i0), a1 = main ? -W : innerU(i1); if (a0 < W - 0.01 || a1 < W - 0.01) cb.quad(Pr(i0, a0, ya - 1.1), Pr(i1, a1, yb - 1.1), Pr(i1, W, yb - 1.1), Pr(i0, W, ya - 1.1), COL.under, null, [0, -1, 0]); } // 橋面底下
       if (i0 >= 2 && el(i0) !== el(i0 - STEP) && !att(r, i0)) { const j = i0, yj = RY[j], g = r.Gmin[j] - 0.4, t = [RTX[j], 0, RTZ[j]], f = el(j) ? t : [-t[0], 0, -t[2]]; cb.quad(Pr(j, -W, yj - 1.1), Pr(j, W, yj - 1.1), Pr(j, W, g), Pr(j, -W, g), COL.wall, null, f); } // 引道的牆到橋的地方：一面牆封起來
-      if (main ? (i0 + STEP) % CH < STEP || i1 >= m - 1 : i1 >= m - 1) flushChunk();
+      if (main ? (i0 + STEP) % CH < STEP || i1 >= m - 1 : i1 >= m - 1 && rampEnd(rk)) flushChunk();
     }
     if (main) cap(0, 1, -1); // 起點外側（內側開口的頭上面那行自己封）
     for (const sd of [-1, 1]) if (on[sd]) cap(m - 1, sd, 1); // 終點
@@ -430,6 +434,9 @@ function buildViaduct(V, opts = {}) {
   }
   // 9) 停車場的車：遠的 InstancedMesh、碰撞（只給玩家）
   const lotCars = lotFar();
+  // 太遠就不畫：停車場、休息站遠的車（每一區）、整個休息站（從內湖、山上看過去）
+  const restCx = (RL.lot.x0 + RL.lot.x1) / 2, restCz = (RL.lot.z0 + RL.lot.z1) / 2;
+  const cullFar = (x, y, z) => { lotCars.cull(x, y, z); const on = Math.hypot(x - restCx, z - restCz) < REST_CULL; if (on !== rest.group.visible) rest.group.visible = on; };
   group.add(...lotCars.meshes);
   for (const c of lotCars.cols) cols.push(c);
   // 9b) 第 92 批：休息站（vdrest.js）：地面、線、主建築（便利商店走得進去：V.buildings 一棟 store）、廁所、加油站、廣場、大車、山上的字、樹、路燈
@@ -496,7 +503,7 @@ function buildViaduct(V, opts = {}) {
   V.group.add(group);
 
   const API = {
-    group, st, at, normal, Q, cols, Y, G: Gc, lot: lotCars, path: VD_PATH, HW, sD, roads: ROADS, rest, restL: RL, signs: sg2, etc: sg2.etc, // roads[0]＝主線；交流道：{ X, Z, S, TX, TZ, n, L, Y, MS（接在主線旁邊那段的主線 s）, UC, def }
+    group, st, at, normal, Q, cols, Y, G: Gc, lot: lotCars, cull: cullFar, path: VD_PATH, HW, sD, roads: ROADS, rest, restL: RL, signs: sg2, etc: sg2.etc, // roads[0]＝主線；交流道：{ X, Z, S, TX, TZ, n, L, Y, MS（接在主線旁邊那段的主線 s）, UC, def }
     near: vdNear, inLot: vdInLot, clearAt: (i) => clearAt(i),
     info: null,
   };
@@ -582,7 +589,10 @@ function buildViaduct(V, opts = {}) {
     cars.forEach((c, i) => { c.inst = i; });
     const set = (i, on) => { const c = cars[i], G = c.grp, m = on ? G.mats[c.slot] : ZERO; for (const I of G.meshes) { I.setMatrixAt(c.slot, m); I.instanceMatrix.needsUpdate = true; } };
     const M5 = new THREE.Matrix4(), hidden = (i) => { const c = cars[i]; c.grp.meshes[0].getMatrixAt(c.slot, M5); return M5.elements[0] === 0; };
-    return { cars, cols: colsL, meshes, hide: (i) => set(i, false), show: (i) => set(i, true), hidden, tris: ftris, kinds: groups.size };
+    // 遠的車：那一區（停車場、休息站）離鏡頭太遠就整區不畫（從內湖、山上看過去只剩一兩個點，一種車一個 draw call 太多）
+    const GL = [...groups.values()].map((G) => { const S = G.meshes[0].boundingSphere; return { G, x: S.center.x, y: S.center.y, z: S.center.z, r: S.radius, on: true }; });
+    const cull = (x, y, z, far = FAR_CULL) => { let n = 0; for (const g of GL) { const on = Math.hypot(g.x - x, g.y - y, g.z - z) - g.r < far; if (on !== g.on) { g.on = on; for (const I of g.G.meshes) I.visible = on; } if (on) n++; } return n; };
+    return { cars, cols: colsL, meshes, hide: (i) => set(i, false), show: (i) => set(i, true), hidden, tris: ftris, kinds: groups.size, cull };
   }
 }
 
