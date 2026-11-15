@@ -221,7 +221,7 @@ function roadNet(V, cars) {
   let roads = [];
   for (const r of V.roads) if (KIND[r.kind] && !r.noNpc) { const pts = dedupe(r.pts); if (pts.length >= 2) roads.push({ kind: r.kind, w: r.w, pts, ow: 0, so: r.w / 2 + WALK_OFF, pre: false }); } // noNpc：不給車流、居民走的路（越野車場的聯外水泥路：盡頭是大門）
   // 修 10：內湖的路（neihu.js 的 V.npcRoads）：已經在路口切好了（pre）、ow 1＝單行道（照點的順序）、so＝人行道離中線多遠
-  for (const r of V.npcRoads || []) if (KIND[r.kind]) { const pts = dedupe(r.pts); if (pts.length >= 2) roads.push({ kind: r.kind, w: r.w, pts, ow: r.ow ? 1 : 0, so: r.so ?? r.w / 2 + WALK_OFF, pre: true }); }
+  for (const r of V.npcRoads || []) if (KIND[r.kind]) { const pts = dedupe(r.pts); if (pts.length >= 2) roads.push({ kind: r.kind, w: r.w, pts, ow: r.ow ? 1 : 0, so: r.so ?? r.w / 2 + WALK_OFF, pre: true, lo: r.lo }); } // lo：第 92 批 內湖的大馬路（一邊兩線）車道離中線多遠
   // 丁字路口：一條路的端點在另一條路中間 → 那條路切成兩段（切好的不用找）
   for (let guard = 0; guard < 50; guard++) {
     let hit = null;
@@ -332,7 +332,7 @@ function laneGraph(V) {
     if (r.len - s0 - s1 < (r.pre ? 1 : 4)) continue;
     const L = [];
     for (const dir of r.ow ? [1] : [1, -1]) { // 修 10：單行道只有一條（在路中間）
-      const c = dir > 0 ? r.pts : r.pts.slice().reverse(), off = r.ow ? c : offsetPts(c, r.w / 4), cut = dir > 0 ? [s0, r.len - s1] : [s1, r.len - s0];
+      const c = dir > 0 ? r.pts : r.pts.slice().reverse(), off = r.ow ? c : offsetPts(c, r.lo ?? r.w / 4), cut = dir > 0 ? [s0, r.len - s1] : [s1, r.len - s0];
       const pts = subPts(off, cut[0], cut[1] + (plen(off) - r.len));
       L.push({ dir, pts, line: mkLine(pts), from: dir > 0 ? r.a : r.b, to: dir > 0 ? r.b : r.a, armOut: dir > 0 ? armA : armB, armIn: dir > 0 ? armB : armA });
     }
