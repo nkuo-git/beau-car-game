@@ -575,7 +575,18 @@ Object.assign(SND_CARS, {
     pops: { ...SND_CARS.yaris.pops, lift: 0, shift: 0 }, motor: { ...SND_CARS.p918.motor, lvl: 0.06, lvlR: 0 } },
   chiron: { ...SND_CARS.jesko, name: '8.0 W16 四渦輪', red: 6700, fire: Array.from({ length: 16 }, (_, i) => i * 45), bank: Array.from({ length: 16 }, (_, i) => i % 2), width: 70,
     turbo: { ...SND_CARS.jesko.turbo, n: 4, whoosh: 1.0, whistle: 0.25 }, pops: { ...SND_CARS.jesko.pops, lift: 0.2, shift: 0.3, lvl: 0.7 } },
-  aventador: { ...SND_CARS.sp3, name: '6.5 V12 自然進氣', red: 8500, pops: { ...SND_CARS.sp3.pops, lift: 0.7, shift: 0.6, lvl: 0.9 }, dct: false, cut: 0.1 },
+  // 第 92 批（Nick 2026-11-15「把 aventador 聲浪改成影片這樣」：影片是 V12 裝了直通、拿掉觸媒的排氣在馬力機上催）：
+  //   60 度 V12 平均點火、兩排稍微不一樣大（低低的「轟」）、排氣管幾乎沒有消音（共鳴少、高音多、沙沙的破音大）、更大聲；
+  //   放油門、換檔「啪啪砰」大很多（直通排氣）；單離合器換檔頓一下（cut 長、不是雙離合的「啵」）
+  aventador: { ...SND_CARS.sp3, name: '6.5 V12 自然進氣', red: 8500, idle: 0.105, gain: 1.0, idleGain: 1.3,
+    fire: SND_V12, bank: [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], cylAmp: [1, 0.96, 1.03, 0.97, 1.01, 0.95, 1, 0.97, 1.04, 0.96, 1.01, 0.98],
+    width: 84, rise: 0.05, decay: 0.8, vari: 0.06, jit: 0.7, wob: 0.01,
+    grp: [{ ms: 1.9, fb: -0.48, lp: 6500, gain: 1 }, { ms: 2.05, fb: -0.48, lp: 6300, gain: 0.95 }],
+    pipe: [{ ms: 6.2, fb: -0.18, lp: 7000 }, { ms: 3.6, fb: -0.14, lp: 8000 }],
+    lp: 10000, eq: [[240, 1.0, 3], [1650, 1.3, 5], [3300, 1.5, 5]], hp: 85, drive: 2.1, rasp: 0.7, raspHz: 3000,
+    intake: { lvl: 0.4, f: 560, q: 1.3, f2: 2200, mix2: 0.6, tone: 0.45, hiss: 0.15 },
+    pops: { lift: 1.0, shift: 1.0, lvl: 1.4, rate: 16, dur: 1.2, als: 0, crack: 0.6, burp: 0.9 },
+    over: 0.7, burble: 11, dct: false, cut: 0.16 },
   senna: { ...SND_CARS.jesko, name: '4.0 V8 平面曲軸雙渦輪', red: 8250 },
   laferrari: { ...SND_CARS.sp3, name: '6.3 V12＋電動馬達', red: 9250, motor: SND_CARS.p918.motor },
   huayra: { ...SND_CARS.sp3, name: '6.0 V12 雙渦輪', red: 6000, fire: SND_V12, lp: 5000, turbo: { ...SND_CARS.jesko.turbo, whoosh: 0.9, bov: 'atmo', bovLvl: 1.1 } },
