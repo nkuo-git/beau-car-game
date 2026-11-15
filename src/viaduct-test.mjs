@@ -170,6 +170,7 @@ await p.addInitScript(() => {
   H.at = (s, u = 0) => { const D = window.__D(), V = D.VDV, P = V.path, i = Math.min(P.n - 1, Math.round(s / 2)); return { x: P.X[i] - P.TZ[i] * u, z: P.Z[i] + P.TX[i] * u, y: V.Y[i], h: Math.atan2(-P.TZ[i], P.TX[i]), i }; };
   H.putDeck = (s, u = 2, n = 60) => { const q = H.at(s, u), D = window.__D(); D.VDV.st.py = q.y; D.VDV.st.px = q.x; D.VDV.st.pz = q.z; return H.put(q.x, q.z, q.h, n); }; // 放到橋上（先跟 PW 說玩家在那一層）
   H.deckY = (x, z, y) => window.__D().VDV.at(x, z, y);
+  H.putRamp = (id, s, n = 90) => { const V = window.__D().VDV, r = V.roads.find((q) => q.def.id === id), i = Math.max(0, Math.min(r.n - 1, Math.round((s / r.L) * (r.n - 1)))); V.st.py = r.Y[i]; V.st.px = r.X[i]; V.st.pz = r.Z[i]; return window.__H.put(r.X[i], r.Z[i], Math.atan2(-r.TZ[i], r.TX[i]), n); }; // 第 92 批：放到交流道上
 });
 
 // ================= 1 開局 =================
@@ -256,6 +257,36 @@ check(s3.maxY > 23.5, `went up to ${s3.maxY} m`);
 check(s3.bumps <= 1, `hit nothing on the way (${s3.bumps} bumps)`);
 check(s3.hi > 600 && s3.hiPol === s3.hi, `up on the deck the police on the ground can't see you (${s3.hiPol}/${s3.hi} frames hidden)`);
 check(!s3.on && Math.abs(s3.endY - s3.endG) < 0.2, `back on the Neihu road at the end (y ${s3.endY}, ground ${s3.endG})`);
+
+// ================= 3b 第 92 批：交流道（分岔到別的地方）：從主線外側那一線開下去、到內湖的路上 =================
+const s3b = await p.evaluate(() => {
+  const D = window.__D(), V = D.VDV, P = V.path, H = window.__H, d = D.drv, out = [];
+  for (const r of V.roads.slice(1)) {
+    const Df = r.def, pts = [];
+    if (Df.exit) { const sd = Df.side * 5.3; for (let s = Df.s0 - Df.dir * 60; Df.dir > 0 ? s < Df.s0 : s > Df.s0; s += Df.dir * 4) { const i = Math.round(s / 2); pts.push([P.X[i] - P.TZ[i] * sd, P.Z[i] + P.TX[i] * sd]); } }
+    for (let i = 0; i < r.n; i += 2) pts.push([r.X[i], r.Z[i]]);
+    { const i = r.n - 1; for (let k = 2; k <= 10; k += 2) pts.push([r.X[i] + r.TX[i] * k, r.Z[i] + r.TZ[i] * k]); } // 下來以後開到內湖的路上（T 字：再過去是房子）
+    const q0 = pts[0], t0 = Math.atan2(-(pts[1][1] - q0[1]), pts[1][0] - q0[0]), y0 = Df.exit ? V.Y[Math.round((Df.s0 - Df.dir * 60) / 2)] : r.Y[0];
+    V.st.py = y0; V.st.px = q0[0]; V.st.pz = q0[1]; H.put(q0[0], q0[1], t0, 60);
+    const o = { id: Df.id, off: 0, maxDY: 0, rampMax: 0, dyAt: null, bumpAt: [] }; let nb = d.telemetry().bumps, seen = false;
+    const res = H.follow(pts, 200, { vmax: 18, each: (q) => {
+      const y = D.tripS.car.position.y, yd = V.at(q.x, q.z, y);
+      if (yd != null) { if (V.Q.r === r.id) { seen = true; o.rampMax = Math.max(o.rampMax, V.Q.s); } const dy = Math.abs(y - yd); if (dy > o.maxDY && !q.air) { o.maxDY = dy; o.dyAt = [Math.round(q.x), Math.round(q.z), +y.toFixed(2), +yd.toFixed(2), V.Q.r, Math.round(V.Q.s)]; } }
+      else if (seen && o.rampMax < r.L - 8) o.off++;
+      if (q.bumps > nb) { nb = q.bumps; if (o.bumpAt.length < 6) o.bumpAt.push([Math.round(q.x), Math.round(q.z), +y.toFixed(1), V.Q.r, Math.round(V.Q.s), (D.drv.colsNear ? D.drv.colsNear(q.x, q.z, 4).map((c) => `${c.vd || c.tag || ''}:${c.t}`).slice(0, 4) : [])]); }
+    } });
+    const t = d.telemetry(), y = D.tripS.car.position.y, g = D.VIL.heightAt(t.x, t.z);
+    out.push({ ...o, end: res.end, stuck: res.stuck, bumps: res.bumps, s: res.s, maxKmh: res.maxKmh, L: Math.round(r.L), rampMax: Math.round(o.rampMax), maxDY: +o.maxDY.toFixed(3), endY: +y.toFixed(2), endG: +g.toFixed(2), onDeck: V.st.on, grade: +(r.maxGrade * 100).toFixed(1), x: Math.round(t.x), z: Math.round(t.z) });
+  }
+  return out;
+});
+console.log('3b', el(), JSON.stringify(s3b));
+for (const r of s3b) {
+  check(r.end && r.stuck === 0 && r.rampMax > r.L - 10 && r.off === 0, `ramp ${r.id}: drove off the main road down the ${r.L} m ramp to its end (reached ${r.rampMax}; ${r.off} frames off the deck, ${r.s} s)`);
+  check(r.maxDY < 0.25 && r.bumps <= 1, `ramp ${r.id}: sat on the deck (max ${r.maxDY} m${r.dyAt ? ' at ' + JSON.stringify(r.dyAt) : ''}), ${r.bumps} bumps${r.bumpAt.length ? ' ' + JSON.stringify(r.bumpAt) : ''}`);
+  check(!r.onDeck && Math.abs(r.endY - r.endG) < 0.2 && r.grade <= 7, `ramp ${r.id}: ends on the Neihu road (y ${r.endY}, ground ${r.endG}; steepest ${r.grade}%)`);
+}
+if (process.env.VD_STOP === '3b') { await b.close(); srv.close(); console.log(fails.length ? `FAILED ${fails.length}` : 'ok so far'); process.exit(0); }
 
 // ================= 4 開在橋下：連到停車場的路（圓環下面兩層）、快速道路外圈（往內湖那段下面）=================
 await p.evaluate(() => window.__npcPause(true)); // 車流先停（只看橋）
@@ -365,6 +396,10 @@ await view('lot', () => { const D = window.__D(), H = window.__H; D.VDV.st.py = 
 await view('roundabout', () => { const H = window.__H, P = window.__D().VDV.path; H.putDeck(P.sH - 60, 2, 90); });
 await view('crossing', () => { window.__H.putDeck(window.__sX - 50, 2, 90); }, await p.evaluate((s) => { window.__sX = s; }, sX));
 await view('neihu-end', () => { const H = window.__H, P = window.__D().VDV.path; H.putDeck(P.L - 70, 2, 90); });
+await view('ramp-a', () => { const D = window.__D(), V = D.VDV, H = window.__H, Df = V.roads[1].def, P = V.path, i = Math.round((Df.s0 - 30) / 2), u = 5.3; H.putDeck(Df.s0 - 30, u, 90); void i; void P; }); // 第 92 批：主線上，前面分岔
+await view('ramp-a-down', () => window.__H.putRamp('A', 300));
+await view('ramp-a-land', () => window.__H.putRamp('A', 470));
+await view('ramp-b-land', () => window.__H.putRamp('B', 440));
 await view('under', () => { const D = window.__D(), H = window.__H; D.VDV.st.py = 0; const th = 1.02; H.put(-780 + 256.9 * Math.sin(th), 225 + 256.9 * Math.cos(th), Math.atan2(-(-Math.sin(th)), Math.cos(th)), 90); });
 const tAt = await p.evaluate(() => {
   const V = window.__D().VDV, P = V.path, N = 200000; let s = 0; const t0 = performance.now();
