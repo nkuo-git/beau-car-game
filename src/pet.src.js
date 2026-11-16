@@ -14,10 +14,12 @@
 const PET_NAME = { pig: '小豬', pinky: '粉紅', cham: '變色龍' };
 const PET_PRICE = { pig: 2000, pinky: 2000, cham: 3000 };
 const PET_PAINT = { pig: '#f4a9bd', pinky: '#ff5fa2', cham: '#7d55d6' }; // 沙灘車的顏色（照那一隻）
-const PET_RIDE = { pig: [-0.2, 0.37, 0], pinky: [-0.22, 0.36, 0], cham: [-0.42, 0.33, 0] }; // 坐在沙灘車上：動物的腳底（本地）放在哪裡
+const ATV_SC = { pig: 0.75, pinky: 0.75, cham: 1 }, atvS = (k) => ATV_SC[k] || 0.75; // 沙灘車的大小：小豬、粉紅只有人的一半高＝兒童的沙灘車；變色龍 2 公尺長＝原本那台
+const PET_RIDE = { pig: [-0.30, 0.875, 0], pinky: [-0.32, 0.835, 0], cham: [-0.25, 0.62, 0] }; // 坐在沙灘車上：動物的原點放在沙灘車本地（沒縮小的）哪裡（座椅上面 0.88）
+const PET_HELM_COL = { pig: '#ff7a1a', pinky: '#2f8cff', cham: '#ffd21a' }; // 安全帽的顏色（跟動物不一樣才看得出來）
 const PET_HELM = { // 安全帽：頭的骨頭本地座標的中心、三個半徑、往後仰（量 animals.js 的頭：小豬 0.42 公尺的骨頭、頭頂 0.75；粉紅 0.55、0.77；變色龍 0.63／x 0.48、0.92）
-  pig: { c: [-0.005, 0.2, 0], r: [0.212, 0.15, 0.232], tilt: 0.22 },
-  pinky: { c: [0.0, 0.122, 0], r: [0.146, 0.11, 0.142], tilt: 0.18 },
+  pig: { c: [-0.005, 0.225, 0], r: [0.212, 0.15, 0.232], tilt: 0.22 },
+  pinky: { c: [0.0, 0.14, 0], r: [0.146, 0.11, 0.142], tilt: 0.18 },
   cham: { c: [0.13, 0.15, 0], r: [0.19, 0.15, 0.17], tilt: 0.3 },
 };
 const COPS_KEY = 'carid.cops';
@@ -82,9 +84,9 @@ function petTag(k) {
 function petHelmet(k) {
   if (PET.helm[k]) return PET.helm[k];
   const H = PET_HELM[k], geo = new THREE.SphereGeometry(1, 22, 12, 0, Math.PI * 2, 0, Math.PI * 0.56);
-  const P = geo.attributes.position, cols = new Float32Array(P.count * 3), stripe = new THREE.Color(PET_PAINT[k]), white = new THREE.Color('#f6f6f2'), dark = new THREE.Color('#1a1d22');
+  const P = geo.attributes.position, cols = new Float32Array(P.count * 3), shell = new THREE.Color(PET_HELM_COL[k] || '#ff7a1a'), white = new THREE.Color('#f6f6f2'), dark = new THREE.Color('#25282e');
   for (let i = 0; i < P.count; i++) {
-    const x = P.getX(i), y = P.getY(i), z = P.getZ(i), c = x > 0.62 && y < 0.42 ? dark : Math.abs(z) < 0.2 ? stripe : white;
+    const y = P.getY(i), z = P.getZ(i), c = y < 0.16 ? dark : Math.abs(z) < 0.16 ? white : shell; // 下緣一圈深色、中間一條白的
     cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
@@ -101,6 +103,7 @@ function petMake(k) {
   C.group.name = 'pet-' + k;
   PET.tag = petTag(k); PET.tag.position.set(k === 'cham' ? 0.3 : 0, (C.height || 0.8) + 0.32, 0); C.group.add(PET.tag);
   PET.C = C; PET.k = k; PET.ready = false; PET.mode = 'hide';
+  atvEnsure(k); // 沙灘車先載（上車的時候才不會等）
   return C;
 }
 function petDrop() {
@@ -118,7 +121,7 @@ function atvEnsure(k) {
   if (!LOD_CARS.z2) return false;
   if (A.data) {
     if (A.car) { A.car.removeFromParent(); A.look?.dispose?.(); }
-    try { const L = buildLodCar('z2', A.data, { ...DEFAULT_LOOK.z2, paint: PET_PAINT[k] || DEFAULT_LOOK.z2.paint }); A.look = L; A.car = L.car; A.car.name = 'pet-atv'; A.car.visible = false; A.k = k; } catch (e) { console.error(e); A.car = null; return false; }
+    try { const L = buildLodCar('z2', A.data, { ...DEFAULT_LOOK.z2, paint: PET_PAINT[k] || DEFAULT_LOOK.z2.paint }); A.look = L; A.car = L.car; A.car.name = 'pet-atv'; A.car.visible = false; A.car.scale.setScalar(atvS(k)); A.k = k; } catch (e) { console.error(e); A.car = null; return false; }
     return true;
   }
   if (!A.loading) { A.loading = true; LOD_CARS.z2.load().then((d) => { A.data = d; A.loading = false; }).catch((e) => { console.error(e); A.loading = false; }); }
@@ -178,13 +181,14 @@ function petReset(px, gy, pz, th) { // 站到你腳邊（後面 0.35 公尺）�
 function petDismount(was) {
   const P = PET, A = P.A, ch = walker.character.group, sc = petRoot(ch);
   const hm = P.helm[P.k]; if (hm) hm.removeFromParent();
+  P.C.group.scale.setScalar(1);
   P.onAtv = false; P.mode = 'walk'; P.atk = null; P.angry = 0;
   sc.add(P.C.group); P.scene = sc; P.C.group.visible = true;
   const t = walker.telemetry(), gy = ch.position.y - (t.jy || 0);
   P.lpx = ch.position.x; P.lpz = ch.position.z; P.lgy = gy; P.lj = t.jumps || 0;
   if (was === 'car' && A.car && A.car.visible && Math.hypot(A.x - ch.position.x, A.z - ch.position.z) < 15) { // 從沙灘車上跳下來（停好的沙灘車留著）
     const s = PET_RIDE[P.k], c = Math.cos(A.th), n = Math.sin(A.th);
-    P.x = A.x + c * s[0] + 0.55 * n; P.z = A.z - n * s[0] + 0.55 * c; P.y = A.y; P.th = A.th; P.jy = s[1]; P.vy = 1.6; P.v = 0;
+    P.x = A.x + c * s[0] * atvS(P.k) + 0.55 * n; P.z = A.z - n * s[0] * atvS(P.k) + 0.55 * c; P.y = A.y; P.th = A.th; P.jy = s[1] * atvS(P.k); P.vy = 1.6; P.v = 0;
     trReset(P.T, P.x, A.y, P.z); P.s = 0; trPush(P.T, ch.position.x, gy, ch.position.z);
   } else petReset(ch.position.x, gy, ch.position.z, t.heading);
   A.v = 0;
@@ -296,7 +300,7 @@ function petMount() {
   } else { A.free = true; A.pend = false; }
   A.v = 0; A.chk = 0;
   if (car) { trReset(A.T, car.position.x, car.position.y, car.position.z); A.lcx = car.position.x; A.lcy = car.position.y; A.lcz = car.position.z; }
-  A.car.add(C.group); const s = PET_RIDE[P.k]; C.group.position.set(s[0], s[1], s[2]); C.group.rotation.set(0, 0, 0); C.group.visible = true;
+  A.car.add(C.group); const s = PET_RIDE[P.k]; C.group.position.set(s[0], s[1], s[2]); C.group.rotation.set(0, 0, 0); C.group.scale.setScalar(1 / atvS(P.k)); C.group.visible = true;
   C.B.head.add(petHelmet(P.k));
   A.car.visible = A.placed;
 }
@@ -362,21 +366,21 @@ function petBtns() { // 帶的寵物換了：右下角那一排重做
 }
 
 // ---- 大便龍寵物店（petshop.js 的 buildPetShopInterior：第一次走進去才蓋，蓋好留著；自己的場景）----
-let PSI = null, PSC = null;
+let PETSI = null, PETSC = null;
 function enterPetShop(b) {
   let first = false;
-  if (!PSI) {
-    try { PSI = buildPetShopInterior({ makeAnimal: buildAnimal, makeCharacter: buildCharacter }); } catch (e) { console.error(e); PSI = null; }
-    if (!PSI) return { say: '寵物店今天沒開' };
-    PSC = new THREE.Scene(); PSC.name = 'petshop'; PSC.background = PSI.background; PSC.add(PSI.group);
-    PSI.exitsW = [{ ...PSI.exitDoor, door: PSI.doors[0] }];
+  if (!PETSI) {
+    try { PETSI = buildPetShopInterior({ makeAnimal: buildAnimal, makeCharacter: buildCharacter }); } catch (e) { console.error(e); PETSI = null; }
+    if (!PETSI) return { say: '寵物店今天沒開' };
+    PETSC = new THREE.Scene(); PETSC.name = 'petshop'; PETSC.background = PETSI.background; PETSC.add(PETSI.group);
+    PETSI.exitsW = [{ ...PETSI.exitDoor, door: PETSI.doors[0] }];
     first = true;
   }
-  indoor = { b, I: PSI, scene: PSC, t: 0, dist0: walker.cameraDist, folks: [], kind: 'petshop', keep: true, exits: PSI.exitsW };
-  PSC.add(walker.character.group);
+  indoor = { b, I: PETSI, scene: PETSC, t: 0, dist0: walker.cameraDist, folks: [], kind: 'petshop', keep: true, exits: PETSI.exitsW };
+  PETSC.add(walker.character.group);
   walker.removeColliders('world'); walker.setCarReach(false);
-  houseSet(PSI.spawn);
-  return { wait: first && renderer.compileAsync ? renderer.compileAsync(PSC, dcam) : null, say: `${PSI.name}：站到寵物前面按「買」` };
+  houseSet(PETSI.spawn);
+  return { wait: first && renderer.compileAsync ? renderer.compileAsync(PETSC, dcam) : null, say: `${PETSI.name}：站到寵物前面按「買」` };
 }
 const PS_ACT = {};
 function psAct(i) {
@@ -387,9 +391,9 @@ function psAct(i) {
     : { label: `買 · ${K.name} ${K.price} 萬`, icon: 'hand', onClick: () => petBuy(K.k) });
 }
 function psStep(dt) {
-  const t = walker.telemetry(); PSI.update(dt, t);
+  const t = walker.telemetry(); PETSI.update(dt, t);
   if (walker.mode !== 'walk') return;
-  const z = PSI.zoneAt(t.x, t.z);
+  const z = PETSI.zoneAt(t.x, t.z);
   walker.setAction(z >= 0 ? psAct(z) : null);
 }
 function petBuy(k) {

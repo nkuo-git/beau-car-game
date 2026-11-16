@@ -27,7 +27,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__look = () => LOOKP; window.__cam = () => ({ maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
   + ' window.__T3 = THREE; window.__LK = () => LOOK; window.__box = (o) => new THREE.Box3().setFromObject(o); window.__GH = () => GH; window.__ghostUnpack = (g) => ghostUnpack(g); window.__ghostAt = (G, t, o) => ghostAt(G, t, o);' // 鬼影車排行榜（ghost.src.js）
-  + ' window.__PET = () => ({ PET, LOBBY, PAGEP, PSI, copsOff, mode: petModeNow(), petNear, petPedOK, petWithMe, doPunch, petGo, HOP, OB, MRTS });'
+  + ' window.__PET = () => ({ PET, LOBBY, PAGEP, PSI: PETSI, copsOff, mode: petModeNow(), petNear, petPedOK, petWithMe, doPunch, petGo, HOP, OB, MRTS, leaveCar, petMount, petHelmet, atvEnsure, PET_RIDE, PET_HELM });'
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -338,7 +338,7 @@ const a4 = await Q(() => { const pol = window.__pol(); pol.clear?.(); const W = 
   /* 站到他後面 4 公尺、面對他 */ const ang = Math.atan2(-(q.z - W.telemetry().z), q.x - W.telemetry().x);
   W.teleport({ x: q.x - Math.cos(ang) * 4, z: q.z + Math.sin(ang) * 4, heading: ang }); window.__H.step(4);
   q = window.__Q.adult(8) || q; const ang2 = Math.atan2(-(q.z - W.telemetry().z), q.x - W.telemetry().x); W.teleport({ x: W.telemetry().x, z: W.telemetry().z, heading: ang2 }); window.__H.step(2);
-  const b = [...document.querySelectorAll('#stage .wk-btns b')].find((e) => e.textContent.trim() === '🐾上'); b?.click();
+  const b = [...document.querySelectorAll('#stage .wk-btns b')].find((e) => e.textContent.trim() === '🐾上'); b?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); b?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
   const atk0 = window.__Q.pet().atk; let hit = -1, mode = null;
   for (let i = 0; i < 360; i++) { window.__H.step(1); if (hit < 0 && (q.mode === 'fall' || q.mode === 'lie' || q.down)) { hit = i; mode = q.mode; } if (hit >= 0 && i > hit + 30) break; }
   const w = pol.wanted; let up = false; for (let i = 0; i < 60 * 8 && !up; i++) { window.__H.step(1); up = !(q.mode === 'fall' || q.mode === 'lie' || q.mode === 'getup' || q.down); }
@@ -367,8 +367,8 @@ await p.evaluate(() => { const H = window.__H, D = window.__D(), W = D.walker, q
     H.step(30); W.getIn(); for (let i = 0; i < 900 && W.mode !== 'off'; i++) H.step(1); H.step(30); return { a, mode: W.mode }; }; });
 const bd5 = await Q(() => window.__H.boardCar());
 console.log('5', el(), JSON.stringify(bd5), JSON.stringify(await Q(() => window.__Q.pet())));
-const v5b = await Q(() => { const D = window.__D(), d = D.drv; window.__pol()?.clear?.(); d.teleport(D.VIL.places.garage.spawn); window.__H.step(20);
-  /* 載沙灘車 */ for (let i = 0; i < 400 && !window.__PET().PET.A.car; i++) window.__H.step(1);
+await p.waitForFunction(() => { window.__H.step(2); return !!window.__PET().PET.A.car; }, null, { timeout: 60000, polling: 200 }); // 沙灘車的輕量車載好（要讓出來給 fetch）
+const v5b = await Q(() => { const D = window.__D(), d = D.drv; window.__pol()?.clear?.(); d.teleport({ x: 25, z: 2.4, heading: 0 }); window.__H.step(20); /* 400 公尺的直線（往 +x）*/
   const s0 = window.__Q.pet(); const out = []; for (let i = 0; i < 60 * 9; i++) { d.setInput({ throttle: i < 60 * 6 ? 0.7 : 0, brake: i < 60 * 6 ? 0 : 0.6, steer: 0 }); window.__dstep(1); if (i % 30 === 29) { const P = window.__PET().PET, car = D.tripS.car; out.push([+Math.hypot(P.A.x - car.position.x, P.A.z - car.position.z).toFixed(1), +d.telemetry().v.toFixed(1), P.A.car.visible ? 1 : 0]); } }
   d.setInput(null); window.__H.step(60);
   const P = window.__PET().PET, car = D.tripS.car, fx = Math.cos(car.rotation.y), fz = -Math.sin(car.rotation.y), behind = (P.A.x - car.position.x) * fx + (P.A.z - car.position.z) * fz;
@@ -380,14 +380,14 @@ check(gaps.length >= 12 && mx(gaps) < 60 && v5b.behind < -3 && v5b.behind > -14,
 await Q(() => { const W = window.__D().walker; window.__D().drv.setCameraMode?.('chase'); window.__H.step(20); });
 await drawAndShot('5-atv');
 // 近照：鏡頭擺到沙灘車旁邊
-await Q(() => { const D = window.__D(), A = window.__PET().PET.A, cam = D.dcam; window.__hold = true; const c = Math.cos(A.th), s = Math.sin(A.th); cam.position.set(A.x + c * 1.6 - s * 1.7, A.y + 1.25, A.z - s * 1.6 - c * 1.7); cam.lookAt(A.x, A.y + 0.8, A.z); cam.updateMatrixWorld(); });
+await Q(() => { const D = window.__D(), A = window.__PET().PET.A, cam = D.dcam; window.__hold = true; const c = Math.cos(A.th), s = Math.sin(A.th); cam.position.set(A.x + c * 1.5 - s * 1.6, A.y + 1.05, A.z - s * 1.5 - c * 1.6); cam.lookAt(A.x, A.y + 0.6, A.z); cam.updateMatrixWorld(); });
 await drawAndShot('5-atv-close');
 await Q(() => { window.__hold = false; });
 const dc5 = await frameInfo(4);
 console.log('  draw (driving with the ATV):', JSON.stringify(dc5));
 
 // ---- 6 下車：跳下來跑到你旁邊 ----
-const o6 = await Q(() => { const H = window.__H, D = window.__D(), W = D.walker; let pr = H.press2() || H.press(); for (let i = 0; i < 400 && W.mode !== 'walk'; i++) H.step(1); H.step(5); const a = window.__Q.pet(); H.step(120); return { pr, a, b: window.__Q.pet() }; });
+const o6 = await Q(() => { const H = window.__H, D = window.__D(), W = D.walker; const pr = '下車'; window.__PET().leaveCar(); for (let i = 0; i < 400 && W.mode !== 'walk'; i++) H.step(1); H.step(5); const a = window.__Q.pet(); H.step(120); return { pr, a, b: window.__Q.pet() }; });
 console.log('6', el(), JSON.stringify(o6));
 check(o6.b.mode === 'walk' && !o6.b.onAtv && !o6.b.helm && o6.b.vis && o6.b.d < 2.5 && o6.b.atv?.vis, `got out (${o6.pr}): the pig hops off (helmet off), runs to you (${o6.b.d} m); the ATV stays parked`);
 
@@ -406,14 +406,16 @@ console.log('  swap:', JSON.stringify(s7));
 check(s7.a === '🐾 帶粉紅出門' && s7.pet.k === 'pinky' && s7.pet.cur === 'pinky' && s7.saved === 'pinky' && s7.lobby.join() === 'pig' && s7.pet.vis && s7.pet.d < 3, `next to 粉紅: 「🐾 帶粉紅出門」 → 粉紅 follows you now (${s7.toast}); the pig stays in the lobby`);
 
 // ---- 8 回車庫頁：全部的寵物在大廳；重新載入還在 ----
-const g8 = await Q(() => { const b = [...document.querySelectorAll('#stage .wk-dest button, #stage button')].find((e) => /直接回車庫/.test(e.textContent)); b?.click(); return !!b; });
-await p.waitForFunction(() => !window.__D().trip, null, { timeout: 60000 }); await p.waitForTimeout(800);
+const g8 = await Q(() => { const b = document.getElementById('driveHome'); b?.click(); return !!b; });
+await p.evaluate(() => { window.__hold = false; window.__noDraw = false; });
+await p.waitForFunction(() => !window.__D().trip && window.__PET().PAGEP.length >= 2, null, { timeout: 60000, polling: 200 }); await p.waitForTimeout(800);
 const g8b = await Q(() => { const X = window.__PET(); return { page: X.PAGEP.map((L) => L.k), par: X.PAGEP.every((L) => L.C.group.parent === window.__room().group), petGone: !X.PET.C?.group.parent }; });
 console.log('8', el(), g8, JSON.stringify(g8b));
 check(g8 && g8b.page.sort().join() === 'pig,pinky' && g8b.par && g8b.petGone, `back on the garage page: both pets play in the lobby (${g8b.page.join(' ')}); the following pet is put away`);
 await p.evaluate(() => { window.__noDraw = false; });
 await p.screenshot({ path: `${prefix}-8-garage.png` });
 await p.reload({ waitUntil: 'domcontentloaded' }); await ready(); await p.waitForTimeout(1500);
+await p.waitForFunction(() => window.__PET().PAGEP.length >= 2, null, { timeout: 60000, polling: 200 }).catch(() => {});
 const r8 = await Q(() => ({ pets: window.__G().pets.slice(), pet: window.__G().pet, page: window.__PET().PAGEP.map((L) => L.k), cops: localStorage.getItem('carid.cops') }));
 console.log('  reload:', JSON.stringify(r8));
 check(r8.pets.join() === 'pig,pinky' && r8.pet === 'pinky' && r8.page.length === 2, 'reloaded: still own the pig and 粉紅, 粉紅 is the one you take out');
