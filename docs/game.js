@@ -7736,7 +7736,7 @@ return { buildPoliceStation, buildPoliceInterior, makePoliceCar, setPoliceLod, p
 const { PETSHOP, PET_KINDS, PETSHOP_TEXT, buildPetShop, buildPetShopInterior } = (() => {
 const PETSHOP = { x: -364, z: -25, hx: 6.5, hz: 10, H: 4.4, top: 5.0, door: { x: -356.9, z: -25, ry: Math.PI / 2 } };
 const FX = PETSHOP.x + PETSHOP.hx, BX = PETSHOP.x - PETSHOP.hx, NZ = PETSHOP.z - PETSHOP.hz, SZ = PETSHOP.z + PETSHOP.hz; // 正面 x −357.5、後面 −370.5、北 z −35、南 −15
-const PET_KINDS = [{ k: 'pig', name: '小豬', price: 2000, col: '#f4b6c6' }, { k: 'pinky', name: '粉紅', price: 2000, col: '#ff6fa8' }, { k: 'cham', name: '變色龍', price: 3000, col: '#8a62d6' }];
+const PET_KINDS = [{ k: 'pig', name: '小豬', price: 200, col: '#f4b6c6' }, { k: 'pinky', name: '粉紅', price: 200, col: '#ff6fa8' }, { k: 'cham', name: '變色龍', price: 300, col: '#8a62d6' }]; // 第 96 批（Nick 2026-11-16「寵物太貴了」）：便宜 10 倍（以前 2000、2000、3000）
 const PODS = [{ z: -30.6, r: 0.95, x: -367.0 }, { z: -25.0, r: 0.95, x: -367.0 }, { z: -19.2, r: 1.3, x: -367.3 }]; // 圓台（照 PET_KINDS 的順序；變色龍最長，圓台大一點）
 const NAME = '大便龍寵物店';
 const PETSHOP_TEXT = [...new Set([...NAME, ...'小豬粉紅變色龍萬最大隻可愛寵物歡迎參觀光臨會一直跟著你收銀台飼料玩具零食幫你打騎沙灘車0123456789！'])].join('');
@@ -16243,15 +16243,17 @@ const CSS = `
 /* 第 69 批（Nick 2026-11-07「換檔在左邊螢幕做一個垂直的用上下滑動換檔」）：左邊一條直的換檔桿 R N 1 2 … NG；手指按著＝踩著離合器，往上滑一格＝升一檔、往下＝降一檔（一次只換一檔） */
 .dv.mt .dv-shf{display:flex;flex-direction:column;left:10px;top:62px;width:52px;padding:4px;box-sizing:border-box;border-radius:14px;background:rgba(14,15,18,0.62);pointer-events:auto;cursor:ns-resize;touch-action:none;-webkit-user-select:none;user-select:none;transition:background .1s,box-shadow .1s}
 .dv.mt .dv-shf.on{background:rgba(14,15,18,0.85);box-shadow:0 0 0 3px #FF6A1F} /* 手指按著＝離合器踩著 */
-.dv-shf b{height:28px;display:grid;place-items:center;border-radius:9px;font:700 15px/1 ${COND};color:#C6CAD1;pointer-events:none}
+.dv-shf{--shh:min(28px,calc(224px / var(--shn,8)))} /* 第 96 批：一格多高：7～10 檔的車（自排車也能手排）格子矮一點，整條跟 6 檔一樣高 */
+.dv-shf b{height:var(--shh);display:grid;place-items:center;border-radius:9px;font:700 min(15px,calc(var(--shh) - 3px))/1 ${COND};color:#C6CAD1;pointer-events:none}
 .dv-shf b.r{color:#FF8A8A}
-.dv-shf b.cur{background:#FF6A1F;color:#1A0F07;font-size:19px}
+.dv-shf b.cur{background:#FF6A1F;color:#1A0F07;font-size:min(19px,calc(var(--shh) - 2px))}
+.dv.mt .dv-act{left:72px;max-width:calc(100% - 218px);padding-right:14px;font-size:17px} /* 第 96 批：手排的時候大按鈕（開鐵捲門、上馬力機⋯）放在換檔桿右邊（以前疊在換檔桿上面） */
 .dv-shf b.cur.stall{background:#55585F;color:#C6CAD1}
 .dv-shf b.hot{color:#FF6A1F;background:rgba(255,106,31,0.22)} /* 下一檔亮橘＝該升（或該降）了 */
 .dv-shf b.lim{color:#fff;background:#FF3B30} /* 撞紅線：上面那一格閃紅 */
 .dv.mt .dv-mth{display:block;bottom:140px;left:50%;transform:translateX(-50%);padding:4px 11px;border-radius:999px;background:#FF3B30;color:#fff;font:700 13px/1 ${SANS};font-style:normal;letter-spacing:.02em;white-space:nowrap;opacity:0;transition:opacity .15s;pointer-events:none}
 .dv.mt .dv-mth.show{opacity:1}.dv.mt .dv-mth.warn{background:#FF6A1F;color:#1A0F07}
-@media (max-height:560px){.dv.mt .dv-shf{top:58px}.dv-shf b{height:22px;font-size:14px}.dv-shf b.cur{font-size:17px}} /* 橫拿：矮一點（338 高的手機：◀ ▶ 在 254 起） */
+@media (max-height:560px){.dv.mt .dv-shf{top:58px}.dv-shf{--shh:min(22px,calc(176px / var(--shn,8)),calc((100cqh - 160px) / var(--shn,8)))}.dv-shf b{font-size:min(14px,calc(var(--shh) - 2px))}.dv-shf b.cur{font-size:min(17px,calc(var(--shh) - 1px))}} /* 橫拿：矮一點；第 96 批：整條的底在方向鍵 ◀ ▶ 上面（338 高的手機 6 檔以前壓到 6 像素） */
 @container (max-height:290px){.dv.mt .dv-mth{left:auto;right:366px;transform:none}} /* 很矮：提示跟著轉速表 */
 @container (max-height:300px){.dv.mt .dv-shf{display:none}} /* 沒全螢幕的小舞台（電腦，290 高）：換檔桿放不下，用鍵盤（Shift＋Q／Z）；338 高的手機還放得下 */
 .dv-spd i{position:absolute;bottom:calc(100% + 24px);left:50%;transform:translateX(-50%);padding:5px 13px;border-radius:999px;background:#FF6A1F;color:#1A0F07;font:700 17px/1 ${SANS};font-style:normal;letter-spacing:.04em;white-space:nowrap;box-shadow:0 3px 0 #9E4213}
@@ -16450,7 +16452,7 @@ function createDrive(o) {
   const DYI = { thr: 0, brk: 0, hb: 0, clu: 0, steer: 0 }; // 馬力機上的輸入：方向盤、手煞車不算（重用）
   // 第 68 批：手排（setGearbox('mt')）：mg＝排在哪一檔（−1 R、0 N、1–6；st.gear／st.rev 跟著它）、clu＝離合器接上多少（0 踩著～1 接上）、stall＝熄火了、crank＝發動中（秒）、
   //   grind＝「咔咔」沒換進去（秒；grindWhy 1 沒按離合器、2 太快不能倒車）、lim＝撞到紅線斷油中、limT＝計時（紅線噠噠噠、閃）、shq＝按了 ▲ ▼ 還沒處理的
-  Object.assign(st, { mt: false, mg: 0, clu: 1, cluPrev: 1, stall: false, crank: 0, grind: 0, grindWhy: 0, lim: false, limT: 0, shq: [] });
+  Object.assign(st, { mt: false, noStall: false, mg: 0, clu: 1, cluPrev: 1, stall: false, crank: 0, grind: 0, grindWhy: 0, lim: false, limT: 0, shq: [] });
   // 第 89 批（Nick「車子發動要有點火」）：ign＝起動馬達還在轉（秒；轉速表 0.07 抖、沒有引擎聲）、踩油門馬上發動；發動那一下 flare（轉速衝到 0.37 再慢慢回到怠速）
   const FLARE_T = 1.0; Object.assign(st, { ign: 0, ignT: 0, flare: 0 });
   const dmgP = { power: 1, top: 1, maxKmh: Infinity, steerPull: 0 }; // 撞壞了（setDamage）
@@ -16586,7 +16588,7 @@ function createDrive(o) {
     st.clu = want <= st.clu ? want : Math.min(1, st.clu + h / 0.12); // 踩下去馬上分開，放開 0.12 秒接上
     if (st.cluPrev < 0.5 && st.clu >= 0.5 && st.mg !== 0 && !st.stall) { // 放開的那一下
       const x = st.rev ? 0.14 + Math.min(1, Math.abs(st.v) / 4.5) * 0.3 : xOf(st.v, st.gear);
-      if (x < 0.12 && inp.thr < 0.15) { st.stall = true; st.crank = 0; st.cut = 0; events.push(['engine', false]); }
+      if (x < 0.12 && inp.thr < 0.15 && !st.noStall) { st.stall = true; st.crank = 0; st.cut = 0; events.push(['engine', false]); }
       else if (x > st.rpm) { if (x > st.rpm + 0.06) { st.blip = BLIP_T; events.push(['blip', st.mg]); } st.rpm = Math.min(1.08, x); } // 第 69 批：降檔接上＝轉速瞬間衝上去（不慢慢爬）；第 74 批：那一下引擎聲大聲（blip，Nick「降檔時的聲浪太小」）
     }
     st.cluPrev = st.clu;
@@ -16601,7 +16603,8 @@ function createDrive(o) {
     if (st.stall) { if (st.crank > 0) { st.crank -= h; if (st.crank <= 0) { st.stall = false; st.crank = 0; st.flare = FLARE_T; events.push(['engine', true]); } } else if (inp.thr > 0.3) { st.crank = 0.6; events.push(['crank', 0.6]); } } // 第 89 批：重新發動也有起動馬達的聲音（crank）、發動那一下轉速衝上去（flare）
     st.grind = Math.max(0, st.grind - h); st.limT += h;
   }
-  function setGearbox(k) {
+  function setGearbox(k, opt) {
+    st.noStall = !!(opt && opt.noStall); // 第 96 批（Nick 2026-11-16「改成自排車也能換手排只是不會突然熄火」）：本來是自排的車也能用手排，放開離合器不會熄火（轉速停在怠速、像自排的變扭器那樣滑）
     const on = k === 'mt'; if (on === st.mt) return;
     st.mt = on; st.stall = false; st.crank = 0; st.grind = 0; st.lim = false; st.clu = st.cluPrev = 1; st.shq.length = 0;
     if (on) st.mg = st.rev ? -1 : Math.abs(st.v) > 0.5 ? st.gear + 1 : 0; // 開著換成手排＝現在這一檔；停著＝空檔
@@ -16943,7 +16946,7 @@ function createDrive(o) {
     H.tiltG = q('.dv-tilt g'); H.tiltC = q('.dv-tilt b'); // 轉手機開車
     H.pop = q('.dv-pop'); // 跳燈
     H.shf = q('.dv-shf'); H.mth = q('.dv-mth'); H.slots = []; // 第 68 批：手排；第 69 批：換檔桿（每一格一個 <b>：NG … 1、N、R）
-    for (let g = NG; g >= -1; g--) { const b = document.createElement('b'); b.textContent = g === 0 ? 'N' : g === -1 ? 'R' : String(g); if (g === -1) b.className = 'r'; b.dataset.g = g; H.shf.append(b); H.slots.push(b); }
+    H.shf.style.setProperty('--shn', NG + 2); for (let g = NG; g >= -1; g--) { const b = document.createElement('b'); b.textContent = g === 0 ? 'N' : g === -1 ? 'R' : String(g); if (g === -1) b.className = 'r'; b.dataset.g = g; H.shf.append(b); H.slots.push(b); }
     H.shfY = null; H.shfId = null; H.shfDone = false;
     H.spdBox = q('.dv-spd'); H.tach = q('.dv-spd svg'); H.tachA = q('.dv-spd svg .a'); H.spdBox.classList.toggle('tach', mode !== 'eye'); // 轉速表
     const on = (el, t, f, opt) => { el.addEventListener(t, f, opt); H.off.push(() => el.removeEventListener(t, f, opt)); };
@@ -17279,7 +17282,7 @@ function createDrive(o) {
     brake: Math.max(st.rev ? st.thr : st.brk, st.hb), steer: st.steer, surface: st.surf, cap: Math.min(999, Math.round(st.cap * 36) / 10), reversing: st.rev, bumps: st.bumps, shifts: st.shifts, zone: zoneNow, dest, destDist: routeData ? Math.max(0, routeData.len - routeS) : null, auto: !!auto, paused,
     slip: st.slip, travel: wrapA(st.th + st.slip), drift: st.dm, drifting: Math.abs(st.slip) > 0.175, drifts: st.drifts, loose: st.loose, skid: st.skid, handbrake: st.hb > 0 ? 1 : 0, // 第 3 批（甩尾）
     marks: SK ? SK.count() : 0, smoke: SK ? SK.alive() : 0, tilt: tilt.on ? tilt.val : null,
-    ngears: NG, mt: st.mt, mgear: st.mt ? st.mg : null, clutch: st.mt ? +(1 - st.clu).toFixed(3) : 0, stalled: st.stall, cranking: st.crank > 0, igniting: st.ign > 0, grind: st.grind > 0 ? st.grindWhy : 0, limiter: st.lim, // 第 68 批：手排
+    ngears: NG, mt: st.mt, noStall: st.noStall, mgear: st.mt ? st.mg : null, clutch: st.mt ? +(1 - st.clu).toFixed(3) : 0, stalled: st.stall, cranking: st.crank > 0, igniting: st.ign > 0, grind: st.grind > 0 ? st.grindWhy : 0, limiter: st.lim, // 第 68 批：手排
     dyno: !!st.dyno, whp: paused ? 0 : st.pw / 745.7, whpX: st.px, redline: P.red, // 第 77 批：馬力機：在滾筒上、輪上馬力（hp）、那時候的轉速（÷紅線）、紅線轉速
     ...(ride ? ride.tele() : null) });
 
@@ -29569,12 +29572,12 @@ const PINKY = {
     ell(G, [0, 0.43, 0], [0.125, 0.15, 0.135], null, BODY, (x, y) => mix2(B.hips, B.chest, 0.36, 0.48, y), { w: 22, h: 16 });
     ell(G, [-0.005, 0.32, 0], [0.142, 0.118, 0.152], null, FLEECE, B.hips, { w: 24, h: 16, jit: 0.007, fuzz: 0.06 });
     ell(G, [0.02, 0.645, 0], [0.13, 0.12, 0.125], null, BODY, B.head, { w: 22, h: 16 });
-    // 第 89 批（Nick「粉紅色豬鼻子太長」）：鼻子短一點（露出頭的那段 15.5 → 9.5 公分）
-    cap(G, [0.1, 0.63, 0], [0.19, 0.654, 0], 0.075, 0.052, BODY, B.head, { seg: 16, k: 6 });
-    const pa = Math.atan2(0.024, 0.09);
-    ell(G, [0.233, 0.664, 0], [0.016, 0.046, 0.049], [0, 0, pa], NOSE, B.head, { w: 14, h: 10, fuzz: 0.01 });
+    // 第 89 批（Nick「粉紅色豬鼻子太長」）：鼻子短一點（露出頭的那段 15.5 → 9.5 公分）；第 96 批（Nick 2026-11-16 又說「粉紅豬鼻子太長了」）：再往回 4 公分（9.5 → 5.5）
+    const NB = -0.04, pa = Math.atan2(0.024, 0.09), nby = NB * 0.024 / 0.09; // 鼻子整段往頭裡面推（斜度不變）
+    cap(G, [0.1, 0.63, 0], [0.19 + NB, 0.654 + nby, 0], 0.075, 0.052, BODY, B.head, { seg: 16, k: 6 });
+    ell(G, [0.233 + NB, 0.664 + nby, 0], [0.016, 0.046, 0.049], [0, 0, pa], NOSE, B.head, { w: 14, h: 10, fuzz: 0.01 });
     for (const s of [-1, 1]) {
-      ell(G, [0.247, 0.668, s * 0.02], [0.006, 0.015, 0.008], [0, 0, pa], STITCH, B.head, { w: 8, h: 6, fuzz: 0 });
+      ell(G, [0.247 + NB, 0.668 + nby, s * 0.02], [0.006, 0.015, 0.008], [0, 0, pa], STITCH, B.head, { w: 8, h: 6, fuzz: 0 });
       ell(G, [0.098, 0.69, s * 0.085], [0.017, 0.017, 0.017], null, EYE, B.head, { w: 12, h: 8, fuzz: 0, rough: 0.22 });
       ell(G, [0.112, 0.697, s * 0.08], [0.005, 0.005, 0.005], null, GLINT, B.head, { w: 6, h: 4, fuzz: 0, rough: 0.3 });
       const th = s * 0.33, ear = s < 0 ? B.earL : B.earR, ex = -0.01, ey = 0.73, ez = s * 0.075, dy = Math.cos(th), dz = Math.sin(th);
@@ -29596,9 +29599,12 @@ const STRIPES = ['#e8393f', '#f28a2b', '#f5d33c', '#58b847', '#2f96d6', '#2b3c96
 const CHAM_SC = 1.2;
 // 腳：肩膀／髖 u、手肘／膝蓋 l、腳踝 f（還沒放大）；前腳手肘朝後、後腳膝蓋朝前，站著就彎一點（爬的樣子，走路的時候腳才踩得到地）
 // 第 89 批（Nick「變色龍腳太長」）：身體低 6 公分、肚子往下多 7.5 公分（belly）、腳變短：露出來的腳短約三分之一（放大前 0.35 → 0.23）
-const CLEG = { F: { x: 0.22, u: 0.36, lx: -0.085, l: 0.19, f: 0.035 }, H: { x: -0.37, u: 0.36, lx: 0.085, l: 0.19, f: 0.035 } };
-const CHAM_DY = -0.06; // 中線（身體、頭、尾巴）往下
-const belly = (s) => 0.075 * (s < 0.3 ? 0 : s < 0.5 ? smooth((s - 0.3) / 0.2) : s < 1.05 ? 1 : s < 1.22 ? 1 - smooth((s - 1.05) / 0.17) : 0); // 肚子（下半圈）多多少
+// 第 96 批（Nick 2026-11-16「便色龍腳短一點」）：身體再低 1 公分、肚子再往下 4 公分、肩膀／手肘跟著低：露出來的腳再短約四分之一（0.22 → 0.17；後腳 0.20 → 0.15）；
+//   肩膀、髖 0.36 → 0.27（側面看得到的大腿短一截）；背還是 0.9 公尺（變色龍還是最大）；腳短了步子也小一點（CHAM.anim 的 lam × LEG_K）
+const CLEG = { F: { x: 0.22, u: 0.27, lx: -0.085, l: 0.15, f: 0.035 }, H: { x: -0.37, u: 0.27, lx: 0.085, l: 0.15, f: 0.035 } };
+const CHAM_DY = -0.07; // 中線（身體、頭、尾巴）往下
+const LEG_K = 0.78; // 步子（腳站著的高度 0.235 ÷ 0.325 ≈ 0.72，留一點）
+const belly = (s) => 0.115 * (s < 0.3 ? 0 : s < 0.5 ? smooth((s - 0.3) / 0.2) : s < 1.05 ? 1 : s < 1.22 ? 1 - smooth((s - 1.05) / 0.17) : 0); // 肚子（下半圈）多多少
 let CL = null; // 中線：{ x, y, s }，s＝從鼻子量的長度（還沒放大）
 function chamLine() {
   if (CL) return CL;
@@ -29866,7 +29872,7 @@ PINKY.anim = (C, S, dt) => {
 
 CHAM.anim = (C, S, dt) => {
   const B = C.B, SC = CHAM_SC, sp = S.sp / SC, k = sstep(0.03, 0.2, sp) * (1 - S.fw), run = sstep(1.1, 2.0, sp);
-  const lam = clamp(0.34 + 0.2 * sp, 0.4, 0.8), beta = lerp(0.66, 0.48, run), lift = lerp(0.05, 0.075, run);
+  const lam = clamp(0.34 + 0.2 * sp, 0.4, 0.8) * LEG_K, beta = lerp(0.66, 0.48, run), lift = lerp(0.05, 0.075, run) * LEG_K;
   S.ph += (dt * sp) / lam; const f = S.ph - Math.floor(S.ph);
   let ang = 0; if (S.st === 'wave') ang = Math.sin(clamp(S.t / 1.4, 0, 1) * PI);
   const rootY = (0.006 * Math.cos(4 * PI * f) - 0.006) * k + (1 - k) * 0.004 * Math.sin(S.clock * 1.6);
@@ -29900,7 +29906,7 @@ CHAM.anim = (C, S, dt) => {
     const t = e ? S.eRt : S.eLt, c = e ? S.eR : S.eL, kk = Math.min(1, dt * 14); c[0] += (t[0] - c[0]) * kk; c[1] += (t[1] - c[1]) * kk;
     const b = e ? B.eyeR : B.eyeL; b.rotation.y = c[0] + (ang ? Math.sin(S.t * 8 + e) * ang : 0); b.rotation.z = c[1];
   }
-  if (S.st === 'sit') { B.root.position.y = -0.12 * CHAM_SC; }
+  if (S.st === 'sit') { B.root.position.y = -0.1 * CHAM_SC; } // 第 96 批：肚子低了，坐下少降一點（肚子不碰地）
 };
 
 // ---- 做一隻 ----
@@ -49479,7 +49485,7 @@ function makeDrv(pose) {
     crush: crushFx && crushK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
-  $('gearTog').hidden = !PERF[cur]?.mt; if (gearK === 'mt' && PERF[cur]?.mt) drv.setGearbox('mt'); document.body.classList.toggle('mtgear', drv.gearbox === 'mt'); // 第 68 批：手排；第 69 批：自排車（PERF 沒有 mt）沒有 MT，那一格也不出來
+  $('gearTog').hidden = !mtOk(cur); if (gearK === 'mt' && mtOk(cur)) drv.setGearbox('mt', mtOpt(cur)); document.body.classList.toggle('mtgear', drv.gearbox === 'mt'); // 第 68 批：手排；第 69 批：自排車（PERF 沒有 mt）沒有 MT，那一格也不出來；第 96 批：自排車也有（不會熄火），只有腳踏車沒有
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
   drv.setCamCeil((x, z) => { if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75; if (TRAMP.on) return rampCeil(x, z); if (VIL.hills && !VIL.hills.high && VIL.hills.tunAt(x, z) >= 0) return VIL.hills.ceil; const c = GAR.ceilingAt(x, z, true); return c < 50 ? GAR.group.position.y + c - 0.75 : Infinity; }); // 第 27 批：隧道裡面＝拱頂底下 // 第 24 批：開在斜坡上＝上面那一圈的底下 // 第 21 批：圓塔現在這一層的天花板（一樓 4.2、樓上 2.9 公尺） // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
@@ -49561,16 +49567,18 @@ for (const b of document.querySelectorAll('#tiltPop button')) b.addEventListener
 // 第 68 批：手排（Nick 2026-11-06「車子做手排的」、卡片「要有離合器」→ 草稿第 2 版「照這樣做」）：「⋯」那一排多一顆「自排／手排」，按一下切換；
 //   每支手機自己記（carid.gear，跟按鈕大小一樣不用搬家、不上雲端）；沒選過＝自排（跟以前一樣）。手排：drive.js setGearbox('mt')（▲ ▼、離合器、熄火、紅線斷油）
 const GEAR_KEY = 'carid.gear';
+// 第 96 批（Nick 2026-11-16「改成自排車也能換手排只是不會突然熄火」）：每台有引擎的車都能選 MT（腳踏車沒有）；本來是自排的（PERF 沒有 mt）手排不會熄火
+const mtOk = (k) => !!PERF[k] && !PERF[k].bike, mtOpt = (k) => ({ noStall: !PERF[k]?.mt });
 let gearK = 'at';
 function gearMode(k, keep) {
   gearK = k === 'mt' ? 'mt' : 'at';
   const b = $('gearTog'); b.textContent = gearK === 'mt' ? 'MT' : 'AT'; b.setAttribute('aria-pressed', String(gearK === 'mt')); // 第 69 批：寫 AT／MT（Nick 2026-11-07）
   if (keep) try { localStorage.setItem(GEAR_KEY, gearK); } catch {}
-  if (drv) drv.setGearbox(gearK === 'mt' && PERF[cur]?.mt ? 'mt' : 'at');
+  if (drv) drv.setGearbox(gearK === 'mt' && mtOk(cur) ? 'mt' : 'at', mtOpt(cur));
   document.body.classList.toggle('mtgear', !!drv && drv.gearbox === 'mt'); // 第 69 批：橫拿的「去哪裡」讓位給換檔桿（garage.css）
 }
 try { gearMode(localStorage.getItem(GEAR_KEY)); } catch { gearMode('at'); }
-$('gearTog').addEventListener('click', () => { gearMode(gearK === 'mt' ? 'at' : 'mt', true); gtoast(gearK === 'mt' ? 'MT 手排：左邊的換檔桿按著往上滑升檔、往下滑降檔' : 'AT 自排：車子自己換檔', 2000); FOLD.moreopen = foldStart(); });
+$('gearTog').addEventListener('click', () => { gearMode(gearK === 'mt' ? 'at' : 'mt', true); gtoast(gearK === 'mt' ? 'MT 手排：左邊的換檔桿按著往上滑升檔、往下滑降檔' + (PERF[cur]?.mt ? '' : '（這台本來是自排：不會熄火）') : 'AT 自排：車子自己換檔', 2000); FOLD.moreopen = foldStart(); });
 // 畫質（第 29 批，Nick 2026-10-23「就用5號的真實度」）：「⋯」那一排多一顆「✨」（🎮 左邊）→「畫質 最真實／漂亮／順」（look.js）；
 //   每支手機自己記（carid.look，跟按鈕大小一樣不用搬家、不上雲端）；沒選過：電腦模擬的（測試）＝順，畫得了半精度＝最真實，不然＝漂亮
 const LOOK_KEY = 'carid.look';
@@ -54875,8 +54883,8 @@ function martStep(dt) {
 // ==== 第 95 批：寵物＋不會被抓（Nick 2026-11-15「可以開槍掃射對方或揍跟撞對方 但不會被抓 / 可以花重金買寵物 / 寵物是那三隻 / 他會一直跟著你 可以幫你打警察或人 /
 //      你開車可以讓寵物騎沙灘車跟在你後面」；mock https://claude.ai/artifact/JiamLyxU1TobxZU6T6cgko ，2026-11-16 卡片選「照這樣做」、「做好就上線」）====
 // 1 🚓 抓／不抓：「⋯」那一排一顆（每支手機自己記 localStorage carid.cops；'off'＝不抓）：police-ai setLenient → 什麼都不算犯罪、有星星的話清掉、警察不追你
-// 2 大便龍寵物店（petshop.js：大停車場西邊、以前的稻田）：走進去（黑掉換場景，跟槍店一樣）站到圓台前面「買 · 小豬 2000 萬」
-//   小豬 2000、粉紅 2000、變色龍 3000（萬）；存檔 GAME.pets（買了哪幾隻）、GAME.pet（帶出門的那一隻）
+// 2 大便龍寵物店（petshop.js：大停車場西邊、以前的稻田）：走進去（黑掉換場景，跟槍店一樣）站到圓台前面「買 · 小豬 200 萬」
+//   小豬 200、粉紅 200、變色龍 300（萬；第 96 批以前 2000、2000、3000）；存檔 GAME.pets（買了哪幾隻）、GAME.pet（帶出門的那一隻）
 // 3 跟著你：走路的時候踩著你走過的路（每 0.25 公尺一個點）走在你後面 1.3 公尺（跑步 1.8）；你跳牠也跳；進房子、坐捷運（walker.shift 一起搬）、回家都跟著；
 //   跳太遠（換場景、傳送、電梯、樓梯換層）＝直接站到你腳邊
 // 4 幫你打：你揍到人、開槍打到人（警察也算），牠衝過去撲倒對方；「揍」下面「🐾 上」：撲你前面最近的人或警察。小孩、路上的小動物永遠不撲；
@@ -54886,7 +54894,7 @@ function martStep(dt) {
 // 6 圓塔一樓大廳：沒帶出門的寵物在地毯、獎盃櫃前面走來走去（車庫頁也看得到全部的）；走過去「🐾 帶小豬出門」換一隻
 // 接在 mart.src.js 後面（同一個 module）；town.src.js：atDoor 的 'petshop'、driveStep 的 psStep／petStep、homeWalk 的 petLobbyAct、doPunch／槍的 onCrime 叫 petHit／petCrime、walkBtns 多 🐾 上
 const PET_NAME = { pig: '小豬', pinky: '粉紅', cham: '變色龍' };
-const PET_PRICE = { pig: 2000, pinky: 2000, cham: 3000 };
+const PET_PRICE = { pig: 200, pinky: 200, cham: 300 }; // 跟 petshop.js PET_KINDS 一樣
 const PET_PAINT = { pig: '#f4a9bd', pinky: '#ff5fa2', cham: '#7d55d6' }; // 沙灘車的顏色（照那一隻）
 const ATV_SC = { pig: 0.75, pinky: 0.75, cham: 1 }, atvS = (k) => ATV_SC[k] || 0.75; // 沙灘車的大小：小豬、粉紅只有人的一半高＝兒童的沙灘車；變色龍 2 公尺長＝原本那台
 const PET_RIDE = { pig: [-0.30, 0.875, 0], pinky: [-0.32, 0.835, 0], cham: [-0.25, 0.62, 0] }; // 坐在沙灘車上：動物的原點放在沙灘車本地（沒縮小的）哪裡（座椅上面 0.88）
@@ -55468,7 +55476,7 @@ renderer.setAnimationLoop((now) => {
 // ---- 改車遊戲（獨立的網站 https://nkuo-git.github.io/beau-car-game/ 和它的 APK）才有的：src/site/site.js，build-site.mjs 接在 game.js 最後 ----
 // 包在一個區塊裡：跟上面整個遊戲同一個 module，名字不能撞到
 {
-  const GAME_BUILD = 48; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
+  const GAME_BUILD = 49; // 網頁內容的版號（build-site.mjs 填；跟 sw.js 的 CACHE、index.html 的 ?v= 一樣）
   const TRY_PAGE = false; // 試玩頁（docs/try/，build-site.mjs --try）：標題寫「試玩」、不裝 Service Worker（正式網站的 sw.js 管整個網站，試玩頁不要搶）
   const $id = (id) => document.getElementById(id);
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
