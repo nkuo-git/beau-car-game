@@ -142,7 +142,7 @@ npm ci                      # 在 repo 最上層；three 0.186.1（遊戲、測�
 
 - test-app-b1／b4 給萬能軟體的 repo（有 tune.html）也可以跑，就是測萬能軟體的改車頁。
 - **不可以為了變綠燈把測試改鬆**；找出原因修好。新加或改的測試要真的有在測東西。
-- 已知偶爾會不穩：world-test 第 7 段 challenge 的 🏁 按鈕「Element is not visible」（名單重畫中；重跑會過，內容 39 上線時一次）；world-test 9e（坐朋友的車）偶爾 B 那邊 A 的位置太舊（`hopWhy` stale）或「選位子」沒出現（重跑會過，內容 35 上線時兩次）；test-b3 第 3 段找不到走路中的小孩（重跑會過；第 6 段的 `X.kid` 現在也會叫坐下中的小孩站起來）；world-test 爬山一起比「before the start the car stays put」偶爾會因為 A 那邊載入卡 2 秒而油門踩到出發以後（重跑會過）；機器人開車偶爾撞到人，測試會把星星清掉並記下次數（不算錯）。
+- 已知偶爾會不穩：world-test 第 7 段 challenge 的 🏁 按鈕「Element is not visible」（名單重畫中；重跑會過，內容 39 上線時一次）；world-test 9e（坐朋友的車）偶爾 B 那邊 A 的位置太舊（`hopWhy` stale）或「選位子」沒出現（重跑會過，內容 35 上線時兩次）；test-b3 第 3 段找不到走路中的小孩（重跑會過；第 6 段的 `X.kid` 現在也會叫坐下中的小孩站起來）；world-test 爬山一起比「before the start the car stays put」偶爾會因為 A 那邊載入卡 2 秒而油門踩到出發以後（重跑會過）；機器人開車偶爾撞到人，測試會把星星清掉並記下次數（不算錯）；viaduct-test 第 9a 段（路上剛好沒有跑車）、第 10e～10g 段（國道警察停的位置、第二台警車）偶爾不過，重跑會過（第 95 批兩次，v106 那版也跑過一次都過）；mrt-test 第 2 段閘門偶爾被大廳的小動物擋住（第 95 批連兩次，重跑過）。
 
 ## 效能（手機）
 - 每個新東西都要看 draw calls 和三角形（`renderer.info`），報告幾個地方的數字。現在開車的畫面大約 150–320 calls、1.0–1.3M 三角形（自己的車就約 100 calls、0.9M）。

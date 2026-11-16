@@ -243,10 +243,11 @@ check(two8 && two8.two && two8.seats.length === 2 && two8.seats[0].top === two8.
 const drive9 = await p.evaluate(() => {
   const D = window.__D(), d = D.drv; D.GAR.door.open(0.2); window.__dstep(40);
   d.setCameraMode('chase');
-  for (let i = 0; i < 60 * 6; i++) { d.setInput({ throttle: 0.6, brake: 0, steer: 0 }); window.__dstep(1); }
+  const L0 = D.garLot(), qx = () => { const t = d.telemetry(); return (t.x - L0.x) * Math.cos(L0.heading) - (t.z - L0.z) * Math.sin(L0.heading); };
+  for (let i = 0; i < 60 * 6 && qx() < 24; i++) { d.setInput({ throttle: 0.6, brake: 0, steer: 0 }); window.__dstep(1); } /* 第 95 批：開到門外的大路（z −72）就停：再直直開過去是大便龍寵物店的牆（以前是稻田） */
   d.setInput(null); window.__stop(60);
   const t = d.telemetry(), L = D.garLot(), q = { x: (t.x - L.x) * Math.cos(L.heading) - (t.z - L.z) * Math.sin(L.heading) };
-  return { out: q.x > 14, kmh: Math.round(t.kmh), me: window.__me(), bumps: t.bumps };
+  return { out: q.x > 14, kmh: Math.round(t.kmh), me: window.__me(), bumps: t.bumps, at: [Math.round(t.x), Math.round(t.z)], near: d.colsNear(t.x, t.z, 8).map((c) => `${c.tag || ''}:${c.name || ''}@${c.x},${c.z}`).slice(0, 8) };
 });
 console.log('9', el(), JSON.stringify(drive9));
 check(drive9.out && drive9.me.vis && drive9.me.i === 0 && drive9.bumps === 0, 'drove out through the door with you visible at the wheel');
