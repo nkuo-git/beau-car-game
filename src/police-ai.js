@@ -782,6 +782,7 @@ function createPolice(o = {}) {
   // ---- 狀態 ----
   let everSeen = false, huntT = 0; // 第 3 批（b3-int）：這次通緝警察看到過你沒有、還沒看到過的秒數（甩開的計時從被看到才開始）
   let extSeen = false;
+  let lenient = false; // 第 95 批（Nick 2026-11-15「可以開槍掃射對方或揍跟撞對方 但不會被抓」）：「⋯」裡 🚓 按成「不抓」＝什麼都不算犯罪、警察不追你
   let enabled = true, alive = true, state = 'free', wanted = 0, heat = 0, seenNow = false, lastX = 0, lastZ = 0, catchP = 0, T0 = 0, spawnT = 0, safeT = 0;
   let phaseT = 0, jailLeft = 0, jailFine = 0, jailStars = 0, paid = false, hudFaded = false, relDone = false, slotT = 0, sndT = 0, yardT = 0, dropped = false;
   const lastCrime = {}, crimes = []; let arrests = 0, escapes = 0;
@@ -820,6 +821,7 @@ function createPolice(o = {}) {
   function crime(type, pos) {
     if (!alive || !enabled || state === 'caught' || state === 'jail' || state === 'release') return wanted; // 第 3 批（b3-int）：關掉的時候（比賽中）沒人管
     const add = T.add[type]; if (add == null) return wanted;
+    if (lenient) return wanted; // 第 95 批：不抓
     if ((type === 'hit' || type === 'punch') && pos && pos.animal) return wanted; // 第 86 批：撞到、碰到路上的動物不會被抓
     const x = pos && isFinite(pos.x) ? +pos.x : P.cx, z = pos && isFinite(pos.z) ? +pos.z : P.cz;
     if (type === 'gunfire' && !(nearestPolice(x, z) <= T.gunfireR)) return wanted; // 附近沒有警察：沒人管
@@ -1723,6 +1725,11 @@ function createPolice(o = {}) {
     if (c.siren) { c.siren.stop(); c.siren = null; }
     const f = c.officer; if (f.on && f.st === 'out') { f.st = 'back'; f.thinkT = 0; f.backT = 0; }
   }
+  function setLenient(on) { lenient = !!on; if (lenient && state === 'wanted') clearStars('警察不會抓你了'); }
+  // 第 95 批：寵物撲警察（不算你犯罪）：r 公尺以內最近、站著的警察（沒有＝null）；knockCop＝撲倒（跟被揍一樣倒下去再爬起來）
+  const copUp = (f) => f.on && f.st !== 'down' && f.st !== 'getup' && f.st !== 'in';
+  function nearCop(x, z, r) { let best = null, bd = r; for (const f of offs) { if (!copUp(f)) continue; const d = Math.hypot(f.x - x, f.z - z); if (d < bd) { bd = d; best = f; } } return best; }
+  function knockCop(f, dx, dz) { if (!f || !copUp(f)) return false; knockOfficer(f, dx, dz); return true; }
   function clearStars(msg) {
     wanted = 0; heat = 0; catchP = 0; state = 'free'; escapes++;
     for (const c of cars) if (c.on) goHome(c);
@@ -1878,13 +1885,13 @@ function createPolice(o = {}) {
     };
   }
   return {
-    update, crime, punch, carHit, shot, carObject, shotCar, colliders, wreck, bump, movers, npcCars, markers: markerList, clear, setEnabled, dispose, telemetry, payFine, preload,
+    update, crime, punch, carHit, setLenient, nearCop, knockCop, copUp, offs, shot, carObject, shotCar, colliders, wreck, bump, movers, npcCars, markers: markerList, clear, setEnabled, dispose, telemetry, payFine, preload,
     surrender: () => { if (state !== 'wanted') return false; caught('surrender'); return true; }, // 第 3 批（b3-int）：通緝中自己走進警察局＝自首（一樣關、一樣罰）
     // 第 93 批：國道警察（高架橋上的追逐車，vdtraffic.js＋town.src.js）：看到你（這一格不會甩開）、抓到你、警笛（同一個聲音、同一條總輸出）
     seenBy: () => { extSeen = true; }, catchBy: (how = 'hwy') => { if (state !== 'wanted') return false; caught(how); return true; },
     siren: (id) => { const ctx = audioCtx(); return ctx ? makeSiren(ctx, SND.out || ctx.destination, id) : null; },
     sirenGain: () => { const muted = SND && typeof SND.muted === 'function' ? !!SND.muted() : false; return SND && !muted && enabled ? (SND.gain ?? 0.22) * SIREN_VOL : 0; },
-    get wanted() { return wanted; }, get state() { return state; }, get enabled() { return enabled; },
+    get wanted() { return wanted; }, get lenient() { return lenient; }, get state() { return state; }, get enabled() { return enabled; },
     get jailLeft() { return state === 'jail' ? Math.max(0, jailLeft) : 0; }, // 連線：朋友的名單寫「在拘留室 9:30」
     resetPerf() { perf.n = 0; perf.sum = 0; perf.max = 0; },
     _dbg: DBG,

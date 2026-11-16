@@ -60,6 +60,7 @@
 import * as THREE from 'three';
 import { buildStreet, STREET_TEXT } from './street.js'; // ==== 第 3 批：街景 ====
 import { buildPoliceStation, POLICE_TEXT } from './police.js'; // ==== 第 3 批：警察局 ====
+import { buildPetShop, PETSHOP_TEXT } from './petshop.js'; // 第 95 批：大便龍寵物店
 import { TOWER, towerFoot, TOWER_RAMP, towerRampGround, towerColsAt } from './tower.js'; // 第 21 批：你的家＝圓塔車庫（tower.js）；第 24 批：外面繞圈的斜坡
 import { HILL_LIST, hillH, inTunnel } from './hills.js';
 import { VD_GAP, vdNear } from './viaduct.js'; // 第 91 批：圓環高架橋（快速道路內圈的口、橋下不放樹）
@@ -77,7 +78,7 @@ const SIGN_TEXT = '一三下乘你便保個停光入冰出利到前加勿北區�
 function villageFonts(ms = 1500) {
   const f = typeof document !== 'undefined' && document.fonts;
   if (!f || !f.load) return Promise.resolve();
-  const all = Promise.all([f.load(`700 64px ${SANS}`, SIGN_TEXT + STREET_TEXT + POLICE_TEXT /* 第 3 批 */), f.load(`700 64px ${COND}`, 'RACEWAY 0123456789 M TUNING 24H km')]).catch(() => {});
+  const all = Promise.all([f.load(`700 64px ${SANS}`, SIGN_TEXT + STREET_TEXT + POLICE_TEXT /* 第 3 批 */ + PETSHOP_TEXT /* 第 95 批 */), f.load(`700 64px ${COND}`, 'RACEWAY 0123456789 M TUNING 24H km')]).catch(() => {});
   return Promise.race([all, new Promise((r) => setTimeout(r, ms))]);
 }
 
@@ -1708,7 +1709,7 @@ function buildVillage(opts = {}) {
     { for (let i = 0; i < 12; i++) rnd(); const r2 = rng(7171); paddyArea(-194, 9, -172, 52, 1, 2, r2); paddyArea(-152, 9, -118, 52, 2, 2, r2); paddyArea(-172, 30, -152, 52, 1, 1, r2); } // 第 3 批：中間空出來給槍店（亂數照樣用掉 12 個，後面的田不變）
     paddyArea(-244, 22, -196, 52, 2, 1, rnd);
     paddyArea(-244, 64, -118, 88, 5, 1, rnd);     // 農路南邊
-    { B = new Builder(200); paddyArea(-386, -92, -352, -8, 2, 3, rnd); paddies.pop(); B = VB; paddyArea(-372, -42, -352, -8, 1, 1, rng(16016)); } // 村子西邊（大路北側）；第 16 批：北邊讓給車庫街（亂數照樣用掉）；第 17 批：南排車庫變大，再讓 4 公尺；第 20 批：西邊讓給圓環車庫（只剩一塊）
+    { B = new Builder(200); paddyArea(-386, -92, -352, -8, 2, 3, rnd); paddies.pop(); B = VB; } // 第 95 批：大停車場西邊那塊稻田拿掉了＝大便龍寵物店（petshop.js）； 村子西邊（大路北側）；第 16 批：北邊讓給車庫街（亂數照樣用掉）；第 17 批：南排車庫變大，再讓 4 公尺；第 20 批：西邊讓給圓環車庫（只剩一塊）
     for (let i = 0; i < 4; i++) rnd();            // 第 3 批：西邊（大路南側）的田改成警察局（亂數照樣用掉，後面的田不變）
     paddyArea(-296, 64, -250, 88, 2, 1, rnd);
     paddyArea(-386, 34, -352, 88, 2, 2, rnd);
@@ -2117,6 +2118,10 @@ function buildVillage(opts = {}) {
   for (const c of PS.colliders) colliders.push(c);
   for (const p of PS.pave) addPave(p.x, p.z, p.hx, p.hz, p.rot || 0, C(p.col), p.y ?? 0.02);
   places.police = PS.place; buildings.push(PS.building);
+  const PSH = buildPetShop({ renderer: opts.renderer }); // 第 95 批：大便龍寵物店（大停車場西邊；裡面是 petshop.js 的 buildPetShopInterior）
+  for (const c of PSH.colliders) colliders.push(c);
+  for (const p of PSH.pave) addPave(p.x, p.z, p.hx, p.hz, p.rot || 0, C(p.col), p.y ?? 0.02);
+  places.petshop = PSH.place; buildings.push(PSH.building);
   places.garst = { name: '車庫街', pos: [-370, -72], slots: GST_SLOTS }; // 第 16 批：車庫街；第 21 批：slots＝6 個人的家（HOME_SITES，分散在地圖上）
   const ST = buildStreet({ buildings, roads, places, colliders, paved, nodes: NODES, poles: stPoles, houses: stHouses, rows: stRows }, { renderer: opts.renderer });
   for (const c of ST.colliders) colliders.push(c);
@@ -2151,7 +2156,7 @@ function buildVillage(opts = {}) {
   const ORDER = { decal: 2, halo: 3, glass: 4 };
   const bv = VB.build(mats, ORDER), bh = HB.build(mats, ORDER, 'hwy-');
   const group = bv.group; group.name = 'village'; group.add(ground);
-  group.add(PS.group, ST.group); // 第 3 批：警察局、街景
+  group.add(PS.group, ST.group, PSH.group); // 第 3 批：警察局、街景；第 95 批：寵物店
   bh.group.name = 'highway'; group.add(bh.group);
   const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wires.flat(), 3));
   const wl = new THREE.LineSegments(wg, mats.wire); wl.name = 'wires'; wl.matrixAutoUpdate = false; group.add(wl);
@@ -2166,7 +2171,7 @@ function buildVillage(opts = {}) {
       .concat([{ pts: hc.map((p) => [p.x, p.z]), w: HW.half * 2, kind: 'highway' }]),
     bounds: { x0: -1090, x1: 12, z0: -530, z1: 530 }, areas: { paddy: paddies, pave: paved }, buildings,
     highway: { len: HL, center: hp.map((p) => [p.x, p.z]), out: hp.map((p) => hwyOff(p, HW.mid)), in: hp.map((p) => hwyOff(p, -HW.mid)).reverse(), half: HW.half, lanes: HW.lanes.slice() }, // 細的（直線 25 公尺、彎道 1.5 度一點）：以後的車流、AI 用
-    info: { meshes: bv.meshes + bh.meshes + 2 + PS.info.meshes + ST.info.meshes, tris: VB.tris + HB.tris + gTris + PS.info.tris + ST.info.tris, village: { meshes: bv.meshes, tris: VB.tris }, highway: { meshes: bh.meshes, tris: HB.tris }, ground: gTris, street: ST.info, police: PS.info }, // 第 3 批：＋街景、警察局
+    info: { meshes: bv.meshes + bh.meshes + 2 + PS.info.meshes + ST.info.meshes + PSH.info.meshes, tris: VB.tris + HB.tris + gTris + PS.info.tris + ST.info.tris, village: { meshes: bv.meshes, tris: VB.tris }, highway: { meshes: bh.meshes, tris: HB.tris }, ground: gTris, street: ST.info, police: PS.info }, // 第 3 批：＋街景、警察局
     sidewalks: ST.sidewalks, crossings: ST.crossings, signals: ST.signals, clock: ST.clock, street: ST, police: PS, // ==== 第 3 批 ====
     dispose() { ST.dispose(); PS.dispose(); /* 第 3 批 */ group.removeFromParent(); group.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); for (const m of Object.values(mats)) m.dispose(); for (const t of texs) t.dispose(); },
   };

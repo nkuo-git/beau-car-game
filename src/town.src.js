@@ -394,6 +394,7 @@ function makeWalker() {
   walker = createWalker({ scene: TR.scene, camera: dcam, world: walkWorld(), colliders: meCols(), bounds: VIL.hills?.walkBounds, character: meChar || buildCharacter(meLook()), hudParent: stage, keyboard: true, onDoor: atDoor, onGetIn });
   walker.setGarage(GAR); // 鐵捲門：碰撞跟著門、門口給「開鐵捲門」
   if (NPC) { walker.addColliders(NPC.peds.props.colliders, 'npc-props'); walker.setMovers(NPC.MOV); } // 板凳、椅子；路上的車、居民（npcStep 每一格換）
+  petWrapShift(walker); // 第 95 批：捷運、電扶梯搬你：寵物一起搬
   makeGuns(); // 第 3 批（b3-int）：槍、「揍」的按鈕、警車和警察擋人、小地圖上的警車
 }
 function startDrive() {
@@ -431,6 +432,7 @@ function startDrive() {
   // 教怎麼開始：第一次出門 walk.js 先教怎麼走（3.2 秒），接著才說走去上車；已經走到車子旁邊（有「上車」）就不說
   const hint = () => { if (DRIVE.on && trip && walker.mode === 'walk' && !walker.action) walker.toast('走到車子旁邊，按「上車」', 2400); };
   if (startDrive.n++) hint(); else setTimeout(hint, 3400);
+  petTripStart(); // 第 95 批：寵物（在你腳邊出現）、🚓 抓／不抓
   lastD = performance.now();
   stage.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
 }
@@ -857,6 +859,7 @@ function atDoor(d) {
     goDoor(() => enterStation(false, d)); return;
   }
   if (d.kind === 'gunshop') { goDoor(() => enterGunShop(d)); return; } // 第 3 批（b3-int）：槍店
+  if (d.kind === 'petshop') { goDoor(() => enterPetShop(d)); return; } // 第 95 批：大便龍寵物店（pet.src.js）
   if (d.crushed) { walker.toast('房子被壓扁了，等一下才會修好', 1800); return; } // 第 9 批：越野車輾扁的房子（離開一陣子就長回來）
   const info = CLOSED[d.kind] ? null : interiorFor(d);
   if (!info) { walker.toast(CLOSED[d.kind] || `${d.name ? d.name + '：' : ''}門鎖著`, 1800); return; }
@@ -1597,6 +1600,7 @@ function homeWalk() {
   const t = walker.telemetry(), q = garLocal(t.x, t.z), Z = GAR.zones, inT = GAR.isInside(q.x, q.z);
   let act = null;
   if (inT && !GAR.floor && !GV.on) { if (inBox(Z.bedSide, q.x, q.z)) act = SLEEP_ACT; else if (inBox(Z.dress, q.x, q.z)) act = DRESS_ACT; } // 第 23 批：朋友家的床、衣櫃不能用
+  if (!act && inT) act = petLobbyAct(t); // 第 95 批：大廳裡沒帶出門的寵物「🐾 帶X出門」
   if (!act && !inT) act = martTrunkAct(t); // 第 81 批：車子後面「打開後車廂」「放進去」「關後車廂」（mart.src.js）
   if (!act && inT) act = elCallAct(t.x, t.z); // 第 21 批：電梯不在這層
   if (!act && !t.near) act = orbayAct(t); // 第 6 批：站在越野車車庫門口（旁邊沒有車可以上）：「開鐵捲門」
@@ -2138,6 +2142,7 @@ function toRace() {
   drv.release(); // 車子放回原點、不轉、輪子歸零（carSize、putCar 要）
   DRIVE.on = false; ambOff(); pxStep(); document.body.classList.remove('driving'); bodyWalking(false); driveBar.hidden = true; VIL.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
   townFog(false); npcShow(false); police?.setEnabled(false); bodyFlag('wanted', false); // 第 3 批：比賽的時候警察藏起來（星星留著）
+  petTripEnd(); // 第 95 批
   enterRace(); // 賽道已經蓋好了：不用等，這一行就進去了
   if (!RACE.on) resumeDrive(VIL.places.track.spawn, 'garage'); // 進不去（不會發生）：接著開
 }
@@ -2147,6 +2152,7 @@ function resumeDrive(pose, dest) {
   townFog(true); npcShow(true); police?.setEnabled(true);
   // 比賽可能贏了錢：開車的重新做（馬力照現在的零件），車子停在起跑區外面
   drv.dispose(); makeDrv(pose); setDest(dest);
+  petTripStart(); // 第 95 批：比賽完：寵物回來
   lastD = performance.now();
   stage.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
 }
@@ -2267,6 +2273,7 @@ function leaveDrive() {
   netBorrowEnd('home'); netLendHome(); // 第 19 批：開借來的車回車庫頁＝還車；借給朋友的拿回來
   gvEnd('home'); // 第 23 批：在朋友家：塔搬回你家
   seatsEnd('home'); // 第 57 批：坐在別的位子、坐朋友的車、朋友坐我的車：收掉
+  petTripEnd(); // 第 95 批：寵物、沙灘車收起來
   const P = tripPose && TWR ? { mid: padCars(0, null)[0] || null, tower: TWR.slice() } : null; // 第 21 批：坐電梯中的那幾台不在裡面（normPark 再找一格）
   trip = false; DRIVE.on = false; boarding = null; ambOff(); pxStep(); VIL?.hills?.update(0, null); // 第 27 批：隧道裡面暗下來的光調回來
   panelClose(); driveBar.hidden = true;
@@ -2429,7 +2436,7 @@ function crushSafe(x, z) {
     add(P.gunshop?.building); add(P.police?.building);
     if (P.police?.lot) { const L = P.police.lot; S.push([L.x0 - 1, L.z0 - 1, L.x1 + 1, L.z1 + 1]); }
     if (P.odealer?.pos) { const [x0, z0] = P.odealer.pos; S.push([x0 - 21, z0 - 10, x0 + 21, z0 + 10]); } // 越野車行的鐵皮車棚（offroad.js：x ±18、z 78…94）
-    for (const b of VIL.buildings || []) if (/^(garage|garst|dealer|police|gunshop|temple)$/.test(b.kind) || (b.kind === 'shop' && b.name === P.shop?.name)) add(b);
+    for (const b of VIL.buildings || []) if (/^(garage|garst|dealer|police|gunshop|petshop|temple)$/.test(b.kind) || (b.kind === 'shop' && b.name === P.shop?.name)) add(b);
   }
   for (const r of CRUSH_SAFE) if (x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3]) return true;
   return false;
@@ -2508,7 +2515,7 @@ function crushStep(dt) {
 const PUNCH_BTN = [{ id: 'punch', label: '揍', key: 'KeyF', onClick: () => doPunch() }]; // 走路右下角的圓按鈕（電腦 F）；拿槍的時候收起來（開槍鈕在同一個地方，F 也是開槍）
 const JUMP_BTN_ON = true; // 第 90 批：「跳」的圓按鈕（在「揍」上面；電腦空白鍵一直都可以跳）。mock https://claude.ai/artifact/CsMA2Xzt68fuUgGsxscXfT ，Nick 2026-11-14 卡片選「照這樣做」
 const JUMP_B = { id: 'jump', label: '跳', onClick: () => walker.jump() };
-const walkBtns = (punch) => (JUMP_BTN_ON ? (punch ? [JUMP_B, ...PUNCH_BTN] : null) : (punch ? PUNCH_BTN : null)); // 拿槍、關著：都收起來（開槍那一排在同一個地方）
+const walkBtns = (punch) => { const b = JUMP_BTN_ON ? (punch ? [JUMP_B, ...PUNCH_BTN] : null) : (punch ? PUNCH_BTN : null); return b && petWithMe() ? [...b, PET_B] : b; }; // 第 95 批：「揍」下面「🐾上」（帶著寵物）； // 拿槍、關著：都收起來（開槍那一排在同一個地方）
 const PUNCH_ME = { x: 0, z: 0, heading: 0 }, PL_CAR = { hx: 2.2, hz: 0.9, cx: 0 }; // 每一格重複用的
 const GS_DESK = { label: '買槍、子彈', icon: 'hand', onClick: () => openDesk() }, GS_RANGE = { label: '開始練習', icon: 'hand', onClick: () => startRange() };
 const jailed = () => !!police && (police.state === 'caught' || police.state === 'jail' || police.state === 'release'); // 被抓到、關著、放出來那一下：不能上車下車、開門、用槍
@@ -2637,7 +2644,7 @@ function makeGuns() {
     gunner = createGunner({ scene: TR.scene, camera: dcam, renderer, walker, character: walker.character, GAME, hudParent: stage, keyboard: true, world: townWorld, targets: townTargets,
       audio: { muted: () => engineAudio.muted },
       onChange: () => save(), onEquip: (id) => walker.setButtons(walkBtns(!id)), // 拿槍：開槍鈕放在「揍」的地方（F 也變開槍）
-      onCrime: (kind, info) => police?.crime(kind, info) });
+      onCrime: (kind, info) => { police?.crime(kind, info); petCrime(kind, info); } }); // 第 95 批：寵物撲你打到的人
   } catch (e) { console.error(e); gunner = null; }
   walker.setButtons(walkBtns(true));
 }
@@ -2665,6 +2672,7 @@ function doPunch() {
   const t = walker.telemetry(); PUNCH_ME.x = t.x; PUNCH_ME.z = t.z; PUNCH_ME.heading = t.heading;
   const hit = police.punch(PUNCH_ME, NPC && !indoor ? NPC.peds.people : null, punchKnock);
   if (hit && NPC && !indoor) NPC.peds.scare(hit.x, hit.z, 10); // 旁邊的人嚇跑
+  if (hit) petHit(hit); // 第 95 批：寵物衝過去撲你揍的那一個
 }
 // 槍店：第一次走進去才蓋（字型載入畫面等過了），之後留著；裡面是自己的場景（店員、靶 gunshop.js 自己有）
 function enterGunShop(b) {
@@ -2785,7 +2793,7 @@ function driveStep(dt) {
   if (sleep) sleepStep(dt); // 睡覺：躺著的時候走路的停住了（mode off）；醒來（慢慢亮的時候）就可以走了
   if (doorFade) fadeStep(dt); // 走進門口：黑掉 → 換成房子裡面（樓上、外面）→ 亮起來
   if (indoor) { indoor.t += dt; for (const f of indoor.folks) f.C.update(dt, FOLK_POSE); } // 裡面的人：站著、坐著會動一動
-  if (indoor?.kind === 'police') PI.update(dt); else if (indoor?.kind === 'gunshop' && walker) gsStep(dt); // 第 3 批：拘留室的鐵門；槍店的靶、店員、櫃台／靶場的按鈕
+  if (indoor?.kind === 'police') PI.update(dt); else if (indoor?.kind === 'gunshop' && walker) gsStep(dt); else if (indoor?.kind === 'petshop' && walker) psStep(dt); // 第 3 批：拘留室的鐵門；槍店的靶、店員、櫃台／靶場的按鈕
   if (DRIVE.on) ldStep(dt); // 第 65 批：門開關、走過門口換裡面／外面、外面的房子走近了蓋好
   if (walker && walker.mode === 'walk' && DRIVE.on) foldStep(dt, walker.telemetry().speed > 0.6); // 第 75 批：走起來了「去哪裡」「⋯」收起來（房子裡也一樣）
   if (walker && walker.mode === 'walk' && DRIVE.on && !indoor && !APTU.on && !MRTS.lvl) { homeWalk(); oTick(walker.telemetry()); }
@@ -2801,7 +2809,7 @@ function driveStep(dt) {
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
   netStep(dt); // 一起開車（net.src.js）：朋友的車、人、名字、表情、一起比賽
-  seatsStep(dt); martStep(dt); // 第 81 批：超商的籃子、後車廂（seatsStep 後面：右邊第二顆按鈕） // 第 57 批：坐別的位子、坐朋友的車、朋友坐在車上（netStep 後面：朋友的車這一格的位置才是新的）
+  seatsStep(dt); martStep(dt); petStep(dt); // 第 95 批：寵物跟著你（pet.src.js）； 第 81 批：超商的籃子、後車廂（seatsStep 後面：右邊第二顆按鈕） // 第 57 批：坐別的位子、坐朋友的車、朋友坐在車上（netStep 後面：朋友的車這一格的位置才是新的）
   pxStep(); clockStep(); ambStep(); // 第 31 批：角落的時間（小地圖上面）、環境聲（風、鳥、蟲、路上的車；下車走路也有）
   mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）

@@ -149,6 +149,8 @@ const CSS = `
 .wk-btns{right:12px;bottom:22px;display:flex;flex-direction:column;align-items:flex-end;gap:12px;pointer-events:auto}
 .wk-btns b{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;background:rgba(14,15,18,0.62);font-size:21px;font-weight:700;box-shadow:0 4px 0 rgba(0,0,0,0.35);cursor:pointer;touch-action:manipulation}
 .wk-btns b.on{transform:translateY(3px);box-shadow:none;background:#FF6A1F;color:#1A0F07}
+.wk-btns b.pet{background:#FF6A1F;color:#1A0F07;font-size:17px;letter-spacing:-0.02em}
+.wk-btns b.pet.on{background:#c94e10}
 .wk-toast{top:132px;left:50%;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:5px 13px;border-radius:999px;background:rgba(14,15,18,0.7);font-size:13px;font-weight:600;line-height:1.3;text-align:center;text-wrap:balance;opacity:0;transform:translate(-50%,0) scale(.92);transition:opacity .15s,transform .15s}
 .wk-toast.show{opacity:1;transform:translate(-50%,0) scale(1)}
 @media (prefers-reduced-motion:reduce){.wk-toast,.wk-chip svg,.wk-stick{transition:none}.wk-act::after{animation:none}}
@@ -923,7 +925,7 @@ function createWalker(o) {
     if (!hud) return;
     hud.btns.replaceChildren(); hud.btns.hidden = !btns.length;
     for (const b of btns) {
-      const el = document.createElement('b'); el.setAttribute('role', 'button'); el.setAttribute('aria-label', b.label); el.textContent = b.label;
+      const el = document.createElement('b'); el.setAttribute('role', 'button'); el.setAttribute('aria-label', b.label); el.textContent = b.label; if (b.cls) el.classList.add(b.cls); // 第 95 批：🐾 上（寵物）是橘色的
       const up = () => el.classList.remove('on');
       el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); el.classList.add('on'); pressBtn(b); });
       for (const t of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(t, up);
