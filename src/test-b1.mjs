@@ -85,7 +85,7 @@ const fullView = (f) => f.fs && f.html && f.pos === 'fixed' && f.stage.join() ==
 // 畫面上的按鈕：開車的 HUD（多了「下車」）、走路的 HUD（搖桿、上車／叫電梯／睡覺的大按鈕、小地圖、換視角、右下角的圓按鈕）、疊在畫面上的去哪裡／直接回車庫／聲音、
 //   全螢幕鈕、比賽的 HUD：看得到的兩兩不重疊；全螢幕的時候都在螢幕裡面（離邊邊至少 4 px）
 const HUD_SEL = ['.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '.wk-chip', '.wk-act', '.wk-map', '.wk-cam', '.wk-stick', '.wk-btns',
-  '#dests', '#destTog', '#moreTog', '#sizeTog', '#sizePop', '.elpanel', '#driveHome', '#dSndBtn', '#fsBtn', '#hud .trackbar', '#hud .tree', '#hud .clock', '#hud .gauge', '#hud .pedals', '#race'];
+  '#dests', '#destTog', '#moreTog', '#copTog', '#sizeTog', '#sizePop', '.elpanel', '#driveHome', '#dSndBtn', '#fsBtn', '#hud .trackbar', '#hud .tree', '#hud .clock', '#hud .gauge', '#hud .pedals', '#race'];
 const hudClash = (inView = true) => p.evaluate(([inView, S]) => {
   // 橫拿打開的「去哪裡」：#dests 是 display: contents（按鈕直接排在 #drivebar 的格子裡）→ 裡面看得到的按鈕一個一個量
   const R = S.map((s) => [s, document.querySelector(s)]).filter(([, e]) => e && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden')
@@ -751,7 +751,7 @@ const hin = await p.evaluate(() => { const H = window.__H, X = window.__IN(), I 
 console.log('  into a house:', JSON.stringify(hdoor), 'fade frames', hw0 * 2, '→', JSON.stringify(hin));
 check(hdoor.n > 0 && hdoor.live && hdoor.opened && hdoor.in && hdoor.fadeFrames === 0 && hin.in && hin.live && hin.name === hdoor.name && hin.floors === hdoor.floors && hin.mode === 'walk' && !hin.paused && hin.hud && hin.at < 1.5 && hin.mine && hin.doors && !hin.fadeShown && hin.toast === hin.name && hin.mov === 0 && hin.meFar,
   `pressed 「開門」 at a house door and walked in (${hdoor.s} s, no fade; 第 65 批) → inside 「${hin.name}」 (${hin.floors} floors) just inside the door, walking HUD back, its own scene (you + the house: ${hin.kids} objects), its exits are the doors now, the traffic and people outside don't count here; built in ${hin.info?.ms} ms`);
-check(hdoor.open >= 80 && hdoor.open === hdoor.doors - 2 && hdoor.shut === 'gunshop,police' && !hdoor.dealer && hdoor.warm && hdoor.warm.compile >= 0, `every village door opens into a house/shop/store/temple/farmhouse (${hdoor.open} of ${hdoor.doors}; still shut: ${hdoor.shut}; the dealer's auto door is open, not a door); warmed up on the loading screen (${JSON.stringify(hdoor.warm)} ms)`);
+check(hdoor.open >= 80 && hdoor.open === hdoor.doors - 3 && hdoor.shut === 'gunshop,petshop,police' /* 第 95 批：寵物店跟槍店一樣是自己的場景 */ && !hdoor.dealer && hdoor.warm && hdoor.warm.compile >= 0, `every village door opens into a house/shop/store/temple/farmhouse (${hdoor.open} of ${hdoor.doors}; still shut: ${hdoor.shut}; the dealer's auto door is open, not a door); warmed up on the loading screen (${JSON.stringify(hdoor.warm)} ms)`);
 await drawAndShot('6b-house-inside');
 const hr0 = await p.evaluate(() => window.__rinfo());
 check(hr0.calls < 40, `inside: the house itself is ${hr0.calls} draw calls, ${hr0.tris} triangles (第 65 批：drawn after the village you see through the windows and the door)`);
@@ -876,7 +876,8 @@ console.log('  hit a person:', JSON.stringify(kn));
 check(kn && kn.hits === 1 && kn.hitMode === 'fall' && /撞到人/.test(kn.toast) && (kn.stars == null || kn.stars >= 2), `driving into a person (9 m/s): they fall over (${kn?.hitMode}), onHit counted once, 「${kn?.toast}」, ${kn?.stars}★`);
 await p.evaluate(() => window.__pol?.()?.clear()); // 第 3 批（b3-int）：撞到人 → 2★ 警察會來抓（test-b3.mjs 測）；這裡接著測開車去改車廠，先把星星清掉
 check(kn && kn.cars > 0 && kn.drivers && kn.riders, `other people's cars have someone at the wheel (hands on the wheel), scooter riders hold the handlebars (${kn?.cars} on the road, ${kn?.nScoot} scooters)`);
-check(kn && Object.keys(kn.dims).length && Object.values(kn.dims).every(([hx, hz]) => hx > 1.7 && hx < 2.6 && hz > 0.7 && hz < 1.15), `other people's cars are measured without the driver in them (half length × half width: ${JSON.stringify(kn?.dims)})`);
+// P8 皮卡含保桿、拖車勾 5.4 公尺長（半長 2.7）：路上剛好有 P8 的時候照它自己的長度
+check(kn && Object.keys(kn.dims).length && Object.entries(kn.dims).every(([k, [hx, hz]]) => hx > 1.7 && hx < (k === 'p8' ? 2.8 : 2.6) && hz > 0.7 && hz < 1.15), `other people's cars are measured without the driver in them (half length × half width: ${JSON.stringify(kn?.dims)})`);
 
 // ---- 2c 第 86 批：路上的動物（Nick「把很多的行人換成這三隻動物但撞到它們不會被抓」）：大約一半是動物、三種都有、撞到會倒會爬起來、沒有星星、揍不到 ----
 const an = await p.evaluate(() => {
