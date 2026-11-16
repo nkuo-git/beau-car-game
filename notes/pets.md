@@ -30,7 +30,9 @@ Content rules kept: kids and the street animals are never targets (pet, punch, g
 
 ## Riding the ATV
 - Z2 LOD (`LOD_CARS.z2`, `buildLodCar('z2', data, look)` with the pet's colour: pig `#f4a9bd`, pinky `#ff5fa2`, chameleon `#7d55d6`), loaded once.
-- The pet sits on it (`PET_RIDE` offsets, state `sit`) with a helmet (`petHelmet`: hemisphere with vertex colours, white / stripe in the pet colour / dark visor, on the head bone).
+- Kid-sized: the ATV is scaled per pet (`ATV_SC`: pig / 粉紅 0.75, chameleon 1; `atvS(k)`), the pet group gets the inverse scale while mounted so the pet keeps its own size.
+- The pet sits on the seat (`PET_RIDE`, ATV-local unscaled: pig [−0.30, 0.875, 0], 粉紅 [−0.32, 0.835, 0], chameleon [−0.25, 0.62, 0]; the seat top is ≈ 0.88; state `sit`).
+- Helmet (`petHelmet`, on the head bone, `PET_HELM` centre / radius / tilt per kind): a hemisphere with vertex colours, shell in a colour that shows on that pet (`PET_HELM_COL`: pig orange, 粉紅 blue, chameleon yellow), a white stripe down the middle, a dark rim at the bottom; no visor (it covered the eyes). The white pig with a white helmet was invisible in screenshots.
 - Its own car trail (640 × 0.6 m). Gap 6 m + 0.35 × car speed, ≤ 31 m/s, accel 7 / brake 12 m/s². Appears only once the car has driven gap + 1 m (no popping in next to you). More than 220 m behind → jumps to 70 m behind. Brakes for people and cops in front; pushed away within 3.4 m of the car (reversing); `free` mode drives straight at the trail point and re-joins; a 0.3 s check short-cuts when the trail loops back past it.
 - Getting out: it hops off next to the parked ATV and runs to you; the ATV stays where it stopped.
 
@@ -42,4 +44,6 @@ Content rules kept: kids and the street animals are never targets (pet, punch, g
 `pets: ['pig','pinky','cham' …]` (unique, filtered), `pet` (must be in pets; else the first). Old saves have none.
 
 ## Test
-`pet-test.mjs`.
+`pet-test.mjs ../out/pet/pt` (26 ok, about 1.5 min): 0 out with no pet; 1 🚓 in 「⋯」 (no overlap, saved per phone, 不抓 = no stars, 抓 again = stars, switching clears them); 2 walk into the shop, buy the pig (−2000), the chameleon with too little money, the pig follows in the shop and comes out; 3 follow walking / running / jumping / teleport; 4 🐾上 knocks an adult down (0★), kids and street animals never targets, punch → the pet goes for the same person; 5 get in the GC8: the pet on its ATV with a helmet, drive on the 400 m strip, the ATV follows and stops behind; 6 下車: hops off, runs to you; 7 buy 粉紅: plays in the lobby, 「🐾 帶粉紅出門」 swaps; 8 直接回車庫 (`#driveHome`): both pets in the garage page, reload keeps them.
+- Test gotchas: walk.js buttons fire on `pointerdown` (dispatch a PointerEvent, `.click()` does nothing); the ATV LOD loads asynchronously, so wait with `waitForFunction(…, { polling: 200 })` between evaluates; get out with `leaveCar()` (the tower roller door button otherwise steals the action).
+- Draw calls (390×844, 普通): walking with the pig 168 calls / 0.71M; driving with the ATV 194 / 0.60M (ATV + pet ≈ 6 calls); pet shop inside 8 / 10k; lobby with a pet 96 / 0.42M.
