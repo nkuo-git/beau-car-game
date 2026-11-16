@@ -78,3 +78,11 @@ Nick: 「車子加速稍微加慢一點」「車子越快加越慢不要到極�
   `TAPER_E`·√(m/s left to the cap): it eases into top speed instead of hitting it (before: 1.2–5.8 m/s² at 98% then a
   wall). Same for AT and MT.
 - `o.accel0` keeps the old behaviour (drift-test compares with the old drive.js using it).
+
+## Batch 96 (trial v108, 2026-11-16): manual on automatic cars, no stall
+Nick: 「改成自排車也能換手排只是不會突然熄火」.
+- Every car with an engine now shows the AT／MT button (town.src.js `mtOk(k)` = PERF entry and not `bike`). Cars without PERF `mt` (918, SP3, JESKO, C16, AV12, SN8, HY, LF, P8, monster, 小黃, Z2) get `drv.setGearbox('mt', mtOpt(k))` with `{ noStall: true }`.
+- drive.js: `st.noStall` (set on every `setGearbox` call, even when the mode does not change). It only disables the stall on the clutch-release edge; with the clutch in and rpm below idle, `xr = max(0.13, x)` already keeps the engine at idle, so the car just sits there (like a torque converter). Everything else (grind, limiter, lugging hint, over-rev engine braking) is the same as a real manual. Telemetry has `noStall`.
+- Shifter height: `--shh` = min(28px, 224px / slots) portrait, min(22px, 176px / slots, (100cqh − 160px) / slots) landscape (`--shn` = gears + 2 is set on `.dv-shf` when the HUD is built). Up to 6 gears nothing changes in portrait; a 10-speed P8 gets 18.7px slots, the same 232px column.
+- Fixed while here (bug since batch 69): the MT shifter sat on top of the big action button (`.dv-act`, also top-left at 58px: 開鐵捲門, 上馬力機…) and, in portrait, the tower lift panel; in landscape at 338 px a 6-speed shifter overlapped the ◀ ▶ buttons by 6px. Now `.dv.mt .dv-act` moves to left 72px (17px text), `body.mtgear:not(.walking) #stage .elpanel` moves to left 72 / top 146 in portrait, and the landscape column stops above the steering buttons. AT layout unchanged.
+- Tests: mt-test Node +4 (no stall in 1st and in 5th from standstill, drives off, plain `setGearbox('mt')` stalls again); browser: 918 has the button and the 7654321NR shifter, no stall, drives off; P8 12 slots at the tower door (act button + lift panel showing) on 6 screens with `.elpanel` added to the overlap check; the mtb has no button. 35 + 38 ok.

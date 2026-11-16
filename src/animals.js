@@ -124,12 +124,12 @@ const PINKY = {
     ell(G, [0, 0.43, 0], [0.125, 0.15, 0.135], null, BODY, (x, y) => mix2(B.hips, B.chest, 0.36, 0.48, y), { w: 22, h: 16 });
     ell(G, [-0.005, 0.32, 0], [0.142, 0.118, 0.152], null, FLEECE, B.hips, { w: 24, h: 16, jit: 0.007, fuzz: 0.06 });
     ell(G, [0.02, 0.645, 0], [0.13, 0.12, 0.125], null, BODY, B.head, { w: 22, h: 16 });
-    // 第 89 批（Nick「粉紅色豬鼻子太長」）：鼻子短一點（露出頭的那段 15.5 → 9.5 公分）
-    cap(G, [0.1, 0.63, 0], [0.19, 0.654, 0], 0.075, 0.052, BODY, B.head, { seg: 16, k: 6 });
-    const pa = Math.atan2(0.024, 0.09);
-    ell(G, [0.233, 0.664, 0], [0.016, 0.046, 0.049], [0, 0, pa], NOSE, B.head, { w: 14, h: 10, fuzz: 0.01 });
+    // 第 89 批（Nick「粉紅色豬鼻子太長」）：鼻子短一點（露出頭的那段 15.5 → 9.5 公分）；第 96 批（Nick 2026-11-16 又說「粉紅豬鼻子太長了」）：再往回 4 公分（9.5 → 5.5）
+    const NB = -0.04, pa = Math.atan2(0.024, 0.09), nby = NB * 0.024 / 0.09; // 鼻子整段往頭裡面推（斜度不變）
+    cap(G, [0.1, 0.63, 0], [0.19 + NB, 0.654 + nby, 0], 0.075, 0.052, BODY, B.head, { seg: 16, k: 6 });
+    ell(G, [0.233 + NB, 0.664 + nby, 0], [0.016, 0.046, 0.049], [0, 0, pa], NOSE, B.head, { w: 14, h: 10, fuzz: 0.01 });
     for (const s of [-1, 1]) {
-      ell(G, [0.247, 0.668, s * 0.02], [0.006, 0.015, 0.008], [0, 0, pa], STITCH, B.head, { w: 8, h: 6, fuzz: 0 });
+      ell(G, [0.247 + NB, 0.668 + nby, s * 0.02], [0.006, 0.015, 0.008], [0, 0, pa], STITCH, B.head, { w: 8, h: 6, fuzz: 0 });
       ell(G, [0.098, 0.69, s * 0.085], [0.017, 0.017, 0.017], null, EYE, B.head, { w: 12, h: 8, fuzz: 0, rough: 0.22 });
       ell(G, [0.112, 0.697, s * 0.08], [0.005, 0.005, 0.005], null, GLINT, B.head, { w: 6, h: 4, fuzz: 0, rough: 0.3 });
       const th = s * 0.33, ear = s < 0 ? B.earL : B.earR, ex = -0.01, ey = 0.73, ez = s * 0.075, dy = Math.cos(th), dz = Math.sin(th);
@@ -151,9 +151,12 @@ const STRIPES = ['#e8393f', '#f28a2b', '#f5d33c', '#58b847', '#2f96d6', '#2b3c96
 const CHAM_SC = 1.2;
 // 腳：肩膀／髖 u、手肘／膝蓋 l、腳踝 f（還沒放大）；前腳手肘朝後、後腳膝蓋朝前，站著就彎一點（爬的樣子，走路的時候腳才踩得到地）
 // 第 89 批（Nick「變色龍腳太長」）：身體低 6 公分、肚子往下多 7.5 公分（belly）、腳變短：露出來的腳短約三分之一（放大前 0.35 → 0.23）
-const CLEG = { F: { x: 0.22, u: 0.36, lx: -0.085, l: 0.19, f: 0.035 }, H: { x: -0.37, u: 0.36, lx: 0.085, l: 0.19, f: 0.035 } };
-const CHAM_DY = -0.06; // 中線（身體、頭、尾巴）往下
-const belly = (s) => 0.075 * (s < 0.3 ? 0 : s < 0.5 ? smooth((s - 0.3) / 0.2) : s < 1.05 ? 1 : s < 1.22 ? 1 - smooth((s - 1.05) / 0.17) : 0); // 肚子（下半圈）多多少
+// 第 96 批（Nick 2026-11-16「便色龍腳短一點」）：身體再低 1 公分、肚子再往下 4 公分、肩膀／手肘跟著低：露出來的腳再短約四分之一（0.22 → 0.17；後腳 0.20 → 0.15）；
+//   肩膀、髖 0.36 → 0.27（側面看得到的大腿短一截）；背還是 0.9 公尺（變色龍還是最大）；腳短了步子也小一點（CHAM.anim 的 lam × LEG_K）
+const CLEG = { F: { x: 0.22, u: 0.27, lx: -0.085, l: 0.15, f: 0.035 }, H: { x: -0.37, u: 0.27, lx: 0.085, l: 0.15, f: 0.035 } };
+const CHAM_DY = -0.07; // 中線（身體、頭、尾巴）往下
+const LEG_K = 0.78; // 步子（腳站著的高度 0.235 ÷ 0.325 ≈ 0.72，留一點）
+const belly = (s) => 0.115 * (s < 0.3 ? 0 : s < 0.5 ? smooth((s - 0.3) / 0.2) : s < 1.05 ? 1 : s < 1.22 ? 1 - smooth((s - 1.05) / 0.17) : 0); // 肚子（下半圈）多多少
 let CL = null; // 中線：{ x, y, s }，s＝從鼻子量的長度（還沒放大）
 function chamLine() {
   if (CL) return CL;
@@ -421,7 +424,7 @@ PINKY.anim = (C, S, dt) => {
 
 CHAM.anim = (C, S, dt) => {
   const B = C.B, SC = CHAM_SC, sp = S.sp / SC, k = sstep(0.03, 0.2, sp) * (1 - S.fw), run = sstep(1.1, 2.0, sp);
-  const lam = clamp(0.34 + 0.2 * sp, 0.4, 0.8), beta = lerp(0.66, 0.48, run), lift = lerp(0.05, 0.075, run);
+  const lam = clamp(0.34 + 0.2 * sp, 0.4, 0.8) * LEG_K, beta = lerp(0.66, 0.48, run), lift = lerp(0.05, 0.075, run) * LEG_K;
   S.ph += (dt * sp) / lam; const f = S.ph - Math.floor(S.ph);
   let ang = 0; if (S.st === 'wave') ang = Math.sin(clamp(S.t / 1.4, 0, 1) * PI);
   const rootY = (0.006 * Math.cos(4 * PI * f) - 0.006) * k + (1 - k) * 0.004 * Math.sin(S.clock * 1.6);
@@ -455,7 +458,7 @@ CHAM.anim = (C, S, dt) => {
     const t = e ? S.eRt : S.eLt, c = e ? S.eR : S.eL, kk = Math.min(1, dt * 14); c[0] += (t[0] - c[0]) * kk; c[1] += (t[1] - c[1]) * kk;
     const b = e ? B.eyeR : B.eyeL; b.rotation.y = c[0] + (ang ? Math.sin(S.t * 8 + e) * ang : 0); b.rotation.z = c[1];
   }
-  if (S.st === 'sit') { B.root.position.y = -0.12 * CHAM_SC; }
+  if (S.st === 'sit') { B.root.position.y = -0.1 * CHAM_SC; } // 第 96 批：肚子低了，坐下少降一點（肚子不碰地）
 };
 
 // ---- 做一隻 ----

@@ -16,7 +16,7 @@ import * as THREE from 'three';
 export const { PETSHOP, PET_KINDS, PETSHOP_TEXT, buildPetShop, buildPetShopInterior } = (() => {
 const PETSHOP = { x: -364, z: -25, hx: 6.5, hz: 10, H: 4.4, top: 5.0, door: { x: -356.9, z: -25, ry: Math.PI / 2 } };
 const FX = PETSHOP.x + PETSHOP.hx, BX = PETSHOP.x - PETSHOP.hx, NZ = PETSHOP.z - PETSHOP.hz, SZ = PETSHOP.z + PETSHOP.hz; // 正面 x −357.5、後面 −370.5、北 z −35、南 −15
-const PET_KINDS = [{ k: 'pig', name: '小豬', price: 2000, col: '#f4b6c6' }, { k: 'pinky', name: '粉紅', price: 2000, col: '#ff6fa8' }, { k: 'cham', name: '變色龍', price: 3000, col: '#8a62d6' }];
+const PET_KINDS = [{ k: 'pig', name: '小豬', price: 200, col: '#f4b6c6' }, { k: 'pinky', name: '粉紅', price: 200, col: '#ff6fa8' }, { k: 'cham', name: '變色龍', price: 300, col: '#8a62d6' }]; // 第 96 批（Nick 2026-11-16「寵物太貴了」）：便宜 10 倍（以前 2000、2000、3000）
 const PODS = [{ z: -30.6, r: 0.95, x: -367.0 }, { z: -25.0, r: 0.95, x: -367.0 }, { z: -19.2, r: 1.3, x: -367.3 }]; // 圓台（照 PET_KINDS 的順序；變色龍最長，圓台大一點）
 const NAME = '大便龍寵物店';
 const PETSHOP_TEXT = [...new Set([...NAME, ...'小豬粉紅變色龍萬最大隻可愛寵物歡迎參觀光臨會一直跟著你收銀台飼料玩具零食幫你打騎沙灘車0123456789！'])].join('');

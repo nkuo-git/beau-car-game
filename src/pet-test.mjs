@@ -1,7 +1,7 @@
 // 第 95 批：寵物＋不會被抓（pet.src.js、petshop.js、police-ai.js setLenient）
 // node pet-test.mjs [prefix]
 //   「⋯」裡的 🚓：按了變「🚓 不抓」（橘色）、警察不抓（撞人、揍人都沒有星星，有的星星清掉）；再按變回抓
-//   走進大便龍寵物店（大停車場西邊）→ 圓台前面「買 · 小豬 2000 萬」→ 錢扣掉、存檔 → 小豬跟著你（店裡、出來、走、跑、跳）、頭上「🐾 小豬」
+//   走進大便龍寵物店（大停車場西邊）→ 圓台前面「買 · 小豬 200 萬」→ 錢扣掉、存檔 → 小豬跟著你（店裡、出來、走、跑、跳）、頭上「🐾 小豬」
 //   「揍」下面「🐾上」：撲前面的人（倒下去再爬起來）、不算你犯罪；小孩、路上的小動物不撲；你揍到的人牠也撲
 //   上車開走：牠戴安全帽騎沙灘車跟在後面；下車：跳下來跑到你旁邊
 //   再買一隻：圓塔一樓大廳走來走去、「🐾 帶X出門」換一隻；車庫頁也看得到；重新載入還在
@@ -71,7 +71,7 @@ async function drawAndShot(name, fullPage = false) { // 畫兩格再截圖（開
 await p.addInitScript(() => {
   if (!sessionStorage.getItem('seeded')) {
     sessionStorage.setItem('seeded', '1');
-    localStorage.setItem('carid.tune', JSON.stringify({ v: 2, cur: 'gc8', scene: 'room', money: 6500, owned: ['gc8', 'yaris'], parts: {}, tyres: {}, wins: {}, cars: {} })); // 6500 萬：買得起小豬＋粉紅（4000），變色龍（3000）就不夠
+    localStorage.setItem('carid.tune', JSON.stringify({ v: 2, cur: 'gc8', scene: 'room', money: 650, owned: ['gc8', 'yaris'], parts: {}, tyres: {}, wins: {}, cars: {} })); // 650 萬：買得起小豬＋粉紅（400），變色龍（300）就不夠（第 96 批：便宜 10 倍）
   }
 });
 // 走路的小工具（在頁面跑；跟 walk-test.mjs 一樣的走法：setInput 跟著鏡頭轉，一格一格走）
@@ -303,12 +303,12 @@ await drawAndShot('2-shop-inside');
 const b2 = await Q(() => { const z = window.__PET().PSI.zones[0], r = window.__H.walkTo(z.x, z.z); window.__H.step(10); const a = window.__H.actText(), m0 = window.__G().money; const pr = window.__H.press(); window.__H.step(30);
   let saved = null; try { saved = JSON.parse(localStorage.getItem('carid.tune')); } catch {} return { r, a, pr, m0, ...window.__Q.pet(), act2: window.__H.actText(), toast: window.__H.toast(), saved: saved && { pets: saved.pets, pet: saved.pet, money: saved.money } }; });
 console.log('  buy:', JSON.stringify(b2));
-check(b2.a === '買 · 小豬 2000 萬' && b2.pr === b2.a, `in front of the pig's stand: 「${b2.a}」`);
-check(b2.m0 - b2.money === 2000 && b2.pets.join() === 'pig' && b2.cur === 'pig' && b2.saved?.pets?.join() === 'pig' && b2.saved?.pet === 'pig' && /買了小豬/.test(b2.toast), `bought: −2000 萬 (${b2.m0} → ${b2.money}), saved pets [pig], toast 「${b2.toast}」`);
+check(b2.a === '買 · 小豬 200 萬' && b2.pr === b2.a, `in front of the pig's stand: 「${b2.a}」`);
+check(b2.m0 - b2.money === 200 && b2.pets.join() === 'pig' && b2.cur === 'pig' && b2.saved?.pets?.join() === 'pig' && b2.saved?.pet === 'pig' && /買了小豬/.test(b2.toast), `bought: −200 萬 (${b2.m0} → ${b2.money}), saved pets [pig], toast 「${b2.toast}」`);
 check(b2.vis && b2.same && b2.d < 2.5 && b2.tag && /^已經有小豬/.test(b2.act2 || ''), `the pig appears next to you in the shop (${b2.d} m), name tag on; the stand now says 「${b2.act2}」`);
-const b2c = await Q(() => { const z = window.__PET().PSI.zones[2]; window.__H.walkTo(z.x, z.z); window.__H.step(10); const a = window.__H.actText(), m0 = window.__G().money; window.__G().money = 2500; const pr = window.__H.press(); window.__H.step(10); const r = { a, pr, toast: window.__H.toast(), pets: window.__G().pets.slice(), money: window.__G().money }; window.__G().money = m0; return r; });
+const b2c = await Q(() => { const z = window.__PET().PSI.zones[2]; window.__H.walkTo(z.x, z.z); window.__H.step(10); const a = window.__H.actText(), m0 = window.__G().money; window.__G().money = 250; const pr = window.__H.press(); window.__H.step(10); const r = { a, pr, toast: window.__H.toast(), pets: window.__G().pets.slice(), money: window.__G().money }; window.__G().money = m0; return r; });
 console.log('  cham, not enough money:', JSON.stringify(b2c));
-check(b2c.a === '買 · 變色龍 3000 萬' && /錢不夠/.test(b2c.toast) && b2c.pets.join() === 'pig' && b2c.money === 2500, `the chameleon costs 3000 萬: with 2500 萬 「${b2c.toast}」, nothing bought`);
+check(b2c.a === '買 · 變色龍 300 萬' && /錢不夠/.test(b2c.toast) && b2c.pets.join() === 'pig' && b2c.money === 250, `the chameleon costs 300 萬: with 250 萬 「${b2c.toast}」, nothing bought`);
 // 店裡走一圈：跟著
 const f2 = await Q(() => { const z = window.__PET().PSI.zones[0]; window.__H.walkTo(z.x + 2.5, z.z + 4); window.__H.step(90); return window.__Q.pet(); });
 console.log('  follow in shop:', JSON.stringify(f2));

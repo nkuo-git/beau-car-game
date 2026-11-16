@@ -461,6 +461,8 @@ body.fs.walking #stage .elpanel { left: auto; right: calc(var(--fs-r) + 10px); t
 @media (min-height: 561px) { body.fs.wanted.walking #stage .elpanel { margin-top: 46px; } }
 @media (max-height: 560px) { body.walking #stage .elpanel { left: 50%; right: auto; top: 8px; } body.fs.walking #stage .elpanel { left: 50%; right: auto; top: calc(var(--fs-t) + 8px); } }
 body.fs.destsopen #stage .elpanel, body.fs.moreopen #stage .elpanel { display: none; }
+/* 第 96 批：直拿、手排（換檔桿在左邊）：面板放在換檔桿右邊、小地圖下面（以前疊在換檔桿上面） */
+@media (min-height: 561px) { body.mtgear:not(.walking) #stage .elpanel { left: 72px; top: 146px; } body.fs.mtgear:not(.walking) #stage .elpanel { left: calc(var(--fs-l) + 72px); top: calc(var(--fs-t) + 146px); } }
 /* 沒全螢幕、畫面是橫的（手機橫拿、平板、電腦）：網站的畫面只有 426 寬，左上、中間、下面都有按鈕 → 面板放右上角（小地圖那裡），
    在電梯上的時候小地圖、全螢幕、換視角先藏起來；開車、走路都一樣 */
 @media (max-height: 560px), (min-width: 561px) {

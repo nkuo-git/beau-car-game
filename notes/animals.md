@@ -88,3 +88,9 @@ Nick: 「便色龍腳太長」「粉紅色豬鼻子太長」.
   - Eyes moved down with the head.
   - animal-test 24 ok (cham foot slide 1.0 cm at 0.85 m/s, limit 3 cm).
 - Pinky: the snout sticks out 9.5 cm past the head instead of 15.5 (cap to x 0.19, nose at 0.233).
+
+## Batch 96 (trial v108, 2026-11-16): chameleon legs shorter again, pinky nose shorter again
+Nick: 「便色龍腳短一點 / 粉紅豬鼻子太長了」 (again after batch 89).
+- Chameleon: `CLEG` shoulder/hip u 0.36 → 0.27, elbow/knee l 0.19 → 0.15; `CHAM_DY` −0.06 → −0.07; `belly` 0.075 → 0.115. Leg showing under the belly 0.22 → 0.17 (hind 0.20 → 0.15, unscaled), and the upper leg seen from the side is a lot shorter. Back height 0.90 m (pinky with ears 0.91; animal-test allows 2 cm, so the chameleon still counts as the biggest; do not lower the centre line further without raising something else). Stride and lift × `LEG_K` 0.78; sit drop −0.12 → −0.10 so the belly stays off the ground. animal-test foot slide 0.8–1.4 cm (limit 3).
+- Pinky: the whole nose (cap, pad, nostrils) moved 4 cm back into the head along its slope (`NB`): the part showing goes 9.5 → 5.5 cm; length 0.43 → 0.39 m.
+- Before/after: /mnt/project-files/car-game/animals/animals-v108.jpg.

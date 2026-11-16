@@ -124,6 +124,17 @@ check(g0 >= 3 && t2.mgear === g0 - 1 && rC < r3 - 0.1 && r1 > r3 + 0.1 && r1 > r
   const dK = rig(); dK.setGearbox('mt'); run(dK, 0.2, { clutch: 1 }); dK.shift(1); dK.shift(1); run(dK, 0.2, { clutch: 1 }); ev.crank.length = 0; ev.engine.length = 0;
   const k1 = run(dK, 0.3, { clutch: 0 }); run(dK, 0.1, { throttle: 0.5 }); const k2 = run(dK, 0.7, {}), kp = Math.max(k2.rpm, run(dK, 0.1, {}).rpm);
   check(k1.stalled && ev.crank.join() === '0.6' && ev.engine.join() === 'false,true' && kp > 0.25, `手排熄火以後按油門：onCrank(${ev.crank.join()})（起動馬達的聲音）、發動那一下轉速衝到 ${r2(kp)}`); }
+// 第 96 批（Nick 2026-11-16「改成自排車也能換手排只是不會突然熄火」）：本來是自排的車用手排（setGearbox('mt', { noStall: true })）：
+//   放開離合器沒給油不熄火（停在怠速、車不動）、停著排 5 檔放開也不熄火、給油開走；同一台換回一般的手排（沒有 noStall）就照樣會熄火
+{ const dN = rig(); dN.setGearbox('mt', { noStall: true }); ev.engine.length = 0;
+  run(dN, 0.2, { clutch: 1 }); dN.shift(1); run(dN, 0.2, { clutch: 1 }); const a = run(dN, 1, {});
+  check(a.noStall && !a.stalled && a.mgear === 1 && Math.abs(a.rpm - 0.13) < 0.03 && a.kmh < 1 && !ev.engine.length, `自排車的手排：1 檔放開離合器、沒給油：沒熄火（轉速停在怠速 ${r2(a.rpm)}、車沒動 ${r2(a.kmh)} km/h、沒有 onEngine）`);
+  run(dN, 0.2, { clutch: 1 }); for (let i = 0; i < 4; i++) { dN.shift(1); run(dN, 0.1, { clutch: 1 }); } const b5 = run(dN, 1, {});
+  check(!b5.stalled && b5.mgear === 5 && b5.rpm > 0.1 && !ev.engine.length, `停著排 5 檔、放開離合器沒給油：也不熄火（${b5.mgear} 檔、轉速 ${r2(b5.rpm)}）`);
+  run(dN, 0.2, { clutch: 1 }); for (let i = 0; i < 4; i++) { dN.shift(-1); run(dN, 0.1, { clutch: 1 }); } const c1 = run(dN, 3, { throttle: 1 });
+  check(!c1.stalled && c1.mgear === 1 && c1.kmh > 20, `降回 1 檔給油：開走了 ${Math.round(c1.kmh)} km/h`);
+  dN.setGearbox('mt'); run(dN, 2.5, { brake: 1 }); run(dN, 0.2, { clutch: 1 }); dN.shift(1); dN.shift(1); run(dN, 0.2, { clutch: 1 }); const d3 = run(dN, 0.5, {});
+  check(!d3.noStall && d3.stalled && d3.mgear === 3, `同一台換回一般的手排（setGearbox('mt') 沒有 noStall）：停著 3 檔放開離合器照樣熄火`); }
 console.log(fails.length ? `FAILED ${fails.length}: ${fails.join(' | ')}` : 'ALL CHECKS OK (Node)');
 if (process.env.NODE_ONLY || fails.length) process.exit(fails.length ? 1 : 0);
 
@@ -214,7 +225,7 @@ const ui = () => p.evaluate(() => {
     mgear: t.mgear, ngears: t.ngears, kmh: +t.kmh.toFixed(1), v: +t.v.toFixed(2), rpm: +t.rpm.toFixed(2), stalled: t.stalled, cranking: t.cranking, voice: !!D.dvoice, more: document.body.classList.contains('moreopen'), mtgear: document.body.classList.contains('mtgear'),
     toast: q('#stage .dv-toast').textContent, toastSize: getComputedStyle(q('#stage .dv-toast')).fontSize, toastTop: Math.round(q('#stage .dv-toast').getBoundingClientRect().top) };
 });
-const HUD_SEL = ['.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '.dv-shf', '#dests', '#destTog', '#moreTog', '#sizeTog', '#tiltTog', '#lookTog', '#musTog', '#gearTog', '#dSndBtn', '#fsBtn'];
+const HUD_SEL = ['.elpanel', '.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '.dv-shf', '#dests', '#destTog', '#moreTog', '#sizeTog', '#tiltTog', '#lookTog', '#musTog', '#gearTog', '#dSndBtn', '#fsBtn'];
 const clash = () => p.evaluate((S) => {
   const R = S.map((s) => [s, document.querySelector(s)]).filter(([, e]) => e && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden' && e.getClientRects().length).map(([s, e]) => [s, e.getBoundingClientRect()]), out = [];
   for (const [s, r] of R) if (r.left < 4 || r.top < 4 || r.right > innerWidth - 4 || r.bottom > innerHeight - 4) out.push(`${s} off-screen ${[r.left, r.top, r.right, r.bottom].map(Math.round)}`);
@@ -326,10 +337,39 @@ check(u.gearbox === 'at' && u.key === 'at' && !u.mt && !u.shf && !u.mtgear && /^
 await p.evaluate(() => { localStorage.setItem('carid.gear', 'mt'); });
 let re = await getIn(); u = await ui();
 check(re.drv && re.gearK === 'mt' && u.gearbox === 'mt' && u.mt && u.shf && u.gear === 'N', `reload with carid.gear = mt: the car starts in manual (N, shifter shown)`);
-// 自排車（918：7 速雙離合器）：沒有 MT 那一格、carid.gear 是 mt 也還是自排、7 檔
-await p.evaluate(() => { const t = JSON.parse(localStorage.getItem('carid.tune')); t.cur = 'p918'; t.owned = ['gc8', 'p918']; localStorage.setItem('carid.tune', JSON.stringify(t)); });
+// 第 96 批（Nick 2026-11-16「改成自排車也能換手排只是不會突然熄火」）：自排車（918：7 速雙離合器）也有 AT／MT；carid.gear 是 mt＝手排（7 檔＋N、R），
+//   放開離合器沒給油不會熄火；10 檔的 P8 換檔桿格子矮一點、不壓到別的按鈕；腳踏車沒有 AT／MT
+const setCur = (k) => p.evaluate((k) => { const t = JSON.parse(localStorage.getItem('carid.tune')); t.cur = k; t.owned = ['gc8', 'p918', 'p8', 'mtb']; localStorage.setItem('carid.tune', JSON.stringify(t)); }, k);
+const fold = () => p.evaluate(() => { if (document.body.classList.contains('moreopen')) document.getElementById('moreTog').click(); }).then(() => p.waitForTimeout(100));
+await setCur('p918');
 re = await getIn(); await p.evaluate(() => document.getElementById('moreTog').click()); await p.waitForTimeout(100); u = await ui(); console.log('  918:', JSON.stringify(bd = re), JSON.stringify(u));
-check(re.drv && re.cur === 'p918' && u.more && !u.tog && u.gearbox === 'at' && !u.mt && !u.shf && u.ngears === 7, `an automatic car (918, 7-speed): no AT／MT button in the ⋯ row, stays AT even though carid.gear = mt, 7 gears`);
+const ns918 = await p.evaluate(() => window.__D().drv.telemetry().noStall);
+check(re.drv && re.cur === 'p918' && u.more && u.tog && u.togText === 'MT' && u.gearbox === 'mt' && u.mt && u.ngears === 7 && ns918 === true, `an automatic car (918, 7-speed) has the AT／MT button now; carid.gear = mt → manual, no-stall mode`);
+await fold();
+await p.evaluate(() => { const D = window.__D(), V = D.VIL, f0 = V.surfaceAt; V.surfaceAt = (x, z) => (Math.abs(x + 660) < 45 && Math.abs(z - 285) < 45 ? 0 : f0(x, z)); D.drv.setInput(null); D.drv.teleport({ x: -698, z: 305, heading: 0 }); window.__dstep(5); });
+u = await ui();
+check(u.shf && u.slots === '7654321NR' && u.cur === 'N' && u.gear === 'N', `918 shifter: 7 gears + N + R (${u.slots}), starts in N`);
+bad = await sweep('5-918');
+check(!bad.length, `918 shifter (9 slots): nothing overlapping on 6 screens (${bad.join(' | ') || 'ok'})`);
+S = await swipe(1, { release: false }); await touch('touchEnd', [S]); await stepN(90); u = await ui(); await shot('6-918-nostall');
+check(u.mgear === 1 && u.gear === '1' && !u.stalled && !u.stallSlot && u.voice && u.rpm > 0.1 && u.kmh < 1 && !/熄火/.test(u.mth), `918 in MT: swipe up to 1st, let go with no gas → no stall (rpm ${u.rpm}, engine sound on, car still)`);
+for (let i = 0; i < 3; i++) await swipe(1); await stepN(60); u = await ui();
+check(u.mgear === 4 && !u.stalled && u.voice, `918: three more swipes while standing (to 4th), letting go each time with no gas → still no stall (${u.gear})`);
+for (let i = 0; i < 3; i++) await swipe(-1); await touch('touchStart', [TG]); await stepN(150); u = await ui(); await touch('touchEnd', [TG]); await stepN(5);
+check(u.mgear === 1 && !u.stalled && u.kmh > 15, `918: back down to 1st, gas → drives off (${u.kmh} km/h)`);
+// P8 皮卡（10 速自排）：換檔桿 12 格，整條跟 6 檔的一樣高、不壓到別的按鈕
+await setCur('p8');
+re = await getIn(); await fold(); u = await ui();
+const p8h = await p.evaluate(() => { const r = [...document.querySelectorAll('#stage .dv-shf b')].map((b) => b.getBoundingClientRect().height); return { min: Math.min(...r), shf: document.querySelector('#stage .dv-shf').getBoundingClientRect().height }; });
+check(re.cur === 'p8' && u.gearbox === 'mt' && u.ngears === 10 && u.slots === '10987654321NR' && p8h.min >= 18 && p8h.shf <= 234, `P8 (10-speed automatic) in MT: 12 slots (${u.slots}), each ${p8h.min.toFixed(1)}px, the whole shifter ${Math.round(p8h.shf)}px (6-speed: 232)`);
+bad = await sweep('7-p8');
+check(!bad.length, `P8 shifter (12 slots): nothing overlapping on 6 screens (${bad.join(' | ') || 'ok'})`);
+// 越野腳踏車：沒有引擎＝沒有 AT／MT
+await setCur('mtb');
+re = await getIn(); // 腳踏車短：getIn 走的那兩點走不到上車的地方 → 直接叫 walker.getIn（bike-test 的作法）
+re.rode = await p.evaluate(() => { const W = window.__D().walker; let ok = !!window.__D().drv; for (let k = 0; k < 600 && !ok; k++) { ok = W.getIn(W.cars.find((c) => c.key === 'mtb')); if (!ok) window.__wstep(1); } for (let n = 0; n < 1200 && !(window.__D().drv && W.mode === 'off'); n++) window.__wstep(1); return !!window.__D().drv; });
+await p.evaluate(() => document.getElementById('moreTog').click()); await p.waitForTimeout(100); u = await ui();
+check(re.cur === 'mtb' && re.rode && u.more && !u.tog && u.gearbox === 'at' && !u.shf, `bicycle: no AT／MT button (stays AT, no shifter)`);
 check(!errs.length, `no page errors (${errs.length})`);
 await b.close(); srv.close();
 console.log(fails.length ? `FAILED ${fails.length}: ${fails.join(' | ')}` : 'ALL CHECKS OK', el());

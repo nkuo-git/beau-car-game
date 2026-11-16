@@ -1,8 +1,8 @@
 // ==== 第 95 批：寵物＋不會被抓（Nick 2026-11-15「可以開槍掃射對方或揍跟撞對方 但不會被抓 / 可以花重金買寵物 / 寵物是那三隻 / 他會一直跟著你 可以幫你打警察或人 /
 //      你開車可以讓寵物騎沙灘車跟在你後面」；mock https://claude.ai/artifact/JiamLyxU1TobxZU6T6cgko ，2026-11-16 卡片選「照這樣做」、「做好就上線」）====
 // 1 🚓 抓／不抓：「⋯」那一排一顆（每支手機自己記 localStorage carid.cops；'off'＝不抓）：police-ai setLenient → 什麼都不算犯罪、有星星的話清掉、警察不追你
-// 2 大便龍寵物店（petshop.js：大停車場西邊、以前的稻田）：走進去（黑掉換場景，跟槍店一樣）站到圓台前面「買 · 小豬 2000 萬」
-//   小豬 2000、粉紅 2000、變色龍 3000（萬）；存檔 GAME.pets（買了哪幾隻）、GAME.pet（帶出門的那一隻）
+// 2 大便龍寵物店（petshop.js：大停車場西邊、以前的稻田）：走進去（黑掉換場景，跟槍店一樣）站到圓台前面「買 · 小豬 200 萬」
+//   小豬 200、粉紅 200、變色龍 300（萬；第 96 批以前 2000、2000、3000）；存檔 GAME.pets（買了哪幾隻）、GAME.pet（帶出門的那一隻）
 // 3 跟著你：走路的時候踩著你走過的路（每 0.25 公尺一個點）走在你後面 1.3 公尺（跑步 1.8）；你跳牠也跳；進房子、坐捷運（walker.shift 一起搬）、回家都跟著；
 //   跳太遠（換場景、傳送、電梯、樓梯換層）＝直接站到你腳邊
 // 4 幫你打：你揍到人、開槍打到人（警察也算），牠衝過去撲倒對方；「揍」下面「🐾 上」：撲你前面最近的人或警察。小孩、路上的小動物永遠不撲；
@@ -12,7 +12,7 @@
 // 6 圓塔一樓大廳：沒帶出門的寵物在地毯、獎盃櫃前面走來走去（車庫頁也看得到全部的）；走過去「🐾 帶小豬出門」換一隻
 // 接在 mart.src.js 後面（同一個 module）；town.src.js：atDoor 的 'petshop'、driveStep 的 psStep／petStep、homeWalk 的 petLobbyAct、doPunch／槍的 onCrime 叫 petHit／petCrime、walkBtns 多 🐾 上
 const PET_NAME = { pig: '小豬', pinky: '粉紅', cham: '變色龍' };
-const PET_PRICE = { pig: 2000, pinky: 2000, cham: 3000 };
+const PET_PRICE = { pig: 200, pinky: 200, cham: 300 }; // 跟 petshop.js PET_KINDS 一樣
 const PET_PAINT = { pig: '#f4a9bd', pinky: '#ff5fa2', cham: '#7d55d6' }; // 沙灘車的顏色（照那一隻）
 const ATV_SC = { pig: 0.75, pinky: 0.75, cham: 1 }, atvS = (k) => ATV_SC[k] || 0.75; // 沙灘車的大小：小豬、粉紅只有人的一半高＝兒童的沙灘車；變色龍 2 公尺長＝原本那台
 const PET_RIDE = { pig: [-0.30, 0.875, 0], pinky: [-0.32, 0.835, 0], cham: [-0.25, 0.62, 0] }; // 坐在沙灘車上：動物的原點放在沙灘車本地（沒縮小的）哪裡（座椅上面 0.88）
