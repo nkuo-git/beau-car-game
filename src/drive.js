@@ -271,7 +271,7 @@ const ICON = {
 // 第 57 批：量車身的盒子（大小、碰撞）：坐在裡面的人（userData.seated：你、朋友；character.js 的骨架 Box3 量出來很大）先拿下來，量完放回去
 //   上車再做一個 drv 的時候人還坐在車上（比賽完、下車再上車），不拿下來的話碰撞盒變成 2.4 公尺寬、車尾多 0.4 公尺：開進圓塔的格子會卡在玻璃上轉掉（test-b1 第 7 段）
 function bodyBox(body, box = new THREE.Box3()) {
-  const off = []; body.traverse((o) => { if (o.userData.seated) off.push([o, o.parent]); });
+  const off = []; body.traverse((o) => { if (o.userData.seated || o.name === 'door-rig') off.push([o, o.parent]); }); // 第 98 批：開著的車門（doors.js 的 door-rig）也不算：門開著上車，車子不會變寬
   for (const [o] of off) o.removeFromParent();
   box.setFromObject(body);
   for (const [o, par] of off) par.add(o);

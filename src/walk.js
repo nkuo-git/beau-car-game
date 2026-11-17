@@ -47,6 +47,7 @@
 //   walker.getOut(drv, S, { key, name, h })   下車：|v| < 1 m/s 才可以（不行回傳 null）。drv.pause()（車子停在原地、影子留著），這台變成可以上的車（car.drive＝true），
 //                          人從駕駛座那邊（左）走出來 0.42 秒（左邊擋住→右邊→後面→前面），鏡頭從開車的慢慢接過來；回傳那台 car
 //   walker.getIn(car?)         上車（「上車」按鈕就是叫這個）：走到車門（站在哪一邊就走哪一邊；前後就先繞過車角）、轉身坐進去 → onGetIn(car)；推搖桿可以取消
+//                              第 98 批：car.dside（getOut 的 op.dside、setCars 給的）＝駕駛座那一邊：有車門的車走去那一邊、下車也從那一邊出來
 //   walker.getIn(car, { seat: { i, side, u } })   第 57 批：坐那個位子：走到那一邊（side −1 左、1 右）、車身長方形中間往前 u 公尺的門 → onGetIn(car, seat)
 //   walker.getOut(drv, S, { seat: { side, u }, paused: true })   第 57 批：從那個位子下車（先站那一邊）；paused＝開車的暫停著也可以（坐別的位子）
 //   walker.exitAt({ x, z, heading, hx, hz, cx, cz }, { side, u })   第 57 批：從朋友的車下來（沒有自己的 drv；車子不留給你上）→ true／false
@@ -511,7 +512,7 @@ function createWalker(o) {
     const side = R + 0.14, u = se && isFinite(se.u) ? +se.u : r.door;
     const C = [[u, -(r.hz + side), u, -(r.hz - 0.28), Math.PI / 2], [u, r.hz + side, u, r.hz - 0.28, -Math.PI / 2], [-(r.hx + side + 0.1), 0, -(r.hx - 0.3), 0, Math.PI], [r.hx + side + 0.1, 0, r.hx - 0.3, 0, 0],
       [u, -(r.hz + side + 0.5), u, -(r.hz - 0.28), Math.PI / 2], [u, r.hz + side + 0.5, u, r.hz - 0.28, -Math.PI / 2], [u - 1.2, -(r.hz + side), u - 1.2, -(r.hz - 0.28), Math.PI / 2], [u + 1.2, -(r.hz + side), u + 1.2, -(r.hz - 0.28), Math.PI / 2]];
-    if (se && se.side > 0) { [C[0], C[1]] = [C[1], C[0]]; [C[4], C[5]] = [C[5], C[4]]; } // 右邊的位子：先右邊
+    if ((se ? se.side : r.car.dside) > 0) { [C[0], C[1]] = [C[1], C[0]]; [C[4], C[5]] = [C[5], C[4]]; } // 右邊的位子：先右邊（第 98 批：右駕、有車門的車從駕駛座下車也是）
     const IN = [0, 0];
     for (const c of C) { // 站得下、從車門走出去中間沒有牆（車子自己的碰撞這時候還沒放）
       toWorldU(r, c[0], c[1], PT); toWorldU(r, c[2], c[3], IN);
@@ -523,7 +524,7 @@ function createWalker(o) {
     if (!alive || !drv || st.mode !== 'off') return null;
     const t = drv.telemetry(); if ((t.paused && !op.paused) || Math.abs(t.v) >= 1) return null; // 第 57 批：坐別的位子（車子停著、開車的暫停著）：op.paused
     const ci = drv.carInfo;
-    const car = { key: op.key ?? null, name: op.name ?? null, x: t.x, z: t.z, heading: t.heading, hx: ci.len / 2, hz: ci.halfW, cx: (ci.nose + ci.tail) / 2, cz: 0, h: op.h ?? 1.4, door: op.door ?? 0, object: S ? S.car : null, drive: true, drv, S };
+    const car = { key: op.key ?? null, name: op.name ?? null, x: t.x, z: t.z, heading: t.heading, hx: ci.len / 2, hz: ci.halfW, cx: (ci.nose + ci.tail) / 2, cz: 0, h: op.h ?? 1.4, door: op.door ?? 0, dside: op.dside ?? 0, object: S ? S.car : null, drive: true, drv, S }; // 第 98 批：dside＝駕駛座在哪一邊（有車門的車：右駕 1、左駕 −1；0＝照舊）
     const prev = parked; parked = car; rebuildCars(true); // 同一台在清單裡的舊位置拿掉；自己的碰撞先不放
     const spot = exitSpot(recs[0], op.seat);
     if (!spot) { parked = prev; rebuildCars(); if (drv.toast && !op.paused) drv.toast('這裡太擠了，下不了車', 1800); return null; } // 四邊都沒地方站：不下車
@@ -562,7 +563,7 @@ function createWalker(o) {
     const se = op.seat || null, u = se && isFinite(se.u) ? +se.u : r.door;
     const dx = st.x - r.bx, dz = st.z - r.bz, lu = dx * r.c - dz * r.s, lw = dx * r.s + dz * r.c;
     const spot = (sd) => toWorldU(r, u, sd * (r.hz + R + 0.12), [0, 0]);
-    let side = se && se.side ? Math.sign(se.side) : lw > 0.2 ? 1 : -1; // 站在哪一邊就走哪一邊（中間、前後＝駕駛座）
+    let side = se && se.side ? Math.sign(se.side) : r.car.dside ? Math.sign(r.car.dside) : lw > 0.2 ? 1 : -1; // 站在哪一邊就走哪一邊（中間、前後＝駕駛座）；第 98 批：有車門的車走去駕駛座那一邊（另一邊的門＝副駕駛座，cardoor.src.js 給的「上車」）
     if (!freeAt(...spot(side), R + 0.02) && freeAt(...spot(-side), R + 0.02)) side = -side;
     const pts = [], add = (u, w) => { const p = toWorldU(r, u, w, [0, 0]); pts.push(p[0], p[1]); };
     const cu = r.hx + R + 0.25, cwd = r.hz + R + 0.25;

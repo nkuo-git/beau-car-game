@@ -275,7 +275,7 @@ function walkCars() {
     const p = tripPose[k]; if (!p || k === LENT_K || EL.keys.has(k)) continue; // 第 19 批：借給朋友了；第 21 批：坐電梯中
     if (poseF(p) !== GAR.floor) continue; // 第 21 批：別層的（樓上的格子；你在樓上的時候外面的）走不到
     const name = CARS[k].btn[0];
-    if (k === tripFull) { if (!drv && tripS && tripBox) list.push({ key: k, name, x: p.x, z: p.z, heading: p.heading, ...tripBox, h: carH(k), object: tripS.car }); continue; } // 出門停在電梯圓台上、停進格子（還沒開、沒在開）
+    if (k === tripFull) { if (!drv && tripS && tripBox) list.push({ key: k, name, x: p.x, z: p.z, heading: p.heading, ...tripBox, h: carH(k), dside: cdSide(k), object: tripS.car }); continue; } // 出門停在電梯圓台上、停進格子（還沒開、沒在開）
     if (PFULL[k]) { list.push({ key: k, name, x: p.x, z: p.z, heading: p.heading, ...PFULL[k].box, h: carH(k), object: PFULL[k].S.car }); continue; } // 第 4 批：大車換開別台（完整的車停著）
     const L = LODS[k]; if (!L?.lod) continue; // 還在載入：載好了會再排一次
     list.push({ key: k, name, x: p.x, z: p.z, heading: p.heading, hx: L.hx, hz: L.hz, cx: L.cx, cz: L.cz, h: carH(k), object: L.lod.car }); // h：大車（怪獸卡車）3 公尺高
@@ -763,7 +763,7 @@ function leaveCar() {
   outAt(spot);
 }
 function outAt(spot, op = null) { // 第 57 批：op＝{ seat: { side, u }, paused }（從別的位子下車）；回傳 walk.js 的那台車（null＝沒下）
-  const car = walker.getOut(drv, tripS, { key: cur, name: CARS[cur].btn[0], h: carH(cur), ...(op || {}) }); // 開太快、四邊都沒地方站就不下（walk.js 會說）
+  const car = walker.getOut(drv, tripS, { key: cur, name: CARS[cur].btn[0], h: carH(cur), dside: cdSide(cur), ...(op || {}) }); // 開太快、四邊都沒地方站就不下（walk.js 會說）
   if (!car) return null;
   tripPose[cur] = { x: car.x, z: car.z, heading: car.heading, f: floorAt(car.x, car.z) };
   // 第 98 批：下車引擎照樣發動著（以前這裡熄火）

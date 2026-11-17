@@ -589,25 +589,24 @@ const rnd = await p.evaluate(() => {
   return { frames, bad };
 });
 check(!rnd.bad.length, `random walking inside the garage (10 × 3 s, walk/run, random camera): never inside a wall/car/door, camera never inside or behind a wall (${rnd.frames} frames${rnd.bad.length ? ' — ' + rnd.bad.join(' | ') : ''})`);
-// 走去 GC8 的駕駛座（車子左邊＝車庫本地 −z）：「開車門 · GC8」→ 門打開 →「上車 · GC8」＋「關車門」（第 98 批）
+// 走去 GC8 旁邊（車子左邊＝車庫本地 −z，離車身 1.5 公尺）：「上車 · GC8」（第 98 批：站在車門旁邊才是「開車門」，cardoor-test 測；GC8 右駕，左邊的門是副駕駛座）
 const w2 = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, W = D.walker, a = H.gw(-4.5, -4, -1.05); W.teleport(a); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]);
   const wa2 = () => { const e = document.querySelector('#stage .wk-act2'); return e && !e.hidden && !e.closest('[hidden]') && e.getClientRects().length ? e.querySelector('span').textContent : null; };
-  const act0 = H.actText(), a20 = wa2(), op = H.press(); H.step(45);
-  return { r, act0, a20, op, act: H.actText(), a2: wa2(), near: W.telemetry().near };
+  return { r, act: H.actText(), a2: wa2(), near: W.telemetry().near };
 });
-check(w2.r.ok && w2.act0 === '開車門 · GC8' && w2.a20 == null && w2.op === '開車門 · GC8' && w2.act === '上車 · GC8' && w2.a2 === '關車門' && w2.near === 'gc8', `walk up to GC8: 「${w2.act0}」 (walked ${w2.r.s?.toFixed(1)} s); pressed: the door opens →「${w2.act}」＋「${w2.a2}」 (第 98 批)`);
+check(w2.r.ok && w2.act === '上車 · GC8' && w2.a2 == null && w2.near === 'gc8', `walk up to GC8: 「${w2.act}」 (walked ${w2.r.s?.toFixed(1)} s)`);
 // 車子旁邊：大按鈕「上車 · GC8」＋右下角的圓按鈕（第 3 批的「揍」，先放一顆一樣大的）也都不重疊
 await p.evaluate(() => window.__D().walker.setButtons([{ id: 'punch', label: '揍', key: 'KeyF', onClick() {} }]));
 clash = await hudClash(); const clashNear = await sizeSweep();
 await p.evaluate(() => window.__D().walker.setButtons(null));
 check(!clash && !clashNear, `on foot next to a car (big 「上車 · GC8」 + a round button bottom right): nothing overlapping on any screen (${[clash, clashNear].filter(Boolean).join(' / ') || 'ok'})`);
 await drawAndShot('3-near-car');
-const bd = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(); return { pressed, ...r }; });
+const bd = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(), R = window.__CD().rig, d = R && R.doors.find((x) => x.D.side > 0 && x.D.row === 0); return { pressed, ...r, drDoor: d ? d.t : null, doors: R && R.doors.map((x) => x.t) }; }); // 第 98 批：GC8 右駕：走去右邊的門，門自己打開
 await p.evaluate(() => window.__H.step(40));
 const inCar = await p.evaluate(() => { const D = window.__D(), H = window.__H, t = D.drv?.telemetry(), sp = D.VIL.places.garage.spawn; return { drv: !!D.drv, act: H.actText(), act2: H.act2(), paused: t?.paused, at: t && Math.hypot(t.x - sp.x, t.z - sp.z), hidden: D.walker.telemetry().hidden, wk: H.visible('#stage .wk'), dv: H.visible('#stage .dv'), voice: !!D.dvoice?.alive, cur: D.cur, shadow: !!D.TR.scene.getObjectByName('park-shadow')?.visible, dshadow: !!D.TR.scene.getObjectByName('drive-shadow')?.visible, eng: H.engS() }; });
 console.log('  上車:', JSON.stringify(bd), JSON.stringify(inCar));
-check(bd.pressed === '上車 · GC8' && bd.modes.join('>') === 'in>seat>off' && inCar.drv && !inCar.paused && inCar.at < 0.01 && inCar.hidden && !inCar.wk && inCar.dv && !inCar.voice && inCar.cur === 'gc8' && !inCar.shadow && inCar.dshadow, '上車: walks to the door, sits, character hidden, GC8 drives from where it was parked (drive HUD, one shadow; engine still off)');
+check(bd.pressed === '上車 · GC8' && bd.modes.join('>') === 'in>seat>off' && bd.drDoor === 1 && bd.doors.filter((x) => x > 0).length === 1 && inCar.drv && !inCar.paused && inCar.at < 0.01 && inCar.hidden && !inCar.wk && inCar.dv && !inCar.voice && inCar.cur === 'gc8' && !inCar.shadow && inCar.dshadow, '上車: walks round to the driver\'s door (GC8 is right-hand drive: the right one), it opens by itself, sits, character hidden, GC8 drives from where it was parked (drive HUD, one shadow; engine still off)');
 const eng1 = await p.evaluate(() => window.__H.start()), [lo1, la1] = inCar.eng.lampsOff.split('/').map(Number);
 check(!inCar.eng.engine && /發動/.test(inCar.eng.gas) && !inCar.eng.off && lo1 === la1 && la1 > 0 && eng1.engine && eng1.voice && eng1.gas === '油門' && eng1.off && eng1.lampsOff.startsWith('0/'), `第 98 批 上車引擎是關著的（「${inCar.eng.gas}」、沒有「熄火」、燈關著 ${inCar.eng.lampsOff} ${inCar.eng.miss.join(' ')}）；按「發動」：引擎聲、「油門」、「熄火」出來、燈開了（關著的 ${eng1.lampsOff}）`);
 check(inCar.act === '開鐵捲門' && inCar.act2 === '下車', `in the car with the door closed BOTH buttons show: big 「${inCar.act}」 and the separate 「${inCar.act2}」`);
@@ -712,7 +711,7 @@ const out1 = await p.evaluate(() => {
   return { pressed, m1, mode: t.mode, local: [+q.x.toFixed(2), +q.z.toFixed(2)], paused: D.drv.telemetry().paused, car: Math.hypot(c.position.x - sp.x, c.position.z - sp.z), voice: !!window.__D().dvoice, dshadow: !!D.TR.scene.getObjectByName('drive-shadow')?.visible, dv: H.visible('#stage .dv'), wk: H.visible('#stage .wk'), e1, far };
 });
 console.log('  下車:', JSON.stringify(out1));
-check(out1.pressed === '下車' && out1.m1 === 'out' && out1.mode === 'walk' && out1.paused && out1.car < 1e-6 && out1.dshadow && !out1.dv && out1.wk && out1.local[1] < -1.0, '下車 → steps out on the driver side (left), the car stays where it stopped (with its shadow), walking HUD back');
+check(out1.pressed === '下車' && out1.m1 === 'out' && out1.mode === 'walk' && out1.paused && out1.car < 1e-6 && out1.dshadow && !out1.dv && out1.wk && out1.local[1] > 1.0, '下車 → steps out on the driver side (第 98 批: GC8 is right-hand drive, so the right), the car stays where it stopped (with its shadow), walking HUD back');
 check(out1.voice && out1.e1.engine && out1.e1.lampsOff.startsWith('0/') && out1.e1.gain > 0.5 && out1.far.voice && out1.far.gain < out1.e1.gain - 0.2, `第 98 批 下車：車子照樣發動著（引擎聲、燈亮著）；走遠一點引擎聲變小（${out1.e1.gain} → ${out1.far.gain}）`);
 cm = await carsMatch();
 check(cm.keys.join() === 'gc8(parked)' && !cm.bad.length, `the car you got out of is boardable where it stands (${cm.keys.join(', ')}${cm.bad.length ? ' — ' + cm.bad.join('; ') : ''})`);

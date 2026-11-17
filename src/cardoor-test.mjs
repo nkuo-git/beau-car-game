@@ -137,7 +137,7 @@ if (FULL) {
   const in1 = await p.evaluate(() => {
     const D = window.__D(), W = D.walker, H = window.__H; let ok = false, k = 0;
     for (; k < 600 && !ok; k++) { ok = W.getIn(W.cars.find((c) => c.object === D.tripS.car)); if (!ok) H.step(1); }
-    const b = H.board(); return { ok, b, doors: H.doors(), drv: !!D.drv, engine: D.drv?.engine };
+    const b = H.board(), D2 = window.__D(); return { ok, b, doors: H.doors(), drv: !!D2.drv, engine: D2.drv?.engine }; // __D() 是叫的那一下的樣子：坐好了再叫一次
   });
   console.log('1', el(), JSON.stringify(in1));
   check(in1.ok && in1.b.modes.join('>') === 'in>seat>off' && in1.b.maxT === 1 && in1.doors[DRV] === 1 && in1.drv && !in1.engine, `walking up to get in: the driver's door opened by itself, you sat down, the door is still open (doors ${JSON.stringify(in1.doors)}); engine off`);
@@ -192,7 +192,8 @@ if (FULL) {
     window.__dstep(5); return { pressed, b, pax: window.__SEAT().PAX.on, act, pressed2, n, doors: H.doors(), after: H.actText(), engine: D.drv.engine };
   });
   console.log('6', el(), JSON.stringify(in6));
-  check(/^上車/.test(in6.pressed) && in6.b.modes.join('>') === 'in>seat>off' && !in6.pax && in6.engine, `「上車」: you sit in the driver's seat and drive (engine still running)`);
+  check(/^上車/.test(in6.pressed) && /^(in>)?seat>off$/.test(in6.b.modes.join('>')) && !in6.pax && in6.engine, // 已經站在門口：第一格就坐下了（沒有 in）
+  `「上車」: you sit in the driver's seat and drive (engine still running)`);
   check(in6.act === '關車門' && in6.pressed2 === '關車門' && in6.doors.every((x) => x === 0) && in6.after !== '關車門', `stopped with the door open: top-left 「關車門」, pressed: closed in ${(in6.n / 60).toFixed(2)} s, the button goes away`);
   // ---- 7 副駕駛座那邊的門：上車＝坐副駕駛座；坐好 1 秒門自己關 ----
   const pax7 = await p.evaluate(() => {

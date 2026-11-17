@@ -495,7 +495,7 @@ if (UNTIL <= 2) await finish();
 const s3a = await ev(() => {
   const X = window.__X, D = window.__D(), H = window.__H, w = D.walker;
   w.teleport(H.gw(-2.6, -2.6, 0)); X.step(10);
-  const r = H.walkLocal([[-0.6, -2.3]]); const act = H.actText(); let pressed = H.press(); if (/^開車門/.test(pressed || '')) { X.step(45); pressed = H.press(); } const b = H.board(); // 第 98 批：車門旁邊先「開車門」
+  const r = H.walkLocal([[-0.6, -2.3]]); const act = H.actText(), pressed = H.press(), b = H.board();
   return { ok: r.ok, act, pressed, modes: b.modes, drv: !!window.__D().drv, gunOff: !X.vis('#stage .gn-fire') };
 });
 console.log('3', el(), JSON.stringify(s3a));

@@ -9,6 +9,7 @@ const CD_ON = true; // 試做頁 v111 打開（v110 先放發動／熄火的時�
 const CD = { S: null, rig: null, near: -1, act2: null, lastMode: '', paxT: 0, acts: {} };
 const CD_V = new THREE.Vector3(), CD_V2 = new THREE.Vector3();
 function cdOK(k) { return !!(CD_ON && k && CARS[k] && !RIDES[k] && !PERF[k]?.bike && !PERF[k]?.big && seatsOf(k).length > 0); }
+function cdSide(k) { return cdOK(k) ? seatsOf(k)[0]?.side || 0 : 0; } // 駕駛座那一邊（walk.js 的 dside：「上車」走過去、下車走出來都是這一邊；右駕 1、左駕 −1）
 function cdDrop() { if (CD.rig) CD.rig.dispose(); CD.rig = null; CD.S = null; CD.near = -1; }
 function cdShut() { const R = CD.rig; if (!R) return; for (let i = 0; i < R.doors.length; i++) if (R.doors[i].want || R.doors[i].t) R.snap(i, 0); } // 後車廂要開：門馬上關好
 // 你的車（完整的、看得到的）的門；沒有門的車、不是這一趟的車 null
