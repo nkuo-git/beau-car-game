@@ -792,6 +792,7 @@ await drawAndShot('10-gc8-monster-parked');
 // GC8 倒車回到電梯上 → 1F → 開到後面一點下車，走回怪獸卡車上車：換回怪獸卡車（GC8 換成輕量車停著）
 const dn9 = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, d = D.drv; let n = 0;
+  if (!d.engine) { d.setInput({ throttle: 1 }); window.__dstep(3); d.setInput(null); window.__dstep(80); } // 第 98 批：換開 GC8＝引擎關著，先發動（不然按煞車不會倒車）
   for (; n < 900; n++) { const t = d.telemetry(), q = H.gl(t.x, t.z), r = Math.hypot(q.x, q.z); d.setInput(n < 30 ? { brake: 1 } : r > 1.0 ? { brake: 0.5 } : { throttle: 1 }); window.__dstep(1); if (n > 40 && r <= 1.0 && Math.abs(t.v) < 0.05) break; }
   d.setInput(null); window.__dstep(20); const pressed = H.elClick('1F'), w = H.elWait(), D2 = window.__D();
   return { n, pressed, s: w.s, floor: D2.GAR.floor, cars: D2.walker.cars.map((c) => c.key), monster: D2.walker.cars.some((c) => c.key === 'monster') };
