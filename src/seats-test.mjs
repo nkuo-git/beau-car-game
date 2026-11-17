@@ -1,5 +1,5 @@
 // 第 57 批（Nick 2026-10-30「車子的每個位子都可以坐」；草稿 /mnt/project-files/car-game/seats/seats-v1.jpg，卡片「好，照圖做」）：自己的車（一個人玩的那一半；朋友的車在 world-test 10）
-//   出門走路到 GC8 旁邊：「上車」下面多一顆「選位子」→ 畫面「要坐哪裡？」（5 個位子、駕駛座寫（開車）、左右照真的那一邊）→ 點副駕駛座：走過去坐進去
+//   出門走路到 GC8 旁邊：第 98 批起自己開的車有車門：「開車門 · GC8」、沒有「選位子」（第 57 批是「上車」下面多一顆「選位子」）→ 畫面「要坐哪裡？」（5 個位子、駕駛座寫（開車）、左右照真的那一邊）→ 點副駕駛座：走過去坐進去
 //   → 坐著：車子不動（油門沒用）、第一人稱在那個位子的眼睛、後照鏡照後面、👁 換成從外面看（看得到你坐在車裡）、拖畫面繞著車
 //   → 「換位子」→ 後座右 → 換到駕駛座＝開車（第一人稱）→ 追車視角看得到你坐在駕駛座、手握方向盤跟著轉 → 再坐副駕駛座 →「下車」（人拿下來、走路）→「上車」照舊開
 //   → 兩人座（RX-7）的畫面只有前面一排；沙灘車、怪獸卡車沒有「選位子」→ 開出鐵捲門（有你坐在裡面）→ draw calls
@@ -90,7 +90,7 @@ console.log('  seats:', JSON.stringify(seats));
 check(seats.gc8.length === 5 && seats.rx7.length === 2 && seats.yaris.length === 4 && seats.supra.length === 4 && seats.p8.length === 5 && seats.jp4.length === 4 && seats.z2.length === 0 && seats.monster.length === 0, 'seat counts follow the real cars: GC8 5, RX-7 2, Yaris 4, Supra 2+2, P8 5, J4 4; the ATV and the monster truck have no seats to pick');
 check(seats.gc8[0] === '駕駛座R' && seats.gc8[1] === '副駕駛座L' && seats.gc8[2] === '後座左L' && seats.gc8[3] === '後座中M' && seats.gc8[4] === '後座右R' && seats.supra[0] === '駕駛座L', `GC8: ${seats.gc8.join(' ')} (right-hand drive, like the real one); Supra left-hand drive`);
 
-// ---- 1 出門：走到 GC8 旁邊 →「上車」下面多一顆「選位子」 ----
+// ---- 1 出門：走到 GC8 旁邊（駕駛座的門）→「開車門 · GC8」；第 98 批：自己開的車有車門，「選位子」換成車門（第 57 批以前是「上車」＋「選位子」） ----
 await p.evaluate(() => { window.scrollTo(0, 0); document.getElementById('driveOut').click(); });
 await p.waitForFunction(() => window.__D().on && window.__D().walker && window.__D().walker.mode === 'walk');
 await p.evaluate(() => { window.__hold = true; window.__noDraw = true; window.__npcPause(true); });
@@ -104,30 +104,24 @@ const near1 = await p.evaluate(() => {
   return { act: W.action, act2: W.action2, near: W.nearCar === car, own: S.SEATN.own === car, btn: window.__vis('#stage .wk-act2'), txt: document.querySelector('#stage .wk-act2 span')?.textContent, me: window.__me() };
 });
 console.log('1', el(), JSON.stringify(near1));
-check(/^上車/.test(near1.act) && near1.act2 === '選位子' && near1.near && near1.own && near1.btn && near1.txt === '選位子', `next to your GC8: 「上車」 and, below it, the dark 「選位子」 button`);
+check(near1.act === '開車門 · GC8' && near1.act2 == null && near1.near && !near1.own && !near1.btn, `next to your GC8's door: 「${near1.act}」, no 「選位子」 (第 98 批: the doors replace it on the car you are driving)`);
 check(!near1.me.vis && near1.me.walkerVis, 'walking: nobody sits in the parked car (you are the one walking)');
 const riWalk = await shot('1-walk');
 
-// ---- 2 「選位子」→ 畫面「要坐哪裡？」：5 個位子，駕駛座寫（開車），左右照真的那一邊（車頭朝上） ----
-await p.evaluate(() => document.querySelector('#stage .wk-act2').click());
-const pick2 = await p.evaluate(() => window.__picker());
-console.log('2', el(), JSON.stringify(pick2));
-const byI = (i) => pick2?.seats.find((s) => s.i === i);
-check(pick2 && pick2.title === '要坐哪裡？' && pick2.note === '點一個位子就走過去坐' && pick2.seats.length === 5 && !pick2.two, 'the picker opens: 「要坐哪裡？」 with 5 seats');
-check(byI(0)?.t.includes('駕駛座') && byI(0)?.t.includes('（開車）') && byI(1)?.t.includes('副駕駛座') && !byI(0)?.dis && !byI(1)?.dis, `driver's seat says （開車）: 「${byI(0)?.t}」; nobody is in any seat`);
-check(byI(1)?.left < byI(0)?.left && byI(0)?.top === byI(1)?.top && byI(2)?.left < byI(3)?.left && byI(3)?.left < byI(4)?.left && byI(2)?.top > byI(0)?.top, 'seen from above with the nose up: the GC8 driver sits on the right, passenger left; rear row below, left/middle/right in order');
-const riPick = await shot('2-picker');
-// 點外面＝關掉；再開
-await p.evaluate(() => window.__SEAT().SEATUI.sp.click());
-const closed = await p.evaluate(() => window.__picker());
-check(closed === null, 'tap outside the card: it closes');
-await p.evaluate(() => document.querySelector('#stage .wk-act2').click());
+// ---- 2 走到副駕駛座的門（GC8 右駕＝左邊）：「開車門 · GC8」→ 門打開 →「上車 · GC8」＋「關車門」（第 98 批；位子的畫面在第 5 段「換位子」看） ----
+const door2 = await p.evaluate(() => {
+  const D = window.__D(), W = D.walker, car = W.cars.find((c) => c.key === window.__K), cs = Math.cos(car.heading), sn = Math.sin(car.heading);
+  W.teleport({ x: car.x - sn * (car.hz + 1.0), z: car.z - cs * (car.hz + 1.0), heading: car.heading - Math.PI / 2 }, { keepCamera: false }); window.__wstep(30);
+  const a0 = W.action, b0 = W.action2; document.querySelector('#stage .wk-act').click(); window.__wstep(45);
+  return { a0, b0, act: W.action, act2: W.action2, txt: document.querySelector('#stage .wk-act2 span')?.textContent };
+});
+console.log('2', el(), JSON.stringify(door2));
+check(door2.a0 === '開車門 · GC8' && door2.b0 == null && door2.act === '上車 · GC8' && door2.act2 === '關車門' && door2.txt === '關車門', `passenger door: 「${door2.a0}」 → the door opens → 「${door2.act}」 and, below it, 「${door2.act2}」`);
 
-// ---- 3 點副駕駛座：走過去坐進去。車子不動、第一人稱在副駕駛座的眼睛、後照鏡照後面 ----
+// ---- 3 按「上車 · GC8」（副駕駛座的門）：走過去坐進去。車子不動、第一人稱在副駕駛座的眼睛、後照鏡照後面 ----
 const sit3 = await p.evaluate(() => {
   const D = window.__D(), W = D.walker, S = window.__SEAT();
-  document.querySelector('#stage .sp-seat[data-i="1"]').click();
-  const picked = !window.__picker(), goes = W.mode;
+  const picked = document.querySelector('#stage .wk-act span')?.textContent; document.querySelector('#stage .wk-act').click(); const goes = W.mode;
   let n = 0; for (; n < 1200 && !(S.PAX.on && W.mode === 'off'); n++) window.__wstep(1);
   window.__dstep(70); // 鏡頭移過去
   const d = window.__D().drv, t0 = d.telemetry(); // 開車的（drv）是坐進去才做的
@@ -138,7 +132,7 @@ const sit3 = await p.evaluate(() => {
 const mirOf = () => p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => { const D = window.__D(); r(D.MIR.on && D.MIR.S === D.tripS); })))); // 後照鏡是畫面那一格（mirrorStep）才決定的
 sit3.mir = await mirOf();
 console.log('3', el(), JSON.stringify(sit3));
-check(sit3.picked && (sit3.goes === 'in' || sit3.goes === 'walk') && sit3.pax && sit3.i === 1 && sit3.mode === 'off', `tapped 副駕駛座: you walked to the door and sat down (${(sit3.n / 60).toFixed(1)} s) 「${sit3.toast}」`);
+check(sit3.picked === '上車 · GC8' && (sit3.goes === 'in' || sit3.goes === 'walk') && sit3.pax && sit3.i === 1 && sit3.mode === 'off', `「上車」 at the passenger door: you walked in and sat in 副駕駛座 (${(sit3.n / 60).toFixed(1)} s) 「${sit3.toast}」`);
 check(sit3.paused && sit3.moved < 0.01 && Math.abs(sit3.v) < 0.01 && !sit3.voice, `in the passenger seat the car does not move (throttle for 1.5 s: ${sit3.moved} m), engine off`);
 check(sit3.cam === 'eye' && sit3.eyeD < 0.02 && sit3.near <= 0.05 && sit3.mir, `first person from the passenger seat's eyes (${sit3.eyeD} m off), mirrors show what is behind`);
 check(sit3.hud && sit3.swap && sit3.out && sit3.eye === 'true' && !sit3.who && !sit3.act2, 'seated HUD: 換位子, 下車, the eye button (pressed = first person); no 「坐在 X 的車上」 pill in your own car; the walking buttons are gone');
@@ -164,7 +158,18 @@ check(out4.me.vis && out4.me.i === 1 && out4.me.state === 'sit', 'from outside y
 check(out4.turned > 0.5 && Math.abs(out4.d1 - out4.d) < 0.3 && out4.yaw < -0.5, `dragging the screen orbits around the car (moved ${out4.turned} m, still ${out4.d1} m away)`);
 const riOut = await shot('4-pax-out');
 
-// ---- 5 「換位子」→ 後座右（你坐的那格黃色、不能點）→ 換到駕駛座＝開車（第一人稱）；追車視角看得到你坐在駕駛座、手握方向盤跟著轉 ----
+// ---- 5 「換位子」→ 畫面「換到哪裡？」：5 個位子，駕駛座寫（開車），左右照真的那一邊（車頭朝上）；點外面關掉
+//      → 後座右（你坐的那格黃色、不能點）→ 換到駕駛座＝開車（第一人稱）；追車視角看得到你坐在駕駛座、手握方向盤跟著轉 ----
+const pick5 = await p.evaluate(() => { window.__SEAT().SEATUI.swap.click(); return window.__picker(); });
+console.log('5 picker', el(), JSON.stringify(pick5));
+const byI = (i) => pick5?.seats.find((s) => s.i === i);
+check(pick5 && pick5.seats.length === 5 && !pick5.two, 'the picker opens with 5 seats');
+check(byI(0)?.t.includes('駕駛座') && byI(0)?.t.includes('（開車）') && byI(1)?.t.includes('副駕駛座') && !byI(0)?.dis && byI(1)?.dis, `driver's seat says （開車）: 「${byI(0)?.t}」; your seat 「${byI(1)?.t}」 can't be tapped`);
+check(byI(1)?.left < byI(0)?.left && byI(0)?.top === byI(1)?.top && byI(2)?.left < byI(3)?.left && byI(3)?.left < byI(4)?.left && byI(2)?.top > byI(0)?.top, 'seen from above with the nose up: the GC8 driver sits on the right, passenger left; rear row below, left/middle/right in order');
+const riPick = await shot('5-picker');
+await p.evaluate(() => window.__SEAT().SEATUI.sp.click());
+const closed = await p.evaluate(() => window.__picker());
+check(closed === null, 'tap outside the card: it closes');
 const swap5 = await p.evaluate(() => {
   const S = window.__SEAT(), U = S.SEATUI;
   U.swap.click(); const P = window.__picker();
@@ -208,12 +213,14 @@ await p.evaluate(() => { const d = window.__D().drv; d.setInput({ throttle: 0, b
 const riDrv = await shot('6-driver');
 await p.evaluate(() => { const d = window.__D().drv; d.setInput(null); window.__dstep(30); });
 
-// ---- 7 下車 → 再「選位子」坐副駕駛座（剛下來那台）→「下車」：人拿下來、走路；「上車」照舊開 ----
+// ---- 7 下車（駕駛座的門開著）→ 走到副駕駛座的門「開車門」→「上車」坐副駕駛座（剛下來那台）→「下車」：人拿下來、走路；「上車」照舊開 ----
 const out7 = await p.evaluate(() => {
   const D = window.__D(), W = D.walker, S = window.__SEAT();
   D.leaveCar(); let n = 0; for (; n < 300 && W.mode !== 'walk'; n++) window.__dstep(1); window.__wstep(30);
-  const walk = { mode: W.mode, me: window.__me(), paused: D.drv.telemetry().paused, act2: W.action2 };
-  document.querySelector('#stage .wk-act2').click(); document.querySelector('#stage .sp-seat[data-i="1"]').click();
+  const walk = { mode: W.mode, me: window.__me(), paused: D.drv.telemetry().paused, act: W.action, act2: W.action2 };
+  const car7 = W.cars.find((c) => c.drive), cs = Math.cos(car7.heading), sn = Math.sin(car7.heading);
+  W.teleport({ x: car7.x - sn * (car7.hz + 1.0), z: car7.z - cs * (car7.hz + 1.0), heading: car7.heading - Math.PI / 2 }, { keepCamera: false }); window.__wstep(30);
+  walk.pa = W.action; document.querySelector('#stage .wk-act').click(); window.__wstep(45); walk.pb = W.action; document.querySelector('#stage .wk-act').click();
   for (n = 0; n < 1200 && !(S.PAX.on && W.mode === 'off'); n++) window.__wstep(1);
   window.__dstep(70);
   const back = { pax: S.PAX.on, i: S.PAX.i, paused: D.drv.telemetry().paused, me: window.__me(), cam: S.SCAM.mode, carD: window.__carD(), voice: !!window.__D().dvoice?.alive, engine: D.drv.engine };
@@ -226,7 +233,8 @@ const out7 = await p.evaluate(() => {
   return { walk, back, out, again: { ok, mode: W.mode, paused: D.drv.telemetry().paused, voice: !!D.dvoice, pax: S.PAX.on } };
 });
 console.log('7', el(), JSON.stringify(out7));
-check(out7.walk.mode === 'walk' && !out7.walk.me.vis && out7.walk.me.walkerVis && out7.walk.paused && out7.walk.act2 === '選位子', 'got out as the driver: the sitting you comes off the car, 「選位子」 is back');
+check(out7.walk.mode === 'walk' && !out7.walk.me.vis && out7.walk.me.walkerVis && out7.walk.paused && out7.walk.act === '上車 · GC8' && out7.walk.act2 === '關車門', `got out as the driver: the sitting you comes off the car, the door stays open: 「${out7.walk.act}」＋「${out7.walk.act2}」`);
+check(out7.walk.pa === '開車門 · GC8' && out7.walk.pb === '上車 · GC8', `walked round to the passenger door: 「${out7.walk.pa}」 →「${out7.walk.pb}」`);
 check(out7.back.pax && out7.back.i === 1 && out7.back.paused && out7.back.cam === 'eye' && out7.back.me.vis && out7.back.me.fp && out7.back.carD < 1.5, `sat in the passenger seat of the car you just left (camera remembered: first person, ${out7.back.carD} m from the middle of the car)`);
 check(out7.out.mode === 'walk' && !out7.out.pax && !out7.out.hud && !out7.out.me.vis && out7.out.me.walkerVis && out7.out.paused && out7.out.drive && out7.out.side === out7.out.want && /^上車/.test(out7.out.act), `tapped 下車: you stand on the passenger side (${out7.out.side < 0 ? 'left' : 'right'} for the GC8), the car stays put (still your car to get back into)`);
 check(out7.back.voice && out7.back.engine, `第 98 批 下車再坐副駕駛座：引擎照樣發動著（引擎聲還在）`);

@@ -238,7 +238,7 @@ async function getIn() {
   await p.evaluate(() => { window.scrollTo(0, 0); document.getElementById('driveOut').click(); });
   await p.waitForFunction(() => window.__D().on && window.__D().walker && window.__D().walker.mode === 'walk', null, { timeout: 300000 });
   await p.evaluate(() => { window.__hold = true; window.__noDraw = true; });
-  return p.evaluate(() => { const D = window.__D(), H = window.__H; D.walker.teleport(H.gw(-4.5, -4, -1.05)); window.__wstep(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); const pressed = H.press(), modes = H.board(); window.__wstep(20); const D2 = window.__D(); return { walk: r?.ok, pressed, modes, off: engS(), drv: !!D2.drv, cur: D2.cur, gearK: D2.gearK, fs: document.body.classList.contains('fs') }; });
+  return p.evaluate(() => { const D = window.__D(), H = window.__H; D.walker.teleport(H.gw(-4.5, -4, -1.05)); window.__wstep(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); let pressed = H.press(); if (/^開車門/.test(pressed || '')) { window.__wstep(45); pressed = H.press(); } const modes = H.board(); // 第 98 批：車門旁邊先「開車門」，打開了才是「上車」 window.__wstep(20); const D2 = window.__D(); return { walk: r?.ok, pressed, modes, off: engS(), drv: !!D2.drv, cur: D2.cur, gearK: D2.gearK, fs: document.body.classList.contains('fs') }; });
 }
 // 第 98 批：上車引擎是關著的；按一下「發動」（點一下就好）：起動馬達轉 0.8 秒、發動
 async function startEng() {

@@ -292,7 +292,7 @@ await p.waitForFunction(() => document.getElementById('status').hidden, null, { 
 await p.evaluate(() => { window.scrollTo(0, 0); document.getElementById('driveOut').click(); });
 await p.waitForFunction(() => window.__D().on && window.__D().walker && window.__D().walker.mode === 'walk', null, { timeout: 300000 });
 await p.evaluate(() => { window.__hold = true; window.__noDraw = true; });
-const bd = await p.evaluate(() => { const D = window.__D(), H = window.__H; D.walker.teleport(H.gw(-4.5, -4, -1.05)); H.step = (n) => window.__wstep(n); window.__wstep(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); const pressed = H.press(), modes = H.board(); window.__wstep(40); const D2 = window.__D(); return { walk: r?.ok, pressed, modes, drv: !!D2.drv, cur: D2.cur }; });
+const bd = await p.evaluate(() => { const D = window.__D(), H = window.__H; D.walker.teleport(H.gw(-4.5, -4, -1.05)); H.step = (n) => window.__wstep(n); window.__wstep(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); let pressed = H.press(); if (/^開車門/.test(pressed || '')) { window.__wstep(45); pressed = H.press(); } const modes = H.board(); // 第 98 批：車門旁邊先「開車門」，打開了才是「上車」 window.__wstep(40); const D2 = window.__D(); return { walk: r?.ok, pressed, modes, drv: !!D2.drv, cur: D2.cur }; });
 console.log('  上車:', JSON.stringify(bd), el());
 check(bd.drv && bd.cur === 'supra' && /上車 · SUPRA/.test(bd.pressed), `walked to the SUPRA and got in (${bd.pressed})`);
 // 「手煞車」按鈕：在 HUD 裡、跟油門煞車一樣的樣子

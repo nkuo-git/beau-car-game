@@ -5,7 +5,7 @@
 //   開車的時候門開著：停住了左上「關車門」；開快了（時速 9 公里）門自己甩上；坐別的位子：坐好 1 秒門自己關
 //   換車、停進格子、回車庫頁、比賽＝門關好（車身換回原本的網格）；開後車廂的時候門先關（兩個都會切車身）
 //   沒有門：腳踏車、街車、沙灘車（騎的）、怪獸卡車
-const CD_ON = false; // 試做頁 v110 先放發動／熄火；車門 v111 打開
+const CD_ON = true; // 試做頁 v111 打開（v110 先放發動／熄火的時候是 false）
 const CD = { S: null, rig: null, near: -1, act2: null, lastMode: '', paxT: 0, acts: {} };
 const CD_V = new THREE.Vector3(), CD_V2 = new THREE.Vector3();
 function cdOK(k) { return !!(CD_ON && k && CARS[k] && !RIDES[k] && !PERF[k]?.bike && !PERF[k]?.big && seatsOf(k).length > 0); }

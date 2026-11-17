@@ -589,9 +589,14 @@ const rnd = await p.evaluate(() => {
   return { frames, bad };
 });
 check(!rnd.bad.length, `random walking inside the garage (10 × 3 s, walk/run, random camera): never inside a wall/car/door, camera never inside or behind a wall (${rnd.frames} frames${rnd.bad.length ? ' — ' + rnd.bad.join(' | ') : ''})`);
-// 走去 GC8 的駕駛座（車子左邊＝車庫本地 −z）：「上車 · GC8」
-const w2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker, a = H.gw(-4.5, -4, -1.05); W.teleport(a); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); return { r, act: H.actText(), near: W.telemetry().near }; });
-check(w2.r.ok && w2.act === '上車 · GC8' && w2.near === 'gc8', `walk up to GC8: 「${w2.act}」 (walked ${w2.r.s?.toFixed(1)} s)`);
+// 走去 GC8 的駕駛座（車子左邊＝車庫本地 −z）：「開車門 · GC8」→ 門打開 →「上車 · GC8」＋「關車門」（第 98 批）
+const w2 = await p.evaluate(() => {
+  const D = window.__D(), H = window.__H, W = D.walker, a = H.gw(-4.5, -4, -1.05); W.teleport(a); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]);
+  const wa2 = () => { const e = document.querySelector('#stage .wk-act2'); return e && !e.hidden && !e.closest('[hidden]') && e.getClientRects().length ? e.querySelector('span').textContent : null; };
+  const act0 = H.actText(), a20 = wa2(), op = H.press(); H.step(45);
+  return { r, act0, a20, op, act: H.actText(), a2: wa2(), near: W.telemetry().near };
+});
+check(w2.r.ok && w2.act0 === '開車門 · GC8' && w2.a20 == null && w2.op === '開車門 · GC8' && w2.act === '上車 · GC8' && w2.a2 === '關車門' && w2.near === 'gc8', `walk up to GC8: 「${w2.act0}」 (walked ${w2.r.s?.toFixed(1)} s); pressed: the door opens →「${w2.act}」＋「${w2.a2}」 (第 98 批)`);
 // 車子旁邊：大按鈕「上車 · GC8」＋右下角的圓按鈕（第 3 批的「揍」，先放一顆一樣大的）也都不重疊
 await p.evaluate(() => window.__D().walker.setButtons([{ id: 'punch', label: '揍', key: 'KeyF', onClick() {} }]));
 clash = await hudClash(); const clashNear = await sizeSweep();
@@ -856,7 +861,7 @@ const again = await p.evaluate(() => {
   return { ok: r.ok, act, pressed, modes: b.modes, same: D.drv === window.__drv0, paused: t.paused, at: Math.hypot(t.x - sp.x, t.z - sp.z), voice: !!window.__D().dvoice?.alive, hidden: D.walker.telemetry().hidden, act2: H.act2(), act1: H.actText() };
 });
 console.log('  上車 again:', JSON.stringify(again));
-check(again.ok && again.act === '上車 · GC8' && again.modes.join('>') === 'in>seat>off' && again.same && !again.paused && again.at < 1e-6 && again.voice && again.hidden && again.act2 === '下車' && again.act1 == null, 'walked back to GC8 and got in: the same car carries on from where it was parked (engine still running); door open → only 下車 shows');
+check(again.ok && again.act === '上車 · GC8' && again.modes.join('>') === 'in>seat>off' && again.same && !again.paused && again.at < 1e-6 && again.voice && again.hidden && again.act2 === '下車' && again.act1 === '關車門', `walked back to GC8 (its door still open since 下車) and got in: the same car carries on from where it was parked (engine still running); roller door open, car door open → 「${again.act1}」＋「下車」 (第 98 批)`);
 // 開著的時候沒有「下車」，停住才有
 const mv = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, d = D.drv; d.setInput({ throttle: 0.5, brake: 0, steer: 0 }); window.__dstep(45);

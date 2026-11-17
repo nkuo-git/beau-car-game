@@ -463,10 +463,10 @@ check(pw1.fs && pw1.d.length === 8 && new Set(pw1.d.map((q) => q.x)).size === 1 
 let clash = await hudClash() || await sizeSweep();
 check(!clash, `on foot with eight destinations: nothing overlapping or off-screen on any screen size (${clash || 'ok'})`);
 await p.evaluate(() => { document.getElementById('destTog').click(); }); // 量完收起來
-const w2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker; W.teleport(H.gw(-4.6, -7.7, -1.05)); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); return { ok: r.ok, act: H.actText() }; });
+const w2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker; W.teleport(H.gw(-4.6, -7.7, -1.05)); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); const act0 = H.actText(), op = H.press(); H.step(45); return { ok: r.ok, act0, op, act: H.actText() }; }); // 第 98 批：車門旁邊「開車門」→ 打開了「上車」
 const bd2 = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(); H.step(40); const D = window.__D(); return { pressed, modes: r.modes, drv: !!D.drv, cur: D.cur, act: H.actText(), act2: H.act2() }; });
 console.log('  上車 GC8:', JSON.stringify(w2), JSON.stringify(bd2));
-check(w2.ok && w2.act === '上車 · GC8' && bd2.pressed === '上車 · GC8' && bd2.modes.join('>') === 'in>seat>off' && bd2.drv && bd2.cur === 'gc8' && bd2.act === '開鐵捲門' && bd2.act2 === '下車', 'walked to GC8 in the middle of the garage and got in (開鐵捲門 + 下車)');
+check(w2.ok && w2.act0 === '開車門 · GC8' && w2.op === '開車門 · GC8' && w2.act === '上車 · GC8' && bd2.pressed === '上車 · GC8' && bd2.modes.join('>') === 'in>seat>off' && bd2.drv && bd2.cur === 'gc8' && bd2.act === '開鐵捲門' && bd2.act2 === '下車', 'walked to GC8 in the middle of the garage, 開車門 → 上車, got in (開鐵捲門 + 下車)');
 // 全螢幕開車：「去哪裡」平常收起來（Nick 2026-10-10）：按「📍 去哪裡 ▾」打開 → 選了收起來 → 再打開量排法
 const fold2 = await p.evaluate(() => { const B = document.body.classList, sh = B.contains('destsopen'), list0 = getComputedStyle(document.getElementById('dests')).display; document.getElementById('destTog').click(); const op = B.contains('destsopen');
   document.querySelector('#dests button[data-d="offroad"]').click(); const picked = B.contains('destsopen'); document.getElementById('destTog').click(); return { sh, list0, op, picked, again: B.contains('destsopen') }; });
@@ -538,7 +538,7 @@ for (const [i, k, name, len] of [[1, 'z2', 'Z2 ATV', [1.9, 2.5]], [2, 'k2', 'K2 
 const bk = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker, d = window.__drvG, t = d.telemetry(), ci = d.carInfo, c0 = (ci.nose + ci.tail) / 2, f = [Math.cos(t.heading), -Math.sin(t.heading)], rt = [Math.sin(t.heading), Math.cos(t.heading)], cx = t.x + f[0] * c0, cz = t.z + f[1] * c0;
   const at = (u, w) => [cx + f[0] * u + rt[0] * w, cz + f[1] * u + rt[1] * w];
   W.teleport({ x: at(-ci.len / 2 - 2, 0)[0], z: at(-ci.len / 2 - 2, 0)[1], heading: t.heading }); H.step(10);
-  const r = H.walkPath([at(-ci.len / 2 - 1.2, -(ci.halfW + 1)), at(0, -(ci.halfW + 0.6))]); const act = H.actText(), pressed = H.press(), b = H.board(); H.step(20);
+  const r = H.walkPath([at(-ci.len / 2 - 1.2, ci.halfW + 1), at(0, ci.halfW + 0.6)]); const act = H.actText(), pressed = H.press(), b = H.board(); H.step(20); // 第 98 批：GC8 右駕，走到右邊駕駛座的門（下車的時候打開、還開著）；左邊是副駕駛座的門（「開車門」→ 坐副駕駛座）
   const D2 = window.__D(); return { ok: r.ok, act, pressed, modes: b.modes, same: D2.drv === d, paused: D2.drv?.telemetry().paused }; });
 console.log('  back in GC8:', JSON.stringify(bk));
 check(bk.ok && bk.act === '上車 · GC8' && bk.modes.join('>') === 'in>seat>off' && bk.same && !bk.paused, 'walked back to GC8 on the dirt and got in: the same car carries on');

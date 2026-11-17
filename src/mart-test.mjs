@@ -410,13 +410,14 @@ if (FULL) {
   // 坐在副駕駛座吃
   const st6 = await L(() => { const H = window.__H, M = window.__MT(), D = window.__D(), W = D.walker; M.MART.vis.want = 0; H.step(60);
     const car = W.cars.find((c) => c.key === M.cur), cs = Math.cos(car.heading), sn = Math.sin(car.heading);
-    W.teleport({ x: car.x + sn * (car.hz + 1.0), z: car.z + cs * (car.hz + 1.0), heading: car.heading + Math.PI / 2 }, { keepCamera: false }); H.step(40);
-    const a2 = W.action2; document.querySelector('#stage .wk-act2').click(); H.step(2); document.querySelector('#stage .sp-seat[data-i="1"]').click();
+    // 第 98 批：自己開的車有車門：走到副駕駛座的門（GC8 右駕＝左邊）「開車門」→「上車」＝坐副駕駛座（以前是「選位子」→ 副駕駛座）
+    W.teleport({ x: car.x - sn * (car.hz + 1.0), z: car.z - cs * (car.hz + 1.0), heading: car.heading - Math.PI / 2 }, { keepCamera: false }); H.step(40);
+    const a0 = H.actText(); H.press(); H.step(45); const a1 = H.actText(), a2 = W.action2; H.press();
     let n = 0; for (; n < 1200 && !(M.PAX.on && W.mode === 'off'); n++) H.step(1); window.__dstep(60);
     document.querySelector('.mt-pill').click(); window.__dstep(3); if (!window.__H.visible('.mt-list')) { document.querySelector('.mt-pill').click(); window.__dstep(3); }
-    return { a2, pax: M.PAX.on, i: M.PAX.i, can: M.martCanEat(), pill: window.__H.visible('.mt-pill'), list: window.__H.visible('.mt-list'), btns: [...document.querySelectorAll('.mt-list button[data-e]')].filter((b) => !b.disabled).length }; });
+    return { a0, a1, a2, pax: M.PAX.on, i: M.PAX.i, can: M.martCanEat(), pill: window.__H.visible('.mt-pill'), list: window.__H.visible('.mt-list'), btns: [...document.querySelectorAll('.mt-list button[data-e]')].filter((b) => !b.disabled).length }; });
   console.log('  seat', JSON.stringify(st6));
-  check(st6.a2 === '選位子' && st6.pax && st6.i === 1 && st6.can && st6.pill && st6.list && st6.btns > 3, `sat in the passenger seat: the bag is still top-left and its 「吃」「喝」 buttons work (${st6.btns})`);
+  check(st6.a0 === '開車門 · GC8' && st6.a1 === '上車 · GC8' && st6.a2 === '關車門' && st6.pax && st6.i === 1 && st6.can && st6.pill && st6.list && st6.btns > 3, `passenger door 「${st6.a0}」→「${st6.a1}」 (＋「${st6.a2}」): sat in the passenger seat: the bag is still top-left and its 「吃」「喝」 buttons work (${st6.btns})`);
   const e3 = await eatAt('egg', true);
   await L(() => window.__H.step(0)); await drawAndShot('6-eat-seat');
   const e3b = await eatEnd(true);
