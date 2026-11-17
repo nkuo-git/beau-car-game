@@ -230,6 +230,7 @@ function bakedMasks(tex) {
 // 燈：晚上（PAINT_NIGHT）自己發光；how：'all' 整片、'red' 只有紅色的地方（尾燈：倒車燈不要紅）
 function bakedNight(m, rgb, how = 'all') {
   const k = how === 'red' ? 'clamp((diffuseColor.r - max(diffuseColor.g, diffuseColor.b)) * 2.5, 0.0, 1.0)' : '1.0';
+  m.userData.lamp = true; // 第 98 批：這個材質有車燈（熄火 lampOff 就不亮）
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uNight = nightU(m); // 第 98 批：熄火的車燈不亮
     sh.fragmentShader = 'uniform float uNight;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>

@@ -541,6 +541,7 @@ function inject(shader, tex) {
 
 // 車漆那一層：玻璃的地方挖掉，其他依照投影圖改顏色、粗糙度、金屬感
 export function patchPaint(mat, tex) {
+  mat.userData.lamp = true; // 第 98 批：這個材質有車燈（熄火 lampOff 就不亮）
   mat.onBeforeCompile = (shader) => {
     inject(shader, tex); shader.uniforms.uNight = nightU(mat); // 第 98 批：熄火的車燈不亮
     shader.fragmentShader = shader.fragmentShader
