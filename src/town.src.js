@@ -504,7 +504,7 @@ function makeDrv(pose) {
     crush: crushFx && crushK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
-  $('gearTog').hidden = !mtOk(cur); if (gearK === 'mt' && mtOk(cur)) drv.setGearbox('mt', mtOpt(cur)); document.body.classList.toggle('mtgear', drv.gearbox === 'mt'); // 第 68 批：手排；第 69 批：自排車（PERF 沒有 mt）沒有 MT，那一格也不出來；第 96 批：自排車也有（不會熄火），只有腳踏車沒有
+  $('gearTog').hidden = !mtOk(cur); if (gearK === 'mt' && mtOk(cur)) drv.setGearbox('mt', mtOpt(cur)); document.body.classList.toggle('mtgear', drv.gearbox === 'mt'); gaugeApply(); // 第 68 批：手排；第 69 批：自排車（PERF 沒有 mt）沒有 MT，那一格也不出來；第 96 批：自排車也有（不會熄火），只有腳踏車沒有
   if (NPC) drv.addColliders(NPC.peds.props.colliders, 'npc-props'); // 板凳、椅子（路上的車 npcStep 每一格換）
   drv.addColliders(DEALER_DOOR, 'dealer-door'); // 車行的自動門開著：人走得進去，車子擋住
   drv.setCamCeil((x, z) => { if (OB?.inside(x, z, 0.6)) return OB.size.ceil - 0.75; if (TRAMP.on) return rampCeil(x, z); if (VIL.hills && !VIL.hills.high && VIL.hills.tunAt(x, z) >= 0) return VIL.hills.ceil; const c = GAR.ceilingAt(x, z, true); return c < 50 ? GAR.group.position.y + c - 0.75 : Infinity; }); // 第 27 批：隧道裡面＝拱頂底下 // 第 24 批：開在斜坡上＝上面那一圈的底下 // 第 21 批：圓塔現在這一層的天花板（一樓 4.2、樓上 2.9 公尺） // 修 5：越野車車庫裡面追車鏡頭壓在天花板下面（以前鏡頭穿出去、屋頂不畫＝看到天空）
@@ -552,7 +552,7 @@ const FOLD = { destsopen: -1, moreopen: -1 };
 const hudMoving = () => { if (!DRIVE.on) return false; if (walker?.mode === 'walk') return walker.telemetry().speed > 0.6; const t = drv?.telemetry(); return !!t && Math.abs(t.v) > 4; };
 const foldStart = () => (hudMoving() ? 8 : -1);
 function destOpen(on) { if (bodyFlags.destsopen === on) return; bodyFlag('destsopen', on); $('destTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.destsopen = foldStart(); }
-function moreOpen(on) { if (!on) { sizeOpen(false); tiltOpen(false); lookOpen(false); musOpen(false); } if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
+function moreOpen(on) { if (!on) { sizeOpen(false); tiltOpen(false); lookOpen(false); musOpen(false); gaugeOpen(false); } if (bodyFlags.moreopen === on) return; bodyFlag('moreopen', on); const b = $('moreTog'); b.setAttribute('aria-expanded', String(on)); b.textContent = on ? '✕' : '⋯'; if (on) FOLD.moreopen = foldStart(); }
 // 按鈕大小（Nick 2026-10-10）：小 0.8、中 1（原本的）、大 1.15；每支手機自己記（carid.btnsize，不用搬家、不上雲端）
 const BTN_Z = { s: 0.8, m: 1, l: 1.15 }, BTN_KEY = 'carid.btnsize';
 // 「大」只放大到排得下：直拿看寬（390 寬剛好排滿＝1 倍）、橫拿看高（340 高＝1 倍）；小螢幕（或手機「顯示大小」調大）上「大」＝「中」
@@ -566,7 +566,7 @@ function btnSize(k, keep) {
   for (const b of document.querySelectorAll('#sizePop button')) b.setAttribute('aria-pressed', String(b.dataset.z === k));
   if (keep) try { localStorage.setItem(BTN_KEY, k); } catch {}
 }
-function sizeOpen(on) { if (on) { tiltOpen(false); lookOpen(false); musOpen(false); } if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function sizeOpen(on) { if (on) { tiltOpen(false); lookOpen(false); musOpen(false); gaugeOpen(false); } if (bodyFlags.sizeopen === on) return; bodyFlag('sizeopen', on); $('sizeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 try { btnSize(localStorage.getItem(BTN_KEY)); } catch { btnSize('m'); }
 $('sizeTog').addEventListener('click', () => sizeOpen(true));
 for (const b of document.querySelectorAll('#sizePop button')) b.addEventListener('click', () => { btnSize(b.dataset.z, true); sizeOpen(false); });
@@ -581,7 +581,7 @@ function tiltMode(k, keep) {
   if (keep) try { localStorage.setItem(TILT_KEY, tiltK); } catch {}
   if (drv) drv.setTilt(tiltK === 'tilt', tiltFail);
 }
-function tiltOpen(on) { if (on) { sizeOpen(false); lookOpen(false); musOpen(false); } if (bodyFlags.tiltopen === on) return; bodyFlag('tiltopen', on); $('tiltTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function tiltOpen(on) { if (on) { sizeOpen(false); lookOpen(false); musOpen(false); gaugeOpen(false); } if (bodyFlags.tiltopen === on) return; bodyFlag('tiltopen', on); $('tiltTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 try { tiltMode(localStorage.getItem(TILT_KEY)); } catch { tiltMode('btn'); }
 $('tiltTog').addEventListener('click', () => tiltOpen(true));
 for (const b of document.querySelectorAll('#tiltPop button')) b.addEventListener('click', () => {
@@ -603,6 +603,21 @@ function gearMode(k, keep) {
   document.body.classList.toggle('mtgear', !!drv && drv.gearbox === 'mt'); // 第 69 批：橫拿的「去哪裡」讓位給換檔桿（garage.css）
 }
 try { gearMode(localStorage.getItem(GEAR_KEY)); } catch { gearMode('at'); }
+// 第 98 批（Nick 2026-11-17「在做一個選項一樣放在選單裡可選要用現在這種儀表板還是那台車的」，草稿「儀表板」那一頁「照這樣做」）：
+//   「⋯」那一排多一顆儀表的按鈕 →「儀表板 遊戲的／原車的」；原車的＝下面中間換成那台車真的儀表（cabin.js cabinHud）；每支手機自己記（carid.gauge，不用搬家、不上雲端）
+const GAUGE_KEY = 'carid.gauge';
+let gaugeK = 'game';
+const gaugeApply = () => { if (drv) drv.setGauge(gaugeK === 'car' ? cabinHud(cur) : null); };
+function gaugeMode(k, keep) {
+  gaugeK = k === 'car' ? 'car' : 'game';
+  for (const b of document.querySelectorAll('#gaugePop button')) b.setAttribute('aria-pressed', String(b.dataset.g === gaugeK));
+  if (keep) try { localStorage.setItem(GAUGE_KEY, gaugeK); } catch {}
+  gaugeApply();
+}
+function gaugeOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); lookOpen(false); musOpen(false); } if (bodyFlags.gaugeopen === on) return; bodyFlag('gaugeopen', on); $('gaugeTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+try { gaugeMode(localStorage.getItem(GAUGE_KEY)); } catch { gaugeMode('game'); }
+$('gaugeTog').addEventListener('click', () => gaugeOpen(true));
+for (const b of document.querySelectorAll('#gaugePop button')) b.addEventListener('click', () => { gaugeMode(b.dataset.g, true); gaugeOpen(false); gtoast(gaugeK === 'car' ? '儀表板：原車的（這台車真的儀表）' : '儀表板：遊戲的', 1400); });
 $('gearTog').addEventListener('click', () => { gearMode(gearK === 'mt' ? 'at' : 'mt', true); gtoast(gearK === 'mt' ? 'MT 手排：左邊的換檔桿按著往上滑升檔、往下滑降檔' + (PERF[cur]?.mt ? '' : '（這台本來是自排：不會熄火）') : 'AT 自排：車子自己換檔', 2000); FOLD.moreopen = foldStart(); });
 // 畫質（第 29 批，Nick 2026-10-23「就用5號的真實度」）：「⋯」那一排多一顆「✨」（🎮 左邊）→「畫質 最真實／漂亮／順」（look.js）；
 //   每支手機自己記（carid.look，跟按鈕大小一樣不用搬家、不上雲端）；沒選過：電腦模擬的（測試）＝順，畫得了半精度＝最真實，不然＝漂亮
@@ -625,7 +640,7 @@ async function lookSet(lv, tell) {
 // 第 39 批：出門＋最真實＝畫 2 倍細再縮小（garage.src.html pxHigh）；第 41 批：手機的超高不畫兩倍（LOOK.max）
 function pxStep() { const lv = DRIVE.on && LOOK ? LOOK.level : 0, low = lv === 1, high = lv === 2 && LOOK.max; if (low !== pxLow || high !== pxHigh) { pxLow = low; pxHigh = high; resize(); } }
 function lookNight(k) { PAINT_NIGHT.value = k; buildLodCar.night(k); } // 第 31 批：路上的車的燈也跟著 0–1 慢慢亮
-function lookOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); musOpen(false); } if (bodyFlags.lookopen === on) return; bodyFlag('lookopen', on); $('lookTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function lookOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); musOpen(false); gaugeOpen(false); } if (bodyFlags.lookopen === on) return; bodyFlag('lookopen', on); $('lookTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 lookBtns(lookPref());
 $('lookTog').addEventListener('click', () => lookOpen(true));
 for (const b of document.querySelectorAll('#lookPop button')) b.addEventListener('click', () => {
@@ -2846,7 +2861,7 @@ let musV = 'm';
 // 第 36 批（Nick 2026-10-25「開車跟走路音樂換一下」）：開車放賽車感的那首（'drive'）、走路（房子裡也是）放輕鬆的那首（'walk'）；換了在下一小節生效（sound.js）
 function musLevel() { if (MUS) MUS.set({ level: MUS_LV[musV] * (indoor ? 0.35 : 1), style: walker && walker.mode !== 'off' ? 'walk' : 'drive' }); }
 function musSet(v, keep) { musV = MUS_LV[v] !== undefined ? v : v === 'off' ? 'off' : 'm'; $('musTog').setAttribute('aria-pressed', String(musV !== 'off')); for (const b of $('musPop').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === musV)); if (keep) try { localStorage.setItem(MUS_KEY, musV); } catch {} musLevel(); }
-function musOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); lookOpen(false); } if (bodyFlags.musopen === on) return; bodyFlag('musopen', on); $('musTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
+function musOpen(on) { if (on) { sizeOpen(false); tiltOpen(false); lookOpen(false); gaugeOpen(false); } if (bodyFlags.musopen === on) return; bodyFlag('musopen', on); $('musTog').setAttribute('aria-expanded', String(on)); if (on) FOLD.moreopen = foldStart(); }
 try { musSet(localStorage.getItem(MUS_KEY)); } catch { musSet('m'); }
 $('musTog').addEventListener('click', () => { engineAudio.resume(); musOpen(!bodyFlags.musopen); });
 $('musPop').addEventListener('click', (e) => { const b = e.target.closest('button[data-v]'); if (!b) return; engineAudio.resume(); musSet(b.dataset.v, true); musOpen(false); FOLD.moreopen = foldStart(); });

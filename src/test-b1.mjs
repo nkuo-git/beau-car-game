@@ -85,7 +85,7 @@ const fullView = (f) => f.fs && f.html && f.pos === 'fixed' && f.stage.join() ==
 // 畫面上的按鈕：開車的 HUD（多了「下車」）、走路的 HUD（搖桿、上車／叫電梯／睡覺的大按鈕、小地圖、換視角、右下角的圓按鈕）、疊在畫面上的去哪裡／直接回車庫／聲音、
 //   全螢幕鈕、比賽的 HUD：看得到的兩兩不重疊；全螢幕的時候都在螢幕裡面（離邊邊至少 4 px）
 const HUD_SEL = ['.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '.wk-chip', '.wk-act', '.wk-map', '.wk-cam', '.wk-stick', '.wk-btns',
-  '#dests', '#destTog', '#moreTog', '#copTog', '#sizeTog', '#sizePop', '.elpanel', '#driveHome', '#dSndBtn', '#fsBtn', '#hud .trackbar', '#hud .tree', '#hud .clock', '#hud .gauge', '#hud .pedals', '#race'];
+  '#dests', '#destTog', '#moreTog', '#copTog', '#gaugeTog', '#sizeTog', '#sizePop', '.elpanel', '#driveHome', '#dSndBtn', '#fsBtn', '#hud .trackbar', '#hud .tree', '#hud .clock', '#hud .gauge', '#hud .pedals', '#race'];
 const hudClash = (inView = true) => p.evaluate(([inView, S]) => {
   // 橫拿打開的「去哪裡」：#dests 是 display: contents（按鈕直接排在 #drivebar 的格子裡）→ 裡面看得到的按鈕一個一個量
   const R = S.map((s) => [s, document.querySelector(s)]).filter(([, e]) => e && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden')

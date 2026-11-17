@@ -50,6 +50,8 @@ export const CABIN3D = (() => {
   const SPEED = (u, v, r, max = 260, o = {}) => ({ k: 'speed', u, v, r, max, step: 20, sub: 2, every: max > 200 ? 2 : 1, label: 'km/h', ...o });
   const SMALL = (u, v, r, lo, hi, val, o = {}) => ({ k: 'small', u, v, r, lo, hi, val, ...o });
   const BOOST = (u, v, r, o = {}) => ({ k: 'static', u, v, r, min: -1, max: 1, step: 0.5, sub: 5, every: 2, label: '×100kPa', val: -0.55, ...o });
+  // 第 98 批：小螢幕（w×h）：role 'gear' 檔位（預設）、'speed' 時速數字、'power' 馬力、'map' 地圖；txt＝螢幕上的小字
+  const TFT = (u, v, w, h, o = {}) => ({ k: 'tft', u, v, w, h, ...o });
 
   // ---- 每台車的樣子 ----
   // eye：駕駛眼睛 [x, y]（z＝駕駛側 × zD）；H 點（屁股）＝眼睛往前 0.16、往下 0.64
@@ -67,7 +69,7 @@ export const CABIN3D = (() => {
         rim: 0x151517, spoke: 0x8e939a, hub: 0x18191b, roof: 0x5a5c60, hl: 0x505256, cage: 0xd6d8da, metal: 0xc4c8cd, knob: 0xc4c8cd, needle: 0xff5a1a, marker: 0xd01818 },
       dash: { xr: 0.40, yt: 0.925, yl: 0.60, slant: 0.05, wrap: 0.10, bulge: 0.03 },
       cl: { w: 0.40, h: 0.14, depth: 0.095, rise: 0.035, type: 'analog', face: '#0b0b0d', ink: '#f2f2f2',
-        dials: [SPEED(-0.128, -0.004, 0.057, 260), TACH(0, 0.002, 0.066, 9, 7), SMALL(0.13, 0.028, 0.03, 'E', 'F', 0.72), SMALL(0.13, -0.036, 0.03, 'C', 'H', 0.45)] },
+        dials: [SPEED(-0.128, -0.004, 0.057, 260), TACH(0, 0.002, 0.066, 9, 7.2), SMALL(0.13, 0.028, 0.03, 'E', 'F', 0.72), SMALL(0.13, -0.036, 0.03, 'C', 'H', 0.45)] },
       stack: { w: 0.27, x1: 0.50, y1: 0.40, turn: 12, kind: 'radio' },
       wheel: { r: 0.185, reach: 0.43, drop: 0.29, col: 23, spokes: [90, 270, 180], hub: 'pad' },
       shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -1.04, L: 0.46, h: 0.12, a: 22 }, bulk: -0.88, cage: true, // 第 57 批：真的 Supra（A80）是 2+2：後面兩個小小的位子（低低的椅墊，在防滾籠後面）
@@ -78,7 +80,7 @@ export const CABIN3D = (() => {
         rim: 0x151517, spoke: 0x1d1e21, hub: 0x1d1e21, roof: 0x5e6065, hl: 0x54565b, metal: 0xb4b8be, knob: 0x1b1b1d, needle: 0xff4a18 },
       dash: { xr: 0.42, yt: 0.935, yl: 0.62, slant: 0.06, wrap: 0.05 },
       cl: { w: 0.44, h: 0.15, depth: 0.10, rise: 0.04, type: 'analog', face: '#0a0a0c', ink: '#f0f0f0',
-        dials: [SPEED(-0.148, -0.004, 0.058, 180), TACH(0, 0.002, 0.068, 9, 8), BOOST(0.148, -0.004, 0.05), SMALL(-0.2, -0.052, 0.02, 'E', 'F', 0.7), SMALL(0.2, -0.052, 0.02, 'C', 'H', 0.45)] },
+        dials: [SPEED(-0.148, -0.004, 0.058, 180), TACH(0, 0.002, 0.068, 10, 8), BOOST(0.148, -0.004, 0.05), SMALL(-0.2, -0.052, 0.02, 'E', 'F', 0.7), SMALL(0.2, -0.052, 0.02, 'C', 'H', 0.45)] },
       mfd: { w: 0.16, h: 0.08 },
       stack: { w: 0.26, x1: 0.50, y1: 0.42, kind: 'radio' },
       wheel: { r: 0.185, reach: 0.43, drop: 0.30, col: 22, spokes: [90, 270, 180], hub: 'pad' },
@@ -90,7 +92,7 @@ export const CABIN3D = (() => {
         rim: 0x141416, spoke: 0x1b1c1e, hub: 0x1b1c1e, roof: 0x77797d, hl: 0x6a6c70, metal: 0xc0c4c9, knob: 0xc0c4c9, needle: 0xff4a18 },
       dash: { xr: 0.42, yt: 0.915, yl: 0.62, slant: 0.05, wrap: 0.04 },
       cl: { w: 0.40, h: 0.145, depth: 0.09, rise: 0.035, type: 'analog', face: '#0b0b0d', ink: '#f0f0f0',
-        dials: [SMALL(-0.135, 0.03, 0.03, 'C', 'H', 0.45), SMALL(-0.135, -0.035, 0.03, 'E', 'F', 0.8), TACH(0, 0, 0.068, 9, 8, { face: '#e8e8e4', ink: '#111111' }), SPEED(0.135, 0, 0.058, 180)] },
+        dials: [SPEED(-0.135, 0, 0.058, 180), TACH(0, 0, 0.068, 9, 8, { face: '#e8e8e4', ink: '#111111' }), SMALL(0.135, 0.03, 0.03, 'E', 'F', 0.8), SMALL(0.135, -0.035, 0.03, 'C', 'H', 0.45)] }, // 第 98 批：真的 GC8：時速左、轉速中間、油量水溫右
       stack: { w: 0.25, x1: 0.50, y1: 0.40, kind: 'knobs' },
       wheel: { r: 0.18, reach: 0.42, drop: 0.30, col: 22, spokes: [90, 270, 180], sw: 0.03, hub: 'round' },
       shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.92, L: 0.56, n: 3 }, // 第 57 批：n 3＝後座三個位子（真的車 5 人座）
@@ -101,7 +103,7 @@ export const CABIN3D = (() => {
         rim: 0x141416, spoke: 0x6e7278, hub: 0x18181a, hl: 0x2e2f33, metal: 0xb8bcc2, knob: 0x1c1c1e, needle: 0xff3a1a },
       dash: { xr: 0.45, yt: 1.035, yl: 0.72, slant: 0.05, wrap: 0.03 },
       cl: { w: 0.40, h: 0.14, depth: 0.09, rise: 0.035, type: 'analog', face: '#0b0b0d', ink: '#f0f0f0',
-        dials: [TACH(-0.118, 0, 0.062, 8, 7), SPEED(0.118, 0, 0.062, 260), { k: 'tft', u: 0, v: 0, w: 0.085, h: 0.1 }] },
+        dials: [TACH(-0.118, 0, 0.062, 8, 7), SPEED(0.118, 0, 0.062, 260), TFT(0, 0, 0.085, 0.1, { txt: '4WD' })] },
       scr: { w: 0.21, h: 0.12 },
       stack: { w: 0.25, x1: 0.53, y1: 0.46, kind: 'knobs' },
       wheel: { r: 0.18, reach: 0.42, drop: 0.30, col: 24, spokes: [90, 270, 180], hub: 'pad' },
@@ -112,7 +114,7 @@ export const CABIN3D = (() => {
       c: { dash: 0x151618, top: 0x111214, low: 0x131416, acc: 0x1c1d20, carpet: 0x1a1a1b, door: 0xa4643a, doorIn: 0x8e5430, sb: 0xa8683a, si: 0x93582f, sp: 0x5e3419, ss: 0x16171a,
         rim: 0x151517, rimTop: 0x1b1c1f, spoke: 0x1b1c1f, hub: 0x151517, hl: 0x1c1c1e, metal: 0xb8bcc2, knob: 0xb8bcc2, needle: 0xff2a1a },
       dash: { xr: 0.40, yt: 0.77, yl: 0.64, slant: 0.03 },
-      cl: { w: 0.40, h: 0.11, depth: 0.07, rise: 0.03, type: 'digital', bend: 0.45 },
+      cl: { w: 0.40, h: 0.11, depth: 0.07, rise: 0.03, type: 'digital', bend: 0.45, max: 10, red: 9.5 },
       stack: { w: 0.20, x1: 0.46, y1: 0.50, kind: 'ferrari' },
       wheel: { r: 0.175, reach: 0.42, drop: 0.28, col: 20, spokes: [90, 270, 180], fb: 0.78, hub: 'pad', paddles: true, top: true, start: true },
       shift: 'bridge', hand: false, pedals: 2, rear: 'bulk', bulk: -0.80,
@@ -132,7 +134,7 @@ export const CABIN3D = (() => {
       c: { dash: 0x17181a, top: 0x131416, low: 0x151618, acc: 0x484b50, carpet: 0x151517, door: 0x19191b, doorIn: 0x222326, sb: 0x151517, si: 0x1c1d20, sp: 0x9bd400, ss: 0x141416,
         rim: 0x151517, spoke: 0x2a2b2e, hub: 0x151517, hl: 0x1c1c1e, metal: 0xb8bcc2, knob: 0x1c1c1e, needle: 0xff3a1a },
       dash: { xr: 0.40, yt: 0.83, yl: 0.63, slant: 0.04 },
-      cl: { w: 0.40, h: 0.13, depth: 0.09, rise: 0.03, type: 'digital' },
+      cl: { w: 0.40, h: 0.13, depth: 0.09, rise: 0.03, type: 'digital', style: 'round', max: 10, red: 9.15 }, // 第 98 批：中間指針轉速、兩邊圓的小螢幕
       stack: { w: 0.22, x1: 0.12, y1: 0.47, kind: 'glass' },
       wheel: { r: 0.18, reach: 0.42, drop: 0.29, col: 21, spokes: [90, 270, 180], hub: 'pad', paddles: true },
       shift: 'toggle', hand: false, pedals: 2, rear: 'bulk', bulk: -0.60,
@@ -155,7 +157,7 @@ export const CABIN3D = (() => {
         rim: 0x151517, spoke: 0x9a9ea4, hub: 0x151517, hl: 0x1c1c1e, metal: 0xc0c4c9, knob: 0xc0c4c9, needle: 0xff3a1a },
       dash: { xr: 0.37, yt: 0.80, yl: 0.65, slant: 0.04, wrap: 0.06 },
       cl: { w: 0.38, h: 0.13, depth: 0.08, rise: 0.03, type: 'analog', face: '#0a0a0c', ink: '#f2f2f2',
-        dials: [{ k: 'tft', u: -0.13, v: 0, w: 0.09, h: 0.09 }, SPEED(0, 0, 0.064, 500, { step: 50, every: 2 }), { k: 'tft', u: 0.13, v: 0, w: 0.09, h: 0.09 }] },
+        dials: [TACH(-0.13, 0, 0.042, 7, 6.7, { scr: true }), SPEED(0, 0, 0.064, 500, { step: 50, every: 2 }), TFT(0.13, 0, 0.09, 0.09, { role: 'power' })] }, // 第 98 批：轉速在左邊的小螢幕、右邊馬力
       stack: { w: 0.16, x1: 0.42, y1: 0.48, kind: 'knobs' },
       wheel: { r: 0.18, reach: 0.42, drop: 0.29, col: 21, spokes: [90, 270, 180], fb: 0.8, hub: 'pad', paddles: true },
       shift: 'toggle', hand: false, pedals: 2, rear: 'bulk', bulk: -0.70,
@@ -163,10 +165,10 @@ export const CABIN3D = (() => {
     ae86: { // 80 年代的小跑車：右駕手排、方方的儀表板；中間大轉速表、左邊時速、右邊小錶；後座
       lhd: false, zD: 0.36, eye: [-0.28, 1.16], fov: 72,
       c: { dash: 0x222326, top: 0x1b1c1f, low: 0x1e1f22, acc: 0x3a3c40, carpet: 0x19191b, door: 0x232427, doorIn: 0x4a4b50, sb: 0x1d1e21, si: 0x55575c, ss: 0x161719,
-        rim: 0x18181a, spoke: 0x1f2023, hub: 0x1f2023, roof: 0x6c6e72, hl: 0x606266, metal: 0xb4b8be, knob: 0x1b1b1d, needle: 0xff6a1a },
+        rim: 0x18181a, spoke: 0x1f2023, hub: 0x1f2023, roof: 0x6c6e72, hl: 0x606266, metal: 0xb4b8be, knob: 0x1b1b1d, needle: 0xf2f2f2 }, // 第 98 批：白指針
       dash: { xr: 0.38, yt: 0.895, yl: 0.62, slant: 0.07, wrap: 0.02 },
       cl: { w: 0.42, h: 0.15, depth: 0.11, rise: 0.04, type: 'analog', face: '#0c0c0e', ink: '#ececec',
-        dials: [SPEED(-0.14, 0, 0.06, 180), TACH(0, 0, 0.07, 9, 7.5), SMALL(0.145, 0.032, 0.03, 'E', 'F', 0.6), SMALL(0.145, -0.036, 0.03, 'C', 'H', 0.5)] },
+        dials: [SPEED(-0.14, 0, 0.06, 180), TACH(0, 0, 0.07, 9, 7.6), SMALL(0.145, 0.032, 0.03, 'E', 'F', 0.6), SMALL(0.145, -0.036, 0.03, 'C', 'H', 0.5)] },
       stack: { w: 0.26, x1: 0.48, y1: 0.42, kind: 'knobs' },
       wheel: { r: 0.185, reach: 0.43, drop: 0.30, col: 24, spokes: [90, 270, 180], sw: 0.035, hub: 'pad' },
       shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.84, L: 0.58 },
@@ -176,7 +178,7 @@ export const CABIN3D = (() => {
       c: { dash: 0x151618, top: 0x111214, low: 0x131416, acc: 0x2a2b2e, carpet: 0x141416, door: 0x18191b, doorIn: 0x232427, sb: 0x141416, si: 0x1e1f22, sp: 0xe8b818, ss: 0x18191c,
         rim: 0x141416, rimTop: 0x1b1c1f, spoke: 0x1b1c1f, hub: 0x141416, hl: 0x1a1a1c, metal: 0xb8bcc2, knob: 0xb8bcc2, needle: 0xff2a1a },
       dash: { xr: 0.40, yt: 0.80, yl: 0.59, slant: 0.04 },
-      cl: { w: 0.36, h: 0.12, depth: 0.08, rise: 0.03, type: 'digital', acc: '#ffcf2a', max: 9, red: 8.5, mode: 'CORSA', gear: '3' },
+      cl: { w: 0.36, h: 0.12, depth: 0.08, rise: 0.03, type: 'digital', style: 'ring', acc: '#ffcf2a', max: 9, red: 8.5, mode: 'STRADA', gear: '3' }, // 第 98 批：中間黃色一圈轉速、大大的檔位
       stack: { w: 0.20, x1: 0.46, y1: 0.48, kind: 'ferrari' },
       wheel: { r: 0.175, reach: 0.42, drop: 0.28, col: 20, spokes: [90, 270, 180], fb: 0.78, hub: 'pad', paddles: true, top: true },
       shift: 'toggle', hand: false, pedals: 2, rear: 'bulk', bulk: -0.76,
@@ -186,7 +188,8 @@ export const CABIN3D = (() => {
       c: { dash: 0x2a2b2e, top: 0x222326, low: 0x27282b, acc: 0x8a8d92, carpet: 0x1c1c1e, door: 0x2c2d30, doorIn: 0x6e6a62, sb: 0x4a4740, si: 0x6a665c, ss: 0x2a2b2e,
         rim: 0x1a1a1c, spoke: 0x3a3c40, hub: 0x1e1f22, roof: 0x8a8478, hl: 0x7e786c, metal: 0xb8bcc2, knob: 0x1c1c1e, needle: 0xff4a1a },
       dash: { xr: 0.50, yt: 0.93, yl: 0.64, slant: 0.06, wrap: 0.04 },
-      cl: { w: 0.36, h: 0.13, depth: 0.09, rise: 0.035, type: 'digital', acc: '#3ab0ff', max: 8, red: 6.5, mode: 'ECO' },
+      cl: { w: 0.36, h: 0.13, depth: 0.09, rise: 0.035, type: 'analog', face: '#0b0b0d', ink: '#f0f0f0', // 第 98 批：轉速左、時速右、中間小螢幕
+        dials: [TACH(-0.11, 0, 0.056, 7, 5.2), SPEED(0.11, 0, 0.056, 220), TFT(0, 0, 0.075, 0.095, { txt: 'ECO' })] },
       scr: { w: 0.22, h: 0.13 },
       stack: { w: 0.25, x1: 0.56, y1: 0.46, kind: 'knobs' },
       wheel: { r: 0.185, reach: 0.43, drop: 0.30, col: 24, spokes: [90, 270, 180], hub: 'pad' },
@@ -197,7 +200,7 @@ export const CABIN3D = (() => {
       c: { dash: 0x141517, top: 0x101113, low: 0x121315, acc: 0x1c1d20, carpet: 0x141416, door: 0x17181a, doorIn: 0x202124, sb: 0x131416, si: 0x1c1d20, sp: 0xff7a1a, ss: 0x17181b,
         rim: 0x141416, rimTop: 0x1b1c1f, spoke: 0x1b1c1f, hub: 0x141416, hl: 0x18181a, metal: 0xb8bcc2, knob: 0xb8bcc2, needle: 0xff6a1a },
       dash: { xr: 0.45, yt: 0.80, yl: 0.64, slant: 0.04 },
-      cl: { w: 0.22, h: 0.085, depth: 0.05, rise: 0.02, type: 'digital', col: true, acc: '#ff8a1a', max: 9, red: 8, mode: 'TRACK' },
+      cl: { w: 0.22, h: 0.085, depth: 0.05, rise: 0.02, type: 'digital', style: 'thin', col: true, acc: '#ff8a1a', max: 9, red: 8.25, mode: 'TRACK' }, // 第 98 批：細細一條：檔位、轉速橫條、時速
       stack: { w: 0.18, x1: 0.50, y1: 0.48, kind: 'tablet' },
       wheel: { r: 0.17, reach: 0.42, drop: 0.28, col: 20, spokes: [90, 270, 180], fb: 0.8, hub: 'pad', paddles: true, top: true },
       shift: 'toggle', hand: false, pedals: 2, rear: 'bulk', bulk: -0.62,
@@ -219,7 +222,7 @@ export const CABIN3D = (() => {
       c: { dash: 0x1b1c1f, top: 0x151619, low: 0x18191c, acc: 0x55585e, carpet: 0x141416, door: 0x1c1d20, doorIn: 0x2a2b2f, sb: 0x16171a, si: 0xb3121c, sp: 0xd01818, ss: 0x121315,
         rim: 0x141416, spoke: 0x1c1d20, hub: 0x18191b, roof: 0x2a2b2e, hl: 0x2e2f33, metal: 0xc4c8cd, knob: 0xc4c8cd, needle: 0xff3a1a },
       dash: { xr: 0.52, yt: 0.95, yl: 0.66, slant: 0.05, wrap: 0.04 },
-      cl: { w: 0.38, h: 0.13, depth: 0.09, rise: 0.035, type: 'digital', acc: '#ff2a2a', max: 8, red: 7, mode: 'SPORT' },
+      cl: { w: 0.38, h: 0.13, depth: 0.09, rise: 0.035, type: 'digital', style: 'bar', acc: '#ff2a2a', max: 8, red: 7, mode: '+R' }, // 第 98 批：上面紅色橫條轉速、中間時速、右邊檔位
       scr: { w: 0.20, h: 0.12 },
       stack: { w: 0.25, x1: 0.56, y1: 0.46, kind: 'knobs' },
       wheel: { r: 0.18, reach: 0.42, drop: 0.30, col: 23, spokes: [90, 270, 180], hub: 'pad' },
@@ -231,7 +234,7 @@ export const CABIN3D = (() => {
         rim: 0x141416, spoke: 0x1d1e21, hub: 0x1d1e21, roof: 0x6e7074, hl: 0x626468, metal: 0xc0c4c9, knob: 0xc0c4c9, needle: 0xff4a18 },
       dash: { xr: 0.55, yt: 0.92, yl: 0.63, slant: 0.05, wrap: 0.04 },
       cl: { w: 0.40, h: 0.145, depth: 0.09, rise: 0.035, type: 'analog', face: '#0b0b0d', ink: '#f0f0f0',
-        dials: [SMALL(-0.135, 0.03, 0.03, 'C', 'H', 0.45), SMALL(-0.135, -0.035, 0.03, 'E', 'F', 0.7), TACH(0, 0, 0.068, 9, 7), SPEED(0.135, 0, 0.058, 180)] },
+        dials: [TACH(-0.118, 0, 0.062, 9, 7.5), SPEED(0.118, 0, 0.062, 180), TFT(0, 0, 0.085, 0.1, { txt: 'AWC' })] }, // 第 98 批：轉速左、時速右、中間小螢幕
       stack: { w: 0.25, x1: 0.58, y1: 0.42, kind: 'knobs' },
       wheel: { r: 0.18, reach: 0.42, drop: 0.30, col: 22, spokes: [90, 270, 180], hub: 'pad' },
       shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.96, n: 3 },
@@ -242,7 +245,7 @@ export const CABIN3D = (() => {
         rim: 0x141416, spoke: 0x1d1e21, hub: 0x1b1c1f, roof: 0x2b2c30, hl: 0x26272b, metal: 0xb4b8be, knob: 0x18191b, needle: 0xff5a18 },
       dash: { xr: 0.22, yt: 1.20, yl: 0.93, slant: 0.05, wrap: 0.02 },
       cl: { w: 0.40, h: 0.145, depth: 0.09, rise: 0.035, type: 'analog', face: '#0b0b0d', ink: '#f0f0f0',
-        dials: [TACH(-0.1, 0, 0.064, 7, 6.5), SPEED(0.1, 0, 0.064, 200), SMALL(0, 0.03, 0.024, 'E', 'F', 0.7), SMALL(0, -0.035, 0.024, 'C', 'H', 0.45)] },
+        dials: [TACH(-0.11, 0, 0.064, 7, 6.6), SPEED(0.11, 0, 0.064, 200), TFT(0, 0, 0.07, 0.1, { txt: '4WD' })] }, // 第 98 批：轉速左、時速右、中間小螢幕
       stack: { w: 0.25, x1: 0.26, y1: 0.80, kind: 'knobs' },
       wheel: { r: 0.19, reach: 0.40, drop: 0.37, col: 28, spokes: [90, 270, 180], hub: 'pad' },
       shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -1.05, shelf: false },
@@ -253,7 +256,7 @@ export const CABIN3D = (() => {
         rim: 0x161618, spoke: 0x1f2023, hub: 0x1d1e21, roof: 0x5a5c60, hl: 0x505256, metal: 0xb4b8be, knob: 0x1b1b1d, needle: 0xff6a18 },
       dash: { xr: 0.30, yt: 1.08, yl: 0.86, slant: 0.04, wrap: 0.02 },
       cl: { w: 0.36, h: 0.13, depth: 0.08, rise: 0.03, type: 'analog', face: '#0b0b0d', ink: '#f0f0f0',
-        dials: [TACH(-0.095, 0, 0.058, 7, 6.2), SPEED(0.095, 0, 0.058, 180), SMALL(0, 0.028, 0.022, 'E', 'F', 0.7), SMALL(0, -0.032, 0.022, 'C', 'H', 0.45)] },
+        dials: [TACH(-0.105, 0, 0.056, 7, 6.2), SPEED(0.105, 0, 0.056, 180), TFT(0, 0, 0.065, 0.09, { txt: '4WD' })] }, // 第 98 批：轉速左、時速右、中間小螢幕
       stack: { w: 0.24, x1: 0.34, y1: 0.72, kind: 'knobs' },
       wheel: { r: 0.185, reach: 0.40, drop: 0.40, col: 26, spokes: [90, 270, 180], hub: 'pad' },
       shift: 'manual', hand: true, pedals: 3, rear: 'bench', bench: { x: -0.92, L: 0.54, shelf: false },
@@ -264,7 +267,7 @@ export const CABIN3D = (() => {
         rim: 0x151517, spoke: 0x1e1f22, hub: 0x1c1d20, roof: 0x55575b, hl: 0x4b4d51, metal: 0xb4b8be, knob: 0x18191b, needle: 0xff5a18 },
       dash: { xr: 0.74, yt: 1.13, yl: 0.89, slant: 0.05, wrap: 0.02, lip: 0.04 }, // lip：前緣抬高 4 公分貼到前擋下緣（前擋斜，FIT 的車頂高度在那裡取到低的那格）
       cl: { w: 0.40, h: 0.145, depth: 0.09, rise: 0.035, type: 'analog', face: '#0b0b0d', ink: '#f0f0f0',
-        dials: [TACH(-0.1, 0, 0.064, 7, 6), SPEED(0.1, 0, 0.064, 200), SMALL(0, 0.03, 0.024, 'E', 'F', 0.7), SMALL(0, -0.035, 0.024, 'C', 'H', 0.45)] },
+        dials: [TACH(-0.13, 0, 0.044, 7, 6, { scr: true }), SPEED(0, 0, 0.066, 200), TFT(0.13, 0, 0.095, 0.095, { role: 'map' })] }, // 第 98 批：中間時速、轉速在左邊的螢幕、右邊地圖
       stack: { w: 0.26, x1: 0.78, y1: 0.80, kind: 'knobs' },
       wheel: { r: 0.19, reach: 0.40, drop: 0.37, col: 28, spokes: [90, 270, 180], hub: 'pad' },
       shift: 'auto', hand: false, pedals: 2, rear: 'bench', bench: { x: -0.21, L: 0.60, a: 12, shelf: false, n: 3 }, roofR: -0.58, // 後座椅背（a：往後倒幾度）、車頂內襯（roofR：拉到哪裡）都停在車艙後牆前面（後面是車斗）
@@ -274,7 +277,7 @@ export const CABIN3D = (() => {
       c: { dash: 0x141517, top: 0x101113, low: 0x121315, acc: 0x1c1d20, carpet: 0x151517, door: 0x18191b, doorIn: 0x222326, sb: 0x141416, si: 0x1e1f22, sp: 0xd01818, ss: 0x16171a,
         rim: 0x151517, rimTop: 0x1b1c1f, spoke: 0x1b1c1f, hub: 0x151517, hl: 0x1a1a1c, metal: 0xb8bcc2, knob: 0xb8bcc2, needle: 0xff2a1a },
       dash: { xr: 0.40, yt: 0.74, yl: 0.58, slant: 0.03 },
-      cl: { w: 0.36, h: 0.11, depth: 0.07, rise: 0.03, type: 'digital', bend: 0.45, acc: '#ffcf2a', max: 10, red: 9, mode: 'RACE' },
+      cl: { w: 0.36, h: 0.11, depth: 0.07, rise: 0.03, type: 'digital', bend: 0.45, acc: '#ffcf2a', max: 10, red: 9.25, mode: 'RACE' },
       stack: { w: 0.20, x1: 0.44, y1: 0.50, kind: 'ferrari' },
       wheel: { r: 0.17, reach: 0.42, drop: 0.28, col: 20, spokes: [90, 270], ft: 0.8, fb: 0.74, hub: 'pad', paddles: true, top: true, start: true },
       shift: 'bridge', hand: false, pedals: 2, rear: 'bulk', bulk: -0.66,
@@ -408,6 +411,7 @@ export const CABIN3D = (() => {
   const clReg = (K) => [0, 0, 640, Math.min(256, Math.round((640 * K.h) / K.w))];
   // 指針式錶：a0～a1 是角度（0＝正上、順時針），數字從 min 到 max
   function dial(g, cx, cy, R, o) {
+    if (o.scr) return scrDial(g, cx, cy, R, o);
     const a0 = o.a0 ?? -135, a1 = o.a1 ?? 135, min = o.min ?? 0, max = o.max, face = o.face || '#0b0b0d', ink = o.ink || '#f2f2f2', red = '#e8201a';
     const ang = (v) => (a0 + ((a1 - a0) * (v - min)) / (max - min)) * D2R, P = (a, r) => [cx + Math.sin(a) * r, cy - Math.cos(a) * r];
     g.save();
@@ -457,24 +461,135 @@ export const CABIN3D = (() => {
   function buttons(g, x, y, w, h, n, col = '#26282c', led = '#ff8a2a') {
     for (let i = 0; i < n; i++) { const bx = x + (w * i) / n + 2; g.fillStyle = col; g.beginPath(); g.roundRect(bx, y, w / n - 4, h, 3); g.fill(); g.fillStyle = led; g.fillRect(bx + (w / n - 4) / 2 - 3, y + 3, 6, 2); }
   }
-  // 數位儀表：中間圓形轉速表（指針另外做），兩邊資訊；時速數字在 dig 那塊另外一張小貼圖
-  function digital(g, x, y, w, h, key, K = {}) { // K：acc 主色、max／red 轉速表最大／紅線、mode 左下的字、gear 檔位字（沒給照舊）
+  // 第 98 批：螢幕樣子的轉速表（C16、P8 左邊的小螢幕）：深藍底、一圈弧（會長的那段另外畫：駕駛座＝指針、畫面下面＝弧長出來＋數字）
+  function scrDial(g, cx, cy, R, o) {
+    const a0 = -135 * D2R, a1 = 135 * D2R, A = (f) => lerp(a0, a1, f) - Math.PI / 2;
+    g.save(); g.fillStyle = '#0a1220'; g.beginPath(); g.roundRect(cx - R * 1.08, cy - R * 1.08, R * 2.16, R * 2.16, R * 0.22); g.fill();
+    g.strokeStyle = '#26324a'; g.lineWidth = R * 0.05; g.stroke();
+    g.lineWidth = R * 0.125; g.strokeStyle = '#1c2a40'; g.beginPath(); g.arc(cx, cy, R * 0.78, A(0), A(1)); g.stroke();
+    if (o.red != null) { g.strokeStyle = '#7a1a14'; g.beginPath(); g.arc(cx, cy, R * 0.78, A(o.red / o.max), A(1)); g.stroke(); }
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#9aa6c0'; g.font = `bold ${Math.round(R * 0.22)}px Arial, sans-serif`; g.fillText('RPM', cx, cy - R * 0.36);
+    g.font = `${Math.round(R * 0.17)}px Arial, sans-serif`; g.fillText('r/min', cx, cy + R * 0.66);
+    g.restore();
+  }
+  // 第 98 批：小螢幕（x、y＝中心）。dyn＝畫面下面「原車的」用：會變的字（檔位、時速、馬力）不畫，另外畫
+  function tft(g, x, y, w, h, o, dyn) {
+    const x0 = x - w / 2, y0 = y - h / 2, role = o.role || 'gear';
+    g.save(); g.fillStyle = '#0a1018'; g.beginPath(); g.roundRect(x0, y0, w, h, Math.min(w, h) * 0.1); g.fill();
+    g.strokeStyle = '#26324a'; g.lineWidth = Math.max(1, h * 0.025); g.stroke();
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (role === 'map') {
+      g.save(); g.beginPath(); g.roundRect(x0, y0, w, h, Math.min(w, h) * 0.1); g.clip(); g.strokeStyle = '#3a5a8a'; g.lineWidth = Math.max(1, h * 0.03);
+      for (let i = 0; i < 5; i++) { g.beginPath(); g.moveTo(x0, y0 + h * (0.12 + i * 0.2)); g.bezierCurveTo(x0 + w * 0.3, y0 + h * (0.02 + i * 0.22), x0 + w * 0.6, y0 + h * (0.3 + i * 0.12), x0 + w, y0 + h * (0.14 + i * 0.18)); g.stroke(); }
+      g.fillStyle = '#ff3a2a'; g.beginPath(); g.moveTo(x, y - h * 0.1); g.lineTo(x + h * 0.07, y + h * 0.08); g.lineTo(x - h * 0.07, y + h * 0.08); g.fill(); g.restore();
+    } else if (role === 'power') {
+      g.fillStyle = '#9aa6c0'; g.font = `bold ${Math.round(h * 0.13)}px Arial, sans-serif`; g.fillText('POWER', x, y0 + h * 0.18); g.font = `${Math.round(h * 0.12)}px Arial, sans-serif`; g.fillText('hp', x, y0 + h * 0.8);
+      if (!dyn) { g.fillStyle = '#e8eef8'; g.font = `bold ${Math.round(h * 0.28)}px Arial, sans-serif`; g.fillText('0', x, y); }
+    } else if (role === 'speed') { if (!dyn) { g.fillStyle = '#e8eef8'; g.font = `bold ${Math.round(h * 0.3)}px Arial, sans-serif`; g.fillText('0', x, y); } } // 時速的數字、km/h 另外畫
+    else if (dyn) { if (o.txt) { g.fillStyle = '#9aa6c0'; g.font = `bold ${Math.round(h * 0.13)}px Arial, sans-serif`; g.fillText(o.txt, x, y0 + h * 0.84); } }
+    else { g.fillStyle = '#e8eef8'; g.font = `bold ${Math.round(h * 0.22)}px Arial, sans-serif`; g.fillText(o.txt || '4WD', x, y - h * 0.12); g.fillStyle = '#ff3a2a'; g.fillRect(x - w * 0.35, y + h * 0.12, w * 0.35, h * 0.08); g.fillStyle = '#3a8aff'; g.fillRect(x, y + h * 0.12, w * 0.35, h * 0.08); }
+    g.restore();
+  }
+  // 第 98 批：數位儀表的排法（style：circle 中間圓的轉速表（預設）、ring 黃色一圈（AV12）、round 兩邊圓的小螢幕（918）、bar 上面橫條（FK、沙灘車、N4）、thin 細細一條（SN8）、bike 碼錶）
+  //   位置都是比例：[fx 從左, fy 從上, 大小（乘 h）]；dig＝時速數字 [fx, fy, 寬（乘 h）, 高（乘 h）]；bar＝轉速橫條 [fx0, fx1, fy, 粗（乘 h）]
+  function digLay(key, K = {}) {
+    const p9 = key === 'p918' || key === 'jesko', s = K.style || 'circle';
+    const L = { s, acc: K.acc ?? (key === 'p918' ? '#b9f02a' : key === 'jesko' ? '#ff3a2a' : '#ffcf2a'), hot: K.hot ?? '#ff3a2a', max: K.max ?? (p9 ? 9 : 10), red: K.red ?? (p9 ? 8.5 : 9),
+      a0: -130, a1: 130, bg: '#05070a', ink: '#f2f6ff', mode: K.mode ?? (key === 'p918' ? 'E-POWER' : 'RACE'), gearTxt: K.gear ?? 'D' };
+    if (s === 'bar') Object.assign(L, { bar: [0.07, 0.93, 0.2, 0.15], dig: [0.5, 0.64, 1.0, 0.46], gear: [0.86, 0.64, 0.4], modeP: [0.14, 0.64, 0.17], bg: '#0b0e14' });
+    else if (s === 'thin') Object.assign(L, { bar: [0.22, 0.66, 0.42, 0.3], dig: [0.84, 0.5, 0.9, 0.52], gear: [0.1, 0.5, 0.62], modeP: [0.44, 0.8, 0.13], bg: '#0b0e14' });
+    else if (s === 'bike') Object.assign(L, { dig: [0.5, 0.42, 1.1, 0.56], bg: '#aab595', ink: '#1d2318' });
+    else {
+      Object.assign(L, { circ: [0.5, 0.52, 0.46], dig: [0.5, 0.68, 0.34, 0.17], gear: [0.16, 0.42, 0.28], modeP: [0.16, 0.72, 0.09] });
+      if (s === 'ring') Object.assign(L, { gear: [0.5, 0.47, 0.3], dig: [0.5, 0.75, 0.36, 0.15], modeP: [0.16, 0.5, 0.11] });
+      if (s === 'round') Object.assign(L, { gear: [0.17, 0.46, 0.3], modeP: [0.17, 0.7, 0.08] });
+    }
+    return L;
+  }
+  // 數位儀表的底（會動的：指針／弧／橫條、時速數字另外做；dyn＝畫面下面用：檔位也另外畫）
+  function digital(g, x, y, w, h, key, K = {}, dyn = false) {
+    const L = digLay(key, K), F = (fx, fy) => [x + fx * w, y + fy * h];
+    g.save(); g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (L.s === 'bike') { // 碼錶：灰綠色的液晶
+      g.fillStyle = '#202226'; g.fillRect(x, y, w, h);
+      g.fillStyle = L.bg; g.beginPath(); g.roundRect(x + w * 0.05, y + h * 0.07, w * 0.9, h * 0.86, h * 0.08); g.fill();
+      g.fillStyle = L.ink; g.globalAlpha = 0.8; g.font = `bold ${Math.round(h * 0.1)}px Arial, sans-serif`;
+      g.fillText('TRIP 2.4', ...F(0.3, 0.84)); g.fillText('0:12', ...F(0.76, 0.84));
+      g.strokeStyle = L.ink; g.globalAlpha = 0.35; g.lineWidth = Math.max(1, h * 0.012); g.beginPath(); g.moveTo(...F(0.1, 0.73)); g.lineTo(...F(0.9, 0.73)); g.stroke();
+      g.restore(); return L;
+    }
     const bg = g.createLinearGradient(0, y, 0, y + h); bg.addColorStop(0, '#07090d'); bg.addColorStop(1, '#101521');
     g.fillStyle = bg; g.fillRect(x, y, w, h);
-    const cx = x + w / 2, cy = y + h * 0.52, R = h * 0.46, acc = K.acc ?? (key === 'p918' ? '#b9f02a' : key === 'jesko' ? '#ff3a2a' : '#ffcf2a');
-    const a0 = -130 * D2R, a1 = 130 * D2R, max = K.max ?? (key === 'p918' ? 9 : key === 'jesko' ? 9 : 10), red = K.red ?? (key === 'p918' ? 8.5 : key === 'jesko' ? 8.5 : 9);
-    g.fillStyle = '#05070a'; g.beginPath(); g.arc(cx, cy, R, 0, 2 * Math.PI); g.fill();
-    g.lineWidth = R * 0.07; g.strokeStyle = '#3a4150'; g.beginPath(); g.arc(cx, cy, R * 0.97, 0, 2 * Math.PI); g.stroke();
-    g.lineWidth = R * 0.08; g.strokeStyle = acc; g.globalAlpha = 0.35; g.beginPath(); g.arc(cx, cy, R * 0.86, a0 - Math.PI / 2, a1 - Math.PI / 2); g.stroke(); g.globalAlpha = 1;
-    g.strokeStyle = '#ff2a1a'; g.beginPath(); g.arc(cx, cy, R * 0.86, lerp(a0, a1, red / max) - Math.PI / 2, a1 - Math.PI / 2); g.stroke();
-    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#e8eef8'; g.font = `bold ${Math.round(R * 0.17)}px Arial, sans-serif`;
-    for (let i = 0; i <= max; i++) { const a = lerp(a0, a1, i / max); g.fillStyle = i >= red ? '#ff4a3a' : '#e8eef8'; g.fillText(String(i), cx + Math.sin(a) * R * 0.64, cy - Math.cos(a) * R * 0.64); }
-    // 兩邊：左邊檔位＋條、右邊地圖或能量
-    g.fillStyle = '#e8eef8'; g.font = `bold ${Math.round(h * 0.28)}px Arial, sans-serif`; g.fillText(K.gear ?? 'D', x + w * 0.16, y + h * 0.42);
-    g.font = `${Math.round(h * 0.09)}px Arial, sans-serif`; g.fillStyle = acc; g.fillText(K.mode ?? (key === 'p918' ? 'E-POWER' : 'RACE'), x + w * 0.16, y + h * 0.72);
-    for (let i = 0; i < 6; i++) { g.fillStyle = i < 4 ? acc : '#2a3140'; g.fillRect(x + w * 0.8 - w * 0.07 + i * w * 0.025, y + h * 0.66 - i * h * 0.05, w * 0.018, h * 0.08 + i * h * 0.05); }
-    g.strokeStyle = '#4a6a9a'; g.lineWidth = 2; g.beginPath(); g.moveTo(x + w * 0.74, y + h * 0.3); g.bezierCurveTo(x + w * 0.8, y + h * 0.2, x + w * 0.86, y + h * 0.42, x + w * 0.93, y + h * 0.26); g.stroke();
-    return { cx, cy, R, a0: -130, a1: 130, max, red };
+    if (L.circ) {
+      const [cx, cy] = F(L.circ[0], L.circ[1]), R = h * L.circ[2], a0 = L.a0 * D2R, a1 = L.a1 * D2R, A = (f) => lerp(a0, a1, f) - Math.PI / 2, ring = L.s === 'ring';
+      if (L.s === 'round') for (const fx of [0.17, 0.83]) { const [sx, sy] = F(fx, 0.52); g.fillStyle = '#05070a'; g.beginPath(); g.arc(sx, sy, h * 0.38, 0, 2 * Math.PI); g.fill(); g.lineWidth = h * 0.025; g.strokeStyle = '#3a4150'; g.stroke(); }
+      g.fillStyle = '#05070a'; g.beginPath(); g.arc(cx, cy, R, 0, 2 * Math.PI); g.fill();
+      g.lineWidth = R * 0.07; g.strokeStyle = '#3a4150'; g.beginPath(); g.arc(cx, cy, R * 0.97, 0, 2 * Math.PI); g.stroke();
+      const rr = ring ? 0.82 : 0.86;
+      g.lineWidth = R * (ring ? 0.14 : 0.08); g.strokeStyle = L.acc; g.globalAlpha = ring ? 0.16 : 0.35; g.beginPath(); g.arc(cx, cy, R * rr, A(0), A(1)); g.stroke(); g.globalAlpha = ring ? 0.5 : 1;
+      g.strokeStyle = '#ff2a1a'; g.beginPath(); g.arc(cx, cy, R * rr, A(L.red / L.max), A(1)); g.stroke(); g.globalAlpha = 1;
+      g.font = `bold ${Math.round(R * 0.17)}px Arial, sans-serif`;
+      for (let i = 0; i <= L.max; i++) { const a = lerp(a0, a1, i / L.max), rn = ring ? 0.64 : 0.64; g.fillStyle = i >= L.red ? '#ff4a3a' : '#e8eef8'; g.fillText(String(i), cx + Math.sin(a) * R * rn, cy - Math.cos(a) * R * rn); }
+      if (L.s === 'round') { // 918：右邊圓的螢幕＝地圖
+        const [sx, sy] = F(0.83, 0.52), r2 = h * 0.36; g.save(); g.beginPath(); g.arc(sx, sy, r2, 0, 2 * Math.PI); g.clip(); g.strokeStyle = '#4a6a9a'; g.lineWidth = Math.max(1, h * 0.025);
+        for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(sx - r2, sy - r2 * 0.6 + i * r2 * 0.45); g.bezierCurveTo(sx - r2 * 0.3, sy - r2 + i * r2 * 0.5, sx + r2 * 0.3, sy - r2 * 0.2 + i * r2 * 0.3, sx + r2, sy - r2 * 0.5 + i * r2 * 0.4); g.stroke(); }
+        g.fillStyle = L.acc; g.beginPath(); g.moveTo(sx, sy - r2 * 0.2); g.lineTo(sx + r2 * 0.14, sy + r2 * 0.16); g.lineTo(sx - r2 * 0.14, sy + r2 * 0.16); g.fill(); g.restore();
+      } else { // 右邊：能量條＋地圖的線
+        for (let i = 0; i < 6; i++) { g.fillStyle = i < 4 ? L.acc : '#2a3140'; g.fillRect(x + w * 0.8 - w * 0.07 + i * w * 0.025, y + h * 0.66 - i * h * 0.05, w * 0.018, h * 0.08 + i * h * 0.05); }
+        g.strokeStyle = '#4a6a9a'; g.lineWidth = 2; g.beginPath(); g.moveTo(x + w * 0.74, y + h * 0.3); g.bezierCurveTo(x + w * 0.8, y + h * 0.2, x + w * 0.86, y + h * 0.42, x + w * 0.93, y + h * 0.26); g.stroke();
+      }
+    } else { // 轉速橫條（bar、thin）：一格一格；紅線以上紅紅的
+      const [bx0, bx1, bfy, bth] = L.bar, X0 = x + bx0 * w, X1 = x + bx1 * w, BY = y + bfy * h, TH = bth * h, n = Math.round(L.max * 4), gap = Math.max(1, ((X1 - X0) / n) * 0.18);
+      g.fillStyle = '#161a22'; g.fillRect(X0, BY - TH / 2, X1 - X0, TH);
+      g.fillStyle = 'rgba(255,42,26,0.3)'; g.fillRect(X0 + ((X1 - X0) * L.red) / L.max, BY - TH / 2, (X1 - X0) * (1 - L.red / L.max), TH);
+      g.fillStyle = '#07090d'; for (let i = 1; i < n; i++) g.fillRect(X0 + ((X1 - X0) * i) / n - gap / 2, BY - TH / 2, gap, TH);
+      if (L.s === 'bar') { g.font = `bold ${Math.round(h * 0.09)}px Arial, sans-serif`; for (let i = 0; i <= L.max; i++) { g.fillStyle = i >= L.red ? '#ff4a3a' : '#c8d0dc'; g.fillText(String(i), X0 + ((X1 - X0) * i) / L.max, BY + TH / 2 + h * 0.08); }
+        const [gx, gy] = F(L.gear[0], L.gear[1]), q = h * L.gear[2]; g.strokeStyle = '#3a4150'; g.lineWidth = Math.max(1, h * 0.02); g.beginPath(); g.roundRect(gx - q * 0.62, gy - q * 0.62, q * 1.24, q * 1.24, q * 0.16); g.stroke(); }
+    }
+    if (!dyn) { g.fillStyle = '#e8eef8'; g.font = `bold ${Math.round(h * L.gear[2])}px Arial, sans-serif`; g.fillText(L.gearTxt, ...F(L.gear[0], L.gear[1])); }
+    g.font = `${L.s === 'bar' ? 'bold ' : ''}${Math.round(h * L.modeP[2])}px Arial, sans-serif`; g.fillStyle = L.acc; g.fillText(L.mode, ...F(L.modeP[0], L.modeP[1]));
+    g.restore();
+    return L;
+  }
+  // 第 98 批：一整塊儀表（駕駛座的貼圖、畫面下面「原車的」都用這個）
+  function drawCluster(g, rx, ry, rw, rh, key, K, dyn = false) {
+    if (K.type !== 'analog') return digital(g, rx, ry, rw, rh, key, K, dyn);
+    const k = rw / K.w, PX = (u, v) => [rx + (u + K.w / 2) * k, ry + (K.h / 2 - v) * k];
+    g.fillStyle = '#050506'; g.fillRect(rx, ry, rw, rh);
+    for (const d of K.dials) {
+      const [x, y] = PX(d.u, d.v);
+      if (d.k === 'small') small(g, x, y, d.r * k, { ...d, face: K.face, ink: K.ink });
+      else if (d.k === 'tft') tft(g, x, y, d.w * k, d.h * k, d, dyn);
+      else dial(g, x, y, d.r * k, { face: K.face, ink: K.ink, ...d });
+    }
+    return null;
+  }
+  // 第 98 批：會動的東西（u、v 公尺，跟 STYLE 的 dials 一樣）：needle 指針、arc 一段弧長出來（螢幕的轉速）、bar 橫條、digits 時速數字、gear 檔位、num 數字（馬力）
+  function clusterParts(key, K) {
+    const out = [];
+    if (K.type === 'analog') {
+      for (const d of K.dials) {
+        if (d.k === 'tach' || d.k === 'speed') out.push(d.scr ? { t: 'arc', u: d.u, v: d.v, r: d.r * 0.78, th: d.r * 0.125, k: d.k, a0: -135, a1: 135, max: d.max, red: d.red, num: d.k === 'tach', col: '#5ad0ff', hot: '#ff3a2a' }
+          : { t: 'needle', u: d.u, v: d.v, len: d.r * 0.86, k: d.k, a0: -135, a1: 135, max: d.max, red: d.red, w: 1 });
+        else if (d.k === 'tft') {
+          const role = d.role || 'gear';
+          if (role === 'gear') out.push({ t: 'gear', u: d.u, v: d.v + d.h * 0.06, s: d.h * 0.5 });
+          else if (role === 'speed') out.push({ t: 'digits', u: d.u, v: d.v + d.h * 0.06, w: d.w * 0.9, h: d.h * 0.6 });
+          else if (role === 'power') out.push({ t: 'num', u: d.u, v: d.v, s: d.h * 0.28 });
+        }
+      }
+      return out;
+    }
+    const L = digLay(key, K), U = (fx) => (fx - 0.5) * K.w, V = (fy) => (0.5 - fy) * K.h, h = K.h;
+    if (L.circ) {
+      const R = L.circ[2] * h, u = U(L.circ[0]), v = V(L.circ[1]);
+      out.push(L.s === 'ring' ? { t: 'arc', u, v, r: R * 0.82, th: R * 0.14, k: 'tach', a0: L.a0, a1: L.a1, max: L.max, red: L.red, col: L.acc, hot: L.hot }
+        : { t: 'needle', u, v, len: R * 0.78, k: 'tach', a0: L.a0, a1: L.a1, max: L.max, red: L.red, w: 0.7 });
+    }
+    if (L.bar) out.push({ t: 'bar', u0: U(L.bar[0]), len: (L.bar[1] - L.bar[0]) * K.w, v: V(L.bar[2]), th: L.bar[3] * h, k: 'tach', max: L.max, red: L.red, col: L.acc, hot: L.hot, n: Math.round(L.max * 4) });
+    if (L.dig) out.push({ t: 'digits', u: U(L.dig[0]), v: V(L.dig[1]), w: L.dig[2] * h, h: L.dig[3] * h, ink: L.ink, bg: L.bg });
+    if (L.gear) out.push({ t: 'gear', u: U(L.gear[0]), v: V(L.gear[1]), s: L.gear[2] * h });
+    return out;
   }
   function makeAtlas(key, st) {
     if (typeof document === 'undefined') return null;
@@ -482,16 +597,7 @@ export const CABIN3D = (() => {
     const g = cv.getContext('2d'), K = st.cl, c = st.c;
     g.fillStyle = '#121214'; g.fillRect(0, 0, 1024, 512);
     // 儀表
-    const [rx, ry, rw, rh] = clReg(K), k = rw / K.w, PX = (u, v) => [rx + (u + K.w / 2) * k, ry + (K.h / 2 - v) * k];
-    if (K.type === 'analog') {
-      g.fillStyle = '#050506'; g.fillRect(rx, ry, rw, rh);
-      for (const d of K.dials) {
-        const [x, y] = PX(d.u, d.v);
-        if (d.k === 'small') small(g, x, y, d.r * k, { ...d, face: K.face, ink: K.ink });
-        else if (d.k === 'tft') { g.fillStyle = '#0a1018'; g.beginPath(); g.roundRect(x - (d.w * k) / 2, y - (d.h * k) / 2, d.w * k, d.h * k, 6); g.fill(); g.fillStyle = '#e8eef8'; g.font = `bold ${Math.round(d.h * k * 0.22)}px Arial`; g.textAlign = 'center'; g.fillText('4WD', x, y - d.h * k * 0.12); g.fillStyle = '#ff3a2a'; g.fillRect(x - d.w * k * 0.35, y + d.h * k * 0.12, d.w * k * 0.35, d.h * k * 0.08); g.fillStyle = '#3a8aff'; g.fillRect(x, y + d.h * k * 0.12, d.w * k * 0.35, d.h * k * 0.08); }
-        else dial(g, x, y, d.r * k, { face: K.face, ink: K.ink, ...d });
-      }
-    } else st._dg = digital(g, rx, ry, rw, rh, key, K);
+    drawCluster(g, ...clReg(K), key, K, false);
     // 中控面板
     const [sx, sy, sw, sh] = REG.st, kind = st.stack.kind;
     g.fillStyle = kind === 'glass' || kind === 'tablet' ? '#07080a' : '#18191c'; g.fillRect(sx, sy, sw, sh);
@@ -594,7 +700,7 @@ export const CABIN3D = (() => {
     };
 
     // ---- 儀表：遮光罩（一個斷面沿著橫向拉）＋儀表面（貼圖）＋會動的指針 ----
-    const K = st.cl, needles = [];
+    const K = st.cl, needles = [], fills = [];
     {
       let Cg, W = null;
       if (K.col) { // Jesko：裝在轉向柱上、方向盤後面
@@ -613,11 +719,10 @@ export const CABIN3D = (() => {
       const [rx, ry, rw, rh] = clReg(K), r = uvOf([rx, ry, rw, rh]);
       put('face', quadUV(P(0, 0, 0.002), U, V, K.w, K.h, r, K.bend || 0, N));
       const frame = (u, v, R) => ({ o: P(u, v, 0.005), U: U.clone().multiplyScalar(R), V: V.clone().multiplyScalar(R) });
-      if (K.type === 'analog') { for (const d of K.dials) if (d.k === 'tach' || d.k === 'speed') needles.push({ ...frame(d.u, d.v, d.r * 0.86), k: d.k, a0: -135, a1: 135, max: d.max, red: d.red, w: 1 }); }
-      else { // 數位：中間轉速表的指針（細一點）＋時速數字
-        const R = K.h * 0.46, dg = { a0: -130, a1: 130, max: 10, red: 9 }; if (key === 'p918' || key === 'jesko') Object.assign(dg, { max: 9, red: 8.5 }); if (K.max) dg.max = K.max; if (K.red) dg.red = K.red;
-        needles.push({ ...frame(0, -K.h * 0.02, R * 0.78), k: 'tach', ...dg, w: 0.7 });
-        cab.userData._dig = { o: P(0, -K.h * 0.18, 0.004), U, V, w: K.h * 0.34, h: K.h * 0.17 };
+      for (const p of clusterParts(key, K)) { // 第 98 批：指針、轉速橫條、時速數字照每台車真的樣子（跟畫面下面「原車的」同一套）；螢幕的弧在這裡用細指針
+        if (p.t === 'needle' || p.t === 'arc') needles.push({ ...frame(p.u, p.v, p.t === 'arc' ? p.r : p.len), k: p.k, a0: p.a0, a1: p.a1, max: p.max, red: p.red, w: p.t === 'arc' ? 0.6 : p.w });
+        else if (p.t === 'bar') fills.push({ o: P(p.u0, p.v, 0.004), U, V, len: p.len, th: p.th, max: p.max, red: p.red, col: p.col });
+        else if (p.t === 'digits' && !cab.userData._dig) cab.userData._dig = { o: P(p.u, p.v, 0.004), U, V, w: p.w, h: p.h, bg: p.bg };
       }
     }
 
@@ -952,8 +1057,15 @@ export const CABIN3D = (() => {
     // 數位儀表的時速
     let digits = null;
     if (cab.userData._dig) {
-      const d = cab.userData._dig, t = makeDigits('#05070a');
+      const d = cab.userData._dig, t = makeDigits(d.bg || '#05070a');
       if (t) { digits = t; const m = new THREE.Mesh(quadUV(d.o, d.U, d.V, d.w, d.h, [0, 0, 1, 1]), new THREE.MeshBasicMaterial({ map: t })); m.name = 'cabin-digits'; cab.add(m); }
+    }
+    // 第 98 批：轉速橫條（FK、SN8）：一個 mesh，每條 4 個點，從左往右長
+    const fpos = new Float32Array(Math.max(1, fills.length) * 12), fm = fills.length ? new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: fills[0].col, side: THREE.DoubleSide })) : null;
+    if (fm) {
+      const fidx = []; fills.forEach((f, i) => fidx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3));
+      fm.geometry.setAttribute('position', new THREE.BufferAttribute(fpos, 3)); fm.geometry.setIndex(fidx); fm.geometry.boundingSphere = new THREE.Sphere(V3(xE + 0.6, yE - 0.2, zd), 0.8);
+      fm.name = 'cabin-fill'; cab.add(fm);
     }
     let mirror = null; // 第 25 批：真的後照鏡（平常藏著；材質、uv 是 town.src.js 給的）
     if (cab.userData._mir) { mirror = new THREE.Mesh(cab.userData._mir, mat.face); mirror.name = 'cabin-mirror'; mirror.visible = false; cab.add(mirror); }
@@ -968,6 +1080,11 @@ export const CABIN3D = (() => {
         NQ.forEach(([l, w], j) => { _p.copy(n.o).addScaledVector(_d, l).addScaledVector(_s, w * n.w); const o = (i * 4 + j) * 3; npos[o] = _p.x; npos[o + 1] = _p.y; npos[o + 2] = _p.z; });
       });
       ng.attributes.position.needsUpdate = true;
+      fills.forEach((b, i) => { // 橫條：長度＝轉速（紅線＝red/max）
+        const L = Math.max(0.0005, b.len * cl((cl(rpm, 0, 1.04) * b.red) / b.max, 0, 1));
+        [[0, -0.5], [0, 0.5], [L, 0.5], [L, -0.5]].forEach(([u, v], j) => { _p.copy(b.o).addScaledVector(b.U, u).addScaledVector(b.V, v * b.th); const o = (i * 4 + j) * 3; fpos[o] = _p.x; fpos[o + 1] = _p.y; fpos[o + 2] = _p.z; });
+      });
+      if (fm) fm.geometry.attributes.position.needsUpdate = true;
       if (digits) digits.userData.set(kmh);
     };
     setGauges(0, 0);
@@ -1017,8 +1134,58 @@ export const CABIN3D = (() => {
     }
     return out;
   }
-  return { build, aim, seats, VIEW, STYLE, fitOf };
+  // ---- 第 98 批：畫面下面「原車的」儀表（Nick 2026-11-17「去查每台車的儀表版長怎樣並把所有儀表板換成那台車的樣子」，草稿「儀表板」那一頁「照這樣做」）----
+  // 跟駕駛座同一套（STYLE[key].cl）；沒有車內的車（沙灘車、N4、腳踏車、怪獸卡車）用這裡的
+  const HUDONLY = {
+    monster: { w: 0.30, h: 0.14, type: 'analog', face: '#0b0b0d', ink: '#f0f0f0', needle: 0xff6a1a, dials: [TACH(-0.04, 0, 0.062, 8, 6.8), TFT(0.105, 0, 0.075, 0.085, { role: 'speed' })] },
+    z2: { w: 0.20, h: 0.08, type: 'digital', style: 'bar', acc: '#46e08a', max: 9, red: 8.5, mode: 'Z2' },
+    n4: { w: 0.20, h: 0.08, type: 'digital', style: 'bar', acc: '#ff7a1a', max: 12, red: 11, mode: 'N4' },
+    mtb: { w: 0.15, h: 0.10, type: 'digital', style: 'bike' }, road: { w: 0.15, h: 0.10, type: 'digital', style: 'bike' },
+  };
+  // hud(key) → { key, aspect, parts, draw(g, W, H, s) }；s＝{ rpm（1＝紅線）, kmh, gear（字）, off（引擎關著）, hp }；底圖（640 寬）一台車做一次
+  const HUDC = new Map(), hex = (n) => '#' + n.toString(16).padStart(6, '0');
+  function hud(key) {
+    const K = STYLE[key]?.cl || HUDONLY[key]; if (!K || typeof document === 'undefined') return null;
+    if (HUDC.has(key)) return HUDC.get(key);
+    const W0 = 640, H0 = Math.round((640 * K.h) / K.w), face = document.createElement('canvas'); face.width = W0; face.height = H0;
+    drawCluster(face.getContext('2d'), 0, 0, W0, H0, key, K, true);
+    const parts = clusterParts(key, K), needle = hex(STYLE[key]?.c?.needle ?? K.needle ?? 0xff5a1a), aspect = K.w / K.h;
+    const fr = (p, rpm, kmh) => (p.k === 'tach' ? (cl(rpm, 0, 1.08) * p.red) / p.max : cl(kmh / p.max, 0, 1.02));
+    function draw(g, W, H, s) {
+      g.clearRect(0, 0, W, H);
+      let dw = W, dh = W / aspect; if (dh > H) { dh = H; dw = H * aspect; }
+      const x0 = (W - dw) / 2, y0 = (H - dh) / 2, k = dw / K.w, X = (u) => x0 + (u + K.w / 2) * k, Y = (v) => y0 + (K.h / 2 - v) * k, rr = Math.min(dh * 0.16, 16), rpm = s.off ? 0 : s.rpm;
+      g.save(); g.beginPath(); g.roundRect(x0, y0, dw, dh, rr); g.clip(); g.drawImage(face, x0, y0, dw, dh);
+      g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineCap = 'round';
+      for (const p of parts) {
+        if (p.t === 'needle') { // 順時針往上（0＝正上）
+          const a = (p.a0 + (p.a1 - p.a0) * fr(p, rpm, s.kmh)) * D2R, cx = X(p.u), cy = Y(p.v), L = p.len * k, dx = Math.sin(a), dy = -Math.cos(a);
+          g.strokeStyle = needle; g.lineWidth = Math.max(1.5, L * 0.065 * p.w); g.beginPath(); g.moveTo(cx - dx * L * 0.18, cy - dy * L * 0.18); g.lineTo(cx + dx * L, cy + dy * L); g.stroke();
+          g.fillStyle = '#1a1a1c'; g.beginPath(); g.arc(cx, cy, Math.max(2, L * 0.11), 0, 2 * Math.PI); g.fill();
+        } else if (s.off) continue;
+        else if (p.t === 'arc') { // 弧從左下長到右下
+          const f = fr(p, rpm, s.kmh), cx = X(p.u), cy = Y(p.v);
+          if (f > 0.002) { g.lineCap = 'butt'; g.strokeStyle = f * p.max >= p.red ? p.hot : p.col; g.lineWidth = p.th * k; g.beginPath(); g.arc(cx, cy, p.r * k, p.a0 * D2R - Math.PI / 2, (p.a0 + (p.a1 - p.a0) * f) * D2R - Math.PI / 2); g.stroke(); g.lineCap = 'round'; }
+          if (p.num) { g.fillStyle = '#f2f6ff'; g.font = `bold ${Math.round(p.r * k * 0.46)}px Arial, sans-serif`; g.fillText(String(Math.round(cl(rpm, 0, 1.08) * p.red * 10) * 100), cx, cy + p.r * k * 0.06); }
+        } else if (p.t === 'bar') { // 一格一格從左往右亮
+          const f = (cl(rpm, 0, 1.04) * p.red) / p.max, on = Math.min(p.n, Math.round(f * p.n)), x1 = X(p.u0), sw = (p.len * k) / p.n, y = Y(p.v), th = p.th * k;
+          for (let i = 0; i < on; i++) { g.fillStyle = ((i + 0.5) / p.n) * p.max >= p.red ? p.hot : p.col; g.fillRect(x1 + i * sw + sw * 0.09, y - th / 2, sw * 0.82, th); }
+        } else if (p.t === 'digits') {
+          const hh = p.h * k; g.fillStyle = p.ink || '#f2f6ff'; g.font = `bold ${Math.round(hh * 0.69)}px Arial, sans-serif`; g.fillText(String(Math.round(s.kmh)), X(p.u), Y(p.v) - hh * 0.09);
+          g.font = `${Math.round(hh * 0.22)}px Arial, sans-serif`; g.globalAlpha = 0.75; g.fillText('km/h', X(p.u), Y(p.v) + hh * 0.37); g.globalAlpha = 1;
+        } else if (p.t === 'gear') { g.fillStyle = s.gear === 'R' ? '#ff5a4a' : '#f2f6ff'; g.font = `bold ${Math.round(p.s * k)}px Arial, sans-serif`; g.fillText(s.gear, X(p.u), Y(p.v)); }
+        else if (p.t === 'num') { g.fillStyle = '#e8eef8'; g.font = `bold ${Math.round(p.s * k)}px Arial, sans-serif`; g.fillText(String(Math.max(0, Math.round(s.hp || 0))), X(p.u), Y(p.v)); }
+      }
+      if (s.off) { g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(x0, y0, dw, dh); } // 熄火：螢幕暗下來、轉速 0
+      g.restore();
+      g.strokeStyle = 'rgba(242,243,245,0.22)'; g.lineWidth = Math.max(1, dh * 0.018); g.beginPath(); g.roundRect(x0 + 0.5, y0 + 0.5, dw - 1, dh - 1, rr); g.stroke();
+    }
+    const o = { key, aspect, parts, draw }; HUDC.set(key, o); return o;
+  }
+  return { build, aim, seats, VIEW, STYLE, fitOf, hud, HUDONLY };
 })();
+// cabinHud(key)：畫面下面「原車的」儀表（第 98 批）：{ aspect, draw(g, W, H, { rpm, kmh, gear, off, hp }) }；沒有＝null
+export function cabinHud(key) { return CABIN3D.hud(key); }
 // cabinSeats(key)：這台車的每個位子（車身座標；見上面 seats）；沒有車內的車（怪獸卡車、沙灘車）＝[]
 export function cabinSeats(key) { return CABIN3D.seats(key); }
 // 人坐進位子（第 57 批）：C＝buildCharacter(look, { state: 'sit', shadow: false, plant: false })，C.group 放進車身（body）；s＝cabinSeats(key) 的一個；P＝重複用的物件

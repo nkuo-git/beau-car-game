@@ -256,7 +256,7 @@ const ui = () => p.evaluate(() => {
     gas: q('#stage .dv-gas').textContent, offB: vis(q('#stage .dv-off')), engine: t.engine,
     toast: q('#stage .dv-toast').textContent, toastSize: getComputedStyle(q('#stage .dv-toast')).fontSize, toastTop: Math.round(q('#stage .dv-toast').getBoundingClientRect().top) };
 });
-const HUD_SEL = ['.elpanel', '.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '.dv-shf', '.dv-off', '#dests', '#destTog', '#moreTog', '#sizeTog', '#tiltTog', '#lookTog', '#musTog', '#gearTog', '#dSndBtn', '#fsBtn'];
+const HUD_SEL = ['.elpanel', '.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '.dv-shf', '.dv-off', '#dests', '#destTog', '#moreTog', '#sizeTog', '#tiltTog', '#lookTog', '#musTog', '#gearTog', '#gaugeTog', '#copTog', '#dSndBtn', '#fsBtn'];
 const clash = () => p.evaluate((S) => {
   const R = S.map((s) => [s, document.querySelector(s)]).filter(([, e]) => e && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden' && e.getClientRects().length).map(([s, e]) => [s, e.getBoundingClientRect()]), out = [];
   for (const [s, r] of R) if (r.left < 4 || r.top < 4 || r.right > innerWidth - 4 || r.bottom > innerHeight - 4) out.push(`${s} off-screen ${[r.left, r.top, r.right, r.bottom].map(Math.round)}`);

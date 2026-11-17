@@ -53,6 +53,7 @@
 //   drive.setMarkers(list | null, tag?)   小地圖上多畫的點（警車⋯）：[{ x, z, fill, ring, r（半徑 px，預設 5）, on（false＝這幀不畫）, label（點上的字）, fg }]；tag＝另外一組（比賽的對手 'race'），null 拿掉；
 //                          只記住陣列本身，每一幀照裡面現在的值畫（陣列可以一直改，不用再叫）；地圖外面的貼在邊上；null＝不畫
 //   drive.setCameraMode('chase' | 'eye' | 'none', view?)   追車／駕駛座／不管鏡頭；drive.cameraMode 是現在的
+//   drive.setGauge(G | null)   第 98 批：下面中間的錶換成那台車真的儀表（G＝cabin.js cabinHud(車)）；null＝遊戲的（圓的轉速表）；drive.gauge＝畫著的那台（沒有＝null）
 //   drive.teleport({ x, z, heading }, { intro })   把車放到那裡停好（不叫 onZone）；intro：鏡頭從車前面繞到後面（出門的時候）
 //   drive.parkAt(pose, onDone)   自己開到 pose（{ x, z, heading }，或 { noseX, z, heading }＝車頭對齊 noseX）停好再叫 onDone
 //   drive.setDyno(pose | null)   第 77 批：馬力機：綁在 pose（{ x, z, heading }）的滾筒上：車不動、輪子照速度轉、油門／煞車／換檔照舊（方向盤、手煞車不算）；telemetry 多 dyno、whp（輪上馬力）、whpX（那時候的轉速÷紅線）、redline；null＝放開
@@ -175,6 +176,12 @@ const CSS = `
 .dv-spd em.n{background:#C6CAD1}.dv-spd.tach em.n{background:none;color:#C6CAD1} /* 第 68 批：手排的空檔 N */
 .dv-spd.tach>b{font-size:17px;margin-top:1px}
 .dv-spd.tach>span{font-size:8px;margin-top:1px}
+.dv .dv-spd canvas.dv-cg{display:none}
+.dv-spd.carg{left:90px;right:90px;bottom:138px;height:84px;min-width:0;padding:0;border-radius:0;background:none;transform:none}
+.dv .dv-spd.carg canvas.dv-cg{display:block;position:absolute;inset:0;width:100%;height:100%}
+.dv-spd.carg>b,.dv-spd.carg>span,.dv-spd.carg>em{display:none}
+.dv.carg i.dv-mth{bottom:232px}
+@media (max-height:560px){.dv-spd.carg{left:166px;right:236px;bottom:12px;height:92px}.dv.pop .dv-spd.carg{right:308px}.dv.carg i.dv-mth{bottom:140px}} /* 第 98 批：「原車的」儀表：直拿放在「去哪裡」、手煞車上面（中間）；橫拿放在方向鍵和手煞車（跳燈）中間；canvas 寫 .dv .dv-spd canvas.dv-cg：garage.css 的 .stage canvas 也是 display:block */
 .dv-steer{bottom:12px;left:10px;display:flex;gap:8px;pointer-events:auto;touch-action:none}
 .dv-steer b,.dv-ped b{display:grid;place-items:center;touch-action:none;cursor:pointer}
 .dv-steer b{width:70px;height:74px;border-radius:18px;background:rgba(14,15,18,0.62);box-shadow:0 4px 0 rgba(0,0,0,0.35)}
@@ -943,7 +950,28 @@ function createDrive(o) {
       if (m === 'eye') camera.fov = (view || o.eye || defEye).fov || 72;
       camera.updateProjectionMatrix(); cam.ok = false; cam.yaw = st.th; cam.d = 6.5;
     }
-    if (hud) { hud.cam.setAttribute('aria-pressed', String(m === 'eye')); hud.spdBox.classList.toggle('tach', m !== 'eye'); }
+    if (hud) { hud.cam.setAttribute('aria-pressed', String(m === 'eye')); spdMode(); }
+  }
+  // 第 98 批（Nick 2026-11-17，草稿「儀表板」那一頁「照這樣做」）：下面中間的錶＝「遊戲的」（圓的轉速表）或「原車的」（cabin.js cabinHud：那台車真的儀表）
+  //   setGauge(G)：G＝cabinHud(車) 或 null（遊戲的）；駕駛座視角照舊只有時速；放不下的小畫面（沒全螢幕的電腦、很矮的橫拿）用圓的
+  let gauge = null, cgOn = false, cgT = 0;
+  const cgFits = () => { const h = hud.root.clientHeight; if (!h) return false; return matchMedia('(max-height:560px)').matches ? h > 300 : h >= 541; };
+  function spdMode() {
+    if (!hud) return;
+    cgOn = !!gauge && mode !== 'eye' && cgFits(); cgT = 0; hud.cgKey = null;
+    hud.spdBox.classList.toggle('carg', cgOn); hud.root.classList.toggle('carg', cgOn); hud.spdBox.classList.toggle('tach', mode !== 'eye' && !cgOn);
+  }
+  function setGauge(G) { gauge = G || null; spdMode(); }
+  function cgTick(dt, kmh, gear) {
+    const H = hud;
+    if ((cgT -= dt) <= 0) {
+      cgT = 0.5; if (cgFits() !== cgOn) spdMode();
+      if (cgOn) { const r = H.cg.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1), w = Math.round(r.width * d), h = Math.round(r.height * d); if (w > 1 && h > 1 && (H.cg.width !== w || H.cg.height !== h)) { H.cg.width = w; H.cg.height = h; H.cgKey = null; } }
+    }
+    if (!cgOn) return;
+    const off = !NOENG && st.stall, hp = Math.round((st.pw || 0) / 745.7 / 5) * 5, k = `${Math.round(st.rpm * 300)}|${kmh}|${gear}|${off}|${hp}`;
+    if (k === H.cgKey) return;
+    H.cgKey = k; gauge.draw(H.cgCtx, H.cg.width, H.cg.height, { rpm: NOENG ? 0 : st.rpm, kmh, gear, off, hp });
   }
 
   // ---- HUD：左上目的地（下面一顆大按鈕）、右上小地圖、下面方向鍵、速度、油門煞車 ----
@@ -952,7 +980,7 @@ function createDrive(o) {
     if (!document.getElementById('dv-style')) { const s = document.createElement('style'); s.id = 'dv-style'; s.textContent = CSS; document.head.append(s); }
     const root = document.createElement('div'); root.className = 'dv';
     root.innerHTML = `<div class="dv-chip" hidden><i>${ICON.up}</i><b></b><small></small></div><button type="button" class="dv-act" hidden><i></i><span></span><kbd>E</kbd></button><div class="dv-map"><canvas></canvas><b class="dv-mapt" hidden></b><b class="dv-mapb" hidden></b></div>`
-      + `<b class="dv-cam" role="button" aria-label="換視角" aria-pressed="false">${ICON.cam}</b><button type="button" class="dv-act2" hidden><i></i><span></span></button><div class="dv-spd"><svg viewBox="0 0 100 100" aria-hidden="true"><path class="t" d="M20.3 79.7A42 42 0 1 1 79.7 79.7"/><path class="z" d="M91.87 53.3A42 42 0 0 1 79.7 79.7"/><path class="a" d="M20.3 79.7A42 42 0 1 1 79.7 79.7" pathLength="100" stroke-dasharray="0 100"/></svg><b>0</b><span>KM/H</span><em>1</em><i hidden>甩尾<span></span></i></div>`
+      + `<b class="dv-cam" role="button" aria-label="換視角" aria-pressed="false">${ICON.cam}</b><button type="button" class="dv-act2" hidden><i></i><span></span></button><div class="dv-spd"><svg viewBox="0 0 100 100" aria-hidden="true"><path class="t" d="M20.3 79.7A42 42 0 1 1 79.7 79.7"/><path class="z" d="M91.87 53.3A42 42 0 0 1 79.7 79.7"/><path class="a" d="M20.3 79.7A42 42 0 1 1 79.7 79.7" pathLength="100" stroke-dasharray="0 100"/></svg><b>0</b><span>KM/H</span><em>1</em><canvas class="dv-cg" aria-hidden="true"></canvas><i hidden>甩尾<span></span></i></div>`
       + `<div class="dv-steer"><b role="button" aria-label="左轉">${ICON.L}</b><b role="button" aria-label="右轉">${ICON.R}</b></div>`
       + `<div class="dv-tilt"><i aria-hidden="true"><svg viewBox="-30 -30 60 60"><g><circle r="24" stroke-width="6"/><path d="M-22 2L-7 5M22 2L7 5M0 9V22" stroke-width="5"/><circle r="6" fill="#F2F3F5" stroke="none"/><rect class="r" x="-3" y="-28" width="6" height="9" rx="1.5"/></g></svg></i><b role="button" aria-label="置中">置中</b></div>`
       + `<div class="dv-ped"><b class="dv-brk" role="button" aria-label="煞車">煞車</b><b class="dv-gas" role="button" aria-label="油門">油門</b></div><div class="dv-toast" role="status"></div>`
@@ -971,6 +999,7 @@ function createDrive(o) {
     H.offB = q('.dv-off'); root.style.setProperty('--shn', NG + 2); for (let g = NG; g >= -1; g--) { const b = document.createElement('b'); b.textContent = g === 0 ? 'N' : g === -1 ? 'R' : String(g); if (g === -1) b.className = 'r'; b.dataset.g = g; H.shf.append(b); H.slots.push(b); }
     H.shfY = null; H.shfId = null; H.shfDone = false;
     H.spdBox = q('.dv-spd'); H.tach = q('.dv-spd svg'); H.tachA = q('.dv-spd svg .a'); H.spdBox.classList.toggle('tach', mode !== 'eye'); // 轉速表
+    H.cg = q('.dv-cg'); H.cgCtx = H.cg.getContext('2d'); H.cgKey = null; // 第 98 批：「原車的」儀表（setGauge）
     const on = (el, t, f, opt) => { el.addEventListener(t, f, opt); H.off.push(() => el.removeEventListener(t, f, opt)); };
     on(root, 'contextmenu', (e) => e.preventDefault());
     // 按住：手指按下去就抓住（滑出去也算按著），放開才放
@@ -1090,6 +1119,7 @@ function createDrive(o) {
       H.gas.innerHTML = v === 'run' ? '油門' : v === 'crank' ? '<span>發動中</span>' : `${ICON.power}<span>發動</span>`; H.gas.setAttribute('aria-label', v === 'run' ? '油門' : '發動');
       H.offB.hidden = v !== 'run' || NOENG; H.offB.classList.remove('on');
     });
+    if (gauge && mode !== 'eye') cgTick(dt, kmh, gear);
     if (mode !== 'eye') { const r = Math.min(1, st.rpm); set('rpm', Math.round(r * 50), (v) => H.tachA.setAttribute('stroke-dasharray', `${v * 2} 100`)); set('redl', r > 0.86, (v) => H.tach.classList.toggle('red', v)); } // 轉速表：50 格，紅區（86% 以上）弧變紅
     if (tilt.on) set('tilt', Math.round(tilt.val * 45), (v) => H.tiltG.setAttribute('transform', `rotate(${v * 2})`)); // 轉手機開車：小方向盤（打到底 90 度，跟駕駛座的一樣）
     set('rev', st.rev && !st.mt, (v) => { H.brk.textContent = v ? '倒車' : '煞車'; H.brk.classList.toggle('rev', v); }); // 手排：煞車永遠是煞車（R 檔油門往後走）
@@ -1340,6 +1370,7 @@ function createDrive(o) {
     setPop, get pop() { return popOn; }, // 跳燈
     setInput: (i) => { forced = i ? { thr: +i.throttle || 0, brk: +i.brake || 0, hb: +i.handbrake || 0, clu: +i.clutch || 0, steer: clamp(+i.steer || 0, -1, 1) } : null; },
     setEngine, stopEngine, get engine() { return !st.stall; }, // 第 98 批：setEngine(on)＝照存的放好（不叫 onEngine）、stopEngine()＝熄火（叫 onEngine(false)）；發動＝按油門那顆（「發動」）
+    setGauge, get gauge() { return cgOn && gauge ? gauge.key : null; }, // 第 98 批：「原車的」儀表（gauge＝畫在畫面上的那台車；null＝圓的）
     setGearbox, shift, get gearbox() { return st.mt ? 'mt' : 'at'; }, // 第 68 批：手排（'mt'）／自排（'at'）；shift(±1)＝按 ▲ ▼
     setDyno, get dyno() { return !!st.dyno; }, // 第 77 批：馬力機：setDyno({ x, z, heading }) 綁上去（車不動、輪子轉、油門換檔照舊）、setDyno(null) 放開
     get cameraMode() { return mode; }, get route() { return routeData; }, get action() { return action ? action.label : null; }, get action2() { return action2 ? action2.label : null; },
