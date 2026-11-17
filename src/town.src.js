@@ -372,7 +372,7 @@ async function enterDrive() {
     // 第 29 批（Nick 2026-10-23「就用5號的真實度」）：畫質；第一次「漂亮／最真實」要先找樹冠、畫材質貼圖、編 shader（在這裡做，開出去不會頓）
     try {
       LOOK = createLook({ renderer, scene: TR.scene, world: VIL, getCar: lookCar, plain: () => GAR?.group || null, indoor: (c) => (!!GAR && !!TWR && inTower(c.position.x, c.position.z) ? 1 : MRTS.lvl > 0 ? 0.5 : 0), // 第 82 批：捷運站裡、車上也補光（0.7；第 94 批 0.5：顏色才不會被沖淡）
-        night: lookNight, carDims: (car) => (tripS && car === tripS.car ? fullBox(tripS) : null), police: () => police?.npcCars || null, traffic: () => NPC?.traffic?.cars || null, trialRain: TRIAL_FREE }); // 第 30 批：晚上（車燈）、自己的車的大燈放哪裡；第 32 批：警車（紅藍燈）、路上的車（大燈照路）；第 47 批：試做頁出門 15 秒就下雨
+        night: lookNight, headOn: () => RACE.on || !!(drv && drv.engine) /* 第 98 批：熄火＝大燈關 */, carDims: (car) => (tripS && car === tripS.car ? fullBox(tripS) : null), police: () => police?.npcCars || null, traffic: () => NPC?.traffic?.cars || null, trialRain: TRIAL_FREE }); // 第 30 批：晚上（車燈）、自己的車的大燈放哪裡；第 32 批：警車（紅藍燈）、路上的車（大燈照路）；第 47 批：試做頁出門 15 秒就下雨
       const lv = lookPref(); lookBtns(lv);
       if (lv > 0) { msg.textContent = '畫面準備中⋯'; await new Promise((r) => setTimeout(r, 30)); await lookSet(lv, false); renderer.compile(TR.scene, dcam); }
     } catch (e) { console.error(e); }
@@ -399,6 +399,7 @@ function makeWalker() {
 }
 function startDrive() {
   tripS = S; tripNo++;
+  for (const k in ENG) delete ENG[k]; // 第 98 批：出門每台車的引擎都是關著的（上車按「發動」）
   dmgOf(tripS, cur); // 撞爛（damage.js）：出門就接上（分類網格＋暖身，一台 0.1–0.4 秒：卡在出門這一下，不要卡在上車那一下）
   DRIVE.on = true; controls.enabled = false;
   document.body.classList.add('driving'); driveBar.hidden = false;
@@ -444,6 +445,7 @@ function parkFull() {
   const gy = PW ? PW.heightAt(p.x, p.z) || 0 : 0; // 第 21 批：塔的一樓（山頂那間 ≈ 103）
   Sx.car.position.set(p.x, gy, p.z); Sx.car.rotation.set(0, p.heading, 0); Sx.car.updateMatrixWorld(true);
   Sx.cabin?.userData.setGauges(0, 0); Sx.cabin?.userData.setSteer?.(0);
+  carLamps(Sx.car, false); // 第 98 批：停著（引擎關著）車燈不亮
   tripFull = cur; tripBox = fullBox(Sx);
   if (!parkShadow) { parkShadow = sh.clone(); parkShadow.name = 'park-shadow'; }
   const c = Math.cos(p.heading), s = Math.sin(p.heading);
@@ -475,6 +477,7 @@ function keepRecent(k) {
 // 完整模型收回車庫頁（原點、不轉、輪子歸零、藏起來；還在 built 裡：車庫頁切回來不用再載）
 function stowFull(Sx) {
   if (!Sx) return;
+  if (CD.S === Sx) cdDrop(); // 第 98 批：車門關好（車身換回原本的網格）
   if (MIR.S === Sx) mirrorSet(false); // 第 25 批：照後鏡換回原本的
   if (RIDER.S === Sx) riderOff(); // 第 56 批：沙灘車騎的人拿下來
   seatDetach(Sx.body); // 第 57 批：坐在車上的人（你、朋友）拿下來
@@ -496,9 +499,8 @@ function makeDrv(pose) {
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
     onZone: arrive, onShift: () => dvoice?.shift(), onBlip: () => (dvoice?.blip || dvoice?.shift)?.() /* 第 74 批：降檔補油；第 97 批：不斷油、轉速滑上去（sound.js blip） */, onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
-    onEngine: (on) => { IGN.st?.stop(); IGN.st = null; dvoice?.dispose(); dvoice = on ? engineAudio.voice(cur, { parts: partsOf(cur) }) : null; }, // 第 68 批：手排熄火＝引擎聲停、重新發動＝再來
-    onCrank: (sec) => { if (PERF[cur]?.bike) return; IGN.st?.stop(); IGN.st = engineAudio.starter?.({ key: cur, dur: sec + 0.05 }) || null; }, // 第 89 批：手排熄火以後重新發動：起動馬達
-    onIgnite: () => { IGN.st?.stop(); IGN.st = null; dvoice?.setGain(1); }, // 第 89 批：點火：引擎發動了（起動馬達停、引擎聲出來）
+    onEngine: (on) => { ENG[cur] = on; IGN.st?.stop(); IGN.st = null; dvoice?.dispose(); dvoice = on ? engineAudio.voice(cur, { parts: partsOf(cur) }) : null; engLamps(); }, // 第 68 批：手排熄火＝引擎聲停、重新發動＝再來；第 98 批：自排也是（按「發動」「熄火」），車燈跟著
+    onCrank: (sec) => { if (PERF[cur]?.bike) return; IGN.st?.stop(); IGN.st = engineAudio.starter?.({ key: cur, dur: sec + 0.05 }) || null; }, // 第 89 批：起動馬達；第 98 批：按「發動」
     crush: crushFx && crushK(cur) ? CRUSH_DRV : null }); // 第 7 批：只有怪獸卡車輾得過去（別的車完全照舊）；第 9 批：越野車（PERF.offroad） // 小地圖的底圖跟走路共用一張
   if (dmg) drv.setDamage(dmg.perf); // 撞壞的車開起來比較慢、方向盤偏
   if (tiltK === 'tilt') drv.setTilt(true, tiltFail); // 轉手機開車
@@ -512,16 +514,22 @@ function makeDrv(pose) {
   home.open = null; obDoor.drv = null; // 門的碰撞下一格放（照門現在開著還是關著；第 6 批：越野車車庫的門一樣）
   arrangeCars(); // 停著的車：放碰撞（開車的是新的）、走路的清單
   drv.setDestination(tripDest);
-  dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
-  ignStart(); // 第 89 批：點火
+  const eOn = !!ENG[cur] || !!PERF[cur]?.bike; drv.setEngine(eOn); // 第 98 批：引擎照這一趟記的（沒發動過＝關著：油門那顆是「發動」）；改車廠開走、比完賽照舊發動著
+  dvoice?.dispose(); dvoice = eOn ? engineAudio.voice(cur, { parts: partsOf(cur) }) : null; engLamps();
   popDrv(); // 跳燈（86、R7）
 }
-// 第 89 批（Nick「車子發動要有點火」）：上車、出門＝點火：鑰匙「喀」、起動馬達轉 0.85 秒（轉速表抖、沒有引擎聲），引擎發動「轟」一下（轉速衝上去再回到怠速）；
-// 踩油門馬上發動（不用等）。腳踏車沒有。drive.js ignite()／onIgnite、sound.js starter()
-const IGN = { st: null, T: 0.85 };
-function ignStart() {
-  if (!drv || !dvoice || PERF[cur]?.bike) return;
-  IGN.st?.stop(); dvoice.setGain(0); drv.ignite(IGN.T); IGN.st = engineAudio.starter?.({ key: cur, dur: IGN.T + 0.1 }) || null;
+// 第 89 批（Nick「車子發動要有點火」）：起動馬達的聲音（sound.js starter()）；第 98 批（Nick 2026-11-17「要可自己發動熄火…下車時車一樣發動只能在車上發動熄火」）：
+//   不再上車就自己點火：油門那顆變「發動」，按了才轉起動馬達（drive.js engStep → onCrank → onEngine(true)）；換檔桿下面「熄火」→ onEngine(false)。
+//   ENG[車]＝這一趟那台的引擎發動著；下車照樣發動著（引擎聲照距離小聲、大燈亮著：engOut）；停進格子、換開別台、被抓、回車庫頁＝熄火
+const IGN = { st: null }, ENG = {};
+function engLamps() { if (tripS?.car) carLamps(tripS.car, !!(drv && drv.engine) && !PERF[cur]?.bike); }
+function engOff(k) { ENG[k] = false; if (k === cur) { IGN.st?.stop(); IGN.st = null; dvoice?.dispose(); dvoice = null; } }
+// 下車走開了：引擎聲照距離小聲（7 公尺一半、30 公尺幾乎聽不到）；房子裡聽不到
+function engOut(t) {
+  if (!dvoice) return;
+  let g = 1;
+  if (walker && walker.mode !== 'off') { const w = walker.telemetry(), d = Math.hypot(w.x - t.x, w.z - t.z); g = indoor || d > 80 ? 0 : Math.min(1, 1.1 / (1 + (d / 7) * (d / 7))); }
+  if (Math.abs(g - dvoice.gain) > 0.02 || (g === 0) !== (dvoice.gain === 0)) dvoice.setGain(g);
 }
 // 改車廠有沒有買得起的（還沒裝的引擎零件、還沒買的輪胎）
 function canShop() {
@@ -758,7 +766,7 @@ function outAt(spot, op = null) { // 第 57 批：op＝{ seat: { side, u }, paus
   const car = walker.getOut(drv, tripS, { key: cur, name: CARS[cur].btn[0], h: carH(cur), ...(op || {}) }); // 開太快、四邊都沒地方站就不下（walk.js 會說）
   if (!car) return null;
   tripPose[cur] = { x: car.x, z: car.z, heading: car.heading, f: floorAt(car.x, car.z) };
-  dvoice?.dispose(); dvoice = null; // 熄火（上車再發動）
+  // 第 98 批：下車引擎照樣發動著（以前這裡熄火）
   tripS?.cabin?.userData.setGauges(0, 0); tripS?.cabin?.userData.setSteer?.(0);
   const TW = twrNow(); // 第 32 批：在朋友家＝他的格子（GV.want）
   if (spot?.tw != null && liftOK(cur) && !TW[spot.tw]) { // 停進格子：車子掛到格子上；開車的收掉（上車再做一個：車子要從格子拿下來）
@@ -770,7 +778,7 @@ function outAt(spot, op = null) { // 第 57 批：op＝{ seat: { side, u }, paus
   return car;
 }
 // 剛下來那台的開車（停著、還沒熄掉的 drv）收掉；walk.js 記的「剛下來那台」也忘掉：上車再做一個（停進格子、走路坐電梯的時候）
-function dropDrv() { drv.dispose(); drv = null; home.open = null; obDoor.drv = null; walker.setCars([], { keepParked: false }); }
+function dropDrv() { engOff(cur); drv.dispose(); drv = null; engLamps(); /* 第 98 批：停進格子、走去坐電梯＝熄火 */ home.open = null; obDoor.drv = null; walker.setCars([], { keepParked: false }); }
 // 開走停在格子裡的那台：從格子拿下來（完整模型交給 makeDrv 放回村子的場景；輕量車交給 arrangeCars 收掉），那格空出來
 function offTower(k) {
   const p = tripPose?.[k]; if (!p || p.tw == null) return null;
@@ -791,7 +799,7 @@ function onGetIn(car, seat = null) {
   const px = seat && seat.i > 0 ? seat.i : 0;
   if (car.drive) { // 剛下來那台：walk.js 已經 drv.resume() 了，引擎再發動
     if (px) { paxStart(cur, px); arrangeCars(); return; } // 別的位子：walk.js 沒有 resume
-    dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) }); ignStart(); // 第 89 批：再上車也點火
+    dvoice?.setGain(1); // 第 98 批：下車的時候引擎照樣發動著（引擎聲照距離小聲）：上車回到原本的大聲；關著的＝按「發動」
     arrangeCars(); return;
   }
   if (car.key === tripFull && !drv) {
@@ -807,6 +815,7 @@ async function switchCar(k) {
   const want = PAX.want; PAX.want = null; // 第 57 批：選了別的位子：載好再坐
   const old = tripS;
   const keep = old && !liftOK(cur) && tripPose[cur] ? { p: old.car.position.clone(), r: old.car.rotation.clone() } : null; // 第 4 批：大車（怪獸卡車：有輕量車，可是輕量車只會平平放在 y 0，在越野車場的地形上會陷下去／浮起來）停在原地：擺的樣子（地形上的高度、斜度）先記下來
+  engOff(cur); carLamps(old?.car, false); // 第 98 批：停著的那台熄火
   if (drv) { drv.dispose(); drv = null; } // dispose 會把車子放回原點：車庫頁收起來，村子裡換輕量車停在 tripPose
   dvoice?.dispose(); dvoice = null;
   old?.dmg?.clearDebris(); // 舊車掉在村子裡的零件、煙收掉（停著的換成輕量車：照存檔也是凹的）
@@ -816,7 +825,7 @@ async function switchCar(k) {
   tripFull = null; arrangeCars();
   let car = built[k] || null;
   if (!car) {
-    gtoast(`${CARS[k].btn[0]} 發動中⋯`, 2600);
+    gtoast(`${CARS[k].btn[0]} 準備中⋯`, 2600); // 第 98 批：以前寫「發動中」（現在上車引擎是關著的，要自己按「發動」）
     try { car = await loadCar(k); } catch (e) { console.error(e); car = null; }
   }
   if (boarding !== tok || !trip || !DRIVE.on || !tripPose) { if (car && built[k] !== car) disposeCar(car); return; } // 等的時候回車庫頁了
@@ -1602,6 +1611,7 @@ function homeWalk() {
   const t = walker.telemetry(), q = garLocal(t.x, t.z), Z = GAR.zones, inT = GAR.isInside(q.x, q.z);
   let act = null;
   if (inT && !GAR.floor && !GV.on) { if (inBox(Z.bedSide, q.x, q.z)) act = SLEEP_ACT; else if (inBox(Z.dress, q.x, q.z)) act = DRESS_ACT; } // 第 23 批：朋友家的床、衣櫃不能用
+  if (!act) act = cdWalkAct(t); // 第 98 批：車門旁邊「開車門」／「上車」（cardoor.src.js）
   if (!act && inT) act = petLobbyAct(t); // 第 95 批：大廳裡沒帶出門的寵物「🐾 帶X出門」
   if (!act && !inT) act = martTrunkAct(t); // 第 81 批：車子後面「打開後車廂」「放進去」「關後車廂」（mart.src.js）
   if (!act && inT) act = elCallAct(t.x, t.z); // 第 21 批：電梯不在這層
@@ -2097,7 +2107,7 @@ dBuy.addEventListener('click', async () => {
 function swapTripCar(k, car) {
   const old = tripS, oldKey = cur, oldName = CARS[cur].btn[0];
   panelClose(); driveBar.hidden = false;
-  drv.dispose(); drv = null; dvoice?.dispose(); dvoice = null;
+  engOff(oldKey); drv.dispose(); drv = null; dvoice?.dispose(); dvoice = null; // 第 98 批：送回去的那台熄火
   old?.dmg?.clearDebris(); // 掉在村子裡的零件、煙收掉
   stowFull(old); tripFull = null; // 車庫頁那邊留著（還在 built 裡：車庫頁切回來不用再載）；送回去的是輕量車
   const where = deliver(oldKey, oldName);
@@ -2591,7 +2601,7 @@ function onArrest(i) { // 畫面全黑：車拖到警察局的停車場、人關
   aptDown(); mrtDown(); if (indoor) leaveHouse(null); martArrest(); // 第 81 批：偷的東西還給超商
   impounded = false;
   if (drv) { // 開的那台（或剛下車停著的那台）：開車的收掉，完整的車停到停車場
-    drv.setInput(null); drv.dispose(); drv = null; dvoice?.dispose(); dvoice = null; if (home) home.open = null; obDoor.drv = null;
+    engOff(cur); drv.setInput(null); drv.dispose(); drv = null; dvoice?.dispose(); dvoice = null; if (home) home.open = null; obDoor.drv = null; // 第 98 批：被抓＝熄火
     tripS?.dmg?.clearDebris();
     if (tripFull === cur && i.yard && tripS) { tripPose[cur] = { x: i.yard.x, z: i.yard.z, heading: i.yard.heading }; parkFull(); impounded = true; }
     walker.setCars([], { keepParked: false }); arrangeCars();
@@ -2773,13 +2783,13 @@ function driveStep(dt) {
     if (drv && DRIVE.on) ciTick(dt); // 賽車場的比賽（circuit.src.js）
     if (drv && DRIVE.on) {
       const t = drv.telemetry();
-      dvoice?.set({ rpm: t.rpm, throttle: t.load, speed: Math.abs(t.v) });
+      dvoice?.set({ rpm: t.rpm, throttle: t.load, speed: Math.abs(t.v) }); engOut(t); // 第 98 批：下車走開了照距離小聲
       tripS?.cabin?.userData.setGauges(t.rpm, t.kmh); tripS?.cabin?.userData.setSteer?.(t.steer); // 駕駛座視角看得到轉速表、速度表、方向盤跟著轉
       popStep(dt); // 跳燈：燈蓋在轉
       if (walker?.mode !== 'walk') foldStep(dt, Math.abs(t.v) > 4); // 修 11＋Nick：開走了「去哪裡」「⋯」收起來（走路的時候下面那行管，不要兩邊都扣秒數）
       if (jailed()) { drv.setAction(null); drv.setAction2(null); } // 第 3 批（b3-int）：被抓到了（手煞車停住）：沒有按鈕
       else if (!t.paused) {
-        drv.setAction(elCallAct(t.x, t.z) || homeAct(t) || orbayAct(t) || dynoAct(t) || bayAct(t)); // HUD 的大按鈕：叫電梯、開鐵捲門（車庫、越野車車庫）、上／下馬力機（第 77 批）、停在這裡改車／看車
+        drv.setAction(elCallAct(t.x, t.z) || homeAct(t) || orbayAct(t) || dynoAct(t) || bayAct(t) || cdDriveAct(t)); // 第 98 批：門開著＝「關車門」 // HUD 的大按鈕：叫電梯、開鐵捲門（車庫、越野車車庫）、上／下馬力機（第 77 批）、停在這裡改車／看車
         const t2 = drv.telemetry(); // 停進改車區（parkAt）、開正停上升降機的時候就不能下車
         drv.setAction2(!t2.paused && !t2.auto && Math.abs(t2.v) < 1 && !DYNO.on ? OUT_ACT : null); // 停住了：右邊多一顆「下車」（綁在馬力機上不能下車）
         if (!drv.telemetry().paused) trackStep(t);
@@ -2811,7 +2821,7 @@ function driveStep(dt) {
   if (DRIVE.on) nhTick(); // 內湖（neihu.src.js）：遠的格子收起來、地圖資料的出處、第一次到說一聲
   if (DRIVE.on && walker) polStep(dt); // 第 3 批（b3-int）：警察、槍（開車、走路都更新完以後；槍在 walker 後面）
   netStep(dt); // 一起開車（net.src.js）：朋友的車、人、名字、表情、一起比賽
-  seatsStep(dt); martStep(dt); petStep(dt); // 第 95 批：寵物跟著你（pet.src.js）； 第 81 批：超商的籃子、後車廂（seatsStep 後面：右邊第二顆按鈕） // 第 57 批：坐別的位子、坐朋友的車、朋友坐在車上（netStep 後面：朋友的車這一格的位置才是新的）
+  seatsStep(dt); martStep(dt); cdStep(dt); petStep(dt); // 第 98 批：車門（cardoor.src.js）； // 第 95 批：寵物跟著你（pet.src.js）； 第 81 批：超商的籃子、後車廂（seatsStep 後面：右邊第二顆按鈕） // 第 57 批：坐別的位子、坐朋友的車、朋友坐在車上（netStep 後面：朋友的車這一格的位置才是新的）
   pxStep(); clockStep(); ambStep(); // 第 31 批：角落的時間（小地圖上面）、環境聲（風、鳥、蟲、路上的車；下車走路也有）
   mapStep(); // 大地圖：小地圖點了做什麼（大地圖／比賽看整個賽道）、比賽的對手點
   bodyWalking(DRIVE.on && (walker?.mode === 'walk' || !!doorFade)); // 門口黑掉的那一下走路停住了：版面照走路的（去哪裡那一排不要跳）

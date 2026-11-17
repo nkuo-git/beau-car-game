@@ -40,6 +40,8 @@ if (Q.has('camber') || Q.has('poke') || Q.has('stretch')) { // 海拉風的樣�
 }
 const v = Q.get('v') || 'front34', CB = Q.has('cab') || v === 'eye' ? await import('./cabin.js') : null;
 if (CB) { const cb = CB.buildCabin(key, spec, S.mats); if (cb.children.length) { const old = S.body.getObjectByName('interior'); if (old) S.body.remove(old); S.body.add(cb); cb.userData.setGauges(0.13, 0); } }
+// 第 98 批：door=0～1（全部的門開多少）、doors=0,2（只開那幾個）：doors.js
+if (Q.has('door')) { const { doorRig } = await import('./doors.js'); const DM = await import('./doors.js'); if (Q.has('fit')) { window.doorFit = DM.doorMeasure(S, key); DM.DOOR_FIT[key] = window.doorFit; } const t0 = performance.now(), PR = DM.doorProbe(S, key), t1 = performance.now(), R = doorRig(S, key), t = +Q.get('door'), only = Q.has('doors') ? Q.get('doors').split(',').map(Number) : null; R.doors.forEach((d, i) => { if (!only || only.includes(i)) R.snap(i, 1); }); const t2 = performance.now(); for (const d of R.doors) if (d.on) { d.t = t; d.D.at(t, d.g); } window.doorMs = [Math.round(t1 - t0), Math.round(t2 - t1)]; window.doorInfo = R.doors.map((d) => ({ kind: d.D.kind, side: d.D.side, row: d.D.row, poly: d.D.poly.map((p) => p.map((v) => +v.toFixed(3))), zIn: +d.D.zIn.toFixed(3), zOut: +d.D.zOut.toFixed(3), lids: d.lids.length })); }
 const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 r.setSize(W, H); r.setPixelRatio(1); r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(r.domElement);
@@ -100,6 +102,6 @@ if (v === 'seat') { // 坐在那個位子：那個人的眼睛往前 5 公分，
 }
 if (v === 'eye') { cam.near = 0.02; cam.updateProjectionMatrix(); S.car.updateMatrixWorld(true); CB.cabinCamera(cam, S.body, key, +(Q.get('yaw') || 0), +(Q.get('pitch') || 0)); }
 r.render(scene, cam);
-window.info = { calls: r.info.render.calls, tris: r.info.render.triangles, fit: window.seatFit };
+window.info = { calls: r.info.render.calls, tris: r.info.render.triangles, fit: window.seatFit, doors: window.doorInfo, doorMs: window.doorMs, doorFit: window.doorFit };
 window.done = true;
 </script></body></html>

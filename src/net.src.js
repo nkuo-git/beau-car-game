@@ -644,7 +644,7 @@ function netSeat(pose) {
   if (drv) { drv.resume(); if (drv.cameraMode) drv.setCameraMode(drv.cameraMode); }
   else { offTower(cur); makeDrv(pose); } // 停在圓塔格子裡的那台：先從格子拿下來（第 21 批）
   drv.setInput(null); drv.teleport(pose); drv.setDestination(null);
-  if (!dvoice) dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
+  if (!dvoice && drv.engine) dvoice = engineAudio.voice(cur, { parts: partsOf(cur) }); dvoice?.setGain(1); // 第 98 批：引擎關著（還沒按發動）就沒有聲音
   arrangeCars();
   return true;
 }
@@ -918,6 +918,7 @@ function borWantOff() { // 走去車門走到一半取消了（推搖桿）、�
 // 你原本那台（剛下來的）：跟 switchCar 一樣停好（大車用完整的停在原地，別台換輕量車、走過去還能上）
 function borParkMine() {
   const old = tripS, keep = old && !liftOK(cur) && tripPose[cur] ? { p: old.car.position.clone(), r: old.car.rotation.clone() } : null;
+  engOff(cur); carLamps(old?.car, false); // 第 98 批：停著的那台熄火（跟 switchCar 一樣）
   if (drv) { drv.dispose(); drv = null; }
   dvoice?.dispose(); dvoice = null;
   old?.dmg?.clearDebris();
@@ -934,7 +935,7 @@ async function netBorrowBoard(e) {
   const k = W.k, look = netLook(k, W.l), pcur = cur, ppose = tripPose[k] || null;
   borParkMine();
   const myS = tripS;
-  gtoast(`${W.n}的 ${borCarName(k)} 發動中⋯`, 2600);
+  gtoast(`${W.n}的 ${borCarName(k)} 準備中⋯`, 2600);
   let car = null; try { car = await loadCar(k, look); } catch (er) { console.error(er); }
   BOR.loading = null;
   if (!car || !trip || !DRIVE.on || !tripPose || !NET.P.get(W.uid) || W.cancel) {
@@ -1020,7 +1021,7 @@ function borLendInfo() { // 網站問：可以借嗎（可以＝車子的樣子�
 function borLend(uid, n) { // 借出去了：開車的收掉、車子藏起來（不能上）
   const t = borParked(); if (!t) return false;
   const k = cur;
-  if (drv) { drv.dispose(); drv = null; dvoice?.dispose(); dvoice = null; stowFull(tripS); tripS = null; tripFull = null; tripBox = null; } // 剛下來那台：開車的收掉
+  engOff(k); if (drv) { drv.dispose(); drv = null; dvoice?.dispose(); dvoice = null; stowFull(tripS); tripS = null; tripFull = null; tripBox = null; } // 剛下來那台：開車的收掉
   if (parkShadow) parkShadow.visible = false;
   tripPose[k] = { x: t.x, z: t.z, heading: t.heading };
   BOR.lent = { uid, n: String(n || '朋友').slice(0, 12), k }; LENT_K = k;

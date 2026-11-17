@@ -1039,6 +1039,7 @@ export function createEngineAudio(opt = {}) {
       if (S.gone) return h;
       const ctx = ensureCtx(); if (!ctx) return h;
       wake(); clearTimeout(S.idleT);
+      const hi = o.key === 'aventador', sf = hi ? 1.3 : 1, wk = hi ? 1.45 : 1; // 第 98 批（Nick「去查AV12發動的聲音」）：AV12 的起動馬達尖、急（嘰聲高、大聲），V12 壓縮很密
       let ncyl = 4; try { const P = SND_profile(o.key || 'supra', []); ncyl = Array.isArray(P.fire) && P.fire.length ? P.fire.length : 4; } catch { /* 照 4 缸 */ }
       const dur = Math.max(0.3, Math.min(2, num(o.dur, 0.85))), t0 = ctx.currentTime + 0.01, tm = t0 + 0.09, keep = [];
       const out = ctx.createGain(); out.gain.value = 0.4 * Math.max(0, num(o.gain, 1)); out.connect(S.inp); keep.push(out); // 0.4：轉的時候比怠速大約 10 dB（量過：1.0 的時候大 18 dB，太吵）
@@ -1051,19 +1052,19 @@ export function createEngineAudio(opt = {}) {
       const mot = ctx.createGain(), mod = ctx.createGain(); mot.gain.setValueAtTime(0, tm); mot.gain.linearRampToValueAtTime(1, tm + 0.08); mod.gain.value = 0.6; mod.connect(mot); mot.connect(out); keep.push(mot, mod);
       const saw = ctx.createOscillator(), lp = ctx.createBiquadFilter(), sg = ctx.createGain(); saw.type = 'sawtooth'; lp.type = 'lowpass'; lp.frequency.value = 1000; lp.Q.value = 0.8; sg.gain.value = 0.26;
       saw.connect(lp); lp.connect(sg); sg.connect(mod); keep.push(saw, lp, sg);
-      const wh = ctx.createOscillator(), wf = ctx.createBiquadFilter(), wg = ctx.createGain(); wh.type = 'square'; wf.type = 'bandpass'; wf.frequency.value = 1500; wf.Q.value = 3; wg.gain.value = 0.035; // 齒輪的嘰聲
+      const wh = ctx.createOscillator(), wf = ctx.createBiquadFilter(), wg = ctx.createGain(); wh.type = 'square'; wf.type = 'bandpass'; wf.frequency.value = 1500 * wk; wf.Q.value = 3; wg.gain.value = hi ? 0.08 : 0.035; // 齒輪的嘰聲
       wh.connect(wf); wf.connect(wg); wg.connect(mod); keep.push(wh, wf, wg);
       const ns = ctx.createBufferSource(), nb = ctx.createBiquadFilter(), ng = ctx.createGain(); ns.buffer = noiseBuf(ctx); ns.loop = true; nb.type = 'bandpass'; nb.frequency.value = 700; nb.Q.value = 0.8; ng.gain.value = 0.05;
       ns.connect(nb); nb.connect(ng); ng.connect(mod); keep.push(ns, nb, ng);
       const thump = ctx.createOscillator(), tg = ctx.createGain(); thump.type = 'sine'; thump.frequency.value = 52; tg.gain.value = 0; thump.connect(tg); tg.connect(out); keep.push(thump, tg); // 每次壓縮低低的「嗯」
-      saw.frequency.setValueAtTime(70, tm); wh.frequency.setValueAtTime(1100, tm); saw.frequency.linearRampToValueAtTime(118, tm + 0.1); wh.frequency.linearRampToValueAtTime(1650, tm + 0.1);
+      saw.frequency.setValueAtTime(70 * sf, tm); wh.frequency.setValueAtTime(1100 * wk, tm); saw.frequency.linearRampToValueAtTime(118 * sf, tm + 0.1); wh.frequency.linearRampToValueAtTime(1650 * wk, tm + 0.1);
       // 曲軸約 200→250 rpm：一秒壓縮 rpm/60 × 缸數/2 次（3.5～16）
       const fc = (k) => Math.max(3.5, Math.min(16, ((200 + 60 * k) / 60) * (ncyl / 2)));
       const end = t0 + dur;
       for (let t = tm + 0.12, k = 0; t < end - 0.02; k++) {
         const T = 1 / fc((t - tm) / dur), tp = t + T * 0.3;
         mod.gain.setValueAtTime(0.55, t); mod.gain.linearRampToValueAtTime(1, tp); mod.gain.linearRampToValueAtTime(0.55, t + T);
-        saw.frequency.setValueAtTime(118 + 14 * k / 8, t); saw.frequency.linearRampToValueAtTime(100 + 14 * k / 8, tp); saw.frequency.linearRampToValueAtTime(118 + 14 * k / 8, t + T);
+        saw.frequency.setValueAtTime((118 + 14 * k / 8) * sf, t); saw.frequency.linearRampToValueAtTime((100 + 14 * k / 8) * sf, tp); saw.frequency.linearRampToValueAtTime((118 + 14 * k / 8) * sf, t + T);
         tg.gain.setValueAtTime(0, t); tg.gain.linearRampToValueAtTime(0.2, tp); tg.gain.linearRampToValueAtTime(0, t + T * 0.85);
         t += T;
       }

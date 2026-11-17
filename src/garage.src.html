@@ -357,7 +357,7 @@ const PERF = {
     ['intake', '高流量進氣', '空濾換成香菇頭', 6, 1], ['exhaust', '不鏽鋼排氣', '叫得更清脆', 8, 2], ['header', '4-2-1 頭段', '高轉更順', 10, 3],
     ['ecu', 'ECU 調校', '重寫點火和噴油', 10, 3], ['itb', '四喉節氣門', '每一缸自己一個節氣門', 25, 8], ['cams', '高角度凸輪軸', '高轉更有力', 20, 10],
     ['bore', '加大缸徑', '排氣量加到 1.8 升', 30, 18], ['sc', '機械增壓', '加一顆機械增壓器', 70, 30]] },
-  aventador: { price: 1200, ng: 7, hp: 740, kg: 1575, awd: 1, red: 8500, vmax: 345, top: 350, cda: 0.68, eng: '6.5 V12 自然進氣', tyres: [10, 18], parts: [
+  aventador: { price: 1200, ng: 7, crank: 1, startBrk: 1, flare: 0.26, flareT: 1.4, flareLoad: 0.9, /* 第 98 批：踩著煞車才發動得了、起動馬達轉 1 秒、發動那一下大聲「轟」衝到約 3000 轉、1.4 秒回到怠速 */ hp: 740, kg: 1575, awd: 1, red: 8500, vmax: 345, top: 350, cda: 0.68, eng: '6.5 V12 自然進氣', tyres: [10, 18], parts: [
     ['filter', '賽車空濾', '吸氣更順', 8, 5], ['exhaust', '鈦合金排氣', 'V12 叫得更大聲', 25, 30], ['ecu', 'ECU 調校', '重寫點火和汽門正時', 20, 30],
     ['flywheel', '輕量化飛輪', '轉速拉得更快', 10, 25], ['intake', '碳纖維進氣', '進氣更順更冷', 15, 40], ['cams', '高角度凸輪軸', '高轉更有力', 30, 70],
     ['forged', '鍛造活塞', '撐得住雙渦輪', 20, 120], ['turbo', '雙渦輪套件', '自然進氣改成雙渦輪', 300, 450]] },
@@ -567,6 +567,7 @@ function dispose(key) {
   delete built[key];
 }
 function disposeCar(S) {
+  S._doorRig?.dispose(); // 第 98 批：車門（doors.js）切開的車身換回原本的
   S.dmg?.dispose(); S.dmg = null; // 撞壞的網格換回原本的（先換回來，下面才會釋放到對的網格）
   const seated = []; S.car.traverse((o) => { if (o.userData.seated) seated.push(o); }); for (const o of seated) { o.removeFromParent(); o.visible = false; } // 第 57 批：坐在車上的人（材質大家共用）先拿下來
   S.car.removeFromParent();

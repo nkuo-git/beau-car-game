@@ -2,7 +2,7 @@
 // 每台車的不同都寫在 SPEC 裡（Supra、GT-R）
 import * as THREE from 'three';
 import { MAT, wheel, gtWing, mirror, interior, aeroKit, AERO_SUPRA, lip, exhaust, wideKit, WIDE_PUSH, STANCE, mk4Wing, rimFace, RIM_POLISH, neonPad, rimMerge, rimLathe, rimCyl } from './parts.js';
-import { makeMaskTextures, patchPaint, patchGlass, patchInside, SUPRA_LOOK, PAINT_NIGHT } from './masks.js';
+import { makeMaskTextures, patchPaint, patchGlass, patchInside, SUPRA_LOOK, PAINT_NIGHT, nightU } from './masks.js';
 import { GTR_LOOK } from './gtr-look.js';
 
 export const SUPRA_SPEC = {
@@ -231,7 +231,7 @@ function bakedMasks(tex) {
 function bakedNight(m, rgb, how = 'all') {
   const k = how === 'red' ? 'clamp((diffuseColor.r - max(diffuseColor.g, diffuseColor.b)) * 2.5, 0.0, 1.0)' : '1.0';
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uNight = PAINT_NIGHT;
+    sh.uniforms.uNight = nightU(m); // 第 98 批：熄火的車燈不亮
     sh.fragmentShader = 'uniform float uNight;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
   totalEmissiveRadiance += uNight * vec3(${rgb.map((v) => v.toFixed(3)).join(', ')}) * ${k};`);
   };

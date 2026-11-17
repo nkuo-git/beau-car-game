@@ -182,7 +182,7 @@ function lookCaps(R) {
 }
 
 function createLook(o) {
-  const R = o.renderer, scene = o.scene, V = o.world, getCar = o.getCar || (() => null), plainOf = o.plain || (() => null), indoor = o.indoor || (() => false), nightCb = o.night || (() => {}), carDims = o.carDims || (() => null);
+  const R = o.renderer, scene = o.scene, V = o.world, getCar = o.getCar || (() => null), plainOf = o.plain || (() => null), indoor = o.indoor || (() => false), nightCb = o.night || (() => {}), carDims = o.carDims || (() => null), headOn = o.headOn || (() => true); // 第 98 批：headOn()＝自己的車的大燈開著（熄火＝關）
   const gl = R.getContext();
   const st = { calls: 0, tris: 0, ms: 0, maxMs: 0, crowns: 0, cells: 0, grass: 0, mats: 0, smooth: 0, prepMs: 0, texMs: 0, sets: 0 };
   const { half, mobile, soft } = lookCaps(R); // 第 42 批：搬到外面（車庫頁還沒出門也要知道沒選過的畫質）
@@ -656,7 +656,7 @@ function createLook(o) {
     } else { for (const l of PL) l.intensity = 0; lampSnap = true; }
     const car = getCar();
     if (car !== headCar) { headCar = car; headDims = car ? carDims(car) : null; }
-    if (car && headDims && k > 0.001) { const D = headDims, xf = D.cx + D.hx - 0.15; car.updateMatrixWorld();
+    if (car && headDims && k > 0.001 && headOn()) { const D = headDims, xf = D.cx + D.hx - 0.15; car.updateMatrixWorld();
       for (let i = 0; i < HLT.length; i++) { const sz = HLT.length < 2 ? 0 : (i ? -1 : 1) * D.hz * 0.62, l = HLT[i]; HEAD[i].set(xf, 0.62, sz).applyMatrix4(car.matrixWorld); HTGT[i].set(xf + LAMP.headAim, -0.3, sz * 1.6).applyMatrix4(car.matrixWorld); // 漂亮：一盞在中間
         l.position.copy(HEAD[i]); l.target.position.copy(HTGT[i]); l.target.updateMatrixWorld(); l.intensity = LAMP.headI * k; }
       if (NS) { const bm = NS.beam; bm.position.set(xf, 0.06, 0).applyMatrix4(car.matrixWorld); car.getWorldQuaternion(bm.quaternion); bm.material.opacity = NSKY.beamI * k; if (!bm.visible) bm.visible = true; } } // 第 34 批：路上的長光斑跟著車頭

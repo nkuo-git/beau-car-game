@@ -102,9 +102,11 @@ const got = await p.evaluate(() => {
   const W = window.__D().walker; let ok = false, k = 0;
   for (; k < 600 && !ok; k++) { ok = W.getIn(W.cars.find((c) => c.key === 'gc8')); if (!ok) window.__wstep(1); }
   let n = 0; for (; n < 1200 && !(window.__D().drv && W.mode === 'off'); n++) window.__wstep(1);
-  return { ok, mode: W.mode };
+  const d = window.__D().drv, e0 = !!d?.telemetry().engine; // 第 98 批：上車引擎是關著的，踩一下油門＝發動
+  if (d) { d.setInput({ throttle: 1 }); window.__dstep(3); d.setInput(null); window.__dstep(60); }
+  return { ok, mode: W.mode, e0, engine: !!d?.telemetry().engine };
 });
-check(got.ok && got.mode === 'off', `in the GC8 (${JSON.stringify(got)})`);
+check(got.ok && got.mode === 'off' && !got.e0 && got.engine, `in the GC8, engine off until the gas is tapped (${JSON.stringify(got)})`);
 // ---- 2a 東邊的門開著：門口前面開進去（沒撞到）；台子上才有「上馬力機」 ----
 const R2 = Math.PI / 2;
 const door = await p.evaluate((R2) => {

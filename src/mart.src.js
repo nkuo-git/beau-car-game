@@ -390,6 +390,7 @@ function martTrunkAct(t) { // homeWalk（走路、在外面）：車子後面（
 }
 function trunkSet(on) {
   const V = tripS && trunkVis(tripS); if (!V) return;
+  if (on) cdShut(); // 第 98 批：車門先關好（兩個都會切車身）
   V.want = on ? 1 : 0;
   if (on) { const L = trunkItems(), nm = TRUNK_TXT[V.P.kind] || '後車廂'; walker.toast(L.length ? `${nm}：${martList(L)}` : `${nm}是空的`, 1800); }
 }

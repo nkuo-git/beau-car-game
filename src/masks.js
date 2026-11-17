@@ -510,6 +510,13 @@ export function makeMaskTextures(look = SUPRA_LOOK) {
 const VERT_DECL = 'varying vec3 vP; varying vec3 vN;\n';
 // 第 30 批（look.js 的晚上）：所有完整的車共用一個「燈亮多少」（0 白天、1 晚上）：大燈（lamp）、尾燈（red）自己發光；車庫頁、白天是 0 ＝ 跟以前一樣
 export const PAINT_NIGHT = { value: 0 };
+// 第 98 批（Nick「熄火時大燈也要關掉」）：每個材質自己的「燈亮多少」：material.userData.lampOff＝這台車熄火了（燈不亮）；其他照 PAINT_NIGHT
+export function nightU(m) { return { get value() { return m.userData.lampOff ? 0 : PAINT_NIGHT.value; } }; }
+// 第 98 批：一台車的燈開／關（熄火＝關；town.src.js 照引擎）
+export function carLamps(obj, on) {
+  if (!obj) return;
+  obj.traverse((o) => { const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []; for (const m of ms) m.userData.lampOff = !on; });
+}
 const MASK_FN = `
 uniform sampler2D tSide, tFront, tRear, tTop, tLivR, tLivL, tLivF;
 uniform float uXr, uXf, uLiv, uGlassY, uNight, uUnderY;
@@ -535,7 +542,7 @@ function inject(shader, tex) {
 // 車漆那一層：玻璃的地方挖掉，其他依照投影圖改顏色、粗糙度、金屬感
 export function patchPaint(mat, tex) {
   mat.onBeforeCompile = (shader) => {
-    inject(shader, tex); shader.uniforms.uNight = PAINT_NIGHT;
+    inject(shader, tex); shader.uniforms.uNight = nightU(mat); // 第 98 批：熄火的車燈不亮
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
   totalEmissiveRadiance += uNight * (vec3(2.4, 2.3, 2.0) * lamp * (1.0 - 0.5 * lens) + vec3(1.3, 0.04, 0.02) * red);

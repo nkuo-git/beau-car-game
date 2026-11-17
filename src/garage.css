@@ -309,7 +309,7 @@ body.fs.driving:not(.walking):not(.racing).moreopen:not(.sizeopen):not(.tiltopen
   background: rgba(14,15,18,0.62); color: #F2F3F5; font: 700 20px/1 var(--sans); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: margin-top .2s; }
 body.fs #drivebar .mustog[aria-pressed="false"] { filter: grayscale(1); opacity: 0.55; }
 /* 第 68 批：手排／自排（🎵 左邊；橫拿放 🎵 左邊那一排、「下車」再往左 426 → 478）；亮橘色＝手排；「去哪裡」打開的時候離合器先藏起來（那一疊會蓋到） */
-body.fs.destsopen #stage .dv-shf { visibility: hidden; } /* 第 69 批：「去哪裡」打開的時候換檔桿先藏起來 */
+body.fs.destsopen #stage .dv-shf, body.fs.destsopen #stage .dv-off, body.fs.moreopen #stage .dv-off { visibility: hidden; } /* 第 98 批：「熄火」跟換檔桿一樣，打開那一排、「去哪裡」的時候先藏起來 */ /* 第 69 批：「去哪裡」打開的時候換檔桿先藏起來 */
 @media (max-height: 560px) { body.fs.driving.mtgear:not(.walking) #drivebar { left: calc(var(--fs-l) + 72px); bottom: calc(var(--fs-b) + 88px); } } /* 第 69 批：橫拿、手排：「去哪裡」往右讓換檔桿、低一點（338 高的手機「⋯」打開時「下車」在 148–198） */
 body.fs.moreopen #stage .dv-shf { visibility: hidden; } /* 第 69 批：「⋯」那一排打開的時候（直拿左邊會壓到 ✨ 🎮）換檔桿先藏起來；車開起來那一排自己收 */
 .geartog { display: none; }

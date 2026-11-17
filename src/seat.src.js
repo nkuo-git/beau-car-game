@@ -245,7 +245,7 @@ function paxStart(k, i) {
   if (!drv || !tripS || !seatsOf(k)[i]) return;
   PAX.want = null;
   drv.pause(); const sh = TR.scene.getObjectByName('drive-shadow'); if (sh) sh.visible = true; // 影子留著（drive.pause 會藏起來）
-  dvoice?.dispose(); dvoice = null; // 熄火
+  // 第 98 批（Nick「下車時車一樣發動」）：坐別的位子也一樣：引擎發動著就照樣發動著（關著就關著）
   tripS.cabin?.userData.setGauges(0, 0); tripS.cabin?.userData.setSteer?.(0);
   PAX.on = true; PAX.k = k; PAX.i = i;
   const ci = drv.carInfo; seatCamStart(SCAM.pref, (ci.nose + ci.tail) / 2);
@@ -259,8 +259,8 @@ function paxTo(j) {
     const eye = SCAM.mode === 'eye';
     seatBlendFrom(0.45); paxEnd();
     drv.resume(); drv.setCameraMode(eye ? 'eye' : 'chase');
-    dvoice?.dispose(); dvoice = engineAudio.voice(cur, { parts: partsOf(cur) });
-    drv.toast('換到駕駛座了，可以開了', 1800);
+    if (drv.engine && !dvoice) dvoice = engineAudio.voice(cur, { parts: partsOf(cur) }); dvoice?.setGain(1); // 第 98 批：引擎照舊（關著的＝按「發動」）
+    drv.toast(drv.engine ? '換到駕駛座了，可以開了' : '換到駕駛座了，按「發動」就可以開', 1800);
     return;
   }
   seatBlendFrom(0.4); PAX.i = j; SCAM.yaw = SCAM.pitch = 0;
@@ -308,7 +308,8 @@ function seatWalk() {
   const ok = walker.mode === 'walk' && !indoor && !doorFade && !sleep && !jailed() && !BOR.pad && !(police && police.state === 'wanted') && !RACE.on;
   if (ok) {
     const car = walker.nearCar;
-    if (seatOwnCar(car)) SEATN.own = car; else SEATN.P = seatNearFriend(walker.telemetry());
+    if (seatOwnCar(car) && !(car.object === tripS?.car && cdOK(cur))) SEATN.own = car; // 第 98 批：有車門的（你開的那台）：走到那個位子的門「開車門」→「上車」（「選位子」換成「關車門」）
+    else if (!seatOwnCar(car)) SEATN.P = seatNearFriend(walker.telemetry());
   }
   walker.setAction2(SEATN.own || SEATN.P ? SEAT_ACT : null);
 }

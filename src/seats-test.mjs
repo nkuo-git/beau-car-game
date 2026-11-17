@@ -184,16 +184,18 @@ const drv6 = await p.evaluate(() => {
   U.swap.click(); document.querySelector('#stage .sp-seat[data-i="0"]').click(); window.__dstep(70);
   const d = D.drv, t = d.telemetry();
   const eye = { pax: S.PAX.on, paused: t.paused, cam: d.cameraMode, voice: !!window.__D().dvoice, hud: window.__vis('#stage .ps'), me: window.__me(), toast: window.__toast(), dEyeD: (() => { const e = D.dcam.position.clone().set(...D.dEye.eye); D.tripS.body.updateWorldMatrix(true, false); D.tripS.body.localToWorld(e); return +D.dcam.position.distanceTo(e).toFixed(3); })() };
+  d.setInput({ throttle: 1 }); window.__dstep(3); d.setInput(null); window.__dstep(60); const eng = { engine: d.engine, voice: !!window.__D().dvoice }; // 第 98 批：按「發動」
   d.setCameraMode('chase'); window.__dstep(30);
   const C = S.MYSIT.C, wg = D.tripS.cabin?.getObjectByName('cabin-wheel'), wl = (o) => { const v = D.dcam.position.clone(); o.updateWorldMatrix(true, false); o.getWorldPosition(v); wg.updateWorldMatrix(true, false); wg.worldToLocal(v); return [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)]; };
   const at = () => ({ s: +d.telemetry().steer.toFixed(2), R: window.__bodyAt(C.hand), L: window.__bodyAt(C.handL), wR: wg ? wl(C.hand) : null, wL: wg ? wl(C.handL) : null }); // wR/wL：手在方向盤自己的座標（跟著方向盤轉的話不會變）
   d.setInput({ throttle: 0, brake: 0, steer: 0, handbrake: 1 }); window.__dstep(40); const s0 = at();
   d.setInput({ throttle: 0, brake: 0, steer: 1, handbrake: 1 }); window.__dstep(40); const s1 = at();
   d.setInput(null); window.__dstep(5);
-  return { eye, chase: window.__me(), wheel: !!S.MYSIT.P.s?.wheel, s0, s1 };
+  return { eye, eng, chase: window.__me(), wheel: !!S.MYSIT.P.s?.wheel, s0, s1 };
 });
 console.log('6', el(), JSON.stringify(drv6));
-check(!drv6.eye.pax && !drv6.eye.paused && drv6.eye.cam === 'eye' && drv6.eye.voice && !drv6.eye.hud && drv6.eye.dEyeD < 0.02 && /駕駛座/.test(drv6.eye.toast), `swapped into the driver's seat: you can drive (engine on, first person at the driver's eyes) 「${drv6.eye.toast}」`);
+check(!drv6.eye.pax && !drv6.eye.paused && drv6.eye.cam === 'eye' && !drv6.eye.voice && !drv6.eye.hud && drv6.eye.dEyeD < 0.02 && /駕駛座.*發動/.test(drv6.eye.toast), `swapped into the driver's seat: you can drive (first person at the driver's eyes; engine never started yet, no sound) 「${drv6.eye.toast}」`);
+check(drv6.eng.engine && drv6.eng.voice, `第 98 批 按「發動」：引擎發動了（引擎聲）`);
 check(drv6.eye.me.vis && drv6.eye.me.fp && drv6.eye.me.hands?.[0] && drv6.eye.me.hands?.[1] && drv6.chase.vis && !drv6.chase.fp && drv6.chase.i === 0 && drv6.chase.state === 'sit', `driving: first person shows both your hands on the wheel (on screen: ${JSON.stringify(drv6.eye.me.hands)}, head hidden); the chase camera shows all of you in the driver's seat (head back)`);
 const dR = Math.hypot(drv6.s1.R[1] - drv6.s0.R[1], drv6.s1.R[2] - drv6.s0.R[2]), dL = Math.hypot(drv6.s1.L[1] - drv6.s0.L[1], drv6.s1.L[2] - drv6.s0.L[2]);
 check(drv6.wheel && drv6.s1.s > 0.9 && dR > 0.04 && dL > 0.04, `hands on the wheel and they turn with it (right hand moved ${dR.toFixed(3)} m, left ${dL.toFixed(3)} m at full lock)`);
@@ -214,7 +216,7 @@ const out7 = await p.evaluate(() => {
   document.querySelector('#stage .wk-act2').click(); document.querySelector('#stage .sp-seat[data-i="1"]').click();
   for (n = 0; n < 1200 && !(S.PAX.on && W.mode === 'off'); n++) window.__wstep(1);
   window.__dstep(70);
-  const back = { pax: S.PAX.on, i: S.PAX.i, paused: D.drv.telemetry().paused, me: window.__me(), cam: S.SCAM.mode, carD: window.__carD() };
+  const back = { pax: S.PAX.on, i: S.PAX.i, paused: D.drv.telemetry().paused, me: window.__me(), cam: S.SCAM.mode, carD: window.__carD(), voice: !!window.__D().dvoice?.alive, engine: D.drv.engine };
   S.SEATUI.out.click(); for (n = 0; n < 300 && W.mode !== 'walk'; n++) window.__dstep(1); window.__wstep(30);
   const t = W.telemetry(), car = W.cars.find((c) => c.drive);
   const out = { mode: W.mode, pax: S.PAX.on, hud: window.__vis('#stage .ps'), me: window.__me(), paused: D.drv.telemetry().paused, drive: !!car, want: Math.sign(S.seatsOf(D.cur)[1].side), side: car ? Math.sign((t.x - car.x) * Math.sin(car.heading) + (t.z - car.z) * Math.cos(car.heading)) : 0, act: W.action, act2: W.action2 };
@@ -227,7 +229,8 @@ console.log('7', el(), JSON.stringify(out7));
 check(out7.walk.mode === 'walk' && !out7.walk.me.vis && out7.walk.me.walkerVis && out7.walk.paused && out7.walk.act2 === '選位子', 'got out as the driver: the sitting you comes off the car, 「選位子」 is back');
 check(out7.back.pax && out7.back.i === 1 && out7.back.paused && out7.back.cam === 'eye' && out7.back.me.vis && out7.back.me.fp && out7.back.carD < 1.5, `sat in the passenger seat of the car you just left (camera remembered: first person, ${out7.back.carD} m from the middle of the car)`);
 check(out7.out.mode === 'walk' && !out7.out.pax && !out7.out.hud && !out7.out.me.vis && out7.out.me.walkerVis && out7.out.paused && out7.out.drive && out7.out.side === out7.out.want && /^上車/.test(out7.out.act), `tapped 下車: you stand on the passenger side (${out7.out.side < 0 ? 'left' : 'right'} for the GC8), the car stays put (still your car to get back into)`);
-check(out7.again.ok && out7.again.mode === 'off' && !out7.again.paused && out7.again.voice && !out7.again.pax, '「上車」 after that drives as before (engine on)');
+check(out7.back.voice && out7.back.engine, `第 98 批 下車再坐副駕駛座：引擎照樣發動著（引擎聲還在）`);
+check(out7.again.ok && out7.again.mode === 'off' && !out7.again.paused && out7.again.voice && !out7.again.pax, '「上車」 after that drives as before (engine still running)');
 
 // ---- 8 兩人座（RX-7）的畫面只有前面一排；沙灘車、怪獸卡車沒有位子可以選 ----
 const two8 = await p.evaluate(() => {

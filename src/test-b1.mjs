@@ -22,7 +22,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__money = (n) => { GAME.money = n; save(true); renderWallet(); renderOptions(); refreshCarBtns(); };'
   + ' window.__D = () => ({ on: DRIVE.on, drv, VIL, GAR, dcam, dvoice, trip, tripS, home, bayLock, snooze, TR, LODS, camGo, cur, built, walker, tripPose, tripFull, boarding, room, liftAnim,'
   + '   TWR, EL, PW, elWho, elFree, poseF, padCars, sleep, gcam, liftSnd, deliver, offTower, normPark, CABIN_EYE, setDest, CARS, PERF, TOWER_BAYS, towerFy, TOWER });'
-  + ' window.__HOME = () => HOME; window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
+  + ' window.__HOME = () => HOME; window.__CD = () => CD; window.__N = () => NPC; window.__NMAX = () => NPC_MAX;'
   + ' window.__pol = () => (typeof police !== "undefined" ? police : null);' // 第 3 批（b3-int）：警察（撞人的測試以後把星星清掉：警察的部分在 test-b3.mjs）
   + ' window.__IN = () => ({ indoor, doorFade, HOUSE_WARM, interiorFor, buildInterior, DEALER_DOOR, LD });'
   + ' window.__npcPause = (off) => { if (off) { if (!NPC) return; window.__npcKeep = NPC; NPC.g.visible = false; NPC.MOV.length = 0; drv?.removeColliders(\'traffic\'); NPC = null; } else if (window.__npcKeep) { NPC = window.__npcKeep; window.__npcKeep = null; NPC.g.visible = DRIVE.on; } };'
@@ -301,6 +301,10 @@ await p.addInitScript(() => {
   H.press = () => { const e = act(); if (!e) return null; const s = e.querySelector('span').textContent; e.click(); return s; };
   H.act2 = () => { const e = document.querySelector('#stage .dv-act2'); return vis(e) ? e.querySelector('span').textContent : null; };
   H.press2 = () => { const e = document.querySelector('#stage .dv-act2'); if (!vis(e)) return null; const s = e.querySelector('span').textContent; e.click(); return s; };
+  // 第 98 批：引擎（上車是關著的：油門那顆「發動」；按一下＝起動馬達 0.8 秒；換檔桿下面「熄火」）；lampsOff＝這台車的燈關著的材質幾個／全部
+  H.engS = () => { const D = window.__D(), t = D.drv?.telemetry(), g = document.querySelector('#stage .dv-gas'), o = document.querySelector('#stage .dv-off'); let off = 0, all = 0; const miss = [], wk = (x) => { if (x.userData.seated) return; for (const m of Array.isArray(x.material) ? x.material : x.material ? [x.material] : []) { all++; if (m.userData.lampOff) off++; else if (miss.length < 3) miss.push(`${x.name || x.type}:${m.name || m.type}`); } for (const c of x.children) wk(c); }; if (D.tripS?.car) wk(D.tripS.car); // 坐在車上的人（seated）不算
+    return { engine: !!t?.engine, gas: g ? g.textContent : null, off: vis(o), voice: !!D.dvoice?.alive, gain: D.dvoice ? +D.dvoice.gain.toFixed(2) : null, lampsOff: `${off}/${all}`, miss }; };
+  H.start = () => { const d = window.__D().drv; d.setInput({ throttle: 1 }); window.__dstep(3); d.setInput(null); window.__dstep(60); return H.engS(); };
   // 電梯的面板（town.src.js elPanel）：看得到嗎、按鈕的字（4F 空 8…）、哪一層亮著、◀ ▶ 那一排；按一顆（字開頭是 label）
   H.elPanel = () => { const e = document.querySelector('#stage .elpanel'); if (!vis(e)) return { shown: false }; const b = [...e.querySelectorAll('.elg button')];
     return { shown: true, btns: b.map((x) => x.textContent.replace(/^(\dF|B\d)/, '$1 ').replace(/\s+/g, ' ').trim()), on: b.filter((x) => x.classList.contains('on')).map((x) => x.textContent.slice(0, 2)).join(), row: vis(e.querySelector('.elr')) }; };
@@ -596,9 +600,11 @@ check(!clash && !clashNear, `on foot next to a car (big 「上車 · GC8」 + a 
 await drawAndShot('3-near-car');
 const bd = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(); return { pressed, ...r }; });
 await p.evaluate(() => window.__H.step(40));
-const inCar = await p.evaluate(() => { const D = window.__D(), H = window.__H, t = D.drv?.telemetry(), sp = D.VIL.places.garage.spawn; return { drv: !!D.drv, act: H.actText(), act2: H.act2(), paused: t?.paused, at: t && Math.hypot(t.x - sp.x, t.z - sp.z), hidden: D.walker.telemetry().hidden, wk: H.visible('#stage .wk'), dv: H.visible('#stage .dv'), voice: !!D.dvoice?.alive, cur: D.cur, shadow: !!D.TR.scene.getObjectByName('park-shadow')?.visible, dshadow: !!D.TR.scene.getObjectByName('drive-shadow')?.visible }; });
+const inCar = await p.evaluate(() => { const D = window.__D(), H = window.__H, t = D.drv?.telemetry(), sp = D.VIL.places.garage.spawn; return { drv: !!D.drv, act: H.actText(), act2: H.act2(), paused: t?.paused, at: t && Math.hypot(t.x - sp.x, t.z - sp.z), hidden: D.walker.telemetry().hidden, wk: H.visible('#stage .wk'), dv: H.visible('#stage .dv'), voice: !!D.dvoice?.alive, cur: D.cur, shadow: !!D.TR.scene.getObjectByName('park-shadow')?.visible, dshadow: !!D.TR.scene.getObjectByName('drive-shadow')?.visible, eng: H.engS() }; });
 console.log('  上車:', JSON.stringify(bd), JSON.stringify(inCar));
-check(bd.pressed === '上車 · GC8' && bd.modes.join('>') === 'in>seat>off' && inCar.drv && !inCar.paused && inCar.at < 0.01 && inCar.hidden && !inCar.wk && inCar.dv && inCar.voice && inCar.cur === 'gc8' && !inCar.shadow && inCar.dshadow, '上車: walks to the door, sits, character hidden, GC8 drives from where it was parked (engine on, drive HUD, one shadow)');
+check(bd.pressed === '上車 · GC8' && bd.modes.join('>') === 'in>seat>off' && inCar.drv && !inCar.paused && inCar.at < 0.01 && inCar.hidden && !inCar.wk && inCar.dv && !inCar.voice && inCar.cur === 'gc8' && !inCar.shadow && inCar.dshadow, '上車: walks to the door, sits, character hidden, GC8 drives from where it was parked (drive HUD, one shadow; engine still off)');
+const eng1 = await p.evaluate(() => window.__H.start()), [lo1, la1] = inCar.eng.lampsOff.split('/').map(Number);
+check(!inCar.eng.engine && /發動/.test(inCar.eng.gas) && !inCar.eng.off && lo1 === la1 && la1 > 0 && eng1.engine && eng1.voice && eng1.gas === '油門' && eng1.off && eng1.lampsOff.startsWith('0/'), `第 98 批 上車引擎是關著的（「${inCar.eng.gas}」、沒有「熄火」、燈關著 ${inCar.eng.lampsOff} ${inCar.eng.miss.join(' ')}）；按「發動」：引擎聲、「油門」、「熄火」出來、燈開了（關著的 ${eng1.lampsOff}）`);
 check(inCar.act === '開鐵捲門' && inCar.act2 === '下車', `in the car with the door closed BOTH buttons show: big 「${inCar.act}」 and the separate 「${inCar.act2}」`);
 // Nick 2026-10-14「第一人稱方向盤要轉」：駕駛座的方向盤跟著 steer 轉（右轉＝從駕駛看順時針，打到底 90 度）；轉向柱不轉
 const swh = await p.evaluate(() => { const D = window.__D(), c = D.tripS?.cabin, g = c?.getObjectByName('cabin-wheel'), H = window.__H; if (!g) return { g: false };
@@ -697,10 +703,12 @@ const out1 = await p.evaluate(() => {
   const D = window.__D(), H = window.__H; D.drv.teleport(D.VIL.places.garage.spawn); window.__dstep(3); window.__drv0 = D.drv;
   const pressed = H.press2(); H.step(2); const m1 = D.walker.mode; H.step(40);
   const t = D.walker.telemetry(), q = H.gl(t.x, t.z), c = D.tripS.car, sp = D.VIL.places.garage.spawn;
-  return { pressed, m1, mode: t.mode, local: [+q.x.toFixed(2), +q.z.toFixed(2)], paused: D.drv.telemetry().paused, car: Math.hypot(c.position.x - sp.x, c.position.z - sp.z), voice: !!window.__D().dvoice, dshadow: !!D.TR.scene.getObjectByName('drive-shadow')?.visible, dv: H.visible('#stage .dv'), wk: H.visible('#stage .wk') };
+  const e1 = H.engS(); for (let i = 0; i < 25; i++) H.step(1); D.walker.teleport(H.gw(5, -9, 0)); H.step(10); const far = H.engS(); D.walker.teleport({ x: t.x, z: t.z, heading: t.heading }); H.step(10);
+  return { pressed, m1, mode: t.mode, local: [+q.x.toFixed(2), +q.z.toFixed(2)], paused: D.drv.telemetry().paused, car: Math.hypot(c.position.x - sp.x, c.position.z - sp.z), voice: !!window.__D().dvoice, dshadow: !!D.TR.scene.getObjectByName('drive-shadow')?.visible, dv: H.visible('#stage .dv'), wk: H.visible('#stage .wk'), e1, far };
 });
 console.log('  下車:', JSON.stringify(out1));
-check(out1.pressed === '下車' && out1.m1 === 'out' && out1.mode === 'walk' && out1.paused && out1.car < 1e-6 && !out1.voice && out1.dshadow && !out1.dv && out1.wk && out1.local[1] < -1.0, '下車 → steps out on the driver side (left), engine off, the car stays where it stopped (with its shadow), walking HUD back');
+check(out1.pressed === '下車' && out1.m1 === 'out' && out1.mode === 'walk' && out1.paused && out1.car < 1e-6 && out1.dshadow && !out1.dv && out1.wk && out1.local[1] < -1.0, '下車 → steps out on the driver side (left), the car stays where it stopped (with its shadow), walking HUD back');
+check(out1.voice && out1.e1.engine && out1.e1.lampsOff.startsWith('0/') && out1.e1.gain > 0.5 && out1.far.voice && out1.far.gain < out1.e1.gain - 0.2, `第 98 批 下車：車子照樣發動著（引擎聲、燈亮著）；走遠一點引擎聲變小（${out1.e1.gain} → ${out1.far.gain}）`);
 cm = await carsMatch();
 check(cm.keys.join() === 'gc8(parked)' && !cm.bad.length, `the car you got out of is boardable where it stands (${cm.keys.join(', ')}${cm.bad.length ? ' — ' + cm.bad.join('; ') : ''})`);
 await drawAndShot('5-got-out');
@@ -848,7 +856,7 @@ const again = await p.evaluate(() => {
   return { ok: r.ok, act, pressed, modes: b.modes, same: D.drv === window.__drv0, paused: t.paused, at: Math.hypot(t.x - sp.x, t.z - sp.z), voice: !!window.__D().dvoice?.alive, hidden: D.walker.telemetry().hidden, act2: H.act2(), act1: H.actText() };
 });
 console.log('  上車 again:', JSON.stringify(again));
-check(again.ok && again.act === '上車 · GC8' && again.modes.join('>') === 'in>seat>off' && again.same && !again.paused && again.at < 1e-6 && again.voice && again.hidden && again.act2 === '下車' && again.act1 == null, 'walked back to GC8 and got in: the same car carries on from where it was parked (engine back on); door open → only 下車 shows');
+check(again.ok && again.act === '上車 · GC8' && again.modes.join('>') === 'in>seat>off' && again.same && !again.paused && again.at < 1e-6 && again.voice && again.hidden && again.act2 === '下車' && again.act1 == null, 'walked back to GC8 and got in: the same car carries on from where it was parked (engine still running); door open → only 下車 shows');
 // 開著的時候沒有「下車」，停住才有
 const mv = await p.evaluate(() => {
   const D = window.__D(), H = window.__H, d = D.drv; d.setInput({ throttle: 0.5, brake: 0, steer: 0 }); window.__dstep(45);
@@ -979,7 +987,7 @@ di = await driveInfo();
 const sw = await p.evaluate(() => { const D = window.__D(), H = window.__H, ex = D.VIL.places.dealer.exit, t = D.drv.telemetry(), b1 = H.gw(D.TOWER_BAYS[1].x, D.TOWER_BAYS[1].z), g = D.tripPose.gc8;
   return { money: window.__G().money, owned: [...window.__G().owned], atExit: Math.hypot(t.x - ex.x, t.z - ex.z) < 0.05, tripIsS: D.tripS === window.__S(), built: Object.keys(D.built), gc8Bay: g.tw === 1 ? Math.hypot(g.x - b1.x, g.z - b1.z) : 99, tripFull: D.tripFull, on: D.LODS.gc8.lod.car.parent?.name }; });
 console.log('  bought:', JSON.stringify(sw), JSON.stringify(di), '| lods', JSON.stringify(await lodAt()));
-check(sw.money === m0 - 200 && sw.owned.includes('supra') && sw.atExit && sw.tripIsS && di.cur === 'supra' && di.dest === 'garage' && di.voice && !di.paused && sw.tripFull === 'supra', 'bought SUPRA: new car waits at the dealer exit, destination home');
+check(sw.money === m0 - 200 && sw.owned.includes('supra') && sw.atExit && sw.tripIsS && di.cur === 'supra' && di.dest === 'garage' && !di.voice && !di.paused && sw.tripFull === 'supra', 'bought SUPRA: new car waits at the dealer exit, destination home (engine off until 發動)');
 const la4 = await lodAt();
 check(la4.gc8 === 'town-garage' && la4.yaris === 'town-garage' && sw.gc8Bay < 1e-6 && sw.on === 'towerBay2' && !String(la4.supra).startsWith('town'), 'old GC8 went to the first free spot in the tower (2 樓 2 號, next to YARIS); SUPRA left the showroom');
 await p.waitForFunction(() => /車行幫你送回車庫了/.test(document.querySelector('#stage .dv-toast')?.textContent || ''), null, { timeout: 15000 });
@@ -1152,12 +1160,12 @@ const yl = await p.evaluate(() => {
     supraOn: L.parent?.name, twr0: D.TWR[0], oldHidden: !D.built.supra || !D.built.supra.car.visible || D.built.supra.car.parent !== D.TR.scene, toast: H.toast() };
 });
 console.log('  switched:', JSON.stringify(yl), '| lods', JSON.stringify(await lodAt()));
-check(sy.pressed === '上車 · YARIS' && sy.modes.join('>') === 'in>seat>off' && /YARIS 發動中/.test(sy.toast) && yl.cur === 'yaris' && yl.S && yl.full && yl.atBay < 0.01 && Math.abs(yl.y - 4.5) < 0.02 && !yl.paused && yl.voice && yl.act2 === '下車' && !yl.yarisLod && yl.twr0 === null,
-  'switched cars on foot upstairs: YARIS (light-weight in 2 樓 1 號) became the full car on the 2F floor; its spot is free now; engine on; 下車 available');
+check(sy.pressed === '上車 · YARIS' && sy.modes.join('>') === 'in>seat>off' && /YARIS 準備中/.test(sy.toast) && yl.cur === 'yaris' && yl.S && yl.full && yl.atBay < 0.01 && Math.abs(yl.y - 4.5) < 0.02 && !yl.paused && !yl.voice && yl.act2 === '下車' && !yl.yarisLod && yl.twr0 === null,
+  'switched cars on foot upstairs: YARIS (light-weight in 2 樓 1 號) became the full car on the 2F floor; its spot is free now; engine off (press 發動); 下車 available');
 check(yl.supraOn?.startsWith('towerBay') && yl.oldHidden && /倒車回到電梯上，按 1F/.test(yl.toast), `SUPRA stays in its 3F spot (light-weight); a hint says how to get down: 「${yl.toast}」`);
 // 倒車回到電梯上 → 1F：電梯下去，自己轉到車頭朝鐵捲門
 const dn7 = await p.evaluate(() => {
-  const D = window.__D(), H = window.__H, d = D.drv; let n = 0;
+  const D = window.__D(), H = window.__H, d = D.drv; let n = 0; H.start(); // 第 98 批：上車引擎是關著的：先發動才能倒車
   for (; n < 900; n++) { const t = d.telemetry(), q = H.gl(t.x, t.z), r = Math.hypot(q.x, q.z); d.setInput(n < 30 ? { brake: 1 } : r > 1.0 ? { brake: 0.5 } : { throttle: 1 }); window.__dstep(1); if (n > 40 && r <= 1.0 && Math.abs(t.v) < 0.05) break; }
   d.setInput(null); window.__dstep(20); const panel = H.elPanel(), h0 = D.drv.telemetry().heading, left = H.elClick('◀'); H.elWait(); const dh = +H.wrapA(window.__D().drv.telemetry().heading - h0).toFixed(4); // 先往左轉一格：下樓的時候要自己轉回來
   const pressed = H.elClick('1F'), w = H.elWait(), D2 = window.__D(), t = D2.drv.telemetry(), q = H.gl(t.x, t.z), c = D2.tripS.car; c.updateMatrixWorld(true);

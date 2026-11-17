@@ -16,11 +16,11 @@ function fakeCar() {
   for (const [x, tr] of [[W.xf, W.trackF], [W.xr, W.trackR]]) for (const s of [-1, 1]) { const hub = new THREE.Group(); hub.position.set(x, W.R, s * tr); const wh = new THREE.Group(); hub.add(wh); car.add(hub); wheels.push(wh); }
   return { car, body, wheels, spec: { wheels: W, interior: { wheelZ: 0.37 } } };
 }
-const dt = 1 / 60, ev = { shifts: [], engine: [], grind: [], blip: [], ignite: 0, crank: [] };
+const dt = 1 / 60, ev = { shifts: [], engine: [], grind: [], blip: [], nb: 0, crank: [] };
 function rig(perf = PERF) {
   const S = fakeCar(), scene = new THREE.Scene(); scene.add(S.car);
   const d = createDrive({ car: S, scene, camera: null, perf, world: { surfaceAt: () => 0, colliders: [], places: {} }, keyboard: false,
-    onShift: (g) => ev.shifts.push(g), onEngine: (on) => ev.engine.push(on), onGrind: (w) => ev.grind.push(w), onBlip: (g) => ev.blip.push(g), onIgnite: () => ev.ignite++, onCrank: (sec) => ev.crank.push(sec) });
+    onShift: (g) => ev.shifts.push(g), onEngine: (on) => ev.engine.push(on), onGrind: (w) => ev.grind.push(w), onBlip: (g) => ev.blip.push(g), onNeedBrake: () => ev.nb++, onCrank: (sec) => ev.crank.push(sec) });
   d.teleport({ x: 0, z: 0, heading: 0 });
   return d;
 }
@@ -38,8 +38,10 @@ d = rig(); d.setGearbox('mt'); ev.shifts.length = 0;
 t = run(d, 3, { throttle: 1 });
 check(d.gearbox === 'mt' && t.mt && t.mgear === 0 && t.kmh < 0.1 && t.rpm > 0.85 && !t.stalled, `手排一開始是空檔 N：踩油門車不動（${r2(t.kmh)} km/h）、引擎空催到 ${r2(t.rpm)}`);
 // ---- 第 74 批（Nick「空檔踩的時候轉速表不要升那麼快」）：空檔油門到底，轉速慢慢上去（0.25 秒還不到 0.6、1 秒過 0.85）；放掉也慢慢掉 ----
-{ const dN = rig(); dN.setGearbox('mt'); const a = run(dN, 0.25, { throttle: 1 }).rpm, b = run(dN, 0.75, { throttle: 1 }).rpm, c = run(dN, 0.2, { throttle: 0 }).rpm, e = run(dN, 1.5, { throttle: 0 }).rpm;
-  check(a > 0.3 && a < 0.6 && b > 0.85 && c > 0.4 && c < 0.8 && e < 0.16, `空檔油門到底：0.25 秒 ${r2(a)}、1 秒 ${r2(b)}（以前 0.25 秒就到頂）；放掉 0.2 秒 ${r2(c)}、1.7 秒回怠速 ${r2(e)}`); }
+{ const dN = rig(); dN.setGearbox('mt'); const a = run(dN, 0.25, { throttle: 1 }).rpm, b = run(dN, 0.75, { throttle: 1 }).rpm, c = run(dN, 0.2, { throttle: 0 }).rpm, c4 = run(dN, 0.2, { throttle: 0 }).rpm, e = run(dN, 1.3, { throttle: 0 }).rpm;
+  check(a > 0.3 && a < 0.6 && b > 0.85 && c > 0.4 && c < 0.8 && e < 0.16, `空檔油門到底：0.25 秒 ${r2(a)}、1 秒 ${r2(b)}（以前 0.25 秒就到頂）；放掉 0.2 秒 ${r2(c)}、1.7 秒回怠速 ${r2(e)}`);
+  // 第 98 批（Nick「N檔踩油門放開轉速稍微掉慢一點」）：放掉 0.4 秒還在 0.4 以上（以前約 0.3）
+  check(c4 > 0.4 && c4 < 0.6, `第 98 批 空檔放油門掉慢一點：放掉 0.4 秒 ${r2(c4)}（以前約 0.3），1.7 秒照樣回怠速`); }
 // ---- 沒按離合器排不進去 ----
 d.shift(1); t = run(d, 0.5, { throttle: 0 });
 check(t.mgear === 0 && t.grind === 1 && ev.grind.join() === '1', `沒按離合器按 ▲：咔咔（grind ${t.grind}）、還是 N`);
@@ -120,16 +122,30 @@ check(g0 >= 3 && t2.mgear === g0 - 1 && rC < r3 - 0.1 && r1 > r3 + 0.1 && r1 > r
   const L = []; for (let i = 0; i < 60; i++) L.push(run(dB, 1 / 60, { throttle: 0 }).load);
   let up = 0, dn = 0; for (let i = 1; i < L.length; i++) { const d = L[i] - L[i - 1]; if (d > up) up = d; if (-d > dn) dn = -d; }
   check(up < 0.5 && dn < 0.06 && Math.max(...L) > 0.85 && L[L.length - 1] === 0, `降檔補油不頓：load 每一格最多 +${r2(up)}、退的時候每一格最多 −${dn.toFixed(3)}（以前最後一下 −0.6），最大 ${r2(Math.max(...L))}、1 秒後 ${L[L.length - 1]}`); }
-// ---- 第 89 批（Nick「車子發動要有點火」）：ignite()：起動馬達轉 0.85 秒（轉速表 0.05～0.1 抖、沒有 load）→ onIgnite、轉速衝上去再回到怠速；踩油門馬上發動 ----
-{ const dI = rig(); ev.ignite = 0; dI.ignite(0.85); const a = run(dI, 0.4, {}), rs = []; for (let i = 0; i < 12; i++) rs.push(run(dI, 1 / 60, {}).rpm);
-  const n0 = ev.ignite, b = run(dI, 0.5, {}), peak = Math.max(b.rpm, ...[0, 0, 0].map(() => run(dI, 0.05, {}).rpm)), c = run(dI, 2, {});
-  check(a.igniting && a.load === 0 && Math.min(...rs) > 0.04 && Math.max(...rs) < 0.1 && Math.max(...rs) - Math.min(...rs) > 0.005 && n0 === 0 && !b.igniting && ev.ignite === 1 && peak > 0.25 && Math.abs(c.rpm - 0.13) < 0.03,
-    `點火：起動馬達轉的時候轉速表 ${r2(Math.min(...rs))}～${r2(Math.max(...rs))} 抖、沒有 load；0.85 秒發動（onIgnite ${ev.ignite} 次）、轉速衝到 ${r2(peak)}、再回到怠速 ${r2(c.rpm)}`);
-  const dJ = rig(); ev.ignite = 0; dJ.ignite(0.85); run(dJ, 0.2, {}); const j = run(dJ, 2 / 60, { throttle: 1 });
-  check(!j.igniting && ev.ignite === 1, `點火的時候踩油門：馬上發動（不用等，onIgnite ${ev.ignite}）`);
+// ---- 第 89 批（Nick「車子發動要有點火」）＋第 98 批（Nick 2026-11-17「要可自己發動熄火…AV12也是只是改成要踩著剎車才可以發動AV12發動時間大約1秒」）：
+//   setEngine(false)＝引擎關著（自排也是）：轉速 0、油門按下去那一下＝起動馬達轉 0.8 秒（onCrank；轉速表 0.05～0.1 抖、沒有 load、車不動）→ onEngine(true)、轉速衝上去再回到怠速；
+//   開著按「熄火」（stopEngine）：onEngine(false)、轉速 0、車照樣滑、油門按著不推也不會自己發動；放開再按才又發動；引擎關著按著煞車不會換倒車；
+//   AV12（startBrk）：沒踩煞車按＝不轉（onNeedBrake）、踩著＝1 秒、轉速衝到 3000 轉左右、引擎聲大聲；發動以後還按著煞車不會換倒車（放開再按才會）
+{ const dI = rig(); dI.setEngine(false); ev.crank.length = 0; ev.engine.length = 0;
+  const off = run(dI, 0.5, { throttle: 0 }), a = run(dI, 0.4, { throttle: 1 }), rs = []; for (let i = 0; i < 12; i++) rs.push(run(dI, 1 / 60, { throttle: 1 }).rpm);
+  const n0 = ev.engine.length, b = run(dI, 0.3, { throttle: 0 }), peak = Math.max(b.rpm, ...[0, 0, 0, 0].map(() => run(dI, 0.05, {}).rpm)), c = run(dI, 2, {});
+  check(off.stalled && !off.engine && off.rpm < 0.01 && a.cranking && a.kmh < 0.1 && a.load === 0 && Math.min(...rs) > 0.04 && Math.max(...rs) < 0.1 && Math.max(...rs) - Math.min(...rs) > 0.005 && n0 === 0 && ev.crank.join() === '0.8' && !b.stalled && ev.engine.join() === 'true' && peak > 0.25 && Math.abs(c.rpm - 0.13) < 0.03,
+    `第 98 批 引擎關著（自排）：轉速 ${r2(off.rpm)}；按「發動」：起動馬達轉的時候車不動（${r2(a.kmh)} km/h）、轉速表 ${r2(Math.min(...rs))}～${r2(Math.max(...rs))} 抖、沒有 load、onCrank(${ev.crank.join()})；發動了（onEngine ${ev.engine.join()}）、轉速衝到 ${r2(peak)}、再回到怠速 ${r2(c.rpm)}`);
+  const dS = rig(); run(dS, 3, { throttle: 1 }); const v0 = dS.telemetry().kmh; ev.engine.length = 0; ev.crank.length = 0; const ok = dS.stopEngine();
+  const s1 = run(dS, 1, { throttle: 1 }), s2 = run(dS, 1, { throttle: 1 }); run(dS, 0.2, { throttle: 0 }); const s3 = run(dS, 0.2, { throttle: 1 });
+  check(ok && ev.engine.join() === 'false' && s1.stalled && s1.rpm < 0.05 && s1.kmh > 10 && s1.kmh <= v0 + 0.5 && s2.kmh <= s1.kmh && s2.kmh > 10 && !s2.cranking && s3.cranking && ev.crank.length === 1,
+    `第 98 批 開著按「熄火」：onEngine(${ev.engine.join()})、轉速 ${r2(s1.rpm)}、車照樣滑（${Math.round(v0)} → ${Math.round(s1.kmh)} → ${Math.round(s2.kmh)} km/h，油門按著不推、不會自己發動）；放開再按：起動馬達轉`);
+  const dR = rig(); dR.setEngine(false); const r1 = run(dR, 1.2, { brake: 1 });
+  check(r1.stalled && !r1.reversing, `第 98 批 引擎關著停住按著煞車 1.2 秒：沒有換倒車（還是 ${r1.reversing ? 'R' : '前進'}）`);
+  const PA = { ...PERF, crank: 1, startBrk: 1, flare: 0.26, flareT: 1.4, flareLoad: 0.9 }, dA = rig(PA); dA.setEngine(false); ev.crank.length = 0; ev.engine.length = 0; ev.nb = 0; run(dA, 0.2, {});
+  const x1 = run(dA, 0.5, { throttle: 1 }); run(dA, 0.2, {}); const x2 = run(dA, 0.5, { throttle: 1, brake: 1 });
+  const L = []; let pk = 0; for (let i = 0; i < 90; i++) { const q = run(dA, 1 / 60, { brake: 1 }); L.push(q.load); pk = Math.max(pk, q.rpm); }
+  const x3 = run(dA, 1.5, { brake: 1 }); run(dA, 0.3, {}); const x4 = run(dA, 1, { brake: 1 });
+  check(x1.stalled && !x1.cranking && ev.nb === 1 && x2.cranking && ev.crank.join() === '1' && !x3.stalled && ev.engine.join() === 'true' && pk > 0.3 && Math.max(...L) > 0.6 && !x3.reversing && x4.reversing,
+    `第 98 批 AV12：沒踩煞車按發動＝不轉（onNeedBrake ${ev.nb}）；踩著煞車＝起動馬達 ${ev.crank.join()} 秒、發動那一下轉速衝到 ${r2(pk)}（約 ${Math.round(pk * 8500)} 轉）、引擎聲 load ${r2(Math.max(...L))}；發動以後還按著煞車 1.5 秒沒有換倒車、放開再按著才換（${x4.reversing ? 'R' : '前進'}）`);
   const dK = rig(); dK.setGearbox('mt'); run(dK, 0.2, { clutch: 1 }); dK.shift(1); dK.shift(1); run(dK, 0.2, { clutch: 1 }); ev.crank.length = 0; ev.engine.length = 0;
-  const k1 = run(dK, 0.3, { clutch: 0 }); run(dK, 0.1, { throttle: 0.5 }); const k2 = run(dK, 0.7, {}), kp = Math.max(k2.rpm, run(dK, 0.1, {}).rpm);
-  check(k1.stalled && ev.crank.join() === '0.6' && ev.engine.join() === 'false,true' && kp > 0.25, `手排熄火以後按油門：onCrank(${ev.crank.join()})（起動馬達的聲音）、發動那一下轉速衝到 ${r2(kp)}`); }
+  const k1 = run(dK, 0.3, { clutch: 0 }); run(dK, 0.1, { throttle: 0.5 }); const k2 = run(dK, 0.9, {}), kp = Math.max(k2.rpm, run(dK, 0.1, {}).rpm);
+  check(k1.stalled && ev.crank.join() === '0.8' && ev.engine.join() === 'false,true' && kp > 0.25, `手排熄火以後按油門：onCrank(${ev.crank.join()})（起動馬達的聲音）、發動那一下轉速衝到 ${r2(kp)}`); }
 // 第 96 批（Nick 2026-11-16「改成自排車也能換手排只是不會突然熄火」）：本來是自排的車用手排（setGearbox('mt', { noStall: true })）：
 //   放開離合器沒給油不熄火（停在怠速、車不動）、停著排 5 檔放開也不熄火、給油開走；同一台換回一般的手排（沒有 noStall）就照樣會熄火
 { const dN = rig(); dN.setGearbox('mt', { noStall: true }); ev.engine.length = 0;
@@ -212,6 +228,8 @@ await p.addInitScript(() => { // 走路的小幫手（drift-test 的）
   const vis = (e) => !!e && !e.hidden && !e.closest('[hidden]') && e.getClientRects().length > 0;
   const act = () => [...document.querySelectorAll('#stage .wk-act, #stage .dv-act')].find(vis);
   H.press = () => { const e = act(); if (!e) return null; const s = e.querySelector('span').textContent; e.click(); return s; };
+  window.engS = () => { const D = window.__D(), t = D.drv?.telemetry(), q = (s) => document.querySelector(s), vis = (e) => !!e && !e.hidden && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && e.getClientRects().length > 0;
+    return t ? { engine: t.engine, stalled: t.stalled, cranking: t.cranking, rpm: +t.rpm.toFixed(2), voice: !!D.dvoice, gas: q('#stage .dv-gas').textContent, start: q('#stage .dv-gas').classList.contains('start'), off: vis(q('#stage .dv-off')), gear: q('#stage .dv-spd em').textContent, mth: q('#stage .dv-mth').classList.contains('show') ? q('#stage .dv-mth').textContent : '' } : null; };
   H.board = (maxS = 8) => { const w = W(), modes = []; for (let n = 0; n < maxS * 60; n++) { step(1); modes.push(w.mode); if (w.mode === 'off') break; } return [...new Set(modes)]; };
 });
 async function getIn() {
@@ -220,7 +238,13 @@ async function getIn() {
   await p.evaluate(() => { window.scrollTo(0, 0); document.getElementById('driveOut').click(); });
   await p.waitForFunction(() => window.__D().on && window.__D().walker && window.__D().walker.mode === 'walk', null, { timeout: 300000 });
   await p.evaluate(() => { window.__hold = true; window.__noDraw = true; });
-  return p.evaluate(() => { const D = window.__D(), H = window.__H; D.walker.teleport(H.gw(-4.5, -4, -1.05)); window.__wstep(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); const pressed = H.press(), modes = H.board(), ig = []; for (const n of [1, 15, 45]) { window.__wstep(n); const D1 = window.__D(), t1 = D1.drv?.telemetry(); ig.push([!!t1?.igniting, +(t1?.rpm ?? 0).toFixed(2), D1.dvoice ? D1.dvoice.gain : null]); } const D2 = window.__D(); return { walk: r?.ok, pressed, modes, ig, drv: !!D2.drv, cur: D2.cur, gearK: D2.gearK, fs: document.body.classList.contains('fs') }; });
+  return p.evaluate(() => { const D = window.__D(), H = window.__H; D.walker.teleport(H.gw(-4.5, -4, -1.05)); window.__wstep(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); const pressed = H.press(), modes = H.board(); window.__wstep(20); const D2 = window.__D(); return { walk: r?.ok, pressed, modes, off: engS(), drv: !!D2.drv, cur: D2.cur, gearK: D2.gearK, fs: document.body.classList.contains('fs') }; });
+}
+// 第 98 批：上車引擎是關著的；按一下「發動」（點一下就好）：起動馬達轉 0.8 秒、發動
+async function startEng() {
+  const g = await center('#stage .dv-gas'), T = { ...g, id: 7 };
+  await touch('touchStart', [T]); await stepN(3); const crank = await p.evaluate(() => engS()); await touch('touchEnd', [T]);
+  await stepN(70); return { crank, run: await p.evaluate(() => engS()) };
 }
 const ui = () => p.evaluate(() => {
   const q = (s) => document.querySelector(s), vis = (e) => !!e && !e.hidden && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && e.getClientRects().length > 0, D = window.__D(), t = D.drv.telemetry();
@@ -229,9 +253,10 @@ const ui = () => p.evaluate(() => {
     shf: vis(shf), shfOn: shf.classList.contains('on'), slots: slots.map((x) => x.t).join(''), cur: by('cur'), hot: by('hot'), lim: by('lim'), stallSlot: by('stall'), gear: q('#stage .dv-spd em').textContent, gearCls: q('#stage .dv-spd em').className, brk: q('#stage .dv-brk').textContent,
     mth: q('#stage .dv-mth').classList.contains('show') ? q('#stage .dv-mth').textContent : '', mthWarn: q('#stage .dv-mth').classList.contains('warn'), mthSize: getComputedStyle(q('#stage .dv-mth')).fontSize,
     mgear: t.mgear, ngears: t.ngears, kmh: +t.kmh.toFixed(1), v: +t.v.toFixed(2), rpm: +t.rpm.toFixed(2), stalled: t.stalled, cranking: t.cranking, voice: !!D.dvoice, more: document.body.classList.contains('moreopen'), mtgear: document.body.classList.contains('mtgear'),
+    gas: q('#stage .dv-gas').textContent, offB: vis(q('#stage .dv-off')), engine: t.engine,
     toast: q('#stage .dv-toast').textContent, toastSize: getComputedStyle(q('#stage .dv-toast')).fontSize, toastTop: Math.round(q('#stage .dv-toast').getBoundingClientRect().top) };
 });
-const HUD_SEL = ['.elpanel', '.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '.dv-shf', '#dests', '#destTog', '#moreTog', '#sizeTog', '#tiltTog', '#lookTog', '#musTog', '#gearTog', '#dSndBtn', '#fsBtn'];
+const HUD_SEL = ['.elpanel', '.dv-chip', '.dv-act', '.dv-act2', '.dv-map', '.dv-cam', '.dv-spd', '.dv-steer', '.dv-brk', '.dv-gas', '.dv-hb', '.dv-shf', '.dv-off', '#dests', '#destTog', '#moreTog', '#sizeTog', '#tiltTog', '#lookTog', '#musTog', '#gearTog', '#dSndBtn', '#fsBtn'];
 const clash = () => p.evaluate((S) => {
   const R = S.map((s) => [s, document.querySelector(s)]).filter(([, e]) => e && !e.closest('[hidden]') && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden' && e.getClientRects().length).map(([s, e]) => [s, e.getBoundingClientRect()]), out = [];
   for (const [s, r] of R) if (r.left < 4 || r.top < 4 || r.right > innerWidth - 4 || r.bottom > innerHeight - 4) out.push(`${s} off-screen ${[r.left, r.top, r.right, r.bottom].map(Math.round)}`);
@@ -255,7 +280,9 @@ async function swipe(dir, { others = [], px = 40, release = true } = {}) {
 let bd = await getIn();
 console.log('  上車:', JSON.stringify(bd), el());
 check(bd.drv && bd.cur === 'gc8' && /上車 · GC8/.test(bd.pressed) && bd.fs, `walked to the GC8 and got in, full screen (${bd.pressed})`);
-check(bd.ig[0][0] && bd.ig[0][2] === 0 && bd.ig[1][0] && bd.ig[1][1] < 0.1 && !bd.ig[2][0] && bd.ig[2][2] === 1 && bd.ig[2][1] > 0.15, `第 89 批 點火：上車就轉起動馬達（引擎聲 0、轉速表 ${bd.ig[1][1]}），0.85 秒發動（引擎聲 1、轉速衝到 ${bd.ig[2][1]}）`);
+check(bd.off && !bd.off.engine && bd.off.stalled && !bd.off.cranking && bd.off.rpm < 0.01 && !bd.off.voice && /發動/.test(bd.off.gas) && bd.off.start && !bd.off.off && bd.off.gear === '熄', `第 98 批 上車引擎是關著的：轉速 ${bd.off.rpm}、沒有引擎聲、油門那顆寫「${bd.off.gas}」、沒有「熄火」、轉速表「${bd.off.gear}」`);
+let se = await startEng(); console.log('  發動:', JSON.stringify(se));
+check(se.crank.cranking && /發動中/.test(se.crank.gas) && !se.crank.voice && se.run.engine && !se.run.cranking && se.run.voice && se.run.gas === '油門' && se.run.off && se.run.rpm > 0.1, `第 98 批 點一下「發動」：起動馬達轉（「${se.crank.gas}」、還沒有引擎聲），0.8 秒發動了：引擎聲、「油門」回來了、「熄火」出現（轉速 ${se.run.rpm}）`);
 // 測試場：村子西北邊的空地（沒有碰撞物），路面照柏油算；路上的車先停
 await p.evaluate(() => { const D = window.__D(), V = D.VIL, f0 = V.surfaceAt; V.surfaceAt = (x, z) => (Math.abs(x + 660) < 45 && Math.abs(z - 285) < 45 ? 0 : f0(x, z)); D.drv.setInput(null); D.drv.teleport({ x: -698, z: 305, heading: 0 }); window.__dstep(5); });
 let u = await ui(); console.log('  AT:', JSON.stringify(u));
@@ -338,17 +365,23 @@ check(stillR === -1 && u.mgear === 1 && u.stalled, `braking to a stop in R stays
 // 換回自排：換檔桿收掉、照舊（熄火也清掉）
 await p.evaluate(() => document.getElementById('moreTog').click()); await p.waitForTimeout(100); await p.evaluate(() => document.getElementById('gearTog').click()); await stepN(3);
 await p.evaluate(() => { if (document.body.classList.contains('moreopen')) document.getElementById('moreTog').click(); }); await p.waitForTimeout(100); u = await ui();
-check(u.gearbox === 'at' && u.key === 'at' && !u.mt && !u.shf && !u.mtgear && /^[1-6]$/.test(u.gear) && u.togText === 'AT', `tapping 「MT」 again → AT: shifter gone, tach back to the gear number`);
+const atOff = { gear: u.gear, gas: u.gas, stalled: u.stalled, offB: u.offB }; se = await startEng(); u = await ui();
+check(u.gearbox === 'at' && u.key === 'at' && !u.mt && !u.shf && !u.mtgear && u.togText === 'AT' && atOff.stalled && atOff.gear === '熄' && /發動/.test(atOff.gas) && !atOff.offB, `tapping 「MT」 again → AT: shifter gone; the stalled engine stays off (tach 「${atOff.gear}」, 「${atOff.gas}」)`);
+check(se.run.engine && /^[1-6]$/.test(u.gear) && u.gas === '油門' && u.offB && u.voice, `第 98 批 自排按「發動」：發動了、轉速表回到檔位 ${u.gear}、「熄火」在左邊`);
+// 第 98 批：按「熄火」：引擎停、沒有引擎聲、油門那顆變「發動」；再發動
+const offC = await center('#stage .dv-off'); await touch('touchStart', [{ ...offC, id: 8 }]); await touch('touchEnd', [{ ...offC, id: 8 }]); await p.waitForTimeout(150); await stepN(30); u = await ui(); const offd = { engine: u.engine, voice: u.voice, gas: u.gas, offB: u.offB, rpm: u.rpm };
+se = await startEng(); const xOn = (await ui()).engine; await p.keyboard.press('KeyX'); await stepN(5); const xOff = (await ui()).engine; se = await startEng(); u = await ui();
+check(!offd.engine && !offd.voice && /發動/.test(offd.gas) && !offd.offB && offd.rpm < 0.05 && xOn && !xOff && u.engine && u.voice, `第 98 批 按「熄火」：引擎停（轉速 ${offd.rpm}）、沒有引擎聲、油門那顆變「${offd.gas}」、「熄火」收起來；鍵盤 X 也是熄火；再按「發動」又發動`);
 // 重新載入：記得手排
 await p.evaluate(() => { localStorage.setItem('carid.gear', 'mt'); });
-let re = await getIn(); u = await ui();
+let re = await getIn(); await startEng(); u = await ui();
 check(re.drv && re.gearK === 'mt' && u.gearbox === 'mt' && u.mt && u.shf && u.gear === 'N', `reload with carid.gear = mt: the car starts in manual (N, shifter shown)`);
 // 第 96 批（Nick 2026-11-16「改成自排車也能換手排只是不會突然熄火」）：自排車（918：7 速雙離合器）也有 AT／MT；carid.gear 是 mt＝手排（7 檔＋N、R），
 //   放開離合器沒給油不會熄火；10 檔的 P8 換檔桿格子矮一點、不壓到別的按鈕；腳踏車沒有 AT／MT
 const setCur = (k) => p.evaluate((k) => { const t = JSON.parse(localStorage.getItem('carid.tune')); t.cur = k; t.owned = ['gc8', 'p918', 'p8', 'mtb']; localStorage.setItem('carid.tune', JSON.stringify(t)); }, k);
 const fold = () => p.evaluate(() => { if (document.body.classList.contains('moreopen')) document.getElementById('moreTog').click(); }).then(() => p.waitForTimeout(100));
 await setCur('p918');
-re = await getIn(); await p.evaluate(() => document.getElementById('moreTog').click()); await p.waitForTimeout(100); u = await ui(); console.log('  918:', JSON.stringify(bd = re), JSON.stringify(u));
+re = await getIn(); await startEng(); await p.evaluate(() => document.getElementById('moreTog').click()); await p.waitForTimeout(100); u = await ui(); console.log('  918:', JSON.stringify(bd = re), JSON.stringify(u));
 const ns918 = await p.evaluate(() => window.__D().drv.telemetry().noStall);
 check(re.drv && re.cur === 'p918' && u.more && u.tog && u.togText === 'MT' && u.gearbox === 'mt' && u.mt && u.ngears === 7 && ns918 === true, `an automatic car (918, 7-speed) has the AT／MT button now; carid.gear = mt → manual, no-stall mode`);
 await fold();
@@ -365,8 +398,9 @@ for (let i = 0; i < 3; i++) await swipe(-1); await touch('touchStart', [TG]); aw
 check(u.mgear === 1 && !u.stalled && u.kmh > 15, `918: back down to 1st, gas → drives off (${u.kmh} km/h)`);
 // P8 皮卡（10 速自排）：換檔桿 12 格，整條跟 6 檔的一樣高、不壓到別的按鈕
 await setCur('p8');
-re = await getIn(); await fold(); u = await ui();
+re = await getIn(); se = await startEng(); await fold(); u = await ui();
 const p8h = await p.evaluate(() => { const r = [...document.querySelectorAll('#stage .dv-shf b')].map((b) => b.getBoundingClientRect().height); return { min: Math.min(...r), shf: document.querySelector('#stage .dv-shf').getBoundingClientRect().height }; });
+check(se.run.engine && u.offB, `P8 發動了：換檔桿下面有「熄火」`);
 check(re.cur === 'p8' && u.gearbox === 'mt' && u.ngears === 10 && u.slots === '10987654321NR' && p8h.min >= 18 && p8h.shf <= 234, `P8 (10-speed automatic) in MT: 12 slots (${u.slots}), each ${p8h.min.toFixed(1)}px, the whole shifter ${Math.round(p8h.shf)}px (6-speed: 232)`);
 bad = await sweep('7-p8');
 check(!bad.length, `P8 shifter (12 slots): nothing overlapping on 6 screens (${bad.join(' | ') || 'ok'})`);
@@ -376,6 +410,7 @@ re = await getIn(); // 腳踏車短：getIn 走的那兩點走不到上車的地
 re.rode = await p.evaluate(() => { const W = window.__D().walker; let ok = !!window.__D().drv; for (let k = 0; k < 600 && !ok; k++) { ok = W.getIn(W.cars.find((c) => c.key === 'mtb')); if (!ok) window.__wstep(1); } for (let n = 0; n < 1200 && !(window.__D().drv && W.mode === 'off'); n++) window.__wstep(1); return !!window.__D().drv; });
 await p.evaluate(() => document.getElementById('moreTog').click()); await p.waitForTimeout(100); u = await ui();
 check(re.cur === 'mtb' && re.rode && u.more && !u.tog && u.gearbox === 'at' && !u.shf, `bicycle: no AT／MT button (stays AT, no shifter)`);
+check(u.gas === '油門' && !u.offB && !u.stalled, `第 98 批 腳踏車沒有引擎：上車就能騎（「${u.gas}」、沒有「熄火」）`);
 check(!errs.length, `no page errors (${errs.length})`);
 await b.close(); srv.close();
 console.log(fails.length ? `FAILED ${fails.length}: ${fails.join(' | ')}` : 'ALL CHECKS OK', el());

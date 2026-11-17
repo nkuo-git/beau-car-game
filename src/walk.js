@@ -1060,6 +1060,7 @@ function createWalker(o) {
     removeColliders: (tag) => cw.remove(tag),
     get action() { return eff ? eff.label : null; }, get action2() { return eff2 ? eff2.label : null; }, get nearCar() { return st.near ? st.near.car : null; }, get character() { return ch; }, get cars() { return recs.map((r) => r.car); }, get parked() { return parked; },
     get doors() { return doorList.map((d) => ({ ref: d.ref, ...d.zone, w: d.w })); }, get cameraMode() { return cam.mode; }, get cameraDist() { return cam.dist; }, get mode() { return st.mode; }, hud: hud && hud.root,
+    get inTarget() { if (tgt && tgt.rec) { const n = tgt.pts.length; return { car: tgt.rec.car, x: tgt.pts[n - 2], z: tgt.pts[n - 1], seat: tgt.seat }; } if (scr && (scr.kind === 'seat' || scr.kind === 'out') && scr.rec) return { car: scr.rec.car, x: scr.kind === 'out' ? scr.x0 : scr.x1, z: scr.kind === 'out' ? scr.z0 : scr.z1, seat: scr.seat || null, out: scr.kind === 'out' }; return null; }, // 第 98 批：要坐進去（走過去、坐下）／走出來的那台車和車門的位置（車門照這個打開）
     get mapLayer() { return (hud && hud.layer) || o.mapLayer || mapLayer(world); },
   };
   setCharacter(o.character);
