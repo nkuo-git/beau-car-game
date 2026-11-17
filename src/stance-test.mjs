@@ -168,6 +168,7 @@ check(out.ok && out.mode === 'off' && out.hubs.every((h) => Math.abs(h[0] - 9) <
 const riOn = await shot('5-on');
 await p.evaluate(() => { window.__hwRun = () => {
   const D = window.__D(), d = D.drv, H = D.VIL.places.highway, L = D.VIL.highway.out;
+  if (!d.telemetry().engine) { d.setInput({ throttle: 1 }); window.__dstep(3); d.setInput(null); window.__dstep(70); } // 第 98 批：上車引擎是關著的：先發動（不然第一趟多了起動馬達那 0.85 秒，兩趟比不一樣）
   d.teleport(H.spawn); window.__dstep(30);
   let k = 0, vmax = 0, air = 0; const b0 = d.telemetry().bumps, l0 = d.telemetry().lands;
   for (let i = 0; i < 60 * 15; i++) {

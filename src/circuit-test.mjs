@@ -514,9 +514,11 @@ check(bmA2.open && Math.abs(bmA3.v.x - bmA2.v.x - 60 * bmA2.v.w / bmA2.r[2]) < 2
 check(bmA4.sel === 'dealer' && /阿財車行/.test(bmA4.card) && bmA4.closed, `tapping the 車 icon picks 阿財車行 (${bmA4.card}); ✕ closes the map`);
 await p.evaluate(() => { document.querySelector('#dests [data-d="circuit"]').click(); window.__wstep(1); }); // 目的地換回賽車場（下面照舊）
 const w2 = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker; W.teleport(H.gw(-4.5, -4, -1.05)); H.step(20); const r = H.walkLocal([[-2.6, -2.6], [-0.6, -2.3]]); return { ok: r.ok, act: H.actText() }; });
-const bd2 = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(); H.step(40); const D = window.__D(); return { pressed, modes: r.modes, drv: !!D.drv, cur: D.cur, dest: D.drv?.telemetry().dest }; });
+const bd2 = await p.evaluate(() => { const H = window.__H, pressed = H.press(), r = H.board(); H.step(40); const D = window.__D(), d = D.drv, e0 = !!d?.telemetry().engine;
+  if (d) { d.setInput({ throttle: 1 }); window.__dstep(3); d.setInput(null); window.__dstep(60); } // 第 98 批：上車引擎是關著的，踩一下油門＝發動
+  return { pressed, modes: r.modes, drv: !!D.drv, cur: D.cur, dest: D.drv?.telemetry().dest, e0, engine: !!d?.telemetry().engine }; });
 console.log('  上車:', JSON.stringify(w2), JSON.stringify(bd2));
-check(bd2.drv && bd2.cur === 'gc8' && bd2.dest === 'circuit', `got in GC8; driving destination is the circuit (${bd2.dest})`);
+check(bd2.drv && bd2.cur === 'gc8' && bd2.dest === 'circuit' && !bd2.e0 && bd2.engine, `got in GC8 (engine off until the gas is tapped); driving destination is the circuit (${bd2.dest})`);
 // 小地圖：賽車場畫在上面（主直線、後直線那一點是路的顏色）
 const mp = await p.evaluate(() => { const L = window.__D().walker.mapLayer, g = L.c.getContext('2d'), px = (x, z) => [...g.getImageData(Math.round((x - L.x0) * L.ms), Math.round((z - L.z0) * L.ms), 1, 1).data]; return { size: [L.c.width, L.c.height], ms: +L.ms.toFixed(2), main: px(800, -160), back: px(450, -740), grass: px(600, -400) }; });
 console.log('  minimap:', JSON.stringify(mp));

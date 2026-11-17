@@ -112,15 +112,16 @@ const R2 = Math.PI / 2;
 const door = await p.evaluate((R2) => {
   const D = window.__D(), d = D.drv, P = D.VIL.places.shop.dyno;
   d.teleport({ x: -148.5, z: -16, heading: R2 }); window.__dstep(5);
+  const shut = d.action; if (shut === '關車門') { document.querySelector('#stage .dv-act').click(); window.__dstep(45); } // 第 98 批：坐進去門還開著（停著＝左上「關車門」；在圓塔裡是「開鐵捲門」先）：先關好
   const near = d.colsNear(-148.5, -26, 1.2).filter((c) => c.t === 'box' && Math.abs(c.z + 26) < 0.6 && Math.abs(c.x + 148.5) < c.hx + 1.2); // 以前這裡是關著的鐵捲門（牆：x −151.5…−145.5 一塊）
   const a0 = d.action; const b0 = d.telemetry().bumps;
   let acts = []; for (let i = 0; i < 60 * 8; i++) { const t = d.telemetry(); d.setInput({ throttle: t.z > -30.5 ? 0.3 : 0, brake: t.z <= -30.5 && t.v > 0.3 ? 1 : 0 }); window.__dstep(1); if (t.z < -27 && !acts.includes(d.action)) acts.push(d.action); if (t.z <= -30.5 && t.v <= 0.3) break; }
   for (let i = 0; i < 10; i++) { d.setInput({ throttle: 0, brake: 0 }); window.__dstep(1); }
   const t = d.telemetry();
-  return { near, wall: near.length, a0, bumps: t.bumps - b0, z: +t.z.toFixed(1), x: +t.x.toFixed(1), kmh: +t.kmh.toFixed(1), acts, pad: P.pad, onPad: Math.abs(t.x - P.pad.x) <= P.pad.hx && Math.abs(t.z - P.pad.z) <= P.pad.hz, act: d.action, act2: d.action2 };
+  return { near, wall: near.length, shut, a0, bumps: t.bumps - b0, z: +t.z.toFixed(1), x: +t.x.toFixed(1), kmh: +t.kmh.toFixed(1), acts, pad: P.pad, onPad: Math.abs(t.x - P.pad.x) <= P.pad.hx && Math.abs(t.z - P.pad.z) <= P.pad.hz, act: d.action, act2: d.action2 };
 }, R2);
 console.log('2a', el(), JSON.stringify(door));
-check(door.wall === 0 && door.bumps === 0 && door.z < -27 && door.a0 === null && door.acts.includes('上馬力機'), `east roller door is open: drove in from the forecourt without a bump (z ${door.z}), no wall collider at the door, no button outside`);
+check(door.shut === '關車門' && door.wall === 0 && door.bumps === 0 && door.z < -27 && door.a0 === null && door.acts.includes('上馬力機'), `east roller door is open: drove in from the forecourt without a bump (z ${door.z}), no wall collider at the door, no button outside (the car door left open from getting in shut with 「${door.shut}」 first)`);
 check(door.onPad && door.act === '上馬力機' && door.act2 === '下車', `stopped on the dyno pad: big button 「上馬力機」, 「下車」 still there`);
 // ---- 2b 上馬力機：自己開正、綁好；油門到底 6 秒：車不動、滾筒轉、螢幕有曲線 ----
 const on = await p.evaluate(() => {

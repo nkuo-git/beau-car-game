@@ -428,9 +428,10 @@ if (FULL) {
   const d6 = await L(() => { const H = window.__H, M = window.__MT(), D = window.__D(), W = D.walker; document.querySelector('#stage .ps-out').click();
     let n = 0; for (; n < 600 && W.mode !== 'walk'; n++) H.step(1); H.step(30);
     const car = W.cars.find((c) => c.key === M.cur); W.teleport({ x: car.x + Math.sin(car.heading) * (car.hz + 0.6), z: car.z + Math.cos(car.heading) * (car.hz + 0.6), heading: 0 }); H.step(30);
-    const a = H.press(); H.board(); H.step(30); return { a, mode: W.mode, can: M.martCanEat(), pill: H.visible('.mt-pill'), bag: M.MART.bag.length }; });
+    let a0 = null, a = H.press(); if (/^開車門/.test(a || '')) { a0 = a; H.step(45); a = H.press(); } // 第 98 批：站在駕駛座的門旁邊（GC8 右駕）＝先「開車門」再「上車」
+    H.board(); H.step(30); return { a0, a, mode: W.mode, can: M.martCanEat(), pill: H.visible('.mt-pill'), bag: M.MART.bag.length }; });
   console.log('  drive', JSON.stringify(d6));
-  check(/^上車/.test(d6.a || '') && d6.mode === 'off' && !d6.can && !d6.pill && d6.bag > 0, 'got in to drive: no eating while driving (the bag pill hides; the things stay in the bag)');
+  check((d6.a0 == null || /^開車門/.test(d6.a0)) && /^上車/.test(d6.a || '') && d6.mode === 'off' && !d6.can && !d6.pill && d6.bag > 0, 'got in to drive: no eating while driving (the bag pill hides; the things stay in the bag)');
 } else {
   // ---- 別的車：照真的車怎麼開（第 83 批）：YARIS 掀背、918 前車廂、J4 側開、P8 尾門往下 ----
   const KIND = { yaris: 'hatch', supra: 'hatch', rx7: 'hatch', ae86: 'hatch', civic: 'hatch', p918: 'frunk', sp3: 'frunk', jesko: 'frunk', chiron: 'frunk', aventador: 'frunk', huayra: 'frunk', laferrari: 'frunk', jp4: 'swing', k2: 'swing', p8: 'drop' }[K] || 'trunk'; // 照真的車（中置引擎的超跑放前面）

@@ -201,7 +201,7 @@ const park4 = await p.evaluate(() => {
   const D = window.__D(), t0 = D.drv.telemetry(), hl = t0.heading - D.garLot().heading, ux = Math.cos(hl), uz = -Math.sin(hl);
   const r = window.__follow([[0, 0], [ux * 3, uz * 3], [ux * 7.6, uz * 7.6], [ux * 10, uz * 10]], 60 * 15, () => 2, (t) => { const q = window.__gl(t.x, t.z); return Math.hypot(q.x, q.z) > 7.3; });
   window.__stop(60);
-  D.leaveCar(); let n = 0, toast = ''; for (; n < 240 && (D.walker.mode !== 'walk' || !toast); n++) { window.__dstep(1); toast = toast || window.__toast(); }
+  const old = window.__toast(); D.leaveCar(); let n = 0, toast = ''; for (; n < 240 && (D.walker.mode !== 'walk' || !toast); n++) { window.__dstep(1); const s = window.__toast(); if (s !== old) toast = toast || s; } // 還在畫面上的上一句（「B1：往前開進⋯」，真的時間幾秒才收）不算
   const i = D.TWR.indexOf(window.__K);
   return { ...r, mode: D.walker.mode, toast, bay: i, f: i >= 0 ? D.TOWER_BAYS[i].f : null, saved: window.__G().park.tower[i] };
 });

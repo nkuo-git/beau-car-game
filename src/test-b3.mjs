@@ -26,6 +26,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__look = () => LOOKP; window.__cam = () => ({ maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };'
+  + ' window.__RL = () => randomLook;'
   + ' window.__P3 = () => ({ ciRace, ciMenuEl, polRace, police, gunner, PI, PSC, GS, GSC, gsDesk, indoor, impounded, townWorld, townTargets, shopWorld, jailed: jailed(), hideAct, polPlayer, gunParked, CLOSE_ACT, PUNCH_BTN, NPC });';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -385,7 +386,13 @@ await p.addInitScript(() => {
   X.kid = (x, z, maxD = 200) => {
     const k = X.person(x, z, 'kid', maxD); if (k) return k;
     const s = P3().NPC.peds.people.filter((q) => q.age === 'kid' && (q.mode === 'sit' || q.mode === 'sitdown') && !q.gone && q.active !== false).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
-    if (!s) return null;
+    if (!s) { // 路上剛好一個小孩都沒有：路上的人一半是動物，角色池是後進先出（剛收回來的先用），小孩的角色可能一直壓在最下面沒人用（第 98 批上下車的路線變了，第 6 段就是這樣）
+      // → 照遊戲自己的「有人走去那一家」（npc.js spawnIn，第 90 批）在附近的房子前面生一個小孩：一樣是路上的人，一樣走路
+      const D = window.__D(), N = P3().NPC.peds, rl = window.__RL(); let look = null; for (let i = 0; i < 500 && !look; i++) { const L = rl(Math.random); if (L.age === 'kid') look = L; }
+      const bs = D.VIL.buildings.filter((b) => b.kind === 'house').sort((a, c) => Math.hypot(a.x - x, a.z - z) - Math.hypot(c.x - x, c.z - z)).slice(0, 12);
+      for (const b of bs) { const p = look && N.spawnIn(b, look, 18); if (!p) continue; X.step(20); if (!p.gone && p.active !== false && p.age === 'kid' && p.mode === 'walk') { X.kidVia = 'spawnIn'; return p; } }
+      return null;
+    }
     for (let i = 0; i < 120 && s.mode === 'sitdown'; i++) X.step(1); // 正在坐下（1.1 秒）：等他坐好才叫得起來
     s.timer = 0;
     for (let i = 0; i < 600; i++) { X.step(1); const q = X.person(x, z, 'kid', maxD); if (q) return q; }
@@ -721,15 +728,15 @@ const s6a = await ev(() => {
   if (!a.drawn) g.draw('pistol');
   X.step(30);
   // 小孩：5 公尺，瞄準肚子（往下打：沒打到就打在後面的地上）
-  const t = w.telemetry(), kid = X.kid(t.x, t.z, 300);
-  if (!kid) { const pp = Q.NPC.peds.people; return { ...a, err: 'no kid', people: pp.length, kids: pp.filter((q) => q.age === 'kid').map((q) => `${q.mode}${q.gone ? ':gone' : ''}${q.active === false ? ':off' : ''}@${Math.hypot(q.x - t.x, q.z - t.z).toFixed(0)}`) }; }
+  X.kidVia = 'near'; const t = w.telemetry(), kid = X.kid(t.x, t.z, 300);
+  if (!kid) { const pp = Q.NPC.peds.people; return { ...a, err: 'no kid', fail: Q.NPC.peds.stats.lastFail, people: pp.length, kids: pp.filter((q) => q.age === 'kid').map((q) => `${q.mode}${q.gone ? ':gone' : ''}${q.active === false ? ':off' : ''}@${Math.hypot(q.x - t.x, q.z - t.z).toFixed(0)}`) }; }
   X.faceTo(kid, 5, (x, z) => X.lineClear(x, z, kid)); X.step(5); g.setAim(true); X.step(20);
   const k0 = g.telemetry().knocks, c0 = pol.telemetry().crimes.length, m0 = kid.mode; let shots = 0;
   const hits = []; for (let i = 0; i < 3; i++) {
     for (let j = 0; j < 240; j++) { const p = w.telemetry(); if (X.lineClear(p.x, p.z, kid)) break; X.step(1); } // 路上的車開過去才開槍（子彈穿過小孩，不要打到後面剛好開過的車）
     X.aimAt(kid.x, 0.7, kid.z, 8); shots += X.fire(); hits.push(g.telemetry().last?.kind); }
   X.step(10); g.setAim(false); X.step(10);
-  a.kid = { m0, m1: kid.mode, y: +kid.y.toFixed(2), shots, knocks: g.telemetry().knocks - k0, crimes: pol.telemetry().crimes.slice(c0).map((c) => c.type).join(), wanted: pol.wanted, aimKind: g.telemetry().aimKind, hits, at: [+w.telemetry().x.toFixed(1), +w.telemetry().z.toFixed(1)] };
+  a.kid = { m0, m1: kid.mode, y: +kid.y.toFixed(2), shots, knocks: g.telemetry().knocks - k0, crimes: pol.telemetry().crimes.slice(c0).map((c) => c.type).join(), wanted: pol.wanted, aimKind: g.telemetry().aimKind, hits, at: [+w.telemetry().x.toFixed(1), +w.telemetry().z.toFixed(1)], via: X.kidVia };
   return a;
 });
 console.log('6', el(), JSON.stringify(s6a));
