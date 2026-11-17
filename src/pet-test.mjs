@@ -364,7 +364,7 @@ await Q(() => { window.__H.step(240); });
 const v5 = await Q(() => { const D = window.__D(), W = D.walker, q = D.tripPose[D.cur]; W.teleport({ x: q.x, z: q.z + 3, heading: 0 }); window.__H.step(20); return null; });
 await p.evaluate(() => { const H = window.__H, D = window.__D(), W = D.walker, q = D.tripPose[D.cur];
   window.__H.boardCar = () => { const c = Math.cos(q.heading), s = Math.sin(q.heading); let a = null;
-    for (const d of [2.0, 2.6, 1.5, 3.2]) { for (const sd of [1, -1]) { W.teleport({ x: q.x + s * d * sd, z: q.z + c * d * sd, heading: q.heading + sd * Math.PI / 2 }); H.step(12); a = H.actText(); if (a && a.indexOf('上車') === 0) break; a = null; } if (a) break; }
+    for (const d of [2.0, 2.6, 1.5, 3.2]) { for (const sd of [1, -1]) { W.teleport({ x: q.x + s * d * sd, z: q.z + c * d * sd, heading: q.heading + sd * Math.PI / 2 }); H.step(12); a = H.actText(); if (/^(上車|開車門)/.test(a || '') /* 第 98 批：車門旁邊是「開車門」；getIn() 照樣走去駕駛座的門、門自己打開 */) break; a = null; } if (a) break; }
     H.step(30); W.getIn(); for (let i = 0; i < 900 && W.mode !== 'off'; i++) H.step(1); H.step(30); return { a, mode: W.mode }; }; });
 const bd5 = await Q(() => window.__H.boardCar());
 console.log('5', el(), JSON.stringify(bd5), JSON.stringify(await Q(() => window.__Q.pet())));
@@ -450,7 +450,7 @@ console.log('  both pounce:', JSON.stringify(a7));
 check(a7.n === 2 && a7.diff && a7.down?.every((d) => d > 0 && d < 6) && a7.w === 0, `🐾上 with two pets: each one goes for a different grown-up and knocks them down (${a7.down?.join(' / ')} s), not your crime`);
 // 上車：兩台沙灘車一台接一台
 const bd7 = await Q(() => { const H = window.__H, D = window.__D(), W = D.walker, car = D.tripS.car, q = { x: car.position.x, z: car.position.z, heading: car.rotation.y }, c = Math.cos(q.heading), s = Math.sin(q.heading); let a = null;
-  for (const d of [2.0, 2.6, 1.5, 3.2]) { for (const sd of [1, -1]) { W.teleport({ x: q.x + s * d * sd, z: q.z + c * d * sd, heading: q.heading + sd * Math.PI / 2 }); H.step(12); a = H.actText(); if (a && a.indexOf('上車') === 0) break; a = null; } if (a) break; }
+  for (const d of [2.0, 2.6, 1.5, 3.2]) { for (const sd of [1, -1]) { W.teleport({ x: q.x + s * d * sd, z: q.z + c * d * sd, heading: q.heading + sd * Math.PI / 2 }); H.step(12); a = H.actText(); if (/^(上車|開車門)/.test(a || '') /* 第 98 批：車門旁邊是「開車門」；getIn() 照樣走去駕駛座的門、門自己打開 */) break; a = null; } if (a) break; }
   H.step(30); W.getIn(); for (let i = 0; i < 900 && W.mode !== 'off'; i++) H.step(1); H.step(30); return { a, mode: W.mode }; });
 await p.waitForFunction(() => { window.__H.step(2); return window.__PET().PETS.every((P) => !!P.A.car); }, null, { timeout: 60000, polling: 200 });
 const v7 = await Q(() => { const D = window.__D(), d = D.drv, X = window.__PET(); window.__pol()?.clear?.(); d.teleport({ x: 25, z: 2.4, heading: 0 }); window.__H.step(20);

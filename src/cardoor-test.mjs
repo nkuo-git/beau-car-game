@@ -175,13 +175,13 @@ if (FULL) {
   const riClosed = await shot('4-closed');
   // ---- 5 「開車門」：0.6 秒打開、往外轉；車身切開 ----
   const open5 = await p.evaluate(() => {
-    const H = window.__H, t0 = performance.now(), pressed = H.press(); H.step(1); const ms = performance.now() - t0;
+    const H = window.__H, t0 = performance.now(), pressed = H.press(); H.step(1); const ms = performance.now() - t0, box0 = H.lidBox(window.__DRV); // box0：剛切下來（還差不多關著）的那一塊
     const n = H.openFrames(window.__DRV) + 1, cut = H.geo().filter((g, i) => g !== window.__GEO0[i]).length;
-    return { pressed, ms: Math.round(ms), n, cut, box: H.lidBox(window.__DRV), act: H.actText(), act2: H.act2() };
+    return { pressed, ms: Math.round(ms), n, cut, box0, box: H.lidBox(window.__DRV), act: H.actText(), act2: H.act2() };
   });
   console.log('5', el(), JSON.stringify(open5));
   check(/^開車門/.test(open5.pressed) && open5.n >= 33 && open5.n <= 40 && open5.cut > 0 && open5.box.n > 0, `「開車門」: the door opens in ${(open5.n / 60).toFixed(2)} s; ${open5.cut} meshes of the body are cut, the door piece (${open5.box.n} meshes) swings on its hinge (first cut ${open5.ms} ms)`);
-  check(open5.box.kind === 'conv' && open5.box.out > open5.box.zOut + 0.5 && open5.box.top < open5.box.roof + 0.1, `a normal door swings out sideways (${open5.box.out} m out from the middle; the body side is ${open5.box.zOut}), not up`);
+  check(open5.box.kind === 'conv' && open5.box.out > open5.box0.out + 0.5 && open5.box.top < open5.box0.top + 0.1, `a normal door swings out sideways (${open5.box.out} m out from the middle, shut ${open5.box0.out}), not up (top ${open5.box.top}, shut ${open5.box0.top})`);
   check(open5.act === shut4.act.replace('開車門', '上車') && open5.act2 === '關車門', `open: 「${open5.act}」 + 「${open5.act2}」`);
   const riOpen5 = await shot('5-open');
   // ---- 6 「上車」開車；停著左上「關車門」→ 關好 ----
@@ -249,12 +249,12 @@ if (FULL) {
   await p.evaluate(() => { const D = window.__D(); D.GAR.door.open(0.2); window.__dstep(40); });
   const at = await p.evaluate(() => window.__H.toDoor(window.__DRV));
   const riClosed = await shot('1-closed');
-  const op = await p.evaluate(() => { const H = window.__H, pressed = H.press(), n = H.openFrames(window.__DRV) + 1; return { pressed, n, box: H.lidBox(window.__DRV), act: H.actText(), act2: H.act2() }; });
+  const op = await p.evaluate(() => { const H = window.__H, pressed = H.press(); H.step(1); const box0 = H.lidBox(window.__DRV), n = H.openFrames(window.__DRV) + 2; return { pressed, n, box0, box: H.lidBox(window.__DRV), act: H.actText(), act2: H.act2() }; }); // box0：剛切下來（還差不多關著）的那一塊
   console.log('1', el(), JSON.stringify({ at, op }));
-  const B = op.box;
-  const dirOk = { conv: B.out > B.zOut + 0.5 && B.top < B.roof + 0.1, scissor: B.top > B.roof + 0.35 && B.out < B.zOut + 0.45, butterfly: B.top > B.roof + 0.15 && B.out > B.zOut + 0.15, gull: B.top > B.roof + 0.05 && B.out > B.zOut + 0.1, dihedral: B.top > B.roof + 0.2 && B.out > B.zOut + 0.1 }[B.kind];
+  const B = op.box, B0 = op.box0; // 跟關著的時候比（量的 roof、zOut 有的車不準：P8 的 roof 量到 1.62，門框上緣是 1.84）
+  const dirOk = { conv: B.out > B0.out + 0.5 && B.top < B0.top + 0.1, scissor: B.top > B0.top + 0.35 && B.out < B0.out + 0.45, butterfly: B.top > B0.top + 0.15 && B.out > B0.out + 0.15, gull: B.top > B0.top + 0.05 && B.out > B0.out + 0.1, dihedral: B.top > B0.top + 0.2 && B.out > B0.out + 0.1 }[B.kind];
   check(/^開車門/.test(at.act) && at.at === DRV && /^開車門/.test(op.pressed) && op.n >= 33 && op.n <= 40, `${K}: at the driver's door 「${at.act}」, pressed: opens in ${(op.n / 60).toFixed(2)} s`);
-  check(dirOk, `${K}: the ${B.kind} door opens like the real car (top ${B.top} m vs roof ${B.roof}; ${B.out} m out vs body side ${B.zOut})`);
+  check(dirOk, `${K}: the ${B.kind} door opens like the real car (top ${B.top} m, shut ${B0.top}; ${B.out} m out, shut ${B0.out})`);
   const riOpen = await shot('2-open');
   const all = await p.evaluate(() => { const R = window.__H.rig(); for (let i = 0; i < R.doors.length; i++) R.set(i, 1); window.__H.step(45); return window.__H.doors(); });
   await shot('3-all-open');

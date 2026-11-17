@@ -645,9 +645,9 @@ shots.walk = await drawAndShot('6-walk');
 // ==== 7 截圖、draw call ====
 const back = await p.evaluate(() => { const D = window.__D(), H = window.__H, W = D.walker; const car = D.tripPose[D.cur]; let r = null;
   for (const sg of [1, -1]) { const x = car.x + 2.0 * sg * Math.sin(car.heading), z = car.z + 2.0 * sg * Math.cos(car.heading); if (H.inside(D.VIL.colliders, x, 1, z, 0.3)) continue; W.teleport({ x, z, heading: car.heading }); H.step(20); if (H.actText()) break; } // 車子旁邊（左或右，空的那邊）
-  const a = H.actText(), pr = H.press(); r = H.board(); H.step(30); return { a, pr, modes: r.modes, mode: W.mode }; });
+  const a = H.actText(); let pr = H.press(); if (/^開車門/.test(pr || '')) { H.step(45); pr = H.press(); } r = H.board(); H.step(30); return { a, pr, modes: r.modes, mode: W.mode, drv: !window.__D().drv?.telemetry().paused }; }); // 第 98 批：車門旁邊先「開車門」（右邊＝GC8 的駕駛座）
 console.log('7 back in the car', JSON.stringify(back));
-check(/^上車/.test(back.pr || '') && back.mode === 'off', `walked back to the car and got in again (${back.pr})`);
+check(/^上車/.test(back.pr || '') && back.mode === 'off' && back.drv, `walked back to the car and got in again (${back.a} → ${back.pr})`);
 const S7 = await p.evaluate(() => { const V = window.__D().VIL, N = V.neihu, sp = V.places.neihu.spawn, st = N.data.stations, ns = N.data.nsigns, box = N.info.box;
   const sch = ns.find((s) => /麗山高中/.test(s.nm)), wd = st.find((s) => s.nm === '文德'), lk = N.link.pts, E = lk[lk.length - 1];
   return { sp, sch: sch && { x: sch.p[0], z: sch.p[1], a: sch.ang }, wd: wd && { x: wd.p[0], z: wd.p[1], a: wd.ang }, E, E2: lk[lk.length - 12], box }; });

@@ -78,7 +78,7 @@ function drMk(kind, s, row, poly, zIn, zOut, m) {
   if (kind === 'scissor') { D.pivot = [m.xf - 0.08, m.yw - 0.05, z]; D.at = (t, g) => { const e = drEase(t); g.rotation.set(0, 0, 0); g.rotateY(s * 0.12 * e); g.rotateZ(-1.2 * e); }; }
   else if (kind === 'butterfly') { D.pivot = [m.xat + 0.05, m.yt - 0.02, s * (zIn + 0.05)]; D.at = (t, g) => { const e = drEase(t); g.rotation.set(0, 0, 0); g.rotateY(s * 0.42 * e); g.rotateZ(-0.95 * e); g.rotateX(-s * 0.3 * e); }; }
   else if (kind === 'gull') { D.pivot = [(m.xf + m.xr) / 2, m.yt, s * Math.max(zIn, (m.zt ?? zIn) - 0.02)]; D.at = (t, g) => { const e = drEase(t); g.rotation.set(-s * 1.25 * e, 0, 0); }; } // 鷗翼：窗的上緣（車頂的邊）當軸往上掀
-  else if (kind === 'dihedral') { D.pivot = [m.xf - 0.06, m.yb + 0.3, z]; D.at = (t, g) => { const a = drEase(Math.min(1, t / 0.4)), b = drEase(Math.max(0, (t - 0.3) / 0.7)); g.rotation.set(0, 0, 0); g.rotateY(s * 0.3 * a); g.rotateZ(-1.3 * b); }; }
+  else if (kind === 'dihedral') { D.pivot = [m.xf - 0.06, m.yb + 0.3, z]; D.at = (t, g) => { const a = drEase(Math.min(1, t / 0.4)), b = drEase(Math.max(0, (t - 0.3) / 0.7)); g.rotation.set(0, s * 0.3 * a, -1.3 * b, 'ZYX'); }; } // 先往外轉（前面當軸），再照車子的橫軸翻上來：站起來的時候還在外面（以前先翻再轉＝跟剪刀門差不多，只往外 4 公分）
   else { D.pivot = [m.xf - 0.04, 0, z]; D.at = (t, g) => { g.rotation.set(0, s * 1.08 * drEase(t), 0); }; } // 一般的門：前面當軸往外（後緣往外 62 度）
   // 切的範圍＝側面的多邊形（每一個邊一個面）＋ |z| > zIn
   const P = []; const n = poly.length;

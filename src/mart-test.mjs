@@ -239,7 +239,7 @@ await p.evaluate(() => { window.scrollTo(0, 0); document.getElementById('driveOu
 await p.waitForFunction(() => window.__D().on && window.__D().walker && window.__D().tripS, null, { timeout: 300000 });
 await p.evaluate(() => { window.__noDraw = true; window.__H.step(30); });
 const b0 = await L(() => { const D = window.__D(), H = window.__H, W = D.walker, c = D.tripS.car; c.updateMatrixWorld(); let act = null;
-  for (const s of [1, -1]) { const q = new window.__T3.Vector3(0.2, 0, s * 1.45).applyMatrix4(c.matrixWorld); W.teleport({ x: q.x, z: q.z, heading: 0 }); H.step(20); act = H.actText(); if (/^上車/.test(act || '')) break; }
+  for (const s of [1, -1]) { const q = new window.__T3.Vector3(0.2, 0, s * 2.3).applyMatrix4(c.matrixWorld); /* 第 98 批：離車門 1.25 公尺內是「開車門」：站遠一點＝走路的「上車」（走到駕駛座的門、門自己開） */ W.teleport({ x: q.x, z: q.z, heading: 0 }); H.step(20); act = H.actText(); if (/^上車/.test(act || '')) break; }
   const pressed = H.press(), r = H.board(); H.step(30); return { act, pressed, ...r, drv: !!window.__D().drv, cur: window.__D().cur }; });
 console.log('0', el(), JSON.stringify(b0));
 const c0 = await L(() => { const D = window.__D(), b = D.VIL.buildings.find((q) => window.__IN().interiorFor(q)?.kind === 'store'); window.__sb = b; const e = window.__IN().interiorFor(b).enter, r = b.rot || 0, nx = Math.sin(r), nz = Math.cos(r);
@@ -365,7 +365,7 @@ if (FULL) {
 
   // ---- 6 第 84 批：後車廂「拿出來」、袋子「吃」「喝」（走路、坐在車上；開車不行）----
   const p6 = await L(() => { const D = window.__D(), H = window.__H, W = D.walker, c = D.tripS.car; c.updateMatrixWorld(); window.__noDraw = true;
-    for (const s of [1, -1]) { const q = new window.__T3.Vector3(0.2, 0, s * 1.45).applyMatrix4(c.matrixWorld); W.teleport({ x: q.x, z: q.z, heading: 0 }); H.step(20); if (/^上車/.test(H.actText() || '')) break; }
+    for (const s of [1, -1]) { const q = new window.__T3.Vector3(0.2, 0, s * 2.3).applyMatrix4(c.matrixWorld); /* 第 98 批：離車門 1.25 公尺內是「開車門」：站遠一點＝走路的「上車」（走到駕駛座的門、門自己開） */ W.teleport({ x: q.x, z: q.z, heading: 0 }); H.step(20); if (/^上車/.test(H.actText() || '')) break; }
     H.press(); H.board(); H.step(30);
     const b = (window.__sb = D.VIL.buildings.find((q) => window.__IN().interiorFor(q)?.kind === 'store')), e = window.__IN().interiorFor(b).enter, r = b.rot || 0, nx = Math.sin(r), nz = Math.cos(r);
     window.__D().drv.teleport({ x: e.x + nx * 7 + Math.cos(r) * 6, z: e.z + nz * 7 - Math.sin(r) * 6, heading: r }); window.__dstep(60);

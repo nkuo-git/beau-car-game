@@ -90,7 +90,7 @@ await p.addInitScript(() => {
         W.teleport({ x: q.x + s * d * sd, z: q.z + c * d * sd, heading: q.heading + sd * Math.PI / 2 });
         H.step(12);
         a = H.actText();
-        if (a && a.indexOf('上車') === 0) { spot = [d, sd]; break; }
+        if (/^(上車|開車門)/.test(a || '') /* 第 98 批：車門旁邊是「開車門」；getIn() 照樣走去駕駛座的門、門自己打開 */) { spot = [d, sd]; break; }
         a = null;
       }
       if (a) break;
