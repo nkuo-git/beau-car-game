@@ -586,7 +586,9 @@ di = await driveInfo();
 const sw = await p.evaluate(() => { const D = window.__D(), ex = D.VIL.places.odealer.exit, t = D.drv.telemetry(); return { money: window.__G().money, owned: [...window.__G().owned], atExit: Math.hypot(t.x - ex.x, t.z - ex.z) < 0.05, tripIsS: D.tripS === window.__S(), oDisp: window.__O().oDisp.map((o) => o && o.k), halfW: D.drv.carInfo.halfW,
   tw: D.TWR.indexOf('gc8'), twr: D.TWR.join(), park: window.__G().park, gc8Pose: D.tripPose.gc8?.tw ?? null, gc8On: D.LODS.gc8?.lod?.car.parent?.name, dmg: !!D.tripS.dmg, dmgH: D.tripS.dmg?.health }; });
 console.log('4', el(), 'bought:', JSON.stringify(sw), JSON.stringify(di), '| lods', JSON.stringify(await lodAt()), '| plates', JSON.stringify(await plates('town')));
-check(sw.money === m0 - 100 && sw.owned.includes('monster') && sw.atExit && sw.tripIsS && di.cur === 'monster' && !di.paused && di.voice, 'bought the monster truck (−100 萬): it waits at the 越野車行 exit, engine running');
+// 第 98 批：買來的車停在門口、引擎關著（油門那顆是「發動」）；踩一下＝發動
+const st4 = await p.evaluate(() => { const d = window.__D().drv, gas = document.querySelector('#stage .dv-gas')?.textContent; const e0 = d.engine; d.setInput({ throttle: 1 }); window.__dstep(3); d.setInput(null); window.__dstep(80); return { e0, gas, e1: d.engine, voice: !!window.__D().dvoice?.alive }; });
+check(sw.money === m0 - 100 && sw.owned.includes('monster') && sw.atExit && sw.tripIsS && di.cur === 'monster' && !di.paused && !di.voice && !st4.e0 && /發動/.test(st4.gas) && st4.e1 && st4.voice, `bought the monster truck (−100 萬): it waits at the 越野車行 exit with the engine off (「${st4.gas}」); tapped: engine running`);
 check(di.dest === 'orace' && /起跑區/.test(di.toast), `next stop: the off-road race start (dest ${di.dest}, toast "${di.toast}")`);
 check(sw.oDisp[0] === null && sw.oDisp[1] === 'z2' && sw.oDisp[2] === 'k2' && sw.oDisp[3] === 'jp4' && sw.oDisp[4] === 'p8' && (await lodAt()).gc8 === 'town-garage' && sw.tw === 1 && sw.gc8Pose === 1 && sw.gc8On === 'towerBay2', `podium cleared (the Z2, the K2, the J4 and the P8 are still for sale in the shed: ${sw.oDisp}); old GC8 was delivered into the first free spot of the tower at home (2 樓 ${sw.tw + 1} 號, next to YARIS)`);
 check(!sw.twr.includes('monster') && !sw.park.tower.includes('monster') && !(await plates('town')).length, 'the monster truck (too big for the lift) is never put into a tower spot, and no spot shows just a name without a car');
@@ -603,8 +605,8 @@ const o5 = await p.evaluate(() => {
   return { act2, pressed, s: +(n / 60).toFixed(2), mode: t.mode, side: +side.toFixed(2), along: +along.toFixed(2), halfW: ci.halfW, R: +W.character.radius.toFixed(3), gy: +D2.VIL.heightAt(t.x, t.z).toFixed(3), cy: +W.character.group.position.y.toFixed(3), paused: ct.paused, voice: !!D2.dvoice, cars: W.cars.map((c) => c.key) };
 });
 console.log('5', el(), '下車 (monster):', JSON.stringify(o5));
-check(o5.act2 === '下車' && o5.pressed === '下車' && o5.mode === 'walk' && o5.paused && !o5.voice && o5.side <= -(o5.halfW + o5.R - 0.05) && Math.abs(o5.along) < 1.5,
-  `下車 from the monster truck: you step out on the driver side outside the big tyres (${Math.abs(o5.side)} m from the middle, tyres ${o5.halfW} m), engine off`);
+check(o5.act2 === '下車' && o5.pressed === '下車' && o5.mode === 'walk' && o5.paused && o5.voice && o5.side <= -(o5.halfW + o5.R - 0.05) && Math.abs(o5.along) < 1.5,
+  `下車 from the monster truck: you step out on the driver side outside the big tyres (${Math.abs(o5.side)} m from the middle, tyres ${o5.halfW} m), engine still running (第 98 批)`);
 check(Math.abs(o5.cy - o5.gy) < 0.01, `standing on the dirt next to it (feet ${o5.cy}, ground ${o5.gy})`);
 await drawAndShot('5a-monster-out');
 const i5 = await p.evaluate(() => { // 從車頭繞到另一邊（每一步腳都踩在地面上）、按上車
@@ -803,8 +805,8 @@ await p.waitForFunction(() => window.__D().cur === 'monster' && window.__D().drv
 await p.evaluate(() => window.__H.step(40));
 const bm3 = await p.evaluate(() => { const D = window.__D(), O = window.__O(); return { pf: Object.keys(O.PFULL), cur: D.cur, S: window.__S() === D.tripS, voice: !!D.dvoice?.alive, gc8: D.tripPose.gc8 && D.tripPose.gc8.tw == null && D.poseF(D.tripPose.gc8) === 0, lod: !!D.LODS.gc8?.lod?.car.parent, cars: D.walker.cars.map((x) => x.key), part: (window.__G().parts.monster || []).length }; });
 console.log('  back in the monster truck:', JSON.stringify(bm), JSON.stringify(bm2), JSON.stringify(bm3), JSON.stringify(await lodAt()));
-check(bm.pressed === '下車' && bm.ok && bm.act === '上車 · 怪獸卡車' && bm2.modes.join('>') === 'in>seat>off' && bm3.cur === 'monster' && bm3.S && !bm3.pf.length && bm3.voice && bm3.gc8 && bm3.lod && bm3.cars.includes('gc8'),
-  'walked back to the parked monster truck and drove it again (GC8 stays where you left it in the lobby, as the light-weight car)');
+check(bm.pressed === '下車' && bm.ok && bm.act === '上車 · 怪獸卡車' && bm2.modes.join('>') === 'in>seat>off' && bm3.cur === 'monster' && bm3.S && !bm3.pf.length && !bm3.voice && bm3.gc8 && bm3.lod && bm3.cars.includes('gc8'),
+  'walked back to the parked monster truck and drove it again (GC8 stays where you left it in the lobby, as the light-weight car); engine off: switching to the GC8 turned it off (第 98 批)');
 await drawAndShot('11-monster-again');
 await p.evaluate(() => document.getElementById('driveHome').click());
 await p.evaluate(() => { window.__hold = false; window.__noDraw = false; }); await p.waitForTimeout(2500);

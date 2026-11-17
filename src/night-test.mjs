@@ -47,7 +47,7 @@ const ready = async () => { await p.waitForFunction(() => document.getElementByI
 const goOut = async () => {
   await p.evaluate(() => { window.scrollTo(0, 0); document.getElementById('driveOut').click(); });
   await p.waitForFunction(() => window.__D().on && window.__D().walker && window.__D().walker.mode === 'walk');
-  return p.evaluate(() => { const W = window.__D().walker; let ok = false; for (let k = 0; k < 600 && !ok; k++) { ok = W.getIn((W.cars.find((c) => c.key === 'gtr') || W.cars[0])); if (!ok) window.__dstep(1); } for (let i = 0; i < 200 && !(window.__D().drv && window.__D().walker.mode === 'off'); i++) window.__dstep(1); return { ok, mode: window.__D().walker.mode }; });
+  return p.evaluate(() => { const W = window.__D().walker; let ok = false; for (let k = 0; k < 600 && !ok; k++) { ok = W.getIn((W.cars.find((c) => c.key === 'gtr') || W.cars[0])); if (!ok) window.__dstep(1); } for (let i = 0; i < 200 && !(window.__D().drv && window.__D().walker.mode === 'off'); i++) window.__dstep(1); const d = window.__D().drv; if (d && !d.engine) { d.setInput({ throttle: 1 }); window.__dstep(3); d.setInput(null); window.__dstep(80); } return { ok, mode: window.__D().walker.mode, engine: !!d?.engine }; }); // 第 98 批：上車引擎關著（大燈也關著）：踩一下油門＝發動
 };
 const helpers = () => p.evaluate(() => {
   const D = window.__D(), R = D.renderer, THREE = window.__THREE;
