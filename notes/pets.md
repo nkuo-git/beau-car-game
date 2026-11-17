@@ -50,3 +50,14 @@ Content rules kept: kids and the street animals are never targets (pet, punch, g
 
 ## Batch 96 (trial v108, 2026-11-16): cheaper
 Nick: 「寵物太貴了」 (no amount given) → ten times cheaper: pig 200, pinky 200, cham 300 萬 (`PET_KINDS` in petshop.js and `PET_PRICE` in pet.src.js must match). pet-test seeds 650 萬 (pig + pinky = 400, then 250 < 300 for the chameleon).
+
+## Batch 97 (trial v109, 2026-11-17): several pets go out together
+Nick: 「寵物可以多隻同時出門」.
+- Save: `petsOut` = the pets that go out (array, in the order they were taken). `pet` is still written as `petsOut[0]` so an older version reads one pet. Old saves: `petsOut` = `[pet]` if it is owned, else `pets.slice(0, 1)`. Buying a pet adds it to `petsOut` (toast 「買了X！牠也跟著你（N 隻一起）」).
+- pet.src.js: everything that used the one `PET` now takes a pet object `P` (`petNew(k)`; list `PETS`; `PET0` is an empty stand-in for code that runs with no pet). `petsOut()` is memoised in `PO` (no array per frame); `PO.lobby` = owned pets that are not out.
+- Walking: each pet follows your trail at its own distance: `extra` = sum over the pets in front of (back of the pet ahead + front of this pet + 0.3 m), from `PET_EXT` (each kind's half-length front/back). Order = `petsOut` order.
+- Driving: each pet has its own ATV (`atvEnsure(P)`; `pet-atv-<k>`). Convoy: `A.extra` = sum of (ATV length × scale / 2 + 1.4 m) for the ATVs in front, plus `P.i × 0.22 × speed`; an ATV brakes when the one ahead is within the queue gap + 0.4 × speed and is pushed back when closer than 0.8 × gap.
+- 🐾上: each pet goes for a different target (`petNear(…, skip)`); if there are fewer people than pets, the rest go for the first one. Your punch or shot sends every pet at that person.
+- Lobby: next to a pet that stayed home, 「🐾 帶X出門」 adds it (`petTake`). Standing on the lobby rug (`inLobbyArea`, `LOBBY_R`), 「🐾 讓X在家玩」 leaves the last pet that is out at home (`petStay`). `lobbySync` returns early when the list is unchanged and keeps each pet where it was; a pet just left at home starts at `LOBBY.at`.
+- Draw calls (390×844, 普通): driving with two ATVs seen from behind 197 calls / 0.65M; chase camera 194 / 0.60M (the ATVs are behind the camera).
+- pet-test section 7 (33 ok): lobby → take 粉紅 (saved petsOut pig,pinky, pet pig) → stay on the rug → take again → walk: both follow in a line (≥ 0.4 m apart) → 🐾上 on the village street (the circuit gate where the car is parked has no pedestrians; the test teleports to (−309.6, −31.5) and looks for two standing adults within 12 m) → GC8: two ATVs one behind the other (≥ 1.8 m apart) → get out: both run to you → garage page lobby shows both → reload keeps both.

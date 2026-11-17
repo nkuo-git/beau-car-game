@@ -110,10 +110,16 @@ check(t.ngears === 2 && t.gear === 2 && t.shifts === 1, `2 速（怪獸卡車那
 d = rig(); run(d, 6, { throttle: 1 }); d.setGearbox('mt'); t = run(d, 0.5, { throttle: 0 }); const g0 = t.mgear, r3 = t.rpm;
 run(d, 0.5, { clutch: 1 }); const rC = d.telemetry().rpm; d.shift(-1); run(d, 0.1, { clutch: 1 }); const r1 = run(d, 6 / 60, { throttle: 0 }).rpm, rEnd = run(d, 0.5, { throttle: 0 }).rpm, t2 = d.telemetry();
 check(g0 >= 3 && t2.mgear === g0 - 1 && rC < r3 - 0.1 && r1 > r3 + 0.1 && r1 > rEnd * 0.9 && t.kmh > 80, `${g0} 檔 ${Math.round(t.kmh)} km/h 收油（轉速 ${r2(r3)}）、踩離合器轉速掉到 ${r2(rC)}、降到 ${t2.mgear} 檔放開：0.1 秒就衝到 ${r2(r1)}（0.5 秒後 ${r2(rEnd)}）`);
-// ---- 第 74 批（Nick「降檔時的聲浪太小」）：降檔接上那一下引擎聲大聲（load 補一腳油、onBlip 放炮），0.55 秒退掉；收油滑行本來 load 0 ----
+// ---- 第 74 批（Nick「降檔時的聲浪太小」）：降檔接上那一下引擎聲大聲（load 補一腳油、onBlip 放炮），0.55 秒退掉（第 97 批起 0.7 秒慢慢退）；收油滑行本來 load 0 ----
 { const dB = rig(); run(dB, 6, { throttle: 1 }); dB.setGearbox('mt'); run(dB, 0.5, { throttle: 0 }); const l0 = dB.telemetry().load; ev.blip.length = 0;
   run(dB, 0.3, { clutch: 1 }); dB.shift(-1); run(dB, 0.1, { clutch: 1 }); const lA = run(dB, 8 / 60, { throttle: 0 }).load, lB = run(dB, 0.3, { throttle: 0 }).load, lC = run(dB, 0.6, { throttle: 0 }).load, gB = dB.telemetry().mgear;
   check(l0 === 0 && lA > 0.85 && lB > 0.3 && lB < lA && lC === 0 && ev.blip.join() === String(gB), `降檔放開：引擎聲 load 滑行 ${l0} → 接上 ${r2(lA)} → 0.3 秒 ${r2(lB)} → 0.9 秒 ${lC}；onBlip(${ev.blip.join()})`); }
+// ---- 第 97 批（Nick 2026-11-17「降檔聲稍微不要那麼頓挫」）：補油的 load 0.05 秒滑上去、整段慢慢退到 0（以前一下子跳到 1、0.55 秒的時候一下子從 0.6 掉到 0）----
+{ const dB = rig(); run(dB, 6, { throttle: 1 }); dB.setGearbox('mt'); run(dB, 0.5, { throttle: 0 });
+  run(dB, 0.3, { clutch: 1 }); dB.shift(-1); run(dB, 0.1, { clutch: 1 });
+  const L = []; for (let i = 0; i < 60; i++) L.push(run(dB, 1 / 60, { throttle: 0 }).load);
+  let up = 0, dn = 0; for (let i = 1; i < L.length; i++) { const d = L[i] - L[i - 1]; if (d > up) up = d; if (-d > dn) dn = -d; }
+  check(up < 0.5 && dn < 0.06 && Math.max(...L) > 0.85 && L[L.length - 1] === 0, `降檔補油不頓：load 每一格最多 +${r2(up)}、退的時候每一格最多 −${dn.toFixed(3)}（以前最後一下 −0.6），最大 ${r2(Math.max(...L))}、1 秒後 ${L[L.length - 1]}`); }
 // ---- 第 89 批（Nick「車子發動要有點火」）：ignite()：起動馬達轉 0.85 秒（轉速表 0.05～0.1 抖、沒有 load）→ onIgnite、轉速衝上去再回到怠速；踩油門馬上發動 ----
 { const dI = rig(); ev.ignite = 0; dI.ignite(0.85); const a = run(dI, 0.4, {}), rs = []; for (let i = 0; i < 12; i++) rs.push(run(dI, 1 / 60, {}).rpm);
   const n0 = ev.ignite, b = run(dI, 0.5, {}), peak = Math.max(b.rpm, ...[0, 0, 0].map(() => run(dI, 0.05, {}).rpm)), c = run(dI, 2, {});

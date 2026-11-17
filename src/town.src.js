@@ -495,7 +495,7 @@ function makeDrv(pose) {
   dEye = eye;
   const dmg = dmgOf(Sx, cur); // 撞爛（damage.js）：換開別台、車店買的新車第一次開才接上
   drv = createDrive({ car: Sx, scene: TR.scene, camera: dcam, perf: { ...PERF[cur], hp: hpOf(cur), vmax: vmaxOf(cur) /* 第 46 批 */ }, world: PW, colliders: meCols(), hudParent: stage,
-    onZone: arrive, onShift: () => dvoice?.shift(), onBlip: () => dvoice?.shift() /* 第 74 批：降檔補油 */, onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
+    onZone: arrive, onShift: () => dvoice?.shift(), onBlip: () => (dvoice?.blip || dvoice?.shift)?.() /* 第 74 批：降檔補油；第 97 批：不斷油、轉速滑上去（sound.js blip） */, onBump: bump, onLand: orLand, halfW: PERF[cur].halfW /* 第 4 批 */, onImpact: crashed, eye, keyboard: true, camButton: true, mapLayer: walker?.mapLayer, audio: engineAudio /* 第 3 批：輪胎叫 */,
     onEngine: (on) => { IGN.st?.stop(); IGN.st = null; dvoice?.dispose(); dvoice = on ? engineAudio.voice(cur, { parts: partsOf(cur) }) : null; }, // 第 68 批：手排熄火＝引擎聲停、重新發動＝再來
     onCrank: (sec) => { if (PERF[cur]?.bike) return; IGN.st?.stop(); IGN.st = engineAudio.starter?.({ key: cur, dur: sec + 0.05 }) || null; }, // 第 89 批：手排熄火以後重新發動：起動馬達
     onIgnite: () => { IGN.st?.stop(); IGN.st = null; dvoice?.setGain(1); }, // 第 89 批：點火：引擎發動了（起動馬達停、引擎聲出來）

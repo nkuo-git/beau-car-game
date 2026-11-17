@@ -561,7 +561,10 @@ function createDrive(o) {
   //   多出來的加速度（出力 − 阻力）乘 (1 − s)^0.4（s：0.55 → 1 倍極速 ＝ 0 → 1），最多 TAPER_E·√(離極速幾 m/s)：越接近極速加越慢，到極速剛好 0
   //   （以前 98% 極速還有 1.2～5.8 m/s²，然後突然停住）
   const ACC_K = o.accel0 ? 1 : 0.87, TAPER0 = o.accel0 ? 2 : 0.55, TAPER_P = 0.4, TAPER_E = 1; // o.accel0＝第 94 批以前的加速（drift-test 跟主幹比一模一樣用）
-  const BLIP_T = 0.55, FREE_UP = 2.4, FREE_DOWN = 4; // 第 74 批：降檔補油聲幾秒；空催轉速上去、空檔下來的快慢（以前跟接著輪子一樣 12；踩著離合器放油門照舊 12）
+  const BLIP_T = 0.7, BLIP_A = 0.05, FREE_UP = 2.4, FREE_DOWN = 4; // 第 74 批：降檔補油聲幾秒；空催轉速上去、空檔下來的快慢（以前跟接著輪子一樣 12；踩著離合器放油門照舊 12）
+  // 第 97 批（Nick 2026-11-17「降檔聲稍微不要那麼頓挫」）：補油的 load 以前一下子跳到 1、0.55 秒後從 0.6 一下子掉到 0（兩下「頓」）；
+  //   現在 BLIP_A 秒滑上去、整段照 smoothstep 慢慢退到 0（BLIP_T 0.55 → 0.7）；聲音那邊不斷油、轉速滑上去（sound.js blip()）
+  const blipEnv = (e) => { const a = clamp(e / BLIP_A, 0, 1), u = clamp(e / BLIP_T, 0, 1); return a * a * (3 - 2 * a) * (1 - u * u * (3 - 2 * u)); };
   function mtStep(h, inp) {
     const want = inp.clu > 0.5 ? 0 : 1;
     st.clu = want <= st.clu ? want : Math.min(1, st.clu + h / 0.12); // 踩下去馬上分開，放開 0.12 秒接上
@@ -658,7 +661,7 @@ function createDrive(o) {
     st.rpm += (want - st.rpm) * (1 - Math.exp(-h * ((MT && st.stall) || st.ign > 0 ? 6 : freeRev ? (want > st.rpm ? FREE_UP : st.mg === 0 ? FREE_DOWN : 12) : 12)));
     st.load = MT && (st.stall || st.mg === 0 || st.clu < 0.5) ? (st.stall ? 0 : go * (st.mg === 0 ? 1 : 0.6)) : st.cut > 0 ? st.cutLoad : go > 0.02 ? go * (0.65 + 0.35 * lim) : 0;
     if (st.ign > 0) st.load = 0;
-    if (st.blip > 0) { st.blip -= h; if (!st.stall) st.load = Math.max(st.load, 0.6 + 0.4 * clamp(st.blip / BLIP_T, 0, 1)); } // 第 74 批：降檔那一下補一腳油的聲音（0.55 秒慢慢退）
+    if (st.blip > 0) { st.blip -= h; if (!st.stall) st.load = Math.max(st.load, blipEnv(BLIP_T - st.blip)); } // 第 74 批：降檔那一下補一腳油的聲音；第 97 批：滑上去、慢慢退到 0（不頓）
     // 走：後軸沿著車頭方向走、繞後軸轉（腳踏車模型）
     const vab = Math.abs(st.v);
     // 頂住東西了還踩油門：方向盤照「想走的速度」轉（原地轉出來，不會一直卡著）

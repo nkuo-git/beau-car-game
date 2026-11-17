@@ -94,3 +94,14 @@ Nick: 「便色龍腳短一點 / 粉紅豬鼻子太長了」 (again after batch 
 - Chameleon: `CLEG` shoulder/hip u 0.36 → 0.27, elbow/knee l 0.19 → 0.15; `CHAM_DY` −0.06 → −0.07; `belly` 0.075 → 0.115. Leg showing under the belly 0.22 → 0.17 (hind 0.20 → 0.15, unscaled), and the upper leg seen from the side is a lot shorter. Back height 0.90 m (pinky with ears 0.91; animal-test allows 2 cm, so the chameleon still counts as the biggest; do not lower the centre line further without raising something else). Stride and lift × `LEG_K` 0.78; sit drop −0.12 → −0.10 so the belly stays off the ground. animal-test foot slide 0.8–1.4 cm (limit 3).
 - Pinky: the whole nose (cap, pad, nostrils) moved 4 cm back into the head along its slope (`NB`): the part showing goes 9.5 → 5.5 cm; length 0.43 → 0.39 m.
 - Before/after: /mnt/project-files/car-game/animals/animals-v108.jpg.
+
+## Batch 97 (trial v109, 2026-11-17): chameleon legs shorter again, all three cuter
+Nick: 「變色龍腳變短」「所有寵物便可愛一點」.
+- Chameleon legs: `CLEG` shoulder/hip u 0.27 → 0.21, elbow/knee l 0.15 → 0.115, lx ±0.085 → ±0.075; `belly` 0.115 → 0.155 (rounder belly, back height unchanged at about 0.90 m, still the biggest of the three); `LEG_K` (stride) 0.78 → 0.64. The leg showing under the belly is about 12 cm (was 17).
+- Cute faces (new helpers after `cap`: `onEll` = a point, normal and tangents on the head ellipsoid; `decal` = a flat ellipsoid or any geometry stuck on that point; `cuteEye` = a big glossy black eye with two white glints; `smile` = a small torus arc):
+  - pig: bigger eyes with glints, pink blush on both cheeks, a small smile under a slightly smaller, lower snout;
+  - pinky: bigger eyes with glints, blush;
+  - chameleon: bigger pupils with glints, a smile along the snout, pink blush.
+  These are the same animals everywhere (street, MRT, pets).
+- Triangles: pig 6.3k, pinky 8.5k, chameleon 17.0k (animal-test limit 18k); still 2 draw calls each. animal-test 24 ok.
+- Before/after: /mnt/project-files/car-game/animals/animals-v109.jpg.

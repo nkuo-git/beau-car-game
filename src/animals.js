@@ -69,6 +69,35 @@ function cap(G, a, b, r0, r1, color, skin, o = {}) {
   _M.compose(_p.set(a[0], a[1], a[2]), _q, _s.set(1, 1, 1));
   put(G, new THREE.LatheGeometry(pts, o.seg || 14), _M, color, skin, o);
 }
+// 第 97 批（Nick 2026-11-17「所有寵物便可愛一點」）：貼在頭上的東西（大眼睛、亮點、腮紅、笑嘴）
+// 頭（橢球 c、r）上 az（左右，弧度：0＝正前方 +x，+＝+z 那一邊）、el（往上）那一點：點 p、法線 n、橫的切線 t、往上的切線 u
+const _fx = new THREE.Vector3(), _fy = new THREE.Vector3(), _fz = new THREE.Vector3(), _FB = new THREE.Matrix4(), _FR = new THREE.Matrix4();
+function onEll(c, r, az, el) {
+  const dx = Math.cos(el) * Math.cos(az), dy = Math.sin(el), dz = Math.cos(el) * Math.sin(az);
+  _fz.set(dx / r[0], dy / r[1], dz / r[2]).normalize(); _fx.crossVectors(_Y, _fz).normalize(); _fy.crossVectors(_fz, _fx).normalize();
+  return { p: [c[0] + r[0] * dx, c[1] + r[1] * dy, c[2] + r[2] * dz], n: _fz.toArray(), t: _fx.toArray(), u: _fy.toArray() };
+}
+// 貼一塊（扁的橢球或別的 geo）：F 那一點往外 lift、在面上往 t 移 dx、往 u 移 dy；半徑 [橫, 直, 厚]、在面上轉 rot
+function decal(G, F, rr, lift, color, skin, o = {}) {
+  _fx.fromArray(F.t); _fy.fromArray(F.u); _fz.fromArray(F.n);
+  _FB.makeBasis(_fx, _fy, _fz).multiply(_FR.makeRotationZ(o.rot || 0)).scale(_s.set(rr[0], rr[1], rr[2]));
+  const dx = o.dx || 0, dy = o.dy || 0;
+  _FB.setPosition(F.p[0] + F.n[0] * lift + F.t[0] * dx + F.u[0] * dy, F.p[1] + F.n[1] * lift + F.t[1] * dx + F.u[1] * dy, F.p[2] + F.n[2] * lift + F.t[2] * dx + F.u[2] * dy);
+  put(G, o.geo || new THREE.SphereGeometry(1, o.w || 16, o.h || 10), _FB, color, skin, o);
+}
+// 大眼睛：黑色亮亮的扁圓、上面一大一小兩個白色亮點（兩隻眼睛的亮點在同一邊）
+function cuteEye(G, F, rw, rh, skin, o = {}) {
+  const EYE = col(o.eye || '#141012'), GL = col('#ffffff');
+  decal(G, F, [rw, rh, rw * 0.42], 0, EYE, skin, { w: 18, h: 12, fuzz: 0, rough: 0.18 });
+  decal(G, F, [rw * 0.36, rh * 0.36, rw * 0.2], rw * 0.32, GL, skin, { dx: -rw * 0.3, dy: rh * 0.36, w: 10, h: 6, fuzz: 0, rough: 0.3 });
+  decal(G, F, [rw * 0.17, rh * 0.17, rw * 0.12], rw * 0.3, GL, skin, { dx: rw * 0.34, dy: -rh * 0.34, w: 8, h: 5, fuzz: 0, rough: 0.3 });
+}
+// 笑嘴：一小段往下彎的弧（U）
+function smile(G, F, R, tube, color, skin, o = {}) {
+  const arc = o.arc || PI * 0.62;
+  decal(G, F, [1, 1, 1], tube * 0.6, color, skin, { geo: new THREE.TorusGeometry(R, tube, 5, 14, arc), rot: -PI / 2 - arc / 2, fuzz: 0, rough: 0.5, dy: R * 0.6 });
+}
+
 function finish(G, sc = 1) {
   const g = new THREE.BufferGeometry();
   const P = new Float32Array(G.P); if (sc !== 1) for (let i = 0; i < P.length; i++) P[i] *= sc;
@@ -91,14 +120,17 @@ const PIG = {
     ['armL', 'body', 0.02, 0.405, -0.135], ['armR', 'body', 0.02, 0.405, 0.135], ['legL', 'body', 0, 0.15, -0.07], ['legR', 'body', 0, 0.15, 0.07], ['tail', 'body', -0.15, 0.25, 0]],
   height: 0.8, radius: 0.26, shadow: [0.5, 0.46, 0], sc: 1,
   geo(G, B) {
-    const BODY = col('#e4ddd2'), FEET = col('#d3c9bd'), EARIN = col('#e9a4a6'), SNOUT = col('#eba1a8'), NOS = col('#8c3946'), EYE = col('#141012'), GLINT = col('#ffffff');
+    const BODY = col('#e4ddd2'), FEET = col('#d3c9bd'), EARIN = col('#e9a4a6'), SNOUT = col('#eba1a8'), NOS = col('#8c3946');
     ell(G, [0, 0.3, 0], [0.15, 0.17, 0.155], null, BODY, B.body, { w: 22, h: 16 });
     ell(G, [0.025, 0.575, 0], [0.195, 0.175, 0.215], null, BODY, B.head, { w: 26, h: 18 });
-    ell(G, [0.205, 0.535, 0], [0.05, 0.062, 0.088], null, SNOUT, B.head, { w: 18, h: 12, fuzz: 0.015 });
+    // 第 97 批（可愛一點）：鼻子小一點、低一點，大眼睛（兩個亮點）、粉紅腮紅、鼻子下面一個小小的笑嘴
+    const HC = [0.025, 0.575, 0], HR = [0.195, 0.175, 0.215], BLUSH = col('#f4a3b1');
+    ell(G, [0.207, 0.525, 0], [0.046, 0.054, 0.078], null, SNOUT, B.head, { w: 18, h: 12, fuzz: 0.015 });
+    smile(G, onEll(HC, HR, 0, -0.62), 0.017, 0.0032, NOS, B.head);
     for (const s of [-1, 1]) {
-      ell(G, [0.252, 0.537, s * 0.032], [0.012, 0.026, 0.015], null, NOS, B.head, { w: 10, h: 8, fuzz: 0 });
-      ell(G, [0.19, 0.615, s * 0.088], [0.021, 0.021, 0.021], null, EYE, B.head, { w: 12, h: 8, fuzz: 0, rough: 0.22 });
-      ell(G, [0.207, 0.624, s * 0.081], [0.006, 0.006, 0.006], null, GLINT, B.head, { w: 6, h: 4, fuzz: 0, rough: 0.3 });
+      ell(G, [0.25, 0.527, s * 0.028], [0.011, 0.022, 0.013], null, NOS, B.head, { w: 10, h: 8, fuzz: 0 });
+      cuteEye(G, onEll(HC, HR, s * 0.5, 0.15), 0.031, 0.036, B.head);
+      decal(G, onEll(HC, HR, s * 0.9, -0.1), [0.04, 0.026, 0.008], 0, BLUSH, B.head, { w: 14, h: 8, fuzz: 0.01 });
       const th = s * 0.65, ear = s < 0 ? B.earL : B.earR, ex = -0.005, ey = 0.7, ez = s * 0.12, dy = Math.cos(th), dz = Math.sin(th);
       ell(G, [ex, ey + 0.06 * dy, ez + 0.06 * dz], [0.026, 0.085, 0.066], [th, 0, 0], BODY, ear, { w: 14, h: 10 });
       ell(G, [ex + 0.017, ey + 0.058 * dy, ez + 0.058 * dz], [0.012, 0.062, 0.046], [th, 0, 0], EARIN, ear, { w: 12, h: 8, fuzz: 0.015 });
@@ -119,19 +151,19 @@ const PINKY = {
     ['thighR', 'hips', 0, 0.27, 0.075], ['shinR', 'thighR', 0, 0.155, 0.075], ['footR', 'shinR', 0, 0.045, 0.075], ['tail', 'hips', -0.12, 0.27, 0]],
   height: 0.85, radius: 0.25, shadow: [0.46, 0.46, 0.01], sc: 1,
   geo(G, B) {
-    const BODY = col('#efcfc4'), FLEECE = col('#f0dcd2'), EARIN = col('#e7a99f'), NOSE = col('#e2b2a6'), STITCH = col('#2a1a1a'), EYE = col('#141012'), GLINT = col('#ffffff');
+    const BODY = col('#efcfc4'), FLEECE = col('#f0dcd2'), EARIN = col('#e7a99f'), NOSE = col('#e2b2a6'), STITCH = col('#2a1a1a'), BLUSH = col('#f0919f'), PH_C = [0.02, 0.645, 0], PH_R = [0.13, 0.12, 0.125];
     const STR = [col('#4fae80'), col('#ea8a2c'), col('#5c4231')];
     ell(G, [0, 0.43, 0], [0.125, 0.15, 0.135], null, BODY, (x, y) => mix2(B.hips, B.chest, 0.36, 0.48, y), { w: 22, h: 16 });
     ell(G, [-0.005, 0.32, 0], [0.142, 0.118, 0.152], null, FLEECE, B.hips, { w: 24, h: 16, jit: 0.007, fuzz: 0.06 });
-    ell(G, [0.02, 0.645, 0], [0.13, 0.12, 0.125], null, BODY, B.head, { w: 22, h: 16 });
+    ell(G, PH_C, PH_R, null, BODY, B.head, { w: 22, h: 16 });
     // 第 89 批（Nick「粉紅色豬鼻子太長」）：鼻子短一點（露出頭的那段 15.5 → 9.5 公分）；第 96 批（Nick 2026-11-16 又說「粉紅豬鼻子太長了」）：再往回 4 公分（9.5 → 5.5）
     const NB = -0.04, pa = Math.atan2(0.024, 0.09), nby = NB * 0.024 / 0.09; // 鼻子整段往頭裡面推（斜度不變）
     cap(G, [0.1, 0.63, 0], [0.19 + NB, 0.654 + nby, 0], 0.075, 0.052, BODY, B.head, { seg: 16, k: 6 });
     ell(G, [0.233 + NB, 0.664 + nby, 0], [0.016, 0.046, 0.049], [0, 0, pa], NOSE, B.head, { w: 14, h: 10, fuzz: 0.01 });
     for (const s of [-1, 1]) {
       ell(G, [0.247 + NB, 0.668 + nby, s * 0.02], [0.006, 0.015, 0.008], [0, 0, pa], STITCH, B.head, { w: 8, h: 6, fuzz: 0 });
-      ell(G, [0.098, 0.69, s * 0.085], [0.017, 0.017, 0.017], null, EYE, B.head, { w: 12, h: 8, fuzz: 0, rough: 0.22 });
-      ell(G, [0.112, 0.697, s * 0.08], [0.005, 0.005, 0.005], null, GLINT, B.head, { w: 6, h: 4, fuzz: 0, rough: 0.3 });
+      cuteEye(G, onEll(PH_C, PH_R, s * 0.78, 0.3), 0.024, 0.028, B.head); // 第 97 批：大眼睛（兩個亮點）、腮紅
+      decal(G, onEll(PH_C, PH_R, s * 1.2, 0.0), [0.03, 0.02, 0.006], 0, BLUSH, B.head, { w: 14, h: 8, fuzz: 0.01 });
       const th = s * 0.33, ear = s < 0 ? B.earL : B.earR, ex = -0.01, ey = 0.73, ez = s * 0.075, dy = Math.cos(th), dz = Math.sin(th);
       ell(G, [ex - 0.01, ey + 0.095 * dy, ez + 0.095 * dz], [0.022, 0.1, 0.058], [th, 0, -0.12], BODY, ear, { w: 14, h: 12 });
       ell(G, [ex + 0.004, ey + 0.095 * dy, ez + 0.095 * dz], [0.01, 0.078, 0.04], [th, 0, -0.12], EARIN, ear, { w: 12, h: 10, fuzz: 0.015 });
@@ -153,10 +185,12 @@ const CHAM_SC = 1.2;
 // 第 89 批（Nick「變色龍腳太長」）：身體低 6 公分、肚子往下多 7.5 公分（belly）、腳變短：露出來的腳短約三分之一（放大前 0.35 → 0.23）
 // 第 96 批（Nick 2026-11-16「便色龍腳短一點」）：身體再低 1 公分、肚子再往下 4 公分、肩膀／手肘跟著低：露出來的腳再短約四分之一（0.22 → 0.17；後腳 0.20 → 0.15）；
 //   肩膀、髖 0.36 → 0.27（側面看得到的大腿短一截）；背還是 0.9 公尺（變色龍還是最大）；腳短了步子也小一點（CHAM.anim 的 lam × LEG_K）
-const CLEG = { F: { x: 0.22, u: 0.27, lx: -0.085, l: 0.15, f: 0.035 }, H: { x: -0.37, u: 0.27, lx: 0.085, l: 0.15, f: 0.035 } };
+// 第 97 批（Nick 2026-11-17「變色龍腳變短」）：背的高度不動（還是最大），肚子再往下 4 公分（圓圓的肚子）、肩膀／髖 0.27 → 0.21、手肘／膝蓋 0.15 → 0.115：
+//   露出來的腳 17 → 約 12 公分（後腳 15 → 約 11）；步子再小一點
+const CLEG = { F: { x: 0.22, u: 0.21, lx: -0.075, l: 0.115, f: 0.035 }, H: { x: -0.37, u: 0.21, lx: 0.075, l: 0.115, f: 0.035 } };
 const CHAM_DY = -0.07; // 中線（身體、頭、尾巴）往下
-const LEG_K = 0.78; // 步子（腳站著的高度 0.235 ÷ 0.325 ≈ 0.72，留一點）
-const belly = (s) => 0.115 * (s < 0.3 ? 0 : s < 0.5 ? smooth((s - 0.3) / 0.2) : s < 1.05 ? 1 : s < 1.22 ? 1 - smooth((s - 1.05) / 0.17) : 0); // 肚子（下半圈）多多少
+const LEG_K = 0.64; // 步子（腳站著的高度 0.175 ÷ 0.325 ≈ 0.54，留一點）
+const belly = (s) => 0.155 * (s < 0.3 ? 0 : s < 0.5 ? smooth((s - 0.3) / 0.2) : s < 1.05 ? 1 : s < 1.22 ? 1 - smooth((s - 1.05) / 0.17) : 0); // 肚子（下半圈）多多少
 let CL = null; // 中線：{ x, y, s }，s＝從鼻子量的長度（還沒放大）
 function chamLine() {
   if (CL) return CL;
@@ -250,9 +284,21 @@ const CHAM = {
     for (const sd of [-1, 1]) {
       const e = sd < 0 ? B.eyeL : B.eyeR, c = [0.555, 0.628 + CHAM_DY, sd * 0.112];
       ell(G, c, [0.06, 0.06, 0.058], null, WHITE, e, { w: 18, h: 12, fuzz: 0, rough: 0.35 });
-      const d = new THREE.Vector3(0.55, 0.12, sd * 0.83).normalize();
-      ell(G, [c[0] + d.x * 0.042, c[1] + d.y * 0.042, c[2] + d.z * 0.042], [0.03, 0.03, 0.03], null, PUPIL, e, { w: 12, h: 8, fuzz: 0, rough: 0.2 });
-      ell(G, [c[0] + d.x * 0.054 + 0.012, c[1] + d.y * 0.054 + 0.012, c[2] + d.z * 0.054], [0.007, 0.007, 0.007], null, WHITE, e, { w: 6, h: 4, fuzz: 0, rough: 0.3 });
+      // 第 97 批（可愛一點）：眼珠大一點、往前看，兩個亮點
+      cuteEye(G, onEll(c, [0.06, 0.06, 0.058], sd * 0.9, 0.12), 0.034, 0.036, e);
+    }
+    // 第 97 批（可愛一點）：嘴巴兩邊往上彎（笑）、眼睛下面粉紅腮紅
+    const MOUTH = col('#3b2350'), BLP = col('#ff86b8'), so = {}, ro = [0, 0];
+    const ringPt = (s, a, out) => { clAt(s, so); chamR(s, ro); const ca = Math.cos(a), sa = Math.sin(a), ry = Math.max(ro[0], 1e-4) + (ca < 0 ? belly(s) : 0), rz = Math.max(ro[1], 1e-4), nx = so.ty, ny = -so.tx;
+      const n = new THREE.Vector3(nx * ca / ry, ny * ca / ry, sa / rz).normalize(); return [so.x + nx * ry * ca + n.x * out, so.y + ny * ry * ca + n.y * out, rz * sa + n.z * out]; };
+    for (const sd of [-1, 1]) {
+      let prev = null;
+      for (let i = 0; i <= 5; i++) { const t = i / 5, sm = lerp(0.075, 0.2, t), a = sd * (PI / 2 + lerp(0.55, 0.3, t * t)), q = ringPt(sm, a, -0.002); if (prev) cap(G, prev, q, 0.0075, 0.0075, MOUTH, skinAt(sm), { seg: 6, k: 2, fuzz: 0, rough: 0.5 }); prev = q; }
+      const sb = 0.25, ab = sd * (PI / 2 + 0.5); clAt(sb, so); chamR(sb, ro);
+      const ca = Math.cos(ab), sa = Math.sin(ab), ry = ro[0], rz = ro[1], nx = so.ty, ny = -so.tx, n = new THREE.Vector3(nx * ca / ry, ny * ca / ry, sa / rz).normalize();
+      _fz.copy(n); _fx.crossVectors(_Y, _fz).normalize(); _fy.crossVectors(_fz, _fx).normalize();
+      const F = { p: [so.x + nx * ry * ca, so.y + ny * ry * ca, rz * sa], n: _fz.toArray(), t: _fx.toArray(), u: _fy.toArray() };
+      decal(G, F, [0.046, 0.03, 0.009], 0, BLP, skinAt(sb), { w: 14, h: 8, fuzz: 0.01 });
     }
     // 腳：兩節＋腳掌（兩根圓圓的腳趾）
     for (const k of ['LF', 'RF', 'LH', 'RH']) {

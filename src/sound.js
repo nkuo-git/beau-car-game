@@ -17,6 +17,7 @@
 //       speed    車速 m/s（可省略；918 前輪電動馬達的聲音跟車速走）
 //       limit    斷油轉速÷紅線（預設 1；起跑線上兩段式起步控制給 0.6，轉速頂在那裡「啪啪啪」）
 //   v.shift()             升檔那一下：斷油、洩壓閥（渦輪車）、GT-R 的渦輪回流「嘟嘟嘟」、放炮、雙離合的「啵」
+//   v.blip()              第 97 批：手排降檔接上那一下：不斷油、轉速滑上去、補完油零星一兩聲小「啵」
 //   v.setGain(0–1)  v.setPan(−1–1)  v.dispose()（0.1 秒淡出）  v.alive
 //   audio.crash({ strength, glass, pan })   撞車的聲音（damage.js 撞的時候叫）：strength 0–1（多大力：0.1 輕輕擦到、1 高速撞牆），
 //                         glass 0–1（有沒有玻璃、燈碎掉：叮叮噹噹）、pan −1–1；金屬擠壓＋悶響、玻璃是合成的（resume() 之後在背景先算好，4 種大小＋玻璃）
@@ -111,7 +112,7 @@ function SND_core(P, sr, seed) {
   // ---- 每個取樣都會改的狀態放在 Float64Array：閉包裡的小數每寫一次就要配置記憶體（V8），慢十倍 ----
   const Z = new Float64Array(32), NB = new Float32Array(K * 8);
   const PH = 0, DP = 1, IP = 2, RH = 3, CX = 4, CY = 5, DX = 6, DY = 7, TD = 8, IH = 9, BS = 10, WC = 11, WS = 12, WC2 = 13, WS2 = 14;
-  const MC = 15, MS = 16, RC = 17, RS = 18, SCC = 19, SCS = 20, PE = 21, BT = 22, BE = 23, FP = 24, FE = 25, FL = 26, FH = 27;
+  const MC = 15, MS = 16, RC = 17, RS = 18, SCC = 19, SCS = 20, PE = 21, BT = 22, BE = 23, FP = 24, FE = 25, FL = 26, FH = 27, TZ = 28;
   Z[WC] = Z[WC2] = Z[MC] = Z[RC] = Z[SCC] = 1; Z[DP] = (6 * P.idle * P.red) / sr;
   let rq = (seed ^ 0x5bd1e995) | 0 || 1;
   // ---- 控制率的狀態 ----
@@ -125,6 +126,12 @@ function SND_core(P, sr, seed) {
   let mcw = 1, msw = 0, mA = 0, mrcw = 1, mrsw = 0, mrA = 0, sccw = 1, scsw = 0, scA = 0;
   const sm = P.smooth || 0.01, kR = kc(sm), kTu = kc(0.025), kTd = kc(0.04), kSp = kc(0.06), kG = kc(0.012), kWn = kc(0.3), kAw = kc(0.15), kOvU = kc(0.18), kOvD = kc(0.05); // 第 79 批：放油門的聲浪 0.18 秒起來（先讓油門那一下掉下去）、踩油門 0.05 秒收掉
   const kBu = kc(0.12), kBd = kc(0.045);
+  const kRg = kc(0.04); let glT = 0; // 第 97 批：降檔補油：轉速 0.04 秒（兩段）滑上去，不是 0.01 秒跳上去
+  // 第 97 批（Nick 2026-11-17「AV12 低轉速時聲浪要低沉越高轉越高亢越大聲」）：P.tone＝跟著轉速變的音色、音量（只有 AV12 有）：
+  //   一階低通分成低（×bass）、高（×treb）兩半再加回來：低轉低通 f[0]、低的多、高的少（低沉）→ 高轉 f[1]、高的多（高亢）；
+  //   lev＝[[轉速, dB]…] 照轉速補的音量（量出來的：排氣管的共鳴讓某些轉速比較小聲，補成越高轉越大聲）
+  const TN = P.tone || null; let tnC = 0, tnB = 1, tnK = 1, tnG = 1;
+  function tnLev(r) { const L = TN.lev; if (!L || !L.length) return 0; if (r <= L[0][0]) return L[0][1]; for (let i = 1; i < L.length; i++) if (r <= L[i][0]) { const a = L[i - 1], b = L[i]; return a[1] + (b[1] - a[1]) * (r - a[0]) / (b[0] - a[0]); } return L[L.length - 1][1]; }
 
   function qpop(dt, lvl, dur) {
     if (pqN >= 12) return;
@@ -149,6 +156,15 @@ function SND_core(P, sr, seed) {
     }
     if (P.dct && rn > 0.4) qpop(0.006, PP.burp, 0.009); // 雙離合升檔的「啵」
   }
+  // 第 97 批（Nick 2026-11-17「降檔聲稍微不要那麼頓挫」）：手排降檔接上那一下：以前用 doShift（斷油一段＝聲音斷掉、洩壓、放炮一串）；
+  //   現在不斷油、不洩壓，轉速滑上去（glT），補完油才零星一兩聲小小的「啵」
+  function doBlip() {
+    glT = 0.18;
+    if (PP.shift > 0 && rnd() < 0.6 * PP.shift) {
+      let n = 1 + ((rnd() * 1.2 * PP.shift) | 0);
+      while (n-- > 0) qpop(0.22 + rnd() * 0.3, PP.lvl * (0.3 + 0.25 * rnd()), 0.002);
+    }
+  }
   // 一缸開始排氣：這次有沒有燒、燒多大
   function ev(i) {
     let f = !(cutT > 0 || fuelCut);
@@ -170,7 +186,8 @@ function SND_core(P, sr, seed) {
     t += dtc;
     gE += (tG - gE) * kG;
     if (tG < 0.5 && gE < 1e-4) dead = true;
-    r1 += (tR - r1) * kR; r2 += (r1 - r2) * kR;
+    const kr = glT > 0 ? kRg : kR; if (glT > 0) glT -= dtc;
+    r1 += (tR - r1) * kr; r2 += (r1 - r2) * kr;
     thr += (tT - thr) * (tT > thr ? kTu : kTd);
     if (tS >= 0) spd += (tS - spd) * kSp;
     const idl = cl((0.26 - r2) * 10, 0, 1); // 1＝怠速附近
@@ -197,6 +214,8 @@ function SND_core(P, sr, seed) {
     const shp = Math.max(ld, 0.6 * idl, 0.55 * ovr); // 怠速的排氣脈衝也滿尖的（汽缸裡還有壓力），聽得到「噗噗」
     rF = 0.32 + (P.rise - 0.32) * shp; sF = 0.1 + (P.decay - 0.1) * shp;
     gI = 1 + (P.idleGain - 1) * idl;
+    if (TN) { const u = cl((rn - TN.r[0]) / (TN.r[1] - TN.r[0]), 0, 1), w = u * u * (3 - 2 * u);
+      tnC = op(TN.f[0] * Math.pow(TN.f[1] / TN.f[0], w)); tnB = TN.bass[0] + (TN.bass[1] - TN.bass[0]) * w; tnK = TN.treb[0] + (TN.treb[1] - TN.treb[0]) * w; tnG = Math.pow(10, tnLev(rn) / 20); }
     vr = P.vari * (1 + 1.2 * idl); jit = P.jit * (1 + idl);
     raspA = P.rasp * (0.2 + 0.8 * ldA) * (fuelCut ? 0.6 : 1);
     flowA = P.flow * (0.12 + 0.88 * ldA) * (0.15 + 0.85 * Math.min(rn, 1)) * (fuelCut ? 0.75 : 1);
@@ -435,6 +454,11 @@ function SND_core(P, sr, seed) {
         Z[SCC] = c; Z[SCS] = d;
       }
       // 9. 音量、去直流、輸出
+      if (TN) { // 第 97 批：AV12 跟著轉速的音色、音量
+        let z = Z[TZ]; const c = tnC, kb = tnB * tnG, kt = tnK * tnG;
+        for (let j = 0; j < m; j++) { const x = Y[j]; z += c * (x - z); Y[j] = kb * z + kt * (x - z); }
+        Z[TZ] = z;
+      }
       {
         let dx = Z[DX], dy = Z[DY];
         const g = gE * gI * P.gain * OUT;
@@ -453,6 +477,7 @@ function SND_core(P, sr, seed) {
       if (g === g && g != null) tG = g > 0.5 ? 1 : 0;
     },
     shift: doShift,
+    blip: doBlip,
     render,
     dead: () => dead,
     info: () => ({ rpm: rn, throttle: thr, load: ld, over: ovr, spool: sp, boost: bst, cut: cutT > 0, pops: pqN }),
@@ -586,7 +611,9 @@ Object.assign(SND_CARS, {
     lp: 10000, eq: [[240, 1.0, 3], [1650, 1.3, 5], [3300, 1.5, 5]], hp: 85, drive: 2.1, rasp: 0.7, raspHz: 3000,
     intake: { lvl: 0.4, f: 560, q: 1.3, f2: 2200, mix2: 0.6, tone: 0.45, hiss: 0.15 },
     pops: { lift: 1.0, shift: 1.0, lvl: 1.4, rate: 16, dur: 1.2, als: 0, crack: 0.6, burp: 0.9 },
-    over: 0.7, burble: 11, dct: false, cut: 0.16 },
+    over: 0.7, burble: 11, dct: false, cut: 0.16,
+    // 第 97 批（Nick「低轉速時聲浪要低沉越高轉越高亢越大聲」）：見 SND_core 的 P.tone
+    tone: { r: [0.15, 0.95], f: [550, 2800], bass: [1.5, 1.0], treb: [0.35, 1.7], lev: [[0.13, -3.4], [0.15, -4.1], [0.18, -2.1], [0.2, -2.1], [0.23, -3.3], [0.26, -4.6], [0.28, -5.3], [0.31, -4.9], [0.33, -3.7], [0.36, -1.6], [0.38, -0.6], [0.41, -0.5], [0.43, -1.5], [0.46, -1.5], [0.48, -1.4], [0.51, -0.3], [0.53, 0.1], [0.56, 1.1], [0.58, 1], [0.61, 1.9], [0.63, 2.1], [0.66, 1.2], [0.68, 0.9], [0.71, -0.1], [0.73, -0.3], [0.76, 1.3], [0.78, 0.6], [0.81, 0.1], [0.83, -0.1], [0.86, -0.9], [0.88, -0.6], [0.91, -0.1], [0.93, 0.2], [0.96, 0.9], [0.98, 0.8]] } },
   senna: { ...SND_CARS.jesko, name: '4.0 V8 平面曲軸雙渦輪', red: 8250 },
   laferrari: { ...SND_CARS.sp3, name: '6.3 V12＋電動馬達', red: 9250, motor: SND_CARS.p918.motor },
   huayra: { ...SND_CARS.sp3, name: '6.0 V12 雙渦輪', red: 6000, fire: SND_V12, lp: 5000, turbo: { ...SND_CARS.jesko.turbo, whoosh: 0.9, bov: 'atmo', bovLvl: 1.1 } },
@@ -637,7 +664,7 @@ function SND_profile(key, parts) {
 }
 
 // ---- AudioWorklet（用 Blob 網址載入；同一個 AudioContext 只載一次，名字帶雜湊，不同版本不會打架）----
-const SND_PARAMS = [['rpm', 0.12, 0, 1.2], ['throttle', 0, 0, 1], ['speed', -1, -1, 200], ['limit', 1, 0.2, 1.2], ['shift', 0, 0, 1e9], ['gate', 1, 0, 1]];
+const SND_PARAMS = [['rpm', 0.12, 0, 1.2], ['throttle', 0, 0, 1], ['speed', -1, -1, 200], ['limit', 1, 0.2, 1.2], ['shift', 0, 0, 1e9], ['gate', 1, 0, 1], ['blip', 0, 0, 1e9]]; // blip：第 97 批 降檔補油
 let SND_src = null, SND_name = '';
 function SND_worklet() {
   if (SND_src) return SND_src;
@@ -645,12 +672,13 @@ function SND_worklet() {
   const body = `const SND_core = ${SND_core.toString()};
 class SND_Proc extends AudioWorkletProcessor {
   static get parameterDescriptors() { return ${JSON.stringify(desc)}; }
-  constructor(o) { super(); const q = (o && o.processorOptions) || {}; this.c = SND_core(q.P, sampleRate, q.seed); this.n = 0; }
+  constructor(o) { super(); const q = (o && o.processorOptions) || {}; this.c = SND_core(q.P, sampleRate, q.seed); this.n = 0; this.b = 0; }
   process(inputs, outputs, p) {
     const c = this.c, o = outputs[0];
     try {
       c.set(p.rpm[0], p.throttle[0], p.speed[0], p.limit[0], p.gate[0]);
       const s = p.shift[0]; if (s !== this.n) { this.n = s; c.shift(); }
+      const b = p.blip ? p.blip[0] : 0; if (b !== this.b) { this.b = b; c.blip(); }
       if (o && o[0]) { c.render(o[0], o[0].length); for (let k = 1; k < o.length; k++) o[k].set(o[0]); }
     } catch (e) { return false; }
     return !c.dead();
@@ -887,7 +915,7 @@ export function createEngineAudio(opt = {}) {
   function voice(key, o = {}) {
     let P;
     try { P = SND_profile(key, o && o.parts); } catch (e) { warn(e); P = SND_profile('supra', []); }
-    const v = { key, P, gain: num(o && o.gain, 1), pan: num(o && o.pan, 0), st: null, src: null, g: null, pn: null, prm: null, core: null, dead: false, live: false, sh: 0 };
+    const v = { key, P, gain: num(o && o.gain, 1), pan: num(o && o.pan, 0), st: null, src: null, g: null, pn: null, prm: null, core: null, dead: false, live: false, sh: 0, bl: 0 };
     v.st = { rpm: v.P.idle, throttle: 0, speed: -1, limit: 1 };
     const api = {
       key,
@@ -907,6 +935,13 @@ export function createEngineAudio(opt = {}) {
           if (v.dead) return;
           v.sh++;
           if (v.prm) v.prm.shift.value = v.sh; else if (v.core) v.core.shift();
+        } catch (e) { warn(e); }
+      },
+      blip() { // 第 97 批：手排降檔接上那一下（不斷油、轉速滑上去）
+        try {
+          if (v.dead) return;
+          v.bl++;
+          if (v.prm && v.prm.blip) v.prm.blip.value = v.bl; else if (v.core) v.core.blip(); else if (v.prm) v.prm.shift.value = ++v.sh;
         } catch (e) { warn(e); }
       },
       setGain(g) {

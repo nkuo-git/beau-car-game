@@ -4,6 +4,7 @@
 //   1) 全油門跟以前一樣大（第 79 批沒動踩油門的聲音）
 //   2) 放油門滑行比全油門小 3～12 dB（以前小 17～21 dB，比怠速還小聲）、比怠速大
 //   3) 低轉滑行不比怠速小超過 6 dB；油門一踩，聲浪那一段馬上收掉
+//   第 97 批：手排降檔 blip() 不斷油、轉速滑上去（升檔 shift() 照舊斷一下）；AV12 全油門越高轉越大聲、低轉低沉（頻譜重心低）高轉高亢
 // node sound-test.mjs
 import fs from 'node:fs';
 import path from 'node:path';
@@ -34,5 +35,40 @@ for (const car of Object.keys(WOT0)) {
 check(rows.every((r) => Math.abs(r.wot - WOT0[r.car]) <= 0.6), `full throttle sounds the same as before (${rows.map((r) => `${r.car} ${r.wot}`).join(', ')})`);
 check(rows.every((r) => r.wot - r.coast >= 2 && r.wot - r.coast <= 12 && r.coast > r.idle), `off throttle at high revs: only ${rows.map((r) => (r.wot - r.coast).toFixed(1)).join(' / ')} dB under full throttle (was 17–21) and louder than idle`);
 check(rows.every((r) => r.lo > r.idle - 6 && r.over > 0.3 && r.back < 0.05), `low-rev coast near idle loudness (${rows.map((r) => `${r.lo}/${r.idle}`).join(', ')}); the overrun part is on while coasting (${rows.map((r) => r.over).join(' ')}) and gone right after the throttle comes back (${rows.map((r) => r.back).join(' ')})`);
+// ---- 第 97 批（Nick 2026-11-17「降檔聲稍微不要那麼頓挫」）：blip()（手排降檔接上那一下）不斷油、轉速滑上去；shift()（升檔）照舊斷一下 ----
+function win(v, sec, rpm, thr, ms = 5) { // 每 ms 毫秒一格的音量 dB、轉速
+  const n = Math.round((ms / 1000) * sr), buf = new Float32Array(n), out = [];
+  for (let k = 0; k < Math.round((sec * 1000) / ms); k++) { v.set(rpm, thr, 30); v.render(buf, n); let e = 0; for (const x of buf) e += x * x; out.push([10 * Math.log10(e / n + 1e-12), v.info().rpm]); }
+  return out;
+}
+for (const car of ['gc8', 'aventador']) {
+  const R = {};
+  for (const how of ['shift', 'blip']) {
+    const v = S.SND_core(S.SND_profile(car, []), sr, 5);
+    win(v, 0.6, 0.45, 0.8); const pre = win(v, 0.1, 0.45, 0.8), lv0 = pre.reduce((a, b) => a + b[0], 0) / pre.length;
+    v[how](); const w = win(v, 0.3, 0.75, 0.8);
+    R[how] = { drop: +(lv0 - Math.min(...w.slice(0, 40).map((q) => q[0]))).toFixed(1), r10: +w[1][1].toFixed(2), r40: +w[7][1].toFixed(2), r250: +w[49][1].toFixed(2) };
+  }
+  console.log('  ', car, JSON.stringify(R));
+  check(R.shift.drop > 8 && R.blip.drop < 6 && R.blip.r10 < 0.62 && R.blip.r250 > 0.72 && R.shift.r10 > R.blip.r10,
+    `${car} downshift blip: no fuel-cut gap (drops ${R.blip.drop} dB; an upshift still cuts ${R.shift.drop} dB); revs glide 0.45 → ${R.blip.r10} (10 ms) → ${R.blip.r40} (40 ms) → ${R.blip.r250} (upshift ${R.shift.r10} at 10 ms)`);
+}
+// ---- 第 97 批（Nick「lamborghini AV12 低轉速時聲浪要低沉越高轉越高亢越大聲」）：全油門每個轉速的音量、頻譜重心 ----
+function fft(re, im) { const n = re.length; for (let i = 1, j = 0; i < n; i++) { let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; } }
+  for (let len = 2; len <= n; len <<= 1) { const ang = (-2 * Math.PI) / len; for (let i = 0; i < n; i += len) for (let k = 0; k < len / 2; k++) { const c = Math.cos(ang * k), s = Math.sin(ang * k), ur = re[i + k], ui = im[i + k], j = i + k + len / 2, vr = re[j] * c - im[j] * s, vi = re[j] * s + im[j] * c; re[i + k] = ur + vr; im[i + k] = ui + vi; re[j] = ur - vr; im[j] = ui - vi; } } }
+function tone(car, rpm) {
+  const v = S.SND_core(S.SND_profile(car, []), sr, 7), N = 4096, buf = new Float32Array(1024), P = new Float64Array(N / 2); let e = 0, n = 0;
+  for (let i = 0; i < 30; i++) { v.set(rpm, 1, 30); v.render(buf, 1024); }
+  for (let k = 0; k < 8; k++) { const x = new Float32Array(N); for (let o = 0; o < N; o += 1024) { v.set(rpm, 1, 30); v.render(buf, 1024); x.set(buf, o); }
+    for (const y of x) { e += y * y; n++; }
+    const re = Float64Array.from(x, (y, i) => y * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N))), im = new Float64Array(N); fft(re, im); for (let i = 0; i < N / 2; i++) P[i] += re[i] * re[i] + im[i] * im[i]; }
+  let tot = 0, cen = 0; for (let i = 1; i < N / 2; i++) { tot += P[i]; cen += P[i] * ((i * sr) / N); }
+  return { rpm, db: +(10 * Math.log10(e / n)).toFixed(1), hz: Math.round(cen / tot) };
+}
+const av = [0.2, 0.3, 0.45, 0.6, 0.75, 0.9, 0.98].map((r) => tone('aventador', r));
+console.log('   aventador', JSON.stringify(av));
+const ups = av.slice(1).map((q, i) => q.db - av[i].db);
+check(ups.every((d) => d > -0.6) && av[6].db - av[0].db > 5.5, `AV12 full throttle gets louder with the revs (${av.map((q) => q.db).join(' → ')} dB)`);
+check(av[0].hz < 500 && av[1].hz < 500 && av[6].hz > 1800 && av[4].hz > av[2].hz + 800, `AV12 low revs are deep (${av[0].hz} / ${av[1].hz} Hz), high revs bright (${av.slice(3).map((q) => q.hz).join(' / ')} Hz)`);
 console.log(fails.length ? `\n${fails.length} FAILED:\n- ${fails.join('\n- ')}` : '\nALL OK');
 process.exit(fails.length ? 1 : 0);

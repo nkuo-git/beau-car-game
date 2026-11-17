@@ -36,8 +36,9 @@ const v = Q.get('v') || 'side', c = CAMS[v] || CAMS.side;
 const cam = new THREE.PerspectiveCamera(c.fov, CW / CH, 0.05, 200), a = c.a * Math.PI / 180;
 const aim = () => {
   const cx = which === 'all' ? 0.7 + (list[1]?.C.group.position.x - list[1]?.x0 || 0) : list[list.length - 1].C.group.position.x + (which === 'cham' ? -0.2 : 0);
+  const ax = +(Q.get('ax') || 0); // 看的點往 +x 移（變色龍的頭在 +x 那頭）
   const d = c.d * (which === 'all' ? 1.35 : which === 'cham' ? 1.1 : 0.75) * (+(Q.get('zoom') || 1));
-  cam.position.set(cx + Math.cos(a) * d, c.h, -Math.sin(a) * d); if (v === 'top') cam.up.set(-1, 0, 0); cam.lookAt(cx, c.ty, 0);
+  cam.position.set(cx + ax + Math.cos(a) * d, c.h, -Math.sin(a) * d); if (v === 'top') cam.up.set(-1, 0, 0); cam.lookAt(cx + ax, c.ty, 0);
 };
 stepAll(+(Q.get('t') || 1.2));
 if (!N) { document.body.appendChild(r.domElement); aim(); r.render(scene, cam); }

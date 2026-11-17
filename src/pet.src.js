@@ -2,7 +2,7 @@
 //      你開車可以讓寵物騎沙灘車跟在你後面」；mock https://claude.ai/artifact/JiamLyxU1TobxZU6T6cgko ，2026-11-16 卡片選「照這樣做」、「做好就上線」）====
 // 1 🚓 抓／不抓：「⋯」那一排一顆（每支手機自己記 localStorage carid.cops；'off'＝不抓）：police-ai setLenient → 什麼都不算犯罪、有星星的話清掉、警察不追你
 // 2 大便龍寵物店（petshop.js：大停車場西邊、以前的稻田）：走進去（黑掉換場景，跟槍店一樣）站到圓台前面「買 · 小豬 200 萬」
-//   小豬 200、粉紅 200、變色龍 300（萬；第 96 批以前 2000、2000、3000）；存檔 GAME.pets（買了哪幾隻）、GAME.pet（帶出門的那一隻）
+//   小豬 200、粉紅 200、變色龍 300（萬；第 96 批以前 2000、2000、3000）；存檔 GAME.pets（買了哪幾隻）、GAME.petsOut（帶出門的，第 97 批；以前是 GAME.pet 一隻）
 // 3 跟著你：走路的時候踩著你走過的路（每 0.25 公尺一個點）走在你後面 1.3 公尺（跑步 1.8）；你跳牠也跳；進房子、坐捷運（walker.shift 一起搬）、回家都跟著；
 //   跳太遠（換場景、傳送、電梯、樓梯換層）＝直接站到你腳邊
 // 4 幫你打：你揍到人、開槍打到人（警察也算），牠衝過去撲倒對方；「揍」下面「🐾 上」：撲你前面最近的人或警察。小孩、路上的小動物永遠不撲；
@@ -10,6 +10,8 @@
 // 5 開車：牠戴安全帽騎一台沙灘車（Z2 的輕量車，顏色照那一隻）踩著你的車開過的路跟在後面（6 公尺＋速度 × 0.35）；前面有人就停；被甩掉 220 公尺＝從後面 70 公尺追上來；
 //   你下車：牠停好跳下來跑到你旁邊；你上車：牠坐回沙灘車
 // 6 圓塔一樓大廳：沒帶出門的寵物在地毯、獎盃櫃前面走來走去（車庫頁也看得到全部的）；走過去「🐾 帶小豬出門」換一隻
+// 7 第 97 批（Nick 2026-11-17「寵物可以多隻同時出門」）：買了的都可以一起出門（排隊跟著你、一隻一台沙灘車、「🐾上」每一隻撲一個）；
+//   大廳：沒帶的旁邊「🐾 帶X出門」＝多一隻；站在牠們玩的地毯、獎盃櫃前面「🐾 讓X在家玩」＝排最後那一隻留下來；買新的＝一起出門
 // 接在 mart.src.js 後面（同一個 module）；town.src.js：atDoor 的 'petshop'、driveStep 的 psStep／petStep、homeWalk 的 petLobbyAct、doPunch／槍的 onCrime 叫 petHit／petCrime、walkBtns 多 🐾 上
 const PET_NAME = { pig: '小豬', pinky: '粉紅', cham: '變色龍' };
 const PET_PRICE = { pig: 200, pinky: 200, cham: 300 }; // 跟 petshop.js PET_KINDS 一樣
@@ -59,15 +61,29 @@ function trShift(T, dx, dz, dth, px, pz) { // 腳下的地板動了（捷運）�
 const petAng = (a) => { a = (a + Math.PI) % (Math.PI * 2); return a < 0 ? a + Math.PI : a - Math.PI; };
 const petTurn = (a, b, r) => { const d = petAng(b - a); return a + (Math.abs(d) <= r ? d : Math.sign(d) * r); };
 
-// ---- 寵物的狀態 ----
-const PET = {
-  k: '', C: null, tag: null, scene: null, mode: 'hide', x: 0, y: 0, z: 0, th: 0, v: 0, s: 0, jy: 0, vy: 0, hop: -1, lj: 0, angry: 0, ready: false,
-  T: petTrail(200, 0.25), lpx: 0, lpz: 0, lgy: 0, atk: null, helm: {}, helmMat: null, onAtv: false, sig: '', btn: false, fb: 0,
-  A: { k: '', car: null, data: null, loading: false, x: 0, y: 0, z: 0, th: 0, v: 0, s: 0, vc: 0, pitch: 0, placed: false, pend: true, free: false, T: petTrail(640, 0.6), lcx: 0, lcy: 0, lcz: 0, chk: 0, look: null },
-};
+// ---- 寵物的狀態（第 97 批：好幾隻一起出門＝PETS 一隻一個；GAME.petsOut＝帶出門的、照順序排隊）----
+// 排隊：第一隻走在你後面 1.3 公尺（跑步 1.8），後面的一隻接一隻（前一隻的屁股＋後一隻的頭＋0.3 公尺）；每一隻自己記一條你走過的路
+// 開車：每一隻騎自己的沙灘車，一台接一台跟在車子後面（前一台太近就停）
+const PET_EXT = { pig: [0.26, 0.18], pinky: [0.22, 0.18], cham: [0.84, 1.1] }; // 身體從原點往前、往後多長（animals.js 的大小；變色龍的尾巴捲在後面）
+const ATV_LEN = 2.1; // 沙灘車多長（沒縮小）
+const PETG = { helm: {}, helmMat: null, btn: false, atvData: null, atvLoading: false }; // 大家共用：安全帽（每一種一頂）、沙灘車的資料
+const PETS = []; // 帶出門的（跟 GAME.petsOut 同樣的順序）
+function petNew(k) {
+  return { k, C: null, tag: null, scene: null, mode: 'hide', x: 0, y: 0, z: 0, th: 0, v: 0, s: 0, jy: 0, vy: 0, hop: -1, lj: 0, angry: 0, i: 0, extra: 0,
+    T: petTrail(200, 0.25), lpx: 0, lpz: 0, lgy: 0, atk: null, onAtv: false,
+    A: { car: null, look: null, x: 0, y: 0, z: 0, th: 0, v: 0, s: 0, vc: 0, pitch: 0, placed: false, pend: true, free: false, T: petTrail(640, 0.6), lcx: 0, lcy: 0, lcz: 0, chk: 0, extra: 0 } };
+}
+const PET0 = petNew(''); // 沒有寵物的時候給測試看的空的
 const PET_UP = { speed: 0, state: 'idle' };
 function petName(k) { return PET_NAME[k] || '寵物'; }
-function petWithMe() { return !!(GAME.pet && GAME.pets?.includes(GAME.pet)); }
+const PO = { src: null, pets: null, n: -1, out: [], lobby: [] }, PO_NONE = [];
+function petsOut() { // 帶出門的（買了的、不重複）；GAME.petsOut／GAME.pets 換了才重算（每一格不 new 陣列）
+  const o = GAME.petsOut || PO_NONE, p = GAME.pets || PO_NONE;
+  if (PO.src !== o || PO.pets !== p || PO.n !== p.length) { PO.src = o; PO.pets = p; PO.n = p.length; PO.out = o.filter((k, i) => p.includes(k) && o.indexOf(k) === i); PO.lobby = p.filter((k) => !PO.out.includes(k)); }
+  return PO.out;
+}
+function petWithMe() { return petsOut().length > 0; }
+const petOf = (k) => PETS.find((P) => P.k === k) || null;
 
 // 名牌（頭上「🐾 小豬」：路上也有一樣的小動物，看得出哪一隻是你的）
 function petTag(k) {
@@ -80,9 +96,9 @@ function petTag(k) {
   sp.scale.set(0.8, 0.2, 1); sp.name = 'pet-tag'; sp.renderOrder = 3;
   return sp;
 }
-// 安全帽：一個半球（白色、中間一條那一隻的顏色、前面下緣黑色的帽簷），掛在頭的骨頭上；每一種做一次
+// 安全帽：一個半球（那一隻的顏色、中間一條白的、下緣一圈深色），掛在頭的骨頭上；每一種做一次（每一種最多一隻）
 function petHelmet(k) {
-  if (PET.helm[k]) return PET.helm[k];
+  if (PETG.helm[k]) return PETG.helm[k];
   const H = PET_HELM[k], geo = new THREE.SphereGeometry(1, 22, 12, 0, Math.PI * 2, 0, Math.PI * 0.56);
   const P = geo.attributes.position, cols = new Float32Array(P.count * 3), shell = new THREE.Color(PET_HELM_COL[k] || '#ff7a1a'), white = new THREE.Color('#f6f6f2'), dark = new THREE.Color('#25282e');
   for (let i = 0; i < P.count; i++) {
@@ -90,64 +106,82 @@ function petHelmet(k) {
     cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-  if (!PET.helmMat) PET.helmMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.05, side: THREE.DoubleSide });
-  const m = new THREE.Mesh(geo, PET.helmMat); m.name = 'pet-helmet';
+  if (!PETG.helmMat) PETG.helmMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.05, side: THREE.DoubleSide });
+  const m = new THREE.Mesh(geo, PETG.helmMat); m.name = 'pet-helmet';
   m.position.set(H.c[0], H.c[1], H.c[2]); m.scale.set(H.r[0], H.r[1], H.r[2]); m.rotation.z = H.tilt;
-  return (PET.helm[k] = m);
+  return (PETG.helm[k] = m);
 }
-// 這一隻（換了就重做）
-function petMake(k) {
-  if (PET.C && PET.k === k) return PET.C;
-  petDrop();
-  let C = null; try { C = buildAnimal({ animal: k }); } catch (e) { console.error(e); return null; }
-  C.group.name = 'pet-' + k;
-  PET.tag = petTag(k); PET.tag.position.set(k === 'cham' ? 0.3 : 0, (C.height || 0.8) + 0.32, 0); C.group.add(PET.tag);
-  PET.C = C; PET.k = k; PET.ready = false; PET.mode = 'hide';
-  atvEnsure(k); // 沙灘車先載（上車的時候才不會等）
+// 做一隻（第一次帶出門）
+function petMake(P) {
+  if (P.C) return P.C;
+  let C = null; try { C = buildAnimal({ animal: P.k }); } catch (e) { console.error(e); return null; }
+  C.group.name = 'pet-' + P.k;
+  P.tag = petTag(P.k); P.tag.position.set(P.k === 'cham' ? 0.3 : 0, (C.height || 0.8) + 0.32, 0); C.group.add(P.tag);
+  P.C = C; P.mode = 'hide';
+  atvEnsure(P); // 沙灘車先載（上車的時候才不會等）
   return C;
 }
-function petDrop() {
-  if (!PET.C) return;
-  const hm = PET.helm[PET.k]; if (hm) hm.removeFromParent();
-  if (PET.tag) { PET.tag.material.map?.dispose(); PET.tag.material.dispose(); PET.tag = null; }
-  PET.C.dispose(); PET.C = null; PET.k = ''; PET.onAtv = false; PET.atk = null;
+function petDrop(P) {
+  const hm = PETG.helm[P.k]; if (hm) hm.removeFromParent(); // 每一種只有一隻：安全帽就是牠的
+  if (P.tag) { P.tag.material.map?.dispose(); P.tag.material.dispose(); P.tag = null; }
+  if (P.C) P.C.dispose(); P.C = null; P.onAtv = false; P.atk = null;
+  if (P.A.car) { P.A.car.removeFromParent(); P.A.look?.dispose?.(); P.A.car = null; P.A.look = null; }
 }
 const petRoot = (o) => { while (o && o.parent) o = o.parent; return o; };
+// 排隊：第 i 隻比第一隻多離你幾公尺（走路）；沙灘車多幾公尺（不算速度那一段）
+function petLine() {
+  let e = 0, a = 0;
+  PETS.forEach((P, i) => {
+    if (i) { const Q = PETS[i - 1]; e += (PET_EXT[Q.k]?.[1] ?? 0.2) + (PET_EXT[P.k]?.[0] ?? 0.25) + 0.3; a += (ATV_LEN * (atvS(Q.k) + atvS(P.k))) / 2 + 1.4; }
+    P.i = i; P.extra = e; P.A.extra = a;
+  });
+}
+// GAME.petsOut 變了：PETS 跟著（多的做、少的收；照順序排）
+function petSync() {
+  const want = petsOut();
+  if (PETS.length === want.length && PETS.every((P, i) => P.k === want[i])) return false;
+  for (let i = PETS.length - 1; i >= 0; i--) if (!want.includes(PETS[i].k)) { petDrop(PETS[i]); PETS.splice(i, 1); }
+  for (const k of want) if (!petOf(k)) PETS.push(petNew(k));
+  PETS.sort((a, b) => want.indexOf(a.k) - want.indexOf(b.k));
+  petLine();
+  return true;
+}
 
-// ---- 沙灘車（Z2 的輕量車，顏色照那一隻；載一次留著）----
-function atvEnsure(k) {
-  const A = PET.A;
-  if (A.car && A.k === k) return true;
+// ---- 沙灘車（Z2 的輕量車，顏色照那一隻；每一隻一台，資料載一次大家用）----
+function atvEnsure(P) {
+  const A = P.A;
+  if (A.car) return true;
   if (!LOD_CARS.z2) return false;
-  if (A.data) {
-    if (A.car) { A.car.removeFromParent(); A.look?.dispose?.(); }
-    try { const L = buildLodCar('z2', A.data, { ...DEFAULT_LOOK.z2, paint: PET_PAINT[k] || DEFAULT_LOOK.z2.paint }); A.look = L; A.car = L.car; A.car.name = 'pet-atv'; A.car.visible = false; A.car.scale.setScalar(atvS(k)); A.k = k; } catch (e) { console.error(e); A.car = null; return false; }
+  if (PETG.atvData) {
+    try { const L = buildLodCar('z2', PETG.atvData, { ...DEFAULT_LOOK.z2, paint: PET_PAINT[P.k] || DEFAULT_LOOK.z2.paint }); A.look = L; A.car = L.car; A.car.name = 'pet-atv-' + P.k; A.car.visible = false; A.car.scale.setScalar(atvS(P.k)); } catch (e) { console.error(e); A.car = null; return false; }
     return true;
   }
-  if (!A.loading) { A.loading = true; LOD_CARS.z2.load().then((d) => { A.data = d; A.loading = false; }).catch((e) => { console.error(e); A.loading = false; }); }
+  if (!PETG.atvLoading) { PETG.atvLoading = true; LOD_CARS.z2.load().then((d) => { PETG.atvData = d; PETG.atvLoading = false; }).catch((e) => { console.error(e); PETG.atvLoading = false; }); }
   return false;
 }
 
 // ---- 出門、回家 ----
 function petTripStart() { // enterDrive 做好以後：沒有寵物就什麼都不做；沙灘車先載
   police?.setLenient(copsOff); copSync();
-  PET.mode = 'hide'; PET.atk = null; PET.A.placed = false; PET.A.pend = true;
-  if (petWithMe()) { petMake(GAME.pet); atvEnsure(GAME.pet); }
+  petSync();
+  for (const P of PETS) { P.mode = 'hide'; P.atk = null; P.A.placed = false; P.A.pend = true; petMake(P); }
   petBtns();
 }
-function petHide() {
-  if (PET.C) PET.C.group.visible = false;
-  if (PET.A.car) PET.A.car.visible = false;
-  PET.mode = 'hide'; PET.atk = null;
+function petHide(P) {
+  if (P.C) P.C.group.visible = false;
+  if (P.A.car) P.A.car.visible = false;
+  P.mode = 'hide'; P.atk = null;
 }
 function petTripEnd() { // leaveDrive、比賽：收起來（下次出門重新放）
-  petHide();
-  if (PET.C) PET.C.group.removeFromParent();
-  if (PET.A.car) PET.A.car.removeFromParent();
-  PET.A.placed = false; PET.A.pend = true;
+  for (const P of PETS) {
+    petHide(P);
+    if (P.C) P.C.group.removeFromParent();
+    if (P.A.car) P.A.car.removeFromParent();
+    P.A.placed = false; P.A.pend = true;
+  }
   for (const L of LOBBY) L.C.group.visible = false;
 }
-// 寵物現在在做什麼：hide（不在外面、比賽、被抓、坐電梯）／car（你在車上：牠騎沙灘車）／walk（你在走路：跟著）
+// 寵物現在在做什麼：hide（不在外面、比賽、被抓、坐電梯）／car（你在車上：騎沙灘車）／walk（你在走路：跟著）
 function petModeNow() {
   if (!trip || !DRIVE.on || !walker || !petWithMe() || polRace.on || jailed() || (typeof RACE !== 'undefined' && RACE.on)) return 'hide';
   if (EL.ride) return 'hide'; // 坐電梯：到了再出現（你腳邊／沙灘車從後面追上來）
@@ -160,54 +194,58 @@ function petCarObj() { if (HOP.on) return (HOP.car || HOP.lodS)?.car || null; re
 // 每一格（driveStep：seatsStep、martStep 後面）
 function petStep(dt) {
   lobbyStep(dt);
-  if (!PET.C) { if (petWithMe() && trip && DRIVE.on) petMake(GAME.pet); else return; }
-  if (PET.k !== GAME.pet && petWithMe()) petMake(GAME.pet);
+  if (!trip || !DRIVE.on) return;
+  if (petSync()) petBtns();
+  if (!PETS.length) return;
   const m = petModeNow();
-  if (m === 'hide') { if (PET.mode !== 'hide') petHide(); return; }
-  if (m === 'car') {
-    if (!atvEnsure(PET.k)) { PET.C.group.visible = false; PET.mode = 'wait'; return; } // 沙灘車還在載
-    if (PET.mode !== 'car') petMount();
-    petCarStep(dt);
-  } else {
-    if (PET.mode !== 'walk') petDismount(PET.mode);
-    petWalkStep(dt);
+  for (const P of PETS) {
+    if (!P.C && !petMake(P)) continue;
+    if (m === 'hide') { if (P.mode !== 'hide') petHide(P); continue; }
+    if (m === 'car') {
+      if (!atvEnsure(P)) { P.C.group.visible = false; P.mode = 'wait'; continue; } // 沙灘車還在載
+      if (P.mode !== 'car') petMount(P);
+      petCarStep(P, dt);
+    } else {
+      if (P.mode !== 'walk') petDismount(P, P.mode);
+      petWalkStep(P, dt);
+    }
   }
 }
 // 走路：踩著你走過的路跟在後面
-function petReset(px, gy, pz, th) { // 站到你腳邊（後面 0.35 公尺），路從這裡重新記
-  const P = PET; P.x = px - Math.cos(th) * 0.35; P.z = pz + Math.sin(th) * 0.35; P.y = gy; P.th = th; P.v = 0; P.jy = 0; P.vy = 0; P.atk = null;
+function petReset(P, px, gy, pz, th) { // 站到你腳邊（後面 0.35 公尺；排在後面的再往後），路從這裡重新記
+  const b = 0.35 + P.extra; P.x = px - Math.cos(th) * b; P.z = pz + Math.sin(th) * b; P.y = gy; P.th = th; P.v = 0; P.jy = 0; P.vy = 0; P.atk = null;
   trReset(P.T, P.x, gy, P.z); P.s = 0; trPush(P.T, px, gy, pz);
 }
-function petDismount(was) {
-  const P = PET, A = P.A, ch = walker.character.group, sc = petRoot(ch);
-  const hm = P.helm[P.k]; if (hm) hm.removeFromParent();
+function petDismount(P, was) {
+  const A = P.A, ch = walker.character.group, sc = petRoot(ch);
+  const hm = PETG.helm[P.k]; if (hm) hm.removeFromParent();
   P.C.group.scale.setScalar(1);
   P.onAtv = false; P.mode = 'walk'; P.atk = null; P.angry = 0;
   sc.add(P.C.group); P.scene = sc; P.C.group.visible = true;
   const t = walker.telemetry(), gy = ch.position.y - (t.jy || 0);
   P.lpx = ch.position.x; P.lpz = ch.position.z; P.lgy = gy; P.lj = t.jumps || 0;
-  if (was === 'car' && A.car && A.car.visible && Math.hypot(A.x - ch.position.x, A.z - ch.position.z) < 15) { // 從沙灘車上跳下來（停好的沙灘車留著）
+  if (was === 'car' && A.car && A.car.visible && Math.hypot(A.x - ch.position.x, A.z - ch.position.z) < 15 + A.extra) { // 從沙灘車上跳下來（停好的沙灘車留著）
     const s = PET_RIDE[P.k], c = Math.cos(A.th), n = Math.sin(A.th);
     P.x = A.x + c * s[0] * atvS(P.k) + 0.55 * n; P.z = A.z - n * s[0] * atvS(P.k) + 0.55 * c; P.y = A.y; P.th = A.th; P.jy = s[1] * atvS(P.k); P.vy = 1.6; P.v = 0;
     trReset(P.T, P.x, A.y, P.z); P.s = 0; trPush(P.T, ch.position.x, gy, ch.position.z);
-  } else petReset(ch.position.x, gy, ch.position.z, t.heading);
+  } else petReset(P, ch.position.x, gy, ch.position.z, t.heading);
   A.v = 0;
 }
-function petWalkStep(dt) {
-  const P = PET, C = P.C, T = P.T, ch = walker.character.group, sc = petRoot(ch), t = walker.telemetry();
+function petWalkStep(P, dt) {
+  const C = P.C, T = P.T, ch = walker.character.group, sc = petRoot(ch), t = walker.telemetry();
   const px = ch.position.x, pz = ch.position.z, gy = ch.position.y - (t.jy || 0);
-  if (sc !== P.scene) { sc.add(C.group); P.scene = sc; petReset(px, gy, pz, t.heading); }
-  else if (Math.hypot(px - P.lpx, pz - P.lpz) > 4 || Math.abs(gy - P.lgy) > 1.5 || Math.hypot(px - P.x, pz - P.z) > 10) petReset(px, gy, pz, t.heading); // 傳送、樓梯換層、被甩太遠
+  if (sc !== P.scene) { sc.add(C.group); P.scene = sc; petReset(P, px, gy, pz, t.heading); }
+  else if (Math.hypot(px - P.lpx, pz - P.lpz) > 4 || Math.abs(gy - P.lgy) > 1.5 || Math.hypot(px - P.x, pz - P.z) > 10 + P.extra) petReset(P, px, gy, pz, t.heading); // 傳送、樓梯換層、被甩太遠
   else if (Math.abs(gy - P.lgy) > 0.002 && Math.hypot(px - P.lpx, pz - P.lpz) < 0.004 && !(t.jy > 0)) { for (let k = 0; k < T.n; k++) T.Y[trI(T, k)] += gy - P.lgy; } // 站著不動、地板在動（電扶梯、升降）：路一起升降
   P.lpx = px; P.lpz = pz; P.lgy = gy;
   C.group.visible = true;
   trPush(T, px, gy, pz);
-  if ((t.jumps || 0) > P.lj) { P.lj = t.jumps; if (P.hop < 0 && P.jy <= 0) P.hop = 0.12; } // 你跳牠也跳（晚一點點）
+  if ((t.jumps || 0) > P.lj) { P.lj = t.jumps; if (P.hop < 0 && P.jy <= 0) P.hop = 0.12 + P.i * 0.1; } // 你跳牠也跳（晚一點點；排在後面的再晚一點）
   if (P.hop >= 0) { P.hop -= dt; if (P.hop < 0) { P.hop = -1; if (P.jy <= 0) P.vy = 3.2; } }
   let state = 'idle', spd = 0;
-  if (P.atk) { const r = petAtkStep(dt, px, gy, pz); state = r; spd = P.v; }
+  if (P.atk) { const r = petAtkStep(P, dt, px, gy, pz); state = r; spd = P.v; }
   else {
-    const gap = t.running ? 1.8 : 1.3, d = Math.hypot(px - P.x, pz - P.z);
+    const gap = (t.running ? 1.8 : 1.3) + P.extra * (t.running ? 1.15 : 1), d = Math.hypot(px - P.x, pz - P.z);
     if (d < gap * 0.9 && T.ls - P.s > gap * 2.2) { trReset(T, P.x, P.y, P.z); P.s = 0; trPush(T, px, gy, pz); } // 你繞回來了：不用走完那一圈
     const rem = T.ls - P.s - gap;
     const want = d > gap * 0.92 && rem > 0 ? Math.min(6.2, rem * 2.4 + Math.min(t.speed || 0, 4.6) * 0.6) : 0;
@@ -225,54 +263,64 @@ function petWalkStep(dt) {
   PET_UP.speed = spd; PET_UP.state = state; C.update(dt, PET_UP);
 }
 
-// ---- 幫你打 ----
+// ---- 幫你打（每一隻都會去）----
 const petPedOK = (p) => p && p.active && !p.gone && p.age !== 'kid' && !p.animal && p.mode !== 'sit' && p.mode !== 'enter' && p.mode !== 'dive'; // 小孩、路上的小動物永遠不撲
 const petPedDown = (p) => p.down || p.mode === 'fall' || p.mode === 'lie' || p.mode === 'getup';
 const petOutside = () => !indoor && !APTU.on && !LDR.on && !MRTS.lvl;
-function petCanFight() { return PET.mode === 'walk' && PET.C && !PET.atk && walker?.mode === 'walk' && petOutside() && !sleep && !doorFade; }
-function petAttack(o, cop) {
-  if (!petCanFight() || !o) return false;
-  if (Math.hypot(o.x - PET.x, o.z - PET.z) > 18) return false;
-  PET.atk = { o, cop: !!cop, t: 0, hit: false, end: 0 };
+function petCanFight(P) { return P.mode === 'walk' && P.C && !P.atk && walker?.mode === 'walk' && petOutside() && !sleep && !doorFade; }
+function petAttack(P, o, cop) {
+  if (!petCanFight(P) || !o) return false;
+  if (Math.hypot(o.x - P.x, o.z - P.z) > 18 + P.extra) return false;
+  P.atk = { o, cop: !!cop, t: 0, hit: false, end: 0 };
   return true;
 }
-function petHit(o) { // doPunch 揍到的（警察有 st、人有 age）
+function petHit(o) { // doPunch 揍到的（警察有 st、人有 age）：大家一起撲
   if (!o) return;
-  if (o.st !== undefined && o.age === undefined) petAttack(o, true);
-  else if (petPedOK(o)) petAttack(o, false);
+  const cop = o.st !== undefined && o.age === undefined;
+  if (!cop && !petPedOK(o)) return;
+  for (const P of PETS) petAttack(P, o, cop);
 }
-function petNear(x, z, r, cops, peds, standing, fx, fz) { // 最近的（前面的算近一點：後面的距離 × 2.2）
+function petNear(x, z, r, cops, peds, standing, fx, fz, skip) { // 最近的（前面的算近一點：後面的距離 × 2.2）；skip＝已經有寵物去撲的
   let best = null, bd = Infinity, cop = false;
   if (cops && police) for (const f of police.offs || []) {
-    if (!police.copUp(f)) continue;
+    if (!police.copUp(f) || skip?.includes(f)) continue;
     const dx = f.x - x, dz = f.z - z, d = Math.hypot(dx, dz); if (d > r) continue;
     const sc = fx == null || dx * fx + dz * fz >= 0 ? d : d * 2.2; if (sc < bd) { bd = sc; best = f; cop = true; }
   }
   if (peds && NPC) for (const p of NPC.peds.people) {
-    if (!petPedOK(p) || (standing && petPedDown(p))) continue;
+    if (!petPedOK(p) || (standing && petPedDown(p)) || skip?.includes(p)) continue;
     const dx = p.x - x, dz = p.z - z, d = Math.hypot(dx, dz); if (d > r) continue;
     const sc = fx == null || dx * fx + dz * fz >= 0 ? d : d * 2.2; if (sc < bd) { bd = sc; best = p; cop = false; }
   }
   return best ? { o: best, cop } : null;
 }
 function petCrime(kind, info) { // 槍：打到人／警察＝撲打到的那一個；附近有警察開槍＝撲最近的警察
-  if (!petCanFight() || !info) return;
+  if (!info || !PETS.some(petCanFight)) return;
   const r = kind === 'gunfire' ? petNear(walker.character.group.position.x, walker.character.group.position.z, 30, true, false, true) : kind === 'shoot' || kind === 'shootCop' ? petNear(info.x, info.z, 4, true, true, false) : null;
-  if (r) petAttack(r.o, r.cop);
+  if (r) for (const P of PETS) petAttack(P, r.o, r.cop);
 }
-function petGo() { // 「🐾 上」
-  if (!PET.C || PET.mode !== 'walk') return;
-  if (!petOutside()) { walker.toast(`${petName(PET.k)}：這裡沒有人可以撲`, 1400); return; }
-  if (PET.atk) return;
-  const t = walker.telemetry(), r = petNear(t.x, t.z, 14, true, true, true, Math.cos(t.heading), -Math.sin(t.heading));
-  if (!r) { walker.toast('附近沒有人可以撲', 1400); return; }
-  if (!petAttack(r.o, r.cop)) walker.toast(`${petName(PET.k)}跟不上了`, 1400);
+function petGo() { // 「🐾 上」：每一隻撲一個（附近的人不夠就一起撲同一個）
+  const ready = PETS.filter((P) => P.C && P.mode === 'walk');
+  if (!ready.length) return;
+  if (!petOutside()) { walker.toast(`${ready.map((P) => petName(P.k)).join('、')}：這裡沒有人可以撲`, 1400); return; }
+  const go = ready.filter((P) => !P.atk);
+  if (!go.length) return;
+  const t = walker.telemetry(), fx = Math.cos(t.heading), fz = -Math.sin(t.heading), taken = [];
+  let first = null, n = 0;
+  for (const P of go) {
+    const r = petNear(t.x, t.z, 14, true, true, true, fx, fz, taken) || first;
+    if (!r) break;
+    if (!first) first = r;
+    if (petAttack(P, r.o, r.cop)) { n++; taken.push(r.o); }
+  }
+  if (!first) walker.toast('附近沒有人可以撲', 1400);
+  else if (!n) walker.toast(`${petName(go[0].k)}跟不上了`, 1400);
 }
-function petAtkStep(dt, px, gy, pz) {
-  const P = PET, g = P.atk, o = g.o; g.t += dt;
+function petAtkStep(P, dt, px, gy, pz) {
+  const g = P.atk, o = g.o; g.t += dt;
   const alive = g.cop ? o.on : o.active && !o.gone;
-  if (g.hit) { if ((g.end -= dt) <= 0 || !alive) petAtkEnd(px, gy, pz); return 'wave'; }
-  if (!alive || g.t > 6 || !petOutside()) { petAtkEnd(px, gy, pz); return 'idle'; }
+  if (g.hit) { if ((g.end -= dt) <= 0 || !alive) petAtkEnd(P, px, gy, pz); return 'wave'; }
+  if (!alive || g.t > 6 || !petOutside()) { petAtkEnd(P, px, gy, pz); return 'idle'; }
   const dx = o.x - P.x, dz = o.z - P.z, d = Math.hypot(dx, dz);
   if (d < 0.85) { // 撲上去
     g.hit = true; g.end = 1.3; P.vy = 3.0; P.v = 0; P.angry = 1.3;
@@ -286,11 +334,11 @@ function petAtkStep(dt, px, gy, pz) {
   P.th = petTurn(P.th, Math.atan2(-dz, dx), 12 * dt);
   return 'run';
 }
-function petAtkEnd(px, gy, pz) { const P = PET; P.atk = null; trReset(P.T, P.x, P.y, P.z); P.s = 0; trPush(P.T, px, gy, pz); }
+function petAtkEnd(P, px, gy, pz) { P.atk = null; trReset(P.T, P.x, P.y, P.z); P.s = 0; trPush(P.T, px, gy, pz); }
 
-// ---- 開車：騎沙灘車跟著 ----
-function petMount() {
-  const P = PET, A = P.A, C = P.C, car = petCarObj();
+// ---- 開車：每一隻騎自己的沙灘車，一台接一台跟著 ----
+function petMount(P) {
+  const A = P.A, C = P.C, car = petCarObj();
   P.atk = null; P.angry = 0; P.mode = 'car'; P.onAtv = true;
   const sc = car ? petRoot(car) : TR.scene;
   if (A.car.parent !== sc) sc.add(A.car);
@@ -305,8 +353,8 @@ function petMount() {
   A.car.visible = A.placed;
 }
 const ATV_MAXV = 31, ATV_PUSH = 3.4;
-function petCarStep(dt) {
-  const P = PET, A = P.A, T = A.T, car = petCarObj();
+function petCarStep(P, dt) {
+  const A = P.A, T = A.T, car = petCarObj();
   if (!car) { A.car.visible = false; return; }
   const cx = car.position.x, cy = car.position.y, cz = car.position.z;
   if (Math.hypot(cx - A.lcx, cz - A.lcz) > 25 || Math.abs(cy - A.lcy) > 1.5) { trReset(T, cx, cy, cz); A.pend = true; A.placed = false; } // 車子傳送（去這裡、回家、電梯）：沙灘車等一下從後面追上來
@@ -314,20 +362,22 @@ function petCarStep(dt) {
   A.lcx = cx; A.lcy = cy; A.lcz = cz;
   const sc = petRoot(car); if (A.car.parent !== sc) sc.add(A.car);
   trPush(T, cx, cy, cz);
-  const gap = 6 + 0.35 * A.vc, sT = T.ls - gap;
+  const gap = 6 + 0.35 * A.vc + A.extra + P.i * 0.22 * A.vc, sT = T.ls - gap; // 排在後面的：前面那幾台的長度＋間隔（越快離越遠）
   if (A.pend) { // 還沒出現：車子開了 gap＋1 公尺，沙灘車在後面那一點出現
     A.car.visible = false;
     if (T.ls - trS0(T) < gap + 1) return;
     A.pend = false; A.free = false; A.placed = true; A.s = sT; A.v = A.vc; trAt(T, A.s, PT); A.x = PT.x; A.y = PT.y; A.z = PT.z; A.th = Math.atan2(-PT.hz, PT.hx);
   }
-  if (T.ls - A.s > 220 && !A.free) { A.s = T.ls - 70; A.v = Math.min(A.vc, ATV_MAXV); } // 甩掉了：從後面 70 公尺追上來
-  // 前面有人（警察也算）：停
+  if (T.ls - A.s > 220 + A.extra && !A.free) { A.s = T.ls - 70 - A.extra; A.v = Math.min(A.vc, ATV_MAXV); } // 甩掉了：從後面 70 公尺追上來
+  // 前面有人（警察也算）、前面那一台沙灘車太近：停
   let block = false;
+  const fx = Math.cos(A.th), fz = -Math.sin(A.th);
   if (A.v > 0.5) {
-    const fx = Math.cos(A.th), fz = -Math.sin(A.th);
     if (NPC) for (const p of NPC.peds.people) { if (!p.active || p.gone) continue; const dx = p.x - A.x, dz = p.z - A.z, f = dx * fx + dz * fz; if (f < 0.6 || f > 3.4) continue; if (Math.abs(dx * fz - dz * fx) < 1.2) { block = true; if (!p.dive) NPC.peds.scare(A.x, A.z, 4); break; } }
     if (!block && police?.nearCop(A.x + fx * 2, A.z + fz * 2, 1.6)) block = true;
   }
+  const Q = P.i ? PETS[P.i - 1].A : null, qGap = Q && Q.placed && Q.car?.visible ? (ATV_LEN * (atvS(PETS[P.i - 1].k) + atvS(P.k))) / 2 + 0.6 : 0;
+  if (qGap) { const dx = Q.x - A.x, dz = Q.z - A.z; if (dx * fx + dz * fz > 0 && Math.hypot(dx, dz) < qGap + 0.4 * A.v) block = true; }
   let want;
   if (A.free) { trAt(T, Math.max(trS0(T), sT), PT2); const dx = PT2.x - A.x, dz = PT2.z - A.z, d = Math.hypot(dx, dz); want = d < 0.4 ? 0 : Math.min(ATV_MAXV, d * 1.6 + A.vc * 0.5); }
   else want = Math.max(0, Math.min(ATV_MAXV, A.vc + (sT - A.s) * 1.5));
@@ -352,16 +402,17 @@ function petCarStep(dt) {
   }
   const dcx = A.x - cx, dcz = A.z - cz, dc = Math.hypot(dcx, dcz); // 車子倒過來：讓開
   if (dc < ATV_PUSH && dc > 1e-3) { A.x = cx + (dcx / dc) * ATV_PUSH; A.z = cz + (dcz / dc) * ATV_PUSH; A.v = 0; A.free = true; }
+  if (qGap) { const dx = A.x - Q.x, dz = A.z - Q.z, d = Math.hypot(dx, dz), m = qGap * 0.8; if (d < m && d > 1e-3) { A.x = Q.x + (dx / d) * m; A.z = Q.z + (dz / d) * m; A.v = Math.min(A.v, Q.v); } } // 兩台不疊在一起
   A.car.visible = true; A.car.position.set(A.x, A.y, A.z); A.car.rotation.set(0, A.th, A.pitch);
   PET_UP.speed = 0; PET_UP.state = 'sit'; P.C.update(dt, PET_UP);
 }
 
 // ---- 走路右下角的「🐾 上」（「揍」下面；拿槍、被關的時候整排收起來）----
 const PET_B = { id: 'pet', label: '🐾上', cls: 'pet', key: 'KeyP', onClick: () => petGo() };
-function petBtns() { // 帶的寵物換了：右下角那一排重做
+function petBtns() { // 有沒有帶寵物變了：右下角那一排重做
   const on = petWithMe();
-  if (on === PET.btn || !walker) return;
-  PET.btn = on;
+  if (on === PETG.btn || !walker) return;
+  PETG.btn = on;
   walker.setButtons(walkBtns(!(jailed() || gunner?.arms.cur)));
 }
 
@@ -387,7 +438,7 @@ function psAct(i) {
   const K = PET_KINDS[i]; if (!K) return null;
   const has = GAME.pets.includes(K.k), key = K.k + (has ? ':has' : '');
   return PS_ACT[key] || (PS_ACT[key] = has
-    ? { label: `已經有${K.name}了`, icon: 'hand', onClick: () => walker.toast(GAME.pet === K.k ? `${K.name}跟著你` : `${K.name}在圓塔一樓大廳玩（走過去「🐾 帶${K.name}出門」）`, 2200) }
+    ? { label: `已經有${K.name}了`, icon: 'hand', onClick: () => walker.toast(petsOut().includes(K.k) ? `${K.name}跟著你` : `${K.name}在圓塔一樓大廳玩（走過去「🐾 帶${K.name}出門」）`, 2200) }
     : { label: `買 · ${K.name} ${K.price} 萬`, icon: 'hand', onClick: () => petBuy(K.k) });
 }
 function psStep(dt) {
@@ -401,10 +452,10 @@ function petBuy(k) {
   const price = PET_PRICE[k];
   if (GAME.money < price) { walker.toast(`錢不夠：${petName(k)}要 ${price} 萬`, 2000); return; }
   GAME.money -= price; GAME.pets.push(k);
-  const had = GAME.pet; GAME.pet = k;
+  const had = petsOut().length; GAME.petsOut = [...petsOut(), k]; // 第 97 批：買了就一起出門（以前換掉原本那一隻）
   save(true); renderWallet();
-  PET.sig = ''; petBtns();
-  walker.toast(had ? `買了${petName(k)}！牠跟著你，${petName(had)}回家在圓塔大廳等你` : `買了${petName(k)}！牠會一直跟著你`, 2600);
+  petSync(); petBtns();
+  walker.toast(had ? `買了${petName(k)}！牠也跟著你（${GAME.petsOut.length} 隻一起）` : `買了${petName(k)}！牠會一直跟著你`, 2600);
 }
 
 // ---- 圓塔一樓大廳的寵物（沒帶出門的；車庫頁是全部）：地毯、獎盃櫃前面走來走去（塔的本地座標：門在 +x、電梯圓台在中間）----
@@ -415,20 +466,23 @@ function lobbyPick(L) {
   L.tx = R.x0 + Math.random() * (R.x1 - R.x0); L.tz = R.z0 + Math.random() * (R.z1 - R.z0);
   L.via = ri !== L.ri; L.ri = ri; L.wait = 0;
 }
-function lobbyMake(list, k, parent, i) {
+function lobbyMake(list, k, parent, i, at) {
   let C = null; try { C = buildAnimal({ animal: k }); } catch (e) { console.error(e); return; }
   C.group.name = 'lobby-pet-' + k;
-  const ri = i % 2, R = LOBBY_R[ri], L = { k, C, ri, x: (R.x0 + R.x1) / 2 + (i - 1) * 1.4, z: (R.z0 + R.z1) / 2, th: Math.random() * 6.28, tx: 0, tz: 0, via: false, wait: 1 + Math.random() * 3, sit: false, v: 0 };
+  const ri = at ? at.ri : i % 2, R = LOBBY_R[ri], L = { k, C, ri, x: at ? at.x : (R.x0 + R.x1) / 2 + (i - 1) * 1.4, z: at ? at.z : (R.z0 + R.z1) / 2, th: at ? at.th : Math.random() * 6.28, tx: 0, tz: 0, via: false, wait: 1 + Math.random() * 3, sit: false, v: 0 };
   L.tx = L.x; L.tz = L.z;
   parent.add(C.group); list.push(L);
 }
-function lobbySync(list, keys, parent) { // 照名單重做（買了、換了才會變）
+function lobbySync(list, keys, parent) { // 照名單重做（買了、帶出門、留在家才會變）；本來就在的留在原地
+  if (list.keys === keys && list.kn === keys.length && list.par === parent) return; // 每一格：名單沒換就不算
+  list.keys = keys; list.kn = keys.length; list.par = parent;
   const sig = keys.join(',') + '|' + (parent?.uuid || '');
   if (list.sig === sig) return; list.sig = sig;
-  for (const L of list) L.C.dispose();
+  const was = {}; for (const L of list) { was[L.k] = { x: L.x, z: L.z, th: L.th, ri: L.ri }; L.C.dispose(); }
+  if (list.at) { Object.assign(was, list.at); list.at = null; }
   list.length = 0;
   if (!parent) return;
-  keys.forEach((k, i) => lobbyMake(list, k, parent, i));
+  keys.forEach((k, i) => lobbyMake(list, k, parent, i, was[k]));
 }
 function lobbyWalk(list, dt) {
   for (const L of list) {
@@ -445,29 +499,46 @@ function lobbyWalk(list, dt) {
 }
 function lobbyStep(dt) { // 村子裡你家的塔（GAR）：一樓大廳、離塔 45 公尺以內才動；在朋友家不畫
   if (!GAR) return;
-  const keys = (GAME.pets || []).filter((k) => k !== GAME.pet);
-  lobbySync(LOBBY, keys, GAR.group);
+  petsOut(); lobbySync(LOBBY, PO.lobby, GAR.group);
   if (!LOBBY.length) return;
   const me = walker && walker.mode !== 'off' ? walker.character.group.position : petCarObj()?.position, q = me ? garLocal(me.x, me.z) : null;
   const on = !!q && !GV.on && Math.hypot(q.x, q.z) < 45 && DRIVE.on && trip;
   for (const L of LOBBY) L.C.group.visible = on;
   if (on) lobbyWalk(LOBBY, dt);
 }
-function petLobbyAct(t) { // homeWalk（一樓大廳）：走到沒帶出門的那一隻旁邊「🐾 帶小豬出門」
-  if (!LOBBY.length || GV.on || GAR.floor) return null;
+const inLobbyArea = (q, m = 0) => LOBBY_R.some((R) => q.x > R.x0 - m && q.x < R.x1 + m && q.z > R.z0 - m && q.z < R.z1 + m);
+const PL_ACT = {};
+function petLobbyAct(t) { // homeWalk（一樓大廳）：沒帶出門的那一隻旁邊「🐾 帶X出門」；地毯、獎盃櫃前面（牠們玩的地方）「🐾 讓X在家玩」（排最後面那一隻）
+  if (GV.on || GAR.floor) return null;
   const q = garLocal(t.x, t.z);
-  for (const L of LOBBY) if (Math.hypot(L.x - q.x, L.z - q.z) < 1.5) return L.act || (L.act = { label: `🐾 帶${petName(L.k)}出門`, icon: 'hand', onClick: () => petSwap(L.k) });
+  for (const L of LOBBY) if (Math.hypot(L.x - q.x, L.z - q.z) < 1.5) return L.act || (L.act = { label: `🐾 帶${petName(L.k)}出門`, icon: 'hand', onClick: () => petTake(L.k) });
+  const out = petsOut();
+  if (out.length && inLobbyArea(q)) { const k = out[out.length - 1]; return PL_ACT[k] || (PL_ACT[k] = { label: `🐾 讓${petName(k)}在家玩`, icon: 'hand', onClick: () => petStay(k) }); }
   return null;
 }
-function petSwap(k) {
-  if (!GAME.pets.includes(k) || GAME.pet === k) return;
-  const L = LOBBY.find((x) => x.k === k), old = GAME.pet, at = L ? { x: L.x, z: L.z, th: L.th } : null;
-  GAME.pet = k; save(true);
-  petMake(k); PET.mode = 'hide'; // 下一格放到牠站的地方（大廳裡你旁邊）
-  if (at && walker) { const w = GAR.group.localToWorld(new THREE.Vector3(at.x, 0, at.z)); const ch = walker.character.group, sc = petRoot(ch); sc.add(PET.C.group); PET.scene = sc; PET.mode = 'walk'; PET.x = w.x; PET.z = w.z; PET.y = ch.position.y; PET.th = petAng(at.th + GAR.group.rotation.y); PET.v = 0; PET.jy = 0; trReset(PET.T, w.x, PET.y, w.z); PET.s = 0; PET.lpx = ch.position.x; PET.lpz = ch.position.z; PET.lgy = ch.position.y; PET.C.group.visible = true; }
-  LOBBY.sig = ''; lobbyStep(0);
-  if (old && L) { const n = LOBBY.find((x) => x.k === old); if (n) { n.x = L.x; n.z = L.z; n.th = L.th; } }
-  walker?.toast(`${petName(k)}跟你出門了${old ? `，${petName(old)}在大廳等你` : ''}`, 2200);
+function petTake(k) { // 第 97 批：帶出門＝多一隻跟著你（以前是換一隻）
+  if (!GAME.pets.includes(k) || petsOut().includes(k)) return;
+  const L = LOBBY.find((x) => x.k === k), at = L ? { x: L.x, z: L.z, th: L.th } : null;
+  GAME.petsOut = [...petsOut(), k]; save(true);
+  petSync(); petBtns();
+  const P = petOf(k);
+  if (P && petMake(P) && at && walker) { // 從牠站的地方開始跟（大廳裡你旁邊）
+    const w = GAR.group.localToWorld(new THREE.Vector3(at.x, 0, at.z)), ch = walker.character.group, sc = petRoot(ch);
+    sc.add(P.C.group); P.scene = sc; P.mode = 'walk'; P.x = w.x; P.z = w.z; P.y = ch.position.y; P.th = petAng(at.th + GAR.group.rotation.y); P.v = 0; P.jy = 0;
+    trReset(P.T, w.x, P.y, w.z); P.s = 0; P.lpx = ch.position.x; P.lpz = ch.position.z; P.lgy = ch.position.y; P.C.group.visible = true;
+  }
+  lobbyStep(0);
+  const n = petsOut().length;
+  walker?.toast(n > 1 ? `${petName(k)}也跟你出門了（${n} 隻一起）` : `${petName(k)}跟你出門了`, 2200);
+}
+function petStay(k) { // 第 97 批：讓牠留在大廳玩（站在牠現在的地方）
+  if (!petsOut().includes(k)) return;
+  const P = petOf(k);
+  if (P && P.C && P.mode === 'walk' && GAR) { const q = garLocal(P.x, P.z); LOBBY.at = { ...(LOBBY.at || {}), [k]: { x: q.x, z: q.z, th: petAng(P.th - GAR.group.rotation.y), ri: q.z > 4 ? 0 : 1 } }; }
+  GAME.petsOut = petsOut().filter((x) => x !== k); save(true);
+  petSync(); petBtns();
+  lobbyStep(0);
+  walker?.toast(`${petName(k)}在大廳玩（要帶牠：走過去「🐾 帶${petName(k)}出門」）`, 2400);
 }
 // 車庫頁（tower.js 的 room，quality 高）：買了的全部在大廳走來走去；garage.src.html 的 loop 叫
 function petsPage(dt = 0) {
@@ -498,10 +569,14 @@ function petWrapShift(w) {
   w.shift = (dx, dz, dth) => {
     const ch = w.character?.group, px = ch ? ch.position.x : 0, pz = ch ? ch.position.z : 0;
     f(dx, dz, dth);
-    if (PET.mode !== 'walk' || !PET.C || !ch) return;
-    trShift(PET.T, dx || 0, dz || 0, dth || 0, px, pz);
-    const c = Math.cos(dth || 0), s = Math.sin(dth || 0), x = PET.x - px, z = PET.z - pz;
-    PET.x = px + (dx || 0) + x * c + z * s; PET.z = pz + (dz || 0) - x * s + z * c; PET.th = petAng(PET.th + (dth || 0));
-    PET.lpx += dx || 0; PET.lpz += dz || 0;
+    if (!ch) return;
+    const c = Math.cos(dth || 0), s = Math.sin(dth || 0);
+    for (const P of PETS) {
+      if (P.mode !== 'walk' || !P.C) continue;
+      trShift(P.T, dx || 0, dz || 0, dth || 0, px, pz);
+      const x = P.x - px, z = P.z - pz;
+      P.x = px + (dx || 0) + x * c + z * s; P.z = pz + (dz || 0) - x * s + z * c; P.th = petAng(P.th + (dth || 0));
+      P.lpx += dx || 0; P.lpz += dz || 0;
+    }
   };
 }

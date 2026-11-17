@@ -4,7 +4,8 @@
 //   走進大便龍寵物店（大停車場西邊）→ 圓台前面「買 · 小豬 200 萬」→ 錢扣掉、存檔 → 小豬跟著你（店裡、出來、走、跑、跳）、頭上「🐾 小豬」
 //   「揍」下面「🐾上」：撲前面的人（倒下去再爬起來）、不算你犯罪；小孩、路上的小動物不撲；你揍到的人牠也撲
 //   上車開走：牠戴安全帽騎沙灘車跟在後面；下車：跳下來跑到你旁邊
-//   再買一隻：圓塔一樓大廳走來走去、「🐾 帶X出門」換一隻；車庫頁也看得到；重新載入還在
+//   再買一隻：圓塔一樓大廳走來走去、「🐾 帶X出門」＝兩隻一起出門（第 97 批）、地毯上「🐾 讓X在家玩」；兩隻排隊跟著、「🐾上」各撲一個、
+//   開車兩台沙灘車一台接一台、下車都跑回來；車庫頁也看得到；重新載入還在
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,7 +28,7 @@ const hook = 'window.__R = () => race; window.__G = () => GAME; window.__S = () 
   + ' window.__look = () => LOOKP; window.__cam = () => ({ maxD: controls.maxDistance, fitD, dist: camera.position.distanceTo(controls.target), pos: camera.position.toArray() }); window.__cea = createEngineAudio; window.__camera = () => camera;'
   + ' window.__dstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return drv && drv.telemetry(); };'
   + ' window.__T3 = THREE; window.__LK = () => LOOK; window.__box = (o) => new THREE.Box3().setFromObject(o); window.__GH = () => GH; window.__ghostUnpack = (g) => ghostUnpack(g); window.__ghostAt = (G, t, o) => ghostAt(G, t, o);' // 鬼影車排行榜（ghost.src.js）
-  + ' window.__PET = () => ({ PET, LOBBY, PAGEP, PSI: PETSI, copsOff, mode: petModeNow(), petNear, petPedOK, petWithMe, doPunch, petGo, HOP, OB, MRTS, leaveCar, petMount, petHelmet, atvEnsure, PET_RIDE, PET_HELM });'
+  + ' window.__PET = () => ({ PET: PETS[0] || PET0, PETS, petTake, petStay, petsOut, LOBBY, PAGEP, PSI: PETSI, copsOff, mode: petModeNow(), petNear, petPedOK, petWithMe, doPunch, petGo, HOP, OB, MRTS, leaveCar, petMount, petHelmet, atvEnsure, PET_RIDE, PET_HELM });'
   + ' window.__wstep = (n, dt = 1 / 60) => { for (let i = 0; i < n && DRIVE.on; i++) driveStep(dt); return walker && walker.telemetry(); };';
 const srv = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split('?')[0]);
@@ -248,7 +249,7 @@ await p.addInitScript(() => {
         d: g ? +Math.hypot(P.x - ch.position.x, P.z - ch.position.z).toFixed(2) : null, dy: g ? +(P.y - (ch.position.y - (t.jy || 0))).toFixed(2) : null, jy: +P.jy.toFixed(3), v: +P.v.toFixed(2),
         atk: P.atk ? (P.atk.cop ? 'cop' : 'ped') : null, onAtv: P.onAtv, tag: !!g && !!g.getObjectByName('pet-tag'), helm: !!g && !!g.getObjectByName('pet-helmet'),
         atv: P.A.car ? { vis: P.A.car.visible && !!P.A.car.parent, x: +P.A.x.toFixed(1), z: +P.A.z.toFixed(1), v: +P.A.v.toFixed(1), pend: P.A.pend, free: P.A.free } : null,
-        wmode: W.mode, x: +t.x.toFixed(1), z: +t.z.toFixed(1), pets: window.__G().pets.slice(), cur: window.__G().pet, money: window.__G().money };
+        wmode: W.mode, x: +t.x.toFixed(1), z: +t.z.toFixed(1), pets: window.__G().pets.slice(), cur: (window.__G().petsOut || []).join(), money: window.__G().money };
     },
     btns: () => [...document.querySelectorAll('#stage .wk-btns b')].filter((e) => !e.closest('[hidden]') && e.getClientRects().length).map((e) => e.textContent.trim()),
     walkFor: (dir, s, run) => { const r = H().push(dir, s, 1, run); return r; },
@@ -391,19 +392,92 @@ const o6 = await Q(() => { const H = window.__H, D = window.__D(), W = D.walker;
 console.log('6', el(), JSON.stringify(o6));
 check(o6.b.mode === 'walk' && !o6.b.onAtv && !o6.b.helm && o6.b.vis && o6.b.d < 2.5 && o6.b.atv?.vis, `got out (${o6.pr}): the pig hops off (helmet off), runs to you (${o6.b.d} m); the ATV stays parked`);
 
-// ---- 7 再買粉紅：大廳、「🐾 帶粉紅出門」 ----
-const l7 = await Q(() => { const G = window.__G(); G.pets.push('pinky'); /* 跟店裡買一樣：帶出門的還是小豬（測試直接放） */
+// ---- 7 再買粉紅：大廳、「🐾 帶粉紅出門」＝兩隻一起出門（第 97 批）、「🐾 讓粉紅在家玩」、排隊跟著、一起撲、兩台沙灘車 ----
+const l7 = await Q(() => { const G = window.__G(); G.pets.push('pinky'); /* 測試直接放進去（沒有帶出門）：在大廳玩 */
   const H = window.__H, D = window.__D(), W = D.walker; W.teleport(H.gw(0, 7, 0)); H.step(20); W.teleport(H.gw(-1.5, 5.8, Math.PI)); H.step(90);
-  const X = window.__PET(); return { lobby: X.LOBBY.map((L) => L.k), vis: X.LOBBY.map((L) => L.C.group.visible), loc: X.LOBBY.map((L) => [+L.x.toFixed(1), +L.z.toFixed(1)]), pet: window.__Q.pet() }; });
+  const X = window.__PET(); return { lobby: X.LOBBY.map((L) => L.k), vis: X.LOBBY.map((L) => L.C.group.visible), loc: X.LOBBY.map((L) => [+L.x.toFixed(1), +L.z.toFixed(1)]), pet: window.__Q.pet(), out: X.PETS.map((P) => P.k) }; });
 console.log('7', el(), JSON.stringify(l7));
-check(l7.lobby.join() === 'pinky' && l7.vis[0] && l7.pet.vis && l7.pet.k === 'pig', `bought 粉紅 too: it plays in the tower's lobby; the pig still follows you`);
+check(l7.lobby.join() === 'pinky' && l7.vis[0] && l7.pet.vis && l7.pet.k === 'pig' && l7.out.join() === 'pig', `bought 粉紅 too: it plays in the tower's lobby; the pig still follows you`);
 await Q(() => { const W = window.__D().walker, L = window.__PET().LOBBY[0], w = window.__D().GAR.group.localToWorld(new window.__T3.Vector3(L.x, 0, L.z)); const t = W.telemetry(); W.setCamera({ yaw: Math.atan2(-(w.z - t.z), w.x - t.x), pitch: 0.3 }); window.__H.step(20); });
 await drawAndShot('7-lobby');
-const s7 = await Q(() => { const H = window.__H, D = window.__D(), W = D.walker, X = window.__PET(); let a = null;
-  for (let i = 0; i < 30 && a !== '🐾 帶粉紅出門'; i++) { const L = X.LOBBY[0], w = D.GAR.group.localToWorld(new window.__T3.Vector3(L.x, 0, L.z)); H.walkTo(w.x, w.z, { tol: 0.8, max: 3 }); H.step(2); a = H.actText(); }
-  const pr = H.press(); H.step(30); return { a, pr, toast: H.toast(), lobby: X.LOBBY.map((L) => L.k), pet: window.__Q.pet(), saved: JSON.parse(localStorage.getItem('carid.tune')).pet, btns: window.__Q.btns() }; });
-console.log('  swap:', JSON.stringify(s7));
-check(s7.a === '🐾 帶粉紅出門' && s7.pet.k === 'pinky' && s7.pet.cur === 'pinky' && s7.saved === 'pinky' && s7.lobby.join() === 'pig' && s7.pet.vis && s7.pet.d < 3, `next to 粉紅: 「🐾 帶粉紅出門」 → 粉紅 follows you now (${s7.toast}); the pig stays in the lobby`);
+const take7 = () => Q(() => { const H = window.__H, D = window.__D(), W = D.walker, X = window.__PET(); let a = null;
+  for (let i = 0; i < 30 && a !== '🐾 帶粉紅出門'; i++) { const L = X.LOBBY[0]; if (!L) break; const w = D.GAR.group.localToWorld(new window.__T3.Vector3(L.x, 0, L.z)); H.walkTo(w.x, w.z, { tol: 0.8, max: 3 }); H.step(2); a = H.actText(); }
+  const pr = H.press(); H.step(30); const sv = JSON.parse(localStorage.getItem('carid.tune'));
+  return { a, pr, toast: H.toast(), lobby: X.LOBBY.map((L) => L.k), out: X.PETS.map((P) => P.k), vis: X.PETS.map((P) => !!P.C?.group.visible), saved: { out: sv.petsOut, pet: sv.pet }, btns: window.__Q.btns() }; });
+const s7 = await take7();
+console.log('  take:', JSON.stringify(s7));
+check(s7.a === '🐾 帶粉紅出門' && s7.out.join() === 'pig,pinky' && s7.vis.every(Boolean) && s7.saved.out?.join() === 'pig,pinky' && s7.saved.pet === 'pig' && s7.lobby.length === 0 && /也跟你出門/.test(s7.toast) && s7.btns.includes('🐾上'),
+  `next to 粉紅: 「🐾 帶粉紅出門」 → now both go out (${s7.toast}); saved petsOut [pig, pinky], the lobby is empty`);
+// 地毯上：「🐾 讓粉紅在家玩」（排最後那一隻），再帶出來
+const st7 = await Q(() => { const H = window.__H, D = window.__D(), W = D.walker, X = window.__PET(); W.teleport(H.gw(-2.5, 6.0, Math.PI)); H.step(10); const a = H.actText();
+  const pr = H.press(); H.step(30); const sv = JSON.parse(localStorage.getItem('carid.tune'));
+  return { a, pr, toast: H.toast(), lobby: X.LOBBY.map((L) => L.k), lvis: X.LOBBY.map((L) => L.C.group.visible), out: X.PETS.map((P) => P.k), saved: sv.petsOut, a2: H.actText() }; });
+console.log('  stay:', JSON.stringify(st7));
+check(st7.a === '🐾 讓粉紅在家玩' && st7.out.join() === 'pig' && st7.lobby.join() === 'pinky' && st7.lvis[0] && st7.saved?.join() === 'pig' && /在大廳玩/.test(st7.toast), `on the lobby rug: 「${st7.a}」 → 粉紅 stays to play in the lobby, the pig still follows (${st7.toast})`);
+const s7b = await take7();
+check(s7b.a === '🐾 帶粉紅出門' && s7b.out.join() === 'pig,pinky' && s7b.lobby.length === 0, `and 「🐾 帶粉紅出門」 again: both follow you`);
+// 走出去：排隊跟著
+const f7 = await Q(() => { const H = window.__H, D = window.__D(), W = D.walker, car = D.tripS.car; W.teleport({ x: car.position.x - 8, z: car.position.z + 6, heading: 0 }); H.step(30);
+  const X = window.__PET(), ch = W.character.group, out = [];
+  const snap = () => { const [A, B] = X.PETS; return [+Math.hypot(A.x - ch.position.x, A.z - ch.position.z).toFixed(2), +Math.hypot(B.x - ch.position.x, B.z - ch.position.z).toFixed(2), +Math.hypot(A.x - B.x, A.z - B.z).toFixed(2)]; };
+  for (let i = 0; i < 8; i++) { const t = W.telemetry(), a = (i < 4 ? 0 : 0.7) - t.camYaw; for (let k = 0; k < 30; k++) { W.setInput({ x: -Math.sin(a), y: Math.cos(a) }); H.step(1); } out.push(snap()); }
+  W.setInput(null); H.step(90); return { out, end: snap(), vis: X.PETS.map((P) => P.C.group.visible && P.mode === 'walk'), dy: X.PETS.map((P) => +(P.y - ch.position.y).toFixed(2)) }; });
+console.log('  line:', JSON.stringify(f7));
+check(f7.vis.every(Boolean) && f7.out.every((q) => q[2] > 0.4) && f7.end[0] < f7.end[1] && f7.end[1] < 4.2 && f7.end[2] > 0.5 && Math.max(...f7.out.map((q) => q[1])) < 6 && f7.dy.every((y) => Math.abs(y) < 0.15),
+  `walking: both follow in a line (pig ${f7.end[0]} m, 粉紅 ${f7.end[1]} m behind you; never closer than ${Math.min(...f7.out.map((q) => q[2]))} m to each other)`);
+await Q(() => { const W = window.__D().walker, t = W.telemetry(); W.setCamera({ yaw: t.heading + 2.5, pitch: 0.2 }); window.__H.step(30); });
+await drawAndShot('7-two-follow');
+// 🐾上：兩隻各撲一個（附近有兩個大人的話）
+const a7 = await Q(() => { const pol = window.__pol(); pol.clear?.(); const W = window.__D().walker, N = window.__N(), X = window.__PET();
+  const ok = (q) => X.petPedOK(q) && !(q.down || q.mode === 'fall' || q.mode === 'lie'); let best = null, bd = 1e9;
+  /* 先回到村子的路上（第 4 段撲人的地方；賽車場門口那裡沒有走路的人），等人走出來；兩隻寵物離太遠會跳到腳邊 */
+  W.teleport({ x: -309.6, z: -31.5, heading: 0 }); window.__H.step(240);
+  /* 兩個站著的大人相距 12 公尺內（人會走動：找不到就等一下再找）；站在兩個人中間旁邊 3 公尺、面對中間 */
+  let tries = 0;
+  for (; tries < 8 && !best; tries++) {
+    if (tries) window.__H.step(120);
+    const t = W.telemetry(), ad = N.peds.people.filter((q) => ok(q) && Math.hypot(q.x - t.x, q.z - t.z) < 400);
+    for (let i = 0; i < ad.length; i++) for (let j = i + 1; j < ad.length; j++) { const d = Math.hypot(ad[i].x - ad[j].x, ad[i].z - ad[j].z); if (d < 12 && d < bd) { bd = d; best = [ad[i], ad[j]]; } }
+  }
+  if (!best) return { none: true, people: N.peds.people.length, adults: N.peds.people.filter(ok).length };
+  const [qa, qb] = best, mx = (qa.x + qb.x) / 2, mz = (qa.z + qb.z) / 2, ux = qb.x - qa.x, uz = qb.z - qa.z, ul = Math.hypot(ux, uz) || 1, sx = mx - uz / ul * 3, sz = mz + ux / ul * 3;
+  const ang = Math.atan2(-(mz - sz), mx - sx); W.teleport({ x: sx, z: sz, heading: ang }); window.__H.step(4);
+  const b = [...document.querySelectorAll('#stage .wk-btns b')].find((e) => e.textContent.trim() === '🐾上'); b?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); b?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+  const atk = X.PETS.map((P) => P.atk?.o || null), down = atk.map(() => -1);
+  for (let i = 0; i < 400; i++) { window.__H.step(1); atk.forEach((q, j) => { if (q && down[j] < 0 && (q.down || q.mode === 'fall' || q.mode === 'lie')) down[j] = i; }); if (down.every((d, j) => !atk[j] || d >= 0)) break; }
+  window.__H.step(200); return { n: atk.filter(Boolean).length, diff: !!atk[0] && !!atk[1] && atk[0] !== atk[1], pair: atk.every((q) => q === qa || q === qb), gap: +bd.toFixed(1), tries, down: down.map((d) => +(d / 60).toFixed(2)), w: pol.wanted }; });
+console.log('  both pounce:', JSON.stringify(a7));
+check(a7.n === 2 && a7.diff && a7.down?.every((d) => d > 0 && d < 6) && a7.w === 0, `🐾上 with two pets: each one goes for a different grown-up and knocks them down (${a7.down?.join(' / ')} s), not your crime`);
+// 上車：兩台沙灘車一台接一台
+const bd7 = await Q(() => { const H = window.__H, D = window.__D(), W = D.walker, car = D.tripS.car, q = { x: car.position.x, z: car.position.z, heading: car.rotation.y }, c = Math.cos(q.heading), s = Math.sin(q.heading); let a = null;
+  for (const d of [2.0, 2.6, 1.5, 3.2]) { for (const sd of [1, -1]) { W.teleport({ x: q.x + s * d * sd, z: q.z + c * d * sd, heading: q.heading + sd * Math.PI / 2 }); H.step(12); a = H.actText(); if (a && a.indexOf('上車') === 0) break; a = null; } if (a) break; }
+  H.step(30); W.getIn(); for (let i = 0; i < 900 && W.mode !== 'off'; i++) H.step(1); H.step(30); return { a, mode: W.mode }; });
+await p.waitForFunction(() => { window.__H.step(2); return window.__PET().PETS.every((P) => !!P.A.car); }, null, { timeout: 60000, polling: 200 });
+const v7 = await Q(() => { const D = window.__D(), d = D.drv, X = window.__PET(); window.__pol()?.clear?.(); d.teleport({ x: 25, z: 2.4, heading: 0 }); window.__H.step(20);
+  const car = D.tripS.car, out = [], along = (A) => (A.x - car.position.x) * Math.cos(car.rotation.y) + (A.z - car.position.z) * -Math.sin(car.rotation.y);
+  let minGap = 1e9;
+  for (let i = 0; i < 60 * 9; i++) { d.setInput({ throttle: i < 60 * 6 ? 0.7 : 0, brake: i < 60 * 6 ? 0 : 0.6, steer: 0 }); window.__dstep(1);
+    const [A, B] = X.PETS.map((P) => P.A); if (A.car.visible && B.car.visible) minGap = Math.min(minGap, Math.hypot(A.x - B.x, A.z - B.z));
+    if (i % 60 === 59) out.push([+along(A).toFixed(1), +along(B).toFixed(1), A.car.visible ? 1 : 0, B.car.visible ? 1 : 0, +d.telemetry().v.toFixed(1)]); }
+  d.setInput(null); window.__H.step(90);
+  const [A, B] = X.PETS.map((P) => P.A);
+  return { out, end: [+along(A).toFixed(1), +along(B).toFixed(1)], vis: [A.car.visible, B.car.visible], sit: X.PETS.map((P) => P.C.group.parent === P.A.car), minGap: +minGap.toFixed(2), cars: X.PETS.map((P) => P.A.car.name) }; });
+console.log('  convoy:', JSON.stringify(bd7), JSON.stringify(v7));
+check(bd7.mode === 'off' && v7.vis.every(Boolean) && v7.sit.every(Boolean) && v7.cars[0] !== v7.cars[1], `got in the GC8: the pig and 粉紅 each ride their own ATV (${v7.cars.join(', ')})`);
+check(v7.end[0] < -3 && v7.end[1] < v7.end[0] - 2 && v7.end[1] > -24 && v7.minGap > 1.8 && v7.out.filter((q) => q[2] && q[3]).length >= 5, `driving then braking: one ATV after the other (${v7.end[0]} m and ${v7.end[1]} m behind the car; never closer than ${v7.minGap} m)`);
+await Q(() => { window.__D().drv.setCameraMode?.('chase'); window.__H.step(20); });
+await drawAndShot('7-convoy');
+const dc7 = await frameInfo(4);
+console.log('  draw (driving with two ATVs):', JSON.stringify(dc7), 'one ATV:', JSON.stringify(dc5));
+// 從後面看兩台沙灘車和車子（追車視角看不到後面）
+await Q(() => { const D = window.__D(), [A, B] = window.__PET().PETS.map((P) => P.A), car = D.tripS.car, cam = D.dcam; window.__hold = true;
+  const c = Math.cos(car.rotation.y), s = Math.sin(car.rotation.y); cam.position.set(B.x - c * 6 + s * 2.5, B.y + 2.6, B.z + s * 6 + c * 2.5); cam.lookAt((A.x + car.position.x) / 2, A.y + 0.6, (A.z + car.position.z) / 2); cam.updateMatrixWorld(); });
+await drawAndShot('7-convoy-back');
+await Q(() => { window.__hold = false; });
+const o7 = await Q(() => { const H = window.__H, W = window.__D().walker, X = window.__PET(); window.__PET().leaveCar(); for (let i = 0; i < 400 && W.mode !== 'walk'; i++) H.step(1); H.step(150);
+  const ch = W.character.group; return { d: X.PETS.map((P) => +Math.hypot(P.x - ch.position.x, P.z - ch.position.z).toFixed(2)), mode: X.PETS.map((P) => P.mode), helm: X.PETS.map((P) => !!P.C.group.getObjectByName('pet-helmet')) }; });
+console.log('  out:', JSON.stringify(o7));
+check(o7.mode.every((m) => m === 'walk') && o7.d.every((d) => d < 5) && !o7.helm.some(Boolean), `got out: both hop off and run to you (${o7.d.join(' / ')} m)`);
 
 // ---- 8 回車庫頁：全部的寵物在大廳；重新載入還在 ----
 const g8 = await Q(() => { const b = document.getElementById('driveHome'); b?.click(); return !!b; });
@@ -416,9 +490,9 @@ await p.evaluate(() => { window.__noDraw = false; });
 await p.screenshot({ path: `${prefix}-8-garage.png` });
 await p.reload({ waitUntil: 'domcontentloaded' }); await ready(); await p.waitForTimeout(1500);
 await p.waitForFunction(() => window.__PET().PAGEP.length >= 2, null, { timeout: 60000, polling: 200 }).catch(() => {});
-const r8 = await Q(() => ({ pets: window.__G().pets.slice(), pet: window.__G().pet, page: window.__PET().PAGEP.map((L) => L.k), cops: localStorage.getItem('carid.cops') }));
+const r8 = await Q(() => ({ pets: window.__G().pets.slice(), out: (window.__G().petsOut || []).slice(), page: window.__PET().PAGEP.map((L) => L.k), cops: localStorage.getItem('carid.cops') }));
 console.log('  reload:', JSON.stringify(r8));
-check(r8.pets.join() === 'pig,pinky' && r8.pet === 'pinky' && r8.page.length === 2, 'reloaded: still own the pig and 粉紅, 粉紅 is the one you take out');
+check(r8.pets.join() === 'pig,pinky' && r8.out.join() === 'pig,pinky' && r8.page.length === 2, 'reloaded: still own the pig and 粉紅, both go out with you');
 
 console.log(errs.length ? `page errors: ${errs.join(' | ')}` : 'no page errors');
 if (errs.length) fails.push('page errors');
